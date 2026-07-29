@@ -1,0 +1,41 @@
+packages/sync/src/targets/claude.ts
+  s_3b7e278a577bd8::t_76b05b3294f6b8 62
+  s_3b7e278a577bd8::t_f84674613b9c08 47
+  s_3b7e278a577bd8::t_14bf40dd623d8b 77-80
+.gitignore
+  h_46518a29d4dd91 16
+packages/sync/src/lib/frontmatter.ts
+  s_3b7e278a577bd8::t_60c8a4203293e9 24-25
+package.json
+  h_46518a29d4dd91 11-12
+packages/sync/src/targets/cursor.ts
+  s_3b7e278a577bd8::t_d626d71beb2ef7 51
+  s_3b7e278a577bd8::t_05290d38c624e0 74-77
+packages/sync/src/lib/toml.ts
+  s_3b7e278a577bd8::t_a530dbec4fec54 47
+packages/sync/src/cli.ts
+  s_3b7e278a577bd8::t_f198385ee4d412 33-34,45,47-51,53,61
+pnpm-workspace.yaml
+  h_46518a29d4dd91 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "2d7525102d0116f16348c4a5e459be7970399e1a",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_3b7e278a577bd8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "17b3a0cf-dac6-4b94-a355-e09ff2039f8a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
