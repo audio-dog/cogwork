@@ -1,5 +1,5 @@
+import { DaemonRpcs, WorkItem } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { DaemonRpcs, WorkItem } from "contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";

@@ -1,4 +1,4 @@
-import { defineWorkspace } from "engine";
+import { defineWorkspace } from "@clanker-forge/engine";
 
 export default defineWorkspace({
   name: "audiodog",

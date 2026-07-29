@@ -1,10 +1,10 @@
-import { DaemonRpcs, type DaemonStatus } from "contracts";
+import { DaemonRpcs, type DaemonStatus } from "@clanker-forge/contracts";
+import { Daemon, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import { Daemon, Registry } from "engine";
 import { defaultConfigHome, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 

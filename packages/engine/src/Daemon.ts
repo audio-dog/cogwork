@@ -1,4 +1,4 @@
-import { DaemonRpcs } from "contracts";
+import { DaemonRpcs } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";

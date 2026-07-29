@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clanker-forge/contracts": "workspace:*",
+    "@clanker-forge/engine": "workspace:*",
     "@effect/platform-node": "catalog:effect",
-    "contracts": "workspace:*",
-    "effect": "catalog:effect",
-    "engine": "workspace:*"
+    "effect": "catalog:effect"
   },
   "devDependencies": {
     "@types/node": "catalog:",

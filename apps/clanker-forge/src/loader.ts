@@ -1,9 +1,9 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { Registry } from "@clanker-forge/engine";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type { Registry } from "engine";
 
 const configSuffixes = [".workspace.ts", ".workspace.mts", ".workspace.cts"];
 

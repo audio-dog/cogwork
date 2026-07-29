@@ -1,4 +1,4 @@
-import type { WorkspaceFailureInfo } from "contracts";
+import type { WorkspaceFailureInfo } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import { decide, type WorkspaceCommand } from "./decider";
 import { emptyRegistry, projectEvent, type RegisteredWorkspace, type RegistryState } from "./projector";

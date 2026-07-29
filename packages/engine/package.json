@@ -1,5 +1,5 @@
 {
-  "name": "engine",
+  "name": "@clanker-forge/engine",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -10,7 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "contracts": "workspace:*",
+    "@clanker-forge/contracts": "workspace:*",
+    "@tanstack/ai": "^0.42.0",
     "effect": "catalog:effect"
   },
   "devDependencies": {
