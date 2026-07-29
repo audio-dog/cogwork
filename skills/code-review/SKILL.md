@@ -38,7 +38,7 @@ Anything in the repo that documents how code should be written, such as `CODING_
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
 
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
-- **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation — and, like any standard here, skip anything tooling already enforces.
+- **Heuristic, not optional.** Each smell is a labelled heuristic ("possible Feature Envy"), so report it as a heuristic rather than a hard violation. But heuristic means it earns an explicit disposition downstream, never a silent pass. Skip only what tooling already enforces.
 
 Each smell reads *what it is* → *how to fix*; match it against the diff:
 
@@ -63,7 +63,7 @@ Send a single message with two `Agent` tool calls. Use the `general-purpose` sub
 
 - The full diff command and commit list.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
-- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
+- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from heuristic smells — documented-standard breaches can be hard, baseline smells are heuristics (label them as such), and a documented repo standard overrides the baseline. Report every finding of either kind; none may be dropped silently. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** — include:
 
@@ -77,7 +77,9 @@ If the spec is missing, skip the Spec sub-agent and note this in the final repor
 
 Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
 
-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
+Number every finding (`S1`, `S2`, … for Standards; `SP1`, … for Spec) and give each its own **Disposition:** line, left as `pending`. A disposition is one of: *fixed* (name the change), *won't-fix* (a concrete, specific reason — "it's a judgement call" is not one), or *escalated* (the finding trades off against a ratified decision, so it's raised as a decision rather than silently dropped or obeyed).
+
+End with a verdict line: total findings per axis and how many remain `pending`. The review is not complete while any finding is `pending` — a heuristic still demands a recorded judgement, not a silent pass. Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
 
 ## Why two axes
 
