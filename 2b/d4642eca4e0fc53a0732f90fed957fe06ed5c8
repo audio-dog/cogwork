@@ -1,0 +1,37 @@
+packages/engine/src/reconcile.ts
+  s_9cf02bd7c20d92::t_b526c8e8d101e2 7,12,21,24-33
+packages/contracts/src/workItem.ts
+  s_9cf02bd7c20d92::t_8900c7adebc256 1-8
+packages/contracts/src/index.ts
+  s_9cf02bd7c20d92::t_0f23a2d6c032a2 5
+packages/engine/src/index.ts
+  s_9cf02bd7c20d92::t_04296b93292b91 5
+packages/contracts/src/baseSchemas.ts
+  s_9cf02bd7c20d92::t_801ea7769a3eb6 23-25
+packages/engine/test/engine.test.ts
+  s_9cf02bd7c20d92::t_5589904c7a8cf1 99-100,102,111,114-126
+  s_9cf02bd7c20d92::t_d39cea8ca69788 2,5,10
+packages/engine/src/workSource.ts
+  s_9cf02bd7c20d92::t_7c38c2f1b9685f 1-6,9,12-13,15-17
+  s_9cf02bd7c20d92::t_35f91230fb1721 7-8,10-11
+  s_9cf02bd7c20d92::t_9ce46d3390e19e 14
+apps/clanker-forge/src/rpc.ts
+  s_9cf02bd7c20d92::t_0edfdfc8cb8895 24-26
+  s_9cf02bd7c20d92::t_5f0f33ff071962 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "2bd4642eca4e0fc53a0732f90fed957fe06ed5c8",
+  "prompts": {},
+  "sessions": {
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
