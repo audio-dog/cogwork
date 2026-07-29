@@ -1,0 +1,40 @@
+packages/engine/src/Registry.ts
+  h_46518a29d4dd91 1
+apps/clanker-forge/config/audiodog.workspace.ts
+  h_46518a29d4dd91 1
+packages/engine/src/Daemon.ts
+  h_46518a29d4dd91 1
+apps/clanker-forge/src/loader.ts
+  h_46518a29d4dd91 4
+packages/engine/package.json
+  h_46518a29d4dd91 2,13-14
+packages/engine/src/decider.ts
+  h_46518a29d4dd91 1
+packages/engine/src/defineWorkspace.ts
+  h_46518a29d4dd91 1
+packages/engine/src/projector.ts
+  h_46518a29d4dd91 1
+packages/engine/test/engine.test.ts
+  h_46518a29d4dd91 1
+apps/clanker-forge/package.json
+  h_46518a29d4dd91 14-15,17
+packages/contracts/package.json
+  h_46518a29d4dd91 2
+apps/clanker-forge/src/rpc.ts
+  h_46518a29d4dd91 2-3
+packages/engine/src/WorkSource.ts
+  h_46518a29d4dd91 1
+apps/clanker-forge/src/commands.ts
+  h_46518a29d4dd91 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "407e94aade08b93c9ee82f5a8cad777bd4de0d0b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
