@@ -1,0 +1,26 @@
+packages/engine/test/engine.test.ts
+  s_9cf02bd7c20d92::t_371c70fdaed23f 115-120,124-125
+packages/contracts/src/baseSchemas.ts
+  s_9cf02bd7c20d92::t_7ddedbdb989783 3
+packages/engine/src/Registry.ts
+  s_9cf02bd7c20d92::t_845ed19e5e5229 24
+  s_9cf02bd7c20d92::t_11b3e608205ae1 41
+apps/clanker-forge/src/rpc.ts
+  s_9cf02bd7c20d92::t_918b2a8065ae01 13-22,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "2477fe01d82d1ee1996ff8135b4f46f05906ccbe",
+  "prompts": {},
+  "sessions": {
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
