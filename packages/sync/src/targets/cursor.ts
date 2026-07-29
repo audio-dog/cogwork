@@ -48,7 +48,7 @@ export const cursor: Target = {
     }
 
     if (Object.keys(assets.mcpServers).length > 0) {
-      writer.write(join(base, "mcp.json"), JSON.stringify({ mcpServers: assets.mcpServers }, null, 2) + "\n");
+      writer.write(join(base, "mcp.json"), `${JSON.stringify({ mcpServers: assets.mcpServers }, null, 2)}\n`);
     }
 
     if (assets.skills.length === 0) return;
@@ -71,7 +71,10 @@ function cursorSubagentFrontmatter(fm: Record<string, string>): Record<string, s
 
 function pick(obj: Record<string, string>, keys: string[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const key of keys) if (obj[key] !== undefined) out[key] = obj[key]!;
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== undefined) out[key] = value;
+  }
   return out;
 }
 

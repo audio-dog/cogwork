@@ -1,6 +1,7 @@
 {
   "files.exclude": {
     "**/node_modules": true,
+    "**/.turbo": true,
     "pnpm-lock.yaml": true
   },
   "git.branchProtection": ["main"],
@@ -26,5 +27,6 @@
   },
   "[typescriptreact]": {
     "editor.defaultFormatter": "biomejs.biome"
-  }
+  },
+  "js/ts.experimental.useTsgo": true
 }

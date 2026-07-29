@@ -44,7 +44,7 @@ export function renderCodexAgent(agent: CodexAgent): string {
   if (agent.model) lines.push(`model = ${tomlString(agent.model)}`);
   if (agent.readonly) lines.push('sandbox_mode = "read-only"');
   lines.push(`developer_instructions = ${tomlMultiline(agent.developerInstructions)}`);
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 function tomlMultiline(value: string): string {

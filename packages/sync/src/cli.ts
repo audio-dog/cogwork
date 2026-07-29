@@ -30,7 +30,8 @@ function parseArgs(argv: string[]): Options {
     dryRun: false,
   };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!;
+    const arg = argv[i];
+    if (arg === undefined) continue;
     switch (arg) {
       case "--target": {
         const value = argv[++i];
@@ -41,10 +42,15 @@ function parseArgs(argv: string[]): Options {
       case "--global":
         opts.mode = "global";
         break;
-      case "--project":
+      case "--project": {
         opts.mode = "project";
-        if (argv[i + 1] && !argv[i + 1]!.startsWith("--")) opts.projectDir = resolve(argv[++i]!);
+        const next = argv[i + 1];
+        if (next && !next.startsWith("--")) {
+          opts.projectDir = resolve(next);
+          i++;
+        }
         break;
+      }
       case "--dry-run":
         opts.dryRun = true;
         break;
@@ -52,6 +58,7 @@ function parseArgs(argv: string[]): Options {
       case "--help":
         printHelp();
         process.exit(0);
+        break;
       default:
         fail(`unknown argument: ${arg}`);
     }

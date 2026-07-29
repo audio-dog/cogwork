@@ -21,7 +21,8 @@ export function parseFrontmatter(raw: string): ParsedFrontmatter {
   const frontmatter: Record<string, string> = {};
   let i = 1;
   for (; i < lines.length; i++) {
-    const line = lines[i]!;
+    const line = lines[i];
+    if (line === undefined) continue;
     if (line.trim() === FENCE) {
       i++;
       break;
