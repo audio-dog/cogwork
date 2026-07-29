@@ -1,0 +1,44 @@
+spikes/cursor-acp/.gitignore
+  s_11872e12057523::t_b82c4c42dce3ce 1-4
+spikes/cursor-acp/run.ts
+  s_11872e12057523::t_e035a78550782a 1-6,8-48,54-152
+  s_11872e12057523::t_3b589fd0c7731e 52
+  s_11872e12057523::t_63460cbe311a33 49-51,53
+  s_11872e12057523::t_e81866773bc6c3 7
+spikes/cursor-acp/FINDINGS.md
+  s_11872e12057523::t_b0b909431cc4d5 1-118,158-168
+  s_11872e12057523::t_beeec4c865ce31 119-157
+spikes/cursor-acp/probe-acp.ts
+  s_11872e12057523::t_b35354d18edc58 1-9,11-37,41-58,60,63,65-102,104-154
+  s_11872e12057523::t_e3137450f7565e 103
+  s_11872e12057523::t_124a6d14031843 59,61-62,64
+  s_11872e12057523::t_e6e4dcc4821667 38-40
+  s_11872e12057523::t_744598144df8dc 10
+spikes/cursor-acp/package.json
+  s_11872e12057523::t_4f7b73966f4bc7 8-9
+  s_11872e12057523::t_2208b137067c76 12
+  s_11872e12057523::t_3200af1638b1e6 1-7,10-11,13-18
+spikes/cursor-acp/pnpm-lock.yaml
+  s_11872e12057523::t_3254a675ab26f3 1-899
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "d28fdf5b4eaa565e29258386c79264757761d8e7",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_11872e12057523": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61390bbf-9948-4075-b744-dfffa2433795",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
