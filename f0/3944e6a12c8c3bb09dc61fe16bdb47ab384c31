@@ -1,0 +1,45 @@
+tsconfig.json
+  h_46518a29d4dd91 1-44
+AGENTS.md
+  h_46518a29d4dd91 1-8
+package.json
+  h_46518a29d4dd91 11-12,14
+README.md
+  s_220696e595dc2c::t_2d4d89d3cfb5ea 92,97-111
+packages/engine/package.json
+  h_46518a29d4dd91 6
+.gitignore
+  s_220696e595dc2c::t_578853185010b4 17-19
+pnpm-workspace.yaml
+  h_46518a29d4dd91 7,10,12-18
+packages/engine/biome.json
+  s_220696e595dc2c::t_8de578ac9bdd63 2
+  h_46518a29d4dd91 3
+  s_220696e595dc2c::t_e442e6db22e3bf 1
+scripts/vendor.mjs
+  s_220696e595dc2c::t_2ff499cc01537c 1-33
+packages/engine/tsconfig.json
+  h_46518a29d4dd91 1,3,5-12,16
+  s_220696e595dc2c::t_d42f5afecadbdf 2,4,13-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "f03944e6a12c8c3bb09dc61fe16bdb47ab384c31",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_220696e595dc2c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9fea49dc-1135-4cf0-a41d-1b16ac87f276",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
