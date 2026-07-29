@@ -10,10 +10,10 @@ import * as Registry from "../src/Registry";
 import * as WorkSource from "../src/WorkSource";
 
 const validModule: Registry.LoadedWorkspace = {
-  source: "audiodog.workspace.ts",
+  source: "example.workspace.ts",
   value: {
-    name: "audiodog",
-    checkoutPath: "/repos/audiodog",
+    name: "example",
+    checkoutPath: "/repos/example",
     workSource: { type: "linear" },
     harness: { preferred: "cursor" },
   },
@@ -33,7 +33,7 @@ describe("buildRegistry", () => {
   it("registers valid configs and isolates malformed and unreadable ones", () => {
     const state = Registry.buildRegistry(sampleResult);
     assert.strictEqual(state.workspaces.length, 1);
-    assert.strictEqual(state.workspaces[0]?.config.name, "audiodog");
+    assert.strictEqual(state.workspaces[0]?.config.name, "example");
     assert.strictEqual(state.failures.length, 2);
     assert.deepStrictEqual(state.failures.map((f) => f.source).sort(), [
       "broken.workspace.ts",
@@ -43,13 +43,13 @@ describe("buildRegistry", () => {
 
   it("isolates a second file that reuses a registered workspace name", () => {
     const duplicate: Registry.LoadedWorkspace = {
-      source: "audiodog-copy.workspace.ts",
+      source: "example-copy.workspace.ts",
       value: validModule.value,
     };
     const state = Registry.buildRegistry({ loaded: [validModule, duplicate], failures: [] });
     assert.strictEqual(state.workspaces.length, 1);
     assert.strictEqual(state.failures.length, 1);
-    assert.strictEqual(state.failures[0]?.source, "audiodog-copy.workspace.ts");
+    assert.strictEqual(state.failures[0]?.source, "example-copy.workspace.ts");
   });
 });
 
@@ -68,7 +68,7 @@ describe("decide", () => {
   it("rejects a config whose name is already registered", () => {
     const events = Registry.decide(registered, {
       type: "register-workspace",
-      source: "audiodog-dup.workspace.ts",
+      source: "example-dup.workspace.ts",
       module: validModule.value,
     });
     assert.strictEqual(events[0]?.type, "workspace.registration-failed");
@@ -137,7 +137,7 @@ describe("daemon status over rpc", () => {
       const status = yield* client.GetStatus();
       assert.strictEqual(status.health, "running");
       assert.strictEqual(status.workspaces.length, 1);
-      assert.strictEqual(status.workspaces[0]?.name, "audiodog");
+      assert.strictEqual(status.workspaces[0]?.name, "example");
       assert.strictEqual(status.workspaces[0]?.workSource, "linear");
       assert.strictEqual(status.failures.length, 2);
       assert.isAtLeast(status.uptimeMillis, 0);
