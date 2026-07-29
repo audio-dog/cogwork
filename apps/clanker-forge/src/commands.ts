@@ -1,9 +1,10 @@
+import { DaemonRpcs, type DaemonStatus } from "contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import { Daemon, Protocol, Registry } from "engine";
+import { Daemon, Registry } from "engine";
 import { defaultConfigHome, defaultSocketPath } from "./paths";
 import { clientLayer, serverLayer } from "./rpc";
 
@@ -38,7 +39,7 @@ const runDaemon = (options: { readonly socketPath: string; readonly configHome: 
     yield* Daemon.reconcileHeartbeat;
   }).pipe(Effect.provide(serverLayer(options)));
 
-const formatStatus = (status: Protocol.DaemonStatus) => {
+const formatStatus = (status: DaemonStatus) => {
   const header = `daemon: ${status.health} (uptime ${Math.round(status.uptimeMillis / 1000)}s)`;
   const workspaces =
     status.workspaces.length === 0
@@ -57,7 +58,7 @@ const formatStatus = (status: Protocol.DaemonStatus) => {
 
 const runStatus = (options: { readonly socketPath: string }) =>
   Effect.gen(function* () {
-    const client = yield* RpcClient.make(Protocol.DaemonRpcs);
+    const client = yield* RpcClient.make(DaemonRpcs);
     const status = yield* client.GetStatus();
     yield* Console.log(formatStatus(status));
   }).pipe(

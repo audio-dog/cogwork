@@ -1,10 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
+import { DaemonRpcs } from "contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "../src/Daemon";
-import { DaemonRpcs } from "../src/Protocol";
 import * as Registry from "../src/Registry";
+import * as Reconcile from "../src/reconcile";
 
 const validModule: Registry.LoadedWorkspace = {
   source: "audiodog.workspace.ts",
@@ -37,6 +38,74 @@ describe("buildRegistry", () => {
       "unreadable.workspace.ts",
     ]);
   });
+
+  it("isolates a second file that reuses a registered workspace name", () => {
+    const duplicate: Registry.LoadedWorkspace = {
+      source: "audiodog-copy.workspace.ts",
+      value: validModule.value,
+    };
+    const state = Registry.buildRegistry({ loaded: [validModule, duplicate], failures: [] });
+    assert.strictEqual(state.workspaces.length, 1);
+    assert.strictEqual(state.failures.length, 1);
+    assert.strictEqual(state.failures[0]?.source, "audiodog-copy.workspace.ts");
+  });
+});
+
+describe("decide", () => {
+  const registered = Registry.buildRegistry({ loaded: [validModule], failures: [] });
+
+  it("emits a registration event for a valid, unseen config", () => {
+    const events = Registry.decide(Registry.emptyRegistry, {
+      type: "register-workspace",
+      source: validModule.source,
+      module: validModule.value,
+    });
+    assert.strictEqual(events[0]?.type, "workspace.registered");
+  });
+
+  it("rejects a config whose name is already registered", () => {
+    const events = Registry.decide(registered, {
+      type: "register-workspace",
+      source: "audiodog-dup.workspace.ts",
+      module: validModule.value,
+    });
+    assert.strictEqual(events[0]?.type, "workspace.registration-failed");
+  });
+
+  it("turns a decode failure into a registration-failed event", () => {
+    const events = Registry.decide(Registry.emptyRegistry, {
+      type: "register-workspace",
+      source: malformedModule.source,
+      module: malformedModule.value,
+    });
+    assert.strictEqual(events[0]?.type, "workspace.registration-failed");
+  });
+
+  it("passes an import failure straight through as a registration-failed event", () => {
+    const events = Registry.decide(Registry.emptyRegistry, {
+      type: "record-import-failure",
+      source: "unreadable.workspace.ts",
+      message: "boom",
+    });
+    assert.deepStrictEqual(events, [
+      { type: "workspace.registration-failed", source: "unreadable.workspace.ts", message: "boom" },
+    ]);
+  });
+});
+
+describe("reconcile worker", () => {
+  const workerLayer = Reconcile.layer.pipe(
+    Layer.provide(Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult))),
+  );
+
+  it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const receipt = yield* worker.submit();
+      assert.strictEqual(receipt.workspaces, 1);
+      assert.strictEqual(receipt.failures, 2);
+    }).pipe(Effect.provide(workerLayer), Effect.scoped),
+  );
 });
 
 describe("daemon status over rpc", () => {

@@ -57,6 +57,9 @@ importers:
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.0.0-beta.102(effect@4.0.0-beta.102)(ioredis@5.11.1)
+      contracts:
+        specifier: workspace:*
+        version: link:../../packages/contracts
       effect:
         specifier: catalog:effect
         version: 4.0.0-beta.102
@@ -74,8 +77,24 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  packages/contracts:
+    dependencies:
+      effect:
+        specifier: catalog:effect
+        version: 4.0.0-beta.102
+    devDependencies:
+      '@catenarycloud/linteffect':
+        specifier: ^0.0.7
+        version: 0.0.7
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/engine:
     dependencies:
+      contracts:
+        specifier: workspace:*
+        version: link:../contracts
       effect:
         specifier: catalog:effect
         version: 4.0.0-beta.102

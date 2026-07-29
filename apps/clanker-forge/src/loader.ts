@@ -1,16 +1,19 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import type { Registry } from "engine";
 
 const configExtensions = new Set([".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
 
-class WorkspaceLoadError extends Data.TaggedError("WorkspaceLoadError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+class WorkspaceLoadError extends Schema.TaggedErrorClass<WorkspaceLoadError>()("WorkspaceLoadError", {
+  detail: Schema.String,
+}) {
+  override get message() {
+    return this.detail;
+  }
+}
 
 type ImportOutcome =
   | { readonly _tag: "loaded"; readonly source: string; readonly value: unknown }
@@ -26,7 +29,7 @@ const readDefault = (module: unknown) => {
 const listConfigFiles = (configHome: string) =>
   Effect.tryPromise({
     try: () => fs.readdir(configHome, { withFileTypes: true }),
-    catch: (cause) => new WorkspaceLoadError({ message: `Cannot read config home ${configHome}`, cause }),
+    catch: () => new WorkspaceLoadError({ detail: `Cannot read config home ${configHome}` }),
   }).pipe(
     Effect.map((entries) =>
       entries
@@ -38,7 +41,7 @@ const listConfigFiles = (configHome: string) =>
 const importConfig = (source: string) =>
   Effect.tryPromise({
     try: () => import(pathToFileURL(source).href),
-    catch: (cause) => new WorkspaceLoadError({ message: describeError(cause), cause }),
+    catch: (cause) => new WorkspaceLoadError({ detail: describeError(cause) }),
   }).pipe(
     Effect.map((module): ImportOutcome => ({ _tag: "loaded", source, value: readDefault(module) })),
     Effect.catchTag("WorkspaceLoadError", (error) =>

@@ -1,10 +1,11 @@
+import { DaemonRpcs } from "contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
-import { DaemonRpcs } from "./Protocol";
 import { WorkspaceRegistry } from "./Registry";
+import { ReconcileWorker } from "./reconcile";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
   "engine/Daemon/DaemonInfo",
@@ -37,9 +38,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
 });
 
 export const reconcileHeartbeat = Effect.gen(function* () {
-  const registry = yield* WorkspaceRegistry;
-  yield* Effect.logInfo("reconcile tick", {
-    workspaces: registry.workspaces.length,
-    failures: registry.failures.length,
-  });
+  const worker = yield* ReconcileWorker;
+  const receipt = yield* worker.submit();
+  yield* Effect.logInfo("reconcile tick", receipt);
 }).pipe(Effect.repeat(Schedule.spaced("5 seconds")));
