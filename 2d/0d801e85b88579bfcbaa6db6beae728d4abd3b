@@ -1,0 +1,41 @@
+CONTEXT.md
+  s_d323c73953e536::t_ac0d4bdc001847 14-16
+packages/sync/package.json
+  s_d323c73953e536::t_c150b141b9ddd7 1-5,7
+  s_d323c73953e536::t_518eefa3cfeda1 6
+packages/sync/src/check.ts
+  s_d323c73953e536::t_86e54e9b9601b4 2-7
+packages/sync/src/lib/repo-root.ts
+  s_d323c73953e536::t_248e3a2459a0ca 1-11
+packages/sync/src/cli.ts
+  s_d323c73953e536::t_05bc4a56a1ab11 5-14
+package.json
+  s_d323c73953e536::t_3e1b668d78d4f8 9-10
+  s_d323c73953e536::t_4abe3bf3f0bd60 12
+pnpm-workspace.yaml
+  s_d323c73953e536::t_be94f816923967 1-2
+README.md
+  s_d323c73953e536::t_468d783dfbbc7f 56
+  s_d323c73953e536::t_9a51a9c0316968 84
+  s_d323c73953e536::t_f5655fd33198e5 82-83,85,87-91,94
+  s_d323c73953e536::t_6e4ff34a16e2f4 69
+  s_d323c73953e536::t_a5e75fd26b33ef 95
+pnpm-lock.yaml
+  s_d323c73953e536::t_f2f72ed43daa38 24-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "2d0d801e85b88579bfcbaa6db6beae728d4abd3b",
+  "prompts": {},
+  "sessions": {
+    "s_d323c73953e536": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f29139c5-86b2-4563-a73f-f74aea6d9a67",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
