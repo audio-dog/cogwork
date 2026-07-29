@@ -1,0 +1,26 @@
+skills/code-review/SKILL.md
+  s_2c8a37d7b99c22::t_88faf11da1ca2d 80-82
+  s_2c8a37d7b99c22::t_612681cc2d07c0 66
+  s_2c8a37d7b99c22::t_e68111fc6e4837 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "aac12c2600024794b1db308c06278d556c372fee",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_2c8a37d7b99c22": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "20957fd7-9a05-47f3-bc49-53d780a430d5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
