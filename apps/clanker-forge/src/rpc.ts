@@ -10,8 +10,18 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { Daemon, Reconcile, Registry, WorkSource } from "engine";
 import { loadFromDisk } from "./loader";
 
+const clearStaleSocket = (socketPath: string) =>
+  Effect.gen(function* () {
+    const stat = yield* Effect.promise(() => fs.stat(socketPath).catch(() => null));
+    if (stat === null) return;
+    if (!stat.isSocket()) {
+      return yield* Effect.die(new Error(`Refusing to remove non-socket file at ${socketPath}`));
+    }
+    yield* Effect.promise(() => fs.rm(socketPath, { force: true }));
+  });
+
 const socketServerLayer = (socketPath: string) =>
-  Effect.promise(() => fs.rm(socketPath, { force: true })).pipe(
+  clearStaleSocket(socketPath).pipe(
     Effect.map(() => NodeSocketServer.layer({ path: socketPath })),
     Layer.unwrap,
   );

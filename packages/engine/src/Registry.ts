@@ -21,7 +21,7 @@ export class WorkspaceRegistry extends Context.Service<WorkspaceRegistry, Regist
   "engine/Registry/WorkspaceRegistry",
 ) {}
 
-const toCommands = (result: LoadResult): ReadonlyArray<WorkspaceCommand> => [
+const toCommands = (result: LoadResult) => [
   ...result.loaded.map(
     (module): WorkspaceCommand => ({
       type: "register-workspace",
@@ -38,7 +38,7 @@ const toCommands = (result: LoadResult): ReadonlyArray<WorkspaceCommand> => [
   ),
 ];
 
-const applyCommand = (state: RegistryState, command: WorkspaceCommand): RegistryState =>
+const applyCommand = (state: RegistryState, command: WorkspaceCommand) =>
   decide(state, command).reduce(projectEvent, state);
 
 export const buildRegistry = (result: LoadResult): RegistryState =>

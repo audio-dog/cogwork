@@ -112,18 +112,17 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
   );
 
-  it.effect("counts pending work the work source reports per workspace", () => {
-    const item = Schema.decodeSync(WorkItem)({ id: "AUD-1", title: "first ticket" });
-    const stubWorkSource = Layer.succeed(WorkSource.WorkSource, {
-      pending: () => Effect.succeed([item]),
-    });
-    const workerWithWork = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, stubWorkSource)));
-    return Effect.gen(function* () {
+  const item = Schema.decodeSync(WorkItem)({ id: "AUD-1", title: "first ticket" });
+  const stubWorkSource = Layer.succeed(WorkSource.WorkSource, { pending: () => Effect.succeed([item]) });
+  const workerWithWork = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, stubWorkSource)));
+
+  it.effect("counts pending work the work source reports per workspace", () =>
+    Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
       const receipt = yield* worker.submit();
       assert.strictEqual(receipt.pendingWork, 1);
-    }).pipe(Effect.provide(workerWithWork), Effect.scoped);
-  });
+    }).pipe(Effect.provide(workerWithWork), Effect.scoped),
+  );
 });
 
 describe("daemon status over rpc", () => {
