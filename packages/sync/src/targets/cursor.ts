@@ -27,10 +27,10 @@ export const cursor: Target = {
       writer.write(join(ctx.projectDir, ".cursor", "rules", "main.mdc"), mdc);
     } else {
       // Cursor's global "User Rules" live in the app settings, not a file on disk, so they
-      // can't be written here. Paste assets/rules/global.md into Cursor → Settings → Rules.
+      // can't be written here. Paste packages/sync/assets/rules/global.md into Cursor → Settings → Rules.
       writer.skip(
         join(ctx.home, ".cursor", "rules"),
-        "Cursor user rules are UI-only; copy assets/rules/global.md into Settings → Rules",
+        "Cursor user rules are UI-only; copy packages/sync/assets/rules/global.md into Settings → Rules",
       );
     }
 
@@ -48,10 +48,7 @@ export const cursor: Target = {
     }
 
     if (Object.keys(assets.mcpServers).length > 0) {
-      writer.write(
-        join(base, "mcp.json"),
-        JSON.stringify({ mcpServers: assets.mcpServers }, null, 2) + "\n",
-      );
+      writer.write(join(base, "mcp.json"), JSON.stringify({ mcpServers: assets.mcpServers }, null, 2) + "\n");
     }
 
     if (assets.skills.length === 0) return;

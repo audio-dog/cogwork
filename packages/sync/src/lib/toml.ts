@@ -40,10 +40,7 @@ export interface CodexAgent {
  * agent's system prompt; omitted optional fields inherit from the parent session.
  */
 export function renderCodexAgent(agent: CodexAgent): string {
-  const lines = [
-    `name = ${tomlString(agent.name)}`,
-    `description = ${tomlString(agent.description)}`,
-  ];
+  const lines = [`name = ${tomlString(agent.name)}`, `description = ${tomlString(agent.description)}`];
   if (agent.model) lines.push(`model = ${tomlString(agent.model)}`);
   if (agent.readonly) lines.push('sandbox_mode = "read-only"');
   lines.push(`developer_instructions = ${tomlMultiline(agent.developerInstructions)}`);

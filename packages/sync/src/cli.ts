@@ -2,16 +2,18 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAssets } from "./lib/assets.js";
-import { findRepoRoot } from "./lib/repo-root.js";
+import { findPackageRoot, findRepoRoot } from "./lib/paths.js";
 import { copyTree } from "./lib/skills.js";
-import { Writer, type WriteResult } from "./lib/writer.js";
 import type { Mode, Target, TargetName } from "./lib/types.js";
+import { type WriteResult, Writer } from "./lib/writer.js";
 import { claude } from "./targets/claude.js";
-import { cursor } from "./targets/cursor.js";
 import { codex } from "./targets/codex.js";
+import { cursor } from "./targets/cursor.js";
 
 const TARGETS: Record<TargetName, Target> = { claude, cursor, codex };
-const repoRoot = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
+const here = dirname(fileURLToPath(import.meta.url));
+const packageRoot = findPackageRoot(here);
+const repoRoot = findRepoRoot(here);
 
 interface Options {
   targets: TargetName[];
@@ -67,9 +69,14 @@ function parseTargets(value: string): TargetName[] {
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const assets = loadAssets(repoRoot);
+  const assets = loadAssets(packageRoot, repoRoot);
   const writer = new Writer({ dryRun: opts.dryRun, repoRoot });
-  const ctx = { mode: opts.mode, home: homedir(), projectDir: opts.projectDir, writer };
+  const ctx = {
+    mode: opts.mode,
+    home: homedir(),
+    projectDir: opts.projectDir,
+    writer,
+  };
 
   for (const name of opts.targets) TARGETS[name].write(assets, ctx);
 
@@ -88,7 +95,10 @@ function report(results: WriteResult[], opts: Options) {
   const label = opts.dryRun ? "DRY RUN — no files written" : "Synced";
   console.log(`\n${label} (mode: ${opts.mode}, targets: ${opts.targets.join(", ")})\n`);
   const icon: Record<WriteResult["status"], string> = {
-    create: "＋", update: "～", unchanged: "·", skip: "⤫",
+    create: "＋",
+    update: "～",
+    unchanged: "·",
+    skip: "⤫",
   };
   for (const r of results) {
     const suffix = r.note ? `  (${r.note})` : "";

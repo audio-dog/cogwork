@@ -39,10 +39,7 @@ export function parseFrontmatter(raw: string): ParsedFrontmatter {
 }
 
 /** Serialize flat frontmatter + body back into a markdown document. */
-export function serializeFrontmatter(
-  frontmatter: Record<string, string | undefined>,
-  body: string,
-): string {
+export function serializeFrontmatter(frontmatter: Record<string, string | undefined>, body: string): string {
   const entries = Object.entries(frontmatter).filter(
     (entry): entry is [string, string] => entry[1] !== undefined,
   );
@@ -53,10 +50,7 @@ export function serializeFrontmatter(
 }
 
 function stripQuotes(value: string): string {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
     return value.slice(1, -1);
   }
   return value;

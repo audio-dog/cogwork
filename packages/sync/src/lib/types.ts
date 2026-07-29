@@ -41,11 +41,11 @@ export interface McpServer {
   type?: string;
 }
 
-/** Everything loaded from `assets/`, ready to render to any target. */
+/** Everything loaded from `packages/sync/assets/`, ready to render to any target. */
 export interface Assets {
-  /** Personal user-level rules (`assets/rules/global.md`); synced in --global mode. */
+  /** Personal user-level rules (`packages/sync/assets/rules/global.md`); synced in --global mode. */
   globalRules: string;
-  /** Per-project rules (`assets/rules/project.md`); synced in --project mode. */
+  /** Per-project rules (`packages/sync/assets/rules/project.md`); synced in --project mode. */
   projectRules: string;
   commands: MarkdownAsset[];
   subagents: MarkdownAsset[];

@@ -18,9 +18,8 @@ export const claude: Target = {
     // Rules / memory → CLAUDE.md (global rules at user level, project rules in the repo)
     const rules = parseFrontmatter(ctx.mode === "global" ? assets.globalRules : assets.projectRules).body;
     if (rules.trim()) {
-      const rulesPath = ctx.mode === "global"
-        ? join(ctx.home, ".claude", "CLAUDE.md")
-        : join(ctx.projectDir, "CLAUDE.md");
+      const rulesPath =
+        ctx.mode === "global" ? join(ctx.home, ".claude", "CLAUDE.md") : join(ctx.projectDir, "CLAUDE.md");
       writer.write(rulesPath, ensureNewline(rules));
     }
 
@@ -55,7 +54,10 @@ export const claude: Target = {
           : {};
         const merged = {
           ...current,
-          mcpServers: { ...(current.mcpServers as object | undefined), ...assets.mcpServers },
+          mcpServers: {
+            ...(current.mcpServers as object | undefined),
+            ...assets.mcpServers,
+          },
         };
         writer.write(file, JSON.stringify(merged, null, 2) + "\n");
       }
