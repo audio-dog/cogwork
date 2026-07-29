@@ -27,10 +27,10 @@ export const cursor: Target = {
       writer.write(join(ctx.projectDir, ".cursor", "rules", "main.mdc"), mdc);
     } else {
       // Cursor's global "User Rules" live in the app settings, not a file on disk, so they
-      // can't be written here. Paste assets/rules/global.md into Cursor → Settings → Rules.
+      // can't be written here. Paste packages/sync/assets/rules/global.md into Cursor → Settings → Rules.
       writer.skip(
         join(ctx.home, ".cursor", "rules"),
-        "Cursor user rules are UI-only; copy assets/rules/global.md into Settings → Rules",
+        "Cursor user rules are UI-only; copy packages/sync/assets/rules/global.md into Settings → Rules",
       );
     }
 
@@ -48,10 +48,7 @@ export const cursor: Target = {
     }
 
     if (Object.keys(assets.mcpServers).length > 0) {
-      writer.write(
-        join(base, "mcp.json"),
-        JSON.stringify({ mcpServers: assets.mcpServers }, null, 2) + "\n",
-      );
+      writer.write(join(base, "mcp.json"), `${JSON.stringify({ mcpServers: assets.mcpServers }, null, 2)}\n`);
     }
 
     if (assets.skills.length === 0) return;
@@ -74,7 +71,10 @@ function cursorSubagentFrontmatter(fm: Record<string, string>): Record<string, s
 
 function pick(obj: Record<string, string>, keys: string[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const key of keys) if (obj[key] !== undefined) out[key] = obj[key]!;
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== undefined) out[key] = value;
+  }
   return out;
 }
 

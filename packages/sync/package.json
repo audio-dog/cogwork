@@ -1,0 +1,19 @@
+{
+  "name": "@clanker-forge/sync",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Single-source generator that syncs rules, commands, subagents, and MCP config across Claude Code, Cursor, and Codex.",
+  "type": "module",
+  "scripts": {
+    "sync": "tsx src/cli.ts",
+    "check": "tsx src/check.ts",
+    "link": "bash bin/link-skills.sh",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:"
+  }
+}

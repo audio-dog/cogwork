@@ -17,9 +17,7 @@ export interface WriteResult {
 export class Writer {
   readonly results: WriteResult[] = [];
 
-  constructor(
-    private readonly opts: { dryRun: boolean; repoRoot: string },
-  ) {}
+  constructor(private readonly opts: { dryRun: boolean; repoRoot: string }) {}
 
   write(path: string, content: string): WriteResult {
     const abs = resolve(path);

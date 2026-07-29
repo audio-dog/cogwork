@@ -1,9 +1,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFrontmatter } from "./lib/frontmatter.js";
+import { findPackageRoot, findRepoRoot } from "./lib/paths.js";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const here = dirname(fileURLToPath(import.meta.url));
+const packageRoot = findPackageRoot(here);
+const repoRoot = findRepoRoot(here);
 const errors: string[] = [];
 
 /** Walk a directory recursively, yielding files whose basename matches `match`. */
@@ -31,12 +34,12 @@ for (const file of walk(join(repoRoot, "skills"), (n) => n === "SKILL.md")) {
 }
 
 // Commands: need a description so agents know when to use them.
-for (const file of walk(join(repoRoot, "assets", "commands"), (n) => n.endsWith(".md"))) {
+for (const file of walk(join(packageRoot, "assets", "commands"), (n) => n.endsWith(".md"))) {
   requireKeys(file, ["description"]);
 }
 
 // Subagents: need name + description.
-for (const file of walk(join(repoRoot, "assets", "subagents"), (n) => n.endsWith(".md"))) {
+for (const file of walk(join(packageRoot, "assets", "subagents"), (n) => n.endsWith(".md"))) {
   requireKeys(file, ["name", "description"]);
 }
 

@@ -2,15 +2,18 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAssets } from "./lib/assets.js";
+import { findPackageRoot, findRepoRoot } from "./lib/paths.js";
 import { copyTree } from "./lib/skills.js";
-import { Writer, type WriteResult } from "./lib/writer.js";
 import type { Mode, Target, TargetName } from "./lib/types.js";
+import { type WriteResult, Writer } from "./lib/writer.js";
 import { claude } from "./targets/claude.js";
-import { cursor } from "./targets/cursor.js";
 import { codex } from "./targets/codex.js";
+import { cursor } from "./targets/cursor.js";
 
 const TARGETS: Record<TargetName, Target> = { claude, cursor, codex };
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const here = dirname(fileURLToPath(import.meta.url));
+const packageRoot = findPackageRoot(here);
+const repoRoot = findRepoRoot(here);
 
 interface Options {
   targets: TargetName[];
@@ -27,7 +30,8 @@ function parseArgs(argv: string[]): Options {
     dryRun: false,
   };
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]!;
+    const arg = argv[i];
+    if (arg === undefined) continue;
     switch (arg) {
       case "--target": {
         const value = argv[++i];
@@ -38,10 +42,15 @@ function parseArgs(argv: string[]): Options {
       case "--global":
         opts.mode = "global";
         break;
-      case "--project":
+      case "--project": {
         opts.mode = "project";
-        if (argv[i + 1] && !argv[i + 1]!.startsWith("--")) opts.projectDir = resolve(argv[++i]!);
+        const next = argv[i + 1];
+        if (next && !next.startsWith("--")) {
+          opts.projectDir = resolve(next);
+          i++;
+        }
         break;
+      }
       case "--dry-run":
         opts.dryRun = true;
         break;
@@ -49,6 +58,7 @@ function parseArgs(argv: string[]): Options {
       case "--help":
         printHelp();
         process.exit(0);
+        break;
       default:
         fail(`unknown argument: ${arg}`);
     }
@@ -66,9 +76,14 @@ function parseTargets(value: string): TargetName[] {
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const assets = loadAssets(repoRoot);
+  const assets = loadAssets(packageRoot, repoRoot);
   const writer = new Writer({ dryRun: opts.dryRun, repoRoot });
-  const ctx = { mode: opts.mode, home: homedir(), projectDir: opts.projectDir, writer };
+  const ctx = {
+    mode: opts.mode,
+    home: homedir(),
+    projectDir: opts.projectDir,
+    writer,
+  };
 
   for (const name of opts.targets) TARGETS[name].write(assets, ctx);
 
@@ -87,7 +102,10 @@ function report(results: WriteResult[], opts: Options) {
   const label = opts.dryRun ? "DRY RUN — no files written" : "Synced";
   console.log(`\n${label} (mode: ${opts.mode}, targets: ${opts.targets.join(", ")})\n`);
   const icon: Record<WriteResult["status"], string> = {
-    create: "＋", update: "～", unchanged: "·", skip: "⤫",
+    create: "＋",
+    update: "～",
+    unchanged: "·",
+    skip: "⤫",
   };
   for (const r of results) {
     const suffix = r.note ? `  (${r.note})` : "";

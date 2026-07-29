@@ -17,9 +17,8 @@ export const codex: Target = {
     const rules = parseFrontmatter(ctx.mode === "global" ? assets.globalRules : assets.projectRules).body;
 
     if (rules.trim()) {
-      const agentsPath = ctx.mode === "global"
-        ? join(ctx.home, ".codex", "AGENTS.md")
-        : join(ctx.projectDir, "AGENTS.md");
+      const agentsPath =
+        ctx.mode === "global" ? join(ctx.home, ".codex", "AGENTS.md") : join(ctx.projectDir, "AGENTS.md");
       writer.write(agentsPath, ensureNewline(rules));
     }
 
@@ -42,9 +41,8 @@ export const codex: Target = {
     }
 
     // Custom agents → .codex/agents/*.toml (user-level globally, project-scoped otherwise).
-    const agentsDir = ctx.mode === "global"
-      ? join(ctx.home, ".codex", "agents")
-      : join(ctx.projectDir, ".codex", "agents");
+    const agentsDir =
+      ctx.mode === "global" ? join(ctx.home, ".codex", "agents") : join(ctx.projectDir, ".codex", "agents");
     for (const agent of assets.subagents) {
       const fm = agent.frontmatter;
       writer.write(

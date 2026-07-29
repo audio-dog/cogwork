@@ -18,9 +18,8 @@ export const claude: Target = {
     // Rules / memory → CLAUDE.md (global rules at user level, project rules in the repo)
     const rules = parseFrontmatter(ctx.mode === "global" ? assets.globalRules : assets.projectRules).body;
     if (rules.trim()) {
-      const rulesPath = ctx.mode === "global"
-        ? join(ctx.home, ".claude", "CLAUDE.md")
-        : join(ctx.projectDir, "CLAUDE.md");
+      const rulesPath =
+        ctx.mode === "global" ? join(ctx.home, ".claude", "CLAUDE.md") : join(ctx.projectDir, "CLAUDE.md");
       writer.write(rulesPath, ensureNewline(rules));
     }
 
@@ -45,7 +44,7 @@ export const claude: Target = {
       if (ctx.mode === "project") {
         writer.write(
           join(ctx.projectDir, ".mcp.json"),
-          JSON.stringify({ mcpServers: assets.mcpServers }, null, 2) + "\n",
+          `${JSON.stringify({ mcpServers: assets.mcpServers }, null, 2)}\n`,
         );
       } else {
         // Merge into the existing ~/.claude.json without clobbering other state.
@@ -55,9 +54,12 @@ export const claude: Target = {
           : {};
         const merged = {
           ...current,
-          mcpServers: { ...(current.mcpServers as object | undefined), ...assets.mcpServers },
+          mcpServers: {
+            ...(current.mcpServers as object | undefined),
+            ...assets.mcpServers,
+          },
         };
-        writer.write(file, JSON.stringify(merged, null, 2) + "\n");
+        writer.write(file, `${JSON.stringify(merged, null, 2)}\n`);
       }
     }
 
@@ -72,7 +74,10 @@ export const claude: Target = {
 
 function pick(obj: Record<string, string>, keys: string[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const key of keys) if (obj[key] !== undefined) out[key] = obj[key]!;
+  for (const key of keys) {
+    const value = obj[key];
+    if (value !== undefined) out[key] = value;
+  }
   return out;
 }
 

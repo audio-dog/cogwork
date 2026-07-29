@@ -3,9 +3,8 @@ import { basename, join } from "node:path";
 import { parseFrontmatter } from "./frontmatter.js";
 import type { Assets, MarkdownAsset, McpServer, RepoConfig, Skill } from "./types.js";
 
-/** Load the canonical `assets/` + `skills/` directories into a structured object. */
-export function loadAssets(repoRoot: string): Assets {
-  const assetsDir = join(repoRoot, "assets");
+export function loadAssets(packageRoot: string, repoRoot: string): Assets {
+  const assetsDir = join(packageRoot, "assets");
   return {
     globalRules: readIfExists(join(assetsDir, "rules", "global.md")) ?? "",
     projectRules: readIfExists(join(assetsDir, "rules", "project.md")) ?? "",
@@ -25,7 +24,11 @@ function loadRepoConfigs(dir: string): RepoConfig[] {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((e) => {
       const configDir = join(dir, e.name);
-      return { slug: e.name, dir: configDir, files: listFiles(configDir) } satisfies RepoConfig;
+      return {
+        slug: e.name,
+        dir: configDir,
+        files: listFiles(configDir),
+      } satisfies RepoConfig;
     });
 }
 
@@ -36,7 +39,11 @@ function loadMarkdownDir(dir: string): MarkdownAsset[] {
     .sort()
     .map((file) => {
       const { frontmatter, body } = parseFrontmatter(readFileSync(join(dir, file), "utf8"));
-      return { name: basename(file, ".md"), frontmatter, body } satisfies MarkdownAsset;
+      return {
+        name: basename(file, ".md"),
+        frontmatter,
+        body,
+      } satisfies MarkdownAsset;
     });
 }
 
@@ -49,7 +56,11 @@ function loadSkills(dir: string): Skill[] {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((e) => {
       const skillDir = join(dir, e.name);
-      return { name: e.name, dir: skillDir, files: listFiles(skillDir) } satisfies Skill;
+      return {
+        name: e.name,
+        dir: skillDir,
+        files: listFiles(skillDir),
+      } satisfies Skill;
     });
 }
 
