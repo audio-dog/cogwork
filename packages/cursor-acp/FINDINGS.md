@@ -158,9 +158,9 @@ Things that cost time here and will bite again — the seam-level knowledge wort
 ## Reproduce
 
 ```bash
-cd spikes/cursor-acp
-pnpm install --ignore-workspace
-echo 'CURSOR_API_KEY=…' > .env         # optionally SPIKE_MODEL=…
+pnpm install                            # from the repo root — spike is a workspace package
+cd packages/cursor-acp
+echo 'CURSOR_API_KEY=…' > .env          # optionally SPIKE_MODEL=…
 pnpm run                                # run.ts — two-invocation resume + AG-UI stream (Q1, Q2)
 pnpm probe                              # probe-acp.ts — raw ACP ground truth (Q1/Q2/Q3)
 SPIKE_MODE=plan SPIKE_PROMPT="Create a detailed multi-step plan…" pnpm probe   # triggers cursor/create_plan (Q3)
