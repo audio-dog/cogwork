@@ -1,0 +1,7 @@
+{
+  "name": "@clanker-forge/sync",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Single-source generator that syncs rules, commands, subagents, and MCP config across Claude Code, Cursor, and Codex.",
+  "type": "module"
+}

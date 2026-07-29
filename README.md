@@ -53,7 +53,7 @@ into a project directory (default: cwd). Run `pnpm sync --help` for all flags.
 | MCP servers | `assets/mcp/servers.json` | `mcpServers` (`.mcp.json` / `~/.claude.json`) | `.cursor/mcp.json` | `~/.codex/clanker-forge.mcp.toml` snippet |
 | Per-repo skill config (`--global`) | `repo-config/<slug>/` | `~/.agents/repo-config/<slug>/` — one shared home, all tools | ← same | ← same |
 
-> Tool conventions change often. Each target lives in `src/targets/<tool>.ts` — that's the one
+> Tool conventions change often. Each target lives in `packages/sync/src/targets/<tool>.ts` — that's the one
 > place to update when a tool moves its files.
 
 ### Model selection (per tool)
@@ -66,7 +66,7 @@ model name, since each tool names models differently (Claude: `haiku`/`sonnet`/`
 model: fast   # or: default | powerful
 ```
 
-Each tier resolves to the right per-tool model in `src/lib/models.ts` (`TIER_MODELS`) — the one
+Each tier resolves to the right per-tool model in `packages/sync/src/lib/models.ts` (`TIER_MODELS`) — the one
 place to edit when a tool renames its models. Any value that isn't a tier (e.g. `inherit` or a
 concrete model ID) is passed through unchanged, and a tier that maps to nothing emits no `model`
 key (the tool uses its own default).
@@ -79,13 +79,19 @@ key (the tool uses its own default).
 
 ## Layout
 
+clanker-forge is a pnpm monorepo. Load-bearing top-level directories (`skills/`, `assets/`,
+`repo-config/`) stay at the root — the `skills` CLI and `bin/link-skills.sh` resolve them there.
+Code lives under `packages/`.
+
 ```
-skills/      Portable SKILL.md skills (shipped via the `skills` CLI)
-assets/      Canonical source for rules, commands, subagents, MCP config
-repo-config/ Per-repo config for the forked engineering skills (see repo-config/README.md)
-src/         TypeScript generator (cli.ts, check.ts, targets/, lib/)
-bin/         link-skills.sh (symlink skills + repo-config for local dev)
+skills/          Portable SKILL.md skills (shipped via the `skills` CLI)
+assets/          Canonical source for rules, commands, subagents, MCP config
+repo-config/     Per-repo config for the forked engineering skills (see repo-config/README.md)
+bin/             link-skills.sh (symlink skills + repo-config for local dev)
+packages/sync/   TypeScript generator behind `pnpm sync`/`pnpm check` (src/cli.ts, src/check.ts, targets/, lib/)
 ```
+
+`pnpm sync`, `pnpm check`, and `pnpm link` run from the repo root exactly as before.
 
 ## Contributing
 

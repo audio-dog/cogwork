@@ -6,10 +6,10 @@
   "type": "module",
   "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "sync": "tsx src/cli.ts",
-    "check": "tsx src/check.ts && tsc --noEmit",
+    "sync": "tsx packages/sync/src/cli.ts",
+    "check": "tsx packages/sync/src/check.ts && tsc --noEmit -p packages/sync",
     "link": "bash bin/link-skills.sh",
-    "build": "tsc"
+    "build": "tsc -p packages/sync"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

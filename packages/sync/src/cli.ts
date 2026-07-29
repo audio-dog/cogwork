@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAssets } from "./lib/assets.js";
+import { findRepoRoot } from "./lib/repo-root.js";
 import { copyTree } from "./lib/skills.js";
 import { Writer, type WriteResult } from "./lib/writer.js";
 import type { Mode, Target, TargetName } from "./lib/types.js";
@@ -10,7 +11,7 @@ import { cursor } from "./targets/cursor.js";
 import { codex } from "./targets/codex.js";
 
 const TARGETS: Record<TargetName, Target> = { claude, cursor, codex };
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
 
 interface Options {
   targets: TargetName[];

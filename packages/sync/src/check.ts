@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFrontmatter } from "./lib/frontmatter.js";
+import { findRepoRoot } from "./lib/repo-root.js";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
 const errors: string[] = [];
 
 /** Walk a directory recursively, yielding files whose basename matches `match`. */

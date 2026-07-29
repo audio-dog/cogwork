@@ -11,8 +11,8 @@ Shared vocabulary for this repo, so docs and skills stay consistent.
   `--project` mode.
 - **Canonical source** — `assets/`. The one place an asset is edited.
 - **Target** — a coding agent we generate for: `claude`, `cursor`, `codex`. One module each in
-  `src/targets/`.
-- **Generator / sync** — the `pnpm sync` CLI (`src/cli.ts`) that reads `assets/` and writes each
-  target's native files.
+  `packages/sync/src/targets/`.
+- **Generator / sync** — the `pnpm sync` CLI (`packages/sync/src/cli.ts`) that reads `assets/` and
+  writes each target's native files.
 - **Mode** — `--global` (writes to `~/.claude`, `~/.codex`, `~/.cursor`) vs `--project` (writes
   into a project directory: `.claude/`, `.cursor/`, root `AGENTS.md`/`CLAUDE.md`).
