@@ -1,0 +1,24 @@
+packages/cursor-acp/FINDINGS.md
+  s_11872e12057523::t_85cf8fe7478b8b 161-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "45085b1f66b42fda4d7b9fe5c0c7957fef01c53d",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_11872e12057523": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61390bbf-9948-4075-b744-dfffa2433795",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
