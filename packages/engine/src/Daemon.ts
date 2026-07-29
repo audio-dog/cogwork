@@ -4,8 +4,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
+import { ReconcileWorker } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
-import { ReconcileWorker } from "./reconcile";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
   "engine/Daemon/DaemonInfo",
@@ -17,24 +17,23 @@ export const daemonInfoLayer = Layer.effect(
 );
 
 export const handlersLayer = DaemonRpcs.toLayer({
-  GetStatus: () =>
-    Effect.gen(function* () {
-      const registry = yield* WorkspaceRegistry;
-      const info = yield* DaemonInfo;
-      const now = yield* Clock.currentTimeMillis;
-      return {
-        health: "running" as const,
-        startedAtMillis: info.startedAtMillis,
-        uptimeMillis: now - info.startedAtMillis,
-        workspaces: registry.workspaces.map((w) => ({
-          name: w.config.name,
-          checkoutPath: w.config.checkoutPath,
-          workSource: w.config.workSource.type,
-          harness: w.config.harness.preferred,
-        })),
-        failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
-      };
-    }),
+  GetStatus: Effect.fn("Daemon.GetStatus")(function* () {
+    const registry = yield* WorkspaceRegistry;
+    const info = yield* DaemonInfo;
+    const now = yield* Clock.currentTimeMillis;
+    return {
+      health: "running" as const,
+      startedAtMillis: info.startedAtMillis,
+      uptimeMillis: now - info.startedAtMillis,
+      workspaces: registry.workspaces.map((w) => ({
+        name: w.config.name,
+        checkoutPath: w.config.checkoutPath,
+        workSource: w.config.workSource.type,
+        harness: w.config.harness.preferred,
+      })),
+      failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
+    };
+  }),
 });
 
 export const reconcileHeartbeat = Effect.gen(function* () {

@@ -5,7 +5,9 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { Registry } from "engine";
 
-const configExtensions = new Set([".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
+const configSuffixes = [".workspace.ts", ".workspace.mts", ".workspace.cts"];
+
+const isConfigFile = (name: string) => configSuffixes.some((suffix) => name.endsWith(suffix));
 
 class WorkspaceLoadError extends Schema.TaggedErrorClass<WorkspaceLoadError>()("WorkspaceLoadError", {
   detail: Schema.String,
@@ -33,7 +35,7 @@ const listConfigFiles = (configHome: string) =>
   }).pipe(
     Effect.map((entries) =>
       entries
-        .filter((entry) => entry.isFile() && configExtensions.has(path.extname(entry.name)))
+        .filter((entry) => entry.isFile() && isConfigFile(entry.name))
         .map((entry) => path.join(configHome, entry.name)),
     ),
   );

@@ -10,6 +10,11 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { Daemon, Reconcile, Registry, WorkSource } from "engine";
 import { loadFromDisk } from "./loader";
 
+export interface DaemonOptions {
+  readonly socketPath: string;
+  readonly configHome: string;
+}
+
 const clearStaleSocket = (socketPath: string) =>
   Effect.gen(function* () {
     const stat = yield* Effect.promise(() => fs.stat(socketPath).catch(() => null));
@@ -29,7 +34,7 @@ const socketServerLayer = (socketPath: string) =>
 const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
-export const serverLayer = (options: { readonly socketPath: string; readonly configHome: string }) => {
+export const serverLayer = (options: DaemonOptions) => {
   const shared = Reconcile.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(registryLayer(options.configHome), Daemon.daemonInfoLayer, WorkSource.emptyLayer),

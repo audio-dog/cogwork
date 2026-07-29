@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString, WorkspaceId } from "./baseSchemas";
+import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from "./baseSchemas";
 
 export const DaemonHealth = Schema.Literals(["running"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -7,8 +7,8 @@ export type DaemonHealth = typeof DaemonHealth.Type;
 export const WorkspaceInfo = Schema.Struct({
   name: WorkspaceId,
   checkoutPath: TrimmedNonEmptyString,
-  workSource: TrimmedNonEmptyString,
-  harness: TrimmedNonEmptyString,
+  workSource: WorkSourceType,
+  harness: HarnessName,
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
@@ -20,8 +20,8 @@ export type WorkspaceFailureInfo = typeof WorkspaceFailureInfo.Type;
 
 export const DaemonStatus = Schema.Struct({
   health: DaemonHealth,
-  startedAtMillis: Schema.Finite,
-  uptimeMillis: Schema.Finite,
+  startedAtMillis: Schema.Natural,
+  uptimeMillis: Schema.Natural,
   workspaces: Schema.Array(WorkspaceInfo),
   failures: Schema.Array(WorkspaceFailureInfo),
 });

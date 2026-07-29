@@ -1,13 +1,13 @@
 import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString, WorkspaceId } from "./baseSchemas";
+import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from "./baseSchemas";
 
-export const WorkSource = Schema.Struct({
-  type: TrimmedNonEmptyString,
+export const WorkSourceConfig = Schema.Struct({
+  type: WorkSourceType,
 });
-export type WorkSource = typeof WorkSource.Type;
+export type WorkSourceConfig = typeof WorkSourceConfig.Type;
 
 export const HarnessPreferences = Schema.Struct({
-  preferred: TrimmedNonEmptyString,
+  preferred: HarnessName,
 });
 export type HarnessPreferences = typeof HarnessPreferences.Type;
 
@@ -15,7 +15,7 @@ export const PlaybookStageConfig = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   prompt: Schema.optional(TrimmedNonEmptyString),
   skill: Schema.optional(TrimmedNonEmptyString),
-  harness: Schema.optional(TrimmedNonEmptyString),
+  harness: Schema.optional(HarnessName),
 });
 export type PlaybookStageConfig = typeof PlaybookStageConfig.Type;
 
@@ -30,7 +30,7 @@ export type PlaybookConfig = typeof PlaybookConfig.Type;
 export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,
   checkoutPath: TrimmedNonEmptyString,
-  workSource: WorkSource,
+  workSource: WorkSourceConfig,
   harness: HarnessPreferences,
   playbook: Schema.optional(PlaybookConfig),
 });

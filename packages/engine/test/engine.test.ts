@@ -5,9 +5,9 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "../src/Daemon";
+import * as Reconcile from "../src/Reconcile";
 import * as Registry from "../src/Registry";
-import * as Reconcile from "../src/reconcile";
-import * as WorkSource from "../src/workSource";
+import * as WorkSource from "../src/WorkSource";
 
 const validModule: Registry.LoadedWorkspace = {
   source: "audiodog.workspace.ts",

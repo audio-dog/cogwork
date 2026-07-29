@@ -6,7 +6,7 @@ import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { Daemon, Registry } from "engine";
 import { defaultConfigHome, defaultSocketPath } from "./paths";
-import { clientLayer, serverLayer } from "./rpc";
+import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
@@ -18,8 +18,8 @@ const configHomeFlag = Flag.string("config-home").pipe(
   Flag.withDefault(defaultConfigHome),
 );
 
-const runDaemon = (options: { readonly socketPath: string; readonly configHome: string }) =>
-  Effect.gen(function* () {
+const runDaemon = Effect.fn("commands.runDaemon")(
+  function* (options: DaemonOptions) {
     const registry = yield* Registry.WorkspaceRegistry;
     yield* Effect.logInfo("clanker-forge daemon started", {
       socket: options.socketPath,
@@ -37,7 +37,9 @@ const runDaemon = (options: { readonly socketPath: string; readonly configHome: 
       { discard: true },
     );
     yield* Daemon.reconcileHeartbeat;
-  }).pipe(Effect.provide(serverLayer(options)));
+  },
+  (effect, options) => effect.pipe(Effect.provide(serverLayer(options))),
+);
 
 const formatStatus = (status: DaemonStatus) => {
   const header = `daemon: ${status.health} (uptime ${Math.round(status.uptimeMillis / 1000)}s)`;
@@ -56,18 +58,21 @@ const formatStatus = (status: DaemonStatus) => {
   ].join("\n");
 };
 
-const runStatus = (options: { readonly socketPath: string }) =>
-  Effect.gen(function* () {
+const runStatus = Effect.fn("commands.runStatus")(
+  function* (_options: { readonly socketPath: string }) {
     const client = yield* RpcClient.make(DaemonRpcs);
     const status = yield* client.GetStatus();
     yield* Console.log(formatStatus(status));
-  }).pipe(
-    Effect.scoped,
-    Effect.provide(clientLayer(options.socketPath)),
-    Effect.tapError((error) =>
-      Console.error(`Could not reach clanker-forge daemon at ${options.socketPath}: ${String(error)}`),
+  },
+  (effect, options) =>
+    effect.pipe(
+      Effect.scoped,
+      Effect.provide(clientLayer(options.socketPath)),
+      Effect.tapError((error) =>
+        Console.error(`Could not reach clanker-forge daemon at ${options.socketPath}: ${String(error)}`),
+      ),
     ),
-  );
+);
 
 export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,

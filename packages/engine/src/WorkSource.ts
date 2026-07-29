@@ -11,7 +11,7 @@ const pendingEmpty = Effect.fn("WorkSource.pending")(function* (_workspace: Regi
 export const makeEmpty = Effect.succeed({ pending: pendingEmpty } as const);
 
 export class WorkSource extends Context.Service<WorkSource, Effect.Success<typeof makeEmpty>>()(
-  "engine/workSource",
+  "engine/WorkSource",
 ) {}
 
 export const emptyLayer = Layer.effect(WorkSource, makeEmpty);

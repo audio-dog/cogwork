@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import { WorkspaceRegistry } from "./Registry";
-import { WorkSource } from "./workSource";
+import { WorkSource } from "./WorkSource";
 
 export interface ReconcileReceipt {
   readonly workspaces: number;
@@ -42,7 +42,7 @@ export const make = Effect.gen(function* () {
 });
 
 export class ReconcileWorker extends Context.Service<ReconcileWorker, Effect.Success<typeof make>>()(
-  "engine/reconcile/ReconcileWorker",
+  "engine/Reconcile/ReconcileWorker",
 ) {}
 
 export const layer = Layer.effect(ReconcileWorker, make);
