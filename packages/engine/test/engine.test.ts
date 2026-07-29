@@ -1,11 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
-import { DaemonRpcs } from "contracts";
+import { DaemonRpcs, WorkItem } from "contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "../src/Daemon";
 import * as Registry from "../src/Registry";
 import * as Reconcile from "../src/reconcile";
+import * as WorkSource from "../src/workSource";
 
 const validModule: Registry.LoadedWorkspace = {
   source: "audiodog.workspace.ts",
@@ -94,8 +96,10 @@ describe("decide", () => {
 });
 
 describe("reconcile worker", () => {
+  const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
+
   const workerLayer = Reconcile.layer.pipe(
-    Layer.provide(Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult))),
+    Layer.provide(Layer.mergeAll(registryLayer, WorkSource.emptyLayer)),
   );
 
   it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
@@ -104,8 +108,22 @@ describe("reconcile worker", () => {
       const receipt = yield* worker.submit();
       assert.strictEqual(receipt.workspaces, 1);
       assert.strictEqual(receipt.failures, 2);
+      assert.strictEqual(receipt.pendingWork, 0);
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
   );
+
+  it.effect("counts pending work the work source reports per workspace", () => {
+    const item = Schema.decodeSync(WorkItem)({ id: "AUD-1", title: "first ticket" });
+    const stubWorkSource = Layer.succeed(WorkSource.WorkSource, {
+      pending: () => Effect.succeed([item]),
+    });
+    const workerWithWork = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, stubWorkSource)));
+    return Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const receipt = yield* worker.submit();
+      assert.strictEqual(receipt.pendingWork, 1);
+    }).pipe(Effect.provide(workerWithWork), Effect.scoped);
+  });
 });
 
 describe("daemon status over rpc", () => {

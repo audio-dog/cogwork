@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import { Daemon, Reconcile, Registry } from "engine";
+import { Daemon, Reconcile, Registry, WorkSource } from "engine";
 import { loadFromDisk } from "./loader";
 
 const socketServerLayer = (socketPath: string) =>
@@ -21,7 +21,9 @@ const registryLayer = (configHome: string) =>
 
 export const serverLayer = (options: { readonly socketPath: string; readonly configHome: string }) => {
   const shared = Reconcile.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(registryLayer(options.configHome), Daemon.daemonInfoLayer)),
+    Layer.provideMerge(
+      Layer.mergeAll(registryLayer(options.configHome), Daemon.daemonInfoLayer, WorkSource.emptyLayer),
+    ),
   );
   return RpcServer.layer(DaemonRpcs).pipe(
     Layer.provide(Daemon.handlersLayer),

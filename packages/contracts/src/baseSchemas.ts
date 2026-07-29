@@ -20,3 +20,6 @@ const makeEntityId = <Brand extends string>(brand: Brand) => TrimmedNonEmptyStri
 
 export const WorkspaceId = makeEntityId("WorkspaceId");
 export type WorkspaceId = typeof WorkspaceId.Type;
+
+export const WorkItemId = makeEntityId("WorkItemId");
+export type WorkItemId = typeof WorkItemId.Type;
