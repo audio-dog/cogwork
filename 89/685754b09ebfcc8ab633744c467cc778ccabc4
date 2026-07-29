@@ -1,0 +1,58 @@
+turbo.json
+  h_46518a29d4dd91 1-12
+package.json
+  h_46518a29d4dd91 9-11,14-17
+packages/sync/package.json
+  h_46518a29d4dd91 6-18
+packages/sync/src/check.ts
+  s_d323c73953e536::t_e04b8d36f10b2d 5,7-9
+  s_d323c73953e536::t_6be5f9e9126f3a 37,42
+pnpm-workspace.yaml
+  h_46518a29d4dd91 2-4,7-10
+skills/implement/SKILL.md
+  s_d323c73953e536::t_b7223a5ed54b1c 7
+  s_d323c73953e536::t_79c29b78e0b470 19
+  s_d323c73953e536::t_6a3b173f2c92b7 8
+biome.json
+  h_46518a29d4dd91 1-35
+packages/sync/src/lib/paths.ts
+  s_d323c73953e536::t_f90268bed344ba 4-19
+packages/sync/src/lib/assets.ts
+  s_d323c73953e536::t_779cd204dd9080 6-7
+CONTEXT.md
+  s_d323c73953e536::t_e80af4313e42c5 59-60
+  s_d323c73953e536::t_68e8efa4435012 52-56
+packages/sync/src/targets/cursor.ts
+  s_d323c73953e536::t_f9f22f65e4c1e1 30,33
+README.md
+  s_d323c73953e536::t_65bde7718c8b11 12
+  s_d323c73953e536::t_030780d2364ab4 82-84,87-91
+  s_d323c73953e536::t_be11c1a38ddca1 49-53
+  s_d323c73953e536::t_157a2bae85934d 99
+packages/sync/src/lib/types.ts
+  s_d323c73953e536::t_881a6a0da7b7c6 44,46,48
+packages/sync/src/cli.ts
+  s_d323c73953e536::t_9debea0d578f61 5,8,11,14-16
+  s_d323c73953e536::t_863a73db380ae8 72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "89685754b09ebfcc8ab633744c467cc778ccabc4",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_d323c73953e536": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f29139c5-86b2-4563-a73f-f74aea6d9a67",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
