@@ -1,0 +1,17 @@
+{
+  "name": "engine",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@catenarycloud/linteffect": "^0.0.7",
+    "@effect/vitest": "catalog:effect",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

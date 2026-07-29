@@ -89,9 +89,25 @@ repo-config/            Per-repo config for the forked engineering skills (see r
 bin/                    link-skills.sh (symlink skills + repo-config for local dev)
 packages/sync/          TypeScript generator behind `pnpm sync`/`pnpm check` (src/cli.ts, src/check.ts, targets/, lib/)
 packages/sync/assets/   Canonical source for rules, commands, subagents, MCP config
+.repos/                 Vendored reference source (git-ignored), pinned by `pnpm vendor`
 ```
 
 `pnpm sync`, `pnpm check`, and `pnpm link` run from the repo root exactly as before.
+
+## Vendored reference source
+
+The Effect v4 API is beta and shifts release-to-release, so the exact source we depend on is
+vendored locally for agents (and humans) to read:
+
+```bash
+pnpm vendor
+```
+
+This shallow-clones the Effect monorepo into `.repos/effect`, pinned to the **exact installed**
+`effect` version (read from `packages/engine`, currently `4.0.0-beta.102` via the `effect` catalog),
+so the reference can never drift from the dependency. `.repos/` is git-ignored, and re-running is
+idempotent — it no-ops when `.repos/effect` already matches the installed version and re-clones when
+the version changes.
 
 ## Contributing
 
