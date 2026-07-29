@@ -1,0 +1,50 @@
+packages/contracts/src/baseSchemas.ts
+  s_9cf02bd7c20d92::t_1da60075b9116c 7,9,12,14-19
+apps/clanker-forge/src/rpc.ts
+  s_9cf02bd7c20d92::t_aa532b8f14bef7 13-17
+  s_9cf02bd7c20d92::t_180e5ac526f401 37
+apps/clanker-forge/src/commands.ts
+  s_9cf02bd7c20d92::t_aa0b47fd8a8c56 62
+  s_9cf02bd7c20d92::t_36c6520aca30bf 9
+  s_9cf02bd7c20d92::t_f41d2a7ff54fdc 21-22,40-42
+  s_9cf02bd7c20d92::t_ee11b93828effb 61,66-73,75
+skills/implement/SKILL.md
+  s_9cf02bd7c20d92::t_8843f6a00710bb 21-22
+packages/engine/src/index.ts
+  s_9cf02bd7c20d92::t_c801fb3f5fef9b 3,5
+packages/engine/src/WorkSource.ts
+  s_9cf02bd7c20d92::t_eedf77d6a9bd13 14
+packages/contracts/src/daemon.ts
+  s_9cf02bd7c20d92::t_392fc02305cda4 23-24
+  s_9cf02bd7c20d92::t_0ae7122ad58282 2,10-11
+packages/engine/test/engine.test.ts
+  s_9cf02bd7c20d92::t_3919180e09fe7f 8,10
+apps/clanker-forge/src/loader.ts
+  s_9cf02bd7c20d92::t_9973aa7d110838 8-10
+  s_9cf02bd7c20d92::t_f481c7456c852f 38
+packages/engine/src/Daemon.ts
+  s_9cf02bd7c20d92::t_9ac3112ab6a2d3 7
+  s_9cf02bd7c20d92::t_21c251e1722459 20-36
+packages/engine/src/Reconcile.ts
+  s_9cf02bd7c20d92::t_d8763b4d217e91 45
+  s_9cf02bd7c20d92::t_8e2870978ece2d 7
+packages/contracts/src/workspace.ts
+  s_9cf02bd7c20d92::t_af4880d94987ec 2,4-5,7,10,18
+  s_9cf02bd7c20d92::t_d5bf74569316cd 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "344e0b33835e4b11d37007962bf98a274a0da6e3",
+  "prompts": {},
+  "sessions": {
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
