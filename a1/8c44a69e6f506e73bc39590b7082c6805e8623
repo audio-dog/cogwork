@@ -1,0 +1,25 @@
+packages/engine/vitest.config.ts
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1,7
+  s_9cf02bd7c20d92::t_156fa46058be7a 2-6
+packages/engine/test/engine.test.ts
+  s_9cf02bd7c20d92::t_b5415882b3a1cc 8,10-16,18,20-21,23,28,41-44,47-49
+  s_9cf02bd7c20d92::t_3d2984a825053f 35-38,58-59
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1-7,17,22,40,46,50-55,57,60
+  s_9cf02bd7c20d92::t_01e8b07a446cb1 9,19,24-27,29-34,39,45,56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "a18c44a69e6f506e73bc39590b7082c6805e8623",
+  "prompts": {},
+  "sessions": {
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
