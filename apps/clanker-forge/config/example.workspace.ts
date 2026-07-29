@@ -1,8 +1,8 @@
 import { defineWorkspace } from "@clanker-forge/engine";
 
 export default defineWorkspace({
-  name: "audiodog",
-  checkoutPath: "/repos/audiodog",
+  name: "example",
+  checkoutPath: "/repos/example",
   workSource: { type: "linear" },
   harness: { preferred: "cursor" },
   playbook: {
