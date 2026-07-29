@@ -1,0 +1,21 @@
+pnpm-workspace.yaml
+  s_9cf02bd7c20d92::t_2193a802c64370 18
+pnpm-lock.yaml
+  s_9cf02bd7c20d92::t_3d301d2a38b584 22-24,55-76,171-183,394-396,586-588,746-749,753-765,813-816,897-904,1066-1073,1089-1091,1134-1137,1231-1242,1289-1308,1439-1440,1559-1562,1668-1669,1672-1677,1745-1756,1812-1815,1859-1864,1892-1893,1952-1953,2002-2003
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "218dee3ab5d5501870e1d2dd503501801a40a12a",
+  "prompts": {},
+  "sessions": {
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
