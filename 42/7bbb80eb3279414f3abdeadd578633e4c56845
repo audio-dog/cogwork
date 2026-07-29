@@ -1,0 +1,47 @@
+apps/clanker-forge/src/commands.ts
+  s_9cf02bd7c20d92::t_0abd53e9898c6e 9-12,14-17,19-21,23-27,29-36,40-41,43-47,50-54,57-59,63-68,70-73,75-77
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1-8,13,18,22,28,37-39,42,48-49,55-56,60-62,69,74,78
+apps/clanker-forge/src/paths.ts
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1-2,4,6
+  s_9cf02bd7c20d92::t_47492d6837f420 3,5
+apps/clanker-forge/src/rpc.ts
+  s_9cf02bd7c20d92::t_aeef731bd12943 11,21,23-25,27-28,31-35
+  s_9cf02bd7c20d92::t_0af9d41d8803fa 13-16
+  s_9cf02bd7c20d92::t_b276ac8b6765a4 10,18-20,22
+  s_9cf02bd7c20d92::t_8e9f68fa694e3c 12,17,26
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1-9,29-30,36
+apps/clanker-forge/src/main.ts
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1-5,7,9
+  s_9cf02bd7c20d92::t_90e7e654ba210b 6,8
+apps/clanker-forge/src/loader.ts
+  s_9cf02bd7c20d92::t_46e9a7bbc8a0e7 9,15-16,18,20-21,25-28,30-35,37,39-40,42-43,46,48,53
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1-3,5,7-8,17,19,22-24,36,47
+  s_9cf02bd7c20d92::t_4009414038a22e 4,6,10-14,38,41,44-45,50-52,57-58,67-68
+  s_9cf02bd7c20d92::t_3703c0236ce219 59-66
+  s_9cf02bd7c20d92::t_3d2984a825053f 29,54-56
+  s_6050a649ffc32d::t_e7ee2a352bed9c 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "427bbb80eb3279414f3abdeadd578633e4c56845",
+  "prompts": {},
+  "sessions": {
+    "s_6050a649ffc32d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5aa0a122-1c3d-40f7-aeee-1ee527442a3e",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
