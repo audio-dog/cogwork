@@ -1,0 +1,88 @@
+packages/engine/src/index.ts
+  s_9cf02bd7c20d92::t_038ea4362c2f95 4
+  s_9cf02bd7c20d92::t_c8ab610662eb21 2
+apps/clanker-forge/src/commands.ts
+  s_9cf02bd7c20d92::t_601bafe696b6aa 61
+  s_9cf02bd7c20d92::t_7704391eebf0d5 1
+  s_9cf02bd7c20d92::t_a5d0410a1bbcf1 7
+  s_9cf02bd7c20d92::t_bcc085b2248b32 42
+packages/engine/src/reconcile.ts
+  s_9cf02bd7c20d92::t_ff9ec3630dbd20 21-30,38,40-43
+  s_9cf02bd7c20d92::t_f48284865f7f11 32-36
+  s_9cf02bd7c20d92::t_a9d4eb3dfc631d 1-20,31,37,39,44-45
+packages/contracts/src/workspace.ts
+  s_9cf02bd7c20d92::t_9eb76f9106a9db 1-38
+packages/engine/package.json
+  s_9cf02bd7c20d92::t_a2e6470aef23a2 13
+packages/contracts/src/index.ts
+  s_9cf02bd7c20d92::t_b1a176d185ea96 1-2,4-5
+  s_9cf02bd7c20d92::t_8b7d530682abef 3
+apps/clanker-forge/package.json
+  s_9cf02bd7c20d92::t_696a996a660097 15
+apps/clanker-forge/src/loader.ts
+  s_9cf02bd7c20d92::t_856452cd09520d 44
+  s_9cf02bd7c20d92::t_16436d1417f7d2 32
+  s_9cf02bd7c20d92::t_74a1bb6e7279be 5,10-16
+packages/engine/src/Daemon.ts
+  s_9cf02bd7c20d92::t_23219cfdfb0401 41,43
+  s_9cf02bd7c20d92::t_e007720c451d75 8
+  s_9cf02bd7c20d92::t_cb119c228c1fe1 1
+  s_9cf02bd7c20d92::t_9fad49c5451076 42
+packages/contracts/src/events.ts
+  s_9cf02bd7c20d92::t_107fc8a0f70791 1-20
+packages/contracts/src/baseSchemas.ts
+  s_9cf02bd7c20d92::t_6d702354d5eee8 1-22
+packages/contracts/package.json
+  s_9cf02bd7c20d92::t_cbba9f7a43abd1 1-18
+packages/engine/src/defineWorkspace.ts
+  s_9cf02bd7c20d92::t_625648e1a45d6e 1-3
+packages/engine/src/decider.ts
+  s_9cf02bd7c20d92::t_c80462ef44fb2f 1-28,35-37
+  s_9cf02bd7c20d92::t_ff2b5c69bceca2 29-34
+apps/clanker-forge/src/rpc.ts
+  s_9cf02bd7c20d92::t_556de2885ba512 4
+  s_9cf02bd7c20d92::t_a2527e001f98f4 10
+  s_9cf02bd7c20d92::t_44115f909c00ba 23-25
+  s_9cf02bd7c20d92::t_5bd0eaf3170c89 26
+packages/contracts/tsconfig.json
+  s_9cf02bd7c20d92::t_a9034c212ad322 1-19
+packages/contracts/src/daemon.ts
+  s_9cf02bd7c20d92::t_267478dab9289c 1-28
+packages/engine/test/engine.test.ts
+  s_9cf02bd7c20d92::t_31fa1b7282990b 41-42,47-94
+  s_9cf02bd7c20d92::t_231b9fe432dd20 104
+  s_9cf02bd7c20d92::t_038ea4362c2f95 8
+  s_9cf02bd7c20d92::t_c530ca062bbc47 2
+  s_9cf02bd7c20d92::t_ff2b5c69bceca2 43-46
+  s_9cf02bd7c20d92::t_31edc098017c91 96-103,105-108
+  s_9cf02bd7c20d92::t_0b794f9caa5c1c 95
+packages/contracts/src/rpc.ts
+  s_9cf02bd7c20d92::t_a6797e030e79a5 1-7
+packages/contracts/biome.json
+  s_9cf02bd7c20d92::t_f8846e1cedb33a 1-4
+packages/engine/src/Registry.ts
+  s_9cf02bd7c20d92::t_ff2b5c69bceca2 3-4,26-30,44-45
+  s_9cf02bd7c20d92::t_1ef56bda9d43c2 17
+  s_9cf02bd7c20d92::t_c0dce0841121f4 1,6-8,24-25,31-43
+  s_9cf02bd7c20d92::t_9ca6f58109cd88 5
+packages/engine/src/projector.ts
+  s_9cf02bd7c20d92::t_3678259a93994b 1-26
+pnpm-lock.yaml
+  s_9cf02bd7c20d92::t_3cb743d36be4ea 60-62,80-92,95-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "f78c4935a7885ebcfa68c06f5259b72db97db2a4",
+  "prompts": {},
+  "sessions": {
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
