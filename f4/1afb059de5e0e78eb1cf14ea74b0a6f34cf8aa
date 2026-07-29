@@ -1,0 +1,23 @@
+packages/engine/src/index.ts
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 1-5
+packages/engine/tsconfig.json
+  s_9cf02bd7c20d92::t_c4facacbe684f7 8,10-11
+packages/engine/package.json
+  s_9cf02bd7c20d92::t_10b2079be05ae3 5-7,9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "f41afb059de5e0e78eb1cf14ea74b0a6f34cf8aa",
+  "prompts": {},
+  "sessions": {
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
