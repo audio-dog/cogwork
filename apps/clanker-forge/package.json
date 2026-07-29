@@ -1,0 +1,23 @@
+{
+  "name": "@clanker-forge/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "clanker-forge": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:effect",
+    "effect": "catalog:effect",
+    "engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:"
+  }
+}
