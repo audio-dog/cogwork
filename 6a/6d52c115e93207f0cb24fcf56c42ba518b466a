@@ -1,0 +1,19 @@
+apps/clanker-forge/config/clanker-forge.workspace.ts
+  s_d0eda8147a4b23::t_7f4092f8b2930f 19-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "6a6d52c115e93207f0cb24fcf56c42ba518b466a",
+  "prompts": {},
+  "sessions": {
+    "s_d0eda8147a4b23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4f3ab7cd-9a0b-4078-8572-d56c4a11f9b4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
