@@ -1,0 +1,32 @@
+packages/contracts/src/workspace.ts
+  s_929db2ce80f5e8::t_535fa989e865eb 6-8
+packages/contracts/src/daemon.ts
+  s_929db2ce80f5e8::t_ea3e3b648927a3 2-4,9-35,41-44
+packages/contracts/src/index.ts
+  s_929db2ce80f5e8::t_89da8ac83fa130 2,6
+packages/contracts/src/coordination.ts
+  s_929db2ce80f5e8::t_6746484591a500 1-19
+packages/contracts/src/triage.ts
+  s_929db2ce80f5e8::t_05e40a38338f31 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "b2cb171bc019d2f39a785a2440dbdd5f174353ae",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_929db2ce80f5e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6f762a4e-4373-4db7-8002-e45a7e4a59de",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
