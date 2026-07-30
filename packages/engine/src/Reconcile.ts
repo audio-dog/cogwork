@@ -1,8 +1,18 @@
+import type {
+  ActionableItem,
+  BlockedItem,
+  ClaimedItem,
+  PollState,
+  WorkspaceId,
+} from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
+import * as Ref from "effect/Ref";
+import { type Classification, classify } from "./classify";
+import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./Registry";
 import { WorkSource } from "./WorkSource";
 
@@ -10,23 +20,70 @@ export interface ReconcileReceipt {
   readonly workspaces: number;
   readonly failures: number;
   readonly pendingWork: number;
+  readonly paused: number;
+}
+
+export interface WorkspaceReconcileState {
+  readonly name: WorkspaceId;
+  readonly poll: PollState;
+  readonly eligible: ReadonlyArray<ActionableItem>;
+  readonly claimed: ReadonlyArray<ClaimedItem>;
+  readonly blocked: ReadonlyArray<BlockedItem>;
+}
+
+export interface ReconcileSnapshot {
+  readonly workspaces: ReadonlyArray<WorkspaceReconcileState>;
 }
 
 interface ReconcileJob {
   readonly receipt: Deferred.Deferred<ReconcileReceipt>;
 }
 
+const okState = (workspace: RegisteredWorkspace, classified: Classification): WorkspaceReconcileState => ({
+  name: workspace.config.name,
+  poll: { status: "ok" },
+  eligible: classified.eligible,
+  claimed: classified.claimed,
+  blocked: classified.blocked,
+});
+
+const pausedState = (workspace: RegisteredWorkspace, message: string): WorkspaceReconcileState => ({
+  name: workspace.config.name,
+  poll: { status: "paused", message },
+  eligible: [],
+  claimed: [],
+  blocked: [],
+});
+
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
   const workSource = yield* WorkSource;
   const queue = yield* Queue.make<ReconcileJob>();
+  const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ workspaces: [] });
+
+  const pollWorkspace = (workspace: RegisteredWorkspace) =>
+    workSource.observe(workspace).pipe(
+      Effect.map((items) => okState(workspace, classify(items))),
+      Effect.catchTag("WorkSourceError", (error) =>
+        Effect.gen(function* () {
+          yield* Effect.logWarning("work source polling paused", {
+            workspace: workspace.config.name,
+            reason: error.reason,
+            message: error.message,
+          });
+          return pausedState(workspace, error.message);
+        }),
+      ),
+    );
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* (job: ReconcileJob) {
-    const pending = yield* Effect.forEach(registry.workspaces, (workspace) => workSource.pending(workspace));
+    const states = yield* Effect.forEach(registry.workspaces, pollWorkspace);
+    yield* Ref.set(snapshotRef, { workspaces: states });
     yield* Deferred.succeed(job.receipt, {
       workspaces: registry.workspaces.length,
       failures: registry.failures.length,
-      pendingWork: pending.reduce((total, items) => total + items.length, 0),
+      pendingWork: states.reduce((total, state) => total + state.eligible.length, 0),
+      paused: states.filter((state) => state.poll.status === "paused").length,
     });
   });
 
@@ -38,11 +95,11 @@ export const make = Effect.gen(function* () {
     return yield* Deferred.await(receipt);
   });
 
-  return { submit } as const;
+  return { submit, snapshot: Ref.get(snapshotRef) } as const;
 });
 
 export class ReconcileWorker extends Context.Service<ReconcileWorker, Effect.Success<typeof make>>()(
-  "engine/Reconcile/ReconcileWorker",
+  "@clanker-forge/engine/Reconcile/ReconcileWorker",
 ) {}
 
 export const layer = Layer.effect(ReconcileWorker, make);

@@ -1,4 +1,4 @@
-import { DaemonRpcs, type DaemonStatus } from "@clanker-forge/contracts";
+import { DaemonRpcs, type DaemonStatus, type WorkspaceInfo } from "@clanker-forge/contracts";
 import { Daemon, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -41,14 +41,38 @@ const runDaemon = Effect.fn("commands.runDaemon")(
   (effect, options) => effect.pipe(Effect.provide(serverLayer(options))),
 );
 
+const section = (label: string, lines: ReadonlyArray<string>) =>
+  lines.length === 0 ? [] : [`      ${label}:`, ...lines.map((line) => `        · ${line}`)];
+
+const formatWorkspace = (w: WorkspaceInfo) => {
+  const poll = w.poll.status === "paused" ? [`      paused: ${w.poll.message}`] : [];
+  const eligible = section(
+    "eligible",
+    w.eligible.map((item) => `${item.stage} ${item.id} ${item.title}`),
+  );
+  const claimed = section(
+    "claimed",
+    w.claimed.map((item) => `${item.id} ${item.title} (by ${item.claim.by})`),
+  );
+  const blocked = section(
+    "blocked",
+    w.blocked.map((item) => `${item.reason} ${item.id} ${item.title}`),
+  );
+  return [
+    `  - ${w.name} [${w.workSource}/${w.harness}] ${w.checkoutPath}`,
+    ...poll,
+    ...eligible,
+    ...claimed,
+    ...blocked,
+  ].join("\n");
+};
+
 const formatStatus = (status: DaemonStatus) => {
   const header = `daemon: ${status.health} (uptime ${Math.round(status.uptimeMillis / 1000)}s)`;
   const workspaces =
     status.workspaces.length === 0
       ? "  (no workspaces registered)"
-      : status.workspaces
-          .map((w) => `  - ${w.name} [${w.workSource}/${w.harness}] ${w.checkoutPath}`)
-          .join("\n");
+      : status.workspaces.map(formatWorkspace).join("\n");
   const failures = status.failures.map((f) => `  ! ${f.source}: ${f.message}`).join("\n");
   return [
     header,

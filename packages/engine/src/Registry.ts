@@ -18,7 +18,7 @@ export interface LoadResult {
 }
 
 export class WorkspaceRegistry extends Context.Service<WorkspaceRegistry, RegistryState>()(
-  "engine/Registry/WorkspaceRegistry",
+  "@clanker-forge/engine/Registry/WorkspaceRegistry",
 ) {}
 
 const toCommands = (result: LoadResult) => [

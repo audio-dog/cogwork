@@ -1,10 +1,11 @@
 import * as fs from "node:fs/promises";
 import { DaemonRpcs } from "@clanker-forge/contracts";
-import { Daemon, Reconcile, Registry, WorkSource } from "@clanker-forge/engine";
+import { Daemon, GitHub, Reconcile, Registry } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
@@ -34,10 +35,15 @@ const socketServerLayer = (socketPath: string) =>
 const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
+const workSourceLayer = GitHub.adapterLayer.pipe(
+  Layer.provide(GitHub.clientLayer),
+  Layer.provide(FetchHttpClient.layer),
+);
+
 export const serverLayer = (options: DaemonOptions) => {
   const shared = Reconcile.layer.pipe(
     Layer.provideMerge(
-      Layer.mergeAll(registryLayer(options.configHome), Daemon.daemonInfoLayer, WorkSource.emptyLayer),
+      Layer.mergeAll(registryLayer(options.configHome), Daemon.daemonInfoLayer, workSourceLayer),
     ),
   );
   return RpcServer.layer(DaemonRpcs).pipe(
