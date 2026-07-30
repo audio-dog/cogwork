@@ -1,0 +1,34 @@
+packages/engine/src/github/adapter.ts
+  s_748cc837e473b1::t_0e0e8afbde50b9 20
+  s_748cc837e473b1::t_fdc6e79e3a6ce5 105
+  s_748cc837e473b1::t_9c3720e4468d85 154-164
+packages/engine/src/github/markers.ts
+  s_748cc837e473b1::t_135f80902ea4b0 28-29
+  s_748cc837e473b1::t_ca7dec41e22127 34-36
+  s_748cc837e473b1::t_3d827770883c71 37
+packages/engine/test/github.test.ts
+  s_748cc837e473b1::t_cde22e15867f74 10
+  s_748cc837e473b1::t_7bfd51ddd082bf 184-207
+  s_748cc837e473b1::t_305b9421a0c161 208-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "bbd648ca566c9179133a6be00fbb1dad8d5e6ac0",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
