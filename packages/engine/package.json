@@ -1,11 +1,16 @@
 {
-  "name": "engine",
+  "name": "@clanker-forge/engine",
   "version": "0.0.0",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@clanker-forge/contracts": "workspace:*",
     "@tanstack/ai": "^0.42.0",
     "effect": "catalog:effect"
   },
