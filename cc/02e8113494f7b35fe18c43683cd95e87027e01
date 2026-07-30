@@ -1,0 +1,70 @@
+packages/engine/src/index.ts
+  s_d0eda8147a4b23::t_4aef0bdcc23de9 3,8-9
+packages/engine/test/worktree-naming.test.ts
+  s_d0eda8147a4b23::t_fae935c4c7bc08 39-42
+  s_d0eda8147a4b23::t_5d39bc9eb1fef0 1-38,43-46
+packages/engine/src/Worktree.ts
+  s_d0eda8147a4b23::t_f31974b327c528 22-23,43
+  s_d0eda8147a4b23::t_eb0615cfa80d65 114
+  s_d0eda8147a4b23::t_6e6388a2d92e81 199-201
+  s_d0eda8147a4b23::t_7f199efc0de3fc 148,150,154,181,183,186
+  s_d0eda8147a4b23::t_1a80d170bcb50d 11-19
+  s_d0eda8147a4b23::t_1c6ffcb76ef573 61
+  s_d0eda8147a4b23::t_1415e51107d3db 139-145
+  s_d0eda8147a4b23::t_3121f12e139cf6 41
+  s_d0eda8147a4b23::t_cf5e39122d6fda 91-97
+  s_d0eda8147a4b23::t_ccbbb0a3ee7a52 45-46
+  s_d0eda8147a4b23::t_687eeb8c84b830 63-67
+  s_d0eda8147a4b23::t_ecdd07026d3ac7 149,157-162,165-167,187-188,191-192
+  s_d0eda8147a4b23::t_5fb8ff402e4957 170,176-177,179-180
+  s_d0eda8147a4b23::t_ff85cf217af8bc 164
+  s_d0eda8147a4b23::t_62ec10b2b59bb2 30
+  s_d0eda8147a4b23::t_b3afb463809864 4
+  s_d0eda8147a4b23::t_e1c51f6131c2b8 72-74
+  s_d0eda8147a4b23::t_db0d654204f23c 40,47-48
+  s_d0eda8147a4b23::t_a1a261591cce88 163
+  s_d0eda8147a4b23::t_0cba56e6a9c584 1-3,5-10,20-21,24-29,31-39,42,44,49-60,62,68-71,85,102,108-113,115-118,120,126-128,130-131,135,137-138,147,151,156,168-169,171-175,178,189-190,193-198,202-205
+  s_952b5c58981003::t_84390a556d9321 182,184-185
+  s_d0eda8147a4b23::t_1718653b2758a0 75-84,86-90,98-101,103-107,132-134,136,146,152-153,155
+  s_d0eda8147a4b23::t_3c4a3f936eb6e8 119,121-125,129
+packages/engine/test/worktree.test.ts
+  s_d0eda8147a4b23::t_cf5e39122d6fda 74-77,177-185,200-203
+  s_d0eda8147a4b23::t_84189fe2c9fd4a 126
+  s_d0eda8147a4b23::t_e79cd061a08a34 140-145,147-158
+  s_d0eda8147a4b23::t_5a84e11dfb427d 146
+  s_d0eda8147a4b23::t_aba00dd3a8f1fd 229-257
+  s_d0eda8147a4b23::t_b281576a5904f5 28
+  s_d0eda8147a4b23::t_c055d129b98673 50-51
+  s_d0eda8147a4b23::t_0ee17ab3a69ed3 211-215,217-227
+  s_d0eda8147a4b23::t_c264a7d8320b92 13,24-27,29-33,35-49,52-68,73,78-92,98-103,109-119,125,127,131-137,171-172,186-188,198-199,204-207
+  s_d0eda8147a4b23::t_46d9ed70db1d53 189-192
+  s_d0eda8147a4b23::t_673f0c70d76e0d 1-12,14-23,34,69-72,93-97,104-108,120-124,129-130,138-139,159-162,167-170,173-176,193-197,209-210,228
+  s_d0eda8147a4b23::t_b8bbe07e824f06 128
+  s_d0eda8147a4b23::t_ef8c16d16906bd 216
+  s_d0eda8147a4b23::t_fb80e738581c26 208
+  s_d0eda8147a4b23::t_80f29554a9d045 163-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "cc02e8113494f7b35fe18c43683cd95e87027e01",
+  "prompts": {},
+  "sessions": {
+    "s_952b5c58981003": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "79736d56-de43-41ef-9ace-f2456268c2ea",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d0eda8147a4b23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4f3ab7cd-9a0b-4078-8572-d56c4a11f9b4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
