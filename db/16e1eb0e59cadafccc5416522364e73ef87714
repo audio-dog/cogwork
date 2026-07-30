@@ -1,0 +1,24 @@
+packages/contracts/src/rpc.ts
+  s_748cc837e473b1::t_c2690e4abf8430 1,5,9-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "db16e1eb0e59cadafccc5416522364e73ef87714",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
