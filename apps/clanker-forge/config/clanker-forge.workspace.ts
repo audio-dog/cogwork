@@ -16,4 +16,9 @@ export default defineWorkspace({
     "follow-up": { enabled: true },
     verify: { enabled: true },
   },
+  worktrees: {
+    linkEnvFiles: [".env"],
+    setup: ["pnpm install"],
+    reapAfterMillis: 604_800_000,
+  },
 });
