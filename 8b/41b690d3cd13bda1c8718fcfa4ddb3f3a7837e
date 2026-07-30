@@ -1,0 +1,39 @@
+apps/cli/src/paths.ts
+  s_748cc837e473b1::t_f6f267a46ada90 7-8
+apps/cli/src/commands.ts
+  s_748cc837e473b1::t_02945ae0f4fefd 57,85,100,102-116,125-131,133-141,143-144,146-147,150
+  s_748cc837e473b1::t_7fbf9186da8b69 44,54-56
+  s_748cc837e473b1::t_177174f2518a23 22,27,59,152,157-174
+  s_748cc837e473b1::t_c39c7d368df64b 69,73,77,117-124,132,142,151
+  s_748cc837e473b1::t_9e4e7f4b29fa4e 29-35
+  s_748cc837e473b1::t_6b15a4d7da2bc6 1-16
+apps/cli/src/rpc.ts
+  s_748cc837e473b1::t_aa545d629a95e8 47-67
+  s_748cc837e473b1::t_9ee61c691f486e 2-20
+apps/cli/src/main.ts
+  s_748cc837e473b1::t_25eedce74f14d6 6-12
+apps/cli/package.json
+  h_46518a29d4dd91 1-14,16-25
+  s_748cc837e473b1::t_064c839730ec74 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "8b41b690d3cd13bda1c8718fcfa4ddb3f3a7837e",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
