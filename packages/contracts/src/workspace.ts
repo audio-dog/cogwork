@@ -30,12 +30,23 @@ export const PlaybookConfig = Schema.Struct({
 });
 export type PlaybookConfig = typeof PlaybookConfig.Type;
 
+export const WorktreeConfig = Schema.Struct({
+  root: Schema.optional(TrimmedNonEmptyString),
+  remote: Schema.optional(TrimmedNonEmptyString),
+  baseBranch: Schema.optional(TrimmedNonEmptyString),
+  linkEnvFiles: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  setup: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  reapAfterMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
+});
+export type WorktreeConfig = typeof WorktreeConfig.Type;
+
 export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,
   checkoutPath: TrimmedNonEmptyString,
   workSource: WorkSourceConfig,
   harness: HarnessPreferences,
   playbook: Schema.optional(PlaybookConfig),
+  worktrees: Schema.optional(WorktreeConfig),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
 export type WorkspaceConfigInput = Schema.Codec.Encoded<typeof WorkspaceConfig>;
