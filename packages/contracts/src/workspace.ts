@@ -3,6 +3,9 @@ import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from 
 
 export const WorkSourceConfig = Schema.Struct({
   type: WorkSourceType,
+  repo: Schema.optional(TrimmedNonEmptyString),
+  tokenEnv: Schema.optional(TrimmedNonEmptyString),
+  botLogin: Schema.optional(TrimmedNonEmptyString),
 });
 export type WorkSourceConfig = typeof WorkSourceConfig.Type;
 
