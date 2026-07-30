@@ -1,0 +1,26 @@
+.gitignore
+  h_46518a29d4dd91 4-5
+pnpm-lock.yaml
+  s_64862f7cdb5d96::t_b087da303342cb 55,60-62,101-106,119-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "8b0967b760aba2f4286862f8f1acc17535dc0efa",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_64862f7cdb5d96": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c50c6b2d-b54c-4fbb-aed0-9e2eb0b2dc9f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
