@@ -10,6 +10,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { loadFromDisk } from "./loader";
+import { worktreeManagerLayer } from "./platform";
 
 export interface DaemonOptions {
   readonly socketPath: string;
@@ -41,7 +42,7 @@ const workSourceLayer = GitHub.adapterLayer.pipe(
 );
 
 export const serverLayer = (options: DaemonOptions) => {
-  const shared = Reconcile.layer.pipe(
+  const shared = Layer.mergeAll(Reconcile.layer, worktreeManagerLayer).pipe(
     Layer.provideMerge(
       Layer.mergeAll(registryLayer(options.configHome), Daemon.daemonInfoLayer, workSourceLayer),
     ),
