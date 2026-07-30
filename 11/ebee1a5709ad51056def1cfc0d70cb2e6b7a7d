@@ -1,0 +1,27 @@
+apps/clanker-forge/src/main.ts
+  s_929db2ce80f5e8::t_464e7d3cc28dc6 1,8
+  s_929db2ce80f5e8::t_7d16678083611f 9
+apps/clanker-forge/.gitignore
+  s_929db2ce80f5e8::t_af8b3cdec526e0 1-2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "11ebee1a5709ad51056def1cfc0d70cb2e6b7a7d",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_929db2ce80f5e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6f762a4e-4373-4db7-8002-e45a7e4a59de",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
