@@ -1,0 +1,20 @@
+packages/contracts/src/workspace.ts
+  s_d0eda8147a4b23::t_7c89c2e1083973 39
+  s_d0eda8147a4b23::t_2274268a68b93f 33-38,40-42,49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "e87b339c9e27d913b4c9b14f53cdc1503656c89d",
+  "prompts": {},
+  "sessions": {
+    "s_d0eda8147a4b23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4f3ab7cd-9a0b-4078-8572-d56c4a11f9b4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
