@@ -1,0 +1,24 @@
+packages/engine/src/github/client.ts
+  s_929db2ce80f5e8::t_836a11b76ea61a 102-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "94f18828e08b943d87717990fb3b38b04e9c1e93",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_929db2ce80f5e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6f762a4e-4373-4db7-8002-e45a7e4a59de",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
