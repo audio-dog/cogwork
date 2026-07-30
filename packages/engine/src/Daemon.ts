@@ -5,8 +5,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
 import type { RegisteredWorkspace } from "./projector";
-import { ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
+import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
+import { ticketSlug, WorktreeManager } from "./Worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
   "@clanker-forge/engine/Daemon/DaemonInfo",
@@ -18,6 +19,9 @@ export const daemonInfoLayer = Layer.effect(
 );
 
 const okPoll = { status: "ok" as const };
+
+const statesByName = (snapshot: ReconcileSnapshot) =>
+  new Map(snapshot.workspaces.map((state) => [state.name, state]));
 
 const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => ({
   name: workspace.config.name,
@@ -37,7 +41,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const worker = yield* ReconcileWorker;
     const snapshot = yield* worker.snapshot;
     const now = yield* Clock.currentTimeMillis;
-    const stateByName = new Map(snapshot.workspaces.map((state) => [state.name, state]));
+    const stateByName = statesByName(snapshot);
     return {
       health: "running" as const,
       startedAtMillis: info.startedAtMillis,
@@ -48,8 +52,48 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
 });
 
+interface ReconcilableWorkspace {
+  readonly workspace: RegisteredWorkspace;
+  readonly state: WorkspaceReconcileState;
+}
+
+const activeTicketKeys = (state: WorkspaceReconcileState) =>
+  [...state.eligible, ...state.claimed, ...state.blocked].map((item) => ticketSlug(item.id));
+
+const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
+  const registry = yield* WorkspaceRegistry;
+  const manager = yield* WorktreeManager;
+  const worker = yield* ReconcileWorker;
+  const snapshot = yield* worker.snapshot;
+  const now = yield* Clock.currentTimeMillis;
+  const stateByName = statesByName(snapshot);
+  const reconcilable = registry.workspaces
+    .map((workspace) => ({ workspace, state: stateByName.get(workspace.config.name) }))
+    .filter(
+      (entry): entry is ReconcilableWorkspace =>
+        entry.workspace.config.worktrees !== undefined && entry.state?.poll.status === "ok",
+    );
+  yield* Effect.forEach(
+    reconcilable,
+    ({ workspace, state }) =>
+      manager.reconcile(workspace, activeTicketKeys(state), now).pipe(
+        Effect.tap((outcome) =>
+          Effect.logInfo("worktree maintenance", { workspace: workspace.config.name, ...outcome }),
+        ),
+        Effect.catchTag("GitError", (error) =>
+          Effect.logWarning("worktree maintenance failed", {
+            workspace: workspace.config.name,
+            message: error.message,
+          }),
+        ),
+      ),
+    { discard: true },
+  );
+});
+
 export const reconcileHeartbeat = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const receipt = yield* worker.submit();
   yield* Effect.logInfo("reconcile tick", receipt);
+  yield* maintainWorktrees();
 }).pipe(Effect.repeat(Schedule.spaced("5 seconds")));
