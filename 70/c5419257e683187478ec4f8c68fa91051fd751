@@ -1,0 +1,27 @@
+packages/engine/src/WorkSource.ts
+  s_748cc837e473b1::t_9076a5944ae6b7 62-67,73-74
+  s_748cc837e473b1::t_fd9d115544dc63 24-28
+packages/engine/test/engine.test.ts
+  s_748cc837e473b1::t_7c4596c7e38927 131-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "70c5419257e683187478ec4f8c68fa91051fd751",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
