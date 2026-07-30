@@ -1,0 +1,26 @@
+packages/engine/src/classify.ts
+  s_748cc837e473b1::t_b9a662f9690450 33-37,45-48
+packages/engine/test/classify.test.ts
+  s_748cc837e473b1::t_5c2890dd96514e 83-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "7951808a5be539c98b39ed380fa233e05b852a46",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
