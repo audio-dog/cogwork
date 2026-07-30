@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@clanker-forge/contracts": "workspace:*",
+    "@clanker-forge/cursor-acp": "workspace:*",
     "@clanker-forge/engine": "workspace:*",
     "@effect/platform-node": "catalog:effect",
     "effect": "catalog:effect"

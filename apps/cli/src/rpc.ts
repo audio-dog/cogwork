@@ -1,19 +1,23 @@
 import * as fs from "node:fs/promises";
-import { DaemonRpcs } from "@clanker-forge/contracts";
-import { Daemon, GitHub, Reconcile, Registry } from "@clanker-forge/engine";
+import { DaemonRpcs, HarnessName } from "@clanker-forge/contracts";
+import { cursorRunner } from "@clanker-forge/cursor-acp";
+import { Daemon, Executor, GitHub, Harness, Reconcile, Registry } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import { layer as ledgerLayer } from "./ledger";
 import { loadFromDisk } from "./loader";
 
 export interface DaemonOptions {
   readonly socketPath: string;
   readonly configHome: string;
+  readonly ledgerPath: string;
 }
 
 const clearStaleSocket = (socketPath: string) =>
@@ -40,20 +44,28 @@ const workSourceLayer = GitHub.adapterLayer.pipe(
   Layer.provide(FetchHttpClient.layer),
 );
 
-export const serverLayer = (options: DaemonOptions) => {
-  const shared = Reconcile.layer.pipe(
-    Layer.provideMerge(
-      Layer.mergeAll(registryLayer(options.configHome), Daemon.daemonInfoLayer, workSourceLayer),
-    ),
+const cursorName = Schema.decodeSync(HarnessName)("cursor");
+const harnessLayer = Harness.layer([cursorRunner({ name: cursorName })]);
+
+const sharedLayer = (options: DaemonOptions) => {
+  const base = Layer.mergeAll(
+    registryLayer(options.configHome),
+    Daemon.daemonInfoLayer,
+    workSourceLayer,
+    ledgerLayer(options.ledgerPath),
+    harnessLayer,
   );
-  return RpcServer.layer(DaemonRpcs).pipe(
+  return Layer.mergeAll(Reconcile.layer, Executor.layer).pipe(Layer.provideMerge(base));
+};
+
+export const serverLayer = (options: DaemonOptions) =>
+  RpcServer.layer(DaemonRpcs).pipe(
     Layer.provide(Daemon.handlersLayer),
     Layer.provideMerge(RpcServer.layerProtocolSocketServer),
     Layer.provide(socketServerLayer(options.socketPath)),
     Layer.provide(RpcSerialization.layerNdjson),
-    Layer.provideMerge(shared),
+    Layer.provideMerge(sharedLayer(options)),
   );
-};
 
 export const clientLayer = (socketPath: string) =>
   RpcClient.layerProtocolSocket().pipe(
