@@ -15,6 +15,7 @@
     "@clanker-forge/cursor-acp": "workspace:*",
     "@clanker-forge/engine": "workspace:*",
     "@effect/platform-node": "catalog:effect",
+    "drizzle-orm": "1.0.0-rc.2",
     "effect": "catalog:effect"
   },
   "devDependencies": {
