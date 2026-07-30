@@ -1,0 +1,33 @@
+packages/engine/test/runLedger.test.ts
+  s_748cc837e473b1::t_c285d8b95e85ba 9-11,13,15-17,19-20,22-24,26-32,34-36,38,41-43,45-46,48-60,62-65,67-73,75-81,83-94,96-97
+  s_748cc837e473b1::t_ed4be489d33206 33
+  s_748cc837e473b1::t_996ef67caa0963 44
+  s_748cc837e473b1::t_225256e256915b 1-8,14,18,21,25,37,39-40,47,61,74
+  s_748cc837e473b1::t_ff17fe7b855739 12,66,82,95
+packages/engine/src/RunLedger.ts
+  s_748cc837e473b1::t_6c6337a7765254 22-54,58-60,62,64-66
+  s_748cc837e473b1::t_91d3547d76403a 55-56
+  s_748cc837e473b1::t_1b5b1596254977 1,5,8,12,14-19,21,57,61,63,68
+  s_748cc837e473b1::t_83850b64c8f757 2-4,6-7,9-11,13,20,67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "8df578bdc9bcb45bce5678550016db0dfc26e1c5",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
