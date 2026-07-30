@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkItem } from "@clanker-forge/contracts";
+import { DaemonRpcs, WorkItemId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -7,6 +7,7 @@ import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "../src/Daemon";
 import * as Reconcile from "../src/Reconcile";
 import * as Registry from "../src/Registry";
+import type { ObservedItem } from "../src/WorkSource";
 import * as WorkSource from "../src/WorkSource";
 
 const validModule: Registry.LoadedWorkspace = {
@@ -109,29 +110,88 @@ describe("reconcile worker", () => {
       assert.strictEqual(receipt.workspaces, 1);
       assert.strictEqual(receipt.failures, 2);
       assert.strictEqual(receipt.pendingWork, 0);
+      assert.strictEqual(receipt.paused, 0);
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
   );
 
-  const item = Schema.decodeSync(WorkItem)({ id: "AUD-1", title: "first ticket" });
-  const stubWorkSource = Layer.succeed(WorkSource.WorkSource, { pending: () => Effect.succeed([item]) });
-  const workerWithWork = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, stubWorkSource)));
+  const id = Schema.decodeSync(WorkItemId);
+  const eligibleItem: ObservedItem = {
+    id: id("AUD-1"),
+    title: "first ticket",
+    roles: ["ready-for-agent"],
+    claim: null,
+    attempts: [],
+    pr: null,
+  };
+  const stub = (service: Partial<WorkSource.WorkSourceService>): WorkSource.WorkSourceService => ({
+    observe: () => Effect.succeed([]),
+    claim: () => Effect.void,
+    release: () => Effect.void,
+    recordAttempt: () => Effect.void,
+    ...service,
+  });
 
-  it.effect("counts pending work the work source reports per workspace", () =>
+  const workingSource = Layer.succeed(
+    WorkSource.WorkSource,
+    stub({ observe: () => Effect.succeed([eligibleItem]) }),
+  );
+  const workerWithWork = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, workingSource)));
+
+  it.effect("classifies observed work into the eligible set per workspace", () =>
     Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
       const receipt = yield* worker.submit();
       assert.strictEqual(receipt.pendingWork, 1);
+      assert.strictEqual(receipt.paused, 0);
+      const snapshot = yield* worker.snapshot;
+      assert.strictEqual(snapshot.workspaces[0]?.eligible[0]?.stage, "implement");
     }).pipe(Effect.provide(workerWithWork), Effect.scoped),
+  );
+
+  const authFailingSource = Layer.succeed(
+    WorkSource.WorkSource,
+    stub({
+      observe: () =>
+        Effect.fail(
+          new WorkSource.WorkSourceError({
+            reason: "auth",
+            message: "GitHub authentication failed (401)",
+          }),
+        ),
+    }),
+  );
+  const workerWithAuthFailure = Reconcile.layer.pipe(
+    Layer.provide(Layer.mergeAll(registryLayer, authFailingSource)),
+  );
+
+  it.effect("pauses a workspace on auth failure instead of failing the tick", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const receipt = yield* worker.submit();
+      assert.strictEqual(receipt.paused, 1);
+      assert.strictEqual(receipt.pendingWork, 0);
+      const state = (yield* worker.snapshot).workspaces[0];
+      assert.strictEqual(state?.poll.status, "paused");
+      assert.strictEqual(
+        state?.poll.status === "paused" ? state.poll.message : null,
+        "GitHub authentication failed (401)",
+      );
+    }).pipe(Effect.provide(workerWithAuthFailure), Effect.scoped),
   );
 });
 
 describe("daemon status over rpc", () => {
+  const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
+  const workerLayer = Reconcile.layer.pipe(
+    Layer.provide(Layer.mergeAll(registryLayer, WorkSource.emptyLayer)),
+  );
   const layer = Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.daemonInfoLayer),
-    Layer.provideMerge(Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult))),
+    Layer.provideMerge(workerLayer),
+    Layer.provideMerge(registryLayer),
   );
 
-  it.effect("reports health, registered workspaces, and registration failures", () =>
+  it.effect("reports health, registered workspaces, their derived work, and failures", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const status = yield* client.GetStatus();
@@ -139,8 +199,10 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.workspaces.length, 1);
       assert.strictEqual(status.workspaces[0]?.name, "example");
       assert.strictEqual(status.workspaces[0]?.workSource, "linear");
+      assert.strictEqual(status.workspaces[0]?.poll.status, "ok");
+      assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.strictEqual(status.failures.length, 2);
       assert.isAtLeast(status.uptimeMillis, 0);
-    }).pipe(Effect.provide(layer)),
+    }).pipe(Effect.provide(layer), Effect.scoped),
   );
 });
