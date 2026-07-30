@@ -1,0 +1,78 @@
+configs/lint/no-call-tower.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-19
+configs/lint/no-effect-step-const-staging.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-18
+configs/lint/no-option-as.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-14
+configs/lint/no-effect-ladder.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-24
+configs/lint/no-effect-side-effect-wrapper.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-32
+configs/lint/no-flatmap-ladder.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-28
+configs/lint/no-effect-as.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-9
+configs/lint/no-iife-wrapper.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-22
+configs/lint/no-effect-do.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-13
+configs/lint/no-match-effect-branch.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-102
+configs/lint/no-runtime-runfork.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-13
+apps/cli/tsconfig.json
+  s_b4c6abe3e83350::t_db5b06c030feef 2
+biome.json
+  s_b4c6abe3e83350::t_632b124dff4f74 22-49
+configs/lint/warn-effect-sync-wrapper.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-19
+configs/lint/no-effect-all-step-sequencing.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-31
+configs/lint/no-nested-effect-gen.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-15
+configs/lint/no-match-void-branch.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-17
+configs/lint/no-arrow-ladder.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-15
+configs/lint/no-effect-fn-generator.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-16
+configs/lint/no-fragmented-const-assembly.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-11
+configs/lint/prevent-dynamic-imports.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-9
+configs/lint/no-effect-wrapper-alias.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-110
+configs/lint/no-pipe-ladder.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-16
+configs/lint/no-effect-bind.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-13
+configs/lint/no-effect-never.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-13
+configs/lint/no-nested-effect-call.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-37
+configs/lint/no-effect-orElse-ladder.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-15
+configs/lint/no-pipeline-fragment-staging.grit
+  s_b4c6abe3e83350::t_c462d094a0f8ed 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "3634dafbc2a3440fc8568b9e624d983be268e1af",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b4c6abe3e83350": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "24f3c59b-bf6b-4adf-93cd-2ce516f3400a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
