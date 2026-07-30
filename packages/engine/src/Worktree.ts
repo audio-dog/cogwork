@@ -1,0 +1,205 @@
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import { Git, GitError, type WorktreeEntry } from "./Git";
+import type { RegisteredWorkspace } from "./projector";
+import { WorktreeFs } from "./WorktreeFs";
+
+export interface WorkItemRef {
+  readonly id: string;
+  readonly title: string;
+}
+
+export interface WorktreeSettings {
+  readonly root?: string;
+  readonly remote?: string;
+  readonly baseBranch?: string;
+  readonly linkEnvFiles?: ReadonlyArray<string>;
+  readonly setup?: ReadonlyArray<string>;
+  readonly reapAfterMillis?: number;
+}
+
+const joinPath = (base: string, segment: string) => `${base.replace(/\/+$/, "")}/${segment}`;
+
+const kebab = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+export const ticketSlug = (id: string) => kebab(id);
+
+export const slugify = (title: string) => kebab(title);
+
+export const branchName = (item: WorkItemRef) => {
+  const ticket = ticketSlug(item.id);
+  const slug = slugify(item.title);
+  return slug ? `${ticket}-${slug}` : ticket;
+};
+
+export const worktreeRoot = (checkoutPath: string, config?: WorktreeSettings) =>
+  (config?.root ?? `${checkoutPath}.worktrees`).replace(/\/+$/, "");
+
+export const worktreePathFor = (root: string, branch: string) => joinPath(root, branch);
+
+const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
+
+const remoteOf = (config?: WorktreeSettings) => config?.remote ?? "origin";
+const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main";
+
+export interface EnsuredWorktree {
+  readonly branch: string;
+  readonly path: string;
+  readonly created: boolean;
+}
+
+export interface ReconcileOutcome {
+  readonly tornDown: ReadonlyArray<string>;
+  readonly reaped: ReadonlyArray<string>;
+}
+
+const labelOf = (entry: WorktreeEntry) => entry.branch ?? entry.path;
+
+const logRemovalFailure = Effect.fn("Worktree.logRemovalFailure")(function* (path: string, message: string) {
+  yield* Effect.logWarning("worktree removal failed", { path, message });
+  return null;
+});
+
+export const make = Effect.gen(function* () {
+  const git = yield* Git;
+  const fs = yield* WorktreeFs;
+
+  const pathFor = (repoPath: string, config: WorktreeSettings | undefined, branch: string) =>
+    worktreePathFor(worktreeRoot(repoPath, config), branch);
+
+  const linkEnv = Effect.fn("Worktree.linkEnv")(function* (
+    repoPath: string,
+    worktreePath: string,
+    relative: string,
+  ) {
+    const target = joinPath(repoPath, relative);
+    const stat = yield* fs.stat(target);
+    if (!stat) return;
+    yield* fs.linkFile(target, joinPath(worktreePath, relative));
+  });
+
+  const runSetup = Effect.fn("Worktree.runSetup")(function* (
+    repoPath: string,
+    worktreePath: string,
+    config?: WorktreeSettings,
+  ) {
+    yield* Effect.forEach(
+      config?.linkEnvFiles ?? [],
+      (relative) => linkEnv(repoPath, worktreePath, relative),
+      {
+        discard: true,
+      },
+    );
+    yield* Effect.forEach(config?.setup ?? [], (command) => fs.runCommand(worktreePath, command), {
+      discard: true,
+    });
+  });
+
+  const managed = Effect.fn("Worktree.managed")(function* (repoPath: string, config?: WorktreeSettings) {
+    const entries = yield* git.listWorktrees(repoPath);
+    const prefix = `${worktreeRoot(repoPath, config)}/`;
+    return entries.filter((entry) => entry.path.startsWith(prefix));
+  });
+
+  const ensure = Effect.fn("Worktree.ensure")(function* (workspace: RegisteredWorkspace, item: WorkItemRef) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const remote = remoteOf(config);
+    const branch = branchName(item);
+    const worktreePath = pathFor(repoPath, config, branch);
+
+    yield* git.fetch(repoPath, remote);
+    const entries = yield* git.listWorktrees(repoPath);
+    const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
+    const exists = entries.some((entry) => entry.path === worktreePath);
+
+    if (!exists) {
+      const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
+      yield* git.addWorktree({ repoPath, worktreePath, branch, startPoint });
+    } else if (hasRemoteBranch) {
+      yield* git.fastForward(worktreePath, remote, branch);
+    }
+
+    yield* runSetup(repoPath, worktreePath, config);
+    return { branch, path: worktreePath, created: !exists } satisfies EnsuredWorktree;
+  });
+
+  const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
+    return yield* managed(workspace.config.checkoutPath, workspace.config.worktrees);
+  });
+
+  const remove = Effect.fn("Worktree.remove")(function* (workspace: RegisteredWorkspace, branch: string) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    if (!safeBranch(branch)) {
+      return yield* new GitError({
+        command: `worktree remove ${branch}`,
+        message: `refusing unsafe worktree branch "${branch}"`,
+      });
+    }
+    return yield* git.removeWorktree(repoPath, pathFor(repoPath, config, branch), true);
+  });
+
+  const isIdle = Effect.fn("Worktree.isIdle")(function* (
+    entry: WorktreeEntry,
+    reapAfterMillis: number,
+    now: number,
+  ) {
+    const stat = yield* fs.stat(entry.path);
+    return stat !== null && now - stat.mtimeMillis > reapAfterMillis;
+  });
+
+  const attemptRemoval = Effect.fn("Worktree.attemptRemoval")(function* (
+    repoPath: string,
+    entry: WorktreeEntry,
+    force: boolean,
+  ) {
+    return yield* git.removeWorktree(repoPath, entry.path, force).pipe(
+      Effect.map(() => labelOf(entry)),
+      Effect.catchTag("GitError", (error) => logRemovalFailure(entry.path, error.message)),
+    );
+  });
+
+  const reconcile = Effect.fn("Worktree.reconcile")(function* (
+    workspace: RegisteredWorkspace,
+    activeTicketKeys: ReadonlyArray<string>,
+    now: number,
+  ) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const entries = yield* managed(repoPath, config);
+    const belongsToActiveTicket = (branch: string) =>
+      activeTicketKeys.some((key) => branch === key || branch.startsWith(`${key}-`));
+
+    const orphaned = entries.filter((entry) => entry.branch !== null && !belongsToActiveTicket(entry.branch));
+    const retained = entries.filter((entry) => entry.branch === null || belongsToActiveTicket(entry.branch));
+    const reapAfterMillis = config?.reapAfterMillis;
+    const idle =
+      reapAfterMillis === undefined
+        ? []
+        : yield* Effect.filter(retained, (entry) => isIdle(entry, reapAfterMillis, now));
+
+    const tornDown = yield* Effect.forEach(orphaned, (entry) => attemptRemoval(repoPath, entry, true));
+    const reaped = yield* Effect.forEach(idle, (entry) => attemptRemoval(repoPath, entry, false));
+
+    return {
+      tornDown: tornDown.filter((label): label is string => label !== null),
+      reaped: reaped.filter((label): label is string => label !== null),
+    } satisfies ReconcileOutcome;
+  });
+
+  return { ensure, list, remove, reconcile } as const;
+});
+
+export type WorktreeManagerService = Effect.Success<typeof make>;
+
+export class WorktreeManager extends Context.Service<WorktreeManager, WorktreeManagerService>()(
+  "@clanker-forge/engine/Worktree/WorktreeManager",
+) {}
+
+export const managerLayer = Layer.effect(WorktreeManager, make);
