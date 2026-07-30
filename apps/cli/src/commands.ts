@@ -114,7 +114,7 @@ const formatEvent = (event: RunEvent) =>
 const formatEvents = (events: ReadonlyArray<RunEvent>) =>
   events.length === 0 ? "(no events for this run)" : events.map(formatEvent).join("\n");
 
-const overSocket = <R>(effect: Effect.Effect<void, unknown, R>, socketPath: string) =>
+const overSocket = <E, R>(effect: Effect.Effect<void, E, R>, socketPath: string) =>
   effect.pipe(
     Effect.scoped,
     Effect.provide(clientLayer(socketPath)),

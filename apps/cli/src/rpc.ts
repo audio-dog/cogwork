@@ -1,10 +1,10 @@
-import * as fs from "node:fs/promises";
 import { DaemonRpcs, HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
 import { Daemon, Executor, GitHub, Harness, Reconcile, Registry } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -22,12 +22,13 @@ export interface DaemonOptions {
 
 const clearStaleSocket = (socketPath: string) =>
   Effect.gen(function* () {
-    const stat = yield* Effect.promise(() => fs.stat(socketPath).catch(() => null));
-    if (stat === null) return;
-    if (!stat.isSocket()) {
+    const fs = yield* FileSystem.FileSystem;
+    const info = yield* fs.stat(socketPath).pipe(Effect.orElseSucceed(() => null));
+    if (info === null) return;
+    if (info.type !== "Socket") {
       return yield* Effect.die(new Error(`Refusing to remove non-socket file at ${socketPath}`));
     }
-    yield* Effect.promise(() => fs.rm(socketPath, { force: true }));
+    yield* fs.remove(socketPath, { force: true });
   });
 
 const socketServerLayer = (socketPath: string) =>

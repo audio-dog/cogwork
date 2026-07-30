@@ -1,4 +1,5 @@
 import * as os from "node:os";
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as path from "node:path";
 
 export const defaultSocketPath = path.join(os.tmpdir(), "clanker-forge.sock");

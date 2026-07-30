@@ -1,5 +1,3 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { RunEvent, RunId, RunRecord, TokenUsage } from "@clanker-forge/contracts";
 import {
@@ -11,7 +9,9 @@ import { RunLedger } from "@clanker-forge/engine";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { runEvents, runs } from "./schema";
 
@@ -73,10 +73,7 @@ const decodeSummary = Schema.decodeUnknownEffect(RunSummarySchema);
 const decodeEvent = Schema.decodeUnknownEffect(RunEventSchema);
 const decodeSession = Schema.decodeUnknownEffect(SessionId);
 
-const decodeAll = <A, R>(
-  decode: (u: unknown) => Effect.Effect<A, unknown, R>,
-  rows: ReadonlyArray<unknown>,
-) =>
+const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows: ReadonlyArray<unknown>) =>
   Effect.forEach(rows, (row) =>
     decode(row).pipe(
       Effect.map((value) => [value] as const),
@@ -85,15 +82,19 @@ const decodeAll = <A, R>(
   ).pipe(Effect.map((chunks) => chunks.flat()));
 
 const open = (ledgerPath: string) =>
-  Effect.acquireRelease(
-    Effect.sync(() => {
-      fs.mkdirSync(path.dirname(ledgerPath), { recursive: true });
-      const sqlite = new DatabaseSync(ledgerPath);
-      sqlite.exec(bootstrapSql);
-      return drizzle({ client: sqlite });
-    }),
-    (db) => Effect.sync(() => db.$client.close()),
-  );
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    yield* fs.makeDirectory(path.dirname(ledgerPath), { recursive: true });
+    return yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        const sqlite = new DatabaseSync(ledgerPath);
+        sqlite.exec(bootstrapSql);
+        return drizzle({ client: sqlite });
+      }),
+      (db) => Effect.sync(() => db.$client.close()),
+    );
+  });
 
 const make = (ledgerPath: string) =>
   Effect.gen(function* () {

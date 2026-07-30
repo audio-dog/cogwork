@@ -20,18 +20,14 @@
     }
   },
   "plugins": [
-    "./configs/lint/no-pipe-ladder.grit",
     "./configs/lint/no-flatmap-ladder.grit",
     "./configs/lint/no-effect-ladder.grit",
     "./configs/lint/no-nested-effect-call.grit",
     "./configs/lint/no-nested-effect-gen.grit",
-    "./configs/lint/no-call-tower.grit",
     "./configs/lint/no-arrow-ladder.grit",
     "./configs/lint/no-effect-orElse-ladder.grit",
     "./configs/lint/no-iife-wrapper.grit",
-    "./configs/lint/no-effect-wrapper-alias.grit",
     "./configs/lint/no-effect-step-const-staging.grit",
-    "./configs/lint/no-fragmented-const-assembly.grit",
     "./configs/lint/no-pipeline-fragment-staging.grit",
     "./configs/lint/no-effect-all-step-sequencing.grit",
     "./configs/lint/no-effect-as.grit",
@@ -44,8 +40,7 @@
     "./configs/lint/no-match-void-branch.grit",
     "./configs/lint/warn-effect-sync-wrapper.grit",
     "./configs/lint/no-runtime-runfork.grit",
-    "./configs/lint/no-effect-never.grit",
-    "./configs/lint/prevent-dynamic-imports.grit"
+    "./configs/lint/no-effect-never.grit"
   ],
   "javascript": {
     "formatter": {
