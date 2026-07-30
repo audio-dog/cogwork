@@ -1,6 +1,10 @@
 export * as Daemon from "./Daemon";
 export { defineWorkspace } from "./defineWorkspace";
+export * as Executor from "./Executor";
 export * as GitHub from "./github";
+export * as Harness from "./Harness";
+export * as Playbook from "./Playbook";
 export * as Reconcile from "./Reconcile";
 export * as Registry from "./Registry";
+export * as RunLedger from "./RunLedger";
 export * as WorkSource from "./WorkSource";
