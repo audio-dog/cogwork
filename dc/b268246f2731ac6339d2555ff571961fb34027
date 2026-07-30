@@ -1,0 +1,31 @@
+apps/cli/src/ledger.ts
+  s_748cc837e473b1::t_74471da99f7281 11-12,16,18,51-56,59-64,66-68,91-93,95,122-131,136,141-152,156-164,175-214,218-243
+  s_748cc837e473b1::t_7632d7e45d3b86 45,47,49-50
+apps/cli/package.json
+  s_748cc837e473b1::t_2bfee798b1921d 18
+apps/cli/src/schema.ts
+  s_748cc837e473b1::t_65c2f1d8b953b1 1-29
+pnpm-lock.yaml
+  s_748cc837e473b1::t_2530c66702475b 69-71,956-1071,2400-2404
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "dcb268246f2731ac6339d2555ff571961fb34027",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
