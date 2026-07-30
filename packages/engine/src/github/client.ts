@@ -2,7 +2,6 @@ import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
@@ -96,26 +95,14 @@ export const reviewDecisionOf = (
 };
 
 const make = (client: HttpClient.HttpClient) => {
-  const tokenFor = Effect.fn("github.tokenFor")(function* (repo: GitHubRepoRef) {
-    const token = yield* Effect.catchTag(
-      Config.option(Config.redacted(repo.tokenEnv)),
-      "ConfigError",
-      (error) => Effect.fail(new WorkSourceError({ reason: "auth", message: error.message })),
-    );
-    if (Option.isNone(token)) {
-      return yield* new WorkSourceError({
-        reason: "auth",
-        message: `missing GitHub token in ${repo.tokenEnv}`,
-      });
-    }
-    return token.value;
-  });
-
   const send = Effect.fn("github.send")(function* (
     repo: GitHubRepoRef,
     request: HttpClientRequest.HttpClientRequest,
   ) {
-    const token = yield* tokenFor(repo);
+    const token = yield* Effect.mapError(
+      Config.redacted(repo.tokenEnv),
+      () => new WorkSourceError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
+    );
     const response = yield* Effect.catchTag(
       client.execute(
         request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
