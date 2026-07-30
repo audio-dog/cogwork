@@ -1,0 +1,30 @@
+apps/clanker-forge/src/commands.ts
+  s_929db2ce80f5e8::t_0e16d0af1d75ed 1
+  s_929db2ce80f5e8::t_a666a9cb3bba2c 44-69,75
+apps/clanker-forge/src/rpc.ts
+  s_929db2ce80f5e8::t_971f5e760cce6e 38-42,46
+  s_929db2ce80f5e8::t_02503568c344f8 3,8
+apps/clanker-forge/config/clanker-forge.workspace.ts
+  s_929db2ce80f5e8::t_dbd91878f40339 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "da01e778c61b14cf71cd4a82372ae3b957c23a88",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_929db2ce80f5e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6f762a4e-4373-4db7-8002-e45a7e4a59de",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
