@@ -1,0 +1,28 @@
+packages/engine/src/Playbook.ts
+  s_748cc837e473b1::t_2cb90b2ca25822 2-22,24-60
+  s_748cc837e473b1::t_03c1ec3a387f79 1
+  s_748cc837e473b1::t_0863e7b624163a 23
+packages/engine/test/playbook.test.ts
+  s_748cc837e473b1::t_2e82aa8bda7ecd 1-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "e22dea17f8e7b7a830ad1d848ad7188c41dad15c",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
