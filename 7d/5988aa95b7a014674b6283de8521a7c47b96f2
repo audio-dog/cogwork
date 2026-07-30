@@ -1,0 +1,83 @@
+configs/lint/no-effect-orElse-ladder.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 4-10
+configs/lint/no-effect-as.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-4
+configs/lint/no-pipeline-fragment-staging.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 3-6
+configs/lint/no-effect-all-step-sequencing.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 4-12,14-24,26
+configs/lint/no-match-void-branch.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-12
+configs/lint/no-effect-fn-generator.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-11
+configs/lint/no-iife-wrapper.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-7,9-14,16-17
+configs/lint/warn-effect-sync-wrapper.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-11
+apps/cli/src/rpc.ts
+  s_b4c6abe3e83350::t_2f5a4a22bf534e 25-28,31
+  s_b4c6abe3e83350::t_b7f5ad99eeedd2 7
+configs/lint/no-match-effect-branch.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 4-7,9-55,57-93
+configs/lint/no-nested-effect-call.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-7,9-10,12-17,19-20
+configs/lint/no-effect-do.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-8
+configs/lint/no-effect-step-const-staging.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 4-7,9-13
+apps/cli/src/commands.ts
+  s_b4c6abe3e83350::t_ae8d0a4d8c7673 117
+configs/lint/no-flatmap-ladder.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 4-19
+biome.json
+  s_b4c6abe3e83350::t_8210d7b9c38358 43
+configs/lint/no-effect-side-effect-wrapper.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 4-10,12-23
+apps/cli/src/loader.ts
+  s_b4c6abe3e83350::t_5e91e3a3f06b06 32-41
+  s_b4c6abe3e83350::t_7eb784bce00ccd 4-5
+apps/cli/src/paths.ts
+  s_b4c6abe3e83350::t_1851b78427e473 2
+apps/cli/src/ledger.ts
+  s_b4c6abe3e83350::t_e2460a4381973b 85-97
+  s_b4c6abe3e83350::t_aaafe40cc742ef 12,14
+  s_b4c6abe3e83350::t_8b863b66718531 76
+configs/lint/no-effect-ladder.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 4-9,11-15
+configs/lint/no-runtime-runfork.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-8
+apps/cli/src/main.ts
+  s_b4c6abe3e83350::t_b9f4b4acbdf583 4
+  s_b4c6abe3e83350::t_aae996f4d87f24 12-17
+configs/lint/no-arrow-ladder.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-10
+configs/lint/no-effect-never.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-8
+configs/lint/no-nested-effect-gen.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-10
+configs/lint/no-effect-bind.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-8
+configs/lint/no-option-as.grit
+  s_b4c6abe3e83350::t_942ff870e498bf 2-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "7d5988aa95b7a014674b6283de8521a7c47b96f2",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b4c6abe3e83350": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "24f3c59b-bf6b-4adf-93cd-2ce516f3400a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
