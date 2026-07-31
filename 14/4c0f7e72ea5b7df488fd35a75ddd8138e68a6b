@@ -1,0 +1,33 @@
+packages/engine/src/Playbook.ts
+  s_5c28f9dca20b9b::t_c9a30f869de0de 58
+  s_5c28f9dca20b9b::t_07c9d4d49472ea 13
+packages/engine/CONTEXT.md
+  s_5c28f9dca20b9b::t_a7b7da815d4a8b 45
+packages/engine/src/Harness.ts
+  s_5c28f9dca20b9b::t_b615f6116d7ba8 14
+packages/engine/src/playbook.test.ts
+  s_5c28f9dca20b9b::t_3305d4eeb8ddf9 35,44,54
+  s_5c28f9dca20b9b::t_582d780a34d18d 32
+packages/engine/src/Executor.ts
+  s_5c28f9dca20b9b::t_85edaacf67b906 363-368
+  s_5c28f9dca20b9b::t_71952beb3724fd 268-273
+  s_5c28f9dca20b9b::t_9341e265635ff4 57
+  s_5c28f9dca20b9b::t_113b521de3c5d3 52-56,58-65
+  s_5c28f9dca20b9b::t_01fc463fd4b5d4 280-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "144c0f7e72ea5b7df488fd35a75ddd8138e68a6b",
+  "prompts": {},
+  "sessions": {
+    "s_5c28f9dca20b9b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0903638a-a436-4145-ac1c-3a8d230c9f55",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
