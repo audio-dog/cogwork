@@ -9,8 +9,14 @@ import { classify } from "../classify";
 import type { RegisteredWorkspace } from "../projector";
 import { WorkSource } from "../WorkSource";
 import { layer as adapterLayer } from "./adapter";
-import { GitHubClient, type GitHubClientService, type RawComment, type RawPull } from "./client";
-import { serializeAttempt, serializeFollowUp } from "./markers";
+import {
+  GitHubClient,
+  type GitHubClientService,
+  type GitHubRepoRef,
+  type RawComment,
+  type RawPull,
+} from "./client";
+import { hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -21,24 +27,43 @@ interface SeedIssue {
   readonly isPullRequest?: boolean;
 }
 
+interface SeedComment {
+  readonly issue: number;
+  readonly authorLogin: string;
+  readonly body: string;
+  readonly authorAssociation?: string;
+  readonly createdAtMillis?: number;
+}
+
 interface Seed {
   readonly issues: ReadonlyArray<SeedIssue>;
   readonly pulls?: ReadonlyArray<RawPull>;
-  readonly comments?: ReadonlyArray<{ readonly issue: number } & RawComment>;
+  readonly comments?: ReadonlyArray<SeedComment>;
   readonly checks?: ReadonlyArray<{ readonly sha: string } & CheckRun>;
 }
 
 const bot = { login: "clanker-forge[bot]" } as const;
+const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
+
+const seedComments = (comments: ReadonlyArray<SeedComment>) =>
+  comments.reduce((byIssue, comment, index) => {
+    const entry = {
+      id: index + 1,
+      authorLogin: comment.authorLogin,
+      authorAssociation: comment.authorAssociation ?? "NONE",
+      body: comment.body,
+      createdAtMillis: comment.createdAtMillis ?? 0,
+    } satisfies RawComment;
+    return new Map(byIssue).set(comment.issue, [...(byIssue.get(comment.issue) ?? []), entry]);
+  }, new Map<number, ReadonlyArray<RawComment>>());
 
 const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   const issuesRef = yield* Ref.make(
     seed.issues.map((issue) => ({ ...issue, isPullRequest: issue.isPullRequest ?? false })),
   );
-  const seededComments = (seed.comments ?? []).reduce(
-    (all, { issue, ...comment }) => all.set(issue, [...(all.get(issue) ?? []), comment]),
-    new Map<number, ReadonlyArray<RawComment>>(),
-  );
-  const commentsRef = yield* Ref.make(seededComments);
+  const seeded = seedComments(seed.comments ?? []);
+  const nextId = yield* Ref.make((seed.comments?.length ?? 0) + 1);
+  const commentsRef = yield* Ref.make(seeded);
   const checksBySha = (seed.checks ?? []).reduce(
     (all, { sha, ...run }) => all.set(sha, [...(all.get(sha) ?? []), run]),
     new Map<string, ReadonlyArray<CheckRun>>(),
@@ -74,11 +99,25 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         labels: issue.labels.filter((existing) => existing !== label),
       })),
     createComment: (_repo, number, body) =>
-      Ref.update(commentsRef, (all) =>
-        new Map(all).set(number, [
-          ...(all.get(number) ?? []),
-          { authorLogin: bot.login, authorAssociation: "NONE", body, createdAtMillis: 0 },
-        ]),
+      Effect.gen(function* () {
+        const assigned = yield* Ref.getAndUpdate(nextId, (value) => value + 1);
+        yield* Ref.update(commentsRef, (all) =>
+          new Map(all).set(number, [
+            ...(all.get(number) ?? []),
+            { id: assigned, authorLogin: bot.login, authorAssociation: "NONE", body, createdAtMillis: 0 },
+          ]),
+        );
+      }),
+    editComment: (_repo, commentId, body) =>
+      Ref.update(
+        commentsRef,
+        (all) =>
+          new Map(
+            [...all].map(([issue, comments]) => [
+              issue,
+              comments.map((comment) => (comment.id === commentId ? { ...comment, body } : comment)),
+            ]),
+          ),
       ),
     listCheckRuns: (_repo, sha) => Effect.succeed([...(checksBySha.get(sha) ?? [])]),
   } satisfies GitHubClientService;
@@ -95,7 +134,7 @@ const workspace: RegisteredWorkspace = {
 };
 
 const withClient = (seed: Seed) =>
-  adapterLayer.pipe(Layer.provide(Layer.effect(GitHubClient, fakeClient(seed))));
+  adapterLayer.pipe(Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))));
 
 const pull = (over: Partial<RawPull> & { readonly number: number; readonly body: string }): RawPull => ({
   authorLogin: "clanker-forge[bot]",
@@ -104,6 +143,9 @@ const pull = (over: Partial<RawPull> & { readonly number: number; readonly body:
   reviewDecision: "none",
   ...over,
 });
+
+const botComments = (comments: ReadonlyArray<RawComment>) =>
+  comments.filter((comment) => comment.authorLogin === bot.login);
 
 describe("github work source adapter", () => {
   it.effect("derives the actionable set from labels and bot-PR state", () =>
@@ -144,17 +186,17 @@ describe("github work source adapter", () => {
   it.effect("round-trips a claim and an attempt through GitHub markers", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000 };
+      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
       yield* source.claim(workspace, id("#7"), claim);
       yield* source.recordAttempt(workspace, id("#7"), attempt);
       const items = yield* source.observe(workspace);
       const observed = items.find((item) => item.id === "#7");
-      assert.deepStrictEqual(observed?.claim, claim);
+      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       const { eligible, claimed } = classify(items);
       assert.strictEqual(eligible.length, 0);
-      assert.deepStrictEqual(claimed[0]?.claim, claim);
+      assert.deepStrictEqual(claimed[0]?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
     ),
@@ -190,7 +232,11 @@ describe("github work source adapter", () => {
   it.effect("stops claiming after release removes the claim marker label", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
-      yield* source.claim(workspace, id("#7"), { by: "clanker-forge", claimedAtMillis: 1 });
+      yield* source.claim(workspace, id("#7"), {
+        by: "clanker-forge",
+        claimedAtMillis: 1,
+        stage: "implement",
+      });
       yield* source.release(workspace, id("#7"));
       const items = yield* source.observe(workspace);
       assert.isNull(items.find((item) => item.id === "#7")?.claim ?? null);
@@ -284,6 +330,143 @@ describe("github work source adapter", () => {
           })),
         }),
       ),
+    ),
+  );
+
+  it.effect("consolidates claim and attempt markers into one visible status comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      const first: Claim = { by: "clanker-forge", claimedAtMillis: 10, stage: "implement" };
+      const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 11 };
+      const second: Claim = { by: "clanker-forge", claimedAtMillis: 12, stage: "implement" };
+      yield* source.claim(workspace, id("#11"), first);
+      yield* source.recordAttempt(workspace, id("#11"), attempt);
+      yield* source.claim(workspace, id("#11"), second);
+      const comments = botComments(yield* client.listComments(repo, 11));
+      assert.strictEqual(comments.length, 1);
+      assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
+      assert.include(comments[0]?.body ?? "", "Currently implementing this issue.");
+      assert.include(comments[0]?.body ?? "", "<!-- clanker-forge:attempt");
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#11");
+      assert.deepStrictEqual(observed?.claim, { by: second.by, claimedAtMillis: second.claimedAtMillis });
+      assert.deepStrictEqual(observed?.attempts, [attempt]);
+    }).pipe(
+      Effect.provide(
+        withClient({ issues: [{ number: 11, title: "consolidate me", labels: ["ready-for-agent"] }] }),
+      ),
+    ),
+  );
+
+  it.effect("keeps every failed attempt across edits so the cap still blocks", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      for (const at of [1, 2, 3]) {
+        yield* source.recordAttempt(workspace, id("#12"), {
+          stage: "triage",
+          outcome: "failed",
+          atMillis: at,
+        });
+      }
+      const comments = botComments(yield* client.listComments(repo, 12));
+      assert.strictEqual(comments.length, 1);
+      assert.include(comments[0]?.body ?? "", "Last triage attempt failed.");
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#12");
+      assert.strictEqual(observed?.attempts.length, 3);
+      assert.include(
+        classify(items).blocked.map((entry) => entry.id),
+        id("#12"),
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({ issues: [{ number: 12, title: "retry budget", labels: ["needs-triage"] }] }),
+      ),
+    ),
+  );
+
+  it.effect("ignores an impostor ledger comment and creates its own", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      yield* source.claim(workspace, id("#14"), {
+        by: "clanker-forge",
+        claimedAtMillis: 1,
+        stage: "triage",
+      });
+      const comments = yield* client.listComments(repo, 14);
+      const ours = botComments(comments);
+      assert.strictEqual(comments.length, 2);
+      assert.strictEqual(ours.length, 1);
+      assert.isTrue(hasLedgerMarker(ours[0]?.body ?? ""));
+      assert.include(ours[0]?.body ?? "", "Currently triaging this issue.");
+      assert.isFalse(ours[0]?.body.includes("by=attacker") ?? true);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 14, title: "spoofed", labels: ["ready-for-agent"] }],
+          comments: [
+            {
+              issue: 14,
+              authorLogin: "attacker",
+              body: "<!-- clanker-forge:ledger -->\n<!-- clanker-forge:claim by=attacker at=1 -->",
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("leaves legacy marker comments alone and writes new markers to a coordination comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      const legacyAttempt: AttemptRecord = { stage: "triage", outcome: "failed", atMillis: 1 };
+      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 2, stage: "implement" };
+      yield* source.claim(workspace, id("#15"), claim);
+      const comments = botComments(yield* client.listComments(repo, 15));
+      assert.strictEqual(comments.length, 2);
+      assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#15");
+      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+      assert.deepStrictEqual(observed?.attempts, [legacyAttempt]);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 15, title: "legacy markers", labels: ["ready-for-agent", "clanker-forge:claimed"] },
+          ],
+          comments: [
+            {
+              issue: 15,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "triage", outcome: "failed", atMillis: 1 }),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("posts triage proposals as a separate comment from the coordination comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      yield* source.claim(workspace, id("#16"), {
+        by: "clanker-forge",
+        claimedAtMillis: 1,
+        stage: "triage",
+      });
+      yield* source.comment(workspace, id("#16"), "Triage proposal body");
+      const comments = botComments(yield* client.listComments(repo, 16));
+      assert.strictEqual(comments.length, 2);
+      assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
+      assert.strictEqual(comments.filter((comment) => comment.body === "Triage proposal body").length, 1);
+    }).pipe(
+      Effect.provide(withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] })),
     ),
   );
 });

@@ -98,7 +98,7 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     at: number,
   ) {
-    const claim = { by: claimant(workspace), claimedAtMillis: at };
+    const claim = { by: claimant(workspace), claimedAtMillis: at, stage: item.stage };
     const result = yield* Effect.result(workSource.claim(workspace, item.id, claim));
     if (Result.isSuccess(result)) return true;
     yield* Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error: result.failure });

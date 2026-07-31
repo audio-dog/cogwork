@@ -2,7 +2,7 @@ import { defineWorkspace } from "@clanker-forge/engine";
 
 export default defineWorkspace({
   name: "clanker-forge",
-  checkoutPath: "/sites/clanker-forge",
+  checkoutPath: "/Users/taylorsteele/sites/clanker-forge",
   workSource: {
     type: "github",
     repo: "taylorfsteele/clanker-forge",
@@ -10,6 +10,7 @@ export default defineWorkspace({
     botLogin: "audiodog-bot",
   },
   harness: { preferred: "cursor" },
+  concurrency: 1,
   playbook: {
     triage: { enabled: true },
     implement: { enabled: true, harness: "cursor" },

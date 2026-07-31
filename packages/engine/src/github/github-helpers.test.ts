@@ -5,6 +5,7 @@ import { type RawComment, type RawPull, reviewDecisionOf } from "./client";
 const review = (login: string, state: string) => ({ login, state });
 
 const comment = (over: Partial<RawComment>): RawComment => ({
+  id: 1,
   authorLogin: "maintainer",
   authorAssociation: "COLLABORATOR",
   body: "",
