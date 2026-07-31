@@ -1,0 +1,46 @@
+apps/cli/config/clanker-forge.workspace.ts
+  s_ed2768740f1f98::t_ddf0ef3332649f 5,13
+packages/engine/src/github/github-helpers.test.ts
+  s_ed2768740f1f98::t_7f260209751a22 8
+packages/engine/src/github/client.ts
+  s_ed2768740f1f98::t_ddf0ef3332649f 36,73,160-166,233-235,246-248
+  s_ed2768740f1f98::t_d846ec78762de0 209
+packages/engine/src/github/adapter.ts
+  s_ed2768740f1f98::t_ac382ce71dfb24 211
+  s_ed2768740f1f98::t_ddf0ef3332649f 23,25-27,29,135-151,212,222
+  s_ed2768740f1f98::t_a30daba4aac88e 152-153
+packages/engine/src/Executor.ts
+  s_ed2768740f1f98::t_ddf0ef3332649f 101
+packages/engine/src/github/markers.test.ts
+  s_ed2768740f1f98::t_ddf0ef3332649f 5,7-9,11-12,20,70-96,101
+  s_ed2768740f1f98::t_cc5158cc7aa7bf 69
+  s_ed2768740f1f98::t_ac382ce71dfb24 97-100
+packages/engine/src/github/markers.ts
+  s_ed2768740f1f98::t_ac382ce71dfb24 1
+  s_ed2768740f1f98::t_ddf0ef3332649f 36,40-43,94-115
+  s_ed2768740f1f98::t_39f03de4d1922d 93
+packages/engine/src/github/github.test.ts
+  s_ed2768740f1f98::t_ac382ce71dfb24 49-58,104-108,467,469
+  s_ed2768740f1f98::t_5dd2e1ae31bad8 19
+  s_ed2768740f1f98::t_7107c401306659 64-66
+  s_ed2768740f1f98::t_14bccddb34e714 34-35
+  s_ed2768740f1f98::t_ddf0ef3332649f 12-18,30-33,36-37,41,46-48,102-103,109-120,137,147-149,189,195,199,235-239,335-466,468,470-471
+packages/contracts/src/coordination.ts
+  s_ed2768740f1f98::t_ddf0ef3332649f 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "6acf61a4a47b0be2df8af7521184d2df339b3341",
+  "prompts": {},
+  "sessions": {
+    "s_ed2768740f1f98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d199fbc-2761-4403-8827-2ff42cd5eed0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
