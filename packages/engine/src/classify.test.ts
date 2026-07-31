@@ -1,12 +1,12 @@
 import { type Claim, WorkItemId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { classify } from "../src/classify";
-import type { ObservedItem, PrReview } from "../src/WorkSource";
+import { classify } from "./classify";
+import type { ObservedItem, PrReview } from "./WorkSource";
 
 const id = Schema.decodeSync(WorkItemId);
 
-const item = (over: Partial<ObservedItem> & { readonly id: string }) => ({
+const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string }) => ({
   id: id(over.id),
   title: over.title ?? `item ${over.id}`,
   roles: over.roles ?? [],

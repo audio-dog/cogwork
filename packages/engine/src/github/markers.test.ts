@@ -8,7 +8,7 @@ import {
   rolesFromLabels,
   serializeAttempt,
   serializeClaim,
-} from "../src/github/markers";
+} from "./markers";
 
 describe("github markers", () => {
   it("maps only recognized tracker labels to canonical roles", () => {

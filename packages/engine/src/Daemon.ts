@@ -4,11 +4,11 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
-import { Executor } from "./Executor";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
 import { RunLedger } from "./RunLedger";
+import { Scheduler, type SchedulerConfig, type SchedulerState } from "./Scheduler";
 import { ticketSlug, WorktreeManager } from "./Worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -25,13 +25,21 @@ const okPoll = { status: "ok" as const };
 const statesByName = (snapshot: ReconcileSnapshot) =>
   new Map(snapshot.workspaces.map((state) => [state.name, state]));
 
+const schedulerStats = (config: SchedulerConfig, state: SchedulerState) => ({
+  globalInFlight: state.global,
+  globalLimit: config.globalLimit,
+  dailyBudgetUsed: state.budgetUsed,
+  dailyBudgetLimit: config.dailyBudget,
+  perWorkspace: [...state.perWorkspace].map(([name, inFlight]) => ({ name, inFlight })),
+});
+
 const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => ({
   name: workspace.config.name,
   checkoutPath: workspace.config.checkoutPath,
   workSource: workspace.config.workSource.type,
   harness: workspace.config.harness.preferred,
   poll: state?.poll ?? okPoll,
-  eligible: state?.eligible ?? [],
+  eligible: (state?.eligible ?? []).map((work) => ({ id: work.id, title: work.title, stage: work.stage })),
   claimed: state?.claimed ?? [],
   blocked: state?.blocked ?? [],
 });
@@ -41,13 +49,16 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const registry = yield* WorkspaceRegistry;
     const info = yield* DaemonInfo;
     const worker = yield* ReconcileWorker;
+    const scheduler = yield* Scheduler;
     const snapshot = yield* worker.snapshot;
+    const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
     const stateByName = statesByName(snapshot);
     return {
       health: "running" as const,
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
+      scheduler: schedulerStats(scheduler.config, stats),
       workspaces: registry.workspaces.map((w) => workspaceInfo(w, stateByName.get(w.config.name))),
       failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
     };
@@ -108,19 +119,14 @@ export const reconcileHeartbeat = Effect.gen(function* () {
   yield* maintainWorktrees();
 }).pipe(Effect.repeat(Schedule.spaced("5 seconds")));
 
-const triageEligible = (state: WorkspaceReconcileState) =>
-  state.eligible.find((item) => item.stage === "triage");
+export const bootstrap = Effect.gen(function* () {
+  const worker = yield* ReconcileWorker;
+  const scheduler = yield* Scheduler;
+  yield* worker.submit();
+  yield* scheduler.recover();
+});
 
 export const executeHeartbeat = Effect.gen(function* () {
-  const registry = yield* WorkspaceRegistry;
-  const worker = yield* ReconcileWorker;
-  const executor = yield* Executor;
-  const snapshot = yield* worker.snapshot;
-  const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
-  const runState = Effect.fn("Daemon.runState")(function* (state: WorkspaceReconcileState) {
-    const workspace = byName.get(state.name);
-    const item = triageEligible(state);
-    if (workspace && item) yield* executor.runIfIdle(workspace, item);
-  });
-  yield* Effect.forEach(snapshot.workspaces, runState);
+  const scheduler = yield* Scheduler;
+  yield* scheduler.tick();
 }).pipe(Effect.repeat(Schedule.spaced("5 seconds")));

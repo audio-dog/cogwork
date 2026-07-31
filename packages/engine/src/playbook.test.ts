@@ -1,9 +1,9 @@
 import { WorkspaceConfig } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { buildTriagePrompt, parseTriageDecision, resolveTriage } from "../src/Playbook";
+import { buildTriagePrompt, parseTriageDecision, resolveTriage } from "./Playbook";
 
-const config = (over: Partial<Parameters<typeof Schema.decodeSync<typeof WorkspaceConfig>>[0]> = {}) =>
+const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
   Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",

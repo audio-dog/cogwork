@@ -4,6 +4,7 @@ import {
   type RunEvent,
   RunId,
   type RunSummary,
+  type SchedulerStats,
   type WorkspaceInfo,
 } from "@clanker-forge/contracts";
 import { Daemon, Registry } from "@clanker-forge/engine";
@@ -31,6 +32,16 @@ const ledgerFlag = Flag.string("ledger").pipe(
   Flag.withDefault(defaultLedgerPath),
 );
 
+const maxConcurrencyFlag = Flag.integer("max-concurrency").pipe(
+  Flag.withDescription("Maximum concurrent agent sessions across all workspaces"),
+  Flag.withDefault(4),
+);
+
+const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
+  Flag.withDescription("Maximum agent sessions started per UTC day across all workspaces"),
+  Flag.withDefault(50),
+);
+
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
 const runDaemon = Effect.fn("commands.runDaemon")(
@@ -51,6 +62,7 @@ const runDaemon = Effect.fn("commands.runDaemon")(
         }),
       { discard: true },
     );
+    yield* Daemon.bootstrap;
     yield* Effect.all([Daemon.reconcileHeartbeat, Daemon.executeHeartbeat], {
       concurrency: "unbounded",
     });
@@ -84,6 +96,12 @@ const formatWorkspace = (w: WorkspaceInfo) => {
   ].join("\n");
 };
 
+const formatScheduler = (s: SchedulerStats) => {
+  const loads = s.perWorkspace.map((w) => `${w.name}=${w.inFlight}`).join(" ");
+  const suffix = loads.length === 0 ? "" : ` (${loads})`;
+  return `scheduler: ${s.globalInFlight}/${s.globalLimit} in-flight · budget ${s.dailyBudgetUsed}/${s.dailyBudgetLimit}${suffix}`;
+};
+
 const formatStatus = (status: DaemonStatus) => {
   const header = `daemon: ${status.health} (uptime ${Math.round(status.uptimeMillis / 1000)}s)`;
   const workspaces =
@@ -93,6 +111,7 @@ const formatStatus = (status: DaemonStatus) => {
   const failures = status.failures.map((f) => `  ! ${f.source}: ${f.message}`).join("\n");
   return [
     header,
+    formatScheduler(status.scheduler),
     "workspaces:",
     workspaces,
     ...(status.failures.length > 0 ? ["failures:", failures] : []),
@@ -155,9 +174,11 @@ export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
   configHome: configHomeFlag,
   ledger: ledgerFlag,
+  maxConcurrency: maxConcurrencyFlag,
+  dailyBudget: dailyBudgetFlag,
 }).pipe(
-  Command.withHandler(({ socket, configHome, ledger }) =>
-    runDaemon({ socketPath: socket, configHome, ledgerPath: ledger }),
+  Command.withHandler(({ socket, configHome, ledger, maxConcurrency, dailyBudget }) =>
+    runDaemon({ socketPath: socket, configHome, ledgerPath: ledger, maxConcurrency, dailyBudget }),
   ),
 );
 

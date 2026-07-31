@@ -51,10 +51,26 @@ export const WorkspaceFailureInfo = Schema.Struct({
 });
 export type WorkspaceFailureInfo = typeof WorkspaceFailureInfo.Type;
 
+export const WorkspaceLoad = Schema.Struct({
+  name: WorkspaceId,
+  inFlight: Schema.Natural,
+});
+export type WorkspaceLoad = typeof WorkspaceLoad.Type;
+
+export const SchedulerStats = Schema.Struct({
+  globalInFlight: Schema.Natural,
+  globalLimit: Schema.Natural,
+  dailyBudgetUsed: Schema.Natural,
+  dailyBudgetLimit: Schema.Natural,
+  perWorkspace: Schema.Array(WorkspaceLoad),
+});
+export type SchedulerStats = typeof SchedulerStats.Type;
+
 export const DaemonStatus = Schema.Struct({
   health: DaemonHealth,
   startedAtMillis: Schema.Natural,
   uptimeMillis: Schema.Natural,
+  scheduler: SchedulerStats,
   workspaces: Schema.Array(WorkspaceInfo),
   failures: Schema.Array(WorkspaceFailureInfo),
 });

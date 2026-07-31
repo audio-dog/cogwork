@@ -1,6 +1,6 @@
 import { DaemonRpcs, HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
-import { Daemon, Executor, GitHub, Harness, Reconcile, Registry } from "@clanker-forge/engine";
+import { Daemon, Executor, GitHub, Harness, Reconcile, Registry, Scheduler } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
@@ -19,6 +19,8 @@ export interface DaemonOptions {
   readonly socketPath: string;
   readonly configHome: string;
   readonly ledgerPath: string;
+  readonly maxConcurrency: number;
+  readonly dailyBudget: number;
 }
 
 const clearStaleSocket = (socketPath: string) =>
@@ -57,7 +59,13 @@ const sharedLayer = (options: DaemonOptions) => {
     ledgerLayer(options.ledgerPath),
     harnessLayer,
   );
-  return Layer.mergeAll(Reconcile.layer, Executor.layer, worktreeManagerLayer).pipe(Layer.provideMerge(base));
+  const services = Layer.mergeAll(Reconcile.layer, Executor.layer, worktreeManagerLayer).pipe(
+    Layer.provideMerge(base),
+  );
+  return Scheduler.layer({
+    globalLimit: options.maxConcurrency,
+    dailyBudget: options.dailyBudget,
+  }).pipe(Layer.provideMerge(services));
 };
 
 export const serverLayer = (options: DaemonOptions) =>

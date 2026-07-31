@@ -11,6 +11,7 @@
     "format-and-lint": "biome check .",
     "prepare": "effect-tsgo patch",
     "typecheck": "turbo typecheck",
+    "test": "turbo test",
     "vendor": "node scripts/vendor.mjs"
   },
   "devDependencies": {
