@@ -1,0 +1,23 @@
+packages/engine/src/classify.test.ts
+  s_e21cb95880eecb::t_da3462e0bd01c3 106-137
+packages/engine/src/classify.ts
+  s_e21cb95880eecb::t_9e537a1c723ad0 50-51,54
+  s_e21cb95880eecb::t_8721a7655e5081 52-53
+  s_e21cb95880eecb::t_19dc039f829388 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "4f9f9fbf3a85c9590f2a4a9e4f75d39193a9ccd7",
+  "prompts": {},
+  "sessions": {
+    "s_e21cb95880eecb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "888c4659-87d3-4394-a263-63e6e5987c3d",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
