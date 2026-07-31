@@ -6,7 +6,7 @@ import {
   SessionId,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
-import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS runs (
   work_item TEXT NOT NULL,
   stage TEXT NOT NULL,
   harness TEXT NOT NULL,
+  branch TEXT,
   session TEXT,
   input_tokens INTEGER,
   output_tokens INTEGER,
@@ -81,6 +82,15 @@ const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows
     ),
   ).pipe(Effect.map((chunks) => chunks.flat()));
 
+const ensureBranchColumn = (sqlite: DatabaseSync) => {
+  try {
+    sqlite.exec("ALTER TABLE runs ADD COLUMN branch TEXT");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("duplicate column")) throw error;
+  }
+};
+
 const open = (ledgerPath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -90,6 +100,7 @@ const open = (ledgerPath: string) =>
       Effect.sync(() => {
         const sqlite = new DatabaseSync(ledgerPath);
         sqlite.exec(bootstrapSql);
+        ensureBranchColumn(sqlite);
         return drizzle({ client: sqlite });
       }),
       (db) => Effect.sync(() => db.$client.close()),
@@ -117,6 +128,25 @@ const make = (ledgerPath: string) =>
         Effect.orElseSucceed(() => [] as ReadonlyArray<A>),
       );
 
+    const latestSessionWhere = (operation: string, where: SQL | undefined) =>
+      Effect.try(() =>
+        db
+          .select({ session: runs.session })
+          .from(runs)
+          .where(and(where, isNotNull(runs.session)))
+          .orderBy(desc(runs.startedAt))
+          .limit(1)
+          .get(),
+      ).pipe(
+        Effect.tapError((cause) => warn(operation, cause)),
+        Effect.orElseSucceed(() => undefined),
+        Effect.flatMap((row) =>
+          row?.session
+            ? decodeSession(row.session).pipe(Effect.orElseSucceed(() => null))
+            : Effect.succeed(null),
+        ),
+      );
+
     const service: RunLedger.RunLedgerService = {
       insertRun: (record: RunRecord) =>
         write("insertRun", () => {
@@ -126,6 +156,7 @@ const make = (ledgerPath: string) =>
             workItem: record.workItem,
             stage: record.stage,
             harness: record.harness,
+            branch: record.branch,
             startedAt: record.startedAtMillis,
             ...runColumns(record),
           };
@@ -153,23 +184,10 @@ const make = (ledgerPath: string) =>
             .run();
         }),
 
-      latestSession: (workItem: string) =>
-        Effect.try(() =>
-          db
-            .select({ session: runs.session })
-            .from(runs)
-            .where(and(eq(runs.workItem, workItem), isNotNull(runs.session)))
-            .orderBy(desc(runs.startedAt))
-            .limit(1)
-            .get(),
-        ).pipe(
-          Effect.tapError((cause) => warn("latestSession", cause)),
-          Effect.orElseSucceed(() => undefined),
-          Effect.flatMap((row) =>
-            row?.session
-              ? decodeSession(row.session).pipe(Effect.orElseSucceed(() => null))
-              : Effect.succeed(null),
-          ),
+      latestSessionByBranch: (workspace: string, branch: string) =>
+        latestSessionWhere(
+          "latestSessionByBranch",
+          and(eq(runs.workspace, workspace), eq(runs.branch, branch)),
         ),
 
       listRuns: (limit: number) =>
@@ -181,6 +199,7 @@ const make = (ledgerPath: string) =>
               workItem: runs.workItem,
               stage: runs.stage,
               harness: runs.harness,
+              branch: runs.branch,
               session: runs.session,
               inputTokens: runs.inputTokens,
               outputTokens: runs.outputTokens,
@@ -204,6 +223,7 @@ const make = (ledgerPath: string) =>
                 workItem: row.workItem,
                 stage: row.stage,
                 harness: row.harness,
+                branch: row.branch,
                 session: row.session,
                 usage: usageOf(row),
                 status: row.status,
