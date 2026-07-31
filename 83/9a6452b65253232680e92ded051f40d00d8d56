@@ -1,0 +1,25 @@
+CONTEXT-MAP.md
+  s_70b28cf86aa091::t_5cab45f62c8094 47
+packages/contracts/CONTEXT.md
+  s_70b28cf86aa091::t_49a1bab99924fa 55
+packages/engine/CONTEXT.md
+  s_70b28cf86aa091::t_eb6fc84cd3e193 53,56-58
+  s_70b28cf86aa091::t_dd0bce2c658e23 49
+  s_70b28cf86aa091::t_93700bad146a2c 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "839a6452b65253232680e92ded051f40d00d8d56",
+  "prompts": {},
+  "sessions": {
+    "s_70b28cf86aa091": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1d29bc55-8570-462c-a622-6b179fb5dbb8",
+        "model": "default"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
