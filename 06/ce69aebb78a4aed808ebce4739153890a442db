@@ -1,0 +1,24 @@
+packages/engine/src/github/markers.ts
+  s_a1e42905488cc4::t_81f1b72e570788 1-6,40,80-102
+  s_a1e42905488cc4::t_8ddc9c08f55c95 44-46
+  s_a1e42905488cc4::t_5effc450f94642 47
+packages/engine/src/github/markers.test.ts
+  s_a1e42905488cc4::t_33772b9e1ee09d 4,6-8,57,63-66,71,76-85
+  s_a1e42905488cc4::t_91b17d968d2db8 10-11,17,56,58-62,67-70,72-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "06ce69aebb78a4aed808ebce4739153890a442db",
+  "prompts": {},
+  "sessions": {
+    "s_a1e42905488cc4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c563765a-1310-4276-b7a3-28668b3ea223",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
