@@ -1,9 +1,9 @@
 export { type CursorRunnerOptions, cursorRunner } from "./harness";
 export {
   applyCursorEffort,
+  type CursorEffort,
+  type CursorModel,
   cursorEfforts,
   cursorModelFlag,
   cursorModels,
-  type CursorEffort,
-  type CursorModel,
 } from "./model";

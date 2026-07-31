@@ -278,12 +278,7 @@ export const make = Effect.gen(function* () {
       resolved,
       branch: null,
       prepare: Effect.succeed(
-        harnessRequest(
-          resolved,
-          workspace.config.checkoutPath,
-          buildTriagePrompt(resolved, item),
-          null,
-        ),
+        harnessRequest(resolved, workspace.config.checkoutPath, buildTriagePrompt(resolved, item), null),
       ),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
       blockRole: "needs-triage",
