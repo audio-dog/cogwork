@@ -44,6 +44,20 @@ const detailMarker = "<!-- clanker-forge:detail -->";
 
 export const hasLedgerMarker = (body: string) => ledgerMarkerPattern.test(body);
 
+const before = (body: string, pattern: RegExp) => {
+  const at = body.search(pattern);
+  return at < 0 ? body : body.slice(0, at);
+};
+
+const after = (body: string, pattern: RegExp) => {
+  const match = pattern.exec(body);
+  return match ? body.slice(match.index + match[0].length) : "";
+};
+
+const orNull = (text: string) => text.trim() || null;
+
+const coordinationRegion = (body: string) => before(body, detailMarkerPattern);
+
 const toPair = (token: string) => {
   const eq = token.indexOf("=");
   return eq > 0 ? [[token.slice(0, eq), token.slice(eq + 1)] as const] : [];
@@ -53,7 +67,7 @@ const parsePairs = (payload: string) => Object.fromEntries(payload.split(/\s+/).
 
 const extractMarkers = (name: string, bodies: ReadonlyArray<string>) =>
   bodies.flatMap((body) =>
-    [...body.matchAll(markerPattern(name))].map((match) => parsePairs(match[1] ?? "")),
+    [...coordinationRegion(body).matchAll(markerPattern(name))].map((match) => parsePairs(match[1] ?? "")),
   );
 
 export const serializeClaim = (claim: Claim) =>
@@ -113,25 +127,13 @@ export const defaultStatus = "Working on this issue.";
 
 const attribution = "> *This was posted by clanker-forge.*";
 
-const before = (body: string, pattern: RegExp) => {
-  const at = body.search(pattern);
-  return at < 0 ? body : body.slice(0, at);
-};
-
-const after = (body: string, pattern: RegExp) => {
-  const match = pattern.exec(body);
-  return match ? body.slice(match.index + match[0].length) : "";
-};
-
-const orNull = (text: string) => text.trim() || null;
-
 export const coordinationStatus = (body: string) =>
   orNull(before(body, ledgerMarkerPattern).replace(attribution, ""));
 
 export const coordinationDetail = (body: string) => orNull(after(body, detailMarkerPattern));
 
 export const coordinationMarkers = (body: string) =>
-  [...before(body, detailMarkerPattern).matchAll(anyMarkerPattern)]
+  [...coordinationRegion(body).matchAll(anyMarkerPattern)]
     .map((match) => match[0])
     .filter((marker) => !ledgerMarkerPattern.test(marker));
 

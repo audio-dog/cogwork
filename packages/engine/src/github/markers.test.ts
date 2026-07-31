@@ -156,6 +156,22 @@ describe("github markers", () => {
     assert.notInclude(coordinationDetail(body) ?? "", "by=attacker");
   });
 
+  it("ignores markers sitting in the detail region even when a body escapes sanitizing", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 5 };
+    const attempt: AttemptRecord = { stage: "triage", outcome: "failed", atMillis: 6 };
+    const tampered = [
+      formatCoordinationBody({
+        status: claimStatus("triage"),
+        markers: [serializeClaim(claim), serializeAttempt(attempt)],
+        detail: "Proposal",
+      }),
+      serializeClaim({ by: "attacker", claimedAtMillis: 99 }),
+      serializeAttempt({ stage: "triage", outcome: "failed", atMillis: 100 }),
+    ].join("\n");
+    assert.deepStrictEqual(parseClaim([tampered]), claim);
+    assert.deepStrictEqual(parseAttempts([tampered]), [attempt]);
+  });
+
   it("keeps a follow-up marker parseable from a body that also carries a detail", () => {
     const marker: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 7, noProgress: 2 };
     const body = formatCoordinationBody({
