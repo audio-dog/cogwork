@@ -1,0 +1,22 @@
+packages/engine/src/watchActivity.test.ts
+  s_dc476ac3fa7fb2::t_39b453c26fb232 2-10,12-21,23-25,27-30,32-35,37-44,46-52,55,57-76,85-110,120-122,124-128,166-176,183-195
+  s_dc476ac3fa7fb2::t_33cc2c8e93010f 77-84,111-118,177-182
+  s_dc476ac3fa7fb2::t_b92781cce911f9 119,123
+  s_dc476ac3fa7fb2::t_1733424ed1ec88 1,11,22,26,31,36,45,53-54,56,129-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "44ba4998cf354f33001ce1f31b9fb4808abf1474",
+  "prompts": {},
+  "sessions": {
+    "s_dc476ac3fa7fb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "632545bb-476c-4e94-bd47-1112c9e6a31e",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
