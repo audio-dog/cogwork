@@ -1,0 +1,58 @@
+packages/engine/src/github/markers.test.ts
+  s_181f054174c359::t_a219eba250c2a3 11
+packages/engine/src/worktree-naming.test.ts
+  s_181f054174c359::t_7e9bd7fc51c76a 2
+packages/engine/src/playbook.test.ts
+  s_181f054174c359::t_f0498f181cd0f5 6
+  s_181f054174c359::t_168ced6525b9f7 4
+packages/engine/src/github/github-helpers.test.ts
+  s_181f054174c359::t_670b207bd17f75 2-3
+packages/engine/src/scheduler.test.ts
+  s_181f054174c359::t_92a7f87cf81c68 10-17
+packages/engine/src/engine.test.ts
+  s_181f054174c359::t_a33cca9d263b45 7-9,11-13
+  s_181f054174c359::t_fa654851fb1f69 124
+  s_181f054174c359::t_888d6cb758f50a 10
+  s_181f054174c359::t_c94b03ad6ec0b1 160
+  s_181f054174c359::t_73ed1f272c73a6 242
+packages/engine/src/github/github.test.ts
+  s_181f054174c359::t_142297f7609f76 10-12
+  s_181f054174c359::t_4ec40294970353 60-62
+  s_181f054174c359::t_982b0745e10a1e 196
+  s_181f054174c359::t_e73e1e78106762 7-9
+packages/engine/src/executor.test.ts
+  s_181f054174c359::t_b28b473dd35946 8-12
+  s_181f054174c359::t_7ab7ffc2dbe185 253
+  s_181f054174c359::t_5374bc66bc8a74 19-21,23,25-26,30-39
+packages/engine/src/classify.test.ts
+  s_181f054174c359::t_a444844cf34b7f 9
+  s_181f054174c359::t_c9e83166b04392 4-5
+packages/engine/src/worktree.test.ts
+  s_181f054174c359::t_93043ef290bbe3 35
+  s_181f054174c359::t_d9cebd2b60be27 7-9
+packages/engine/src/runLedger.test.ts
+  s_181f054174c359::t_dc264984a30e70 12
+packages/engine/vitest.config.ts
+  s_181f054174c359::t_45201fdb63a84f 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "469e85fab97b5c80ad06b35ecccb82602cf524ae",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_181f054174c359": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cf85be62-15af-48e2-a2f7-8b560e3d45ce",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
