@@ -45,9 +45,17 @@ const stageFor = (item: ObservedItem) => {
   return null;
 };
 
+export const observedStage = (item: ObservedItem) => item.claim?.stage ?? stageFor(item);
+
+export const blockRoleFor = (stage: LifecycleStage) => {
+  if (stage === "implement") return "ready-for-agent" as const;
+  if (stage === "triage") return "needs-triage" as const;
+  return null;
+};
+
 export const maxAttemptsPerStage = 3;
 
-const consecutiveFailures = (item: ObservedItem, stage: LifecycleStage) => {
+export const consecutiveFailures = (item: ObservedItem, stage: LifecycleStage) => {
   const forStage = item.attempts.filter((attempt) => attempt.stage === stage);
   const lastNonFailure = forStage.findLastIndex((attempt) => attempt.outcome !== "failed");
   return forStage.length - (lastNonFailure + 1);
