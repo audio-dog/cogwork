@@ -1,0 +1,68 @@
+packages/engine/src/engine.test.ts
+  s_70b28cf86aa091::t_7980eef0162df8 137-138
+packages/engine/src/github/markers.ts
+  s_70b28cf86aa091::t_a290014c137de5 145
+  s_70b28cf86aa091::t_bab200e9afb736 138
+  s_70b28cf86aa091::t_9186a7e7ac6704 37,43
+  s_70b28cf86aa091::t_412161a35fbd57 112-132,134,139-144,146-150
+  s_70b28cf86aa091::t_5f6ec7f24a8322 44
+packages/engine/src/executor.test.ts
+  s_70b28cf86aa091::t_3d06df44a4fd53 159
+  s_70b28cf86aa091::t_d83b2095fa2717 539-540
+  s_70b28cf86aa091::t_d7119748fa3a81 610-611
+  s_70b28cf86aa091::t_b8eaaee39f23a9 328
+  s_70b28cf86aa091::t_3ce7e9f56006c1 487
+  s_70b28cf86aa091::t_9530bdb68dc68d 311
+  s_70b28cf86aa091::t_d76582041e2348 439
+  s_70b28cf86aa091::t_35419a1cfd09da 249,258-262
+  s_70b28cf86aa091::t_81e33787cd5d1f 171-173
+packages/engine/src/WorkSource.ts
+  s_70b28cf86aa091::t_ca7eee6691d01e 6
+  s_70b28cf86aa091::t_1c78bdb13f96b7 59-62
+  s_70b28cf86aa091::t_b15381fa4d6a32 73-74
+packages/engine/src/Executor.ts
+  s_70b28cf86aa091::t_3f415844ad204b 190
+  s_70b28cf86aa091::t_04678c1b31cdef 303
+  s_70b28cf86aa091::t_8d81865a2b7413 374,377,379
+  s_70b28cf86aa091::t_5695e746784b5d 62
+  s_70b28cf86aa091::t_9e2cd5555180f5 288
+  s_70b28cf86aa091::t_4ac356c28aa3e5 289-292
+packages/engine/src/github/github.test.ts
+  s_70b28cf86aa091::t_40e0733ff8c2e2 20
+  s_70b28cf86aa091::t_fef32173aad953 506-541,563-564
+  s_70b28cf86aa091::t_4f5212106a55b0 550
+  s_70b28cf86aa091::t_0d9b0d26323156 461,465-469,472-473,476-484,489-505,542-549,551-562
+  s_70b28cf86aa091::t_f9bad03db76be0 9
+packages/engine/src/github/adapter.ts
+  s_70b28cf86aa091::t_835de3681e9dda 150,153,159,161-162,164-165
+  s_70b28cf86aa091::t_80a6f1c27f734c 241-249,251,254
+  s_70b28cf86aa091::t_3c61e6159d2f23 160,163
+  s_70b28cf86aa091::t_d1aa2c5ac6dcc7 99-102
+  s_70b28cf86aa091::t_30e208dba40a8e 103
+  s_70b28cf86aa091::t_c066ab3f664993 193-195
+  s_70b28cf86aa091::t_bc9efb3683b4d3 47-52
+  s_70b28cf86aa091::t_7f1dea559c50d3 231
+  s_70b28cf86aa091::t_7ba4f532446cbf 26,28-29,40
+packages/engine/src/github/markers.test.ts
+  s_70b28cf86aa091::t_2b26392401e9ba 97,101-102,108-168
+  s_70b28cf86aa091::t_eda3f4426ef858 8,10-11
+  s_70b28cf86aa091::t_acfb59fcfeba5e 79-83
+packages/engine/src/scheduler.test.ts
+  s_70b28cf86aa091::t_8ed3cf1fd31ba1 169-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "f40f6a971e35037b86b60a182f14c4c8c7ae9928",
+  "prompts": {},
+  "sessions": {
+    "s_70b28cf86aa091": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1d29bc55-8570-462c-a622-6b179fb5dbb8",
+        "model": "default"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
