@@ -2,12 +2,12 @@ import { defineWorkspace } from "@clanker-forge/engine";
 
 export default defineWorkspace({
   name: "clanker-forge",
-  checkoutPath: "/repos/clanker-forge",
+  checkoutPath: "/sites/clanker-forge",
   workSource: {
     type: "github",
     repo: "taylorfsteele/clanker-forge",
     tokenEnv: "GITHUB_TOKEN",
-    botLogin: "clanker-forge[bot]",
+    botLogin: "audiodog-bot",
   },
   harness: { preferred: "cursor" },
   playbook: {
