@@ -13,8 +13,13 @@ import {
 } from "../WorkSource";
 import { GitHubClient, type GitHubClientService, type GitHubRepoRef, type RawPull } from "./client";
 import {
+  attemptStatus,
   claimLabel,
+  claimStatus,
+  coordinationMarkers,
+  formatCoordinationBody,
   hasClaimLabel,
+  hasLedgerMarker,
   parseAttempts,
   parseClaim,
   roleLabel,
@@ -89,6 +94,25 @@ const make = (client: GitHubClientService): WorkSourceService => {
     return { target, number };
   });
 
+  const upsertMarker = Effect.fn("github.upsertMarker")(function* (
+    target: GitHubTarget,
+    number: number,
+    marker: string,
+    status: string,
+  ) {
+    const comments = yield* client.listComments(target, number);
+    const ledger = comments.find(
+      (comment) => comment.authorLogin === target.botLogin && hasLedgerMarker(comment.body),
+    );
+    const markers = [...(ledger ? coordinationMarkers(ledger.body) : []), marker];
+    const body = formatCoordinationBody(status, markers);
+    if (ledger) {
+      yield* client.editComment(target, ledger.id, body);
+      return;
+    }
+    yield* client.createComment(target, number, body);
+  });
+
   const prsByIssue = Effect.fn("github.prsByIssue")(function* (target: GitHubTarget) {
     const pulls = yield* client.listPulls(target);
     const bot = target.botLogin ? pulls.filter((pull) => pull.authorLogin === target.botLogin) : [];
@@ -139,7 +163,10 @@ const make = (client: GitHubClientService): WorkSourceService => {
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
         yield* client.addLabel(target, number, claimLabel);
-        yield* client.createComment(target, number, serializeClaim(claim));
+        const status = claim.stage
+          ? claimStatus(claim.stage)
+          : `In progress — claimed by ${claim.by}.`;
+        yield* upsertMarker(target, number, serializeClaim(claim), status);
       }),
     release: (workspace, id) =>
       Effect.gen(function* () {
@@ -149,7 +176,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
     recordAttempt: (workspace, id, attempt) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* client.createComment(target, number, serializeAttempt(attempt));
+        yield* upsertMarker(target, number, serializeAttempt(attempt), attemptStatus(attempt));
       }),
     comment: (workspace, id, body) =>
       Effect.gen(function* () {
