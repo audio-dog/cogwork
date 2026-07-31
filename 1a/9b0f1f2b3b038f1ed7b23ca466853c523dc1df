@@ -1,0 +1,138 @@
+packages/engine/src/ci.ts
+  s_ed2768740f1f98::t_27558a2868f71a 12-20,24-25
+  s_ed2768740f1f98::t_780367c28fc3f5 1-11,21-23,26-28
+packages/engine/src/resumePolicy.ts
+  s_ed2768740f1f98::t_27558a2868f71a 3
+  s_ed2768740f1f98::t_aa76854be478e7 1-2,4-37
+packages/engine/src/RunLedger.ts
+  s_ed2768740f1f98::t_d1db2d43344fd6 52,54
+  s_ed2768740f1f98::t_4ff5783db636ab 22,26
+packages/engine/src/classify.test.ts
+  s_ed2768740f1f98::t_27558a2868f71a 5
+  s_ed2768740f1f98::t_b29f6a9d583cb0 20-27
+  s_ed2768740f1f98::t_0c54de0d3a08a4 106-164
+packages/engine/src/WorkSource.ts
+  s_ed2768740f1f98::t_8c84994908b395 9
+  s_ed2768740f1f98::t_d4c38f375df44a 6
+packages/engine/src/github/github-helpers.test.ts
+  s_ed2768740f1f98::t_93ea373e96dcfc 2-3,7-13
+  s_ed2768740f1f98::t_f365e20c5804ee 20
+  s_ed2768740f1f98::t_800d097405aa01 77-111
+  s_ed2768740f1f98::t_6d9962abb8ce5a 14
+packages/engine/src/classify.ts
+  s_ed2768740f1f98::t_d9bb1b0b6c6b25 10,15
+  s_ed2768740f1f98::t_79181ab89fcb68 63-64
+  s_ed2768740f1f98::t_594933a8307d61 70
+  s_ed2768740f1f98::t_726107f4b7d813 25-30,35-40,42
+  s_55851d43d336a2::t_1b4dcc7c7a7d03 71-77,81
+packages/engine/src/playbook.test.ts
+  s_ed2768740f1f98::t_0b6432fec4fc54 5,8,10
+  s_ed2768740f1f98::t_fb1ac528c83274 79-99,101-104,107,109-125
+packages/engine/src/Executor.ts
+  s_ed2768740f1f98::t_c5a34d925f3137 129,142-145
+  s_ed2768740f1f98::t_6334036bbeae8f 397-408,422
+  s_ed2768740f1f98::t_27558a2868f71a 28
+  s_ed2768740f1f98::t_b88746e3f05d3a 12,14,17,20
+  s_ed2768740f1f98::t_2152b4cf7c8031 226,232
+  s_ed2768740f1f98::t_83ed8ecb005c6c 48,51-57
+  s_ed2768740f1f98::t_279a2ab5ea7bb1 262-366
+  s_ed2768740f1f98::t_b2b216bb878263 58
+packages/engine/src/executor.test.ts
+  s_ed2768740f1f98::t_27558a2868f71a 116-122,499-503,534-538,555-559
+  s_ed2768740f1f98::t_227c829a508e9b 100-115,123-140
+  s_ed2768740f1f98::t_0e9e2b3992c2e6 227-231,238
+  s_ed2768740f1f98::t_85bf36e3da786c 495-498,504-533,539-554,560-596
+  s_ed2768740f1f98::t_ebcf3d85828d7e 190,192,196-198
+skills/follow-up-agent/SKILL.md
+  s_ed2768740f1f98::t_fa2a17b5969e69 1-79
+packages/engine/src/Playbook.ts
+  s_ed2768740f1f98::t_77f61a5fba5b91 34-48,52,59-60,67-68,75-84,90
+  s_ed2768740f1f98::t_4feb742762bf9c 157-175
+  s_ed2768740f1f98::t_250969db525edf 15-16,19
+  s_ed2768740f1f98::t_076c6e5caed723 20
+packages/engine/src/github/markers.ts
+  s_ed2768740f1f98::t_53fa63ed85e9c7 4
+  s_ed2768740f1f98::t_3dd666183e5b52 57-59
+  s_ed2768740f1f98::t_27558a2868f71a 77,87
+  s_ed2768740f1f98::t_2c5a20207430c9 78-86
+  s_ed2768740f1f98::t_46c9ec34d2181e 62
+  s_ed2768740f1f98::t_b0f2ddb5faaf59 75-76
+packages/contracts/src/workspace.ts
+  s_ed2768740f1f98::t_5a6016aab28868 23-24
+packages/engine/src/engine.test.ts
+  s_ed2768740f1f98::t_27558a2868f71a 163-169
+apps/cli/src/ledger.ts
+  s_55851d43d336a2::t_25ef390ab38b09 73-116
+  s_ed2768740f1f98::t_a720a7eff47eec 175,188
+  s_55851d43d336a2::t_771717bd75580f 178,189
+  s_ed2768740f1f98::t_f3fff0f0560283 231-232
+  s_55851d43d336a2::t_e30d0a19b7fb6b 238,249
+  s_ed2768740f1f98::t_47df82de157c62 119
+  s_ed2768740f1f98::t_0cdb74ca48ea7a 5
+packages/engine/src/ci.test.ts
+  s_ed2768740f1f98::t_86c472b0657edd 1-56
+packages/engine/src/resumePolicy.test.ts
+  s_ed2768740f1f98::t_ee6e20f0bce772 1-71
+packages/engine/src/followUp.test.ts
+  s_ed2768740f1f98::t_b2e400fe3c9682 1-100
+packages/engine/src/github/github.test.ts
+  s_ed2768740f1f98::t_2d44957058e09f 103
+  s_ed2768740f1f98::t_a6b3e310966f82 180
+  s_ed2768740f1f98::t_b4cdf096a71532 283
+  s_ed2768740f1f98::t_17726765f1c64b 281
+  s_ed2768740f1f98::t_2b10c627953510 230-236,239
+  s_ed2768740f1f98::t_deb9c8d18c0785 7,13
+  s_ed2768740f1f98::t_4958449419971d 78-79,81,83
+  s_ed2768740f1f98::t_f2386258f67267 80
+  s_ed2768740f1f98::t_da9db6ad921cd8 177-179,181-183
+  s_ed2768740f1f98::t_8ddbca752ea190 28,42-45
+  s_ed2768740f1f98::t_16b7c2eb882eba 203-229,237-238,240-261
+packages/engine/src/followUp.ts
+  s_ed2768740f1f98::t_7aac862e47af30 2-5,13-57
+  s_ed2768740f1f98::t_e20a62b7ca7c60 1,6-12
+packages/engine/src/github/adapter.ts
+  s_ed2768740f1f98::t_a7c1117ca544f9 16-21,27
+  s_ed2768740f1f98::t_27558a2868f71a 5
+  s_ed2768740f1f98::t_3fc9e29e18f295 67-71,73
+  s_ed2768740f1f98::t_88a157584ac3db 65-66,72,74-81,84
+  s_ed2768740f1f98::t_68601204ff2d0d 116-129,133-139,142,154,162
+  s_ed2768740f1f98::t_868ee05e0677c1 15
+  s_ed2768740f1f98::t_a7446ed428d09d 85
+packages/engine/src/github/markers.test.ts
+  s_ed2768740f1f98::t_fbe885d13be9eb 3,9,13
+  s_ed2768740f1f98::t_b6dc027f4ed283 52-61
+packages/engine/src/runLedger.test.ts
+  s_ed2768740f1f98::t_ddd003f94c932a 74-75,84-86
+packages/engine/src/github/client.ts
+  s_ed2768740f1f98::t_403d24fe2ba6a0 207
+  s_ed2768740f1f98::t_a0bd203385b035 8
+  s_ed2768740f1f98::t_719f117e3cd571 31,39
+  s_ed2768740f1f98::t_c0e3fa0dd473f8 75
+  s_ed2768740f1f98::t_363fb114425eb1 192,203-206,208-225
+  s_ed2768740f1f98::t_6ebefc13bf53d3 63,74,78-86,91-96
+  s_ed2768740f1f98::t_4410b99c19b774 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "1a9b0f1f2b3b038f1ed7b23ca466853c523dc1df",
+  "prompts": {},
+  "sessions": {
+    "s_55851d43d336a2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "07785a29-06a5-4444-b434-d048cea9dd5c",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ed2768740f1f98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9d199fbc-2761-4403-8827-2ff42cd5eed0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
