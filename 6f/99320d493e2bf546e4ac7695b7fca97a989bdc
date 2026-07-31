@@ -1,0 +1,22 @@
+packages/contracts/src/workspace.ts
+  s_25418fec61383b::t_7f0aad9bb8deea 4-12,16,19-20
+packages/contracts/CONTEXT.md
+  s_25418fec61383b::t_a758d106c57733 12,15-17
+  s_25418fec61383b::t_636c3a2cf58960 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "6f99320d493e2bf546e4ac7695b7fca97a989bdc",
+  "prompts": {},
+  "sessions": {
+    "s_25418fec61383b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "174feb72-dc34-46fb-9f66-529cc6e2c9ed",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
