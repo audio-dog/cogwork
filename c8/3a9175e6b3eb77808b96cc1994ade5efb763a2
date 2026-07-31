@@ -1,0 +1,28 @@
+packages/engine/src/Scheduler.ts
+  s_19bc81255f20b1::t_3645a22be78cee 184-205,208-210,212-231,240-241,259
+  s_19bc81255f20b1::t_75b78096efca75 1,15,21,138,145,232-237,239,258,277
+  s_19bc81255f20b1::t_f6796c6d99b97d 136-137
+  s_19bc81255f20b1::t_c3b2c3c3624dfe 242-257
+  s_19bc81255f20b1::t_623c364f0e08ed 238
+  s_19bc81255f20b1::t_6d1e59a82b8072 8-14,23
+packages/engine/src/scheduler.test.ts
+  s_19bc81255f20b1::t_8e6a354ca652f6 11,16
+  s_19bc81255f20b1::t_635e7731a34168 304,306,329,332-333,337-339,345-381
+  s_19bc81255f20b1::t_8f5e0cd2e49dc2 193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "c83a9175e6b3eb77808b96cc1994ade5efb763a2",
+  "prompts": {},
+  "sessions": {
+    "s_19bc81255f20b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "76b9e526-453e-48e8-ad6a-b8eb58dad638",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
