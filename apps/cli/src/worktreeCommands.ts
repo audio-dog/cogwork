@@ -1,4 +1,4 @@
-import { Registry, Worktree } from "@clanker-forge/engine";
+import { type Git, Registry, Worktree } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -53,19 +53,14 @@ const runWorktree = <E>(
     Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
   );
 
+const formatWorktrees = (entries: ReadonlyArray<Git.WorktreeEntry>) =>
+  entries.length === 0
+    ? "  (no worktrees)"
+    : entries.map((entry) => `  ${entry.branch ?? "(detached)"}  ${entry.path}`).join("\n");
+
 const runList = (options: { readonly configHome: string; readonly workspace: string }) =>
   runWorktree(options, (workspace, manager) =>
-    manager
-      .list(workspace)
-      .pipe(
-        Effect.flatMap((entries) =>
-          Console.log(
-            entries.length === 0
-              ? "  (no worktrees)"
-              : entries.map((entry) => `  ${entry.branch ?? "(detached)"}  ${entry.path}`).join("\n"),
-          ),
-        ),
-      ),
+    manager.list(workspace).pipe(Effect.flatMap((entries) => Console.log(formatWorktrees(entries)))),
   );
 
 const runEnsure = (options: {
