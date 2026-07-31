@@ -31,6 +31,7 @@ export interface RawPull {
 }
 
 export interface RawComment {
+  readonly id: number;
   readonly authorLogin: string;
   readonly body: string;
 }
@@ -64,6 +65,7 @@ const ReviewSchema = Schema.Struct({
 });
 
 const CommentSchema = Schema.Struct({
+  id: Schema.Finite,
   body: Schema.NullOr(Schema.String),
   user: Schema.Struct({ login: Schema.String }),
 });
@@ -133,12 +135,13 @@ const make = (client: HttpClient.HttpClient) => {
     return reviewDecisionOf(reviews.map((review) => ({ login: review.user.login, state: review.state })));
   });
 
-  const postJson = Effect.fn("github.postJson")(function* (repo: GitHubRepoRef, path: string, body: unknown) {
-    const request = yield* Effect.mapError(
-      HttpClientRequest.bodyJson(HttpClientRequest.post(path), body),
-      toUnavailable,
-    );
-    yield* send(repo, request);
+  const sendJson = Effect.fn("github.sendJson")(function* (
+    repo: GitHubRepoRef,
+    request: HttpClientRequest.HttpClientRequest,
+    body: unknown,
+  ) {
+    const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), toUnavailable);
+    yield* send(repo, withBody);
   });
 
   return {
@@ -177,11 +180,15 @@ const make = (client: HttpClient.HttpClient) => {
         const json = yield* fetchJson(repo, repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`));
         const comments = yield* Effect.mapError(decodeComments(json), toUnavailable);
         return comments.flatMap((comment) =>
-          comment.body ? [{ authorLogin: comment.user.login, body: comment.body }] : [],
+          comment.body
+            ? [{ id: comment.id, authorLogin: comment.user.login, body: comment.body }]
+            : [],
         );
       }),
     addLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
-      postJson(repo, repoPath(repo, `/issues/${issueNumber}/labels`), { labels: [label] }),
+      sendJson(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/labels`)), {
+        labels: [label],
+      }),
     removeLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
       Effect.asVoid(
         send(
@@ -192,7 +199,9 @@ const make = (client: HttpClient.HttpClient) => {
         ),
       ),
     createComment: (repo: GitHubRepoRef, issueNumber: number, body: string) =>
-      postJson(repo, repoPath(repo, `/issues/${issueNumber}/comments`), { body }),
+      sendJson(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)), { body }),
+    editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
+      sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
   };
 };
 

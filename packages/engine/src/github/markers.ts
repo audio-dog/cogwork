@@ -1,4 +1,9 @@
-import { AttemptRecord, Claim, type TriageRole } from "@clanker-forge/contracts";
+import {
+  AttemptRecord,
+  Claim,
+  type LifecycleStage,
+  type TriageRole,
+} from "@clanker-forge/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
@@ -32,8 +37,13 @@ export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(
 const markerPattern = (name: string) => new RegExp(`<!--\\s*clanker-forge:${name}\\s([^>]*)-->`, "g");
 
 const anyMarkerPattern = /<!--\s*clanker-forge:[^>]*-->/g;
+const ledgerMarkerPattern = /<!--\s*clanker-forge:ledger\s*-->/;
 
 export const stripMarkers = (text: string) => text.replace(anyMarkerPattern, "");
+
+export const ledgerMarker = "<!-- clanker-forge:ledger -->";
+
+export const hasLedgerMarker = (body: string) => ledgerMarkerPattern.test(body);
 
 const toPair = (token: string) => {
   const eq = token.indexOf("=");
@@ -67,3 +77,26 @@ export const parseAttempts = (bodies: ReadonlyArray<string>) =>
   extractMarkers("attempt", bodies).flatMap((pairs) =>
     okToArray(decodeAttempt({ stage: pairs.stage, outcome: pairs.outcome, atMillis: Number(pairs.at) })),
   );
+
+const stageGerund: Record<LifecycleStage, string> = {
+  triage: "triaging",
+  implement: "implementing",
+  "follow-up": "following up on",
+  verify: "verifying",
+};
+
+export const claimStatus = (stage: LifecycleStage) => `Currently ${stageGerund[stage]} this issue.`;
+
+export const attemptStatus = (attempt: AttemptRecord) => {
+  if (attempt.outcome === "succeeded") return `${attempt.stage} completed.`;
+  if (attempt.outcome === "abandoned") return `${attempt.stage} abandoned.`;
+  return `Last ${attempt.stage} attempt failed.`;
+};
+
+export const coordinationMarkers = (body: string) =>
+  [...body.matchAll(anyMarkerPattern)]
+    .map((match) => match[0])
+    .filter((marker) => !ledgerMarkerPattern.test(marker));
+
+export const formatCoordinationBody = (status: string, markers: ReadonlyArray<string>) =>
+  ["> *This was posted by clanker-forge.*", "", status, "", ledgerMarker, ...markers].join("\n");

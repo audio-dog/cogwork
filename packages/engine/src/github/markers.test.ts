@@ -1,13 +1,20 @@
 import type { AttemptRecord, Claim } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import {
+  attemptStatus,
   claimLabel,
+  claimStatus,
+  coordinationMarkers,
+  formatCoordinationBody,
   hasClaimLabel,
+  hasLedgerMarker,
+  ledgerMarker,
   parseAttempts,
   parseClaim,
   rolesFromLabels,
   serializeAttempt,
   serializeClaim,
+  stripMarkers,
 } from "./markers";
 
 describe("github markers", () => {
@@ -45,5 +52,35 @@ describe("github markers", () => {
 
   it("returns null for bodies without a well-formed claim marker", () => {
     assert.isNull(parseClaim(["just a comment", "<!-- clanker-forge:claim by= at=nope -->"]));
+  });
+
+  it("parses claim and attempts from a single consolidated coordination body", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 3 };
+    const attempts: ReadonlyArray<AttemptRecord> = [
+      { stage: "implement", outcome: "failed", atMillis: 1 },
+      { stage: "implement", outcome: "failed", atMillis: 2 },
+    ];
+    const body = formatCoordinationBody(claimStatus("implement"), [
+      ...attempts.map(serializeAttempt),
+      serializeClaim(claim),
+    ]);
+    assert.deepStrictEqual(parseClaim([body]), claim);
+    assert.deepStrictEqual(parseAttempts([body]), attempts);
+  });
+
+  it("recognizes the ledger marker and strips every marker from proposal text", () => {
+    assert.isTrue(hasLedgerMarker(ledgerMarker));
+    assert.isFalse(hasLedgerMarker("<!-- clanker-forge:claim by=x at=1 -->"));
+    const text = `Hello ${ledgerMarker} world ${serializeClaim({ by: "x", claimedAtMillis: 1 })}`;
+    assert.strictEqual(stripMarkers(text).replace(/\s+/g, " ").trim(), "Hello world");
+  });
+
+  it("formats a visible status above the hidden markers", () => {
+    const claim = serializeClaim({ by: "bot", claimedAtMillis: 1 });
+    const body = formatCoordinationBody(claimStatus("triage"), [claim]);
+    assert.include(body, "Currently triaging this issue.");
+    assert.include(body, "> *This was posted by clanker-forge.*");
+    assert.deepStrictEqual(coordinationMarkers(body), [claim]);
+    assert.strictEqual(attemptStatus({ stage: "triage", outcome: "failed", atMillis: 1 }), "Last triage attempt failed.");
   });
 });
