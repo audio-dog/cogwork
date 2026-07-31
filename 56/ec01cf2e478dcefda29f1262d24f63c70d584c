@@ -1,0 +1,20 @@
+apps/cli/src/worktreeCommands.ts
+  s_761c6289cb44b5::t_8eb37d3e5f0a3e 1
+  s_761c6289cb44b5::t_37ab8717ee82d7 56-60,63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "56ec01cf2e478dcefda29f1262d24f63c70d584c",
+  "prompts": {},
+  "sessions": {
+    "s_761c6289cb44b5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "189b8f52-fa52-4514-adb3-9e2b2a188421",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
