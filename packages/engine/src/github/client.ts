@@ -1,10 +1,15 @@
+import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import type * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import type * as Headers from "effect/unstable/http/Headers";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
@@ -108,6 +113,37 @@ const millisFromIso = (value: string | null) => {
 const unavailable = (message: string) => new WorkSourceError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
+const defaultCooldownMillis = 60_000;
+
+const isoMillis = (millis: number) =>
+  Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
+
+const rateLimited = (resumeAtMillis: number) =>
+  new WorkSourceError({
+    reason: "rate-limited",
+    message: `GitHub rate limit exceeded; resuming after ${isoMillis(resumeAtMillis)}`,
+  });
+
+const headerSeconds = (value: string | undefined) => {
+  const parsed = value === undefined ? Number.NaN : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
+  const retryAfter = headerSeconds(headers["retry-after"]);
+  if (retryAfter !== null) return nowMillis + retryAfter * 1000;
+  const reset = headerSeconds(headers["x-ratelimit-reset"]);
+  return reset === null ? null : reset * 1000;
+};
+
+const isTransient = (error: WorkSourceError) => error.reason === "unavailable";
+const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
+
+interface EtagEntry {
+  readonly etag: string;
+  readonly body: unknown;
+}
+
 const repoPath = (repo: GitHubRepoRef, suffix: string) =>
   `https://api.github.com/repos/${repo.owner}/${repo.name}${suffix}`;
 
@@ -126,7 +162,48 @@ export const reviewDecisionOf = (
   return "none";
 };
 
-const make = (client: HttpClient.HttpClient) => {
+const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpClient) {
+  const etags = yield* Ref.make(new Map<string, EtagEntry>());
+  const resumeAtRef = yield* Ref.make<number | null>(null);
+
+  const execute = Effect.fn("github.execute")(function* (
+    request: HttpClientRequest.HttpClientRequest,
+    token: Redacted.Redacted<string>,
+  ) {
+    const now = yield* Clock.currentTimeMillis;
+    const cooldownUntil = yield* Ref.get(resumeAtRef);
+    if (cooldownUntil !== null && now < cooldownUntil) {
+      return yield* rateLimited(cooldownUntil);
+    }
+    const response = yield* Effect.catchTag(
+      client.execute(
+        request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
+      ),
+      "HttpClientError",
+      (error) => Effect.fail(unavailable(error.message)),
+    );
+    const remaining = response.headers["x-ratelimit-remaining"];
+    const resumeAt = rateLimitResumeAt(response.headers, now);
+    if (remaining === "0" && resumeAt !== null) {
+      yield* Ref.set(resumeAtRef, resumeAt);
+    }
+    if (response.status === 401) {
+      return yield* new WorkSourceError({ reason: "auth", message: "GitHub authentication failed (401)" });
+    }
+    const throttled =
+      response.status === 429 ||
+      (response.status === 403 && (remaining === "0" || response.headers["retry-after"] !== undefined));
+    if (throttled) {
+      const until = resumeAt ?? now + defaultCooldownMillis;
+      yield* Ref.set(resumeAtRef, until);
+      return yield* rateLimited(until);
+    }
+    if (response.status >= 400) {
+      return yield* unavailable(`GitHub request failed (${response.status})`);
+    }
+    return response;
+  });
+
   const send = Effect.fn("github.send")(function* (
     repo: GitHubRepoRef,
     request: HttpClientRequest.HttpClientRequest,
@@ -135,25 +212,27 @@ const make = (client: HttpClient.HttpClient) => {
       Config.redacted(repo.tokenEnv),
       () => new WorkSourceError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
     );
-    const response = yield* Effect.catchTag(
-      client.execute(
-        request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
-      ),
-      "HttpClientError",
-      (error) => Effect.fail(unavailable(error.message)),
-    );
-    if (response.status === 401) {
-      return yield* new WorkSourceError({ reason: "auth", message: "GitHub authentication failed (401)" });
-    }
-    if (response.status >= 400) {
-      return yield* unavailable(`GitHub request failed (${response.status})`);
-    }
-    return response;
+    return yield* execute(request, token);
   });
 
   const fetchJson = Effect.fn("github.fetchJson")(function* (repo: GitHubRepoRef, path: string) {
-    const response = yield* send(repo, HttpClientRequest.get(path));
-    return yield* Effect.mapError(response.json, toUnavailable);
+    const cached = (yield* Ref.get(etags)).get(path);
+    const base = HttpClientRequest.get(path);
+    const request = cached ? HttpClientRequest.setHeader(base, "if-none-match", cached.etag) : base;
+    const response = yield* Effect.retry(send(repo, request), {
+      while: isTransient,
+      schedule: transientBackoff,
+      times: 3,
+    });
+    if (response.status === 304 && cached) {
+      return cached.body;
+    }
+    const body = yield* Effect.mapError(response.json, toUnavailable);
+    const etag = response.headers.etag;
+    if (etag !== undefined) {
+      yield* Ref.update(etags, (entries) => new Map(entries).set(path, { etag, body }));
+    }
+    return body;
   });
 
   const reviewDecisionFor = Effect.fn("github.reviewDecision")(function* (
@@ -255,18 +334,12 @@ const make = (client: HttpClient.HttpClient) => {
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
   };
-};
+});
 
-export type GitHubClientService = ReturnType<typeof make>;
+export type GitHubClientService = Effect.Success<ReturnType<typeof make>>;
 
 export class GitHubClient extends Context.Service<GitHubClient, GitHubClientService>()(
   "@clanker-forge/engine/github/client/GitHubClient",
 ) {}
 
-export const layer = Layer.effect(
-  GitHubClient,
-  Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient;
-    return make(client);
-  }),
-);
+export const layer = Layer.effect(GitHubClient, Effect.flatMap(HttpClient.HttpClient, make));

@@ -24,7 +24,7 @@ export interface RoleChanges {
 }
 
 export class WorkSourceError extends Schema.TaggedErrorClass<WorkSourceError>()("WorkSourceError", {
-  reason: Schema.Literals(["auth", "unavailable"]),
+  reason: Schema.Literals(["auth", "unavailable", "rate-limited"]),
   message: Schema.String,
 }) {}
 

@@ -45,6 +45,11 @@ const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
   Flag.withDefault(50),
 );
 
+const pollIntervalFlag = Flag.integer("poll-interval").pipe(
+  Flag.withDescription("Seconds between work-source polls (higher values conserve GitHub API quota)"),
+  Flag.withDefault(60),
+);
+
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
 const watchIdFlag = Flag.string("id").pipe(
@@ -71,7 +76,7 @@ const runDaemon = Effect.fn("commands.runDaemon")(
       { discard: true },
     );
     yield* Daemon.bootstrap;
-    yield* Effect.all([Daemon.reconcileHeartbeat, Daemon.executeHeartbeat], {
+    yield* Effect.all([Daemon.reconcileHeartbeat(options.pollIntervalMillis), Daemon.executeHeartbeat], {
       concurrency: "unbounded",
     });
   },
@@ -202,9 +207,17 @@ export const daemonCommand = Command.make("daemon", {
   ledger: ledgerFlag,
   maxConcurrency: maxConcurrencyFlag,
   dailyBudget: dailyBudgetFlag,
+  pollInterval: pollIntervalFlag,
 }).pipe(
-  Command.withHandler(({ socket, configHome, ledger, maxConcurrency, dailyBudget }) =>
-    runDaemon({ socketPath: socket, configHome, ledgerPath: ledger, maxConcurrency, dailyBudget }),
+  Command.withHandler(({ socket, configHome, ledger, maxConcurrency, dailyBudget, pollInterval }) =>
+    runDaemon({
+      socketPath: socket,
+      configHome,
+      ledgerPath: ledger,
+      maxConcurrency,
+      dailyBudget,
+      pollIntervalMillis: pollInterval * 1000,
+    }),
   ),
 );
 
