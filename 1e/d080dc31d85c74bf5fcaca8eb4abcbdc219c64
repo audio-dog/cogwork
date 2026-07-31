@@ -1,0 +1,39 @@
+packages/engine/src/Scheduler.ts
+  s_181f054174c359::t_ace0686e36438a 154-156,158-169
+  s_181f054174c359::t_0739807114e4cf 215
+apps/cli/src/commands.ts
+  s_181f054174c359::t_2b95af733d1a70 99-104,114
+  s_181f054174c359::t_d6370a8145ac8f 7
+packages/contracts/src/daemon.ts
+  s_181f054174c359::t_19106d0e5d76d8 54-68,73
+packages/engine/test/engine.test.ts
+  s_181f054174c359::t_387db10f85142a 222-233,238,255-263
+  s_181f054174c359::t_9564f488e212ce 264-266
+  s_181f054174c359::t_37864e0f45742f 1,10
+  s_181f054174c359::t_eeca4bd1e4cb1c 267-268
+packages/engine/src/Daemon.ts
+  s_181f054174c359::t_eddb6a16c7f662 11
+  s_181f054174c359::t_d8d0b3205607eb 28-35
+  s_181f054174c359::t_7c4fe0f753527b 52,54,61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "1ed080dc31d85c74bf5fcaca8eb4abcbdc219c64",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_181f054174c359": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cf85be62-15af-48e2-a2f7-8b560e3d45ce",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
