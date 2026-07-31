@@ -46,12 +46,16 @@ A workspace's binding of a lifecycle stage to a prompt template, skill, and harn
 _Avoid_: Workflow, pipeline
 
 **Work source adapter**:
-A concrete implementation of the work source port. `GitHub.adapterLayer` is the only real one; it reads issues, labels, and comments, and writes coordination markers into a bot-owned comment.
+A concrete implementation of the work source port. `GitHub.adapterLayer` is the only real one; it reads issues, labels, and comments, and writes status, detail, and coordination markers into the coordination comment.
 _Avoid_: Client (the GitHub HTTP client is a lower-level detail), plugin
 
 **Coordination markers**:
-The HTML-comment records (claim, attempt, ledger anchor) the GitHub adapter writes into a single bot-owned comment on an issue, so the control plane's coordination state travels with the work source.
+The HTML-comment records (claim, attempt, follow-up, ledger anchor) the GitHub adapter writes into the coordination comment, so the control plane's coordination state travels with the work source.
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.
+
+**Coordination comment**:
+The single bot-owned comment the GitHub adapter keeps on an issue. Every bot write edits it in place rather than adding another comment. It holds three parts: the **status** (one line naming what the control plane is doing now), the **detail** (the latest thing the bot has to say to a human — a triage proposal, a hand-off explanation), and the coordination markers. A write that sets one part carries the other two forward, so a status change never erases a proposal.
+_Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (the proposal is one kind of detail).
 
 **Worktree manager**:
 The git worktree lifecycle: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker.
