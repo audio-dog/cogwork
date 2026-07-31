@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkItemId } from "@clanker-forge/contracts";
+import { DaemonRpcs, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -7,6 +7,7 @@ import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "../src/Daemon";
 import * as Reconcile from "../src/Reconcile";
 import * as Registry from "../src/Registry";
+import * as Scheduler from "../src/Scheduler";
 import type { ObservedItem } from "../src/WorkSource";
 import * as WorkSource from "../src/WorkSource";
 
@@ -218,10 +219,23 @@ describe("daemon status over rpc", () => {
   const workerLayer = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, WorkSource.emptyLayer)),
   );
+  const schedulerStub = Layer.succeed(Scheduler.Scheduler, {
+    tick: () => Effect.succeed([]),
+    recover: () => Effect.void,
+    config: { globalLimit: 4, dailyBudget: 50 },
+    stats: Effect.succeed({
+      global: 3,
+      perWorkspace: new Map([[Schema.decodeSync(WorkspaceId)("example"), 2]]),
+      inflight: new Set<string>(),
+      budgetDay: 0,
+      budgetUsed: 7,
+    }),
+  });
   const layer = Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.daemonInfoLayer),
     Layer.provideMerge(workerLayer),
     Layer.provideMerge(registryLayer),
+    Layer.provideMerge(schedulerStub),
   );
 
   it.effect("reports health, registered workspaces, their derived work, and failures", () =>
@@ -236,6 +250,20 @@ describe("daemon status over rpc", () => {
       assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.strictEqual(status.failures.length, 2);
       assert.isAtLeast(status.uptimeMillis, 0);
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
+  it.effect("surfaces scheduler caps and budget in the status payload", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const status = yield* client.GetStatus();
+      assert.strictEqual(status.scheduler.globalInFlight, 3);
+      assert.strictEqual(status.scheduler.globalLimit, 4);
+      assert.strictEqual(status.scheduler.dailyBudgetUsed, 7);
+      assert.strictEqual(status.scheduler.dailyBudgetLimit, 50);
+      assert.strictEqual(status.scheduler.perWorkspace.length, 1);
+      assert.strictEqual(status.scheduler.perWorkspace[0]?.name, "example");
+      assert.strictEqual(status.scheduler.perWorkspace[0]?.inFlight, 2);
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 });

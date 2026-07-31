@@ -151,11 +151,22 @@ export const make = (config: SchedulerConfig) =>
       const snapshot = yield* worker.snapshot;
       const candidates = candidatesOf(registry, snapshot, config);
       const day = utcDay(yield* Clock.currentTimeMillis);
-      const picks = yield* Ref.modify(stateRef, (state) => {
-        const planned = plan(candidates, state, config, day);
-        return [planned.picks, planned.state];
+      const planned = yield* Ref.modify(stateRef, (state) => {
+        const next = plan(candidates, state, config, day);
+        return [next, next.state];
       });
-      return yield* Effect.forEach(picks, (candidate) => Effect.forkIn(runJob(candidate), scope));
+      if (planned.picks.length > 0) {
+        yield* Effect.logInfo("scheduled jobs", {
+          picked: planned.picks.map((c) => ({
+            workspace: c.workspace.config.name,
+            item: c.work.id,
+            stage: c.work.stage,
+          })),
+          inFlight: planned.state.global,
+          budgetUsed: planned.state.budgetUsed,
+        });
+      }
+      return yield* Effect.forEach(planned.picks, (candidate) => Effect.forkIn(runJob(candidate), scope));
     });
 
     const releaseStale = Effect.fn("Scheduler.releaseStale")(function* (
@@ -201,7 +212,7 @@ export const make = (config: SchedulerConfig) =>
       );
     });
 
-    return { tick, recover, stats: Ref.get(stateRef) } as const;
+    return { tick, recover, stats: Ref.get(stateRef), config } as const;
   });
 
 export class Scheduler extends Context.Service<Scheduler, Effect.Success<ReturnType<typeof make>>>()(

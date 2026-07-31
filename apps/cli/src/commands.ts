@@ -4,6 +4,7 @@ import {
   type RunEvent,
   RunId,
   type RunSummary,
+  type SchedulerStats,
   type WorkspaceInfo,
 } from "@clanker-forge/contracts";
 import { Daemon, Registry } from "@clanker-forge/engine";
@@ -95,6 +96,12 @@ const formatWorkspace = (w: WorkspaceInfo) => {
   ].join("\n");
 };
 
+const formatScheduler = (s: SchedulerStats) => {
+  const loads = s.perWorkspace.map((w) => `${w.name}=${w.inFlight}`).join(" ");
+  const suffix = loads.length === 0 ? "" : ` (${loads})`;
+  return `scheduler: ${s.globalInFlight}/${s.globalLimit} in-flight · budget ${s.dailyBudgetUsed}/${s.dailyBudgetLimit}${suffix}`;
+};
+
 const formatStatus = (status: DaemonStatus) => {
   const header = `daemon: ${status.health} (uptime ${Math.round(status.uptimeMillis / 1000)}s)`;
   const workspaces =
@@ -104,6 +111,7 @@ const formatStatus = (status: DaemonStatus) => {
   const failures = status.failures.map((f) => `  ! ${f.source}: ${f.message}`).join("\n");
   return [
     header,
+    formatScheduler(status.scheduler),
     "workspaces:",
     workspaces,
     ...(status.failures.length > 0 ? ["failures:", failures] : []),

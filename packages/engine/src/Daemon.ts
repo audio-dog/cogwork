@@ -8,7 +8,7 @@ import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
 import { RunLedger } from "./RunLedger";
-import { Scheduler } from "./Scheduler";
+import { Scheduler, type SchedulerConfig, type SchedulerState } from "./Scheduler";
 import { ticketSlug, WorktreeManager } from "./Worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -24,6 +24,14 @@ const okPoll = { status: "ok" as const };
 
 const statesByName = (snapshot: ReconcileSnapshot) =>
   new Map(snapshot.workspaces.map((state) => [state.name, state]));
+
+const schedulerStats = (config: SchedulerConfig, state: SchedulerState) => ({
+  globalInFlight: state.global,
+  globalLimit: config.globalLimit,
+  dailyBudgetUsed: state.budgetUsed,
+  dailyBudgetLimit: config.dailyBudget,
+  perWorkspace: [...state.perWorkspace].map(([name, inFlight]) => ({ name, inFlight })),
+});
 
 const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => ({
   name: workspace.config.name,
@@ -41,13 +49,16 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const registry = yield* WorkspaceRegistry;
     const info = yield* DaemonInfo;
     const worker = yield* ReconcileWorker;
+    const scheduler = yield* Scheduler;
     const snapshot = yield* worker.snapshot;
+    const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
     const stateByName = statesByName(snapshot);
     return {
       health: "running" as const,
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
+      scheduler: schedulerStats(scheduler.config, stats),
       workspaces: registry.workspaces.map((w) => workspaceInfo(w, stateByName.get(w.config.name))),
       failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
     };
