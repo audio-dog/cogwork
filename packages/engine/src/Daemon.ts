@@ -1,14 +1,22 @@
-import { DaemonRpcs, type RunActivity, type RunId } from "@clanker-forge/contracts";
+import {
+  DaemonRpcs,
+  HarnessEvent,
+  type RunEvent,
+  type RunId,
+  type RunRecord,
+} from "@clanker-forge/contracts";
+import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
-import { RunEventBus } from "./RunEventBus";
+import { activityOf, RunEventBus } from "./RunEventBus";
 import { RunLedger } from "./RunLedger";
 import { Scheduler, type SchedulerConfig, type SchedulerState } from "./Scheduler";
 import { ticketSlug, WorktreeManager } from "./Worktree";
@@ -24,8 +32,34 @@ export const daemonInfoLayer = Layer.effect(
 
 const okPoll = { status: "ok" as const };
 
-export const filterActivity = (activity: Stream.Stream<RunActivity>, id: RunId | undefined) =>
-  id === undefined ? activity : Stream.filter(activity, (item) => item.runId === id);
+const decodeHarnessEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(HarnessEvent));
+
+const activityFromEvent = (run: RunRecord, event: RunEvent) =>
+  decodeHarnessEvent(event.data).pipe(
+    Effect.map((harnessEvent) => activityOf(run, event.seq, event.atMillis, harnessEvent)),
+  );
+
+const activitiesFromLedger = (run: RunRecord, events: ReadonlyArray<RunEvent>) =>
+  Effect.forEach(events, (event) => activityFromEvent(run, event).pipe(Effect.option)).pipe(
+    Effect.map(Arr.getSomes),
+  );
+
+export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
+  const bus = yield* RunEventBus;
+  if (id === undefined) return bus.activity;
+
+  const ledger = yield* RunLedger;
+  const subscription = yield* bus.subscribe();
+  const run = yield* ledger.getRun(id);
+  const history = run === null ? [] : yield* activitiesFromLedger(run, yield* ledger.events(id));
+  const lastSeq = history.at(-1)?.seq ?? -1;
+  return Stream.concat(
+    Stream.fromIterable(history),
+    Stream.fromSubscription(subscription).pipe(
+      Stream.filter((item) => item.runId === id && item.seq > lastSeq),
+    ),
+  );
+});
 
 const statesByName = (snapshot: ReconcileSnapshot) =>
   new Map(snapshot.workspaces.map((state) => [state.name, state]));
@@ -76,8 +110,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const ledger = yield* RunLedger;
     return yield* ledger.events(payload.id);
   }),
-  WatchActivity: (payload) =>
-    Stream.unwrap(Effect.map(RunEventBus, (bus) => filterActivity(bus.activity, payload.id))),
+  WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
 });
 
 interface ReconcilableWorkspace {
