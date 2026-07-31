@@ -4,9 +4,10 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Command from "effect/unstable/cli/Command";
 import { daemonCommand, runEventsCommand, runsCommand, statusCommand } from "./commands";
+import { worktreeCommand } from "./worktreeCommands";
 
 const cli = Command.make("clanker-forge").pipe(
-  Command.withSubcommands([daemonCommand, statusCommand, runsCommand, runEventsCommand]),
+  Command.withSubcommands([daemonCommand, statusCommand, runsCommand, runEventsCommand, worktreeCommand]),
 );
 
 NodeRuntime.runMain(

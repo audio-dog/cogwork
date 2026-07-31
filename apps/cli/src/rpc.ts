@@ -13,6 +13,7 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { layer as ledgerLayer } from "./ledger";
 import { loadFromDisk } from "./loader";
+import { worktreeManagerLayer } from "./platform";
 
 export interface DaemonOptions {
   readonly socketPath: string;
@@ -56,7 +57,7 @@ const sharedLayer = (options: DaemonOptions) => {
     ledgerLayer(options.ledgerPath),
     harnessLayer,
   );
-  return Layer.mergeAll(Reconcile.layer, Executor.layer).pipe(Layer.provideMerge(base));
+  return Layer.mergeAll(Reconcile.layer, Executor.layer, worktreeManagerLayer).pipe(Layer.provideMerge(base));
 };
 
 export const serverLayer = (options: DaemonOptions) =>
