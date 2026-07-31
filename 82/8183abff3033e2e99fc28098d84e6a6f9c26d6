@@ -1,0 +1,21 @@
+packages/contracts/src/coordination.ts
+  s_a1e42905488cc4::t_3ac1c0817aec9b 8
+packages/engine/src/Executor.ts
+  s_a1e42905488cc4::t_683146c5c8b35f 89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "828183abff3033e2e99fc28098d84e6a6f9c26d6",
+  "prompts": {},
+  "sessions": {
+    "s_a1e42905488cc4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c563765a-1310-4276-b7a3-28668b3ea223",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
