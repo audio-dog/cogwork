@@ -1,0 +1,21 @@
+apps/cli/src/ledger.ts
+  s_dc476ac3fa7fb2::t_80022245034e03 257
+  s_dc476ac3fa7fb2::t_c2ad888bf97433 175-185,187
+  s_dc476ac3fa7fb2::t_1bd4283061d4f2 258-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "19552a4a6787a9a4b672cb91f2f942ac944021ef",
+  "prompts": {},
+  "sessions": {
+    "s_dc476ac3fa7fb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "632545bb-476c-4e94-bd47-1112c9e6a31e",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
