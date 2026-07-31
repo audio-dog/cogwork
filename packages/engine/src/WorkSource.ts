@@ -3,13 +3,10 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type { ObservedPr } from "./followUp";
 import type { RegisteredWorkspace } from "./projector";
 
-export type PrReview = "pending" | "changes-requested" | "ready";
-
-export interface ObservedPr {
-  readonly review: PrReview;
-}
+export type { FollowUpMarker, ObservedPr, PrReview } from "./followUp";
 
 export interface ObservedItem {
   readonly id: WorkItemId;

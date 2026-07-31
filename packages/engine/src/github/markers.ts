@@ -1,11 +1,7 @@
-import {
-  AttemptRecord,
-  Claim,
-  type LifecycleStage,
-  type TriageRole,
-} from "@clanker-forge/contracts";
+import { AttemptRecord, Claim, type LifecycleStage, type TriageRole } from "@clanker-forge/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import { FollowUpMarker } from "../followUp";
 
 const roleLabels = {
   "needs-triage": "needs-triage",
@@ -63,8 +59,12 @@ export const serializeClaim = (claim: Claim) =>
 export const serializeAttempt = (attempt: AttemptRecord) =>
   `<!-- clanker-forge:attempt stage=${attempt.stage} outcome=${attempt.outcome} at=${attempt.atMillis} -->`;
 
+export const serializeFollowUp = (marker: FollowUpMarker) =>
+  `<!-- clanker-forge:follow-up checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} -->`;
+
 const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
+const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
 
 export const parseClaim = (bodies: ReadonlyArray<string>) => {
   const candidates = extractMarkers("claim", bodies).flatMap((pairs) =>
@@ -77,6 +77,19 @@ export const parseAttempts = (bodies: ReadonlyArray<string>) =>
   extractMarkers("attempt", bodies).flatMap((pairs) =>
     okToArray(decodeAttempt({ stage: pairs.stage, outcome: pairs.outcome, atMillis: Number(pairs.at) })),
   );
+
+export const parseFollowUp = (bodies: ReadonlyArray<string>) =>
+  extractMarkers("follow-up", bodies)
+    .flatMap((pairs) =>
+      okToArray(
+        decodeFollowUp({
+          checks: pairs.checks,
+          humanCommentAtMillis: Number(pairs.human),
+          noProgress: Number(pairs.noProgress),
+        }),
+      ),
+    )
+    .at(-1) ?? null;
 
 const stageGerund: Record<LifecycleStage, string> = {
   triage: "triaging",

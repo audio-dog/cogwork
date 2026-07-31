@@ -2,9 +2,12 @@ import { WorkspaceConfig } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
+  buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
+  parseFollowUpResult,
   parseTriageDecision,
+  resolveFollowUp,
   resolveImplement,
   resolveStage,
   resolveTriage,
@@ -73,13 +76,53 @@ describe("resolveImplement", () => {
   });
 });
 
+describe("resolveFollowUp", () => {
+  it("defaults to the follow-up-agent skill and a one-day resume age with no token cap", () => {
+    const resolved = resolveFollowUp(config());
+    assert.strictEqual(resolved.enabled, false);
+    assert.strictEqual(resolved.skill, "follow-up-agent");
+    assert.strictEqual(resolved.resumeMaxAgeMillis, 86_400_000);
+    assert.isNull(resolved.resumeMaxTokens);
+  });
+
+  it("prefers per-stage resume overrides", () => {
+    const resolved = resolveFollowUp(
+      config({
+        playbook: { "follow-up": { enabled: true, resumeMaxAgeMillis: 5_000, resumeMaxTokens: 42 } },
+      }),
+    );
+    assert.strictEqual(resolved.enabled, true);
+    assert.strictEqual(resolved.resumeMaxAgeMillis, 5_000);
+    assert.strictEqual(resolved.resumeMaxTokens, 42);
+  });
+});
+
 describe("resolveStage", () => {
-  it("resolves triage and implement, and returns null for unsupported stages", () => {
-    const cfg = config({ playbook: { triage: { enabled: true }, implement: { enabled: true } } });
+  it("resolves triage, implement, and follow-up, and returns null for unsupported stages", () => {
+    const cfg = config({
+      playbook: { triage: { enabled: true }, implement: { enabled: true }, "follow-up": { enabled: true } },
+    });
     assert.strictEqual(resolveStage(cfg, "triage")?.enabled, true);
     assert.strictEqual(resolveStage(cfg, "implement")?.enabled, true);
+    assert.strictEqual(resolveStage(cfg, "follow-up")?.enabled, true);
     assert.isNull(resolveStage(cfg, "verify"));
-    assert.isNull(resolveStage(cfg, "follow-up"));
+  });
+});
+
+describe("buildFollowUpPrompt", () => {
+  it("names the skill, forbids merging, and appends the follow-up sentinel", () => {
+    const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" });
+    assert.include(prompt, "`follow-up-agent`");
+    assert.include(prompt, "Never merge");
+    assert.include(prompt, "FOLLOWUP-RESULT: <pushed | blocked>");
+  });
+});
+
+describe("parseFollowUpResult", () => {
+  it("reads the last pushed/blocked sentinel", () => {
+    assert.strictEqual(parseFollowUpResult("work\nFOLLOWUP-RESULT: pushed"), "pushed");
+    assert.strictEqual(parseFollowUpResult("FOLLOWUP-RESULT: pushed\nFOLLOWUP-RESULT: blocked"), "blocked");
+    assert.isNull(parseFollowUpResult("FOLLOWUP-RESULT: banana"));
   });
 });
 

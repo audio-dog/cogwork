@@ -2,8 +2,8 @@ import { DatabaseSync } from "node:sqlite";
 import type { RunEvent, RunId, RunRecord, TokenUsage } from "@clanker-forge/contracts";
 import {
   RunEvent as RunEventSchema,
+  RunRecord as RunRecordSchema,
   RunSummary as RunSummarySchema,
-  SessionId,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
 import { and, desc, eq, isNotNull, type SQL, sql } from "drizzle-orm";
@@ -70,9 +70,53 @@ const usageOf = (row: {
   };
 };
 
+const runRecordSelection = {
+  id: runs.id,
+  workspace: runs.workspace,
+  workItem: runs.workItem,
+  stage: runs.stage,
+  harness: runs.harness,
+  branch: runs.branch,
+  session: runs.session,
+  inputTokens: runs.inputTokens,
+  outputTokens: runs.outputTokens,
+  totalTokens: runs.totalTokens,
+  status: runs.status,
+  startedAt: runs.startedAt,
+  endedAt: runs.endedAt,
+};
+
+const runRecordFromRow = (row: {
+  readonly id: string;
+  readonly workspace: string;
+  readonly workItem: string;
+  readonly stage: string;
+  readonly harness: string;
+  readonly branch: string | null;
+  readonly session: string | null;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
+  readonly totalTokens: number | null;
+  readonly status: string;
+  readonly startedAt: number;
+  readonly endedAt: number | null;
+}) => ({
+  id: row.id,
+  workspace: row.workspace,
+  workItem: row.workItem,
+  stage: row.stage,
+  harness: row.harness,
+  branch: row.branch,
+  session: row.session,
+  usage: usageOf(row),
+  status: row.status,
+  startedAtMillis: row.startedAt,
+  endedAtMillis: row.endedAt,
+});
+
 const decodeSummary = Schema.decodeUnknownEffect(RunSummarySchema);
 const decodeEvent = Schema.decodeUnknownEffect(RunEventSchema);
-const decodeSession = Schema.decodeUnknownEffect(SessionId);
+const decodeRun = Schema.decodeUnknownEffect(RunRecordSchema);
 
 const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows: ReadonlyArray<unknown>) =>
   Effect.forEach(rows, (row) =>
@@ -128,10 +172,10 @@ const make = (ledgerPath: string) =>
         Effect.orElseSucceed(() => [] as ReadonlyArray<A>),
       );
 
-    const latestSessionWhere = (operation: string, where: SQL | undefined) =>
+    const latestRunWhere = (operation: string, where: SQL | undefined) =>
       Effect.try(() =>
         db
-          .select({ session: runs.session })
+          .select(runRecordSelection)
           .from(runs)
           .where(and(where, isNotNull(runs.session)))
           .orderBy(desc(runs.startedAt))
@@ -141,8 +185,8 @@ const make = (ledgerPath: string) =>
         Effect.tapError((cause) => warn(operation, cause)),
         Effect.orElseSucceed(() => undefined),
         Effect.flatMap((row) =>
-          row?.session
-            ? decodeSession(row.session).pipe(Effect.orElseSucceed(() => null))
+          row
+            ? decodeRun(runRecordFromRow(row)).pipe(Effect.orElseSucceed(() => null))
             : Effect.succeed(null),
         ),
       );
@@ -184,29 +228,14 @@ const make = (ledgerPath: string) =>
             .run();
         }),
 
-      latestSessionByBranch: (workspace: string, branch: string) =>
-        latestSessionWhere(
-          "latestSessionByBranch",
-          and(eq(runs.workspace, workspace), eq(runs.branch, branch)),
-        ),
+      latestRunByBranch: (workspace: string, branch: string) =>
+        latestRunWhere("latestRunByBranch", and(eq(runs.workspace, workspace), eq(runs.branch, branch))),
 
       listRuns: (limit: number) =>
         readRows("listRuns", () =>
           db
             .select({
-              id: runs.id,
-              workspace: runs.workspace,
-              workItem: runs.workItem,
-              stage: runs.stage,
-              harness: runs.harness,
-              branch: runs.branch,
-              session: runs.session,
-              inputTokens: runs.inputTokens,
-              outputTokens: runs.outputTokens,
-              totalTokens: runs.totalTokens,
-              status: runs.status,
-              startedAt: runs.startedAt,
-              endedAt: runs.endedAt,
+              ...runRecordSelection,
               eventCount: sql<number>`(select count(*) from ${runEvents} where ${runEvents.runId} = ${runs.id})`,
             })
             .from(runs)
@@ -217,20 +246,7 @@ const make = (ledgerPath: string) =>
           Effect.flatMap((rows) =>
             decodeAll(
               decodeSummary,
-              rows.map((row) => ({
-                id: row.id,
-                workspace: row.workspace,
-                workItem: row.workItem,
-                stage: row.stage,
-                harness: row.harness,
-                branch: row.branch,
-                session: row.session,
-                usage: usageOf(row),
-                status: row.status,
-                startedAtMillis: row.startedAt,
-                endedAtMillis: row.endedAt,
-                eventCount: Number(row.eventCount),
-              })),
+              rows.map((row) => ({ ...runRecordFromRow(row), eventCount: Number(row.eventCount) })),
             ),
           ),
         ),

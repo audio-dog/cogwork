@@ -1,14 +1,24 @@
 import { assert, describe, it } from "@effect/vitest";
-import { linkedIssue, prReview } from "./adapter";
-import { type RawPull, reviewDecisionOf } from "./client";
+import { humanCommentSignal, linkedIssue, prReview } from "./adapter";
+import { type RawComment, type RawPull, reviewDecisionOf } from "./client";
 
 const review = (login: string, state: string) => ({ login, state });
+
+const comment = (over: Partial<RawComment>): RawComment => ({
+  id: 1,
+  authorLogin: "maintainer",
+  authorAssociation: "COLLABORATOR",
+  body: "",
+  createdAtMillis: 0,
+  ...over,
+});
 
 const pull = (over: Partial<RawPull>): RawPull => ({
   number: 1,
   authorLogin: "clanker-forge[bot]",
   body: "",
   draft: false,
+  headSha: "sha",
   reviewDecision: "none",
   ...over,
 });
@@ -63,5 +73,40 @@ describe("prReview", () => {
 
   it("keeps an unreviewed PR pending instead of routing it to verify", () => {
     assert.strictEqual(prReview(pull({ reviewDecision: "none" })), "pending");
+  });
+});
+
+describe("humanCommentSignal", () => {
+  const bot = "clanker-forge[bot]";
+
+  it("counts a write-access human comment and reads its /fresh directive", () => {
+    const signal = humanCommentSignal(
+      [comment({ authorAssociation: "COLLABORATOR", body: "please /fresh", createdAtMillis: 200 })],
+      bot,
+    );
+    assert.strictEqual(signal.latestAtMillis, 200);
+    assert.isTrue(signal.fresh);
+  });
+
+  it("ignores comments from users without write access", () => {
+    const signal = humanCommentSignal(
+      [comment({ authorLogin: "drive-by", authorAssociation: "NONE", body: "/fresh", createdAtMillis: 200 })],
+      bot,
+    );
+    assert.isNull(signal.latestAtMillis);
+    assert.isFalse(signal.fresh);
+  });
+
+  it("ignores the bot's own comments", () => {
+    const signal = humanCommentSignal(
+      [comment({ authorLogin: bot, authorAssociation: "OWNER", body: "/fresh", createdAtMillis: 200 })],
+      bot,
+    );
+    assert.isNull(signal.latestAtMillis);
+  });
+
+  it("cannot identify humans without a configured bot login", () => {
+    const signal = humanCommentSignal([comment({ createdAtMillis: 200 })], null);
+    assert.isNull(signal.latestAtMillis);
   });
 });

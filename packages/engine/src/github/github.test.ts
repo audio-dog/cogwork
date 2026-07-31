@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import type { CheckRun } from "../ci";
 import { classify } from "../classify";
 import type { RegisteredWorkspace } from "../projector";
 import { WorkSource } from "../WorkSource";
@@ -15,7 +16,7 @@ import {
   type RawComment,
   type RawPull,
 } from "./client";
-import { hasLedgerMarker, serializeAttempt } from "./markers";
+import { hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -30,29 +31,31 @@ interface SeedComment {
   readonly issue: number;
   readonly authorLogin: string;
   readonly body: string;
+  readonly authorAssociation?: string;
+  readonly createdAtMillis?: number;
 }
 
 interface Seed {
   readonly issues: ReadonlyArray<SeedIssue>;
   readonly pulls?: ReadonlyArray<RawPull>;
   readonly comments?: ReadonlyArray<SeedComment>;
+  readonly checks?: ReadonlyArray<{ readonly sha: string } & CheckRun>;
 }
 
 const bot = { login: "clanker-forge[bot]" } as const;
 const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
 
 const seedComments = (comments: ReadonlyArray<SeedComment>) =>
-  comments.reduce(
-    (byIssue, comment, index) => {
-      const entry = {
-        id: index + 1,
-        authorLogin: comment.authorLogin,
-        body: comment.body,
-      } satisfies RawComment;
-      return new Map(byIssue).set(comment.issue, [...(byIssue.get(comment.issue) ?? []), entry]);
-    },
-    new Map<number, ReadonlyArray<RawComment>>(),
-  );
+  comments.reduce((byIssue, comment, index) => {
+    const entry = {
+      id: index + 1,
+      authorLogin: comment.authorLogin,
+      authorAssociation: comment.authorAssociation ?? "NONE",
+      body: comment.body,
+      createdAtMillis: comment.createdAtMillis ?? 0,
+    } satisfies RawComment;
+    return new Map(byIssue).set(comment.issue, [...(byIssue.get(comment.issue) ?? []), entry]);
+  }, new Map<number, ReadonlyArray<RawComment>>());
 
 const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   const issuesRef = yield* Ref.make(
@@ -61,6 +64,10 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   const seeded = seedComments(seed.comments ?? []);
   const nextId = yield* Ref.make((seed.comments?.length ?? 0) + 1);
   const commentsRef = yield* Ref.make(seeded);
+  const checksBySha = (seed.checks ?? []).reduce(
+    (all, { sha, ...run }) => all.set(sha, [...(all.get(sha) ?? []), run]),
+    new Map<string, ReadonlyArray<CheckRun>>(),
+  );
   const pulls = seed.pulls ?? [];
   const patch = (
     number: number,
@@ -94,13 +101,11 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     createComment: (_repo, number, body) =>
       Effect.gen(function* () {
         const assigned = yield* Ref.getAndUpdate(nextId, (value) => value + 1);
-        yield* Ref.update(
-          commentsRef,
-          (all) =>
-            new Map(all).set(number, [
-              ...(all.get(number) ?? []),
-              { id: assigned, authorLogin: bot.login, body },
-            ]),
+        yield* Ref.update(commentsRef, (all) =>
+          new Map(all).set(number, [
+            ...(all.get(number) ?? []),
+            { id: assigned, authorLogin: bot.login, authorAssociation: "NONE", body, createdAtMillis: 0 },
+          ]),
         );
       }),
     editComment: (_repo, commentId, body) =>
@@ -114,6 +119,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
             ]),
           ),
       ),
+    listCheckRuns: (_repo, sha) => Effect.succeed([...(checksBySha.get(sha) ?? [])]),
   } satisfies GitHubClientService;
 });
 
@@ -133,6 +139,7 @@ const withClient = (seed: Seed) =>
 const pull = (over: Partial<RawPull> & { readonly number: number; readonly body: string }): RawPull => ({
   authorLogin: "clanker-forge[bot]",
   draft: false,
+  headSha: `sha-${over.number}`,
   reviewDecision: "none",
   ...over,
 });
@@ -209,7 +216,13 @@ describe("github work source adapter", () => {
         withClient({
           issues: [{ number: 8, title: "targeted", labels: ["ready-for-agent", "clanker-forge:claimed"] }],
           comments: [
-            { issue: 8, authorLogin: "attacker", body: "<!-- clanker-forge:claim by=attacker at=1 -->" },
+            {
+              issue: 8,
+              authorLogin: "attacker",
+              authorAssociation: "NONE",
+              body: "<!-- clanker-forge:claim by=attacker at=1 -->",
+              createdAtMillis: 1,
+            },
           ],
         }),
       ),
@@ -233,6 +246,65 @@ describe("github work source adapter", () => {
     ),
   );
 
+  it.effect("reads failing checks, PR human comments, /fresh, and the follow-up marker from a bot PR", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#5");
+      assert.strictEqual(observed?.pr?.checks, "failing");
+      assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 200);
+      assert.isTrue(observed?.pr?.fresh);
+      assert.deepStrictEqual(observed?.pr?.followUp, {
+        checks: "failing",
+        humanCommentAtMillis: 100,
+        noProgress: 1,
+      });
+      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
+      assert.strictEqual(eligible?.stage, "follow-up");
+      assert.isTrue(eligible?.followUp?.fresh);
+      assert.strictEqual(eligible?.followUp?.noProgress, 0);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 5, title: "in review", labels: ["ready-for-agent"] },
+            { number: 100, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 100, body: "Closes #5" })],
+          comments: [
+            {
+              issue: 100,
+              authorLogin: "maintainer",
+              authorAssociation: "COLLABORATOR",
+              body: "please /fresh start",
+              createdAtMillis: 200,
+            },
+            {
+              issue: 5,
+              authorLogin: bot.login,
+              authorAssociation: "NONE",
+              body: serializeFollowUp({ checks: "failing", humanCommentAtMillis: 100, noProgress: 1 }),
+              createdAtMillis: 150,
+            },
+          ],
+          checks: [
+            { sha: "sha-100", name: "ci", status: "completed", conclusion: "failure", startedAtMillis: 1 },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("never exposes a merge or review-thread-resolution capability", () =>
+    Effect.gen(function* () {
+      const forbidden = /merge|resolve/i;
+      const client = yield* fakeClient({ issues: [] });
+      assert.isFalse(Object.keys(client).some((method) => forbidden.test(method)));
+      const source = yield* WorkSource;
+      assert.isFalse(Object.keys(source).some((method) => forbidden.test(method)));
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
   it.effect("counts prior attempts and blocks past the cap even without the claim label", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
@@ -252,7 +324,9 @@ describe("github work source adapter", () => {
           comments: [1, 2, 3].map((at) => ({
             issue: 9,
             authorLogin: bot.login,
+            authorAssociation: "NONE",
             body: serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
+            createdAtMillis: at,
           })),
         }),
       ),
@@ -390,14 +464,9 @@ describe("github work source adapter", () => {
       const comments = botComments(yield* client.listComments(repo, 16));
       assert.strictEqual(comments.length, 2);
       assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
-      assert.strictEqual(
-        comments.filter((comment) => comment.body === "Triage proposal body").length,
-        1,
-      );
+      assert.strictEqual(comments.filter((comment) => comment.body === "Triage proposal body").length, 1);
     }).pipe(
-      Effect.provide(
-        withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] }),
-      ),
+      Effect.provide(withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] })),
     ),
   );
 });

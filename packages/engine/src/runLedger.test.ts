@@ -71,6 +71,8 @@ describe("RunLedger (memory)", () => {
   it.effect("returns the most recent session handle for a branch", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger;
+      const sessionByBranch = (workspace: string, branch: string) =>
+        Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
       yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export" }));
       yield* ledger.insertRun(record("run-2", 3000, { branch: "9-other" }));
       yield* ledger.updateRun(runId("run-1"), {
@@ -79,9 +81,9 @@ describe("RunLedger (memory)", () => {
         usage: null,
         endedAtMillis: 1500,
       });
-      assert.strictEqual(yield* ledger.latestSessionByBranch("gh", "7-fix-export"), "sess-abc");
-      assert.isNull(yield* ledger.latestSessionByBranch("gh", "9-other"));
-      assert.isNull(yield* ledger.latestSessionByBranch("other", "7-fix-export"));
+      assert.strictEqual(yield* sessionByBranch("gh", "7-fix-export"), "sess-abc");
+      assert.isNull(yield* sessionByBranch("gh", "9-other"));
+      assert.isNull(yield* sessionByBranch("other", "7-fix-export"));
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 

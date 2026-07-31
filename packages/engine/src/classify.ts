@@ -7,10 +7,12 @@ import type {
   LifecycleStage,
 } from "@clanker-forge/contracts";
 import { stagePriority } from "@clanker-forge/contracts";
+import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./followUp";
 import type { ObservedItem } from "./WorkSource";
 
 export interface EligibleWork extends ActionableItem {
   readonly priorFailures: number;
+  readonly followUp?: FollowUpContext;
 }
 
 export interface Classification {
@@ -20,15 +22,24 @@ export interface Classification {
 }
 
 type Outcome =
-  | { readonly kind: "eligible"; readonly stage: LifecycleStage; readonly priorFailures: number }
+  | {
+      readonly kind: "eligible";
+      readonly stage: LifecycleStage;
+      readonly priorFailures: number;
+      readonly followUp?: FollowUpContext;
+    }
   | { readonly kind: "claimed"; readonly claim: Claim }
   | { readonly kind: "blocked"; readonly reason: BlockReason }
   | { readonly kind: "drop" };
 
+const prStage = (pr: ObservedPr) => {
+  if (triggersFollowUp(pr)) return "follow-up";
+  if (pr.review === "ready") return "verify";
+  return null;
+};
+
 const stageFor = (item: ObservedItem) => {
-  if (item.pr?.review === "changes-requested") return "follow-up";
-  if (item.pr?.review === "ready") return "verify";
-  if (item.pr) return null;
+  if (item.pr) return prStage(item.pr);
   if (item.roles.includes("ready-for-agent")) return "implement";
   if (item.roles.includes("needs-triage")) return "triage";
   return null;
@@ -49,21 +60,25 @@ const classifyOne = (item: ObservedItem): Outcome => {
   if (!stage) return { kind: "drop" };
   const failures = failedAttempts(item, stage);
   if (failures >= maxAttemptsPerStage) return { kind: "blocked", reason: "ready-for-human" };
-  return { kind: "eligible", stage, priorFailures: failures };
+  const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
+  return { kind: "eligible", stage, priorFailures: failures, followUp };
 };
 
 const byStagePriority = (a: EligibleWork, b: EligibleWork) =>
   stagePriority.indexOf(a.stage) - stagePriority.indexOf(b.stage);
 
+const toEligible = (item: ObservedItem, outcome: Extract<Outcome, { readonly kind: "eligible" }>) => ({
+  id: item.id,
+  title: item.title,
+  stage: outcome.stage,
+  priorFailures: outcome.priorFailures,
+  ...(outcome.followUp ? { followUp: outcome.followUp } : {}),
+});
+
 export const classify = (items: ReadonlyArray<ObservedItem>) => {
   const outcomes = items.map((item) => ({ item, outcome: classifyOne(item) }));
   const eligible = outcomes
-    .flatMap(
-      ({ item, outcome }): ReadonlyArray<EligibleWork> =>
-        outcome.kind === "eligible"
-          ? [{ id: item.id, title: item.title, stage: outcome.stage, priorFailures: outcome.priorFailures }]
-          : [],
-    )
+    .flatMap(({ item, outcome }) => (outcome.kind === "eligible" ? [toEligible(item, outcome)] : []))
     .sort(byStagePriority);
   const claimed = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "claimed" ? [{ id: item.id, title: item.title, claim: outcome.claim }] : [],
