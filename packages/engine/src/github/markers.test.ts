@@ -1,13 +1,16 @@
 import type { AttemptRecord, Claim } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import type { FollowUpMarker } from "../followUp";
 import {
   claimLabel,
   hasClaimLabel,
   parseAttempts,
   parseClaim,
+  parseFollowUp,
   rolesFromLabels,
   serializeAttempt,
   serializeClaim,
+  serializeFollowUp,
 } from "./markers";
 
 describe("github markers", () => {
@@ -45,5 +48,15 @@ describe("github markers", () => {
 
   it("returns null for bodies without a well-formed claim marker", () => {
     assert.isNull(parseClaim(["just a comment", "<!-- clanker-forge:claim by= at=nope -->"]));
+  });
+
+  it("round-trips a follow-up marker and keeps the most recent one", () => {
+    const older: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 1, noProgress: 0 };
+    const newer: FollowUpMarker = { checks: "passing", humanCommentAtMillis: 2, noProgress: 1 };
+    assert.deepStrictEqual(parseFollowUp([serializeFollowUp(older), serializeFollowUp(newer)]), newer);
+  });
+
+  it("returns null for a follow-up marker with an unknown check state", () => {
+    assert.isNull(parseFollowUp(["<!-- clanker-forge:follow-up checks=maybe human=1 noProgress=0 -->"]));
   });
 });

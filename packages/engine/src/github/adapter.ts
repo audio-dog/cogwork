@@ -2,6 +2,7 @@ import { WorkItemId } from "@clanker-forge/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { checkState } from "../ci";
 import type { RegisteredWorkspace } from "../projector";
 import {
   type ObservedItem,
@@ -11,12 +12,19 @@ import {
   WorkSourceError,
   type WorkSourceService,
 } from "../WorkSource";
-import { GitHubClient, type GitHubClientService, type GitHubRepoRef, type RawPull } from "./client";
+import {
+  GitHubClient,
+  type GitHubClientService,
+  type GitHubRepoRef,
+  type RawComment,
+  type RawPull,
+} from "./client";
 import {
   claimLabel,
   hasClaimLabel,
   parseAttempts,
   parseClaim,
+  parseFollowUp,
   roleLabel,
   rolesFromLabels,
   serializeAttempt,
@@ -54,10 +62,26 @@ export const prReview = (pull: RawPull): PrReview => {
   return "pending";
 };
 
-const prEntry = (pull: RawPull) => {
-  const issue = linkedIssue(pull.body);
-  return issue ? [[issue, { review: prReview(pull) }] as const] : [];
+const freshPattern = /\/fresh\b/i;
+
+const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+const trustedHuman = (comment: RawComment, botLogin: string) =>
+  comment.authorLogin !== botLogin && writeAccess.has(comment.authorAssociation);
+
+export const humanCommentSignal = (comments: ReadonlyArray<RawComment>, botLogin: string | null) => {
+  const humans = botLogin ? comments.filter((comment) => trustedHuman(comment, botLogin)) : [];
+  const newest = humans.reduce<RawComment | null>(
+    (max, comment) => (max && max.createdAtMillis >= comment.createdAtMillis ? max : comment),
+    null,
+  );
+  return {
+    latestAtMillis: newest?.createdAtMillis ?? null,
+    fresh: newest ? freshPattern.test(newest.body) : false,
+  };
 };
+
+type PrSignals = Omit<ObservedPr, "followUp">;
 
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
@@ -89,13 +113,33 @@ const make = (client: GitHubClientService): WorkSourceService => {
     return { target, number };
   });
 
+  const observePr = Effect.fn("github.observePr")(function* (target: GitHubTarget, pull: RawPull) {
+    const [checks, comments] = yield* Effect.all([
+      client.listCheckRuns(target, pull.headSha),
+      client.listComments(target, pull.number),
+    ]);
+    const human = humanCommentSignal(comments, target.botLogin);
+    return {
+      review: prReview(pull),
+      checks: checkState(checks),
+      latestHumanCommentAtMillis: human.latestAtMillis,
+      fresh: human.fresh,
+    } satisfies PrSignals;
+  });
+
   const prsByIssue = Effect.fn("github.prsByIssue")(function* (target: GitHubTarget) {
     const pulls = yield* client.listPulls(target);
     const bot = target.botLogin ? pulls.filter((pull) => pull.authorLogin === target.botLogin) : [];
-    return new Map<number, ObservedPr>(bot.flatMap(prEntry));
+    const entries = yield* Effect.forEach(bot, (pull) =>
+      Effect.map(observePr(target, pull), (signals) => {
+        const issue = linkedIssue(pull.body);
+        return issue ? [[issue, signals] as const] : [];
+      }),
+    );
+    return new Map<number, PrSignals>(entries.flat());
   });
 
-  const buildItem = (target: GitHubTarget, prs: Map<number, ObservedPr>) =>
+  const buildItem = (target: GitHubTarget, prs: Map<number, PrSignals>) =>
     Effect.fn("github.buildItem")(function* (issue: {
       readonly number: number;
       readonly title: string;
@@ -107,6 +151,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
         ? comments.filter((comment) => comment.authorLogin === target.botLogin).map((comment) => comment.body)
         : [];
       const id = yield* itemId(issue.number);
+      const signals = prs.get(issue.number);
       return {
         id,
         title: issue.title,
@@ -114,7 +159,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
         claimLabeled,
         claim: claimLabeled ? parseClaim(trusted) : null,
         attempts: parseAttempts(trusted),
-        pr: prs.get(issue.number) ?? null,
+        pr: signals ? { ...signals, followUp: parseFollowUp(trusted) } : null,
       } satisfies ObservedItem;
     });
 

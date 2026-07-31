@@ -9,12 +9,15 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
+import type { FollowUpContext } from "./followUp";
 import type { GitError } from "./Git";
-import { stripMarkers } from "./github/markers";
+import { serializeFollowUp, stripMarkers } from "./github/markers";
 import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./Harness";
 import {
+  buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
+  parseFollowUpResult,
   parseImplementResult,
   parseTriageDecision,
   type ResolvedStage,
@@ -22,6 +25,7 @@ import {
 } from "./Playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { RunLedger } from "./RunLedger";
+import { decideResume } from "./resumePolicy";
 import { WorkSource, type WorkSourceError } from "./WorkSource";
 import { branchName, WorktreeManager } from "./Worktree";
 import type { WorktreeFsError } from "./WorktreeFs";
@@ -41,8 +45,16 @@ interface StageOps {
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
   readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, WorkSourceError>;
-  readonly blockRole: TriageRole;
+  readonly blockRole: TriageRole | null;
 }
+
+const defaultFollowUp: FollowUpContext = {
+  checks: "pending",
+  humanCommentAtMillis: 0,
+  noProgress: 0,
+  blocked: false,
+  fresh: false,
+};
 
 const decisionLine = /^\s*TRIAGE-DECISION:.*$/gim;
 
@@ -114,7 +126,7 @@ export const make = Effect.gen(function* () {
   const applyFailure = Effect.fn("Executor.applyFailure")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    blockRole: TriageRole,
+    blockRole: TriageRole | null,
     runId: RunId,
     retryable: boolean,
     session: SessionId | null,
@@ -127,7 +139,10 @@ export const make = Effect.gen(function* () {
     });
     const block = !retryable || item.priorFailures + 1 >= maxAttemptsPerStage;
     if (block) {
-      yield* workSource.setRoles(workspace, item.id, { remove: [blockRole], add: ["ready-for-human"] });
+      yield* workSource.setRoles(workspace, item.id, {
+        remove: blockRole ? [blockRole] : [],
+        add: ["ready-for-human"],
+      });
     }
     yield* ledger.updateRun(runId, {
       status: block ? "blocked" : "failed",
@@ -208,13 +223,13 @@ export const make = Effect.gen(function* () {
     branch: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
-    const sessionId = yield* ledger.latestSessionByBranch(workspace.config.name, branch);
+    const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
     return {
       harness: resolved.harness,
       checkoutPath: worktree.path,
       prompt: buildImplementPrompt(resolved, item),
       model: resolved.model,
-      sessionId,
+      sessionId: last?.session ?? null,
     } satisfies HarnessRequest;
   });
 
@@ -244,10 +259,111 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
-  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) =>
-    item.stage === "implement"
-      ? implementOps(workspace, item, resolved)
-      : triageOps(workspace, item, resolved);
+  const followUpMarker = (context: FollowUpContext) =>
+    serializeFollowUp({
+      checks: context.checks,
+      humanCommentAtMillis: context.humanCommentAtMillis,
+      noProgress: context.noProgress,
+    });
+
+  const applyFollowUpSuccess = Effect.fn("Executor.applyFollowUpSuccess")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    acc: RunAccumulator,
+    context: FollowUpContext,
+  ) {
+    const session = yield* sessionOf(acc.session);
+    const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* workSource.comment(workspace, item.id, followUpMarker(context));
+    yield* workSource.recordAttempt(workspace, item.id, {
+      stage: "follow-up",
+      outcome: "succeeded",
+      atMillis: endedAtMillis,
+    });
+    yield* ledger.updateRun(runId, { status: "succeeded", session, usage: acc.usage, endedAtMillis });
+  });
+
+  const completeFollowUp = Effect.fn("Executor.completeFollowUp")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    acc: RunAccumulator,
+    context: FollowUpContext,
+  ) {
+    const result = parseFollowUpResult(acc.text);
+    if (result === "pushed") {
+      return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
+    }
+    const session = yield* sessionOf(acc.session);
+    return yield* applyFailure(workspace, item, null, runId, result !== "blocked", session);
+  });
+
+  const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    resolved: ResolvedStage,
+    branch: string,
+    context: FollowUpContext,
+  ) {
+    const worktree = yield* worktrees.ensure(workspace, item);
+    const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
+    const now = yield* Clock.currentTimeMillis;
+    const decision = decideResume({
+      sessionId: last?.session ?? null,
+      lastRunStartedAtMillis: last?.startedAtMillis ?? null,
+      lastRunTotalTokens: last?.usage?.totalTokens ?? null,
+      now,
+      worktreeRecreated: worktree.created,
+      fresh: context.fresh,
+      maxAgeMillis: resolved.resumeMaxAgeMillis,
+      maxTokens: resolved.resumeMaxTokens,
+    });
+    return {
+      harness: resolved.harness,
+      checkoutPath: worktree.path,
+      prompt: buildFollowUpPrompt(resolved, item),
+      model: resolved.model,
+      sessionId: decision.kind === "resume" ? decision.sessionId : null,
+    } satisfies HarnessRequest;
+  });
+
+  const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+    const branch = branchName(item);
+    const context = item.followUp ?? defaultFollowUp;
+    return {
+      resolved,
+      branch,
+      prepare: prepareFollowUp(workspace, item, resolved, branch, context),
+      complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
+      blockRole: null,
+    } satisfies StageOps;
+  };
+
+  const blockNoProgress = Effect.fn("Executor.blockNoProgress")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const atMillis = yield* Clock.currentTimeMillis;
+    const context = item.followUp ?? defaultFollowUp;
+    yield* workSource.comment(
+      workspace,
+      item.id,
+      `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.\n\n${followUpMarker(context)}`,
+    );
+    yield* workSource.setRoles(workspace, item.id, { remove: [], add: ["ready-for-human"] });
+    yield* workSource.recordAttempt(workspace, item.id, {
+      stage: "follow-up",
+      outcome: "abandoned",
+      atMillis,
+    });
+  });
+
+  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+    if (item.stage === "implement") return implementOps(workspace, item, resolved);
+    if (item.stage === "follow-up") return followUpOps(workspace, item, resolved);
+    return triageOps(workspace, item, resolved);
+  };
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
@@ -278,6 +394,18 @@ export const make = Effect.gen(function* () {
       : applyFailure(workspace, item, ops.blockRole, runId, retryableOf(outcome.failure), null);
   });
 
+  const runOrBlock = Effect.fn("Executor.runOrBlock")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    resolved: ResolvedStage,
+    startedAtMillis: number,
+  ) {
+    if (item.stage === "follow-up" && item.followUp?.blocked) {
+      return yield* blockNoProgress(workspace, item);
+    }
+    yield* runClaimed(workspace, item, opsFor(workspace, item, resolved), startedAtMillis);
+  });
+
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -286,13 +414,12 @@ export const make = Effect.gen(function* () {
     if (!resolved?.enabled) {
       return false;
     }
-    const ops = opsFor(workspace, item, resolved);
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {
       return false;
     }
-    yield* runClaimed(workspace, item, ops, startedAtMillis).pipe(
+    yield* runOrBlock(workspace, item, resolved, startedAtMillis).pipe(
       Effect.ensuring(releaseClaim(workspace, item)),
     );
     return true;

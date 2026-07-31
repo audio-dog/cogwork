@@ -4,12 +4,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import type { CheckRun } from "../ci";
 import { classify } from "../classify";
 import type { RegisteredWorkspace } from "../projector";
 import { WorkSource } from "../WorkSource";
 import { layer as adapterLayer } from "./adapter";
 import { GitHubClient, type GitHubClientService, type RawComment, type RawPull } from "./client";
-import { serializeAttempt } from "./markers";
+import { serializeAttempt, serializeFollowUp } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -24,6 +25,7 @@ interface Seed {
   readonly issues: ReadonlyArray<SeedIssue>;
   readonly pulls?: ReadonlyArray<RawPull>;
   readonly comments?: ReadonlyArray<{ readonly issue: number } & RawComment>;
+  readonly checks?: ReadonlyArray<{ readonly sha: string } & CheckRun>;
 }
 
 const bot = { login: "clanker-forge[bot]" } as const;
@@ -37,6 +39,10 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     new Map<number, ReadonlyArray<RawComment>>(),
   );
   const commentsRef = yield* Ref.make(seededComments);
+  const checksBySha = (seed.checks ?? []).reduce(
+    (all, { sha, ...run }) => all.set(sha, [...(all.get(sha) ?? []), run]),
+    new Map<string, ReadonlyArray<CheckRun>>(),
+  );
   const pulls = seed.pulls ?? [];
   const patch = (
     number: number,
@@ -69,8 +75,12 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
       })),
     createComment: (_repo, number, body) =>
       Ref.update(commentsRef, (all) =>
-        new Map(all).set(number, [...(all.get(number) ?? []), { authorLogin: bot.login, body }]),
+        new Map(all).set(number, [
+          ...(all.get(number) ?? []),
+          { authorLogin: bot.login, authorAssociation: "NONE", body, createdAtMillis: 0 },
+        ]),
       ),
+    listCheckRuns: (_repo, sha) => Effect.succeed([...(checksBySha.get(sha) ?? [])]),
   } satisfies GitHubClientService;
 });
 
@@ -90,6 +100,7 @@ const withClient = (seed: Seed) =>
 const pull = (over: Partial<RawPull> & { readonly number: number; readonly body: string }): RawPull => ({
   authorLogin: "clanker-forge[bot]",
   draft: false,
+  headSha: `sha-${over.number}`,
   reviewDecision: "none",
   ...over,
 });
@@ -163,7 +174,13 @@ describe("github work source adapter", () => {
         withClient({
           issues: [{ number: 8, title: "targeted", labels: ["ready-for-agent", "clanker-forge:claimed"] }],
           comments: [
-            { issue: 8, authorLogin: "attacker", body: "<!-- clanker-forge:claim by=attacker at=1 -->" },
+            {
+              issue: 8,
+              authorLogin: "attacker",
+              authorAssociation: "NONE",
+              body: "<!-- clanker-forge:claim by=attacker at=1 -->",
+              createdAtMillis: 1,
+            },
           ],
         }),
       ),
@@ -181,6 +198,65 @@ describe("github work source adapter", () => {
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
     ),
+  );
+
+  it.effect("reads failing checks, PR human comments, /fresh, and the follow-up marker from a bot PR", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#5");
+      assert.strictEqual(observed?.pr?.checks, "failing");
+      assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 200);
+      assert.isTrue(observed?.pr?.fresh);
+      assert.deepStrictEqual(observed?.pr?.followUp, {
+        checks: "failing",
+        humanCommentAtMillis: 100,
+        noProgress: 1,
+      });
+      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
+      assert.strictEqual(eligible?.stage, "follow-up");
+      assert.isTrue(eligible?.followUp?.fresh);
+      assert.strictEqual(eligible?.followUp?.noProgress, 0);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 5, title: "in review", labels: ["ready-for-agent"] },
+            { number: 100, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 100, body: "Closes #5" })],
+          comments: [
+            {
+              issue: 100,
+              authorLogin: "maintainer",
+              authorAssociation: "COLLABORATOR",
+              body: "please /fresh start",
+              createdAtMillis: 200,
+            },
+            {
+              issue: 5,
+              authorLogin: bot.login,
+              authorAssociation: "NONE",
+              body: serializeFollowUp({ checks: "failing", humanCommentAtMillis: 100, noProgress: 1 }),
+              createdAtMillis: 150,
+            },
+          ],
+          checks: [
+            { sha: "sha-100", name: "ci", status: "completed", conclusion: "failure", startedAtMillis: 1 },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("never exposes a merge or review-thread-resolution capability", () =>
+    Effect.gen(function* () {
+      const forbidden = /merge|resolve/i;
+      const client = yield* fakeClient({ issues: [] });
+      assert.isFalse(Object.keys(client).some((method) => forbidden.test(method)));
+      const source = yield* WorkSource;
+      assert.isFalse(Object.keys(source).some((method) => forbidden.test(method)));
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
   it.effect("counts prior attempts and blocks past the cap even without the claim label", () =>
@@ -202,7 +278,9 @@ describe("github work source adapter", () => {
           comments: [1, 2, 3].map((at) => ({
             issue: 9,
             authorLogin: bot.login,
+            authorAssociation: "NONE",
             body: serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
+            createdAtMillis: at,
           })),
         }),
       ),

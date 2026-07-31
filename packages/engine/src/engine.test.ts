@@ -160,7 +160,13 @@ describe("reconcile worker", () => {
     claimLabeled: false,
     claim: null,
     attempts: [],
-    pr: { review: "pending" },
+    pr: {
+      review: "pending",
+      checks: "passing",
+      latestHumanCommentAtMillis: null,
+      fresh: false,
+      followUp: null,
+    },
   };
   const inReviewSource = Layer.succeed(
     WorkSource.WorkSource,

@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
+import type { CheckRun } from "../ci";
 import { WorkSourceError } from "../WorkSource";
 
 export interface GitHubRepoRef {
@@ -27,12 +28,15 @@ export interface RawPull {
   readonly authorLogin: string;
   readonly body: string;
   readonly draft: boolean;
+  readonly headSha: string;
   readonly reviewDecision: ReviewDecision;
 }
 
 export interface RawComment {
   readonly authorLogin: string;
+  readonly authorAssociation: string;
   readonly body: string;
+  readonly createdAtMillis: number;
 }
 
 const baseHeaders = {
@@ -56,6 +60,7 @@ const PullSchema = Schema.Struct({
   user: Schema.Struct({ login: Schema.String }),
   body: Schema.NullOr(Schema.String),
   draft: Schema.optional(Schema.Boolean),
+  head: Schema.Struct({ sha: Schema.String }),
 });
 
 const ReviewSchema = Schema.Struct({
@@ -66,12 +71,29 @@ const ReviewSchema = Schema.Struct({
 const CommentSchema = Schema.Struct({
   body: Schema.NullOr(Schema.String),
   user: Schema.Struct({ login: Schema.String }),
+  created_at: Schema.String,
+  author_association: Schema.optional(Schema.String),
 });
+
+const CheckRunSchema = Schema.Struct({
+  name: Schema.String,
+  status: Schema.String,
+  conclusion: Schema.NullOr(Schema.String),
+  started_at: Schema.NullOr(Schema.String),
+});
+
+const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema) });
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
 const decodeComments = Schema.decodeUnknownEffect(Schema.Array(CommentSchema));
+const decodeCheckRuns = Schema.decodeUnknownEffect(CheckRunsSchema);
+
+const millisFromIso = (value: string | null) => {
+  const parsed = value === null ? Number.NaN : Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
 
 const unavailable = (message: string) => new WorkSourceError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
@@ -167,6 +189,7 @@ const make = (client: HttpClient.HttpClient) => {
               authorLogin: pull.user.login,
               body: pull.body ?? "",
               draft: pull.draft ?? false,
+              headSha: pull.head.sha,
               reviewDecision: decision,
             }),
           ),
@@ -177,7 +200,29 @@ const make = (client: HttpClient.HttpClient) => {
         const json = yield* fetchJson(repo, repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`));
         const comments = yield* Effect.mapError(decodeComments(json), toUnavailable);
         return comments.flatMap((comment) =>
-          comment.body ? [{ authorLogin: comment.user.login, body: comment.body }] : [],
+          comment.body
+            ? [
+                {
+                  authorLogin: comment.user.login,
+                  authorAssociation: comment.author_association ?? "NONE",
+                  body: comment.body,
+                  createdAtMillis: millisFromIso(comment.created_at),
+                },
+              ]
+            : [],
+        );
+      }),
+    listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
+      Effect.gen(function* () {
+        const json = yield* fetchJson(repo, repoPath(repo, `/commits/${sha}/check-runs?per_page=100`));
+        const decoded = yield* Effect.mapError(decodeCheckRuns(json), toUnavailable);
+        return decoded.check_runs.map(
+          (run): CheckRun => ({
+            name: run.name,
+            status: run.status,
+            conclusion: run.conclusion,
+            startedAtMillis: millisFromIso(run.started_at),
+          }),
         );
       }),
     addLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>

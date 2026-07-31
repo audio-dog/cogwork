@@ -97,6 +97,47 @@ const noSentinelImplementEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
 ];
 
+const followUpWorkspace: RegisteredWorkspace = {
+  source: workspace.source,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh",
+    checkoutPath: "/repos/gh",
+    workSource: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    harness: { preferred: "cursor" },
+    playbook: { "follow-up": { enabled: true } },
+  }),
+};
+
+const followUpItem = {
+  id: id("#5"),
+  title: "PR follow-up playbook",
+  stage: "follow-up" as const,
+  priorFailures: 0,
+  followUp: {
+    checks: "failing" as const,
+    humanCommentAtMillis: 0,
+    noProgress: 0,
+    blocked: false,
+    fresh: false,
+  },
+};
+
+const followUpBranch = branchName(followUpItem);
+
+const followUpEvents: ReadonlyArray<HarnessEvent> = [
+  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
+  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
+  {
+    type: "TEXT_MESSAGE_CONTENT",
+    name: null,
+    text: "Fixed the failing check and pushed.\nFOLLOWUP-RESULT: pushed",
+    sessionId: null,
+    usage: null,
+    finishReason: null,
+  },
+  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+];
+
 const disabledWorkspace: RegisteredWorkspace = {
   source: workspace.source,
   config: Schema.decodeSync(WorkspaceConfig)({
@@ -146,13 +187,15 @@ const capturingRunner = (
     ),
 });
 
-const worktreeStub: WorktreeManagerService = {
+const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
   ensure: (_workspace, item) =>
-    Effect.succeed({ branch: branchName(item), path: `/wt/${branchName(item)}`, created: true }),
+    Effect.succeed({ branch: branchName(item), path: `/wt/${branchName(item)}`, created }),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
   reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
-};
+});
+
+const worktreeStub = worktreeStubCreated(true);
 
 const failingRunner = (error: HarnessError): HarnessRunner => ({
   name: cursor,
@@ -181,14 +224,18 @@ const successEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
 ];
 
-const provide = (ws: WorkSourceService, runners: ReadonlyArray<HarnessRunner>) =>
+const provide = (
+  ws: WorkSourceService,
+  runners: ReadonlyArray<HarnessRunner>,
+  worktree: WorktreeManagerService = worktreeStub,
+) =>
   Executor.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(WorkSource, ws),
         harnessLayer(runners),
         RunLedger.layerMemory,
-        Layer.succeed(WorktreeManager, worktreeStub),
+        Layer.succeed(WorktreeManager, worktree),
       ),
     ),
   );
@@ -441,6 +488,108 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.status, "blocked");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("runs a follow-up job, records the follow-up marker, and never hands off on success", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, followUpEvents)],
+        worktreeStubCreated(false),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const [request] = yield* Ref.get(requests);
+        assert.strictEqual(request?.checkoutPath, `/wt/${followUpBranch}`);
+        assert.include(request?.prompt ?? "", "follow-up-agent");
+        assert.include(request?.prompt ?? "", "FOLLOWUP-RESULT");
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
+        assert.isFalse(log.some((c) => c.method === "setRoles"));
+        const marker = log.find((c) => c.method === "comment");
+        assert.include(marker?.body ?? "", "clanker-forge:follow-up");
+        assert.include(marker?.body ?? "", "checks=failing");
+        assert.isTrue(log.some((c) => c.method === "release"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.stage, "follow-up");
+        assert.strictEqual(run?.branch, followUpBranch);
+        assert.strictEqual(run?.status, "succeeded");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("resumes the branch session on a later follow-up when the worktree was not recreated", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, followUpEvents)],
+        worktreeStubCreated(false),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.isNull(captured[0]?.sessionId ?? null);
+        assert.strictEqual(captured[1]?.sessionId, "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("starts a fresh follow-up session when the worktree was recreated", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, followUpEvents)],
+        worktreeStubCreated(true),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.isNull(captured[1]?.sessionId ?? null);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("blocks a no-progress follow-up with a human handoff and no harness run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, followUpEvents)]);
+      const blockedItem = {
+        ...followUpItem,
+        followUp: { ...followUpItem.followUp, noProgress: 3, blocked: true },
+      };
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, blockedItem);
+
+        assert.strictEqual((yield* Ref.get(requests)).length, 0);
+        const log = yield* Ref.get(calls);
+        assert.deepStrictEqual(log.find((c) => c.method === "setRoles")?.add, ["ready-for-human"]);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "abandoned");
+        assert.include(log.find((c) => c.method === "comment")?.body ?? "", "no progress");
+        assert.isFalse(log.some((c) => c.method === "merge" || c.method === "resolve"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
       }).pipe(Effect.provide(layer));
     }),
   );

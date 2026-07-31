@@ -12,7 +12,11 @@ export interface ResolvedStage {
   readonly model: string | null;
   readonly skill: string;
   readonly promptTemplate: string;
+  readonly resumeMaxAgeMillis: number | null;
+  readonly resumeMaxTokens: number | null;
 }
+
+const dayMillis = 86_400_000;
 
 const defaultTriagePrompt = [
   'You are running the triage playbook for work item {id} ("{title}") in this repository checkout.',
@@ -27,33 +31,63 @@ const defaultImplementPrompt = [
   "pass the local gate, commit, and open a pull request that references {id}.",
 ].join("\n");
 
+const defaultFollowUpPrompt = [
+  'You are running the follow-up playbook for the pull request that resolves work item {id} ("{title}").',
+  "You are in the worktree on that PR's branch, with no human in the session.",
+  "Follow the `{skill}` skill to move the PR forward: read the PR's failing checks and any human review",
+  "comments, make the fix, pass the local gate, and push to the same branch.",
+  "Never merge the PR and never resolve review threads — a human gates the code.",
+].join("\n");
+
+interface StageDefaults {
+  readonly skill: string;
+  readonly promptTemplate: string;
+  readonly resumeMaxAgeMillis: number | null;
+  readonly resumeMaxTokens: number | null;
+}
+
 const resolveStageConfig = (
   config: WorkspaceConfig,
   stage: PlaybookStageConfig | undefined,
-  defaults: { readonly skill: string; readonly promptTemplate: string },
+  defaults: StageDefaults,
 ): ResolvedStage => ({
   enabled: stage?.enabled ?? false,
   harness: stage?.harness ?? config.harness.preferred,
   model: stage?.model ?? null,
   skill: stage?.skill ?? defaults.skill,
   promptTemplate: stage?.prompt ?? defaults.promptTemplate,
+  resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
+  resumeMaxTokens: stage?.resumeMaxTokens ?? defaults.resumeMaxTokens,
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
   resolveStageConfig(config, config.playbook?.triage, {
     skill: "triage-agent",
     promptTemplate: defaultTriagePrompt,
+    resumeMaxAgeMillis: null,
+    resumeMaxTokens: null,
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
   resolveStageConfig(config, config.playbook?.implement, {
     skill: "implement-agent",
     promptTemplate: defaultImplementPrompt,
+    resumeMaxAgeMillis: null,
+    resumeMaxTokens: null,
+  });
+
+export const resolveFollowUp = (config: WorkspaceConfig) =>
+  resolveStageConfig(config, config.playbook?.["follow-up"], {
+    skill: "follow-up-agent",
+    promptTemplate: defaultFollowUpPrompt,
+    resumeMaxAgeMillis: dayMillis,
+    resumeMaxTokens: null,
   });
 
 const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) => ResolvedStage>> = {
   triage: resolveTriage,
   implement: resolveImplement,
+  "follow-up": resolveFollowUp,
 };
 
 export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
@@ -120,3 +154,22 @@ export const buildImplementPrompt = (resolved: ResolvedStage, item: PromptItem) 
 
 export const parseImplementResult = (text: string) =>
   parseLastSentinel(implementResultPattern, implementResults, text);
+
+export type FollowUpResult = "pushed" | "blocked";
+
+const followUpResults: ReadonlyArray<FollowUpResult> = ["pushed", "blocked"];
+
+const followUpFooter = [
+  "",
+  "End your final message with exactly one line, and nothing after it:",
+  "FOLLOWUP-RESULT: <pushed | blocked>",
+  "Use `pushed` only when you pushed a fix to the PR's branch; otherwise use `blocked`.",
+].join("\n");
+
+const followUpResultPattern = /FOLLOWUP-RESULT:\s*([a-z-]+)/gi;
+
+export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem) =>
+  buildPrompt(resolved, item, followUpFooter);
+
+export const parseFollowUpResult = (text: string) =>
+  parseLastSentinel(followUpResultPattern, followUpResults, text);

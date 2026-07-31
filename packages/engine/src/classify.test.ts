@@ -2,6 +2,7 @@ import { type Claim, WorkItemId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
+import { followUpNoProgressLimit, type ObservedPr } from "./followUp";
 import type { ObservedItem, PrReview } from "./WorkSource";
 
 const id = Schema.decodeSync(WorkItemId);
@@ -16,7 +17,14 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   pr: over.pr ?? null,
 });
 
-const pr = (review: PrReview): ObservedItem["pr"] => ({ review });
+const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"] => ({
+  review,
+  checks: "passing",
+  latestHumanCommentAtMillis: null,
+  fresh: false,
+  followUp: null,
+  ...over,
+});
 
 describe("classify", () => {
   it("routes ready-for-agent with no PR to implement", () => {
@@ -93,6 +101,65 @@ describe("classify", () => {
     const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
     const { eligible } = classify([item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt] })]);
     assert.strictEqual(eligible[0]?.stage, "triage");
+  });
+
+  it("routes a bot PR with failing checks to follow-up even without a changes-requested review", () => {
+    const { eligible } = classify([item({ id: "1", pr: pr("pending", { checks: "failing" }) })]);
+    assert.strictEqual(eligible[0]?.stage, "follow-up");
+    assert.strictEqual(eligible[0]?.followUp?.checks, "failing");
+    assert.strictEqual(eligible[0]?.followUp?.noProgress, 0);
+  });
+
+  it("routes a bot PR with a new human comment and green checks to follow-up", () => {
+    const { eligible } = classify([
+      item({ id: "1", pr: pr("pending", { checks: "passing", latestHumanCommentAtMillis: 100 }) }),
+    ]);
+    assert.strictEqual(eligible[0]?.stage, "follow-up");
+  });
+
+  it("increments the no-progress counter when neither checks nor human moved since the last attempt", () => {
+    const { eligible } = classify([
+      item({
+        id: "1",
+        pr: pr("pending", {
+          checks: "failing",
+          latestHumanCommentAtMillis: 50,
+          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 1 },
+        }),
+      }),
+    ]);
+    assert.strictEqual(eligible[0]?.followUp?.noProgress, 2);
+    assert.isFalse(eligible[0]?.followUp?.blocked);
+  });
+
+  it("resets the no-progress counter when a human responds since the last attempt", () => {
+    const { eligible } = classify([
+      item({
+        id: "1",
+        pr: pr("pending", {
+          checks: "failing",
+          latestHumanCommentAtMillis: 100,
+          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 2 },
+        }),
+      }),
+    ]);
+    assert.strictEqual(eligible[0]?.followUp?.noProgress, 0);
+  });
+
+  it("keeps a no-progress-exhausted follow-up eligible but flagged blocked at the limit", () => {
+    const { eligible } = classify([
+      item({
+        id: "1",
+        pr: pr("pending", {
+          checks: "failing",
+          latestHumanCommentAtMillis: 50,
+          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: followUpNoProgressLimit - 1 },
+        }),
+      }),
+    ]);
+    assert.strictEqual(eligible[0]?.stage, "follow-up");
+    assert.strictEqual(eligible[0]?.followUp?.noProgress, followUpNoProgressLimit);
+    assert.isTrue(eligible[0]?.followUp?.blocked);
   });
 
   it("orders eligible work follow-up > triage > implement > verify", () => {
