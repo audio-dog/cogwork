@@ -1,0 +1,45 @@
+packages/engine/src/github/adapter.ts
+  s_19bc81255f20b1::t_6b8c6fc8c37631 245,249
+packages/engine/src/WorkSource.ts
+  s_19bc81255f20b1::t_e514c46c2e551b 56-61
+packages/engine/src/github/github.test.ts
+  s_19bc81255f20b1::t_1b1192e04a7556 489-493
+  s_19bc81255f20b1::t_04eded7c867dd4 560
+  s_19bc81255f20b1::t_dd42890e9db364 363
+  s_19bc81255f20b1::t_606459ff954b9b 444
+  s_19bc81255f20b1::t_b3fe7218d6b427 199,202,204-206,209
+packages/engine/src/github/markers.test.ts
+  s_19bc81255f20b1::t_5a43e7eb883923 56-63
+  s_19bc81255f20b1::t_1fbc8eb0a4f345 39,44-54,64
+  s_dc476ac3fa7fb2::t_bfd8508fd9d11a 55,65
+packages/engine/src/github/markers.ts
+  s_19bc81255f20b1::t_31f38d998eb081 74-77
+  s_19bc81255f20b1::t_6ae5b7c724917c 91-97
+  s_19bc81255f20b1::t_5fa56e01256c84 129,133
+  s_19bc81255f20b1::t_ec3b49ee115e03 132
+  s_19bc81255f20b1::t_5840b39d23ea80 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "6cd7d0572c53dccc146a441fa3fa13f8bdb9efba",
+  "prompts": {},
+  "sessions": {
+    "s_19bc81255f20b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "76b9e526-453e-48e8-ad6a-b8eb58dad638",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dc476ac3fa7fb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "632545bb-476c-4e94-bd47-1112c9e6a31e",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
