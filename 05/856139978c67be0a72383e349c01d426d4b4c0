@@ -1,0 +1,26 @@
+apps/cli/src/platform.ts
+  s_244c8b725114d0::t_e4c73d0bb8f0b6 13-22,24-25
+  s_244c8b725114d0::t_3a51ee52e08c8b 121
+  s_244c8b725114d0::t_6a796d314365c4 3,5-9,23,42-45,47-58,60-90,92-120,122-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "05856139978c67be0a72383e349c01d426d4b4c0",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_244c8b725114d0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bd1eafa9-1ac4-43ae-bb5a-79866dc8cf40",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
