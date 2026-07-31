@@ -9,6 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "spike:run": "node --env-file=.env --experimental-strip-types run.ts",
     "spike:probe": "node --env-file=.env --experimental-strip-types probe-acp.ts"
   },
@@ -23,6 +24,7 @@
     "effect": "catalog:effect"
   },
   "devDependencies": {
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

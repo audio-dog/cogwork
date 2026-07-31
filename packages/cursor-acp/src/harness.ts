@@ -6,6 +6,7 @@ import { defineSandbox, defineWorkspace, withSandbox } from "@tanstack/ai-sandbo
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
+import { cursorModelFlag } from "./model";
 
 export interface CursorRunnerOptions {
   readonly name: HarnessName;
@@ -14,6 +15,11 @@ export interface CursorRunnerOptions {
   readonly scrubEnv?: ReadonlyArray<string>;
   readonly authMethodId?: string;
 }
+
+type CursorModelOptions = {
+  readonly sessionId?: string;
+  readonly effort?: string;
+};
 
 const sessionIdOf = (chunk: StreamChunk) =>
   chunk.type === EventType.CUSTOM && chunk.name.endsWith(".session-id")
@@ -73,10 +79,13 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
       Stream.unwrap(
         Effect.sync(() => {
           const model = request.model ?? defaultModel;
+          const emptyModelOptions: CursorModelOptions = {};
           const adapter = acpCompatible({
             name: options.name,
             models: [model],
-            command: ({ model: selected }) => `${agentBin} --model ${selected} acp`,
+            modelOptions: emptyModelOptions,
+            command: ({ model: selected, modelOptions }) =>
+              `${agentBin} --model ${cursorModelFlag(selected, modelOptions?.effort)} acp`,
             planEventName: `${options.name}.plan`,
             authMethodId,
           });
@@ -85,11 +94,15 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             provider: localProcessSandbox({ dir: request.checkoutPath, scrubEnv }),
             workspace: defineWorkspace({ source: { type: "none" } }),
           });
+          const modelOptions: CursorModelOptions = {
+            ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+            ...(request.effort ? { effort: request.effort } : {}),
+          };
           const stream = chat({
             adapter: adapter(model),
             messages: [{ role: "user", content: request.prompt }],
             middleware: [withSandbox(sandbox)],
-            ...(request.sessionId ? { modelOptions: { sessionId: request.sessionId } } : {}),
+            ...(request.sessionId || request.effort ? { modelOptions } : {}),
           });
           return bridge(stream);
         }),

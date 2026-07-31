@@ -10,8 +10,12 @@ events.
 ## Language
 
 **cursorRunner**:
-The factory that produces the engine's harness runner for Cursor. The package's single export.
+The factory that produces the engine's harness runner for Cursor. Maps harness-request `model` / `effort` onto Cursor CLI `--model` (including bracket `effort=` overrides) via TanStack `acpCompatible` `modelOptions`. The package also exports `cursorModels` / `cursorEfforts` for typed playbook config.
 _Avoid_: Harness, driver
+
+**Cursor model / effort**:
+Harness-native strings for Cursor. `cursorModels` / `cursorEfforts` are a typed subset for workspace config (`satisfies CursorModel`); runtime still accepts any id `agent --list-models` reports. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override when set; preset ids that already embed effort need no separate field.
+_Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`)
 
 **ACP (Agent Client Protocol)**:
 The stdio JSON-RPC protocol the Cursor CLI exposes via `agent acp`. The wire format this adapter speaks; not a concept the rest of the repo sees.
