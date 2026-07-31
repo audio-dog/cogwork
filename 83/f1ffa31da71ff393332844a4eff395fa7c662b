@@ -1,0 +1,37 @@
+packages/engine/src/RunLedger.ts
+  s_19bc81255f20b1::t_c1e3da03fc9289 69-72,76
+  s_19bc81255f20b1::t_dec617b184a1da 24
+  s_19bc81255f20b1::t_a291d06f3e5c86 63
+  s_19bc81255f20b1::t_7e35e479a8ba61 25-28,30-31,59-62,64-66,73-74
+  s_19bc81255f20b1::t_6ca5e83ab3fb85 22-23
+  s_dc476ac3fa7fb2::t_233304b98430bd 75
+apps/cli/src/ledger.ts
+  s_19bc81255f20b1::t_b212c5324a637e 175,180,245-248
+  s_19bc81255f20b1::t_d1ab24d3f86668 215-217,219-224,244,249
+  s_19bc81255f20b1::t_6ebd95f9eaea97 218
+  s_19bc81255f20b1::t_02c5555d1cbc4d 250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "83f1ffa31da71ff393332844a4eff395fa7c662b",
+  "prompts": {},
+  "sessions": {
+    "s_19bc81255f20b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "76b9e526-453e-48e8-ad6a-b8eb58dad638",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dc476ac3fa7fb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "632545bb-476c-4e94-bd47-1112c9e6a31e",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
