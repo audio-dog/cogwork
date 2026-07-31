@@ -1,0 +1,148 @@
+packages/engine/src/Harness.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-58
+configs/lint/no-effect-step-const-staging.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-14
+configs/lint/no-effect-side-effect-wrapper.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-24
+configs/lint/no-match-effect-branch.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-94
+.gitignore
+  s_d0eda8147a4b23::t_cc325e99f97338 19-21
+configs/lint/no-iife-wrapper.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-18
+packages/engine/src/Playbook.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-60
+packages/contracts/src/rpc.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1,5,9-16
+configs/lint/no-runtime-runfork.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-9
+packages/engine/test/executor.test.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-236
+apps/cli/src/paths.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-9
+apps/cli/src/commands.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-174
+configs/lint/no-effect-orElse-ladder.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-11
+packages/contracts/src/run.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-48
+configs/lint/no-match-void-branch.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-13
+apps/cli/src/worktreeCommands.ts
+  s_d0eda8147a4b23::t_ed745cd67278a7 56-95,99,106,112
+  s_d0eda8147a4b23::t_cc325e99f97338 1-55,96-98,100-105,107-111,113-116
+packages/engine/src/index.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 3,6-7,10
+packages/cursor-acp/package.json
+  s_d0eda8147a4b23::t_cc325e99f97338 2,6-9,11-13,17-18,22-26
+biome.json
+  s_d0eda8147a4b23::t_cc325e99f97338 22-44
+apps/cli/src/loader.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-73
+configs/lint/warn-effect-sync-wrapper.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-12
+apps/cli/.gitignore
+  s_d0eda8147a4b23::t_cc325e99f97338 1-2
+packages/engine/test/github.test.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 10,184-207
+  s_d0eda8147a4b23::t_dabba71eb8f0ae 208-209
+configs/lint/no-nested-effect-gen.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-11
+apps/cli/src/platform.ts
+  s_d0eda8147a4b23::t_b346b5fced0478 63-67
+  s_d0eda8147a4b23::t_2aa6836257a9cf 1,3,5
+  s_d0eda8147a4b23::t_3f81ca4afba4ed 42
+  s_d0eda8147a4b23::t_cc325e99f97338 2,4,6-41,43-62,68-89
+packages/engine/src/Daemon.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 7,11,55-62,110-125
+  s_d0eda8147a4b23::t_4685590b99bf18 126
+packages/engine/test/engine.test.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 131-132
+configs/lint/no-option-as.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-10
+packages/engine/src/WorkSource.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 24-28,62-67,73-74
+packages/cursor-acp/src/harness.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-98
+configs/lint/no-effect-never.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-9
+configs/lint/no-arrow-ladder.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-11
+packages/cursor-acp/src/index.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1
+configs/lint/no-flatmap-ladder.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-20
+apps/cli/config/clanker-forge.workspace.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-24
+packages/engine/src/Executor.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-223
+packages/engine/src/github/markers.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 28-29,34-36
+  s_d0eda8147a4b23::t_ff5968b9978a3a 37
+configs/lint/no-effect-do.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-9
+packages/engine/test/playbook.test.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-73
+configs/lint/no-effect-ladder.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-16
+apps/cli/package.json
+  s_d0eda8147a4b23::t_cc325e99f97338 1-26
+configs/lint/no-effect-bind.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-9
+packages/cursor-acp/tsconfig.json
+  s_d0eda8147a4b23::t_cc325e99f97338 1-19
+apps/cli/src/rpc.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-59,61-76
+  s_d0eda8147a4b23::t_defcbd9428b1ef 60
+apps/cli/src/ledger.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-251
+packages/engine/src/github/adapter.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 20,105,154-164
+packages/engine/src/RunLedger.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-68
+apps/cli/src/main.ts
+  s_d0eda8147a4b23::t_6450c8cf7cf280 7,10
+  s_d0eda8147a4b23::t_cc325e99f97338 1-6,8-9,11-18
+apps/cli/tsconfig.json
+  s_d0eda8147a4b23::t_cc325e99f97338 1-22
+apps/cli/src/schema.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-29
+configs/lint/no-nested-effect-call.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-21
+configs/lint/no-effect-all-step-sequencing.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-27
+packages/contracts/src/workspace.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 22
+configs/lint/no-effect-as.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-5
+configs/lint/no-pipeline-fragment-staging.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-7
+packages/engine/test/classify.test.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 83-97
+packages/contracts/src/index.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 6
+configs/lint/no-effect-fn-generator.grit
+  s_d0eda8147a4b23::t_cc325e99f97338 1-12
+packages/engine/src/classify.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 33-37,45-48
+packages/engine/test/runLedger.test.ts
+  s_d0eda8147a4b23::t_cc325e99f97338 1-97
+pnpm-lock.yaml
+  s_d0eda8147a4b23::t_0c36e444e623a5 55,60-62,69-71,104-109,122-128,956-1071,2400-2404
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "67caa2a86e1cc286aa5179a7c3791f60cc295e94",
+  "prompts": {},
+  "sessions": {
+    "s_d0eda8147a4b23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4f3ab7cd-9a0b-4078-8572-d56c4a11f9b4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
