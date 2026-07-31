@@ -12,6 +12,7 @@ export interface CursorRunnerOptions {
   readonly agentBin?: string;
   readonly defaultModel?: string;
   readonly scrubEnv?: ReadonlyArray<string>;
+  readonly authMethodId?: string;
 }
 
 const sessionIdOf = (chunk: StreamChunk) =>
@@ -65,6 +66,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   const agentBin = options.agentBin ?? "agent";
   const defaultModel = options.defaultModel ?? "auto";
   const scrubEnv = [...(options.scrubEnv ?? ["GITHUB_TOKEN", "GH_TOKEN"])];
+  const authMethodId = options.authMethodId ?? "cursor_login";
   return {
     name: options.name,
     run: (request) =>
@@ -76,6 +78,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             models: [model],
             command: ({ model: selected }) => `${agentBin} --model ${selected} acp`,
             planEventName: `${options.name}.plan`,
+            authMethodId,
           });
           const sandbox = defineSandbox({
             id: `clanker-forge-${options.name}`,
