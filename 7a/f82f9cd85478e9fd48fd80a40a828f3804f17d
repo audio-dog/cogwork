@@ -1,0 +1,36 @@
+apps/cli/src/commands.ts
+  s_adf5ce602e9099::t_a1e024c7b16f9b 210,212-220
+  s_adf5ce602e9099::t_d9f59662f82e39 48-52
+  s_adf5ce602e9099::t_9eaa58c58d9f1c 79
+packages/engine/src/WorkSource.ts
+  s_adf5ce602e9099::t_7916d40838abb8 27
+packages/engine/src/Daemon.ts
+  s_adf5ce602e9099::t_76926ce6687e27 122-128
+packages/engine/src/github/client.ts
+  s_adf5ce602e9099::t_19611b22989d55 193-196
+  s_adf5ce602e9099::t_9cf8703cb838ba 116-117,121-123,125-146
+  s_adf5ce602e9099::t_4ecf988a50ddd2 337,339,345
+  s_adf5ce602e9099::t_b9a85a6ca8b7c7 165-169,173-177,185-189,197-200,207-217,219-235
+  s_adf5ce602e9099::t_ff283ae345660a 8
+  s_adf5ce602e9099::t_e2611a998cdb4c 118-120,124
+  s_adf5ce602e9099::t_96f0244c59ac35 1,9-10,12
+  s_adf5ce602e9099::t_56bc2a3369c6f7 171
+apps/cli/src/rpc.ts
+  s_adf5ce602e9099::t_071801c98e5a83 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "7af82f9cd85478e9fd48fd80a40a828f3804f17d",
+  "prompts": {},
+  "sessions": {
+    "s_adf5ce602e9099": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2dbcbb6b-6aab-43c3-9235-8c1c3405a57b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
