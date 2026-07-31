@@ -124,7 +124,8 @@ const parseLastSentinel = <A extends string>(pattern: RegExp, valid: ReadonlyArr
 const decisionFooter = [
   "",
   "When you are done, write your proposal for the maintainer as your final message.",
-  "It will be posted verbatim as a comment on {id}, so write it as the comment body.",
+  "It will be published verbatim on {id} inside the single comment clanker-forge keeps there,",
+  "so write it as that comment body.",
   "End your final message with exactly one line, and nothing after it:",
   `TRIAGE-DECISION: <${decisionRoles.join(" | ")}>`,
 ].join("\n");
