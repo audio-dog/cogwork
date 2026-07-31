@@ -25,9 +25,15 @@ const okToArray = <A>(result: Result.Result<A, unknown>): ReadonlyArray<A> =>
 export const rolesFromLabels = (labels: ReadonlyArray<string>) =>
   labels.flatMap((label) => compact(labelToRole.get(label)));
 
+export const roleLabel = (role: TriageRole) => roleLabels[role];
+
 export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(claimLabel);
 
 const markerPattern = (name: string) => new RegExp(`<!--\\s*clanker-forge:${name}\\s([^>]*)-->`, "g");
+
+const anyMarkerPattern = /<!--\s*clanker-forge:[^>]*-->/g;
+
+export const stripMarkers = (text: string) => text.replace(anyMarkerPattern, "");
 
 const toPair = (token: string) => {
   const eq = token.indexOf("=");

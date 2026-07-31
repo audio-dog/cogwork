@@ -16,6 +16,9 @@ skills-lock.json
 *.log
 .turbo
 
+# Sandbox projection written by the TanStack AI local-process harness at runtime
+.tanstack-projected*
+
 # Vendored reference source (Effect v4, etc.), pinned by `pnpm vendor`
 /.repos/
 

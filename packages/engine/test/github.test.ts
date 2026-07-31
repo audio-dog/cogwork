@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 import { classify } from "../src/classify";
 import { layer as adapterLayer } from "../src/github/adapter";
 import { GitHubClient, type GitHubClientService, type RawComment, type RawPull } from "../src/github/client";
+import { serializeAttempt } from "../src/github/markers";
 import type { RegisteredWorkspace } from "../src/projector";
 import { WorkSource } from "../src/WorkSource";
 
@@ -178,6 +179,32 @@ describe("github work source adapter", () => {
       assert.strictEqual(classify(items).eligible.length, 1);
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
+    ),
+  );
+
+  it.effect("counts prior attempts and blocks past the cap even without the claim label", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#9");
+      assert.strictEqual(observed?.attempts.length, 3);
+      const { eligible, blocked } = classify(items);
+      assert.strictEqual(eligible.length, 0);
+      assert.include(
+        blocked.map((entry) => entry.id),
+        "#9",
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 9, title: "keeps failing", labels: ["needs-triage"] }],
+          comments: [1, 2, 3].map((at) => ({
+            issue: 9,
+            authorLogin: bot.login,
+            body: serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
+          })),
+        }),
+      ),
     ),
   );
 });

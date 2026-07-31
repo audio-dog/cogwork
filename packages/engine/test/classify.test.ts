@@ -80,6 +80,21 @@ describe("classify", () => {
     assert.strictEqual(reasons["2"], "ready-for-human");
   });
 
+  it("blocks an item as ready-for-human once its stage exhausts the failed-attempt cap", () => {
+    const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const { eligible, blocked } = classify([
+      item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] }),
+    ]);
+    assert.strictEqual(eligible.length, 0);
+    assert.strictEqual(blocked[0]?.reason, "ready-for-human");
+  });
+
+  it("keeps an item eligible while it is still under the failed-attempt cap", () => {
+    const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const { eligible } = classify([item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt] })]);
+    assert.strictEqual(eligible[0]?.stage, "triage");
+  });
+
   it("orders eligible work follow-up > triage > implement > verify", () => {
     const { eligible } = classify([
       item({ id: "verify", roles: ["ready-for-agent"], pr: pr("ready") }),

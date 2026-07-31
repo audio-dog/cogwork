@@ -21,6 +21,11 @@ export interface ObservedItem {
   readonly pr: ObservedPr | null;
 }
 
+export interface RoleChanges {
+  readonly add: ReadonlyArray<TriageRole>;
+  readonly remove: ReadonlyArray<TriageRole>;
+}
+
 export class WorkSourceError extends Schema.TaggedErrorClass<WorkSourceError>()("WorkSourceError", {
   reason: Schema.Literals(["auth", "unavailable"]),
   message: Schema.String,
@@ -54,11 +59,19 @@ const releaseEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId) => fa
 const recordAttemptEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _attempt: AttemptRecord) =>
   failWhenRemote(workspace);
 
+const commentEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _body: string) =>
+  failWhenRemote(workspace);
+
+const setRolesEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _changes: RoleChanges) =>
+  failWhenRemote(workspace);
+
 export const makeEmpty = Effect.succeed({
   observe: observeEmpty,
   claim: claimEmpty,
   release: releaseEmpty,
   recordAttempt: recordAttemptEmpty,
+  comment: commentEmpty,
+  setRoles: setRolesEmpty,
 } as const);
 
 export type WorkSourceService = Effect.Success<typeof makeEmpty>;

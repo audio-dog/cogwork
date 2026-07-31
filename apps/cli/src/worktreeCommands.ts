@@ -53,59 +53,63 @@ const runWorktree = <E>(
     Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
   );
 
+const runList = (options: { readonly configHome: string; readonly workspace: string }) =>
+  runWorktree(options, (workspace, manager) =>
+    manager
+      .list(workspace)
+      .pipe(
+        Effect.flatMap((entries) =>
+          Console.log(
+            entries.length === 0
+              ? "  (no worktrees)"
+              : entries.map((entry) => `  ${entry.branch ?? "(detached)"}  ${entry.path}`).join("\n"),
+          ),
+        ),
+      ),
+  );
+
+const runEnsure = (options: {
+  readonly configHome: string;
+  readonly workspace: string;
+  readonly item: string;
+  readonly title: string;
+}) =>
+  runWorktree(options, (workspace, manager) =>
+    manager
+      .ensure(workspace, { id: options.item, title: options.title })
+      .pipe(
+        Effect.flatMap((result) =>
+          Console.log(`${result.created ? "created" : "reused"} ${result.branch} at ${result.path}`),
+        ),
+      ),
+  );
+
+const runRemove = (options: {
+  readonly configHome: string;
+  readonly workspace: string;
+  readonly branch: string;
+}) =>
+  runWorktree(options, (workspace, manager) =>
+    manager.remove(workspace, options.branch).pipe(Effect.andThen(Console.log(`removed ${options.branch}`))),
+  );
+
 const listCommand = Command.make("list", {
   configHome: configHomeFlag,
   workspace: workspaceFlag,
-}).pipe(
-  Command.withHandler((options) =>
-    runWorktree(options, (workspace, manager) =>
-      manager
-        .list(workspace)
-        .pipe(
-          Effect.flatMap((entries) =>
-            Console.log(
-              entries.length === 0
-                ? "  (no worktrees)"
-                : entries.map((entry) => `  ${entry.branch ?? "(detached)"}  ${entry.path}`).join("\n"),
-            ),
-          ),
-        ),
-    ),
-  ),
-);
+}).pipe(Command.withHandler(runList));
 
 const ensureCommand = Command.make("ensure", {
   configHome: configHomeFlag,
   workspace: workspaceFlag,
   item: itemFlag,
   title: titleFlag,
-}).pipe(
-  Command.withHandler((options) =>
-    runWorktree(options, (workspace, manager) =>
-      manager
-        .ensure(workspace, { id: options.item, title: options.title })
-        .pipe(
-          Effect.flatMap((result) =>
-            Console.log(`${result.created ? "created" : "reused"} ${result.branch} at ${result.path}`),
-          ),
-        ),
-    ),
-  ),
-);
+}).pipe(Command.withHandler(runEnsure));
 
 const removeCommand = Command.make("remove", {
   configHome: configHomeFlag,
   workspace: workspaceFlag,
   branch: branchFlag,
-}).pipe(
-  Command.withHandler((options) =>
-    runWorktree(options, (workspace, manager) =>
-      manager
-        .remove(workspace, options.branch)
-        .pipe(Effect.andThen(Console.log(`removed ${options.branch}`))),
-    ),
-  ),
-);
+}).pipe(Command.withHandler(runRemove));
 
 export const worktreeCommand = Command.make("worktree").pipe(
   Command.withSubcommands([listCommand, ensureCommand, removeCommand]),

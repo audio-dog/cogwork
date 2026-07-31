@@ -1,18 +1,28 @@
 {
-  "name": "spike-cursor-acp",
+  "name": "@clanker-forge/cursor-acp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Throwaway spike for issue #9 — Cursor `agent acp` under TanStack AI acpCompatible + localProcessSandbox",
+  "description": "Cursor `agent acp` harness runner for clanker-forge, built on TanStack AI acpCompatible + localProcessSandbox",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "run": "node --env-file=.env --experimental-strip-types run.ts",
-    "probe": "node --env-file=.env --experimental-strip-types probe-acp.ts"
+    "typecheck": "tsc --noEmit",
+    "spike:run": "node --env-file=.env --experimental-strip-types run.ts",
+    "spike:probe": "node --env-file=.env --experimental-strip-types probe-acp.ts"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
+    "@clanker-forge/contracts": "workspace:*",
+    "@clanker-forge/engine": "workspace:*",
     "@tanstack/ai": "0.42.0",
     "@tanstack/ai-acp": "0.2.3",
     "@tanstack/ai-sandbox": "0.2.4",
-    "@tanstack/ai-sandbox-local-process": "0.2.0"
+    "@tanstack/ai-sandbox-local-process": "0.2.0",
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
   }
 }

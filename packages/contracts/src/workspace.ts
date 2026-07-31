@@ -19,6 +19,7 @@ export const PlaybookStageConfig = Schema.Struct({
   prompt: Schema.optional(TrimmedNonEmptyString),
   skill: Schema.optional(TrimmedNonEmptyString),
   harness: Schema.optional(HarnessName),
+  model: Schema.optional(TrimmedNonEmptyString),
 });
 export type PlaybookStageConfig = typeof PlaybookStageConfig.Type;
 

@@ -1,5 +1,8 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import { exec, execFile } from "node:child_process";
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as fs from "node:fs/promises";
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as path from "node:path";
 import { promisify } from "node:util";
 import { Git, Worktree, WorktreeFs } from "@clanker-forge/engine";
@@ -36,7 +39,7 @@ const gitImpl: Git.GitService = {
   fetch: (repoPath, remote) => runGit(repoPath, ["fetch", remote]).pipe(Effect.asVoid),
   remoteBranchExists: (repoPath, remote, branch) =>
     runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
-      Effect.as(true),
+      Effect.map(() => true),
       Effect.catchTag("GitError", () => Effect.succeed(false)),
     ),
   addWorktree: ({ repoPath, worktreePath, branch, startPoint }) =>
@@ -57,11 +60,11 @@ export const gitLayer = Layer.succeed(Git.Git, gitImpl);
 const worktreeFsImpl: WorktreeFs.WorktreeFsService = {
   linkFile: (target, linkPath) =>
     Effect.tryPromise({
-      try: async () => {
-        await fs.mkdir(path.dirname(linkPath), { recursive: true });
-        await fs.rm(linkPath, { force: true });
-        await fs.symlink(target, linkPath);
-      },
+      try: () =>
+        fs
+          .mkdir(path.dirname(linkPath), { recursive: true })
+          .then(() => fs.rm(linkPath, { force: true }))
+          .then(() => fs.symlink(target, linkPath)),
       catch: (cause) =>
         new WorktreeFs.WorktreeFsError({ operation: `link ${linkPath}`, message: describe(cause) }),
     }),
