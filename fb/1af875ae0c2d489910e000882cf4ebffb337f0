@@ -1,0 +1,28 @@
+skills/implement-agent/SKILL.md
+  s_6dfc97dd53d15b::t_6430dadd3af644 17
+  h_46518a29d4dd91 62-71,75
+  s_6dfc97dd53d15b::t_98982010817d18 50-51
+skills/triage-agent/SKILL.md
+  s_6dfc97dd53d15b::t_93bd2fd81f1dbf 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "fb1af875ae0c2d489910e000882cf4ebffb337f0",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_6dfc97dd53d15b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ce70a852-0adc-49a9-b90e-c95a627c134f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
