@@ -1,0 +1,44 @@
+apps/cli/src/ledger.ts
+  s_0b4491292a3500::t_f7b4884e446f5a 131
+  s_0b4491292a3500::t_164cdbed2ae171 88-90
+  s_0b4491292a3500::t_add7d651cc9122 226
+  s_0b4491292a3500::t_5303f34f6ecfcf 25
+  s_0b4491292a3500::t_189c31e8888a72 85-87,91-93,103
+  s_0b4491292a3500::t_dcffcda832ca36 159
+  s_0b4491292a3500::t_7affcd5674274d 9
+  s_0b4491292a3500::t_9a381b5c7aa144 202
+  s_0b4491292a3500::t_e6a41a6d71fa64 132-147
+  s_0b4491292a3500::t_e6e3de9b90e73e 187-190
+  s_0b4491292a3500::t_1a0f705a45db9b 148-149
+apps/cli/src/schema.ts
+  s_0b4491292a3500::t_ac2e036e23e609 9
+packages/engine/src/runLedger.test.ts
+  s_0b4491292a3500::t_977882230a8c6a 82-84
+  s_0b4491292a3500::t_2fdff31b5aa30f 20,26,32
+  s_0b4491292a3500::t_5a41744f303bf6 71,74-75
+packages/engine/src/RunLedger.ts
+  s_0b4491292a3500::t_6efd61f95cb6a3 22
+  s_0b4491292a3500::t_0882b9695988d7 52-55
+  s_0b4491292a3500::t_5203191f423a6d 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "18d9733231bcae12b2c85edfade4599e7eb58ee8",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_0b4491292a3500": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "13c45b46-5dea-40fe-9e25-75005b1e6c64",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
