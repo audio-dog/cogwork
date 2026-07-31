@@ -1,0 +1,22 @@
+.github/workflows/pull-request.yml
+  s_87cbf9d54bc052::t_bcb01078e43755 12-109
+  s_87cbf9d54bc052::t_b8a9267a99e57b 9-11
+  s_87cbf9d54bc052::t_f2cfbc75334239 110-112
+  s_87cbf9d54bc052::t_67d46556ee2e7b 1-8,113-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "e995b7a8495b2efdc10492e4bee3854616aab9a6",
+  "prompts": {},
+  "sessions": {
+    "s_87cbf9d54bc052": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e74e7208-b526-4ca6-9567-f76c9c60d66e",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
