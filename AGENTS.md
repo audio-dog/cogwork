@@ -9,11 +9,14 @@ Before editing files for a substantial task:
 - Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
 <!-- intent-skills:end -->
 
-## Local Effect Source
+## Effect TS
 
 The Effect v4 repository is cloned to `.repos/effect` for reference.
 Use this to explore APIs, find usage examples, and understand implementations for Effect.
 When Effect v4 behavior or types are unclear, don't guess from Effect v3 memory —
 grep the real source in `.repos/effect` (e.g. `packages/effect/src`).
 The repo also contains agent-specific rules and guidance to follow in various markdown files.
+
+You must always invoke the /effect-ts skill when writing Effect code.
+
 
