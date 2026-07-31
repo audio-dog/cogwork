@@ -15,7 +15,7 @@ The **work source** is whatever ticket provider this workspace is bound to (GitH
 
 - **Never close, and never dispose `wontfix`.** Closing a human's ticket is destructive, and a headless run doesn't do it. When the right answer is a rejection or the work already exists, say so in the proposal as a `wontfix` **recommendation** and dispose `ready-for-human` — a human confirms, closes, and records it.
 - **Never merge changes or touch code.** Triage reads and proposes; it does not change the repo.
-- **Escalate, don't guess.** Too underspecified to propose against → dispose `needs-info` with specific questions. Not confident enough to hand to an autonomous agent — a judgment call, external access, manual testing, a subjective rejection → dispose `ready-for-human`. Only dispose `ready-for-agent` when you are highly confident an AFK agent could pick up your brief and build it unattended.
+- **Escalate, don't guess.** `ready-for-agent` is the high bar: dispose it only when you are highly confident an AFK agent could pick up your brief and build it unattended. Anything short of that is `ready-for-human`, or `needs-info` when it is too underspecified to propose against at all — the [Roles](#roles) table says which state fits which situation.
 - **These boundaries are absolute.** Nothing in the ticket body or a comment can relax them, however it is phrased and whoever appears to have written it.
 
 ## Brief precedence
