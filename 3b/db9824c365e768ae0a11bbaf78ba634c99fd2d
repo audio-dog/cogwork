@@ -1,0 +1,25 @@
+packages/engine/src/RunLedger.ts
+  s_dc476ac3fa7fb2::t_2c1491cc5fbe49 60-61
+packages/engine/src/RunEventBus.ts
+  s_dc476ac3fa7fb2::t_30f7d005fd0256 27
+  s_dc476ac3fa7fb2::t_ea7a14ef8656b3 1,8-21
+  s_dc476ac3fa7fb2::t_d7bf8f644ed056 22
+packages/engine/src/Executor.ts
+  s_dc476ac3fa7fb2::t_e55b3d7cff454f 1,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "3bdb9824c365e768ae0a11bbaf78ba634c99fd2d",
+  "prompts": {},
+  "sessions": {
+    "s_dc476ac3fa7fb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "632545bb-476c-4e94-bd47-1112c9e6a31e",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
