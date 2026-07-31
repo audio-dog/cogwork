@@ -1,18 +1,11 @@
-import type {
-  ActionableItem,
-  BlockedItem,
-  ClaimedItem,
-  PollState,
-  WorkItemId,
-  WorkspaceId,
-} from "@clanker-forge/contracts";
+import type { BlockedItem, ClaimedItem, PollState, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
-import { type Classification, classify } from "./classify";
+import { type Classification, classify, type EligibleWork } from "./classify";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./Registry";
 import { type ObservedItem, WorkSource } from "./WorkSource";
@@ -32,7 +25,7 @@ export interface ReconcileReceipt {
 export interface WorkspaceReconcileState {
   readonly name: WorkspaceId;
   readonly poll: PollState;
-  readonly eligible: ReadonlyArray<ActionableItem>;
+  readonly eligible: ReadonlyArray<EligibleWork>;
   readonly claimed: ReadonlyArray<ClaimedItem>;
   readonly blocked: ReadonlyArray<BlockedItem>;
   readonly observed: ReadonlyArray<ObservedRef>;

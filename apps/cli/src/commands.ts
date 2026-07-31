@@ -31,6 +31,16 @@ const ledgerFlag = Flag.string("ledger").pipe(
   Flag.withDefault(defaultLedgerPath),
 );
 
+const maxConcurrencyFlag = Flag.integer("max-concurrency").pipe(
+  Flag.withDescription("Maximum concurrent agent sessions across all workspaces"),
+  Flag.withDefault(4),
+);
+
+const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
+  Flag.withDescription("Maximum agent sessions started per UTC day across all workspaces"),
+  Flag.withDefault(50),
+);
+
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
 const runDaemon = Effect.fn("commands.runDaemon")(
@@ -51,6 +61,7 @@ const runDaemon = Effect.fn("commands.runDaemon")(
         }),
       { discard: true },
     );
+    yield* Daemon.bootstrap;
     yield* Effect.all([Daemon.reconcileHeartbeat, Daemon.executeHeartbeat], {
       concurrency: "unbounded",
     });
@@ -155,9 +166,11 @@ export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
   configHome: configHomeFlag,
   ledger: ledgerFlag,
+  maxConcurrency: maxConcurrencyFlag,
+  dailyBudget: dailyBudgetFlag,
 }).pipe(
-  Command.withHandler(({ socket, configHome, ledger }) =>
-    runDaemon({ socketPath: socket, configHome, ledgerPath: ledger }),
+  Command.withHandler(({ socket, configHome, ledger, maxConcurrency, dailyBudget }) =>
+    runDaemon({ socketPath: socket, configHome, ledgerPath: ledger, maxConcurrency, dailyBudget }),
   ),
 );
 

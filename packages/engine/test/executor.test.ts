@@ -25,7 +25,7 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 
-const triageItem = { id: id("#7"), title: "broken export", stage: "triage" as const };
+const triageItem = { id: id("#7"), title: "broken export", stage: "triage" as const, priorFailures: 0 };
 
 interface Call {
   readonly method: string;
@@ -196,6 +196,27 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
         assert.strictEqual(runs[0]?.status, "failed");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("blocks a retryable failure once its attempt reaches the cap", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const error = new HarnessError({ reason: "turn", retryable: true, message: "network blip" });
+      const layer = provide(recorder(calls), [failingRunner(error)]);
+      const atCap = { ...triageItem, priorFailures: 2 };
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(workspace, atCap);
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        assert.deepStrictEqual(log.find((c) => c.method === "setRoles")?.add, ["ready-for-human"]);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const runs = yield* ledger.listRuns(10);
+        assert.strictEqual(runs[0]?.status, "blocked");
       }).pipe(Effect.provide(layer));
     }),
   );

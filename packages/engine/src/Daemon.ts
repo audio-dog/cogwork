@@ -4,11 +4,11 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
-import { Executor } from "./Executor";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
 import { RunLedger } from "./RunLedger";
+import { Scheduler } from "./Scheduler";
 import { ticketSlug, WorktreeManager } from "./Worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -31,7 +31,7 @@ const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcile
   workSource: workspace.config.workSource.type,
   harness: workspace.config.harness.preferred,
   poll: state?.poll ?? okPoll,
-  eligible: state?.eligible ?? [],
+  eligible: (state?.eligible ?? []).map((work) => ({ id: work.id, title: work.title, stage: work.stage })),
   claimed: state?.claimed ?? [],
   blocked: state?.blocked ?? [],
 });
@@ -108,19 +108,14 @@ export const reconcileHeartbeat = Effect.gen(function* () {
   yield* maintainWorktrees();
 }).pipe(Effect.repeat(Schedule.spaced("5 seconds")));
 
-const triageEligible = (state: WorkspaceReconcileState) =>
-  state.eligible.find((item) => item.stage === "triage");
+export const bootstrap = Effect.gen(function* () {
+  const worker = yield* ReconcileWorker;
+  const scheduler = yield* Scheduler;
+  yield* worker.submit();
+  yield* scheduler.recover();
+});
 
 export const executeHeartbeat = Effect.gen(function* () {
-  const registry = yield* WorkspaceRegistry;
-  const worker = yield* ReconcileWorker;
-  const executor = yield* Executor;
-  const snapshot = yield* worker.snapshot;
-  const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
-  const runState = Effect.fn("Daemon.runState")(function* (state: WorkspaceReconcileState) {
-    const workspace = byName.get(state.name);
-    const item = triageEligible(state);
-    if (workspace && item) yield* executor.runIfIdle(workspace, item);
-  });
-  yield* Effect.forEach(snapshot.workspaces, runState);
+  const scheduler = yield* Scheduler;
+  yield* scheduler.tick();
 }).pipe(Effect.repeat(Schedule.spaced("5 seconds")));

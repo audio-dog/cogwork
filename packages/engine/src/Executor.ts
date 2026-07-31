@@ -1,4 +1,4 @@
-import type { ActionableItem, RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
+import type { RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
 import { RunId, SessionId } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -8,9 +8,16 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { stripMarkers } from "./github/markers";
 import { Harness, type HarnessEvent, type HarnessRequest } from "./Harness";
-import { buildTriagePrompt, parseTriageDecision, type ResolvedStage, resolveTriage } from "./Playbook";
+import {
+  buildTriagePrompt,
+  parseTriageDecision,
+  type ResolvedStage,
+  resolveTriage,
+  runnable,
+} from "./Playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { RunLedger } from "./RunLedger";
 import { WorkSource } from "./WorkSource";
@@ -34,13 +41,8 @@ const mergeEvent = (acc: RunAccumulator, event: HarnessEvent): RunAccumulator =>
   usage: event.usage ?? acc.usage,
 });
 
-const claimant = (workspace: RegisteredWorkspace) => workspace.config.workSource.botLogin ?? "clanker-forge";
-
-const withoutKey = (set: ReadonlySet<string>, key: string): ReadonlySet<string> => {
-  const next = new Set(set);
-  next.delete(key);
-  return next;
-};
+export const claimant = (workspace: RegisteredWorkspace) =>
+  workspace.config.workSource.botLogin ?? "clanker-forge";
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
 const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
@@ -54,7 +56,6 @@ export const make = Effect.gen(function* () {
   const harness = yield* Harness;
   const ledger = yield* RunLedger;
   const runCounter = yield* Ref.make(0);
-  const inflight = yield* Ref.make<ReadonlySet<string>>(new Set());
 
   const nextRunId = (startedAtMillis: number) =>
     Ref.getAndUpdate(runCounter, (n) => n + 1).pipe(
@@ -64,7 +65,7 @@ export const make = Effect.gen(function* () {
 
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
     workspace: RegisteredWorkspace,
-    item: ActionableItem,
+    item: EligibleWork,
     at: number,
   ) {
     const claim = { by: claimant(workspace), claimedAtMillis: at };
@@ -94,7 +95,7 @@ export const make = Effect.gen(function* () {
 
   const applySuccess = Effect.fn("Executor.applySuccess")(function* (
     workspace: RegisteredWorkspace,
-    item: ActionableItem,
+    item: EligibleWork,
     runId: RunId,
     acc: RunAccumulator,
   ) {
@@ -113,7 +114,7 @@ export const make = Effect.gen(function* () {
 
   const applyFailure = Effect.fn("Executor.applyFailure")(function* (
     workspace: RegisteredWorkspace,
-    item: ActionableItem,
+    item: EligibleWork,
     runId: RunId,
     retryable: boolean,
   ) {
@@ -123,11 +124,12 @@ export const make = Effect.gen(function* () {
       outcome: "failed",
       atMillis: endedAtMillis,
     });
-    if (!retryable) {
+    const block = !retryable || item.priorFailures + 1 >= maxAttemptsPerStage;
+    if (block) {
       yield* workSource.setRoles(workspace, item.id, { remove: ["needs-triage"], add: ["ready-for-human"] });
     }
     yield* ledger.updateRun(runId, {
-      status: retryable ? "failed" : "blocked",
+      status: block ? "blocked" : "failed",
       session: null,
       usage: null,
       endedAtMillis,
@@ -136,7 +138,7 @@ export const make = Effect.gen(function* () {
 
   const releaseClaim = Effect.fn("Executor.releaseClaim")(function* (
     workspace: RegisteredWorkspace,
-    item: ActionableItem,
+    item: EligibleWork,
   ) {
     const result = yield* Effect.result(workSource.release(workspace, item.id));
     if (Result.isFailure(result)) {
@@ -146,7 +148,7 @@ export const make = Effect.gen(function* () {
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
-    item: ActionableItem,
+    item: EligibleWork,
     resolved: ResolvedStage,
     startedAtMillis: number,
   ) {
@@ -179,41 +181,24 @@ export const make = Effect.gen(function* () {
 
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
-    item: ActionableItem,
+    item: EligibleWork,
   ) {
-    const resolved = resolveTriage(workspace.config);
-    if (item.stage !== "triage" || !resolved.enabled) {
-      return;
+    if (!runnable(workspace.config, item.stage)) {
+      return false;
     }
+    const resolved = resolveTriage(workspace.config);
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {
-      return;
+      return false;
     }
     yield* runClaimed(workspace, item, resolved, startedAtMillis).pipe(
       Effect.ensuring(releaseClaim(workspace, item)),
     );
+    return true;
   });
 
-  const runIfIdle = Effect.fn("Executor.runIfIdle")(function* (
-    workspace: RegisteredWorkspace,
-    item: ActionableItem,
-  ) {
-    const key = `${workspace.config.name}:${item.id}`;
-    const started = yield* Ref.modify(inflight, (set) =>
-      set.has(key) ? [false, set] : [true, new Set(set).add(key)],
-    );
-    if (!started) {
-      return;
-    }
-    yield* execute(workspace, item).pipe(
-      Effect.catchCause((cause) => Effect.logWarning("triage run failed", { item: item.id, cause })),
-      Effect.ensuring(Ref.update(inflight, (set) => withoutKey(set, key))),
-      Effect.forkDetach,
-    );
-  });
-
-  return { execute, runIfIdle } as const;
+  return { execute } as const;
 });
 
 export class Executor extends Context.Service<Executor, Effect.Success<typeof make>>()(

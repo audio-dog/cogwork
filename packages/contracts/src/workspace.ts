@@ -48,6 +48,7 @@ export const WorkspaceConfig = Schema.Struct({
   harness: HarnessPreferences,
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),
+  concurrency: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
 export type WorkspaceConfigInput = Schema.Codec.Encoded<typeof WorkspaceConfig>;

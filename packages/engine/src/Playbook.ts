@@ -1,4 +1,4 @@
-import type { HarnessName, TriageRole, WorkspaceConfig } from "@clanker-forge/contracts";
+import type { HarnessName, LifecycleStage, TriageRole, WorkspaceConfig } from "@clanker-forge/contracts";
 
 export interface ResolvedStage {
   readonly enabled: boolean;
@@ -24,6 +24,9 @@ export const resolveTriage = (config: WorkspaceConfig): ResolvedStage => {
     promptTemplate: stage?.prompt ?? defaultTriagePrompt,
   };
 };
+
+export const runnable = (config: WorkspaceConfig, stage: LifecycleStage) =>
+  stage === "triage" && resolveTriage(config).enabled;
 
 const decisionRoles: ReadonlyArray<TriageRole> = [
   "ready-for-agent",
