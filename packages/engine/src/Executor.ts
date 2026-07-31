@@ -9,18 +9,24 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
+import type { GitError } from "./Git";
 import { stripMarkers } from "./github/markers";
-import { Harness, type HarnessEvent, type HarnessRequest } from "./Harness";
+import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./Harness";
 import {
+  buildImplementPrompt,
   buildTriagePrompt,
+  parseImplementResult,
   parseTriageDecision,
   type ResolvedStage,
-  resolveTriage,
-  runnable,
+  resolveStage,
 } from "./Playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { RunLedger } from "./RunLedger";
-import { WorkSource } from "./WorkSource";
+import { WorkSource, type WorkSourceError } from "./WorkSource";
+import { branchName, WorktreeManager } from "./Worktree";
+import type { WorktreeFsError } from "./WorktreeFs";
+
+type PrepareError = GitError | WorktreeFsError;
 
 interface RunAccumulator {
   readonly text: string;
@@ -29,6 +35,14 @@ interface RunAccumulator {
 }
 
 const emptyAccumulator: RunAccumulator = { text: "", session: null, usage: null };
+
+interface StageOps {
+  readonly resolved: ResolvedStage;
+  readonly branch: string | null;
+  readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
+  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, WorkSourceError>;
+  readonly blockRole: TriageRole;
+}
 
 const decisionLine = /^\s*TRIAGE-DECISION:.*$/gim;
 
@@ -40,6 +54,9 @@ const mergeEvent = (acc: RunAccumulator, event: HarnessEvent): RunAccumulator =>
   session: event.sessionId ?? acc.session,
   usage: event.usage ?? acc.usage,
 });
+
+const retryableOf = (error: PrepareError | HarnessError) =>
+  error._tag === "HarnessError" ? error.retryable : true;
 
 export const claimant = (workspace: RegisteredWorkspace) =>
   workspace.config.workSource.botLogin ?? "clanker-forge";
@@ -55,6 +72,7 @@ export const make = Effect.gen(function* () {
   const workSource = yield* WorkSource;
   const harness = yield* Harness;
   const ledger = yield* RunLedger;
+  const worktrees = yield* WorktreeManager;
   const runCounter = yield* Ref.make(0);
 
   const nextRunId = (startedAtMillis: number) =>
@@ -71,7 +89,7 @@ export const make = Effect.gen(function* () {
     const claim = { by: claimant(workspace), claimedAtMillis: at };
     const result = yield* Effect.result(workSource.claim(workspace, item.id, claim));
     if (Result.isSuccess(result)) return true;
-    yield* Effect.logWarning("triage claim failed", { item: item.id, error: result.failure });
+    yield* Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error: result.failure });
     return false;
   });
 
@@ -93,7 +111,33 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const applySuccess = Effect.fn("Executor.applySuccess")(function* (
+  const applyFailure = Effect.fn("Executor.applyFailure")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    blockRole: TriageRole,
+    runId: RunId,
+    retryable: boolean,
+    session: SessionId | null,
+  ) {
+    const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* workSource.recordAttempt(workspace, item.id, {
+      stage: item.stage,
+      outcome: "failed",
+      atMillis: endedAtMillis,
+    });
+    const block = !retryable || item.priorFailures + 1 >= maxAttemptsPerStage;
+    if (block) {
+      yield* workSource.setRoles(workspace, item.id, { remove: [blockRole], add: ["ready-for-human"] });
+    }
+    yield* ledger.updateRun(runId, {
+      status: block ? "blocked" : "failed",
+      session: block ? null : session,
+      usage: null,
+      endedAtMillis,
+    });
+  });
+
+  const applyTriageSuccess = Effect.fn("Executor.applyTriageSuccess")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     runId: RunId,
@@ -112,28 +156,35 @@ export const make = Effect.gen(function* () {
     yield* ledger.updateRun(runId, { status: "succeeded", session, usage: acc.usage, endedAtMillis });
   });
 
-  const applyFailure = Effect.fn("Executor.applyFailure")(function* (
+  const applyImplementSuccess = Effect.fn("Executor.applyImplementSuccess")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     runId: RunId,
-    retryable: boolean,
+    acc: RunAccumulator,
   ) {
+    const session = yield* sessionOf(acc.session);
     const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* workSource.setRoles(workspace, item.id, { remove: ["ready-for-agent"], add: [] });
     yield* workSource.recordAttempt(workspace, item.id, {
-      stage: "triage",
-      outcome: "failed",
+      stage: "implement",
+      outcome: "succeeded",
       atMillis: endedAtMillis,
     });
-    const block = !retryable || item.priorFailures + 1 >= maxAttemptsPerStage;
-    if (block) {
-      yield* workSource.setRoles(workspace, item.id, { remove: ["needs-triage"], add: ["ready-for-human"] });
+    yield* ledger.updateRun(runId, { status: "succeeded", session, usage: acc.usage, endedAtMillis });
+  });
+
+  const completeImplement = Effect.fn("Executor.completeImplement")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    acc: RunAccumulator,
+  ) {
+    const result = parseImplementResult(acc.text);
+    if (result === "opened-pr") {
+      return yield* applyImplementSuccess(workspace, item, runId, acc);
     }
-    yield* ledger.updateRun(runId, {
-      status: block ? "blocked" : "failed",
-      session: null,
-      usage: null,
-      endedAtMillis,
-    });
+    const session = yield* sessionOf(acc.session);
+    return yield* applyFailure(workspace, item, "ready-for-agent", runId, result !== "blocked", session);
   });
 
   const releaseClaim = Effect.fn("Executor.releaseClaim")(function* (
@@ -142,14 +193,66 @@ export const make = Effect.gen(function* () {
   ) {
     const result = yield* Effect.result(workSource.release(workspace, item.id));
     if (Result.isFailure(result)) {
-      yield* Effect.logWarning("triage release failed", { item: item.id, error: result.failure });
+      yield* Effect.logWarning("claim release failed", {
+        stage: item.stage,
+        item: item.id,
+        error: result.failure,
+      });
     }
   });
+
+  const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    resolved: ResolvedStage,
+    branch: string,
+  ) {
+    const worktree = yield* worktrees.ensure(workspace, item);
+    const sessionId = yield* ledger.latestSessionByBranch(workspace.config.name, branch);
+    return {
+      harness: resolved.harness,
+      checkoutPath: worktree.path,
+      prompt: buildImplementPrompt(resolved, item),
+      model: resolved.model,
+      sessionId,
+    } satisfies HarnessRequest;
+  });
+
+  const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) =>
+    ({
+      resolved,
+      branch: null,
+      prepare: Effect.succeed({
+        harness: resolved.harness,
+        checkoutPath: workspace.config.checkoutPath,
+        prompt: buildTriagePrompt(resolved, item),
+        model: resolved.model,
+        sessionId: null,
+      }),
+      complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
+      blockRole: "needs-triage",
+    }) satisfies StageOps;
+
+  const implementOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+    const branch = branchName(item);
+    return {
+      resolved,
+      branch,
+      prepare: prepareImplement(workspace, item, resolved, branch),
+      complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
+      blockRole: "ready-for-agent",
+    } satisfies StageOps;
+  };
+
+  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) =>
+    item.stage === "implement"
+      ? implementOps(workspace, item, resolved)
+      : triageOps(workspace, item, resolved);
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
+    ops: StageOps,
     startedAtMillis: number,
   ) {
     const runId = yield* nextRunId(startedAtMillis);
@@ -157,8 +260,9 @@ export const make = Effect.gen(function* () {
       id: runId,
       workspace: workspace.config.name,
       workItem: item.id,
-      stage: "triage",
-      harness: resolved.harness,
+      stage: item.stage,
+      harness: ops.resolved.harness,
+      branch: ops.branch,
       session: null,
       usage: null,
       status: "running",
@@ -166,33 +270,29 @@ export const make = Effect.gen(function* () {
       endedAtMillis: null,
     };
     yield* ledger.insertRun(record);
-    const request: HarnessRequest = {
-      harness: resolved.harness,
-      checkoutPath: workspace.config.checkoutPath,
-      prompt: buildTriagePrompt(resolved, { id: item.id, title: item.title }),
-      model: resolved.model,
-      sessionId: null,
-    };
-    const outcome = yield* Effect.result(foldRun(runId, request));
+    const outcome = yield* Effect.result(
+      ops.prepare.pipe(Effect.flatMap((request) => foldRun(runId, request))),
+    );
     yield* Result.isSuccess(outcome)
-      ? applySuccess(workspace, item, runId, outcome.success)
-      : applyFailure(workspace, item, runId, outcome.failure.retryable);
+      ? ops.complete(runId, outcome.success)
+      : applyFailure(workspace, item, ops.blockRole, runId, retryableOf(outcome.failure), null);
   });
 
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    if (!runnable(workspace.config, item.stage)) {
+    const resolved = resolveStage(workspace.config, item.stage);
+    if (!resolved?.enabled) {
       return false;
     }
-    const resolved = resolveTriage(workspace.config);
+    const ops = opsFor(workspace, item, resolved);
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {
       return false;
     }
-    yield* runClaimed(workspace, item, resolved, startedAtMillis).pipe(
+    yield* runClaimed(workspace, item, ops, startedAtMillis).pipe(
       Effect.ensuring(releaseClaim(workspace, item)),
     );
     return true;

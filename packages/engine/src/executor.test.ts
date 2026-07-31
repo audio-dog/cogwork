@@ -6,10 +6,17 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Executor from "./Executor";
-import { HarnessError, type HarnessEvent, type HarnessRunner, layer as harnessLayer } from "./Harness";
+import {
+  HarnessError,
+  type HarnessEvent,
+  type HarnessRequest,
+  type HarnessRunner,
+  layer as harnessLayer,
+} from "./Harness";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunLedger from "./RunLedger";
 import { WorkSource, type WorkSourceService } from "./WorkSource";
+import { branchName, WorktreeManager, type WorktreeManagerService } from "./Worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const id = Schema.decodeSync(WorkItemId);
@@ -26,6 +33,69 @@ const workspace: RegisteredWorkspace = {
 };
 
 const triageItem = { id: id("#7"), title: "broken export", stage: "triage" as const, priorFailures: 0 };
+
+const usage: TokenUsage = { inputTokens: 12, outputTokens: 34, totalTokens: 46 };
+
+const implementWorkspace: RegisteredWorkspace = {
+  source: workspace.source,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh",
+    checkoutPath: "/repos/gh",
+    workSource: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    harness: { preferred: "cursor" },
+    playbook: { implement: { enabled: true } },
+  }),
+};
+
+const implementItem = {
+  id: id("#15"),
+  title: "Implement playbook",
+  stage: "implement" as const,
+  priorFailures: 0,
+};
+
+const implementBranch = branchName(implementItem);
+
+const implementEvents: ReadonlyArray<HarnessEvent> = [
+  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
+  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
+  {
+    type: "TEXT_MESSAGE_CONTENT",
+    name: null,
+    text: "Opened PR #99, Closes #15.\nIMPLEMENT-RESULT: opened-pr",
+    sessionId: null,
+    usage: null,
+    finishReason: null,
+  },
+  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+];
+
+const blockedImplementEvents: ReadonlyArray<HarnessEvent> = [
+  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
+  {
+    type: "TEXT_MESSAGE_CONTENT",
+    name: null,
+    text: "The brief contradicts itself; leaving for a human.\nIMPLEMENT-RESULT: blocked",
+    sessionId: null,
+    usage: null,
+    finishReason: null,
+  },
+  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+];
+
+const noSentinelImplementEvents: ReadonlyArray<HarnessEvent> = [
+  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
+  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
+  {
+    type: "TEXT_MESSAGE_CONTENT",
+    name: null,
+    text: "Made progress but ran out of turn before opening a PR.",
+    sessionId: null,
+    usage: null,
+    finishReason: null,
+  },
+  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+];
 
 const disabledWorkspace: RegisteredWorkspace = {
   source: workspace.source,
@@ -65,12 +135,29 @@ const runner = (events: ReadonlyArray<HarnessEvent>): HarnessRunner => ({
   run: () => Stream.fromArray(events),
 });
 
+const capturingRunner = (
+  requests: Ref.Ref<ReadonlyArray<HarnessRequest>>,
+  events: ReadonlyArray<HarnessEvent>,
+): HarnessRunner => ({
+  name: cursor,
+  run: (request) =>
+    Stream.unwrap(
+      Ref.update(requests, (xs) => [...xs, request]).pipe(Effect.map(() => Stream.fromArray(events))),
+    ),
+});
+
+const worktreeStub: WorktreeManagerService = {
+  ensure: (_workspace, item) =>
+    Effect.succeed({ branch: branchName(item), path: `/wt/${branchName(item)}`, created: true }),
+  list: () => Effect.succeed([]),
+  remove: () => Effect.void,
+  reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+};
+
 const failingRunner = (error: HarnessError): HarnessRunner => ({
   name: cursor,
   run: () => Stream.fail(error),
 });
-
-const usage: TokenUsage = { inputTokens: 12, outputTokens: 34, totalTokens: 46 };
 
 const successEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
@@ -97,7 +184,12 @@ const successEvents: ReadonlyArray<HarnessEvent> = [
 const provide = (ws: WorkSourceService, runners: ReadonlyArray<HarnessRunner>) =>
   Executor.layer.pipe(
     Layer.provideMerge(
-      Layer.mergeAll(Layer.succeed(WorkSource, ws), harnessLayer(runners), RunLedger.layerMemory),
+      Layer.mergeAll(
+        Layer.succeed(WorkSource, ws),
+        harnessLayer(runners),
+        RunLedger.layerMemory,
+        Layer.succeed(WorktreeManager, worktreeStub),
+      ),
     ),
   );
 
@@ -252,6 +344,128 @@ describe("Executor.execute", () => {
         const executor = yield* Executor.Executor;
         yield* executor.execute(disabledWorkspace, triageItem);
         assert.deepStrictEqual(yield* Ref.get(calls), []);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("runs an implement job in the worktree and ledgers the run keyed by branch", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const [request] = yield* Ref.get(requests);
+        assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
+        assert.include(request?.prompt ?? "", "implement-agent");
+        assert.include(request?.prompt ?? "", "#15");
+        assert.isNull(request?.sessionId ?? null);
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
+        assert.isTrue(log.some((c) => c.method === "release"));
+        assert.isFalse(log.some((c) => c.method === "comment"));
+        const roles = log.find((c) => c.method === "setRoles");
+        assert.deepStrictEqual(roles?.remove, ["ready-for-agent"]);
+        assert.deepStrictEqual(roles?.add, []);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.stage, "implement");
+        assert.strictEqual(run?.branch, implementBranch);
+        assert.strictEqual(run?.status, "succeeded");
+        assert.strictEqual(run?.session, "sess-42");
+        assert.deepStrictEqual(run?.usage, usage);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("resumes the branch's persisted session on a later implement run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 2);
+        assert.isNull(captured[0]?.sessionId ?? null);
+        assert.strictEqual(captured[1]?.sessionId, "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("blocks a failed implement job and hands the issue back to a human", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const error = new HarnessError({ reason: "launch", retryable: false, message: "no cli" });
+      const layer = provide(recorder(calls), [failingRunner(error)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        const roles = log.find((c) => c.method === "setRoles");
+        assert.deepStrictEqual(roles?.remove, ["ready-for-agent"]);
+        assert.deepStrictEqual(roles?.add, ["ready-for-human"]);
+        assert.isFalse(log.some((c) => c.method === "comment"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.stage, "implement");
+        assert.strictEqual(run?.status, "blocked");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("hands a self-reported blocked implement run to a human without retrying", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(recorder(calls), [runner(blockedImplementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        const roles = log.find((c) => c.method === "setRoles");
+        assert.deepStrictEqual(roles?.remove, ["ready-for-agent"]);
+        assert.deepStrictEqual(roles?.add, ["ready-for-human"]);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "blocked");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("retries a sentinel-less implement run and resumes its session on the next attempt", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, noSentinelImplementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        assert.isFalse(log.some((c) => c.method === "setRoles"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [firstRun] = yield* ledger.listRuns(10);
+        assert.strictEqual(firstRun?.status, "failed");
+        assert.strictEqual(firstRun?.session, "sess-42");
+
+        yield* executor.execute(implementWorkspace, implementItem);
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured[1]?.sessionId, "sess-42");
       }).pipe(Effect.provide(layer));
     }),
   );
