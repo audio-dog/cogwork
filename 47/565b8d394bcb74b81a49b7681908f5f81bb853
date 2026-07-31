@@ -1,0 +1,21 @@
+packages/contracts/CONTEXT.md
+  s_5c28f9dca20b9b::t_17cc53f9196614 76
+packages/contracts/src/workspace.ts
+  s_5c28f9dca20b9b::t_cb7cb49c8cad00 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "47565b8d394bcb74b81a49b7681908f5f81bb853",
+  "prompts": {},
+  "sessions": {
+    "s_5c28f9dca20b9b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0903638a-a436-4145-ac1c-3a8d230c9f55",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
