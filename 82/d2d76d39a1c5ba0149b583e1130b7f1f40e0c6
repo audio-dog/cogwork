@@ -1,0 +1,16 @@
+turbo.json
+  h_46518a29d4dd91 8-13
+package.json
+  h_46518a29d4dd91 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "82d2d76d39a1c5ba0149b583e1130b7f1f40e0c6",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
