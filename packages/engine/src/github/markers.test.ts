@@ -36,9 +36,31 @@ describe("github markers", () => {
   });
 
   it("round-trips a claim through its hidden comment marker", () => {
-    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000 };
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
     const parsed = parseClaim([`On it.\n${serializeClaim(claim)}\n`]);
     assert.deepStrictEqual(parsed, claim);
+  });
+
+  it("keeps claims without a stage parseable for older markers", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1 };
+    assert.deepStrictEqual(parseClaim([serializeClaim(claim)]), claim);
+  });
+
+  it("includes a failure reason in the attempt status line", () => {
+    assert.strictEqual(
+      attemptStatus({ stage: "implement", outcome: "failed", atMillis: 1 }, "git worktree add: boom"),
+      "Last implement attempt failed: git worktree add: boom",
+    );
+  });
+
+  it("strips coordination marker noise from attempt status reasons", () => {
+    assert.strictEqual(
+      attemptStatus(
+        { stage: "implement", outcome: "failed", atMillis: 1 },
+        `boom <!-- clanker-forge:attempt stage=implement outcome=failed at=9 -->`,
+      ),
+      "Last implement attempt failed: boom",
+    );
   });
 
   it("round-trips attempt records and preserves their order", () => {

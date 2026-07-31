@@ -196,14 +196,17 @@ describe("github work source adapter", () => {
       const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
       yield* source.claim(workspace, id("#7"), claim);
-      yield* source.recordAttempt(workspace, id("#7"), attempt);
+      yield* source.recordAttempt(workspace, id("#7"), attempt, "git worktree add: boom");
       const items = yield* source.observe(workspace);
       const observed = items.find((item) => item.id === "#7");
-      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+      assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
+      const client = yield* GitHubClient;
+      const comments = botComments(yield* client.listComments(repo, 7));
+      assert.include(comments[0]?.body ?? "", "Last implement attempt failed: git worktree add: boom");
       const { eligible, claimed } = classify(items);
       assert.strictEqual(eligible.length, 0);
-      assert.deepStrictEqual(claimed[0]?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+      assert.deepStrictEqual(claimed[0]?.claim, claim);
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
     ),
@@ -357,7 +360,7 @@ describe("github work source adapter", () => {
       assert.include(comments[0]?.body ?? "", "<!-- clanker-forge:attempt");
       const items = yield* source.observe(workspace);
       const observed = items.find((item) => item.id === "#11");
-      assert.deepStrictEqual(observed?.claim, { by: second.by, claimedAtMillis: second.claimedAtMillis });
+      assert.deepStrictEqual(observed?.claim, second);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
     }).pipe(
       Effect.provide(
@@ -438,7 +441,7 @@ describe("github work source adapter", () => {
       assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
       const items = yield* source.observe(workspace);
       const observed = items.find((item) => item.id === "#15");
-      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+      assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [legacyAttempt]);
     }).pipe(
       Effect.provide(
@@ -483,7 +486,11 @@ describe("github work source adapter", () => {
       assert.include(coordination?.body ?? "", "Currently implementing this issue.");
       const observed = (yield* source.observe(workspace)).find((item) => item.id === "#16");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
-      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 3 });
+      assert.deepStrictEqual(observed?.claim, {
+        by: "clanker-forge",
+        claimedAtMillis: 3,
+        stage: "implement",
+      });
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] })),
     ),
@@ -550,7 +557,7 @@ describe("github work source adapter", () => {
       assert.notInclude(proposal?.body ?? "", "outcome=failed");
       const observed = (yield* source.observe(workspace)).find((item) => item.id === "#21");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
-      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+      assert.deepStrictEqual(observed?.claim, claim);
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 21, title: "poison", labels: ["needs-triage"] }] })),
     ),

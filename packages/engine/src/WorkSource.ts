@@ -53,8 +53,12 @@ const claimEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim:
 
 const releaseEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace);
 
-const recordAttemptEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _attempt: AttemptRecord) =>
-  failWhenRemote(workspace);
+const recordAttemptEmpty = (
+  workspace: RegisteredWorkspace,
+  _itemId: WorkItemId,
+  _attempt: AttemptRecord,
+  _reason?: string,
+) => failWhenRemote(workspace);
 
 const recordFollowUpEmpty = (
   workspace: RegisteredWorkspace,
