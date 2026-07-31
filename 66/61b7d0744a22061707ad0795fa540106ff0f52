@@ -1,0 +1,22 @@
+packages/engine/src/Worktree.ts
+  s_19bc81255f20b1::t_77272272abb764 45-54
+packages/engine/src/classify.ts
+  s_19bc81255f20b1::t_36af087a65a225 50-55
+  s_19bc81255f20b1::t_1f70caf1b85b0b 48-49,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "6661b7d0744a22061707ad0795fa540106ff0f52",
+  "prompts": {},
+  "sessions": {
+    "s_19bc81255f20b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "76b9e526-453e-48e8-ad6a-b8eb58dad638",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
