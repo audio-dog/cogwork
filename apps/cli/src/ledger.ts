@@ -172,16 +172,8 @@ const make = (ledgerPath: string) =>
         Effect.orElseSucceed(() => [] as ReadonlyArray<A>),
       );
 
-    const latestRunWhere = (operation: string, where: SQL | undefined) =>
-      Effect.try(() =>
-        db
-          .select(runRecordSelection)
-          .from(runs)
-          .where(and(where, isNotNull(runs.session)))
-          .orderBy(desc(runs.startedAt))
-          .limit(1)
-          .get(),
-      ).pipe(
+    const readRun = (operation: string, thunk: () => Parameters<typeof runRecordFromRow>[0] | undefined) =>
+      Effect.try(thunk).pipe(
         Effect.tapError((cause) => warn(operation, cause)),
         Effect.orElseSucceed(() => undefined),
         Effect.flatMap((row) =>
@@ -189,6 +181,17 @@ const make = (ledgerPath: string) =>
             ? decodeRun(runRecordFromRow(row)).pipe(Effect.orElseSucceed(() => null))
             : Effect.succeed(null),
         ),
+      );
+
+    const latestRunWhere = (operation: string, where: SQL | undefined) =>
+      readRun(operation, () =>
+        db
+          .select(runRecordSelection)
+          .from(runs)
+          .where(and(where, isNotNull(runs.session)))
+          .orderBy(desc(runs.startedAt))
+          .limit(1)
+          .get(),
       );
 
     const service: RunLedger.RunLedgerService = {
@@ -250,6 +253,9 @@ const make = (ledgerPath: string) =>
             ),
           ),
         ),
+
+      getRun: (runId: RunId) =>
+        readRun("getRun", () => db.select(runRecordSelection).from(runs).where(eq(runs.id, runId)).get()),
 
       events: (runId: RunId) =>
         readRows("events", () =>
