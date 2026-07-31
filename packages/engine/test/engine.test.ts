@@ -150,6 +150,37 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(workerWithWork), Effect.scoped),
   );
 
+  const inReviewItem: ObservedItem = {
+    id: id("AUD-2"),
+    title: "pr under review",
+    roles: [],
+    claim: null,
+    attempts: [],
+    pr: { review: "pending" },
+  };
+  const inReviewSource = Layer.succeed(
+    WorkSource.WorkSource,
+    stub({ observe: () => Effect.succeed([inReviewItem]) }),
+  );
+  const workerWithInReview = Reconcile.layer.pipe(
+    Layer.provide(Layer.mergeAll(registryLayer, inReviewSource)),
+  );
+
+  it.effect("retains a non-actionable but open ticket in the observed set", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      const state = (yield* worker.snapshot).workspaces[0];
+      assert.strictEqual(state?.eligible.length, 0);
+      assert.strictEqual(state?.claimed.length, 0);
+      assert.strictEqual(state?.blocked.length, 0);
+      assert.deepStrictEqual(
+        state?.observed.map((item) => item.id),
+        [id("AUD-2")],
+      );
+    }).pipe(Effect.provide(workerWithInReview), Effect.scoped),
+  );
+
   const authFailingSource = Layer.succeed(
     WorkSource.WorkSource,
     stub({

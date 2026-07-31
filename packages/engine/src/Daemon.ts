@@ -68,7 +68,7 @@ interface ReconcilableWorkspace {
 }
 
 const activeTicketKeys = (state: WorkspaceReconcileState) =>
-  [...state.eligible, ...state.claimed, ...state.blocked].map((item) => ticketSlug(item.id));
+  state.observed.map((item) => ticketSlug(item.id));
 
 const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   const registry = yield* WorkspaceRegistry;

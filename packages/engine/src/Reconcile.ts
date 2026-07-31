@@ -3,6 +3,7 @@ import type {
   BlockedItem,
   ClaimedItem,
   PollState,
+  WorkItemId,
   WorkspaceId,
 } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
@@ -14,7 +15,12 @@ import * as Ref from "effect/Ref";
 import { type Classification, classify } from "./classify";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./Registry";
-import { WorkSource } from "./WorkSource";
+import { type ObservedItem, WorkSource } from "./WorkSource";
+
+export interface ObservedRef {
+  readonly id: WorkItemId;
+  readonly title: string;
+}
 
 export interface ReconcileReceipt {
   readonly workspaces: number;
@@ -29,6 +35,7 @@ export interface WorkspaceReconcileState {
   readonly eligible: ReadonlyArray<ActionableItem>;
   readonly claimed: ReadonlyArray<ClaimedItem>;
   readonly blocked: ReadonlyArray<BlockedItem>;
+  readonly observed: ReadonlyArray<ObservedRef>;
 }
 
 export interface ReconcileSnapshot {
@@ -39,12 +46,17 @@ interface ReconcileJob {
   readonly receipt: Deferred.Deferred<ReconcileReceipt>;
 }
 
-const okState = (workspace: RegisteredWorkspace, classified: Classification): WorkspaceReconcileState => ({
+const okState = (
+  workspace: RegisteredWorkspace,
+  observed: ReadonlyArray<ObservedItem>,
+  classified: Classification,
+): WorkspaceReconcileState => ({
   name: workspace.config.name,
   poll: { status: "ok" },
   eligible: classified.eligible,
   claimed: classified.claimed,
   blocked: classified.blocked,
+  observed: observed.map((item) => ({ id: item.id, title: item.title })),
 });
 
 const pausedState = (workspace: RegisteredWorkspace, message: string): WorkspaceReconcileState => ({
@@ -53,6 +65,7 @@ const pausedState = (workspace: RegisteredWorkspace, message: string): Workspace
   eligible: [],
   claimed: [],
   blocked: [],
+  observed: [],
 });
 
 export const make = Effect.gen(function* () {
@@ -63,7 +76,7 @@ export const make = Effect.gen(function* () {
 
   const pollWorkspace = (workspace: RegisteredWorkspace) =>
     workSource.observe(workspace).pipe(
-      Effect.map((items) => okState(workspace, classify(items))),
+      Effect.map((items) => okState(workspace, items, classify(items))),
       Effect.catchTag("WorkSourceError", (error) =>
         Effect.gen(function* () {
           yield* Effect.logWarning("work source polling paused", {
