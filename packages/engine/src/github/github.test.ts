@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
+import type { FollowUpMarker } from "../followUp";
 import type { RegisteredWorkspace } from "../projector";
 import { WorkSource } from "../WorkSource";
 import { layer as adapterLayer } from "./adapter";
@@ -16,7 +17,7 @@ import {
   type RawComment,
   type RawPull,
 } from "./client";
-import { hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
+import { defaultStatus, hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -457,22 +458,108 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("posts triage proposals as a separate comment from the coordination comment", () =>
+  it.effect("folds the triage proposal into the one coordination comment and keeps it there", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const client = yield* GitHubClient;
+      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
+      const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
+      yield* source.claim(workspace, id("#16"), claim);
+      yield* source.note(workspace, id("#16"), "Triage proposal body");
+      yield* source.recordAttempt(workspace, id("#16"), attempt);
       yield* source.claim(workspace, id("#16"), {
         by: "clanker-forge",
-        claimedAtMillis: 1,
-        stage: "triage",
+        claimedAtMillis: 3,
+        stage: "implement",
       });
-      yield* source.comment(workspace, id("#16"), "Triage proposal body");
       const comments = botComments(yield* client.listComments(repo, 16));
-      assert.strictEqual(comments.length, 2);
-      assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
-      assert.strictEqual(comments.filter((comment) => comment.body === "Triage proposal body").length, 1);
+      assert.strictEqual(comments.length, 1);
+      const body = comments[0]?.body ?? "";
+      assert.isTrue(hasLedgerMarker(body));
+      assert.include(body, "Triage proposal body");
+      assert.include(body, "Currently implementing this issue.");
+      assert.notInclude(body, "Currently triaging this issue.");
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#16");
+      assert.deepStrictEqual(observed?.attempts, [attempt]);
+      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 3 });
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] })),
+    ),
+  );
+
+  it.effect("replaces the previous proposal when triage runs again", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      yield* source.note(workspace, id("#17"), "First proposal");
+      yield* source.note(workspace, id("#17"), "Second proposal");
+      const comments = botComments(yield* client.listComments(repo, 17));
+      assert.strictEqual(comments.length, 1);
+      assert.notInclude(comments[0]?.body ?? "", "First proposal");
+      assert.include(comments[0]?.body ?? "", "Second proposal");
+      assert.include(comments[0]?.body ?? "", defaultStatus);
+    }).pipe(
+      Effect.provide(withClient({ issues: [{ number: 17, title: "rerun", labels: ["needs-triage"] }] })),
+    ),
+  );
+
+  it.effect("lets the coordination comment outrank a legacy marker comment written after it", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const stale: FollowUpMarker = { checks: "pending", humanCommentAtMillis: 1, noProgress: 0 };
+      const current: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 9, noProgress: 2 };
+      yield* source.recordFollowUp(workspace, id("#19"), current);
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#19");
+      assert.notDeepEqual(observed?.pr?.followUp, stale);
+      assert.deepStrictEqual(observed?.pr?.followUp, current);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 19, title: "legacy follow-up", labels: ["ready-for-agent"] },
+            { number: 102, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 102, body: "Closes #19" })],
+          comments: [
+            {
+              issue: 19,
+              authorLogin: bot.login,
+              body: "<!-- clanker-forge:ledger -->\n<!-- clanker-forge:claim by=clanker-forge at=1 -->",
+              createdAtMillis: 1,
+            },
+            {
+              issue: 19,
+              authorLogin: bot.login,
+              body: serializeFollowUp({ checks: "pending", humanCommentAtMillis: 1, noProgress: 0 }),
+              createdAtMillis: 2,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("records a follow-up marker with a visible status instead of a marker-only comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      const marker: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 4, noProgress: 1 };
+      yield* source.recordFollowUp(workspace, id("#18"), marker);
+      const comments = botComments(yield* client.listComments(repo, 18));
+      assert.strictEqual(comments.length, 1);
+      assert.include(comments[0]?.body ?? "", defaultStatus);
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#18");
+      assert.deepStrictEqual(observed?.pr?.followUp, marker);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 18, title: "in review", labels: ["ready-for-agent"] },
+            { number: 101, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 101, body: "Closes #18" })],
+        }),
+      ),
     ),
   );
 });
