@@ -1,0 +1,23 @@
+packages/engine/CONTEXT.md
+  s_e21cb95880eecb::t_5980a1f1b7fac1 49,57-58
+CONTEXT-MAP.md
+  s_e21cb95880eecb::t_b279805e813376 47
+skills/triage-agent/SKILL.md
+  s_e21cb95880eecb::t_bd973d9568b6d0 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "bd0e935ad5f5d8c56245a1a2fb2fb664f1895a71",
+  "prompts": {},
+  "sessions": {
+    "s_e21cb95880eecb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "888c4659-87d3-4394-a263-63e6e5987c3d",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
