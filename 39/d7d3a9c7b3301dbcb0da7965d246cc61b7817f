@@ -1,0 +1,43 @@
+packages/engine/src/playbook.test.ts
+  s_0b4491292a3500::t_907e47662c7059 54-97
+  s_0b4491292a3500::t_c8629d0524e66b 4-11
+  s_0b4491292a3500::t_0e8d3b4950cef0 98
+packages/engine/src/Playbook.ts
+  s_0b4491292a3500::t_f3cf00cefac0f1 105-116
+  s_0b4491292a3500::t_5b01661f840272 42,48,59
+  s_0b4491292a3500::t_0132faa9602e51 117
+  s_b7a9ae2d0b72f8::t_6dfba6d895e0c0 1-7,30-41,43-47,49-52,75-84,86-89,100-102,104,118-119,122
+  s_0b4491292a3500::t_8b20da7e39240f 121
+  s_0b4491292a3500::t_9eb5c6539471c3 85
+  s_0b4491292a3500::t_4c44b067281ee4 103
+  s_0b4491292a3500::t_ea30a99bcfed1c 23-29,53-56,60-61,63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "39d7d3a9c7b3301dbcb0da7965d246cc61b7817f",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_0b4491292a3500": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "13c45b46-5dea-40fe-9e25-75005b1e6c64",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b7a9ae2d0b72f8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cfb55977-7107-44db-b4b0-b9f3e407cb4f",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
