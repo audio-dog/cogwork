@@ -1,24 +1,28 @@
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import { exec, execFile } from "node:child_process";
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import * as fs from "node:fs/promises";
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import * as path from "node:path";
-import { promisify } from "node:util";
 import { Git, Worktree, WorktreeFs } from "@clanker-forge/engine";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-
-const execFileAsync = promisify(execFile);
-const execAsync = promisify(exec);
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as Stream from "effect/Stream";
+import * as ChildProcess from "effect/unstable/process/ChildProcess";
+import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 
 const describe = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
-const runGit = (cwd: string, args: ReadonlyArray<string>) =>
-  Effect.tryPromise({
-    try: () => execFileAsync("git", [...args], { cwd }),
-    catch: (cause) => new Git.GitError({ command: `git ${args.join(" ")}`, message: describe(cause) }),
-  }).pipe(Effect.map((result) => result.stdout));
+const captureWith = (spawner: ChildProcessSpawner["Service"]) => (command: ChildProcess.Command) =>
+  Effect.scoped(
+    Effect.flatMap(spawner.spawn(command), (handle) =>
+      Effect.all(
+        {
+          stdout: Stream.mkString(Stream.decodeText(handle.stdout)),
+          stderr: Stream.mkString(Stream.decodeText(handle.stderr)),
+          exitCode: handle.exitCode,
+        },
+        { concurrency: "unbounded" },
+      ),
+    ),
+  );
 
 const parseWorktrees = (stdout: string) =>
   stdout
@@ -35,54 +39,90 @@ const parseWorktrees = (stdout: string) =>
       return [{ path: worktreePath, branch: branchRef ? branchRef.replace("refs/heads/", "") : null }];
     });
 
-const gitImpl: Git.GitService = {
-  fetch: (repoPath, remote) => runGit(repoPath, ["fetch", remote]).pipe(Effect.asVoid),
-  remoteBranchExists: (repoPath, remote, branch) =>
-    runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
-      Effect.map(() => true),
-      Effect.catchTag("GitError", () => Effect.succeed(false)),
-    ),
-  addWorktree: ({ repoPath, worktreePath, branch, startPoint }) =>
-    runGit(repoPath, ["worktree", "add", "-B", branch, worktreePath, startPoint]).pipe(Effect.asVoid),
-  removeWorktree: (repoPath, worktreePath, force) =>
-    runGit(repoPath, ["worktree", "remove", ...(force ? ["--force"] : []), worktreePath]).pipe(
-      Effect.andThen(runGit(repoPath, ["worktree", "prune"])),
-      Effect.asVoid,
-    ),
-  listWorktrees: (repoPath) =>
-    runGit(repoPath, ["worktree", "list", "--porcelain"]).pipe(Effect.map(parseWorktrees)),
-  fastForward: (worktreePath, remote, branch) =>
-    runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
-};
+export const gitLayer = Layer.effect(
+  Git.Git,
+  Effect.gen(function* () {
+    const capture = captureWith(yield* ChildProcessSpawner);
 
-export const gitLayer = Layer.succeed(Git.Git, gitImpl);
+    const runGit = (cwd: string, args: ReadonlyArray<string>) => {
+      const command = `git ${args.join(" ")}`;
+      const fail = (message: string) => new Git.GitError({ command, message });
+      return capture(ChildProcess.make("git", [...args], { cwd })).pipe(
+        Effect.mapError((cause) => fail(describe(cause))),
+        Effect.flatMap((result) =>
+          result.exitCode === 0
+            ? Effect.succeed(result.stdout)
+            : fail(result.stderr.trim() || `exited with code ${result.exitCode}`),
+        ),
+      );
+    };
 
-const worktreeFsImpl: WorktreeFs.WorktreeFsService = {
-  linkFile: (target, linkPath) =>
-    Effect.tryPromise({
-      try: () =>
+    return {
+      fetch: (repoPath, remote) => runGit(repoPath, ["fetch", remote]).pipe(Effect.asVoid),
+      remoteBranchExists: (repoPath, remote, branch) =>
+        runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
+          Effect.map(() => true),
+          Effect.catchTag("GitError", () => Effect.succeed(false)),
+        ),
+      addWorktree: ({ repoPath, worktreePath, branch, startPoint }) =>
+        runGit(repoPath, ["worktree", "add", "-B", branch, worktreePath, startPoint]).pipe(Effect.asVoid),
+      removeWorktree: (repoPath, worktreePath, force) =>
+        runGit(repoPath, ["worktree", "remove", ...(force ? ["--force"] : []), worktreePath]).pipe(
+          Effect.andThen(runGit(repoPath, ["worktree", "prune"])),
+          Effect.asVoid,
+        ),
+      listWorktrees: (repoPath) =>
+        runGit(repoPath, ["worktree", "list", "--porcelain"]).pipe(Effect.map(parseWorktrees)),
+      fastForward: (worktreePath, remote, branch) =>
+        runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
+    } satisfies Git.GitService;
+  }),
+);
+
+export const worktreeFsLayer = Layer.effect(
+  WorktreeFs.WorktreeFs,
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const capture = captureWith(yield* ChildProcessSpawner);
+
+    const fail = (operation: string) => (cause: unknown) =>
+      new WorktreeFs.WorktreeFsError({ operation, message: describe(cause) });
+
+    return {
+      linkFile: (target, linkPath) =>
         fs
-          .mkdir(path.dirname(linkPath), { recursive: true })
-          .then(() => fs.rm(linkPath, { force: true }))
-          .then(() => fs.symlink(target, linkPath)),
-      catch: (cause) =>
-        new WorktreeFs.WorktreeFsError({ operation: `link ${linkPath}`, message: describe(cause) }),
-    }),
-  runCommand: (cwd, command) =>
-    Effect.tryPromise({
-      try: () => execAsync(command, { cwd }),
-      catch: (cause) => new WorktreeFs.WorktreeFsError({ operation: command, message: describe(cause) }),
-    }).pipe(Effect.asVoid),
-  stat: (target) =>
-    Effect.promise(() =>
-      fs
-        .stat(target)
-        .then((entry) => ({ mtimeMillis: entry.mtimeMs }))
-        .catch(() => null),
-    ),
-};
-
-export const worktreeFsLayer = Layer.succeed(WorktreeFs.WorktreeFs, worktreeFsImpl);
+          .makeDirectory(path.dirname(linkPath), { recursive: true })
+          .pipe(
+            Effect.andThen(fs.remove(linkPath, { force: true })),
+            Effect.andThen(fs.symlink(target, linkPath)),
+            Effect.mapError(fail(`link ${linkPath}`)),
+          ),
+      runCommand: (cwd, command) =>
+        capture(ChildProcess.make(command, { cwd, shell: true })).pipe(
+          Effect.mapError(fail(command)),
+          Effect.flatMap((result) =>
+            result.exitCode === 0
+              ? Effect.void
+              : new WorktreeFs.WorktreeFsError({
+                  operation: command,
+                  message: result.stderr.trim() || `exited with code ${result.exitCode}`,
+                }),
+          ),
+        ),
+      stat: (target) =>
+        fs.stat(target).pipe(
+          Effect.map((info) =>
+            Option.match(info.mtime, {
+              onNone: () => null,
+              onSome: (mtime) => ({ mtimeMillis: mtime.getTime() }),
+            }),
+          ),
+          Effect.orElseSucceed(() => null),
+        ),
+    } satisfies WorktreeFs.WorktreeFsService;
+  }),
+);
 
 export const worktreeManagerLayer = Worktree.managerLayer.pipe(
   Layer.provide(Layer.mergeAll(gitLayer, worktreeFsLayer)),
