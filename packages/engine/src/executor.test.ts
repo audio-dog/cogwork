@@ -5,11 +5,11 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Executor from "../src/Executor";
-import { HarnessError, type HarnessEvent, type HarnessRunner, layer as harnessLayer } from "../src/Harness";
-import type { RegisteredWorkspace } from "../src/projector";
-import * as RunLedger from "../src/RunLedger";
-import { WorkSource, type WorkSourceService } from "../src/WorkSource";
+import * as Executor from "./Executor";
+import { HarnessError, type HarnessEvent, type HarnessRunner, layer as harnessLayer } from "./Harness";
+import type { RegisteredWorkspace } from "./projector";
+import * as RunLedger from "./RunLedger";
+import { WorkSource, type WorkSourceService } from "./WorkSource";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const id = Schema.decodeSync(WorkItemId);
@@ -26,6 +26,16 @@ const workspace: RegisteredWorkspace = {
 };
 
 const triageItem = { id: id("#7"), title: "broken export", stage: "triage" as const, priorFailures: 0 };
+
+const disabledWorkspace: RegisteredWorkspace = {
+  source: workspace.source,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh",
+    checkoutPath: "/repos/gh",
+    workSource: { type: "github", repo: "owner/repo" },
+    harness: { preferred: "cursor" },
+  }),
+};
 
 interface Call {
   readonly method: string;
@@ -237,19 +247,10 @@ describe("Executor.execute", () => {
   it.effect("does nothing when triage is disabled in the playbook", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
-      const disabled: RegisteredWorkspace = {
-        source: workspace.source,
-        config: Schema.decodeSync(WorkspaceConfig)({
-          name: "gh",
-          checkoutPath: "/repos/gh",
-          workSource: { type: "github", repo: "owner/repo" },
-          harness: { preferred: "cursor" },
-        }),
-      };
       const layer = provide(recorder(calls), [runner(successEvents)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        yield* executor.execute(disabled, triageItem);
+        yield* executor.execute(disabledWorkspace, triageItem);
         assert.deepStrictEqual(yield* Ref.get(calls), []);
       }).pipe(Effect.provide(layer));
     }),

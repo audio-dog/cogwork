@@ -4,9 +4,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { type AddWorktreeArgs, Git, type GitService, type WorktreeEntry } from "../src/Git";
-import * as Worktree from "../src/Worktree";
-import { type FileStat, WorktreeFs, type WorktreeFsService } from "../src/WorktreeFs";
+import { type AddWorktreeArgs, Git, type GitService, type WorktreeEntry } from "./Git";
+import * as Worktree from "./Worktree";
+import { type FileStat, WorktreeFs, type WorktreeFsService } from "./WorktreeFs";
 
 const decodeConfig = Schema.decodeSync(WorkspaceConfig);
 
@@ -32,7 +32,7 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
   };
 });
 
-type Recorder = Effect.Success<typeof makeRecorder>;
+type Recorder = Effect.Success<ReturnType<typeof makeRecorder>>;
 
 const fakeGit = (
   recorder: Recorder,

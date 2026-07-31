@@ -4,12 +4,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { classify } from "../src/classify";
-import { layer as adapterLayer } from "../src/github/adapter";
-import { GitHubClient, type GitHubClientService, type RawComment, type RawPull } from "../src/github/client";
-import { serializeAttempt } from "../src/github/markers";
-import type { RegisteredWorkspace } from "../src/projector";
-import { WorkSource } from "../src/WorkSource";
+import { classify } from "../classify";
+import type { RegisteredWorkspace } from "../projector";
+import { WorkSource } from "../WorkSource";
+import { layer as adapterLayer } from "./adapter";
+import { GitHubClient, type GitHubClientService, type RawComment, type RawPull } from "./client";
+import { serializeAttempt } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -57,8 +57,9 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
           })),
         ),
       ),
-    listPulls: () => Effect.succeed(pulls),
-    listComments: (_repo, number) => Ref.get(commentsRef).pipe(Effect.map((all) => all.get(number) ?? [])),
+    listPulls: () => Effect.succeed([...pulls]),
+    listComments: (_repo, number) =>
+      Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     addLabel: (_repo, number, label) =>
       patch(number, (issue) => ({ ...issue, labels: [...issue.labels, label] })),
     removeLabel: (_repo, number, label) =>
@@ -192,7 +193,7 @@ describe("github work source adapter", () => {
       assert.strictEqual(eligible.length, 0);
       assert.include(
         blocked.map((entry) => entry.id),
-        "#9",
+        id("#9"),
       );
     }).pipe(
       Effect.provide(

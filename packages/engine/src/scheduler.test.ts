@@ -7,14 +7,14 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
-import type { EligibleWork } from "../src/classify";
-import * as Executor from "../src/Executor";
-import type { RegisteredWorkspace } from "../src/projector";
-import * as Reconcile from "../src/Reconcile";
-import * as Registry from "../src/Registry";
-import * as Scheduler from "../src/Scheduler";
-import type { ObservedItem } from "../src/WorkSource";
-import { WorkSource, type WorkSourceService } from "../src/WorkSource";
+import type { EligibleWork } from "./classify";
+import * as Executor from "./Executor";
+import type { RegisteredWorkspace } from "./projector";
+import * as Reconcile from "./Reconcile";
+import * as Registry from "./Registry";
+import * as Scheduler from "./Scheduler";
+import type { ObservedItem } from "./WorkSource";
+import { WorkSource, type WorkSourceService } from "./WorkSource";
 
 const id = Schema.decodeSync(WorkItemId);
 

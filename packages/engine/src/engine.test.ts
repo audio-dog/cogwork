@@ -4,12 +4,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
-import * as Daemon from "../src/Daemon";
-import * as Reconcile from "../src/Reconcile";
-import * as Registry from "../src/Registry";
-import * as Scheduler from "../src/Scheduler";
-import type { ObservedItem } from "../src/WorkSource";
-import * as WorkSource from "../src/WorkSource";
+import * as Daemon from "./Daemon";
+import * as Reconcile from "./Reconcile";
+import * as Registry from "./Registry";
+import * as RunLedger from "./RunLedger";
+import * as Scheduler from "./Scheduler";
+import type { ObservedItem } from "./WorkSource";
+import * as WorkSource from "./WorkSource";
 
 const validModule: Registry.LoadedWorkspace = {
   source: "example.workspace.ts",
@@ -120,6 +121,7 @@ describe("reconcile worker", () => {
     id: id("AUD-1"),
     title: "first ticket",
     roles: ["ready-for-agent"],
+    claimLabeled: false,
     claim: null,
     attempts: [],
     pr: null,
@@ -155,6 +157,7 @@ describe("reconcile worker", () => {
     id: id("AUD-2"),
     title: "pr under review",
     roles: [],
+    claimLabeled: false,
     claim: null,
     attempts: [],
     pr: { review: "pending" },
@@ -236,6 +239,7 @@ describe("daemon status over rpc", () => {
     Layer.provideMerge(workerLayer),
     Layer.provideMerge(registryLayer),
     Layer.provideMerge(schedulerStub),
+    Layer.provideMerge(RunLedger.layerMemory),
   );
 
   it.effect("reports health, registered workspaces, their derived work, and failures", () =>

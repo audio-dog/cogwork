@@ -9,7 +9,7 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { layerMemory, RunLedger } from "../src/RunLedger";
+import { layerMemory, RunLedger } from "./RunLedger";
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");

@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
-import { linkedIssue, prReview } from "../src/github/adapter";
-import { type RawPull, reviewDecisionOf } from "../src/github/client";
+import { linkedIssue, prReview } from "./adapter";
+import { type RawPull, reviewDecisionOf } from "./client";
 
 const review = (login: string, state: string) => ({ login, state });
 
