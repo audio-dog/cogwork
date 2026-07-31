@@ -1,0 +1,28 @@
+packages/engine/src/Executor.ts
+  s_19bc81255f20b1::t_1f67bd8322e326 12,31,96-104,168,172-174,176-179,181-186,192-201,258-267,313,323,363-364,404,456-467
+  s_19bc81255f20b1::t_67ae21524c255a 153,156-158
+  s_19bc81255f20b1::t_bc81cc922543c3 11,468-472
+packages/engine/src/executor.test.ts
+  s_19bc81255f20b1::t_d5c8aefafab5a0 501,521-524,528
+  s_19bc81255f20b1::t_125532a4411de9 160,170-176
+  s_19bc81255f20b1::t_7c5a99025383fc 401
+  s_19bc81255f20b1::t_c4a2232e09edb1 332-334,336-338
+  s_19bc81255f20b1::t_6fb5cd71330073 357-359,361
+  s_19bc81255f20b1::t_1392cd73c04f05 652-655,657
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "0662f8843ddb8490054fbc82fa81420611e5677f",
+  "prompts": {},
+  "sessions": {
+    "s_19bc81255f20b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "76b9e526-453e-48e8-ad6a-b8eb58dad638",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
