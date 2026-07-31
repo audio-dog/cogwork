@@ -1,0 +1,28 @@
+packages/cursor-acp/src/harness.ts
+  s_748cc837e473b1::t_8af9bc842f18bc 15
+  s_748cc837e473b1::t_61023b495d3fe4 69
+  s_748cc837e473b1::t_f17f134127654b 81
+.gitignore
+  s_748cc837e473b1::t_e39057646a9294 19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "c7b6ef92e1cef7050bd39032de0e222494680419",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_748cc837e473b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ab44bfa3-775f-46ce-a212-26786adcf808",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
