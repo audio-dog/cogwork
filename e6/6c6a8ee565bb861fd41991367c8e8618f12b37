@@ -1,0 +1,91 @@
+apps/cli/src/rpc.ts
+  s_181f054174c359::t_2e0b46e4c9a5b7 3
+  s_181f054174c359::t_699d7e9b3c7f47 22-23
+  s_181f054174c359::t_46158c344aee1f 62-68
+packages/engine/src/Playbook.ts
+  s_181f054174c359::t_b0afe650d98833 28-30
+  s_181f054174c359::t_fb017c308cd93d 1
+packages/engine/src/Executor.ts
+  s_181f054174c359::t_e5a0ac8bb9a573 187,193,198
+  s_181f054174c359::t_b12ebb48efa082 68
+  s_181f054174c359::t_c460c7b5f79997 141
+  s_181f054174c359::t_f8db5c30807107 1,11,14-20
+  s_181f054174c359::t_a8da61a75a9400 44-45
+  s_181f054174c359::t_5bfe012e7aee17 98
+  s_181f054174c359::t_d783eefc8f016b 117,127-128,132
+  s_181f054174c359::t_535489d4627f3e 151
+  s_181f054174c359::t_35800fd9d5cadc 184,186,189,201
+packages/contracts/src/workspace.ts
+  s_181f054174c359::t_10aeb6b0602551 51
+apps/cli/src/commands.ts
+  s_181f054174c359::t_38f4ba9ea515e6 64
+  s_181f054174c359::t_182e27698e83fe 34-43
+  s_181f054174c359::t_8d6413d3a88fd2 169-170,172-173
+packages/engine/src/classify.ts
+  s_181f054174c359::t_341736c8a95365 12-15,17
+  s_181f054174c359::t_8d115329563be5 23
+  s_181f054174c359::t_4506bd818465e5 50-52,55,61-65
+packages/engine/src/Reconcile.ts
+  s_181f054174c359::t_f583f919f3ce24 8
+  s_181f054174c359::t_94d3fd9a820e0a 28
+  s_181f054174c359::t_ca6197ae5d6009 1
+packages/engine/src/Daemon.ts
+  s_181f054174c359::t_715f30b77c2101 34
+  s_181f054174c359::t_087feec5687b53 11
+  s_181f054174c359::t_12e43648ec7d5a 111-116,119-120
+packages/engine/test/scheduler.test.ts
+  s_181f054174c359::t_234f6b530fd7ab 1-20,23-178,180-201,203-204,206-223,225-237,239-240,242-250,252-269,271-275,277-283,285-339,341-346
+  s_181f054174c359::t_9a04756a1af5b8 22
+  s_181f054174c359::t_5bf327467e9aa0 205
+  s_181f054174c359::t_f77f6bafbebf98 251
+  s_181f054174c359::t_245465d6426bc5 340
+  s_181f054174c359::t_9dc2fe660cb9d5 224
+  s_181f054174c359::t_ec33fbba4fc89b 21
+  s_181f054174c359::t_cb720e4cb11d03 270,276,284
+  s_181f054174c359::t_e60fdc7a589bad 179,202,238
+  s_181f054174c359::t_03396e16b05908 241
+packages/engine/src/index.ts
+  s_181f054174c359::t_b3b117fe67cb7c 11
+packages/engine/src/Scheduler.ts
+  s_181f054174c359::t_72ade24df6ff59 14
+  s_181f054174c359::t_af3ed2466e5ff0 26,34,37-39
+  s_181f054174c359::t_adf80ed1cc2a3a 11
+  s_181f054174c359::t_7898045b1e68c0 98
+  s_181f054174c359::t_1ab2d4692c6a83 140
+  s_8e87c2f7a4a282::t_71c498cac88b10 67,75-78,84
+  s_181f054174c359::t_2ea7d6539918c1 163
+  s_181f054174c359::t_a36e29f4ac3120 2-10,12-13,15-25,27-33,35-36,41-65,68-73,85,87-97,100-109,111-115,119-138,141-157,177-184,186-211
+  s_181f054174c359::t_a97a2ac3ca6458 1,40,66,74,79-83,86,99,110,116-118,139,158-162,164-176,185
+packages/engine/test/executor.test.ts
+  s_181f054174c359::t_e72b3868a6a60c 203-223
+  s_181f054174c359::t_03171c2f39bfbb 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "e66c6a8ee565bb861fd41991367c8e8618f12b37",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_181f054174c359": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cf85be62-15af-48e2-a2f7-8b560e3d45ce",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8e87c2f7a4a282": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a663bcad-062f-4d25-9667-8524c0425887",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
