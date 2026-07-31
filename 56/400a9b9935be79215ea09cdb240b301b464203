@@ -1,0 +1,26 @@
+packages/engine/src/executor.test.ts
+  s_70b28cf86aa091::t_7db96d162961fd 610-613
+  s_70b28cf86aa091::t_4e8c81d2cbb591 171-172
+packages/engine/src/WorkSource.ts
+  s_70b28cf86aa091::t_6a236787d6d452 59-64
+packages/engine/src/Executor.ts
+  s_70b28cf86aa091::t_8fde16c07f769c 374,377
+packages/engine/src/github/adapter.ts
+  s_70b28cf86aa091::t_3a9062ea83e0fa 246,249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "56400a9b9935be79215ea09cdb240b301b464203",
+  "prompts": {},
+  "sessions": {
+    "s_70b28cf86aa091": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1d29bc55-8570-462c-a622-6b179fb5dbb8",
+        "model": "default"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
