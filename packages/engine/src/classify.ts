@@ -47,8 +47,11 @@ const stageFor = (item: ObservedItem) => {
 
 export const maxAttemptsPerStage = 3;
 
-const failedAttempts = (item: ObservedItem, stage: LifecycleStage) =>
-  item.attempts.filter((attempt) => attempt.stage === stage && attempt.outcome === "failed").length;
+const consecutiveFailures = (item: ObservedItem, stage: LifecycleStage) => {
+  const forStage = item.attempts.filter((attempt) => attempt.stage === stage);
+  const lastNonFailure = forStage.findLastIndex((attempt) => attempt.outcome !== "failed");
+  return forStage.length - (lastNonFailure + 1);
+};
 
 const classifyOne = (item: ObservedItem): Outcome => {
   if (item.roles.includes("wontfix")) return { kind: "drop" };
@@ -58,7 +61,7 @@ const classifyOne = (item: ObservedItem): Outcome => {
   if (item.roles.includes("ready-for-human")) return { kind: "blocked", reason: "ready-for-human" };
   const stage = stageFor(item);
   if (!stage) return { kind: "drop" };
-  const failures = failedAttempts(item, stage);
+  const failures = consecutiveFailures(item, stage);
   if (failures >= maxAttemptsPerStage) return { kind: "blocked", reason: "ready-for-human" };
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
   return { kind: "eligible", stage, priorFailures: failures, followUp };
