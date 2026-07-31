@@ -166,7 +166,8 @@ const workSourceStub = (service: Partial<WorkSourceService>) =>
     claim: () => Effect.void,
     release: () => Effect.void,
     recordAttempt: () => Effect.void,
-    comment: () => Effect.void,
+    recordFollowUp: () => Effect.void,
+    note: () => Effect.void,
     setRoles: () => Effect.void,
     ...service,
   });

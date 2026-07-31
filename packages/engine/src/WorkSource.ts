@@ -3,7 +3,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import type { ObservedPr } from "./followUp";
+import type { FollowUpMarker, ObservedPr } from "./followUp";
 import type { RegisteredWorkspace } from "./projector";
 
 export type { FollowUpMarker, ObservedPr, PrReview } from "./followUp";
@@ -56,7 +56,10 @@ const releaseEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId) => fa
 const recordAttemptEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _attempt: AttemptRecord) =>
   failWhenRemote(workspace);
 
-const commentEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _body: string) =>
+const recordFollowUpEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _marker: FollowUpMarker) =>
+  failWhenRemote(workspace);
+
+const noteEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _detail: string) =>
   failWhenRemote(workspace);
 
 const setRolesEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _changes: RoleChanges) =>
@@ -67,7 +70,8 @@ export const makeEmpty = Effect.succeed({
   claim: claimEmpty,
   release: releaseEmpty,
   recordAttempt: recordAttemptEmpty,
-  comment: commentEmpty,
+  recordFollowUp: recordFollowUpEmpty,
+  note: noteEmpty,
   setRoles: setRolesEmpty,
 } as const);
 

@@ -34,10 +34,13 @@ const markerPattern = (name: string) => new RegExp(`<!--\\s*clanker-forge:${name
 
 const anyMarkerPattern = /<!--\s*clanker-forge:[^>]*-->/g;
 const ledgerMarkerPattern = /<!--\s*clanker-forge:ledger\s*-->/;
+const detailMarkerPattern = /<!--\s*clanker-forge:detail\s*-->/;
 
 export const stripMarkers = (text: string) => text.replace(anyMarkerPattern, "");
 
 export const ledgerMarker = "<!-- clanker-forge:ledger -->";
+
+const detailMarker = "<!-- clanker-forge:detail -->";
 
 export const hasLedgerMarker = (body: string) => ledgerMarkerPattern.test(body);
 
@@ -106,10 +109,42 @@ export const attemptStatus = (attempt: AttemptRecord) => {
   return `Last ${attempt.stage} attempt failed.`;
 };
 
+export const defaultStatus = "Working on this issue.";
+
+const attribution = "> *This was posted by clanker-forge.*";
+
+const before = (body: string, pattern: RegExp) => {
+  const at = body.search(pattern);
+  return at < 0 ? body : body.slice(0, at);
+};
+
+const after = (body: string, pattern: RegExp) => {
+  const match = pattern.exec(body);
+  return match ? body.slice(match.index + match[0].length) : "";
+};
+
+const orNull = (text: string) => text.trim() || null;
+
+export const coordinationStatus = (body: string) =>
+  orNull(before(body, ledgerMarkerPattern).replace(attribution, ""));
+
+export const coordinationDetail = (body: string) => orNull(after(body, detailMarkerPattern));
+
 export const coordinationMarkers = (body: string) =>
-  [...body.matchAll(anyMarkerPattern)]
+  [...before(body, detailMarkerPattern).matchAll(anyMarkerPattern)]
     .map((match) => match[0])
     .filter((marker) => !ledgerMarkerPattern.test(marker));
 
-export const formatCoordinationBody = (status: string, markers: ReadonlyArray<string>) =>
-  ["> *This was posted by clanker-forge.*", "", status, "", ledgerMarker, ...markers].join("\n");
+interface CoordinationBody {
+  readonly status: string;
+  readonly markers: ReadonlyArray<string>;
+  readonly detail: string | null;
+}
+
+const detailSection = (detail: string | null) => {
+  const visible = orNull(stripMarkers(detail ?? ""));
+  return visible === null ? [] : ["", detailMarker, "", visible];
+};
+
+export const formatCoordinationBody = ({ status, markers, detail }: CoordinationBody) =>
+  [attribution, "", status, "", ledgerMarker, ...markers, ...detailSection(detail)].join("\n");

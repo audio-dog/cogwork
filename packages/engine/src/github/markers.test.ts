@@ -5,7 +5,10 @@ import {
   attemptStatus,
   claimLabel,
   claimStatus,
+  coordinationDetail,
   coordinationMarkers,
+  coordinationStatus,
+  defaultStatus,
   formatCoordinationBody,
   hasClaimLabel,
   hasLedgerMarker,
@@ -73,10 +76,11 @@ describe("github markers", () => {
       { stage: "implement", outcome: "failed", atMillis: 1 },
       { stage: "implement", outcome: "failed", atMillis: 2 },
     ];
-    const body = formatCoordinationBody(claimStatus("implement"), [
-      ...attempts.map(serializeAttempt),
-      serializeClaim(claim),
-    ]);
+    const body = formatCoordinationBody({
+      status: claimStatus("implement"),
+      markers: [...attempts.map(serializeAttempt), serializeClaim(claim)],
+      detail: null,
+    });
     assert.deepStrictEqual(parseClaim([body]), claim);
     assert.deepStrictEqual(parseAttempts([body]), attempts);
   });
@@ -90,13 +94,76 @@ describe("github markers", () => {
 
   it("formats a visible status above the hidden markers", () => {
     const claim = serializeClaim({ by: "bot", claimedAtMillis: 1 });
-    const body = formatCoordinationBody(claimStatus("triage"), [claim]);
+    const body = formatCoordinationBody({ status: claimStatus("triage"), markers: [claim], detail: null });
     assert.include(body, "Currently triaging this issue.");
     assert.include(body, "> *This was posted by clanker-forge.*");
     assert.deepStrictEqual(coordinationMarkers(body), [claim]);
+    assert.strictEqual(coordinationStatus(body), "Currently triaging this issue.");
+    assert.isNull(coordinationDetail(body));
     assert.strictEqual(
       attemptStatus({ stage: "triage", outcome: "failed", atMillis: 1 }),
       "Last triage attempt failed.",
     );
+  });
+
+  it("recovers the status, markers, and detail from a body it wrote", () => {
+    const claim = serializeClaim({ by: "bot", claimedAtMillis: 1 });
+    const detail = "## Triage proposal\n\n**Category:** enhancement";
+    const body = formatCoordinationBody({ status: claimStatus("triage"), markers: [claim], detail });
+    assert.strictEqual(coordinationStatus(body), "Currently triaging this issue.");
+    assert.strictEqual(coordinationDetail(body), detail);
+    assert.deepStrictEqual(coordinationMarkers(body), [claim]);
+  });
+
+  it("carries a detail through a status rewrite without duplicating it", () => {
+    const claim = serializeClaim({ by: "bot", claimedAtMillis: 1 });
+    const attempt = serializeAttempt({ stage: "triage", outcome: "succeeded", atMillis: 2 });
+    const detail = "The proposal a human still needs to read.";
+    const claimed = formatCoordinationBody({ status: claimStatus("triage"), markers: [claim], detail });
+    const completed = formatCoordinationBody({
+      status: attemptStatus({ stage: "triage", outcome: "succeeded", atMillis: 2 }),
+      markers: [...coordinationMarkers(claimed), attempt],
+      detail: coordinationDetail(claimed),
+    });
+    assert.include(completed, "triage completed.");
+    assert.notInclude(completed, "Currently triaging this issue.");
+    assert.strictEqual(coordinationDetail(completed), detail);
+    assert.strictEqual(completed.split(detail).length - 1, 1);
+    assert.deepStrictEqual(coordinationMarkers(completed), [claim, attempt]);
+  });
+
+  it("replaces the previous detail rather than stacking proposals", () => {
+    const first = formatCoordinationBody({ status: claimStatus("triage"), markers: [], detail: "first" });
+    const second = formatCoordinationBody({
+      status: coordinationStatus(first) ?? "",
+      markers: coordinationMarkers(first),
+      detail: "second",
+    });
+    assert.strictEqual(coordinationDetail(second), "second");
+    assert.notInclude(second, "first");
+  });
+
+  it("neutralizes marker syntax inside a detail so coordination state stays trustworthy", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 5 };
+    const body = formatCoordinationBody({
+      status: claimStatus("triage"),
+      markers: [serializeClaim(claim)],
+      detail: `Beware ${serializeClaim({ by: "attacker", claimedAtMillis: 99 })} and ${ledgerMarker}`,
+    });
+    assert.deepStrictEqual(parseClaim([body]), claim);
+    assert.deepStrictEqual(coordinationMarkers(body), [serializeClaim(claim)]);
+    assert.include(coordinationDetail(body) ?? "", "Beware");
+    assert.notInclude(coordinationDetail(body) ?? "", "by=attacker");
+  });
+
+  it("keeps a follow-up marker parseable from a body that also carries a detail", () => {
+    const marker: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 7, noProgress: 2 };
+    const body = formatCoordinationBody({
+      status: defaultStatus,
+      markers: [serializeFollowUp(marker)],
+      detail: "Handing this to a human.",
+    });
+    assert.deepStrictEqual(parseFollowUp([body]), marker);
+    assert.include(body, defaultStatus);
   });
 });

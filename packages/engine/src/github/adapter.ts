@@ -23,7 +23,10 @@ import {
   attemptStatus,
   claimLabel,
   claimStatus,
+  coordinationDetail,
   coordinationMarkers,
+  coordinationStatus,
+  defaultStatus,
   formatCoordinationBody,
   hasClaimLabel,
   hasLedgerMarker,
@@ -34,10 +37,17 @@ import {
   rolesFromLabels,
   serializeAttempt,
   serializeClaim,
+  serializeFollowUp,
 } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
   readonly botLogin: string | null;
+}
+
+interface CoordinationUpdate {
+  readonly status?: string;
+  readonly marker?: string;
+  readonly detail?: string;
 }
 
 const targetFor = (workspace: RegisteredWorkspace) => {
@@ -86,6 +96,11 @@ export const humanCommentSignal = (comments: ReadonlyArray<RawComment>, botLogin
   };
 };
 
+const coordinationLast = (comments: ReadonlyArray<RawComment>) => [
+  ...comments.filter((comment) => !hasLedgerMarker(comment.body)),
+  ...comments.filter((comment) => hasLedgerMarker(comment.body)),
+];
+
 type PrSignals = Omit<ObservedPr, "followUp">;
 
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
@@ -132,18 +147,22 @@ const make = (client: GitHubClientService): WorkSourceService => {
     } satisfies PrSignals;
   });
 
-  const upsertMarker = Effect.fn("github.upsertMarker")(function* (
+  const upsertCoordination = Effect.fn("github.upsertCoordination")(function* (
     target: GitHubTarget,
     number: number,
-    marker: string,
-    status: string,
+    update: CoordinationUpdate,
   ) {
     const comments = yield* client.listComments(target, number);
     const ledger = comments.find(
       (comment) => comment.authorLogin === target.botLogin && hasLedgerMarker(comment.body),
     );
-    const markers = [...(ledger ? coordinationMarkers(ledger.body) : []), marker];
-    const body = formatCoordinationBody(status, markers);
+    const previous = ledger?.body ?? "";
+    const markers = coordinationMarkers(previous);
+    const body = formatCoordinationBody({
+      status: update.status ?? coordinationStatus(previous) ?? defaultStatus,
+      markers: update.marker === undefined ? markers : [...markers, update.marker],
+      detail: update.detail ?? coordinationDetail(previous),
+    });
     if (ledger) {
       yield* client.editComment(target, ledger.id, body);
       return;
@@ -171,9 +190,9 @@ const make = (client: GitHubClientService): WorkSourceService => {
     }) {
       const claimLabeled = hasClaimLabel(issue.labels);
       const comments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
-      const trusted = target.botLogin
-        ? comments.filter((comment) => comment.authorLogin === target.botLogin).map((comment) => comment.body)
-        : [];
+      const trusted = coordinationLast(
+        comments.filter((comment) => comment.authorLogin === target.botLogin),
+      ).map((comment) => comment.body);
       const id = yield* itemId(issue.number);
       const signals = prs.get(issue.number);
       return {
@@ -209,7 +228,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
         const { target, number } = yield* resolveIssue(workspace, id);
         yield* client.addLabel(target, number, claimLabel);
         const status = claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
-        yield* upsertMarker(target, number, serializeClaim(claim), status);
+        yield* upsertCoordination(target, number, { status, marker: serializeClaim(claim) });
       }),
     release: (workspace, id) =>
       Effect.gen(function* () {
@@ -219,12 +238,20 @@ const make = (client: GitHubClientService): WorkSourceService => {
     recordAttempt: (workspace, id, attempt) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* upsertMarker(target, number, serializeAttempt(attempt), attemptStatus(attempt));
+        yield* upsertCoordination(target, number, {
+          status: attemptStatus(attempt),
+          marker: serializeAttempt(attempt),
+        });
       }),
-    comment: (workspace, id, body) =>
+    recordFollowUp: (workspace, id, marker) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* client.createComment(target, number, body);
+        yield* upsertCoordination(target, number, { marker: serializeFollowUp(marker) });
+      }),
+    note: (workspace, id, detail) =>
+      Effect.gen(function* () {
+        const { target, number } = yield* resolveIssue(workspace, id);
+        yield* upsertCoordination(target, number, { detail });
       }),
     setRoles: (workspace, id, changes) =>
       Effect.gen(function* () {
