@@ -1,0 +1,19 @@
+packages/engine/CONTEXT.md
+  s_25418fec61383b::t_131068200182f7 49-50,53,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "537eb6bee5f300036cb8d7790e5612a199241d15",
+  "prompts": {},
+  "sessions": {
+    "s_25418fec61383b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "174feb72-dc34-46fb-9f66-529cc6e2c9ed",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
