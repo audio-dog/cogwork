@@ -19,9 +19,9 @@ const applyUpdate = (record: RunRecord, update: RunUpdate): RunRecord => ({
   endedAtMillis: update.endedAtMillis,
 });
 
-const latestSessionOf = (runs: ReadonlyArray<RunRecord>, workItem: string): SessionId | null =>
+const latestSessionWhere = (runs: ReadonlyArray<RunRecord>, match: (run: RunRecord) => boolean) =>
   runs
-    .filter((run) => run.workItem === workItem && run.session !== null)
+    .filter((run) => run.session !== null && match(run))
     .sort((a, b) => b.startedAtMillis - a.startedAtMillis)
     .at(0)?.session ?? null;
 
@@ -49,8 +49,10 @@ export const makeMemory = Effect.gen(function* () {
       Ref.update(eventsRef, (events) => new Map(events).set(runId, [...(events.get(runId) ?? []), event])),
     updateRun: (runId: RunId, update: RunUpdate) =>
       Ref.update(runsRef, (runs) => runs.map((run) => (run.id === runId ? applyUpdate(run, update) : run))),
-    latestSession: (workItem: string) =>
-      Effect.map(Ref.get(runsRef), (runs) => latestSessionOf(runs, workItem)),
+    latestSessionByBranch: (workspace: string, branch: string) =>
+      Effect.map(Ref.get(runsRef), (runs) =>
+        latestSessionWhere(runs, (run) => run.workspace === workspace && run.branch === branch),
+      ),
     listRuns: (limit: number) =>
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
         Effect.map(([runs, events]) => summarize(runs, events, limit)),

@@ -17,17 +17,19 @@ const workItem = Schema.decodeSync(WorkItemId)("#7");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
-const record = (id: string, startedAtMillis: number): RunRecord => ({
+const record = (id: string, startedAtMillis: number, over: Partial<RunRecord> = {}): RunRecord => ({
   id: runId(id),
   workspace,
   workItem,
   stage: "triage",
   harness,
+  branch: null,
   session: null,
   usage: null,
   status: "running",
   startedAtMillis,
   endedAtMillis: null,
+  ...over,
 });
 
 describe("RunLedger (memory)", () => {
@@ -66,19 +68,20 @@ describe("RunLedger (memory)", () => {
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 
-  it.effect("returns the most recent session handle for a work item", () =>
+  it.effect("returns the most recent session handle for a branch", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger;
-      yield* ledger.insertRun(record("run-1", 1000));
-      yield* ledger.insertRun(record("run-2", 3000));
+      yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export" }));
+      yield* ledger.insertRun(record("run-2", 3000, { branch: "9-other" }));
       yield* ledger.updateRun(runId("run-1"), {
         status: "succeeded",
         session,
         usage: null,
         endedAtMillis: 1500,
       });
-      const latest = yield* ledger.latestSession(workItem);
-      assert.strictEqual(latest, "sess-abc");
+      assert.strictEqual(yield* ledger.latestSessionByBranch("gh", "7-fix-export"), "sess-abc");
+      assert.isNull(yield* ledger.latestSessionByBranch("gh", "9-other"));
+      assert.isNull(yield* ledger.latestSessionByBranch("other", "7-fix-export"));
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 

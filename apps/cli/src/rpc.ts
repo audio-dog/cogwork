@@ -59,8 +59,8 @@ const sharedLayer = (options: DaemonOptions) => {
     ledgerLayer(options.ledgerPath),
     harnessLayer,
   );
-  const services = Layer.mergeAll(Reconcile.layer, Executor.layer, worktreeManagerLayer).pipe(
-    Layer.provideMerge(base),
+  const services = Layer.mergeAll(Reconcile.layer, Executor.layer).pipe(
+    Layer.provideMerge(Layer.mergeAll(base, worktreeManagerLayer)),
   );
   return Scheduler.layer({
     globalLimit: options.maxConcurrency,

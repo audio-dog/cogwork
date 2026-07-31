@@ -1,4 +1,10 @@
-import type { HarnessName, LifecycleStage, TriageRole, WorkspaceConfig } from "@clanker-forge/contracts";
+import type {
+  HarnessName,
+  LifecycleStage,
+  PlaybookStageConfig,
+  TriageRole,
+  WorkspaceConfig,
+} from "@clanker-forge/contracts";
 
 export interface ResolvedStage {
   readonly enabled: boolean;
@@ -14,19 +20,47 @@ const defaultTriagePrompt = [
   "verify the claim where you can, and decide the correct next state.",
 ].join("\n");
 
-export const resolveTriage = (config: WorkspaceConfig): ResolvedStage => {
-  const stage = config.playbook?.triage;
-  return {
-    enabled: stage?.enabled ?? false,
-    harness: stage?.harness ?? config.harness.preferred,
-    model: stage?.model ?? null,
-    skill: stage?.skill ?? "triage",
-    promptTemplate: stage?.prompt ?? defaultTriagePrompt,
-  };
+const defaultImplementPrompt = [
+  'You are running the implement playbook for work item {id} ("{title}") in this repository checkout.',
+  "You are on a fresh branch dedicated to {id}, with no human in the session.",
+  "Follow the `{skill}` skill to implement {id}: read the issue and its comments as the brief, make the change,",
+  "pass the local gate, commit, and open a pull request that references {id}.",
+].join("\n");
+
+const resolveStageConfig = (
+  config: WorkspaceConfig,
+  stage: PlaybookStageConfig | undefined,
+  defaults: { readonly skill: string; readonly promptTemplate: string },
+): ResolvedStage => ({
+  enabled: stage?.enabled ?? false,
+  harness: stage?.harness ?? config.harness.preferred,
+  model: stage?.model ?? null,
+  skill: stage?.skill ?? defaults.skill,
+  promptTemplate: stage?.prompt ?? defaults.promptTemplate,
+});
+
+export const resolveTriage = (config: WorkspaceConfig) =>
+  resolveStageConfig(config, config.playbook?.triage, {
+    skill: "triage-agent",
+    promptTemplate: defaultTriagePrompt,
+  });
+
+export const resolveImplement = (config: WorkspaceConfig) =>
+  resolveStageConfig(config, config.playbook?.implement, {
+    skill: "implement-agent",
+    promptTemplate: defaultImplementPrompt,
+  });
+
+const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) => ResolvedStage>> = {
+  triage: resolveTriage,
+  implement: resolveImplement,
 };
 
+export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
+  stageResolvers[stage]?.(config) ?? null;
+
 export const runnable = (config: WorkspaceConfig, stage: LifecycleStage) =>
-  stage === "triage" && resolveTriage(config).enabled;
+  resolveStage(config, stage)?.enabled ?? false;
 
 const decisionRoles: ReadonlyArray<TriageRole> = [
   "ready-for-agent",
@@ -38,6 +72,21 @@ const decisionRoles: ReadonlyArray<TriageRole> = [
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
 
+interface PromptItem {
+  readonly id: string;
+  readonly title: string;
+}
+
+const buildPrompt = (resolved: ResolvedStage, item: PromptItem, footer: string) => {
+  const values = { id: item.id, title: item.title, skill: resolved.skill };
+  return `${fill(resolved.promptTemplate, values)}\n${fill(footer, values)}`;
+};
+
+const parseLastSentinel = <A extends string>(pattern: RegExp, valid: ReadonlyArray<A>, text: string) => {
+  const last = [...text.matchAll(pattern)].at(-1)?.[1]?.toLowerCase();
+  return valid.find((value) => value === last) ?? null;
+};
+
 const decisionFooter = [
   "",
   "When you are done, write your proposal for the maintainer as your final message.",
@@ -46,18 +95,28 @@ const decisionFooter = [
   `TRIAGE-DECISION: <${decisionRoles.join(" | ")}>`,
 ].join("\n");
 
-export const buildTriagePrompt = (
-  resolved: ResolvedStage,
-  item: { readonly id: string; readonly title: string },
-) => {
-  const values = { id: item.id, title: item.title, skill: resolved.skill };
-  return `${fill(resolved.promptTemplate, values)}\n${fill(decisionFooter, values)}`;
-};
-
 const decisionPattern = /TRIAGE-DECISION:\s*([a-z-]+)/gi;
 
-export const parseTriageDecision = (text: string): TriageRole | null => {
-  const matches = [...text.matchAll(decisionPattern)];
-  const last = matches.at(-1)?.[1]?.toLowerCase();
-  return decisionRoles.find((role) => role === last) ?? null;
-};
+export const buildTriagePrompt = (resolved: ResolvedStage, item: PromptItem) =>
+  buildPrompt(resolved, item, decisionFooter);
+
+export const parseTriageDecision = (text: string) => parseLastSentinel(decisionPattern, decisionRoles, text);
+
+export type ImplementResult = "opened-pr" | "blocked";
+
+const implementResults: ReadonlyArray<ImplementResult> = ["opened-pr", "blocked"];
+
+const implementFooter = [
+  "",
+  "End your final message with exactly one line, and nothing after it:",
+  "IMPLEMENT-RESULT: <opened-pr | blocked>",
+  "Use `opened-pr` only when you opened a pull request that references {id}; otherwise use `blocked`.",
+].join("\n");
+
+const implementResultPattern = /IMPLEMENT-RESULT:\s*([a-z-]+)/gi;
+
+export const buildImplementPrompt = (resolved: ResolvedStage, item: PromptItem) =>
+  buildPrompt(resolved, item, implementFooter);
+
+export const parseImplementResult = (text: string) =>
+  parseLastSentinel(implementResultPattern, implementResults, text);

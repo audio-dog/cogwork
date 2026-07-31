@@ -6,6 +6,7 @@ export const runs = sqliteTable("runs", {
   workItem: text("work_item").notNull(),
   stage: text("stage").notNull(),
   harness: text("harness").notNull(),
+  branch: text("branch"),
   session: text("session"),
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
