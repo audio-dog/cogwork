@@ -8,13 +8,13 @@ Definitions here are the source of truth — other contexts reference them rathe
 
 ### Work
 
-**Work item**:
-A single unit of backlog work observed from a work source, identified by a branded `WorkItemId` (e.g. a GitHub issue like `#13`). Carries a title and, once observed, its roles, claim, attempts, and linked PR.
-_Avoid_: Task, job, ticket (except when naming the work source's own UI)
-
 **Work source**:
-The external system that is authoritative for backlog work — its items, their human-visible roles, and the coordination markers written back onto them. Configured per workspace; GitHub is the only adapter today.
+The external system that is authoritative for backlog work — its items, their human-visible roles, and the coordination markers written back onto them. Configured per workspace; GitHub and Linear are the adapters today.
 _Avoid_: Backlog, control-plane database, internal store
+
+**Work item**:
+A single unit of backlog work observed from a work source, identified by a branded `WorkItemId` (e.g. a GitHub issue like `#13`, or a Linear identifier like `AUD-1`). Carries a title and, once observed, its roles, claim, attempts, and linked PR.
+_Avoid_: Task, job, ticket (except when naming the work source's own UI)
 
 **Workspace**:
 A repo registered with the daemon: a checkout path bound to a work source, harness preferences, and playbook config. The unit of isolation and per-repo configuration.
