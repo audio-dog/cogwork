@@ -28,6 +28,7 @@ import {
   coordinationStatus,
   defaultStatus,
   formatCoordinationBody,
+  formatNoteBody,
   hasClaimLabel,
   hasLedgerMarker,
   parseAttempts,
@@ -47,8 +48,16 @@ interface GitHubTarget extends GitHubRepoRef {
 interface CoordinationUpdate {
   readonly status?: string;
   readonly marker?: string;
-  readonly detail?: string;
+  readonly detail?: string | null;
 }
+
+const botLedger = (comments: ReadonlyArray<RawComment>, botLogin: string | null) =>
+  comments.find((comment) => comment.authorLogin === botLogin && hasLedgerMarker(comment.body));
+
+const nextDetail = (update: CoordinationUpdate, previous: string) => {
+  if (!Object.hasOwn(update, "detail")) return coordinationDetail(previous);
+  return update.detail ?? null;
+};
 
 const targetFor = (workspace: RegisteredWorkspace) => {
   const source = workspace.config.workSource;
@@ -153,15 +162,13 @@ const make = (client: GitHubClientService): WorkSourceService => {
     update: CoordinationUpdate,
   ) {
     const comments = yield* client.listComments(target, number);
-    const ledger = comments.find(
-      (comment) => comment.authorLogin === target.botLogin && hasLedgerMarker(comment.body),
-    );
+    const ledger = botLedger(comments, target.botLogin);
     const previous = ledger?.body ?? "";
     const markers = coordinationMarkers(previous);
     const body = formatCoordinationBody({
       status: update.status ?? coordinationStatus(previous) ?? defaultStatus,
       markers: update.marker === undefined ? markers : [...markers, update.marker],
-      detail: update.detail ?? coordinationDetail(previous),
+      detail: nextDetail(update, previous),
     });
     if (ledger) {
       yield* client.editComment(target, ledger.id, body);
@@ -251,7 +258,12 @@ const make = (client: GitHubClientService): WorkSourceService => {
     note: (workspace, id, detail) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* upsertCoordination(target, number, { detail });
+        const comments = yield* client.listComments(target, number);
+        const ledger = botLedger(comments, target.botLogin);
+        if (ledger && coordinationDetail(ledger.body) !== null) {
+          yield* upsertCoordination(target, number, { detail: null });
+        }
+        yield* client.createComment(target, number, formatNoteBody(detail));
       }),
     setRoles: (workspace, id, changes) =>
       Effect.gen(function* () {
