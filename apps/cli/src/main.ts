@@ -3,11 +3,18 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Command from "effect/unstable/cli/Command";
-import { daemonCommand, runEventsCommand, runsCommand, statusCommand } from "./commands";
+import { daemonCommand, runEventsCommand, runsCommand, statusCommand, watchCommand } from "./commands";
 import { worktreeCommand } from "./worktreeCommands";
 
 const cli = Command.make("clanker-forge").pipe(
-  Command.withSubcommands([daemonCommand, statusCommand, runsCommand, runEventsCommand, worktreeCommand]),
+  Command.withSubcommands([
+    daemonCommand,
+    statusCommand,
+    runsCommand,
+    runEventsCommand,
+    watchCommand,
+    worktreeCommand,
+  ]),
 );
 
 NodeRuntime.runMain(

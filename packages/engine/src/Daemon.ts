@@ -1,12 +1,14 @@
-import { DaemonRpcs } from "@clanker-forge/contracts";
+import { DaemonRpcs, type RunActivity, type RunId } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
+import * as Stream from "effect/Stream";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
+import { RunEventBus } from "./RunEventBus";
 import { RunLedger } from "./RunLedger";
 import { Scheduler, type SchedulerConfig, type SchedulerState } from "./Scheduler";
 import { ticketSlug, WorktreeManager } from "./Worktree";
@@ -21,6 +23,9 @@ export const daemonInfoLayer = Layer.effect(
 );
 
 const okPoll = { status: "ok" as const };
+
+export const filterActivity = (activity: Stream.Stream<RunActivity>, id: RunId | undefined) =>
+  id === undefined ? activity : Stream.filter(activity, (item) => item.runId === id);
 
 const statesByName = (snapshot: ReconcileSnapshot) =>
   new Map(snapshot.workspaces.map((state) => [state.name, state]));
@@ -71,6 +76,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const ledger = yield* RunLedger;
     return yield* ledger.events(payload.id);
   }),
+  WatchActivity: (payload) =>
+    Stream.unwrap(Effect.map(RunEventBus, (bus) => filterActivity(bus.activity, payload.id))),
 });
 
 interface ReconcilableWorkspace {

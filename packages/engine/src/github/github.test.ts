@@ -104,7 +104,13 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         yield* Ref.update(commentsRef, (all) =>
           new Map(all).set(number, [
             ...(all.get(number) ?? []),
-            { id: assigned, authorLogin: bot.login, authorAssociation: "NONE", body, createdAtMillis: 0 },
+            {
+              id: assigned,
+              authorLogin: bot.login,
+              authorAssociation: "NONE",
+              body,
+              createdAtMillis: assigned,
+            },
           ]),
         );
       }),

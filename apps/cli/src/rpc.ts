@@ -1,6 +1,15 @@
 import { DaemonRpcs, HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
-import { Daemon, Executor, GitHub, Harness, Reconcile, Registry, Scheduler } from "@clanker-forge/engine";
+import {
+  Daemon,
+  Executor,
+  GitHub,
+  Harness,
+  Reconcile,
+  Registry,
+  RunEventBus,
+  Scheduler,
+} from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
@@ -58,6 +67,7 @@ const sharedLayer = (options: DaemonOptions) => {
     workSourceLayer,
     ledgerLayer(options.ledgerPath),
     harnessLayer,
+    RunEventBus.layer,
   );
   const services = Layer.mergeAll(Reconcile.layer, Executor.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(base, worktreeManagerLayer)),

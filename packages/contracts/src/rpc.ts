@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { DaemonStatus } from "./daemon";
-import { RunEvent, RunId, RunSummary } from "./run";
+import { RunActivity, RunEvent, RunId, RunSummary } from "./run";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
 
@@ -13,4 +13,10 @@ export const GetRunEvents = Rpc.make("GetRunEvents", {
   success: Schema.Array(RunEvent),
 });
 
-export const DaemonRpcs = RpcGroup.make(GetStatus, ListRuns, GetRunEvents);
+export const WatchActivity = Rpc.make("WatchActivity", {
+  payload: { id: Schema.optional(RunId) },
+  success: RunActivity,
+  stream: true,
+});
+
+export const DaemonRpcs = RpcGroup.make(GetStatus, ListRuns, GetRunEvents, WatchActivity);

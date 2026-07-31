@@ -1,0 +1,53 @@
+# Context Map
+
+Clanker-forge has two languages that don't overlap. The **orchestration** language of the control
+plane — how work gets discovered, scheduled, and run by coding agents — and the **sync** language of
+the asset generator — how skills, rules, and agent config get rendered for each tool.
+
+Read this map first for how the pieces connect, then the per-context `CONTEXT.md` for the area you're
+working in. `packages/contracts/CONTEXT.md` is the shared kernel; read it alongside any orchestration
+context.
+
+## Contexts
+
+### Orchestration (the control plane)
+
+- [contracts](./packages/contracts/CONTEXT.md) — shared kernel: the schemas and vocabulary every other orchestration context speaks (`WorkItem`, `Run`, `Claim`, harness terms, lifecycle stages).
+- [engine](./packages/engine/CONTEXT.md) — the runtime machinery: daemon, reconcile, scheduler, executor, harness dispatch, worktrees, the GitHub work source.
+- [cli](./apps/cli/CONTEXT.md) — `clanker-forge`, the client and daemon host: subcommands, RPC transport, workspace loading, live watch.
+- [cursor-acp](./packages/cursor-acp/CONTEXT.md) — the Cursor harness adapter: bridges the engine's harness contract to the Cursor agent over ACP.
+
+### Sync (the agent toolkit)
+
+- [sync](./packages/sync/CONTEXT.md) — the single-source generator: renders `assets/` and `skills/` into each tool's native config. Shares no vocabulary with orchestration.
+
+## Relationships
+
+### Orchestration runtime flow
+
+The **daemon** (hosted by the `cli`) runs two heartbeats over every registered **workspace**:
+
+1. **Reconcile.** The reconcile worker polls each workspace's **work source** (GitHub today), then `classify` partitions the observed items into **eligible**, **claimed**, and **blocked**, each tagged with a **lifecycle stage**. The result is held in an in-memory snapshot.
+2. **Execute.** The **scheduler** picks eligible **candidates** from that snapshot under its concurrency limits and daily budget, and forks one **executor** per candidate.
+
+Each executor run then:
+
+- **claims** the work item on the work source (a label plus a coordination marker),
+- opens a git **worktree** for the branch,
+- resolves the stage's **playbook** into a prompt + harness + model,
+- sends a **harness request** to the **harness service**, which routes to the registered **harness runner** by name,
+- streams **harness events** back, appending them to the **run ledger** and publishing **run activity** on the event bus,
+- records the **attempt** outcome and updates roles / PR state on the work source.
+
+### Cross-context edges
+
+- **engine → contracts.** Every engine service consumes and produces contracts schemas. Contracts owns the nouns; engine owns the verbs.
+- **cli → engine.** The `daemon` command composes the engine's layers into a running server. `status` / `runs` / `watch` talk to it over the RPC group. `worktree` embeds the engine's worktree manager directly, with no RPC.
+- **cursor-acp → engine.** `cursorRunner` implements the engine's harness runner interface. The engine knows nothing about ACP or Cursor; cursor-acp knows nothing about scheduling.
+- **engine ↔ work source (GitHub).** Claims, attempts, and a coordination "ledger" comment live on the work source, so any daemon can rebuild its coordination view from GitHub alone. That GitHub "ledger" comment is not the run ledger — see contracts.
+
+### Sync stands alone
+
+The `sync` context reads `assets/`, `skills/`, and `repo-config/` and writes each **target's** native
+files. Its only tie to orchestration is indirect: the skills and rules it distributes are what the
+orchestration harnesses eventually run.

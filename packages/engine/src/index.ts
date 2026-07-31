@@ -7,6 +7,7 @@ export * as Harness from "./Harness";
 export * as Playbook from "./Playbook";
 export * as Reconcile from "./Reconcile";
 export * as Registry from "./Registry";
+export * as RunEventBus from "./RunEventBus";
 export * as RunLedger from "./RunLedger";
 export * as Scheduler from "./Scheduler";
 export * as WorkSource from "./WorkSource";

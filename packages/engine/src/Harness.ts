@@ -1,8 +1,10 @@
-import type { HarnessName, TokenUsage } from "@clanker-forge/contracts";
+import type { HarnessEvent, HarnessName } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
+export type { HarnessEvent } from "@clanker-forge/contracts";
 
 export interface HarnessRequest {
   readonly harness: HarnessName;
@@ -10,15 +12,6 @@ export interface HarnessRequest {
   readonly prompt: string;
   readonly model: string | null;
   readonly sessionId: string | null;
-}
-
-export interface HarnessEvent {
-  readonly type: string;
-  readonly name: string | null;
-  readonly text: string | null;
-  readonly sessionId: string | null;
-  readonly usage: TokenUsage | null;
-  readonly finishReason: string | null;
 }
 
 export class HarnessError extends Schema.TaggedErrorClass<HarnessError>()("HarnessError", {

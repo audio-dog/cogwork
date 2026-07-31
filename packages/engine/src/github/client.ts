@@ -1,7 +1,9 @@
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
@@ -90,6 +92,12 @@ const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
 const decodeComments = Schema.decodeUnknownEffect(Schema.Array(CommentSchema));
+
+const commentMillis = (iso: string) =>
+  DateTime.make(iso).pipe(
+    Option.map(DateTime.toEpochMillis),
+    Option.getOrElse(() => 0),
+  );
 const decodeCheckRuns = Schema.decodeUnknownEffect(CheckRunsSchema);
 
 const millisFromIso = (value: string | null) => {
@@ -210,7 +218,7 @@ const make = (client: HttpClient.HttpClient) => {
                   authorLogin: comment.user.login,
                   authorAssociation: comment.author_association ?? "NONE",
                   body: comment.body,
-                  createdAtMillis: millisFromIso(comment.created_at),
+                  createdAtMillis: commentMillis(comment.created_at),
                 },
               ]
             : [],

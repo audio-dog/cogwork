@@ -14,6 +14,7 @@ import {
   layer as harnessLayer,
 } from "./Harness";
 import type { RegisteredWorkspace } from "./projector";
+import * as RunEventBus from "./RunEventBus";
 import * as RunLedger from "./RunLedger";
 import { WorkSource, type WorkSourceService } from "./WorkSource";
 import { branchName, WorktreeManager, type WorktreeManagerService } from "./Worktree";
@@ -235,6 +236,7 @@ const provide = (
         Layer.succeed(WorkSource, ws),
         harnessLayer(runners),
         RunLedger.layerMemory,
+        RunEventBus.layer,
         Layer.succeed(WorktreeManager, worktree),
       ),
     ),
@@ -345,6 +347,24 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
         assert.strictEqual(runs[0]?.status, "failed");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("persists a terminal event on failure so watchers flush the run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const error = new HarnessError({ reason: "turn", retryable: true, message: "network blip" });
+      const layer = provide(recorder(calls), [failingRunner(error)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(workspace, triageItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const runs = yield* ledger.listRuns(10);
+        const id = runs[0]?.id;
+        const events = id ? yield* ledger.events(id) : [];
+        assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
       }).pipe(Effect.provide(layer));
     }),
   );

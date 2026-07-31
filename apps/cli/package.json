@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "tsx src/main.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@clanker-forge/contracts": "workspace:*",
@@ -19,8 +20,10 @@
     "effect": "catalog:effect"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:effect",
     "@types/node": "catalog:",
     "tsx": "^4.19.2",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

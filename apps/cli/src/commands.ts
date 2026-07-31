@@ -10,12 +10,15 @@ import {
 import { Daemon, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { defaultConfigHome, defaultLedgerPath, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
+import { flushWatch, initialWatchState, stepWatch } from "./watch";
 
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
@@ -43,6 +46,11 @@ const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
 );
 
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
+
+const watchIdFlag = Flag.string("id").pipe(
+  Flag.withDescription("Only follow a single run id"),
+  Flag.optional,
+);
 
 const runDaemon = Effect.fn("commands.runDaemon")(
   function* (options: DaemonOptions) {
@@ -161,6 +169,24 @@ const runEvents = Effect.fn("commands.runEvents")(
   (effect, options) => overSocket(effect, options.socketPath),
 );
 
+const watchPayload = (id: Option.Option<string>) => {
+  const raw = Option.getOrUndefined(id);
+  if (raw === undefined) return Effect.succeed({});
+  return Effect.map(Schema.decodeUnknownEffect(RunId)(raw), (value) => ({ id: value }));
+};
+
+const runWatch = Effect.fn("commands.runWatch")(
+  function* (options: { readonly socketPath: string; readonly id: Option.Option<string> }) {
+    const client = yield* RpcClient.make(DaemonRpcs);
+    const payload = yield* watchPayload(options.id);
+    yield* client.WatchActivity(payload).pipe(
+      Stream.mapAccum(() => initialWatchState, stepWatch, { onHalt: flushWatch }),
+      Stream.runForEach(Console.log),
+    );
+  },
+  (effect, options) => overSocket(effect, options.socketPath),
+);
+
 const runStatus = Effect.fn("commands.runStatus")(
   function* (_options: { readonly socketPath: string }) {
     const client = yield* RpcClient.make(DaemonRpcs);
@@ -192,4 +218,8 @@ export const runsCommand = Command.make("runs", { socket: socketFlag }).pipe(
 
 export const runEventsCommand = Command.make("run-events", { socket: socketFlag, id: runIdFlag }).pipe(
   Command.withHandler(({ socket, id }) => runEvents({ socketPath: socket, id })),
+);
+
+export const watchCommand = Command.make("watch", { socket: socketFlag, id: watchIdFlag }).pipe(
+  Command.withHandler(({ socket, id }) => runWatch({ socketPath: socket, id })),
 );

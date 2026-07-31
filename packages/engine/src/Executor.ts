@@ -1,4 +1,4 @@
-import type { RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
+import type { RunActivity, RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
 import { RunId, SessionId } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -24,6 +24,7 @@ import {
   resolveStage,
 } from "./Playbook";
 import type { RegisteredWorkspace } from "./projector";
+import { RunEventBus } from "./RunEventBus";
 import { RunLedger } from "./RunLedger";
 import { decideResume } from "./resumePolicy";
 import { WorkSource, type WorkSourceError } from "./WorkSource";
@@ -67,6 +68,30 @@ const mergeEvent = (acc: RunAccumulator, event: HarnessEvent): RunAccumulator =>
   usage: event.usage ?? acc.usage,
 });
 
+const activityOf = (record: RunRecord, seq: number, atMillis: number, event: HarnessEvent): RunActivity => ({
+  runId: record.id,
+  workspace: record.workspace,
+  workItem: record.workItem,
+  stage: record.stage,
+  seq,
+  atMillis,
+  event,
+});
+
+const failedTerminal: HarnessEvent = {
+  type: "RUN_FINISHED",
+  name: null,
+  text: null,
+  sessionId: null,
+  usage: null,
+  finishReason: "failed",
+};
+
+const withFailureTerminal = (stream: Stream.Stream<HarnessEvent, HarnessError>) =>
+  Stream.catchCause(stream, (cause) =>
+    Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
+  );
+
 const retryableOf = (error: PrepareError | HarnessError) =>
   error._tag === "HarnessError" ? error.retryable : true;
 
@@ -84,6 +109,7 @@ export const make = Effect.gen(function* () {
   const workSource = yield* WorkSource;
   const harness = yield* Harness;
   const ledger = yield* RunLedger;
+  const bus = yield* RunEventBus;
   const worktrees = yield* WorktreeManager;
   const runCounter = yield* Ref.make(0);
 
@@ -106,20 +132,21 @@ export const make = Effect.gen(function* () {
   });
 
   const persistEvent = Effect.fn("Executor.persistEvent")(function* (
-    runId: RunId,
+    record: RunRecord,
     seq: number,
     event: HarnessEvent,
   ) {
     const atMillis = yield* Clock.currentTimeMillis;
     const data = yield* encodeJson(event).pipe(Effect.orElseSucceed(() => "{}"));
-    yield* ledger.appendEvent(runId, { seq, type: event.type, name: event.name, data, atMillis });
+    yield* ledger.appendEvent(record.id, { seq, type: event.type, name: event.name, data, atMillis });
+    yield* bus.publish(activityOf(record, seq, atMillis, event));
   });
 
-  const foldRun = Effect.fn("Executor.foldRun")(function* (runId: RunId, request: HarnessRequest) {
+  const foldRun = Effect.fn("Executor.foldRun")(function* (record: RunRecord, request: HarnessRequest) {
     return yield* Stream.runFoldEffect(
-      Stream.zipWithIndex(harness.run(request)),
+      Stream.zipWithIndex(withFailureTerminal(harness.run(request))),
       () => emptyAccumulator,
-      (acc, [event, seq]) => Effect.map(persistEvent(runId, seq, event), () => mergeEvent(acc, event)),
+      (acc, [event, seq]) => Effect.map(persistEvent(record, seq, event), () => mergeEvent(acc, event)),
     );
   });
 
@@ -387,7 +414,7 @@ export const make = Effect.gen(function* () {
     };
     yield* ledger.insertRun(record);
     const outcome = yield* Effect.result(
-      ops.prepare.pipe(Effect.flatMap((request) => foldRun(runId, request))),
+      ops.prepare.pipe(Effect.flatMap((request) => foldRun(record, request))),
     );
     yield* Result.isSuccess(outcome)
       ? ops.complete(runId, outcome.success)

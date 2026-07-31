@@ -27,6 +27,16 @@ export const RunEvent = Schema.Struct({
 });
 export type RunEvent = typeof RunEvent.Type;
 
+export const HarnessEvent = Schema.Struct({
+  type: Schema.String,
+  name: Schema.NullOr(Schema.String),
+  text: Schema.NullOr(Schema.String),
+  sessionId: Schema.NullOr(Schema.String),
+  usage: Schema.NullOr(TokenUsage),
+  finishReason: Schema.NullOr(Schema.String),
+});
+export type HarnessEvent = typeof HarnessEvent.Type;
+
 export const RunRecord = Schema.Struct({
   id: RunId,
   workspace: WorkspaceId,
@@ -47,3 +57,14 @@ export const RunSummary = Schema.Struct({
   eventCount: Schema.Natural,
 });
 export type RunSummary = typeof RunSummary.Type;
+
+export const RunActivity = Schema.Struct({
+  runId: RunId,
+  workspace: WorkspaceId,
+  workItem: WorkItemId,
+  stage: LifecycleStage,
+  seq: Schema.Natural,
+  atMillis: Schema.Natural,
+  event: HarnessEvent,
+});
+export type RunActivity = typeof RunActivity.Type;

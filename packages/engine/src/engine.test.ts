@@ -1,12 +1,15 @@
-import { DaemonRpcs, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import type { RunActivity } from "@clanker-forge/contracts";
+import { DaemonRpcs, RunId, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./Daemon";
 import * as Reconcile from "./Reconcile";
 import * as Registry from "./Registry";
+import * as RunEventBus from "./RunEventBus";
 import * as RunLedger from "./RunLedger";
 import * as Scheduler from "./Scheduler";
 import type { ObservedItem } from "./WorkSource";
@@ -246,6 +249,7 @@ describe("daemon status over rpc", () => {
     Layer.provideMerge(registryLayer),
     Layer.provideMerge(schedulerStub),
     Layer.provideMerge(RunLedger.layerMemory),
+    Layer.provideMerge(RunEventBus.layer),
   );
 
   it.effect("reports health, registered workspaces, their derived work, and failures", () =>
@@ -275,5 +279,44 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.scheduler.perWorkspace[0]?.name, "example");
       assert.strictEqual(status.scheduler.perWorkspace[0]?.inFlight, 2);
     }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+});
+
+describe("filterActivity", () => {
+  const runId = Schema.decodeSync(RunId);
+  const workspace = Schema.decodeSync(WorkspaceId)("example");
+  const workItem = Schema.decodeSync(WorkItemId)("AUD-1");
+  const sample = (id: string): RunActivity => ({
+    runId: runId(id),
+    workspace,
+    workItem,
+    stage: "triage",
+    seq: 0,
+    atMillis: 0,
+    event: {
+      type: "RUN_STARTED",
+      name: null,
+      text: null,
+      sessionId: null,
+      usage: null,
+      finishReason: null,
+    },
+  });
+
+  it.effect("passes every activity through when no id is given", () =>
+    Effect.gen(function* () {
+      const source = Stream.fromIterable([sample("run-1"), sample("run-2")]);
+      const seen = yield* Stream.runCollect(Daemon.filterActivity(source, undefined));
+      assert.strictEqual(seen.length, 2);
+    }),
+  );
+
+  it.effect("keeps only the requested run when an id is given", () =>
+    Effect.gen(function* () {
+      const source = Stream.fromIterable([sample("run-1"), sample("run-2")]);
+      const seen = yield* Stream.runCollect(Daemon.filterActivity(source, runId("run-2")));
+      const ids = seen.map((item) => item.runId);
+      assert.deepStrictEqual(ids, [runId("run-2")]);
+    }),
   );
 });
