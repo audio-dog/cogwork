@@ -41,7 +41,7 @@ const resolveStageConfig = (
 
 export const resolveTriage = (config: WorkspaceConfig) =>
   resolveStageConfig(config, config.playbook?.triage, {
-    skill: "triage",
+    skill: "triage-agent",
     promptTemplate: defaultTriagePrompt,
   });
 

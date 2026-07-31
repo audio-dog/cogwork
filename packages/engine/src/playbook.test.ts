@@ -24,7 +24,7 @@ describe("resolveTriage", () => {
     const resolved = resolveTriage(config());
     assert.strictEqual(resolved.enabled, false);
     assert.strictEqual(resolved.harness, "cursor");
-    assert.strictEqual(resolved.skill, "triage");
+    assert.strictEqual(resolved.skill, "triage-agent");
     assert.strictEqual(resolved.model, null);
   });
 
@@ -101,7 +101,7 @@ describe("buildTriagePrompt", () => {
     const prompt = buildTriagePrompt(resolveTriage(config()), { id: "#7", title: "broken export" });
     assert.include(prompt, "#7");
     assert.include(prompt, "broken export");
-    assert.include(prompt, "`triage`");
+    assert.include(prompt, "`triage-agent`");
     assert.include(prompt, "TRIAGE-DECISION: <ready-for-agent | ready-for-human | needs-info | wontfix>");
   });
 });
