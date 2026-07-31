@@ -1,0 +1,22 @@
+packages/engine/src/WorkSource.ts
+  s_25418fec61383b::t_df49a0b4944435 58-70
+  s_25418fec61383b::t_6d40df3dd6b454 38-39,43-44
+  s_25418fec61383b::t_a92a80c1ff6b09 46
+  s_25418fec61383b::t_ee1578599b7324 37,40-41,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "822cb53ad805a976c0c6d484b91e133139c575e0",
+  "prompts": {},
+  "sessions": {
+    "s_25418fec61383b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "174feb72-dc34-46fb-9f66-529cc6e2c9ed",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
