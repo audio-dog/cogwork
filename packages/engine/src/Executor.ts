@@ -49,6 +49,20 @@ interface StageOps {
   readonly blockRole: TriageRole | null;
 }
 
+const harnessRequest = (
+  resolved: ResolvedStage,
+  checkoutPath: string,
+  prompt: string,
+  sessionId: string | null,
+) => ({
+  harness: resolved.harness,
+  checkoutPath,
+  prompt,
+  model: resolved.model,
+  effort: resolved.effort,
+  sessionId,
+});
+
 const defaultFollowUp: FollowUpContext = {
   checks: "pending",
   humanCommentAtMillis: 0,
@@ -251,26 +265,26 @@ export const make = Effect.gen(function* () {
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
-    return {
-      harness: resolved.harness,
-      checkoutPath: worktree.path,
-      prompt: buildImplementPrompt(resolved, item),
-      model: resolved.model,
-      sessionId: last?.session ?? null,
-    } satisfies HarnessRequest;
+    return harnessRequest(
+      resolved,
+      worktree.path,
+      buildImplementPrompt(resolved, item),
+      last?.session ?? null,
+    );
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) =>
     ({
       resolved,
       branch: null,
-      prepare: Effect.succeed({
-        harness: resolved.harness,
-        checkoutPath: workspace.config.checkoutPath,
-        prompt: buildTriagePrompt(resolved, item),
-        model: resolved.model,
-        sessionId: null,
-      }),
+      prepare: Effect.succeed(
+        harnessRequest(
+          resolved,
+          workspace.config.checkoutPath,
+          buildTriagePrompt(resolved, item),
+          null,
+        ),
+      ),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
       blockRole: "needs-triage",
     }) satisfies StageOps;
@@ -346,13 +360,12 @@ export const make = Effect.gen(function* () {
       maxAgeMillis: resolved.resumeMaxAgeMillis,
       maxTokens: resolved.resumeMaxTokens,
     });
-    return {
-      harness: resolved.harness,
-      checkoutPath: worktree.path,
-      prompt: buildFollowUpPrompt(resolved, item),
-      model: resolved.model,
-      sessionId: decision.kind === "resume" ? decision.sessionId : null,
-    } satisfies HarnessRequest;
+    return harnessRequest(
+      resolved,
+      worktree.path,
+      buildFollowUpPrompt(resolved, item),
+      decision.kind === "resume" ? decision.sessionId : null,
+    );
   });
 
   const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {

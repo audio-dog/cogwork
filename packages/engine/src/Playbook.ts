@@ -10,6 +10,7 @@ export interface ResolvedStage {
   readonly enabled: boolean;
   readonly harness: HarnessName;
   readonly model: string | null;
+  readonly effort: string | null;
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
@@ -54,6 +55,7 @@ const resolveStageConfig = (
   enabled: stage?.enabled ?? false,
   harness: stage?.harness ?? config.harness.preferred,
   model: stage?.model ?? null,
+  effort: stage?.effort ?? null,
   skill: stage?.skill ?? defaults.skill,
   promptTemplate: stage?.prompt ?? defaults.promptTemplate,
   resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
