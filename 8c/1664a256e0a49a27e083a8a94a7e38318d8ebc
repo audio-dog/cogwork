@@ -1,0 +1,21 @@
+skills/triage-agent/SKILL.md
+  s_70b28cf86aa091::t_a2b30c95ae96c6 3
+  s_70b28cf86aa091::t_a5ff75748a5c28 70
+  s_70b28cf86aa091::t_e16ce59ca1cbb5 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "8c1664a256e0a49a27e083a8a94a7e38318d8ebc",
+  "prompts": {},
+  "sessions": {
+    "s_70b28cf86aa091": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1d29bc55-8570-462c-a622-6b179fb5dbb8",
+        "model": "default"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
