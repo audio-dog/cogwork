@@ -1,0 +1,23 @@
+packages/engine/src/github/client.ts
+  s_a1e42905488cc4::t_6ba454d9964e7e 138-144
+  s_a1e42905488cc4::t_667be7b3097776 189-191,202,204
+  s_a1e42905488cc4::t_5a11baca93ec7c 34
+  s_a1e42905488cc4::t_6920e52002a6a8 183-185,203
+  s_a1e42905488cc4::t_a1737f20d395fc 68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "8223b751efc5a9ab3a152d91d774e5782a7a5902",
+  "prompts": {},
+  "sessions": {
+    "s_a1e42905488cc4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c563765a-1310-4276-b7a3-28668b3ea223",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
