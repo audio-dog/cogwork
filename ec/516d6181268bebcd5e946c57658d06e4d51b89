@@ -1,0 +1,29 @@
+packages/engine/src/workSourceRouter.ts
+  s_25418fec61383b::t_a81ba741034436 1-9,13,26-31
+  s_25418fec61383b::t_7e4ee1835d2a33 10-12,14-25
+packages/engine/src/github/adapter.ts
+  s_25418fec61383b::t_4b04b90a976d2e 284-285
+packages/engine/src/index.ts
+  s_25418fec61383b::t_7404dfe3d08a99 7
+  s_25418fec61383b::t_81a91311435470 17
+apps/cli/src/rpc.ts
+  s_25418fec61383b::t_0ed20c59829ecc 8,13,58,60
+packages/engine/src/github/index.ts
+  s_25418fec61383b::t_beb47f3903ecdb 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "ec516d6181268bebcd5e946c57658d06e4d51b89",
+  "prompts": {},
+  "sessions": {
+    "s_25418fec61383b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "174feb72-dc34-46fb-9f66-529cc6e2c9ed",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
