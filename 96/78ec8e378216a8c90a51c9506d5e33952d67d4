@@ -1,0 +1,28 @@
+skills/implement-agent/SKILL.md
+  s_0b4491292a3500::t_f931fdb4b14d0a 19,23,28
+  s_0b4491292a3500::t_583da5042c0824 38
+  s_0b4491292a3500::t_321af4f93ebd1d 3,8,10-12
+  s_0b4491292a3500::t_eccef094277065 69,71
+  s_0b4491292a3500::t_2e9151f976f375 94,100,106-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "9678ec8e378216a8c90a51c9506d5e33952d67d4",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_0b4491292a3500": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "13c45b46-5dea-40fe-9e25-75005b1e6c64",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
