@@ -1,0 +1,28 @@
+packages/engine/test/engine.test.ts
+  s_d0eda8147a4b23::t_4bbbeeaeb1e2ec 153-160,165,167-183
+  s_d0eda8147a4b23::t_1169153b2e90de 161-164,166
+packages/engine/src/Daemon.ts
+  s_d0eda8147a4b23::t_9ab20cde5d3c03 71
+packages/engine/src/Reconcile.ts
+  s_d0eda8147a4b23::t_9102a80482c051 6
+  s_d0eda8147a4b23::t_c5fa596be23bf6 79
+  s_d0eda8147a4b23::t_d7bf10adcff827 49-53,59,68
+  s_d0eda8147a4b23::t_bbb1da7aa7b8d6 38
+  s_d0eda8147a4b23::t_1fdd5ad422e900 18-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "29dea1b444fe678ba29a92288f65bbf01ec8a0c7",
+  "prompts": {},
+  "sessions": {
+    "s_d0eda8147a4b23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4f3ab7cd-9a0b-4078-8572-d56c4a11f9b4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
