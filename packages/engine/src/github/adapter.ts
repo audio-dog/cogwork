@@ -243,10 +243,10 @@ const make = (client: GitHubClientService): WorkSourceService => {
           marker: serializeAttempt(attempt),
         });
       }),
-    recordFollowUp: (workspace, id, marker) =>
+    recordFollowUp: (workspace, id, marker, detail) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* upsertCoordination(target, number, { marker: serializeFollowUp(marker) });
+        yield* upsertCoordination(target, number, { marker: serializeFollowUp(marker), detail });
       }),
     note: (workspace, id, detail) =>
       Effect.gen(function* () {

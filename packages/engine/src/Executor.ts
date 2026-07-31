@@ -371,12 +371,12 @@ export const make = Effect.gen(function* () {
   ) {
     const atMillis = yield* Clock.currentTimeMillis;
     const context = item.followUp ?? defaultFollowUp;
-    yield* workSource.note(
+    yield* workSource.recordFollowUp(
       workspace,
       item.id,
+      followUpMarker(context),
       `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.`,
     );
-    yield* workSource.recordFollowUp(workspace, item.id, followUpMarker(context));
     yield* workSource.setRoles(workspace, item.id, { remove: [], add: ["ready-for-human"] });
     yield* workSource.recordAttempt(workspace, item.id, {
       stage: "follow-up",

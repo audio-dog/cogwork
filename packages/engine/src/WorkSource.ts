@@ -56,8 +56,12 @@ const releaseEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId) => fa
 const recordAttemptEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _attempt: AttemptRecord) =>
   failWhenRemote(workspace);
 
-const recordFollowUpEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _marker: FollowUpMarker) =>
-  failWhenRemote(workspace);
+const recordFollowUpEmpty = (
+  workspace: RegisteredWorkspace,
+  _itemId: WorkItemId,
+  _marker: FollowUpMarker,
+  _detail?: string,
+) => failWhenRemote(workspace);
 
 const noteEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _detail: string) =>
   failWhenRemote(workspace);

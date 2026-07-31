@@ -168,8 +168,8 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): WorkSourceService => ({
   release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
   recordAttempt: (_workspace, itemId, attempt) =>
     record(calls, { method: "recordAttempt", item: itemId, outcome: attempt.outcome }),
-  recordFollowUp: (_workspace, itemId, marker) =>
-    record(calls, { method: "recordFollowUp", item: itemId, checks: marker.checks }),
+  recordFollowUp: (_workspace, itemId, marker, detail) =>
+    record(calls, { method: "recordFollowUp", item: itemId, checks: marker.checks, body: detail }),
   note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, body: detail }),
   setRoles: (_workspace, itemId, changes) =>
     record(calls, { method: "setRoles", item: itemId, add: changes.add, remove: changes.remove }),
@@ -607,8 +607,10 @@ describe("Executor.execute", () => {
         const log = yield* Ref.get(calls);
         assert.deepStrictEqual(log.find((c) => c.method === "setRoles")?.add, ["ready-for-human"]);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "abandoned");
-        assert.include(log.find((c) => c.method === "note")?.body ?? "", "no progress");
-        assert.strictEqual(log.find((c) => c.method === "recordFollowUp")?.checks, "failing");
+        const handoff = log.find((c) => c.method === "recordFollowUp");
+        assert.include(handoff?.body ?? "", "no progress");
+        assert.strictEqual(handoff?.checks, "failing");
+        assert.isFalse(log.some((c) => c.method === "note"));
         assert.isFalse(log.some((c) => c.method === "merge" || c.method === "resolve"));
 
         const ledger = yield* RunLedger.RunLedger;
