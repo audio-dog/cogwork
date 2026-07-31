@@ -172,12 +172,12 @@ const make = (ledgerPath: string) =>
         Effect.orElseSucceed(() => [] as ReadonlyArray<A>),
       );
 
-    const latestRunWhere = (operation: string, where: SQL | undefined) =>
+    const latestRunWhere = (operation: string, where: SQL | undefined, requireSession = true) =>
       Effect.try(() =>
         db
           .select(runRecordSelection)
           .from(runs)
-          .where(and(where, isNotNull(runs.session)))
+          .where(requireSession ? and(where, isNotNull(runs.session)) : where)
           .orderBy(desc(runs.startedAt))
           .limit(1)
           .get(),
@@ -212,6 +212,16 @@ const make = (ledgerPath: string) =>
           db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run();
         }),
 
+      closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+        write("closeRunning", () => {
+          db.update(runs)
+            .set({ status: "failed", endedAt: endedAtMillis })
+            .where(
+              and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")),
+            )
+            .run();
+        }),
+
       appendEvent: (runId: RunId, event: RunEvent) =>
         write("appendEvent", () => {
           const values = {
@@ -230,6 +240,13 @@ const make = (ledgerPath: string) =>
 
       latestRunByBranch: (workspace: string, branch: string) =>
         latestRunWhere("latestRunByBranch", and(eq(runs.workspace, workspace), eq(runs.branch, branch))),
+
+      latestRunForItem: (workspace: string, workItem: string) =>
+        latestRunWhere(
+          "latestRunForItem",
+          and(eq(runs.workspace, workspace), eq(runs.workItem, workItem)),
+          false,
+        ),
 
       listRuns: (limit: number) =>
         readRows("listRuns", () =>
