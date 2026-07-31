@@ -128,6 +128,8 @@ describe("reconcile worker", () => {
     claim: () => Effect.void,
     release: () => Effect.void,
     recordAttempt: () => Effect.void,
+    comment: () => Effect.void,
+    setRoles: () => Effect.void,
     ...service,
   });
 

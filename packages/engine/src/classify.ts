@@ -30,6 +30,11 @@ const stageFor = (item: ObservedItem) => {
   return null;
 };
 
+export const maxAttemptsPerStage = 3;
+
+const failedAttempts = (item: ObservedItem, stage: LifecycleStage) =>
+  item.attempts.filter((attempt) => attempt.stage === stage && attempt.outcome === "failed").length;
+
 const classifyOne = (item: ObservedItem): Outcome => {
   if (item.roles.includes("wontfix")) return { kind: "drop" };
   if (item.claim) return { kind: "claimed", claim: item.claim };
@@ -37,7 +42,10 @@ const classifyOne = (item: ObservedItem): Outcome => {
   if (item.roles.includes("needs-info")) return { kind: "blocked", reason: "needs-info" };
   if (item.roles.includes("ready-for-human")) return { kind: "blocked", reason: "ready-for-human" };
   const stage = stageFor(item);
-  return stage ? { kind: "eligible", stage } : { kind: "drop" };
+  if (!stage) return { kind: "drop" };
+  if (failedAttempts(item, stage) >= maxAttemptsPerStage)
+    return { kind: "blocked", reason: "ready-for-human" };
+  return { kind: "eligible", stage };
 };
 
 const byStagePriority = (a: ActionableItem, b: ActionableItem) =>

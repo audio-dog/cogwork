@@ -17,6 +17,7 @@ import {
   hasClaimLabel,
   parseAttempts,
   parseClaim,
+  roleLabel,
   rolesFromLabels,
   serializeAttempt,
   serializeClaim,
@@ -101,7 +102,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
       readonly labels: ReadonlyArray<string>;
     }) {
       const claimLabeled = hasClaimLabel(issue.labels);
-      const comments = yield* claimLabeled ? client.listComments(target, issue.number) : Effect.succeed([]);
+      const comments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
       const trusted = target.botLogin
         ? comments.filter((comment) => comment.authorLogin === target.botLogin).map((comment) => comment.body)
         : [];
@@ -149,6 +150,17 @@ const make = (client: GitHubClientService): WorkSourceService => {
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
         yield* client.createComment(target, number, serializeAttempt(attempt));
+      }),
+    comment: (workspace, id, body) =>
+      Effect.gen(function* () {
+        const { target, number } = yield* resolveIssue(workspace, id);
+        yield* client.createComment(target, number, body);
+      }),
+    setRoles: (workspace, id, changes) =>
+      Effect.gen(function* () {
+        const { target, number } = yield* resolveIssue(workspace, id);
+        yield* Effect.forEach(changes.remove, (role) => client.removeLabel(target, number, roleLabel(role)));
+        yield* Effect.forEach(changes.add, (role) => client.addLabel(target, number, roleLabel(role)));
       }),
   };
 };

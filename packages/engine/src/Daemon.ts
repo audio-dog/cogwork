@@ -4,9 +4,11 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
+import { Executor } from "./Executor";
 import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
 import { WorkspaceRegistry } from "./Registry";
+import { RunLedger } from "./RunLedger";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
   "@clanker-forge/engine/Daemon/DaemonInfo",
@@ -46,10 +48,35 @@ export const handlersLayer = DaemonRpcs.toLayer({
       failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
     };
   }),
+  ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
+    const ledger = yield* RunLedger;
+    return yield* ledger.listRuns(50);
+  }),
+  GetRunEvents: Effect.fn("Daemon.GetRunEvents")(function* (payload) {
+    const ledger = yield* RunLedger;
+    return yield* ledger.events(payload.id);
+  }),
 });
 
 export const reconcileHeartbeat = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const receipt = yield* worker.submit();
   yield* Effect.logInfo("reconcile tick", receipt);
+}).pipe(Effect.repeat(Schedule.spaced("5 seconds")));
+
+const triageEligible = (state: WorkspaceReconcileState) =>
+  state.eligible.find((item) => item.stage === "triage");
+
+export const executeHeartbeat = Effect.gen(function* () {
+  const registry = yield* WorkspaceRegistry;
+  const worker = yield* ReconcileWorker;
+  const executor = yield* Executor;
+  const snapshot = yield* worker.snapshot;
+  const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
+  const runState = Effect.fn("Daemon.runState")(function* (state: WorkspaceReconcileState) {
+    const workspace = byName.get(state.name);
+    const item = triageEligible(state);
+    if (workspace && item) yield* executor.runIfIdle(workspace, item);
+  });
+  yield* Effect.forEach(snapshot.workspaces, runState);
 }).pipe(Effect.repeat(Schedule.spaced("5 seconds")));

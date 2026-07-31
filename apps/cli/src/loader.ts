@@ -1,8 +1,8 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Registry } from "@clanker-forge/engine";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 const configSuffixes = [".workspace.ts", ".workspace.mts", ".workspace.cts"];
@@ -29,16 +29,16 @@ const readDefault = (module: unknown) => {
 };
 
 const listConfigFiles = (configHome: string) =>
-  Effect.tryPromise({
-    try: () => fs.readdir(configHome, { withFileTypes: true }),
-    catch: () => new WorkspaceLoadError({ detail: `Cannot read config home ${configHome}` }),
-  }).pipe(
-    Effect.map((entries) =>
-      entries
-        .filter((entry) => entry.isFile() && isConfigFile(entry.name))
-        .map((entry) => path.join(configHome, entry.name)),
-    ),
-  );
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const entries = yield* fs
+      .readDirectory(configHome)
+      .pipe(
+        Effect.mapError(() => new WorkspaceLoadError({ detail: `Cannot read config home ${configHome}` })),
+      );
+    return entries.filter(isConfigFile).map((name) => path.join(configHome, name));
+  });
 
 const importConfig = (source: string) =>
   Effect.tryPromise({
