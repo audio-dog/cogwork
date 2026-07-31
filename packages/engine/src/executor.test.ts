@@ -157,6 +157,7 @@ interface Call {
   readonly remove?: ReadonlyArray<string>;
   readonly outcome?: string;
   readonly checks?: string;
+  readonly reason?: string;
 }
 
 const record = (calls: Ref.Ref<ReadonlyArray<Call>>, entry: Call) =>
@@ -166,8 +167,13 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): WorkSourceService => ({
   observe: () => Effect.succeed([]),
   claim: (_workspace, itemId) => record(calls, { method: "claim", item: itemId }),
   release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
-  recordAttempt: (_workspace, itemId, attempt) =>
-    record(calls, { method: "recordAttempt", item: itemId, outcome: attempt.outcome }),
+  recordAttempt: (_workspace, itemId, attempt, reason) =>
+    record(calls, {
+      method: "recordAttempt",
+      item: itemId,
+      outcome: attempt.outcome,
+      reason,
+    }),
   recordFollowUp: (_workspace, itemId, marker, detail) =>
     record(calls, { method: "recordFollowUp", item: itemId, checks: marker.checks, body: detail }),
   note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, body: detail }),
@@ -323,9 +329,13 @@ describe("Executor.execute", () => {
         yield* executor.execute(workspace, triageItem);
 
         const log = yield* Ref.get(calls);
-        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        const attempt = log.find((c) => c.method === "recordAttempt");
+        assert.strictEqual(attempt?.outcome, "failed");
+        assert.strictEqual(attempt?.reason, "no cli");
         assert.deepStrictEqual(log.find((c) => c.method === "setRoles")?.add, ["ready-for-human"]);
-        assert.isFalse(log.some((c) => c.method === "note"));
+        const note = log.find((c) => c.method === "note");
+        assert.include(note?.body ?? "", "non-retryable failure");
+        assert.include(note?.body ?? "", "no cli");
 
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
@@ -344,8 +354,11 @@ describe("Executor.execute", () => {
         yield* executor.execute(workspace, triageItem);
 
         const log = yield* Ref.get(calls);
-        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        const attempt = log.find((c) => c.method === "recordAttempt");
+        assert.strictEqual(attempt?.outcome, "failed");
+        assert.strictEqual(attempt?.reason, "network blip");
         assert.isFalse(log.some((c) => c.method === "setRoles"));
+        assert.isFalse(log.some((c) => c.method === "note"));
 
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
@@ -385,6 +398,7 @@ describe("Executor.execute", () => {
         const log = yield* Ref.get(calls);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
         assert.deepStrictEqual(log.find((c) => c.method === "setRoles")?.add, ["ready-for-human"]);
+        assert.include(log.find((c) => c.method === "note")?.body ?? "", "3 failed triage attempts");
 
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
@@ -484,7 +498,7 @@ describe("Executor.execute", () => {
         const roles = log.find((c) => c.method === "setRoles");
         assert.deepStrictEqual(roles?.remove, ["ready-for-agent"]);
         assert.deepStrictEqual(roles?.add, ["ready-for-human"]);
-        assert.isFalse(log.some((c) => c.method === "note"));
+        assert.include(log.find((c) => c.method === "note")?.body ?? "", "no cli");
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
@@ -504,9 +518,14 @@ describe("Executor.execute", () => {
 
         const log = yield* Ref.get(calls);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        assert.include(
+          log.find((c) => c.method === "recordAttempt")?.reason ?? "",
+          "brief contradicts itself",
+        );
         const roles = log.find((c) => c.method === "setRoles");
         assert.deepStrictEqual(roles?.remove, ["ready-for-agent"]);
         assert.deepStrictEqual(roles?.add, ["ready-for-human"]);
+        assert.include(log.find((c) => c.method === "note")?.body ?? "", "brief contradicts itself");
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
@@ -630,7 +649,12 @@ describe("Executor.execute", () => {
 
         const log = yield* Ref.get(calls);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        assert.include(
+          log.find((c) => c.method === "recordAttempt")?.reason ?? "",
+          "agent produced no result line",
+        );
         assert.isFalse(log.some((c) => c.method === "setRoles"));
+        assert.isFalse(log.some((c) => c.method === "note"));
 
         const ledger = yield* RunLedger.RunLedger;
         const [firstRun] = yield* ledger.listRuns(10);
