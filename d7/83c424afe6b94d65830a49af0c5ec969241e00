@@ -1,0 +1,36 @@
+packages/engine/src/linear/linear.test.ts
+  s_25418fec61383b::t_58cdbcc9476569 185
+  s_25418fec61383b::t_18e36e7851fc97 199
+  s_25418fec61383b::t_de9aca95d41a47 125-134
+  s_25418fec61383b::t_8203d86ca9d86f 1-102,104-124,135-164,166-184,186-187,189,192-198,200-377,381,387-389
+  s_25418fec61383b::t_dbe447c7666ded 165
+  s_25418fec61383b::t_8882a94d71f7bf 103
+  s_25418fec61383b::t_35a7f016f651fb 378-380,382-386
+  s_25418fec61383b::t_99a37b5955848e 188,190-191
+packages/engine/src/linear/adapter.ts
+  s_25418fec61383b::t_7a94f3ae2e4349 118,126-130
+  s_25418fec61383b::t_964006d268dfe9 204
+  s_25418fec61383b::t_362d129fde8119 42-43
+  s_25418fec61383b::t_a685b5fc239584 2-41,44-78,80-83,85-114,116-117,119-125,131-167,170,172-174,177-179,182-187,190-192,195-196,198,200-202,210-218
+  s_25418fec61383b::t_f970cfa10682af 115
+  s_25418fec61383b::t_956da8d903efd9 1
+  s_25418fec61383b::t_5870380200f727 79,84,168-169,171,175-176,180-181,188-189,193-194,197,199,203,205-209
+packages/engine/src/linear/index.ts
+  s_25418fec61383b::t_00c4f3976b88b9 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "d783c424afe6b94d65830a49af0c5ec969241e00",
+  "prompts": {},
+  "sessions": {
+    "s_25418fec61383b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "174feb72-dc34-46fb-9f66-529cc6e2c9ed",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
