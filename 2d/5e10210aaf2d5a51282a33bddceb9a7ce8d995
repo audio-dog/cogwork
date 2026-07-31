@@ -1,0 +1,23 @@
+packages/engine/src/github/markers.test.ts
+  s_70b28cf86aa091::t_09f89ebc227838 159-174
+packages/engine/src/github/markers.ts
+  s_70b28cf86aa091::t_6344d61c77386c 47-60
+  s_70b28cf86aa091::t_e9219423ed6eca 136
+  s_70b28cf86aa091::t_bfcac781c4e97b 70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "2d5e10210aaf2d5a51282a33bddceb9a7ce8d995",
+  "prompts": {},
+  "sessions": {
+    "s_70b28cf86aa091": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1d29bc55-8570-462c-a622-6b179fb5dbb8",
+        "model": "default"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
