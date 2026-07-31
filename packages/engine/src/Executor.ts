@@ -1,4 +1,4 @@
-import type { RunActivity, RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
+import type { RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
 import { RunId, SessionId } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -23,7 +23,7 @@ import {
   resolveStage,
 } from "./Playbook";
 import type { RegisteredWorkspace } from "./projector";
-import { RunEventBus } from "./RunEventBus";
+import { activityOf, RunEventBus } from "./RunEventBus";
 import { RunLedger } from "./RunLedger";
 import { decideResume } from "./resumePolicy";
 import { WorkSource, type WorkSourceError } from "./WorkSource";
@@ -65,16 +65,6 @@ const mergeEvent = (acc: RunAccumulator, event: HarnessEvent): RunAccumulator =>
   text: event.text ? acc.text + event.text : acc.text,
   session: event.sessionId ?? acc.session,
   usage: event.usage ?? acc.usage,
-});
-
-const activityOf = (record: RunRecord, seq: number, atMillis: number, event: HarnessEvent): RunActivity => ({
-  runId: record.id,
-  workspace: record.workspace,
-  workItem: record.workItem,
-  stage: record.stage,
-  seq,
-  atMillis,
-  event,
 });
 
 const failedTerminal: HarnessEvent = {
