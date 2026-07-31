@@ -33,6 +33,7 @@ export const RunRecord = Schema.Struct({
   workItem: WorkItemId,
   stage: LifecycleStage,
   harness: HarnessName,
+  branch: Schema.NullOr(TrimmedNonEmptyString),
   session: Schema.NullOr(SessionId),
   usage: Schema.NullOr(TokenUsage),
   status: RunStatus,
