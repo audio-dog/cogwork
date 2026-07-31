@@ -1,0 +1,108 @@
+apps/cli/src/commands.ts
+  s_b88f065fda7026::t_bf7d5d0c2a6a71 21
+  s_b88f065fda7026::t_b8c82c5a86aba7 177-180,182,184-189
+  s_c9d694181fd390::t_9464bdf51673e5 181
+  s_b88f065fda7026::t_bafdb19d566a07 183
+  s_b88f065fda7026::t_8d90410adfce14 222-225
+  s_b88f065fda7026::t_97397537c09ae4 13,15
+  s_b88f065fda7026::t_2759ca1be444ba 50-54
+  s_b88f065fda7026::t_233174a3ecee91 172-176
+packages/engine/src/RunEventBus.ts
+  s_b88f065fda7026::t_be046a1313ca2c 1-22
+packages/contracts/src/run.ts
+  s_b88f065fda7026::t_7da06882ec4d9f 30-39
+  s_b88f065fda7026::t_dff3768e3bb1c0 60-70
+apps/cli/src/main.ts
+  s_b88f065fda7026::t_deed9dc2089128 6,10-17
+packages/engine/src/executor.test.ts
+  s_b88f065fda7026::t_29cebeeeca3616 17
+  s_e7b8ebb7984b34::t_83653e95604fd7 307-324
+  s_b88f065fda7026::t_c2a5983bc26d6e 192
+packages/engine/src/Executor.ts
+  s_b88f065fda7026::t_c452de58c87b05 1
+  s_b88f065fda7026::t_8bfe5d179a5708 100
+  s_b88f065fda7026::t_026d2753d0fd9e 135
+  s_b88f065fda7026::t_beb11544e5ada7 301
+  s_b88f065fda7026::t_2e1a121fd81715 69-82
+  s_b88f065fda7026::t_947b44e90226a1 24
+  s_b88f065fda7026::t_dfb73453721945 59-68
+  s_b88f065fda7026::t_317f6cf1ca957d 123,129-130,133,137
+packages/engine/src/Harness.ts
+  s_b88f065fda7026::t_6eb4e79bf1261e 1,7-8
+packages/engine/src/Daemon.ts
+  s_b88f065fda7026::t_0666e571ce5320 79
+  s_b88f065fda7026::t_2cfd155859e3f6 28-29
+  s_b88f065fda7026::t_61829222edf11b 27
+  s_b88f065fda7026::t_90d167b5ee56a8 1,7,11
+  s_c9d694181fd390::t_3673995b2d3d08 80
+packages/engine/src/engine.test.ts
+  s_b88f065fda7026::t_9375e8ac03c99c 312
+  s_b88f065fda7026::t_10b59834ce9163 1-2,7
+  s_b88f065fda7026::t_e60769e3a53364 12
+  s_b88f065fda7026::t_851936b4008378 278-303,305-311,313-316
+  s_b88f065fda7026::t_849ec7ffd9b4fb 304
+  s_b88f065fda7026::t_0bca636d2e1b84 246
+apps/cli/src/watch.ts
+  s_b88f065fda7026::t_19cd7ce684748f 1-2,8,10-15,22,28-29,34-39,42,44-54,57-58,62
+  s_b88f065fda7026::t_c88a3df173e8ca 16-21,25-27,30-32,40-41,43,64
+  s_b88f065fda7026::t_e2703e9070fb59 3-7,9,23-24,33,55-56,59-61,63
+apps/cli/src/watch.test.ts
+  s_b88f065fda7026::t_ba0bb7d8d18580 37-45
+  s_b88f065fda7026::t_912d9f9d6cb477 47-52
+  s_b88f065fda7026::t_a8c58e2f343c4a 53
+  s_b88f065fda7026::t_2eb374092420a9 122-127,129-135,137-138
+  s_b88f065fda7026::t_da277ff08ceec5 128,136
+  s_b88f065fda7026::t_cb8aa0994a9521 1-2,4,7-10,19-25,27-31
+  s_b88f065fda7026::t_06436ecbfc991d 112-121
+  s_b88f065fda7026::t_5d8714c47e78ea 5
+  s_b88f065fda7026::t_7df38d79f6a63b 3,6,11-18,26,32-36,46,54-111,139-147
+packages/contracts/src/rpc.ts
+  s_b88f065fda7026::t_499a53fd148f4e 5,16-22
+apps/cli/vitest.config.ts
+  s_b88f065fda7026::t_3fa619425cd182 1-7
+apps/cli/src/rpc.ts
+  s_b88f065fda7026::t_83a54f7c07803c 70
+  s_b88f065fda7026::t_51fa4a340ff0c9 3-12
+apps/cli/package.json
+  s_b88f065fda7026::t_1e9736e5db6369 23,26-27
+  s_b88f065fda7026::t_8ef5c22e2cd212 11-12
+packages/engine/src/index.ts
+  s_b88f065fda7026::t_4cdea32bbd91fa 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "1679a14add72d4abb68fa874b9b4e93741be7dac",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b88f065fda7026": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3e9c49f4-c30c-4947-9b57-f51766884b02",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c9d694181fd390": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2839439c-1f00-471b-ac97-b80b7d2f7768",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e7b8ebb7984b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1f23de35-6d5d-4998-a9d2-c6b262f7d98a",
+        "model": "composer-2.5-fast"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
