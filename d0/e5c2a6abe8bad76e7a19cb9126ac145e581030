@@ -1,0 +1,25 @@
+skills/triage-agent/SKILL.md
+  h_46518a29d4dd91 37,75
+  s_0b4491292a3500::t_ae4cdc90cfa839 3,8,10-12,16-19,23,27,41-42,48,61,65-68,76-77,93,109,115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "d0e5c2a6abe8bad76e7a19cb9126ac145e581030",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_0b4491292a3500": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "13c45b46-5dea-40fe-9e25-75005b1e6c64",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
