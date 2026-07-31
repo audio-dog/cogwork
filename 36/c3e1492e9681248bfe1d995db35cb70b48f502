@@ -1,0 +1,36 @@
+AGENTS.md
+  s_70bb680408ead7::t_ea6c8934e87945 22-34
+packages/cursor-acp/CONTEXT.md
+  s_70bb680408ead7::t_9d5d405258f617 1-26
+packages/sync/CONTEXT.md
+  s_70bb680408ead7::t_dda0842961ec1c 1-48
+packages/engine/CONTEXT.md
+  s_70bb680408ead7::t_d0c787f33817ae 1-62
+apps/cli/CONTEXT.md
+  s_70bb680408ead7::t_63424abeb048ca 1-27
+packages/contracts/CONTEXT.md
+  s_70bb680408ead7::t_6f44133ebf40c6 1,3-5,7,9-13,16-51,54-55,57-59,61-63,65-69,72-73,75-87,89-91
+CONTEXT-MAP.md
+  s_70bb680408ead7::t_d734a977810f6a 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.18",
+  "base_commit_sha": "36c3e1492e9681248bfe1d995db35cb70b48f502",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_70bb680408ead7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d2703181-9ee4-4880-9530-24c76c9f1e6f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
