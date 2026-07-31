@@ -1,0 +1,26 @@
+packages/engine/src/engine.test.ts
+  s_dc476ac3fa7fb2::t_3c9f6e4acb803a 1
+packages/engine/src/Daemon.ts
+  s_dc476ac3fa7fb2::t_d2c315cf462ad2 1-7,14,35-36,46,50,113
+  s_dc476ac3fa7fb2::t_6d696ff9cbbabb 19,39
+  s_dc476ac3fa7fb2::t_9fcb6dc036284c 44
+  s_dc476ac3fa7fb2::t_0ab950b7611a14 42,49,54,56-60
+  s_dc476ac3fa7fb2::t_30e0476b8f18b0 8
+  s_dc476ac3fa7fb2::t_0603ab0cf756ca 37-38,40-41,43,45,47-48,51-53,55,61-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "a037a91ed3c6d56b82549c436bb5df053b017362",
+  "prompts": {},
+  "sessions": {
+    "s_dc476ac3fa7fb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "632545bb-476c-4e94-bd47-1112c9e6a31e",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
