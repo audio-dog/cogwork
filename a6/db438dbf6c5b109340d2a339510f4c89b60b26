@@ -1,0 +1,45 @@
+packages/engine/src/github/markers.test.ts
+  s_729c25df1f08ed::t_642311582e2069 13
+  s_729c25df1f08ed::t_e75ffe3aa8303e 164,168-172
+  s_729c25df1f08ed::t_9621a87aaed23a 160-163,165-167,173
+  s_729c25df1f08ed::t_b932f983ae8555 174-175
+packages/engine/src/github/markers.ts
+  s_729c25df1f08ed::t_42fcc947ceb0eb 151-155
+packages/engine/src/github/adapter.ts
+  s_e21cb95880eecb::t_19deb7c2edf474 262-263
+  s_729c25df1f08ed::t_ee13ce620ed711 266
+  s_e21cb95880eecb::t_b01c089c136d02 261,264-265
+  s_e21cb95880eecb::t_ec837c1b9089e2 54-61
+  s_e21cb95880eecb::t_4321da32e24716 51
+  s_729c25df1f08ed::t_c5eadaf4886c82 31
+  s_e21cb95880eecb::t_1eadf8f1fc4988 165,171
+packages/engine/src/github/github.test.ts
+  s_e21cb95880eecb::t_b3d04225cb3ade 461,476-483,492,499-502,508-529
+  s_729c25df1f08ed::t_0b40620c7ce16f 533-555
+  s_729c25df1f08ed::t_8a66db9c37bea5 556-558
+  s_e21cb95880eecb::t_50268c1f0f4102 530-532
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "a6db438dbf6c5b109340d2a339510f4c89b60b26",
+  "prompts": {},
+  "sessions": {
+    "s_729c25df1f08ed": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0a6db803-55a0-44f3-b0a1-84a6c7566647",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e21cb95880eecb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "888c4659-87d3-4394-a263-63e6e5987c3d",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
