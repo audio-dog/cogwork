@@ -5,6 +5,7 @@ import { LifecycleStage } from "./triage";
 export const Claim = Schema.Struct({
   by: TrimmedNonEmptyString,
   claimedAtMillis: Schema.Natural,
+  stage: Schema.optional(LifecycleStage),
 });
 export type Claim = typeof Claim.Type;
 
