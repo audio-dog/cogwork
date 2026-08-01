@@ -10,6 +10,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "models:sync": "node --experimental-strip-types scripts/sync-models.ts",
+    "models:check": "node --experimental-strip-types scripts/sync-models.ts --check",
     "spike:run": "node --env-file=.env --experimental-strip-types run.ts",
     "spike:probe": "node --env-file=.env --experimental-strip-types probe-acp.ts"
   },

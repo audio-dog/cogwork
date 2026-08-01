@@ -1,26 +1,11 @@
 export const cursorEfforts = ["none", "low", "medium", "high", "xhigh", "max"] as const;
 export type CursorEffort = (typeof cursorEfforts)[number];
 
-export const cursorModels = [
-  "auto",
-  "composer-2.5",
-  "composer-2.5-fast",
-  "claude-opus-5-thinking-high",
-  "claude-opus-5-thinking-medium",
-  "claude-opus-5-thinking-low",
-  "claude-opus-4-8",
-  "claude-opus-4-8-thinking-high",
-  "claude-sonnet-5-thinking-high",
-  "claude-sonnet-5-thinking-medium",
-  "gpt-5.6-sol-high",
-  "gpt-5.6-terra-medium",
-  "gpt-5.5-high",
-  "gpt-5.3-codex",
-  "gpt-5.2",
-  "cursor-grok-4.5-high",
-  "kimi-k3-high",
-] as const;
-export type CursorModel = (typeof cursorModels)[number];
+export const parseCursorModelList = (output: string) =>
+  output.split("\n").flatMap((line) => {
+    const id = line.trim().match(/^(\S+) - \S/)?.[1];
+    return id ? [id] : [];
+  });
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 

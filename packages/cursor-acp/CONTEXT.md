@@ -14,8 +14,8 @@ The factory that produces the engine's harness runner for Cursor. Maps harness-r
 _Avoid_: Harness, driver
 
 **Cursor model / effort**:
-Harness-native strings for Cursor. `cursorModels` / `cursorEfforts` are a typed subset for workspace config (`satisfies CursorModel`); runtime still accepts any id `agent --list-models` reports. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override when set; preset ids that already embed effort need no separate field.
-_Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`)
+Harness-native strings for Cursor. `cursorModels` is generated from `agent --list-models` (`models:sync` → `models.generated.ts`), never hand-written; `models:check` fails when the committed catalog has drifted from the CLI. Config authors get autocomplete via `satisfies CursorModel`, while runtime accepts any id the CLI takes. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override for parameterized base ids; the listed preset ids already embed their effort.
+_Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`); hand-maintaining the model catalog
 
 **ACP (Agent Client Protocol)**:
 The stdio JSON-RPC protocol the Cursor CLI exposes via `agent acp`. The wire format this adapter speaks; not a concept the rest of the repo sees.
