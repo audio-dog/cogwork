@@ -1,0 +1,54 @@
+packages/engine/src/github/github-helpers.test.ts
+  s_92ccad0e123ef9::t_303d5885e320b2 111-118,126-133
+  s_92ccad0e123ef9::t_217abf561d21e4 28
+  s_92ccad0e123ef9::t_04b2efa16c7ee5 179-204
+  s_92ccad0e123ef9::t_b19e8e411fb47c 178
+  s_92ccad0e123ef9::t_6a8673263f93b9 109,125,134-135,140-147,165-170,174-177
+  s_92ccad0e123ef9::t_1fb6450a79ceb1 124,136-139,148-151,157-164,171-173
+  s_92ccad0e123ef9::t_f8d55bdee63a78 2-3,16-21
+  s_92ccad0e123ef9::t_b8cc0c1a7d3803 75,79-80,84
+  s_92ccad0e123ef9::t_88bccc80080d99 22-24
+  s_92ccad0e123ef9::t_4b8feb3ba3b484 205
+packages/engine/src/github/adapter.ts
+  s_92ccad0e123ef9::t_24fe326d834edc 168,172-176,178
+  s_92ccad0e123ef9::t_a42881577c3ad1 169-171
+  s_92ccad0e123ef9::t_20471e02ca7dd5 250
+  s_92ccad0e123ef9::t_e015583b0c38d6 22-23
+  s_92ccad0e123ef9::t_8a39b99d1d2bf2 208-218
+  s_92ccad0e123ef9::t_9d9181d842db7d 232
+  s_92ccad0e123ef9::t_0081d0d565f591 92,100-101,103-109,111,114-115
+  s_92ccad0e123ef9::t_9e70556642a043 162,165-166
+  s_92ccad0e123ef9::t_04289777df2660 220,233-234,247
+  s_92ccad0e123ef9::t_e789653eec4448 77,79-80,88,90-91,102,112-113
+  s_92ccad0e123ef9::t_1c6face4e19f13 93-99,110
+  s_92ccad0e123ef9::t_8f675cbd59f4df 21,35
+packages/engine/src/github/github.test.ts
+  s_92ccad0e123ef9::t_2ef109da219311 219,339-358,371-378,414-418,451-523
+  s_92ccad0e123ef9::t_87098ef40d90c8 419-450
+  s_92ccad0e123ef9::t_0604d10e0da8cf 213-218
+  s_92ccad0e123ef9::t_f79a36411f3af9 338,379-400,404-409,413
+  s_92ccad0e123ef9::t_e8ad58c8990519 118-119
+  s_92ccad0e123ef9::t_71fedc53071d70 80-90
+  s_92ccad0e123ef9::t_e422e6fc769ab7 40-48,53-54
+  s_92ccad0e123ef9::t_66d8458e947272 212,220
+  s_92ccad0e123ef9::t_303d5885e320b2 359-370,401-403,410-412
+  s_92ccad0e123ef9::t_a2f4051f4c16cf 173
+  s_92ccad0e123ef9::t_0ec23d6c922951 19
+  s_92ccad0e123ef9::t_676d751b063e97 524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "e1be6998f7db1d055ad010373ef2a1187d74c43a",
+  "prompts": {},
+  "sessions": {
+    "s_92ccad0e123ef9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f61c58c9-18f2-407b-a6ff-9a40056f3c8b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
