@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Symlinks every skill in this repo into ~/.claude/skills so the local Claude CLI
-# picks them up without publishing.
+# Symlinks every skill in the sync (distributed) bucket into ~/.claude/skills so the
+# local Claude CLI picks them up without publishing.
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PACKAGE="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$PACKAGE/../.." && pwd)"
 DEST="$HOME/.claude/skills"
+SKILLS_ROOT="$PACKAGE/skills/sync"
 
 # If ~/.claude/skills is itself a symlink into this repo, per-skill links would write
 # back into the source tree. Detect and bail rather than polluting the working copy.
@@ -22,7 +24,7 @@ fi
 
 mkdir -p "$DEST"
 
-find "$REPO/skills" -name SKILL.md -not -path '*/node_modules/*' -print0 |
+find "$SKILLS_ROOT" -name SKILL.md -not -path '*/node_modules/*' -print0 |
   while IFS= read -r -d '' skill_md; do
     src="$(dirname "$skill_md")"
     name="$(basename "$src")"

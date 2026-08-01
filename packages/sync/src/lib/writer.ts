@@ -12,7 +12,7 @@ export interface WriteResult {
 /**
  * Writes generated files, with a dry-run mode that reports intended changes instead of
  * applying them. Refuses to write to any path that resolves back inside this repo (e.g.
- * a tool config dir symlinked into the source tree), mirroring `bin/link-skills.sh`.
+ * a tool config dir symlinked into the source tree), mirroring `packages/sync/bin/link-skills.sh`.
  */
 export class Writer {
   readonly results: WriteResult[] = [];
