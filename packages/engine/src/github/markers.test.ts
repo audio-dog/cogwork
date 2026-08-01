@@ -11,6 +11,7 @@ import {
   defaultStatus,
   formatCoordinationBody,
   hasClaimLabel,
+  hasClankerMarker,
   hasLedgerMarker,
   ledgerMarker,
   parseAttempts,
@@ -83,6 +84,15 @@ describe("github markers", () => {
     });
     assert.deepStrictEqual(parseClaim([body]), claim);
     assert.deepStrictEqual(parseAttempts([body]), attempts);
+  });
+
+  it("recognizes any clanker-forge marker so the daemon can spot its own comments", () => {
+    assert.isTrue(hasClankerMarker(ledgerMarker));
+    assert.isTrue(hasClankerMarker(serializeClaim({ by: "x", claimedAtMillis: 1 })));
+    assert.isTrue(
+      hasClankerMarker(serializeFollowUp({ checks: "failing", humanCommentAtMillis: 1, noProgress: 0 })),
+    );
+    assert.isFalse(hasClankerMarker("please take another look, this still fails"));
   });
 
   it("recognizes the ledger marker and strips every marker from proposal text", () => {

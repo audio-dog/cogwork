@@ -33,6 +33,7 @@ export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(
 const markerPattern = (name: string) => new RegExp(`<!--\\s*clanker-forge:${name}\\s([^>]*)-->`, "g");
 
 const anyMarkerPattern = /<!--\s*clanker-forge:[^>]*-->/g;
+const clankerMarkerPattern = /<!--\s*clanker-forge:[^>]*-->/;
 const ledgerMarkerPattern = /<!--\s*clanker-forge:ledger\s*-->/;
 const detailMarkerPattern = /<!--\s*clanker-forge:detail\s*-->/;
 
@@ -43,6 +44,8 @@ export const ledgerMarker = "<!-- clanker-forge:ledger -->";
 const detailMarker = "<!-- clanker-forge:detail -->";
 
 export const hasLedgerMarker = (body: string) => ledgerMarkerPattern.test(body);
+
+export const hasClankerMarker = (body: string) => clankerMarkerPattern.test(body);
 
 const before = (body: string, pattern: RegExp) => {
   const at = body.search(pattern);
