@@ -1,0 +1,19 @@
+packages/engine/src/github/adapter.ts
+  s_7ea6ac5064e991::t_d2f75e820d4f78 125-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "b48c1bf2eaed1e3af7ce2c7214cb5a1948dc98e7",
+  "prompts": {},
+  "sessions": {
+    "s_7ea6ac5064e991": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b9d7570d-e1fd-401a-82d2-bcfc3e5e34c6",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
