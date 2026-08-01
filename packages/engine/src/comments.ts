@@ -3,7 +3,10 @@ import type { LifecycleStage } from "@clanker-forge/contracts";
 const attribution = "> *This was posted by clanker-forge.*";
 
 const resultLine = /^\s*(?:IMPLEMENT|FOLLOWUP|TRIAGE)-(?:RESULT|DECISION):.*$/gim;
-const markerNoise = /<!--\s*clanker-forge:[^>]*-->/g;
+const htmlMarker = /<!--\s*clanker-forge:[^>]*-->/g;
+const textMarker = /^[ \t]*clanker-forge:.*$/gm;
+
+const stripMarkers = (text: string) => text.replace(htmlMarker, "").replace(textMarker, "");
 
 const maxReasonChars = 800;
 
@@ -30,7 +33,7 @@ export const attachCommand = (checkoutPath: string, sessionId: string) =>
 
 export const recoveryReason = "worker did not survive a daemon restart";
 
-export const statusReason = (reason: string) => oneLine(truncate(reason.replace(markerNoise, "")));
+export const statusReason = (reason: string) => oneLine(truncate(stripMarkers(reason)));
 
 export const prepareFailureReason = (error: {
   readonly _tag: string;
@@ -71,7 +74,7 @@ export const blockedComment = (
     "",
     "Applied `ready-for-human`; a human needs to take over.",
     "",
-    `Last failure: ${truncate(reason.replace(markerNoise, ""))}`,
+    `Last failure: ${truncate(stripMarkers(reason))}`,
   ];
   return resume === undefined
     ? lines.join("\n")

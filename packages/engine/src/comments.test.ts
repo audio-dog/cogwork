@@ -20,6 +20,23 @@ describe("comments", () => {
     );
   });
 
+  it("strips the plain-text marker lines Linear coordination bodies use", () => {
+    assert.strictEqual(
+      statusReason("build failed\nclanker-forge:attempt stage=implement outcome=succeeded at=9"),
+      "build failed",
+    );
+  });
+
+  it("keeps plain-text markers out of the blocked handoff body", () => {
+    const body = blockedComment(
+      "implement",
+      { kind: "non-retryable" },
+      "boom\nclanker-forge:ledger",
+      undefined,
+    );
+    assert.notInclude(body, "clanker-forge:ledger");
+  });
+
   it("collapses whitespace", () => {
     assert.strictEqual(oneLine("git\n  failed\tbadly"), "git failed badly");
   });

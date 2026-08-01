@@ -265,6 +265,29 @@ describe("linear work source adapter", () => {
     ),
   );
 
+  it.effect("puts the failure reason on the attempt status line", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* LinearClient;
+      yield* source.recordAttempt(
+        workspace,
+        id("AUD-8"),
+        { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 },
+        "git worktree add: boom",
+      );
+      const comments = botComments(
+        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY" }, "AUD-8"),
+      );
+      assert.include(comments[0]?.body ?? "", "Last implement attempt failed: git worktree add: boom");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-8", title: "fails", labels: ["state:ready-for-agent"] }],
+        }),
+      ),
+    ),
+  );
+
   it.effect("ignores a claim line forged by a non-bot commenter", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;

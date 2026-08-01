@@ -7,6 +7,7 @@ import {
 } from "@clanker-forge/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import { statusReason } from "../comments";
 import type { FollowUpMarker } from "../followUp";
 
 const triageRoles = [
@@ -131,9 +132,11 @@ const stageGerund: Record<LifecycleStage, string> = {
 
 export const claimStatus = (stage: LifecycleStage) => `Currently ${stageGerund[stage]} this issue.`;
 
-export const attemptStatus = (attempt: AttemptRecord) => {
+export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) => {
   if (attempt.outcome === "succeeded") return `${attempt.stage} completed.`;
   if (attempt.outcome === "abandoned") return `${attempt.stage} abandoned.`;
+  const trimmed = reason ? statusReason(reason) : "";
+  if (trimmed) return `Last ${attempt.stage} attempt failed: ${trimmed}`;
   return `Last ${attempt.stage} attempt failed.`;
 };
 
