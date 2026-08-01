@@ -12,7 +12,7 @@ export interface MarkdownAsset {
   body: string;
 }
 
-/** A skill directory (`skills/<name>/` containing a `SKILL.md` plus support files). */
+/** A skill directory (`skills/<bucket>/<name>/` containing a `SKILL.md` plus support files). */
 export interface Skill {
   /** Directory name (kebab-case, matches SKILL.md `name`). */
   name: string;
@@ -50,7 +50,7 @@ export interface Assets {
   commands: MarkdownAsset[];
   subagents: MarkdownAsset[];
   mcpServers: Record<string, McpServer>;
-  /** Portable skills loaded from `skills/` (synced in --global mode). */
+  /** Portable skills loaded from `skills/sync/` (synced in --global mode). */
   skills: Skill[];
   /** Per-repo skill config loaded from `repo-config/` (synced in --global mode). */
   repoConfigs: RepoConfig[];

@@ -29,7 +29,7 @@ function requireKeys(file: string, keys: string[]) {
 }
 
 // Skills: every SKILL.md needs name + description.
-for (const file of walk(join(repoRoot, "skills"), (n) => n === "SKILL.md")) {
+for (const file of walk(join(packageRoot, "skills"), (n) => n === "SKILL.md")) {
   requireKeys(file, ["name", "description"]);
 }
 

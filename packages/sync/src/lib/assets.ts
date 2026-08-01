@@ -11,7 +11,7 @@ export function loadAssets(packageRoot: string, repoRoot: string): Assets {
     commands: loadMarkdownDir(join(assetsDir, "commands")),
     subagents: loadMarkdownDir(join(assetsDir, "subagents")),
     mcpServers: loadMcp(join(assetsDir, "mcp", "servers.json")),
-    skills: loadSkills(join(repoRoot, "skills")),
+    skills: loadSkills(join(packageRoot, "skills", "sync")),
     repoConfigs: loadRepoConfigs(join(repoRoot, "repo-config")),
   };
 }
@@ -47,7 +47,7 @@ function loadMarkdownDir(dir: string): MarkdownAsset[] {
     });
 }
 
-/** A skill is any immediate subdirectory of `skills/` that contains a `SKILL.md`. */
+/** A skill is any immediate subdirectory of a skills bucket that contains a `SKILL.md`. */
 function loadSkills(dir: string): Skill[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
