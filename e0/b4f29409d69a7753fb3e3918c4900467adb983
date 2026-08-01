@@ -1,0 +1,119 @@
+packages/sync/skills/README.md
+  s_2ed5961c4e0c0c::t_bc73318309dd20 1-12,23-30,33-34,36-38,40-65,67-74,76-77
+  s_d0b8192a3f77fb::t_f9b2e0215c4ba6 18-22
+  s_d0b8192a3f77fb::t_af8efb20ed09d2 31-32,35
+  s_d0b8192a3f77fb::t_c97ac35751a93e 14-17
+  s_d0b8192a3f77fb::t_74d634a578737b 66
+  s_d0b8192a3f77fb::t_125064abe42446 75
+  s_d0b8192a3f77fb::t_fa53233897f44f 78-80
+  s_2ed5961c4e0c0c::t_edafa044d48a6a 39
+  s_2ed5961c4e0c0c::t_0c2990e48a0160 13
+packages/sync/src/lib/types.ts
+  s_2ed5961c4e0c0c::t_b002c812f0095a 53
+  s_2ed5961c4e0c0c::t_59405b1a0f43b2 15
+packages/sync/src/check.ts
+  s_2ed5961c4e0c0c::t_bf96aa71064139 32
+packages/sync/src/lib/assets.ts
+  s_2ed5961c4e0c0c::t_75f5ccf08f53bc 50
+  s_2ed5961c4e0c0c::t_66041739ffca31 14
+packages/sync/skills/sync/adversarial-review/SKILL.md
+  s_2ed5961c4e0c0c::t_14316681f0df90 1-52
+packages/sync/skills/sync/code-review/SKILL.md
+  s_2ed5961c4e0c0c::t_553f8ed4abeee1 1-91
+packages/sync/skills/sync/code-review/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_be4b84cc2f49e6 1-3
+packages/sync/skills/sync/domain-modeling/ADR-FORMAT.md
+  s_2ed5961c4e0c0c::t_eb1fc4f274a7fc 1-47
+packages/sync/skills/sync/domain-modeling/CONTEXT-FORMAT.md
+  s_2ed5961c4e0c0c::t_20cd1ce07124bf 1-60
+packages/sync/skills/sync/domain-modeling/SKILL.md
+  s_2ed5961c4e0c0c::t_68ee6bcf44dc8a 1-78
+packages/sync/skills/sync/domain-modeling/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_69c227650c4161 1-3
+packages/sync/skills/sync/follow-up-agent/SKILL.md
+  s_2ed5961c4e0c0c::t_5f26d3b10763b4 1-87
+packages/sync/skills/sync/git-master/SKILL.md
+  s_2ed5961c4e0c0c::t_5f434a48b815da 1-199
+packages/sync/skills/sync/git-master/commit-mode.md
+  s_2ed5961c4e0c0c::t_11780beb1e8760 1-445
+packages/sync/skills/sync/git-master/history-search-mode.md
+  s_2ed5961c4e0c0c::t_bc414d83b03214 1-227
+packages/sync/skills/sync/git-master/rebase-mode.md
+  s_2ed5961c4e0c0c::t_55c95848314e53 1-179
+packages/sync/skills/sync/implement-agent/SKILL.md
+  s_2ed5961c4e0c0c::t_add20de7232ad8 1-120
+packages/sync/skills/sync/implement/SKILL.md
+  s_2ed5961c4e0c0c::t_5ff8e366561db3 1-21
+packages/sync/skills/sync/improve-codebase-architecture/HTML-REPORT.md
+  s_2ed5961c4e0c0c::t_5fd64a4d3c5e2b 1-123
+packages/sync/skills/sync/improve-codebase-architecture/SKILL.md
+  s_2ed5961c4e0c0c::t_e0e58de13bb5bd 1-71
+packages/sync/skills/sync/improve-codebase-architecture/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_d5620d4828f48d 1-5
+packages/sync/skills/sync/prefactor/SKILL.md
+  s_2ed5961c4e0c0c::t_e6d66f347a539a 1-81
+packages/sync/skills/sync/setup-repo-config/SKILL.md
+  s_2ed5961c4e0c0c::t_b678b4a0dae97f 1-100
+packages/sync/skills/sync/setup-repo-config/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_fa6d255dbc2097 1-5
+packages/sync/skills/sync/setup-repo-config/domain.md
+  s_2ed5961c4e0c0c::t_3b7c387ebcc093 1-51
+packages/sync/skills/sync/setup-repo-config/issue-tracker-github.md
+  s_2ed5961c4e0c0c::t_c770e5e2b15b24 1-45
+packages/sync/skills/sync/setup-repo-config/issue-tracker-gitlab.md
+  s_2ed5961c4e0c0c::t_dd3b0beac69742 1-46
+packages/sync/skills/sync/setup-repo-config/issue-tracker-local.md
+  s_2ed5961c4e0c0c::t_6de6cec9a51900 1-30
+packages/sync/skills/sync/setup-repo-config/triage-labels.md
+  s_2ed5961c4e0c0c::t_ab6caee97c179a 1-15
+packages/sync/skills/sync/to-spec/SKILL.md
+  s_2ed5961c4e0c0c::t_e35cdd5a2f678b 1-82
+packages/sync/skills/sync/to-spec/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_dd865953077b7c 1-5
+packages/sync/skills/sync/to-tickets/SKILL.md
+  s_2ed5961c4e0c0c::t_68b2665b8ebb21 1-112
+packages/sync/skills/sync/to-tickets/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_2c7b1176dbfe05 1-5
+packages/sync/skills/sync/triage-agent/AGENT-BRIEF.md
+  s_2ed5961c4e0c0c::t_2af5b831f9b17a 1-207
+packages/sync/skills/sync/triage-agent/OUT-OF-SCOPE.md
+  s_2ed5961c4e0c0c::t_fe12f040a9660c 1-105
+packages/sync/skills/sync/triage-agent/SKILL.md
+  s_2ed5961c4e0c0c::t_f3004bf297d72e 1-119
+packages/sync/skills/sync/triage/AGENT-BRIEF.md
+  s_2ed5961c4e0c0c::t_4ba6290d5b3114 1-207
+packages/sync/skills/sync/triage/OUT-OF-SCOPE.md
+  s_2ed5961c4e0c0c::t_ab5d73d5a9b0e8 1-105
+packages/sync/skills/sync/triage/SKILL.md
+  s_2ed5961c4e0c0c::t_1e640e8f25033a 1-121
+packages/sync/skills/sync/triage/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_596309814caa39 1-5
+packages/sync/skills/sync/wayfinder/SKILL.md
+  s_2ed5961c4e0c0c::t_87cf56521cc15f 1-128
+packages/sync/skills/sync/wayfinder/agents/openai.yaml
+  s_2ed5961c4e0c0c::t_84f78e35564a36 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "e0b4f29409d69a7753fb3e3918c4900467adb983",
+  "prompts": {},
+  "sessions": {
+    "s_2ed5961c4e0c0c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "31dc8d50-b0c9-4dbd-890b-13146a5db979",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d0b8192a3f77fb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4deaf382-78a5-4c61-9980-edeb274b9584",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
