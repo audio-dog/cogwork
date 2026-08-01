@@ -94,10 +94,10 @@ const freshPattern = /\/fresh\b/i;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-type Feedback = Pick<RawComment, "authorLogin" | "authorAssociation" | "body" | "createdAtMillis">;
+type Feedback = Pick<RawComment, "authorAssociation" | "body" | "createdAtMillis">;
 
-const isHumanFeedback = (feedback: Feedback, botLogin: string) =>
-  feedback.authorLogin !== botLogin && writeAccess.has(feedback.authorAssociation);
+const isHumanFeedback = (feedback: Feedback) =>
+  writeAccess.has(feedback.authorAssociation) && !hasClankerMarker(feedback.body);
 
 export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
   const latestApprovalMillis = reviews.reduce(
@@ -119,11 +119,15 @@ export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
 };
 
 export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botLogin: string | null) => {
-  const humans = botLogin ? feedback.filter((item) => isHumanFeedback(item, botLogin)) : [];
-  const newest = humans.reduce<Feedback | null>(
-    (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
-    null,
-  );
+  if (!botLogin) {
+    return { latestAtMillis: null, fresh: false };
+  }
+  const newest = feedback
+    .filter(isHumanFeedback)
+    .reduce<Feedback | null>(
+      (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
+      null,
+    );
   return {
     latestAtMillis: newest?.createdAtMillis ?? null,
     fresh: newest ? freshPattern.test(newest.body) : false,
@@ -318,3 +322,5 @@ export const layer = Layer.effect(
     return make(client);
   }),
 );
+
+export { make as makeAdapter };

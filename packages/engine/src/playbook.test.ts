@@ -31,9 +31,10 @@ describe("resolveTriage", () => {
     assert.strictEqual(resolved.harness, "cursor");
     assert.strictEqual(resolved.skill, "triage-agent");
     assert.strictEqual(resolved.model, null);
+    assert.strictEqual(resolved.effort, null);
   });
 
-  it("prefers per-stage harness, model, skill, and prompt overrides", () => {
+  it("prefers per-stage harness, model, effort, skill, and prompt overrides", () => {
     const resolved = resolveTriage(
       config({
         harness: { preferred: "cursor" },
@@ -42,6 +43,7 @@ describe("resolveTriage", () => {
             enabled: true,
             harness: "claude",
             model: "opus",
+            effort: "high",
             skill: "my-triage",
             prompt: "Do the thing",
           },
@@ -51,6 +53,7 @@ describe("resolveTriage", () => {
     assert.strictEqual(resolved.enabled, true);
     assert.strictEqual(resolved.harness, "claude");
     assert.strictEqual(resolved.model, "opus");
+    assert.strictEqual(resolved.effort, "high");
     assert.strictEqual(resolved.skill, "my-triage");
     assert.strictEqual(resolved.promptTemplate, "Do the thing");
   });

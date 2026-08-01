@@ -42,19 +42,19 @@ A pluggable implementation of one agent backend: a `name` plus a `run` that retu
 _Avoid_: Harness service, adapter (adapter is the work-source term)
 
 **Playbook**:
-A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Stages can be disabled per workspace; only `triage` and `implement` are wired today.
+A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model/effort choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Model and effort are harness-native strings (e.g. Cursor CLI model ids and `effort=` bracket values); stages can be disabled per workspace; only `triage`, `implement`, and `follow-up` are wired today.
 _Avoid_: Workflow, pipeline
 
 **Work source adapter**:
-A concrete implementation of the work source port. `GitHub.adapterLayer` is the only real one; it reads issues, labels, and comments, writes coordination markers into the coordination comment, and posts human-facing notes (triage proposals) as separate comments.
-_Avoid_: Client (the GitHub HTTP client is a lower-level detail), plugin
+A concrete implementation of the work source port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by `workSource.type` via `workSourceRoutedLayer`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear returns `pr: null` (PR follow-up stays GitHub's problem for now).
+_Avoid_: Client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Coordination markers**:
-The HTML-comment records (claim, attempt, follow-up, ledger anchor) the GitHub adapter writes into the coordination comment, so the control plane's coordination state travels with the work source.
+Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the work source. GitHub embeds them as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments).
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.
 
 **Coordination comment**:
-The single bot-owned comment the GitHub adapter keeps on an issue for control-plane state. Every coordination write edits it in place rather than adding another comment. It holds the **status** (one line naming what the control plane is doing now), optional **detail** (a hand-off explanation such as a no-progress follow-up note), and the coordination markers. Triage proposals are not stored here — each triage round is a separate comment so the thread stays conversational and notifiable. A write that sets one part carries the others forward, so a status change never erases a hand-off detail.
+The single bot-owned comment an adapter keeps on an issue for control-plane state. Every coordination write edits it in place rather than adding another comment. It holds the **status** (one line naming what the control plane is doing now), optional **detail** (a hand-off explanation such as a no-progress follow-up note), and the coordination markers. Triage proposals are not stored here — each triage round is a separate comment so the thread stays conversational and notifiable. A write that sets one part carries the others forward, so a status change never erases a hand-off detail.
 _Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
 
 **Worktree manager**:

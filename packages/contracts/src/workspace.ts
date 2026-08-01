@@ -1,11 +1,23 @@
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from "./baseSchemas";
 
+export const TriageRoleLabels = Schema.Struct({
+  "needs-triage": Schema.optional(TrimmedNonEmptyString),
+  "ready-for-agent": Schema.optional(TrimmedNonEmptyString),
+  "needs-info": Schema.optional(TrimmedNonEmptyString),
+  "ready-for-human": Schema.optional(TrimmedNonEmptyString),
+  wontfix: Schema.optional(TrimmedNonEmptyString),
+});
+export type TriageRoleLabels = typeof TriageRoleLabels.Type;
+
 export const WorkSourceConfig = Schema.Struct({
   type: WorkSourceType,
   repo: Schema.optional(TrimmedNonEmptyString),
+  team: Schema.optional(TrimmedNonEmptyString),
   tokenEnv: Schema.optional(TrimmedNonEmptyString),
   botLogin: Schema.optional(TrimmedNonEmptyString),
+  botUserId: Schema.optional(TrimmedNonEmptyString),
+  roleLabels: Schema.optional(TriageRoleLabels),
 });
 export type WorkSourceConfig = typeof WorkSourceConfig.Type;
 
@@ -20,6 +32,7 @@ export const PlaybookStageConfig = Schema.Struct({
   skill: Schema.optional(TrimmedNonEmptyString),
   harness: Schema.optional(HarnessName),
   model: Schema.optional(TrimmedNonEmptyString),
+  effort: Schema.optional(TrimmedNonEmptyString),
   resumeMaxAgeMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
   resumeMaxTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
 });
