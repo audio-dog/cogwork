@@ -83,7 +83,9 @@ export const make = Effect.gen(function* () {
     );
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* (job: ReconcileJob) {
-    const states = yield* Effect.forEach(registry.workspaces, pollWorkspace);
+    const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
+      concurrency: 4,
+    });
     yield* Ref.set(snapshotRef, { workspaces: states });
     yield* Deferred.succeed(job.receipt, {
       workspaces: registry.workspaces.length,

@@ -259,6 +259,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
     return yield* Effect.forEach(
       issues.filter((issue) => !issue.isPullRequest),
       buildItem(target, pullsByIssue(target, pulls)),
+      { concurrency: 10 },
     );
   });
 
