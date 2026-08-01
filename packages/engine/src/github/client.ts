@@ -33,10 +33,10 @@ export interface RawIssue {
 export interface RawPull {
   readonly number: number;
   readonly authorLogin: string;
+  readonly authorAssociation: string;
   readonly body: string;
   readonly draft: boolean;
   readonly headSha: string;
-  readonly reviewDecision: ReviewDecision;
 }
 
 export interface RawComment {
@@ -45,6 +45,14 @@ export interface RawComment {
   readonly authorAssociation: string;
   readonly body: string;
   readonly createdAtMillis: number;
+}
+
+export interface RawReview {
+  readonly authorLogin: string;
+  readonly authorAssociation: string;
+  readonly state: string;
+  readonly body: string;
+  readonly submittedAtMillis: number;
 }
 
 const baseHeaders = {
@@ -69,11 +77,15 @@ const PullSchema = Schema.Struct({
   body: Schema.NullOr(Schema.String),
   draft: Schema.optional(Schema.Boolean),
   head: Schema.Struct({ sha: Schema.String }),
+  author_association: Schema.optional(Schema.String),
 });
 
 const ReviewSchema = Schema.Struct({
   state: Schema.String,
   user: Schema.Struct({ login: Schema.String }),
+  body: Schema.NullOr(Schema.String),
+  author_association: Schema.optional(Schema.String),
+  submitted_at: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 const CommentSchema = Schema.Struct({
@@ -83,6 +95,19 @@ const CommentSchema = Schema.Struct({
   created_at: Schema.String,
   author_association: Schema.optional(Schema.String),
 });
+
+const toRawComment = (comment: typeof CommentSchema.Type) =>
+  comment.body
+    ? [
+        {
+          id: comment.id,
+          authorLogin: comment.user.login,
+          authorAssociation: comment.author_association ?? "NONE",
+          body: comment.body,
+          createdAtMillis: commentMillis(comment.created_at),
+        },
+      ]
+    : [];
 
 const CheckRunSchema = Schema.Struct({
   name: Schema.String,
@@ -235,13 +260,27 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return body;
   });
 
-  const reviewDecisionFor = Effect.fn("github.reviewDecision")(function* (
+  const listReviews = Effect.fn("github.listReviews")(function* (repo: GitHubRepoRef, pullNumber: number) {
+    const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}/reviews?per_page=100`));
+    const reviews = yield* Effect.mapError(decodeReviews(json), toUnavailable);
+    return reviews.map(
+      (review): RawReview => ({
+        authorLogin: review.user.login,
+        authorAssociation: review.author_association ?? "NONE",
+        state: review.state,
+        body: review.body ?? "",
+        submittedAtMillis: review.submitted_at ? commentMillis(review.submitted_at) : 0,
+      }),
+    );
+  });
+
+  const listReviewComments = Effect.fn("github.listReviewComments")(function* (
     repo: GitHubRepoRef,
     pullNumber: number,
   ) {
-    const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}/reviews?per_page=100`));
-    const reviews = yield* Effect.mapError(decodeReviews(json), toUnavailable);
-    return reviewDecisionOf(reviews.map((review) => ({ login: review.user.login, state: review.state })));
+    const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}/comments?per_page=100`));
+    const comments = yield* Effect.mapError(decodeComments(json), toUnavailable);
+    return comments.flatMap(toRawComment);
   });
 
   const sendJson = Effect.fn("github.sendJson")(function* (
@@ -271,38 +310,25 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, "/pulls?state=open&per_page=100"));
         const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
-        return yield* Effect.forEach(pulls, (pull) =>
-          Effect.map(
-            reviewDecisionFor(repo, pull.number),
-            (decision): RawPull => ({
-              number: pull.number,
-              authorLogin: pull.user.login,
-              body: pull.body ?? "",
-              draft: pull.draft ?? false,
-              headSha: pull.head.sha,
-              reviewDecision: decision,
-            }),
-          ),
+        return pulls.map(
+          (pull): RawPull => ({
+            number: pull.number,
+            authorLogin: pull.user.login,
+            authorAssociation: pull.author_association ?? "NONE",
+            body: pull.body ?? "",
+            draft: pull.draft ?? false,
+            headSha: pull.head.sha,
+          }),
         );
       }),
     listComments: (repo: GitHubRepoRef, issueNumber: number) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`));
         const comments = yield* Effect.mapError(decodeComments(json), toUnavailable);
-        return comments.flatMap((comment) =>
-          comment.body
-            ? [
-                {
-                  id: comment.id,
-                  authorLogin: comment.user.login,
-                  authorAssociation: comment.author_association ?? "NONE",
-                  body: comment.body,
-                  createdAtMillis: commentMillis(comment.created_at),
-                },
-              ]
-            : [],
-        );
+        return comments.flatMap(toRawComment);
       }),
+    listReviewComments,
+    listReviews,
     listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/commits/${sha}/check-runs?per_page=100`));

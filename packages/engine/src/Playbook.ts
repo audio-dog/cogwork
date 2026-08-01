@@ -137,6 +137,40 @@ export const buildTriagePrompt = (resolved: ResolvedStage, item: PromptItem) =>
 
 export const parseTriageDecision = (text: string) => parseLastSentinel(decisionPattern, decisionRoles, text);
 
+const dispositionPattern = /Disposition\**\s*:\s*\**\s*([a-z-]+)/gi;
+
+export const parseTriageDisposition = (text: string) =>
+  parseLastSentinel(dispositionPattern, decisionRoles, text);
+
+export type TriageDecisionSource = "sentinel" | "disposition" | "default";
+
+export interface TriageDecision {
+  readonly role: TriageRole;
+  readonly source: TriageDecisionSource;
+  readonly sentinel: TriageRole | null;
+  readonly disposition: TriageRole | null;
+}
+
+const decisionSource = (
+  sentinel: TriageRole | null,
+  disposition: TriageRole | null,
+): TriageDecisionSource => {
+  if (sentinel) return "sentinel";
+  if (disposition) return "disposition";
+  return "default";
+};
+
+export const resolveTriageDecision = (text: string): TriageDecision => {
+  const sentinel = parseTriageDecision(text);
+  const disposition = parseTriageDisposition(text);
+  return {
+    sentinel,
+    disposition,
+    source: decisionSource(sentinel, disposition),
+    role: sentinel ?? disposition ?? "ready-for-human",
+  };
+};
+
 export type ImplementResult = "opened-pr" | "blocked";
 
 const implementResults: ReadonlyArray<ImplementResult> = ["opened-pr", "blocked"];
