@@ -1,0 +1,23 @@
+skills/follow-up-agent/SKILL.md
+  s_7ea6ac5064e991::t_ff272d820d0293 17
+  s_7ea6ac5064e991::t_9efaf8cdfe88c6 66-73
+packages/engine/src/github/markers.test.ts
+  s_7ea6ac5064e991::t_a8636a910f95da 99-102
+  s_7ea6ac5064e991::t_dd9ff8c7738227 103-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "6ff21e1f3ee612414b8f9583057bf3eac1bb5967",
+  "prompts": {},
+  "sessions": {
+    "s_7ea6ac5064e991": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b9d7570d-e1fd-401a-82d2-bcfc3e5e34c6",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
