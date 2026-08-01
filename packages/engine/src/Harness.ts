@@ -11,6 +11,7 @@ export interface HarnessRequest {
   readonly checkoutPath: string;
   readonly prompt: string;
   readonly model: string | null;
+  readonly effort: string | null;
   readonly sessionId: string | null;
 }
 

@@ -42,7 +42,7 @@ A pluggable implementation of one agent backend: a `name` plus a `run` that retu
 _Avoid_: Harness service, adapter (adapter is the work-source term)
 
 **Playbook**:
-A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Stages can be disabled per workspace; only `triage` and `implement` are wired today.
+A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model/effort choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Model and effort are harness-native strings (e.g. Cursor CLI model ids and `effort=` bracket values); stages can be disabled per workspace; only `triage`, `implement`, and `follow-up` are wired today.
 _Avoid_: Workflow, pipeline
 
 **Work source adapter**:

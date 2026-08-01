@@ -73,7 +73,7 @@ A coding agent (Cursor, Claude Code, …) the control plane drives to do work in
 _Avoid_: Model, provider, target (that word belongs to sync)
 
 **Harness request**:
-The input handed to a harness for one run: which harness, the checkout path, the prompt, an optional model, and an optional session to resume.
+The input handed to a harness for one run: which harness, the checkout path, the prompt, an optional model, an optional harness-native effort level, and an optional session to resume.
 _Avoid_: Prompt (that's one field), job
 
 **Harness event**:

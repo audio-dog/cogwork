@@ -32,6 +32,7 @@ export const PlaybookStageConfig = Schema.Struct({
   skill: Schema.optional(TrimmedNonEmptyString),
   harness: Schema.optional(HarnessName),
   model: Schema.optional(TrimmedNonEmptyString),
+  effort: Schema.optional(TrimmedNonEmptyString),
   resumeMaxAgeMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
   resumeMaxTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
 });
