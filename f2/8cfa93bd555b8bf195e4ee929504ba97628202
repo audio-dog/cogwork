@@ -1,0 +1,31 @@
+packages/engine/src/github/client.ts
+  s_92ccad0e123ef9::t_b5b33527819105 277,281-283
+  s_92ccad0e123ef9::t_866f42ebf78f44 328,331
+  s_92ccad0e123ef9::t_d2da9fd4fd8d3d 99
+  s_92ccad0e123ef9::t_bb72533140a256 313-321
+  s_92ccad0e123ef9::t_c665f50fe9d39d 86-88,100-110
+  s_92ccad0e123ef9::t_414cc1edce298c 50-55
+  s_92ccad0e123ef9::t_9c0980eb8413cc 36
+  s_92ccad0e123ef9::t_98e38bac1bc03e 263-274
+  s_92ccad0e123ef9::t_9ab9596ad3b3ee 330
+  s_92ccad0e123ef9::t_de6d49c71085cf 80
+  s_92ccad0e123ef9::t_a3f227c5df5424 56-57
+  s_92ccad0e123ef9::t_ff2d4e4832073c 111
+  s_92ccad0e123ef9::t_cd60d4de5e703e 275-276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "f28cfa93bd555b8bf195e4ee929504ba97628202",
+  "prompts": {},
+  "sessions": {
+    "s_92ccad0e123ef9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f61c58c9-18f2-407b-a6ff-9a40056f3c8b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
