@@ -1,0 +1,19 @@
+apps/cli/config/clanker-forge.workspace.ts
+  s_5c28f9dca20b9b::t_715c3a7f1e8a76 1,5,21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "52d15af1825f2515fe811f7f643573880adf5978",
+  "prompts": {},
+  "sessions": {
+    "s_5c28f9dca20b9b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0903638a-a436-4145-ac1c-3a8d230c9f55",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
