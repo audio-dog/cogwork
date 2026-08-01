@@ -7,7 +7,7 @@
   "scripts": {
     "sync": "tsx src/cli.ts",
     "check": "tsx src/check.ts",
-    "link": "bash bin/link-skills.sh",
+    "link-skills": "bash bin/link-skills.sh",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },

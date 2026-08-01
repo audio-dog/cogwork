@@ -2,7 +2,7 @@
   "name": "clanker-forge",
   "version": "0.0.1",
   "private": true,
-  "description": "Toolkit for AI coding agents: portable skills plus a single-source generator that syncs rules, commands, subagents, and MCP config across Claude Code, Cursor, and Codex.",
+  "description": "Toolkit for AI coding agents: skills (forge / engine / sync buckets) plus a single-source generator that syncs rules, commands, subagents, and MCP config across Claude Code, Cursor, and Codex.",
   "type": "module",
   "packageManager": "pnpm@11.5.3",
   "scripts": {
@@ -12,6 +12,9 @@
     "prepare": "effect-tsgo patch",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
+    "sync": "pnpm --filter @clanker-forge/sync run sync",
+    "check": "pnpm --filter @clanker-forge/sync run check",
+    "link-skills": "pnpm --filter @clanker-forge/sync run link-skills",
     "vendor": "node scripts/vendor.mjs"
   },
   "devDependencies": {
