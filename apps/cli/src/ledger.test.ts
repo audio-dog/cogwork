@@ -1,0 +1,150 @@
+import {
+  HarnessName,
+  RunId,
+  type RunRecord,
+  SessionId,
+  WorkItemId,
+  WorkspaceId,
+} from "@clanker-forge/contracts";
+import { RunLedger } from "@clanker-forge/engine";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { assert, describe, layer } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
+import { layer as ledgerLayer } from "./ledger";
+
+const runId = Schema.decodeSync(RunId);
+const workspace = Schema.decodeSync(WorkspaceId)("gh");
+const workItem = Schema.decodeSync(WorkItemId)("#7");
+const session = Schema.decodeSync(SessionId)("sess-abc");
+const harness = Schema.decodeSync(HarnessName)("cursor");
+
+const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecord> = {}): RunRecord => ({
+  id: runId(id),
+  workspace,
+  workItem,
+  stage: "triage",
+  harness,
+  branch: null,
+  session: null,
+  usage: null,
+  status: "running",
+  startedAtMillis,
+  endedAtMillis: null,
+  ...overrides,
+});
+
+describe("sqlite RunLedger", () => {
+  layer(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-ledger-" });
+      return ledgerLayer(path.join(dir, "runs.db"));
+    }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
+  )((it) => {
+    it.effect("persists a run, its events, and reports a summary with event count", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        const id = runId("happy-1");
+        yield* ledger.insertRun(record("happy-1", 1000));
+        yield* ledger.appendEvent(id, {
+          seq: 1,
+          type: "TEXT_MESSAGE_CONTENT",
+          name: null,
+          data: '{"delta":"hi"}',
+          atMillis: 1002,
+        });
+        yield* ledger.appendEvent(id, {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 1001,
+        });
+        yield* ledger.updateRun(id, {
+          status: "succeeded",
+          session,
+          usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
+          endedAtMillis: 2000,
+        });
+
+        const summaries = yield* ledger.listRuns(10);
+        const summary = summaries.find((row) => row.id === id);
+        assert.isDefined(summary);
+        assert.strictEqual(summary?.status, "succeeded");
+        assert.strictEqual(summary?.eventCount, 2);
+        assert.strictEqual(summary?.session, "sess-abc");
+        assert.deepStrictEqual(summary?.usage, {
+          inputTokens: 5,
+          outputTokens: 2,
+          totalTokens: 7,
+        });
+
+        const events = yield* ledger.events(id);
+        assert.deepStrictEqual(
+          events.map((event) => event.seq),
+          [0, 1],
+        );
+        assert.deepStrictEqual(
+          events.map((event) => event.type),
+          ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
+        );
+      }),
+    );
+
+    it.effect("orders runs newest first", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(record("order-older", 1000));
+        yield* ledger.insertRun(record("order-newer", 5000));
+        const summaries = yield* ledger.listRuns(10);
+        const ids = summaries
+          .map((summary) => summary.id)
+          .filter((id) => id === "order-older" || id === "order-newer");
+        assert.deepStrictEqual(ids, ["order-newer", "order-older"]);
+      }),
+    );
+
+    it.effect("returns the most recent session handle for a branch", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        const sessionByBranch = (workspace: string, branch: string) =>
+          Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
+        yield* ledger.insertRun(record("branch-1", 1000, { branch: "7-fix-export" }));
+        yield* ledger.insertRun(record("branch-2", 3000, { branch: "9-other" }));
+        yield* ledger.updateRun(runId("branch-1"), {
+          status: "succeeded",
+          session,
+          usage: null,
+          endedAtMillis: 1500,
+        });
+        assert.strictEqual(yield* sessionByBranch("gh", "7-fix-export"), "sess-abc");
+        assert.isNull(yield* sessionByBranch("gh", "9-other"));
+        assert.isNull(yield* sessionByBranch("other", "7-fix-export"));
+      }),
+    );
+
+    it.effect("collapses absent token usage fields to omitted keys", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        const id = runId("usage-partial");
+        yield* ledger.insertRun(record("usage-partial", 9000));
+        yield* ledger.updateRun(id, {
+          status: "succeeded",
+          session,
+          usage: { inputTokens: 5 },
+          endedAtMillis: 9100,
+        });
+
+        const summaries = yield* ledger.listRuns(10);
+        const summary = summaries.find((row) => row.id === id);
+        assert.isDefined(summary);
+        assert.deepStrictEqual(summary?.usage, { inputTokens: 5 });
+      }),
+    );
+  });
+});
