@@ -1,0 +1,36 @@
+packages/engine/src/comments.ts
+  s_19bc81255f20b1::t_83a6c1c18dcc59 77
+  s_19bc81255f20b1::t_9ce4d35ecd6a7f 6-9
+  s_19bc81255f20b1::t_fe788cfef1650b 36
+packages/engine/src/comments.test.ts
+  s_19bc81255f20b1::t_c6efbf75ba7cf4 23-39
+packages/engine/src/linear/linear.test.ts
+  s_19bc81255f20b1::t_5bd3df495191c4 268-290
+packages/engine/src/linear/markers.ts
+  s_19bc81255f20b1::t_60971de15dacf7 10
+  s_19bc81255f20b1::t_aed1f89a77bfb7 138-139
+  s_19bc81255f20b1::t_dead12023207fa 135
+packages/engine/src/workSourceRouter.test.ts
+  s_19bc81255f20b1::t_a9e6a7bead30cc 1-10,15-72
+  s_19bc81255f20b1::t_82ea1d8f6c07e9 11-14
+packages/engine/src/linear/adapter.ts
+  s_19bc81255f20b1::t_a22e0130178921 174,178
+packages/engine/src/workSourceRouter.ts
+  s_19bc81255f20b1::t_c61460771c4c57 18-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "df1e0231b0a39f644d450a30c1e500dd25a0dbc5",
+  "prompts": {},
+  "sessions": {
+    "s_19bc81255f20b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "76b9e526-453e-48e8-ad6a-b8eb58dad638",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
