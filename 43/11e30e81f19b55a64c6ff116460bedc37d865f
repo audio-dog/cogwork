@@ -1,0 +1,32 @@
+packages/engine/src/github/markers.ts
+  s_b03e688695e966::t_8a301451fe25c4 36
+  s_b03e688695e966::t_96ba68d17f08ec 48
+  s_92ccad0e123ef9::t_e6a0a7d4b5aaa3 49
+packages/engine/src/github/markers.test.ts
+  s_92ccad0e123ef9::t_4d2d54dd911c7a 14
+  s_92ccad0e123ef9::t_4c5882c31bf53a 89-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "4311e30e81f19b55a64c6ff116460bedc37d865f",
+  "prompts": {},
+  "sessions": {
+    "s_92ccad0e123ef9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f61c58c9-18f2-407b-a6ff-9a40056f3c8b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b03e688695e966": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3170c558-c108-45ed-9017-e26cf9b0eed8",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
