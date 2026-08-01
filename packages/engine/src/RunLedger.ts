@@ -79,6 +79,8 @@ export const makeMemory = Effect.gen(function* () {
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
         Effect.map(([runs, events]) => summarize(runs, events, limit)),
       ),
+    getRun: (runId: RunId) =>
+      Effect.map(Ref.get(runsRef), (runs) => runs.find((run) => run.id === runId) ?? null),
     events: (runId: RunId) => Effect.map(Ref.get(eventsRef), (events) => sortedEvents(events, runId)),
   } as const;
 });

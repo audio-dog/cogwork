@@ -172,16 +172,8 @@ const make = (ledgerPath: string) =>
         Effect.orElseSucceed(() => [] as ReadonlyArray<A>),
       );
 
-    const latestRunWhere = (operation: string, where: SQL | undefined, requireSession = true) =>
-      Effect.try(() =>
-        db
-          .select(runRecordSelection)
-          .from(runs)
-          .where(requireSession ? and(where, isNotNull(runs.session)) : where)
-          .orderBy(desc(runs.startedAt))
-          .limit(1)
-          .get(),
-      ).pipe(
+    const readRun = (operation: string, thunk: () => Parameters<typeof runRecordFromRow>[0] | undefined) =>
+      Effect.try(thunk).pipe(
         Effect.tapError((cause) => warn(operation, cause)),
         Effect.orElseSucceed(() => undefined),
         Effect.flatMap((row) =>
@@ -189,6 +181,11 @@ const make = (ledgerPath: string) =>
             ? decodeRun(runRecordFromRow(row)).pipe(Effect.orElseSucceed(() => null))
             : Effect.succeed(null),
         ),
+      );
+
+    const latestRunWhere = (operation: string, where: SQL | undefined) =>
+      readRun(operation, () =>
+        db.select(runRecordSelection).from(runs).where(where).orderBy(desc(runs.startedAt)).limit(1).get(),
       );
 
     const service: RunLedger.RunLedgerService = {
@@ -239,14 +236,13 @@ const make = (ledgerPath: string) =>
         }),
 
       latestRunByBranch: (workspace: string, branch: string) =>
-        latestRunWhere("latestRunByBranch", and(eq(runs.workspace, workspace), eq(runs.branch, branch))),
+        latestRunWhere(
+          "latestRunByBranch",
+          and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)),
+        ),
 
       latestRunForItem: (workspace: string, workItem: string) =>
-        latestRunWhere(
-          "latestRunForItem",
-          and(eq(runs.workspace, workspace), eq(runs.workItem, workItem)),
-          false,
-        ),
+        latestRunWhere("latestRunForItem", and(eq(runs.workspace, workspace), eq(runs.workItem, workItem))),
 
       listRuns: (limit: number) =>
         readRows("listRuns", () =>
@@ -267,6 +263,9 @@ const make = (ledgerPath: string) =>
             ),
           ),
         ),
+
+      getRun: (runId: RunId) =>
+        readRun("getRun", () => db.select(runRecordSelection).from(runs).where(eq(runs.id, runId)).get()),
 
       events: (runId: RunId) =>
         readRows("events", () =>

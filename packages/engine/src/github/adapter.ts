@@ -18,6 +18,9 @@ import {
   type GitHubRepoRef,
   type RawComment,
   type RawPull,
+  type RawReview,
+  type ReviewDecision,
+  reviewDecisionOf,
 } from "./client";
 import {
   attemptStatus,
@@ -30,6 +33,7 @@ import {
   formatCoordinationBody,
   formatNoteBody,
   hasClaimLabel,
+  hasClankerMarker,
   hasLedgerMarker,
   parseAttempts,
   parseClaim,
@@ -79,10 +83,10 @@ export const linkedIssue = (body: string) => {
   return match?.[1] ? Number.parseInt(match[1], 10) : null;
 };
 
-export const prReview = (pull: RawPull): PrReview => {
+export const prReview = (pull: RawPull, decision: ReviewDecision): PrReview => {
   if (pull.draft) return "pending";
-  if (pull.reviewDecision === "changes-requested") return "changes-requested";
-  if (pull.reviewDecision === "approved") return "ready";
+  if (decision === "changes-requested") return "changes-requested";
+  if (decision === "approved") return "ready";
   return "pending";
 };
 
@@ -90,15 +94,40 @@ const freshPattern = /\/fresh\b/i;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-const trustedHuman = (comment: RawComment, botLogin: string) =>
-  comment.authorLogin !== botLogin && writeAccess.has(comment.authorAssociation);
+type Feedback = Pick<RawComment, "authorAssociation" | "body" | "createdAtMillis">;
 
-export const humanCommentSignal = (comments: ReadonlyArray<RawComment>, botLogin: string | null) => {
-  const humans = botLogin ? comments.filter((comment) => trustedHuman(comment, botLogin)) : [];
-  const newest = humans.reduce<RawComment | null>(
-    (max, comment) => (max && max.createdAtMillis >= comment.createdAtMillis ? max : comment),
-    null,
+const isHumanFeedback = (feedback: Feedback) =>
+  writeAccess.has(feedback.authorAssociation) && !hasClankerMarker(feedback.body);
+
+export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
+  const latestApprovalMillis = reviews.reduce(
+    (latest, review) => (review.state === "APPROVED" ? Math.max(latest, review.submittedAtMillis) : latest),
+    Number.NEGATIVE_INFINITY,
   );
+  return reviews.flatMap((review) =>
+    review.body && review.state !== "APPROVED" && review.submittedAtMillis > latestApprovalMillis
+      ? [
+          {
+            authorLogin: review.authorLogin,
+            authorAssociation: review.authorAssociation,
+            body: review.body,
+            createdAtMillis: review.submittedAtMillis,
+          },
+        ]
+      : [],
+  );
+};
+
+export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botLogin: string | null) => {
+  if (!botLogin) {
+    return { latestAtMillis: null, fresh: false };
+  }
+  const newest = feedback
+    .filter(isHumanFeedback)
+    .reduce<Feedback | null>(
+      (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
+      null,
+    );
   return {
     latestAtMillis: newest?.createdAtMillis ?? null,
     fresh: newest ? freshPattern.test(newest.body) : false,
@@ -143,13 +172,23 @@ const make = (client: GitHubClientService): WorkSourceService => {
   });
 
   const observePr = Effect.fn("github.observePr")(function* (target: GitHubTarget, pull: RawPull) {
-    const [checks, comments] = yield* Effect.all([
+    const [checks, comments, reviewComments, reviews] = yield* Effect.all([
       client.listCheckRuns(target, pull.headSha),
       client.listComments(target, pull.number),
+      client.listReviewComments(target, pull.number),
+      client.listReviews(target, pull.number),
     ]);
-    const human = humanCommentSignal(comments, target.botLogin);
+    const decision = reviewDecisionOf(
+      reviews
+        .filter((review) => writeAccess.has(review.authorAssociation))
+        .map((review) => ({ login: review.authorLogin, state: review.state })),
+    );
+    const human = humanCommentSignal(
+      [...comments, ...reviewComments, ...reviewFeedback(reviews)],
+      target.botLogin,
+    );
     return {
-      review: prReview(pull),
+      review: prReview(pull, decision),
       checks: checkState(checks),
       latestHumanCommentAtMillis: human.latestAtMillis,
       fresh: human.fresh,
@@ -177,19 +216,19 @@ const make = (client: GitHubClientService): WorkSourceService => {
     yield* client.createComment(target, number, body);
   });
 
-  const prsByIssue = Effect.fn("github.prsByIssue")(function* (target: GitHubTarget) {
-    const pulls = yield* client.listPulls(target);
-    const bot = target.botLogin ? pulls.filter((pull) => pull.authorLogin === target.botLogin) : [];
-    const entries = yield* Effect.forEach(bot, (pull) =>
-      Effect.map(observePr(target, pull), (signals) => {
-        const issue = linkedIssue(pull.body);
-        return issue ? [[issue, signals] as const] : [];
-      }),
-    );
-    return new Map<number, PrSignals>(entries.flat());
-  });
+  const daemonPull = (target: GitHubTarget, pull: RawPull) =>
+    pull.authorLogin === target.botLogin || writeAccess.has(pull.authorAssociation);
 
-  const buildItem = (target: GitHubTarget, prs: Map<number, PrSignals>) =>
+  const pullsByIssue = (target: GitHubTarget, pulls: ReadonlyArray<RawPull>) =>
+    pulls.reduce((byIssue, pull) => {
+      const issue = linkedIssue(pull.body);
+      if (issue === null || !daemonPull(target, pull)) return byIssue;
+      const existing = byIssue.get(issue);
+      if (existing && existing.authorLogin === target.botLogin) return byIssue;
+      return new Map(byIssue).set(issue, pull);
+    }, new Map<number, RawPull>());
+
+  const buildItem = (target: GitHubTarget, pulls: Map<number, RawPull>) =>
     Effect.fn("github.buildItem")(function* (issue: {
       readonly number: number;
       readonly title: string;
@@ -201,7 +240,9 @@ const make = (client: GitHubClientService): WorkSourceService => {
         comments.filter((comment) => comment.authorLogin === target.botLogin),
       ).map((comment) => comment.body);
       const id = yield* itemId(issue.number);
-      const signals = prs.get(issue.number);
+      const owned = trusted.some(hasClankerMarker);
+      const pull = pulls.get(issue.number);
+      const signals = owned && pull ? yield* observePr(target, pull) : null;
       return {
         id,
         title: issue.title,
@@ -214,10 +255,10 @@ const make = (client: GitHubClientService): WorkSourceService => {
     });
 
   const observeTarget = Effect.fn("github.observeTarget")(function* (target: GitHubTarget) {
-    const [issues, prs] = yield* Effect.all([client.listIssues(target), prsByIssue(target)]);
+    const [issues, pulls] = yield* Effect.all([client.listIssues(target), client.listPulls(target)]);
     return yield* Effect.forEach(
       issues.filter((issue) => !issue.isPullRequest),
-      buildItem(target, prs),
+      buildItem(target, pullsByIssue(target, pulls)),
     );
   });
 
@@ -281,3 +322,5 @@ export const layer = Layer.effect(
     return make(client);
   }),
 );
+
+export { make as makeAdapter };

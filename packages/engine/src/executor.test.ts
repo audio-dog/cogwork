@@ -319,6 +319,30 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("backstops a missing sentinel with the proposal disposition", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const dispositionOnly: ReadonlyArray<HarnessEvent> = [
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          name: null,
+          text: "## Triage proposal\n\n**Disposition:** ready-for-agent\n\n### Open questions\n\n- none",
+          sessionId: null,
+          usage: null,
+          finishReason: null,
+        },
+      ];
+      const layer = provide(recorder(calls), [runner(dispositionOnly)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(workspace, triageItem);
+        const log = yield* Ref.get(calls);
+        assert.deepStrictEqual(log.find((c) => c.method === "setRoles")?.add, ["ready-for-agent"]);
+        assert.isTrue(log.some((c) => c.method === "note"));
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("marks a non-retryable harness failure as blocked and hands it to a human", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);

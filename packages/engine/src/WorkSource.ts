@@ -34,53 +34,44 @@ const noAdapter = (workspace: RegisteredWorkspace) =>
     message: `no work source adapter configured for ${workspace.config.name}`,
   });
 
+const hasRemoteSource = (workspace: RegisteredWorkspace) => {
+  const { type, team, repo } = workspace.config.workSource;
+  return type === "linear" ? Boolean(team) : Boolean(repo);
+};
+
 const failWhenRemote = Effect.fn("WorkSource.guard")(function* (workspace: RegisteredWorkspace) {
-  if (!workspace.config.workSource.repo) {
-    return yield* Effect.void;
+  if (hasRemoteSource(workspace)) {
+    return yield* noAdapter(workspace);
   }
-  return yield* noAdapter(workspace);
+  return yield* Effect.void;
 });
 
 const observeEmpty = Effect.fn("WorkSource.observe")(function* (workspace: RegisteredWorkspace) {
-  if (workspace.config.workSource.repo) {
+  if (hasRemoteSource(workspace)) {
     return yield* noAdapter(workspace);
   }
   return [] as ReadonlyArray<ObservedItem>;
 });
 
-const claimEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: Claim) =>
-  failWhenRemote(workspace);
-
-const releaseEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace);
-
-const recordAttemptEmpty = (
-  workspace: RegisteredWorkspace,
-  _itemId: WorkItemId,
-  _attempt: AttemptRecord,
-  _reason?: string,
-) => failWhenRemote(workspace);
-
-const recordFollowUpEmpty = (
-  workspace: RegisteredWorkspace,
-  _itemId: WorkItemId,
-  _marker: FollowUpMarker,
-  _detail?: string,
-) => failWhenRemote(workspace);
-
-const noteEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _detail: string) =>
-  failWhenRemote(workspace);
-
-const setRolesEmpty = (workspace: RegisteredWorkspace, _itemId: WorkItemId, _changes: RoleChanges) =>
-  failWhenRemote(workspace);
-
 export const makeEmpty = Effect.succeed({
   observe: observeEmpty,
-  claim: claimEmpty,
-  release: releaseEmpty,
-  recordAttempt: recordAttemptEmpty,
-  recordFollowUp: recordFollowUpEmpty,
-  note: noteEmpty,
-  setRoles: setRolesEmpty,
+  claim: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: Claim) => failWhenRemote(workspace),
+  release: (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace),
+  recordAttempt: (
+    workspace: RegisteredWorkspace,
+    _itemId: WorkItemId,
+    _attempt: AttemptRecord,
+    _reason?: string,
+  ) => failWhenRemote(workspace),
+  recordFollowUp: (
+    workspace: RegisteredWorkspace,
+    _itemId: WorkItemId,
+    _marker: FollowUpMarker,
+    _detail?: string,
+  ) => failWhenRemote(workspace),
+  note: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _detail: string) => failWhenRemote(workspace),
+  setRoles: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _changes: RoleChanges) =>
+    failWhenRemote(workspace),
 } as const);
 
 export type WorkSourceService = Effect.Success<typeof makeEmpty>;
