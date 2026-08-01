@@ -7,10 +7,12 @@ import {
   buildTriagePrompt,
   parseFollowUpResult,
   parseTriageDecision,
+  parseTriageDisposition,
   resolveFollowUp,
   resolveImplement,
   resolveStage,
   resolveTriage,
+  resolveTriageDecision,
 } from "./Playbook";
 
 const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
@@ -29,9 +31,10 @@ describe("resolveTriage", () => {
     assert.strictEqual(resolved.harness, "cursor");
     assert.strictEqual(resolved.skill, "triage-agent");
     assert.strictEqual(resolved.model, null);
+    assert.strictEqual(resolved.effort, null);
   });
 
-  it("prefers per-stage harness, model, skill, and prompt overrides", () => {
+  it("prefers per-stage harness, model, effort, skill, and prompt overrides", () => {
     const resolved = resolveTriage(
       config({
         harness: { preferred: "cursor" },
@@ -40,6 +43,7 @@ describe("resolveTriage", () => {
             enabled: true,
             harness: "claude",
             model: "opus",
+            effort: "high",
             skill: "my-triage",
             prompt: "Do the thing",
           },
@@ -49,6 +53,7 @@ describe("resolveTriage", () => {
     assert.strictEqual(resolved.enabled, true);
     assert.strictEqual(resolved.harness, "claude");
     assert.strictEqual(resolved.model, "opus");
+    assert.strictEqual(resolved.effort, "high");
     assert.strictEqual(resolved.skill, "my-triage");
     assert.strictEqual(resolved.promptTemplate, "Do the thing");
   });
@@ -164,5 +169,52 @@ describe("parseTriageDecision", () => {
   it("returns null for an unknown or missing decision", () => {
     assert.isNull(parseTriageDecision("TRIAGE-DECISION: banana"));
     assert.isNull(parseTriageDecision("no decision here"));
+  });
+});
+
+describe("parseTriageDisposition", () => {
+  it("reads the disposition from the proposal prose, bold or plain", () => {
+    assert.strictEqual(
+      parseTriageDisposition("**Disposition:** ready-for-agent\n\n### Findings"),
+      "ready-for-agent",
+    );
+    assert.strictEqual(parseTriageDisposition("Disposition: needs-info"), "needs-info");
+    assert.strictEqual(
+      parseTriageDisposition("**Disposition**: ready-for-human (Medium)"),
+      "ready-for-human",
+    );
+  });
+
+  it("returns null when no readable disposition is present", () => {
+    assert.isNull(parseTriageDisposition("no disposition here"));
+    assert.isNull(parseTriageDisposition("**Disposition:** banana"));
+  });
+});
+
+describe("resolveTriageDecision", () => {
+  it("prefers the sentinel over the disposition and reports the source", () => {
+    const decision = resolveTriageDecision(
+      "**Disposition:** ready-for-human\nTRIAGE-DECISION: ready-for-agent",
+    );
+    assert.strictEqual(decision.role, "ready-for-agent");
+    assert.strictEqual(decision.source, "sentinel");
+    assert.strictEqual(decision.sentinel, "ready-for-agent");
+    assert.strictEqual(decision.disposition, "ready-for-human");
+  });
+
+  it("backstops a missing sentinel with the proposal disposition", () => {
+    const decision = resolveTriageDecision("**Disposition:** ready-for-agent\n\n### Open questions\n- none");
+    assert.strictEqual(decision.role, "ready-for-agent");
+    assert.strictEqual(decision.source, "disposition");
+    assert.isNull(decision.sentinel);
+    assert.strictEqual(decision.disposition, "ready-for-agent");
+  });
+
+  it("defaults to ready-for-human when neither sentinel nor disposition is readable", () => {
+    const decision = resolveTriageDecision("I could not tell what to do.");
+    assert.strictEqual(decision.role, "ready-for-human");
+    assert.strictEqual(decision.source, "default");
+    assert.isNull(decision.sentinel);
+    assert.isNull(decision.disposition);
   });
 });

@@ -69,6 +69,8 @@ Decide the disposition:
 
 Then write the proposal **as your final message** — it becomes the published comment body, so write it that way and put nothing before or after it except the trailing sentinel line. **Do not add the AI disclaimer**; the engine prepends it. Draft the Agent Brief per [AGENT-BRIEF.md](AGENT-BRIEF.md) whenever you dispose `ready-for-agent`.
 
+Completion: your final message is the comment body, and its last line is the [sentinel](#signal-your-result) naming the same state as your `Disposition`. The run is not done until that line is written.
+
 ```markdown
 ## Triage proposal
 
@@ -106,10 +108,12 @@ Then write the proposal **as your final message** — it becomes the published c
 
 ## Signal your result
 
-The engine reads one machine sentinel to set the ticket's next state, so your final message must end with exactly one line, and nothing after it:
+The **sentinel** is the one line the engine reads to set the ticket's state — the only channel your decision travels through. Your final message must end with it: exactly one line, and nothing after it.
 
 ```
 TRIAGE-DECISION: <ready-for-agent | ready-for-human | needs-info>
 ```
 
-It must match the **Disposition** in your proposal. A headless run never disposes `wontfix` — route rejections and already-built work through `ready-for-human` with a `wontfix` recommendation. Omitting the line leaves the ticket in `needs-triage` and the run is retried, so always emit it.
+It must name the same state as your **Disposition**. A headless run never disposes `wontfix` — route rejections and already-built work through `ready-for-human` with a `wontfix` recommendation.
+
+Omit the sentinel and the engine can't count on reading your decision: it falls back to `ready-for-human`, at the risk of throwing away a `ready-for-agent` call and the brief behind it. So every run ends on the sentinel — write it before you stop.
