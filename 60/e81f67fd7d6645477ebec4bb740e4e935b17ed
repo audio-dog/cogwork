@@ -1,0 +1,24 @@
+packages/engine/src/github/github-helpers.test.ts
+  s_7ea6ac5064e991::t_de8196c9a87879 125
+  s_7ea6ac5064e991::t_62f0e02e959c22 110,116-124,126-131
+  s_7ea6ac5064e991::t_0d6325605d929d 4
+packages/engine/src/github/adapter.ts
+  s_7ea6ac5064e991::t_a0afa0b19114e4 99-100
+  s_7ea6ac5064e991::t_2ce23b9b59adb4 97,122-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "60e81f67fd7d6645477ebec4bb740e4e935b17ed",
+  "prompts": {},
+  "sessions": {
+    "s_7ea6ac5064e991": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b9d7570d-e1fd-401a-82d2-bcfc3e5e34c6",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
