@@ -1,0 +1,19 @@
+packages/engine/src/Reconcile.ts
+  s_6decc283766a73::t_8946b9ca74c01c 86-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "a62161cd89d1d0006e6d57c14e4342b49375a8b8",
+  "prompts": {},
+  "sessions": {
+    "s_6decc283766a73": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8ae193d4-25d3-44db-881a-bf0fba692d6f",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
