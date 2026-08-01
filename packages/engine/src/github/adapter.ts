@@ -122,10 +122,12 @@ export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botLogin: 
   if (!botLogin) {
     return { latestAtMillis: null, fresh: false };
   }
-  const newest = feedback.filter(isHumanFeedback).reduce<Feedback | null>(
-    (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
-    null,
-  );
+  const newest = feedback
+    .filter(isHumanFeedback)
+    .reduce<Feedback | null>(
+      (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
+      null,
+    );
   return {
     latestAtMillis: newest?.createdAtMillis ?? null,
     fresh: newest ? freshPattern.test(newest.body) : false,
