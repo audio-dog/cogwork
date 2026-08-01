@@ -1,0 +1,118 @@
+packages/engine/src/linear/markers.ts
+  s_19bc81255f20b1::t_aed1f89a77bfb7 134
+  s_19bc81255f20b1::t_6ccf6ddeadfdc0 1-133,135-171
+packages/engine/src/linear/adapter.ts
+  s_19bc81255f20b1::t_2cdbeebb976882 174-178
+  s_19bc81255f20b1::t_a9627f46e4d371 1-173,179-218
+apps/cli/src/ledger.ts
+  s_19bc81255f20b1::t_0c991d7cf1ed0e 240-241,244-245
+  s_19bc81255f20b1::t_535b856df64be2 175-176,186-190,246,267-269
+packages/engine/src/WorkSource.ts
+  s_19bc81255f20b1::t_782555cfc30ff8 60-65,67-68,71
+  s_19bc81255f20b1::t_fa9131a029e329 58-59
+  s_19bc81255f20b1::t_2a572f045d2733 66
+  s_19bc81255f20b1::t_15729e16b7cf45 69-70
+  s_19bc81255f20b1::t_44600ef290f602 72-74
+  s_19bc81255f20b1::t_ecf64d9aa0fbbc 37-41,43-44,46,50
+packages/engine/src/workSourceRouter.ts
+  s_19bc81255f20b1::t_c050c2e94a16d8 18-19
+  s_19bc81255f20b1::t_b6a094a401591d 1-17,20-31
+apps/cli/config/clanker-forge.workspace.ts
+  s_19bc81255f20b1::t_41a9c8ba277e5b 1,4-7,20-22
+apps/cli/src/rpc.ts
+  s_19bc81255f20b1::t_d7d7c56cac45a5 8,13,58,60
+packages/contracts/CONTEXT.md
+  s_19bc81255f20b1::t_fe00e6fc5c325b 12,15-18,76
+packages/contracts/src/workspace.ts
+  s_19bc81255f20b1::t_2968156ad09f33 4-12,16,19-20,35
+packages/cursor-acp/CONTEXT.md
+  s_19bc81255f20b1::t_2f35b3f8b84e68 13,16-19
+packages/cursor-acp/package.json
+  s_19bc81255f20b1::t_eec3c7f0a9df49 12-14,29-30
+packages/cursor-acp/scripts/sync-models.ts
+  s_19bc81255f20b1::t_3d45b0254c1b58 1-42
+packages/cursor-acp/src/harness.ts
+  s_19bc81255f20b1::t_3d6012b93551c5 1,5-11,16,26-30,78-148,160,164-165,174-177,182
+packages/cursor-acp/src/index.ts
+  s_19bc81255f20b1::t_cc6efb171ba904 2-9
+packages/cursor-acp/src/model.test.ts
+  s_19bc81255f20b1::t_539423d76c454a 1-52
+packages/cursor-acp/src/model.ts
+  s_19bc81255f20b1::t_d13731edddc8fe 1-26
+packages/cursor-acp/src/models.generated.ts
+  s_19bc81255f20b1::t_02c31c2395acd4 1-199
+packages/cursor-acp/vitest.config.ts
+  s_19bc81255f20b1::t_a783c8dac76e39 1-7
+packages/engine/CONTEXT.md
+  s_19bc81255f20b1::t_6a63f51d0fc38b 45,49-50,53,57
+packages/engine/package.json
+  s_19bc81255f20b1::t_213a57a7b37f15 14
+packages/engine/src/Daemon.ts
+  s_19bc81255f20b1::t_3249f8e927be0d 1-8,14,19,35-62,113
+packages/engine/src/Executor.ts
+  s_19bc81255f20b1::t_fee24b6c069293 1,24-25,28,51-64,78-99,244-245,249,320-325,332-334,410-415
+packages/engine/src/Harness.ts
+  s_19bc81255f20b1::t_fb49a75148975a 14
+packages/engine/src/Playbook.ts
+  s_19bc81255f20b1::t_c419fb55edf65e 13,58,142-175
+packages/engine/src/RunEventBus.ts
+  s_19bc81255f20b1::t_b3bbe5b0e288d1 1,8-22,27
+packages/engine/src/RunLedger.ts
+  s_19bc81255f20b1::t_13af2a404ac7a1 82-83
+packages/engine/src/engine.test.ts
+  s_19bc81255f20b1::t_94250b6f3cf277 1
+packages/engine/src/executor.test.ts
+  s_19bc81255f20b1::t_36a05b9a7b1b74 318-341
+packages/engine/src/github/adapter.ts
+  s_19bc81255f20b1::t_771f2bc0876d33 21-23,36,86,88-89,97,99-117,119-130,175,178-179,181-189,191,219-229,231,243-245,258,261,325-326
+packages/engine/src/github/client.ts
+  s_19bc81255f20b1::t_0559908f665238 36,50-57,80,86-88,99-111,263-277,281-283,313-321,328,330-331
+packages/engine/src/github/github-helpers.test.ts
+  s_19bc81255f20b1::t_739d495de61f4f 2-4,17-25,29,76,80-81,85,110,112-134,140-167,173-221
+packages/engine/src/github/github.test.ts
+  s_19bc81255f20b1::t_8eb0ca938920c5 19,40-48,53-54,80-90,118-119,173,212-220,341-527
+packages/engine/src/github/index.ts
+  s_19bc81255f20b1::t_a6182fd2853839 1
+packages/engine/src/github/markers.test.ts
+  s_19bc81255f20b1::t_928bf73de714f9 15,112-126
+packages/engine/src/github/markers.ts
+  s_19bc81255f20b1::t_9cbdea7469326a 37,49-50
+packages/engine/src/index.ts
+  s_19bc81255f20b1::t_9dea044e2f6b96 7,17
+packages/engine/src/linear/client.test.ts
+  s_19bc81255f20b1::t_6ec2d04387f546 1-178
+packages/engine/src/linear/client.ts
+  s_19bc81255f20b1::t_0b3928dc7d717e 1-318
+packages/engine/src/linear/index.ts
+  s_19bc81255f20b1::t_33c373a7aa314a 1-7
+packages/engine/src/linear/linear.test.ts
+  s_19bc81255f20b1::t_298f3c4fa48e1b 1-385
+packages/engine/src/linear/markers.test.ts
+  s_19bc81255f20b1::t_7502ab6d6fd781 1-77
+packages/engine/src/playbook.test.ts
+  s_19bc81255f20b1::t_ea8efea0cfb404 10,15,34,37,46,56,174-220
+packages/engine/src/watchActivity.test.ts
+  s_19bc81255f20b1::t_bd86beb567d3cc 1-195
+pnpm-lock.yaml
+  s_19bc81255f20b1::t_2698379b9d5e86 135-137,144-146,473-477,490-493,1213-1216,2056-2059,2068-2073,2613-2614
+skills/follow-up-agent/SKILL.md
+  s_19bc81255f20b1::t_a8db28be8a5a55 17,66-73
+skills/triage-agent/SKILL.md
+  s_19bc81255f20b1::t_0302fd522e9dc1 72-73,111,117-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "be55033ea3fcd06c258bb656a4ee5a302c9bfeea",
+  "prompts": {},
+  "sessions": {
+    "s_19bc81255f20b1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "76b9e526-453e-48e8-ad6a-b8eb58dad638",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
