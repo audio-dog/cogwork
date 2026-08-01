@@ -1,0 +1,32 @@
+packages/engine/src/linear/client.ts
+  s_25418fec61383b::t_a985a052f8cf51 236-240,242,245-246,248-252
+  s_25418fec61383b::t_3450cd5651f9f1 262,265-269,277,280
+  s_25418fec61383b::t_a2e912113f3f4d 59,111-120,168,183-194,209-215,217-219,222-234,243-244,253-261,263-264,270-276,278-279,281-310
+  s_25418fec61383b::t_b3bfc29a092cfa 1
+  s_25418fec61383b::t_8096f043b0ac02 105-110
+  s_25418fec61383b::t_a407cc090b6f92 121-122
+  s_25418fec61383b::t_47b4801f2217b8 220-221
+  s_25418fec61383b::t_5eed5a24196c4e 318
+packages/engine/src/linear/linear.test.ts
+  s_25418fec61383b::t_93bc75e1af5780 39
+packages/engine/package.json
+  s_25418fec61383b::t_adf2f7f6ae93ee 14
+pnpm-lock.yaml
+  s_25418fec61383b::t_47444fab2d1074 141-143,470-474,487-490,1210-1213,2053-2056,2065-2070,2610-2611
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "fcf47aacf99d9ad5540dcf496401c3dbf4fe0f6e",
+  "prompts": {},
+  "sessions": {
+    "s_25418fec61383b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "174feb72-dc34-46fb-9f66-529cc6e2c9ed",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
