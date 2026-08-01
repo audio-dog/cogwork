@@ -1,0 +1,46 @@
+packages/engine/src/executor.test.ts
+  s_2bcd2b43512c8d::t_6261e9ae1a0264 313-315
+  s_2bcd2b43512c8d::t_b1b77b65cb9c95 316-336
+packages/cursor-acp/src/harness.ts
+  s_92c6fea2f6be3b::t_19d4339cbb82da 1,5-11
+  s_92c6fea2f6be3b::t_a42b791c13eb93 72-93,95-126,128-141
+  s_92c6fea2f6be3b::t_02fc5b1dc625f7 127
+  s_92c6fea2f6be3b::t_b940eebfdbc874 94
+  s_92c6fea2f6be3b::t_6cff3915972408 156
+packages/engine/src/playbook.test.ts
+  s_2bcd2b43512c8d::t_ba540b2fab88e1 10,15
+  s_2bcd2b43512c8d::t_f397951a02b665 171-217
+packages/engine/src/Playbook.ts
+  s_2bcd2b43512c8d::t_e47acf780657a2 140-173
+packages/engine/src/Executor.ts
+  s_2bcd2b43512c8d::t_8a797805d0af55 210-211,215
+  s_2bcd2b43512c8d::t_3473ecbc592994 23-24
+  s_2bcd2b43512c8d::t_d26191b7d6aa80 65-86
+skills/triage-agent/SKILL.md
+  s_2bcd2b43512c8d::t_c5001d5a38faf2 111,117-119
+  s_2bcd2b43512c8d::t_2c3283bb9c7572 72-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "485cca10577d49f1369d19a58e5106519d80b9fe",
+  "prompts": {},
+  "sessions": {
+    "s_2bcd2b43512c8d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bbfe6f76-60e3-4196-879a-4d1e2300895e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_92c6fea2f6be3b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2d70a028-5b3b-4474-a84b-1d26f866961d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
