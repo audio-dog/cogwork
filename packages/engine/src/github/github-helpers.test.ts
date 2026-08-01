@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { humanCommentSignal, linkedIssue, prReview, reviewFeedback } from "./adapter";
 import { type RawComment, type RawPull, type RawReview, reviewDecisionOf } from "./client";
+import { ledgerMarker } from "./markers";
 
 const review = (login: string, state: string) => ({ login, state });
 
@@ -106,13 +107,28 @@ describe("humanCommentSignal", () => {
     assert.isFalse(signal.fresh);
   });
 
-  it("ignores the daemon's own comments so its round summaries never re-trigger follow-up", () => {
+  it("counts unmarked write-access feedback even when authorLogin equals botLogin", () => {
     const signal = humanCommentSignal(
       [
         comment({
           authorLogin: bot,
           authorAssociation: "OWNER",
-          body: "fixed the checks",
+          body: "please take another look",
+          createdAtMillis: 200,
+        }),
+      ],
+      bot,
+    );
+    assert.strictEqual(signal.latestAtMillis, 200);
+  });
+
+  it("ignores marked write-access feedback even when authorLogin equals botLogin", () => {
+    const signal = humanCommentSignal(
+      [
+        comment({
+          authorLogin: bot,
+          authorAssociation: "OWNER",
+          body: `fixed the checks\n${ledgerMarker}`,
           createdAtMillis: 200,
         }),
       ],

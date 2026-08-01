@@ -96,6 +96,12 @@ describe("github markers", () => {
     assert.isFalse(hasClankerMarker("please take another look, this still fails"));
   });
 
+  it("recognizes the agent note marker the follow-up playbook appends to its round summaries", () => {
+    assert.isTrue(
+      hasClankerMarker("## Follow-up round 1\n\nfixed the checks\n\n<!-- clanker-forge:agent-note -->"),
+    );
+  });
+
   it("recognizes the ledger marker and strips every marker from proposal text", () => {
     assert.isTrue(hasLedgerMarker(ledgerMarker));
     assert.isFalse(hasLedgerMarker("<!-- clanker-forge:claim by=x at=1 -->"));
