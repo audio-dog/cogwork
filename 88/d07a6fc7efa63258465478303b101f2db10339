@@ -1,0 +1,37 @@
+packages/cursor-acp/package.json
+  s_5c28f9dca20b9b::t_c82c7deba1ea66 13
+  s_5c28f9dca20b9b::t_96fd01333b02fa 14
+packages/cursor-acp/src/index.ts
+  s_5c28f9dca20b9b::t_bebf498d4649de 7,9
+packages/cursor-acp/CONTEXT.md
+  s_5c28f9dca20b9b::t_1a03106e75d976 17
+  s_5c28f9dca20b9b::t_8d38280adb1a23 18
+packages/cursor-acp/src/model.test.ts
+  s_5c28f9dca20b9b::t_1357a26ee098ad 44,46,48-50
+  s_5c28f9dca20b9b::t_acd127ec25543c 45
+  s_5c28f9dca20b9b::t_df74e0898b81d7 2-3,28-43,51-52
+  s_5c28f9dca20b9b::t_959324ccdd0ddf 47
+packages/cursor-acp/scripts/sync-models.ts
+  s_5c28f9dca20b9b::t_822b22ae676071 1,3-7,9,22-25,39-40
+  s_5c28f9dca20b9b::t_c96188d25de77b 2,8,10-21,26-38,41-42
+packages/cursor-acp/src/model.ts
+  s_5c28f9dca20b9b::t_f23efd8615a15f 4-8
+packages/cursor-acp/src/models.generated.ts
+  s_5c28f9dca20b9b::t_b21b90fd92f463 1-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "88d07a6fc7efa63258465478303b101f2db10339",
+  "prompts": {},
+  "sessions": {
+    "s_5c28f9dca20b9b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0903638a-a436-4145-ac1c-3a8d230c9f55",
+        "model": "auto-smart"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
