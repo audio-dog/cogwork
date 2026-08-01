@@ -28,14 +28,14 @@ repo-config/
 
 ## Resolution order
 
-The forked skills in `skills/` resolve each config file as:
+The forked skills in `packages/sync/skills/` resolve each config file as:
 
-1. `~/.agents/repo-config/<slug>/<file>` — this directory, symlinked by `pnpm link`
+1. `~/.agents/repo-config/<slug>/<file>` — this directory, symlinked by `pnpm link-skills`
 2. `docs/agents/<file>` committed in the target repo
 
 So a repo that *does* commit config still works, and this directory wins when both exist.
 
 ## Setup
 
-- `pnpm link` symlinks this directory to `~/.agents/repo-config`.
+- `pnpm link-skills` symlinks this directory to `~/.agents/repo-config`.
 - Run `/setup-repo-config` inside a repo to scaffold a new `<slug>/` directory here.
