@@ -5,10 +5,12 @@ import {
   Executor,
   GitHub,
   Harness,
+  Linear,
   Reconcile,
   Registry,
   RunEventBus,
   Scheduler,
+  workSourceRoutedLayer,
 } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
@@ -53,8 +55,9 @@ const socketServerLayer = (socketPath: string) =>
 const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
-const workSourceLayer = GitHub.adapterLayer.pipe(
+const workSourceLayer = workSourceRoutedLayer.pipe(
   Layer.provide(GitHub.clientLayer),
+  Layer.provide(Linear.clientLayer),
   Layer.provide(FetchHttpClient.layer),
 );
 

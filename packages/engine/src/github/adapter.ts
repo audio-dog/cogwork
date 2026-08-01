@@ -318,3 +318,5 @@ export const layer = Layer.effect(
     return make(client);
   }),
 );
+
+export { make as makeAdapter };
