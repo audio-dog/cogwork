@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@clanker-forge/contracts": "workspace:*",
+    "@linear/sdk": "^89.0.0",
     "@tanstack/ai": "^0.42.0",
     "effect": "catalog:effect"
   },
