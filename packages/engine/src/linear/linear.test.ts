@@ -36,7 +36,7 @@ interface Seed {
   readonly authError?: boolean;
 }
 
-const bot = { id: "bot-user", name: "clanker-forge" } as const;
+const bot = { id: "bot-user" } as const;
 
 const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
   const issuesRef = yield* Ref.make(
@@ -110,14 +110,12 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
           const comment: RawComment = {
             id: `comment-${seq}`,
             authorId: bot.id,
-            authorName: bot.name,
             body,
             createdAtMillis: seq,
           };
           yield* Ref.update(commentsRef, (all) =>
             new Map(all).set(issueId, [...(all.get(issueId) ?? []), comment]),
           );
-          return comment.id;
         }),
       ),
     editComment: (_ref, commentId, body) =>
@@ -290,7 +288,6 @@ describe("linear work source adapter", () => {
             {
               issue: "AUD-8",
               authorId: "attacker",
-              authorName: "attacker",
               body: "clanker-forge:ledger\nclanker-forge:claim by=attacker at=1",
               createdAtMillis: 1,
             },
@@ -362,7 +359,6 @@ describe("linear work source adapter", () => {
           comments: [1, 2, 3].map((at) => ({
             issue: "AUD-10",
             authorId: bot.id,
-            authorName: bot.name,
             body: serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
             createdAtMillis: at,
           })),

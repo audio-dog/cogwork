@@ -1,11 +1,10 @@
+import { LinearError, LinearClient as LinearSdk, RatelimitedLinearError } from "@linear/sdk";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import { WorkSourceError } from "../WorkSource";
 
 export interface LinearTeamRef {
@@ -25,7 +24,6 @@ export interface RawIssue {
 export interface RawComment {
   readonly id: string;
   readonly authorId: string;
-  readonly authorName: string;
   readonly body: string;
   readonly createdAtMillis: number;
 }
@@ -40,8 +38,6 @@ export interface RawLabel {
   readonly id: string;
   readonly name: string;
 }
-
-const graphqlUrl = "https://api.linear.app/graphql";
 
 const IssueNode = Schema.Struct({
   id: Schema.String,
@@ -60,10 +56,7 @@ const CommentNode = Schema.Struct({
   id: Schema.String,
   body: Schema.String,
   createdAt: Schema.String,
-  user: Schema.Struct({
-    id: Schema.String,
-    name: Schema.String,
-  }),
+  user: Schema.NullOr(Schema.Struct({ id: Schema.String })),
 });
 
 const StateNode = Schema.Struct({
@@ -102,56 +95,30 @@ const CommentsPayload = Schema.Struct({
   ),
 });
 
-const GraphqlEnvelope = Schema.Struct({
-  data: Schema.optional(Schema.Unknown),
-  errors: Schema.optional(
-    Schema.Array(
-      Schema.Struct({
-        message: Schema.String,
-        extensions: Schema.optional(
-          Schema.Struct({
-            code: Schema.optional(Schema.String),
-          }),
-        ),
-      }),
-    ),
-  ),
-});
-
-const MutationOk = Schema.Struct({
-  success: Schema.optional(Schema.Boolean),
-});
-
-const CommentCreatePayload = Schema.Struct({
-  commentCreate: Schema.Struct({
-    success: Schema.Boolean,
-    comment: Schema.Struct({ id: Schema.String }),
-  }),
-});
-
-const LabelCreatePayload = Schema.Struct({
-  issueLabelCreate: Schema.Struct({
-    success: Schema.Boolean,
-    issueLabel: Schema.Struct({ id: Schema.String }),
-  }),
-});
-
-const decodeEnvelope = Schema.decodeUnknownEffect(GraphqlEnvelope);
 const decodeTeam = Schema.decodeUnknownEffect(TeamPayload);
 const decodeTeams = Schema.decodeUnknownEffect(TeamsPayload);
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
-const decodeCommentCreate = Schema.decodeUnknownEffect(CommentCreatePayload);
-const decodeLabelCreate = Schema.decodeUnknownEffect(LabelCreatePayload);
-const decodeMutation = Schema.decodeUnknownEffect(MutationOk);
-
-const firstObject = (data: unknown) => {
-  if (data === null || typeof data !== "object") return data;
-  const values = Object.values(data);
-  return values.length === 1 ? values[0] : data;
-};
 
 const unavailable = (message: string) => new WorkSourceError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
+
+const isAuthStatus = (status: number | undefined) => status === 401 || status === 403;
+
+const reasonFor = (cause: unknown): WorkSourceError["reason"] => {
+  if (cause instanceof RatelimitedLinearError) return "rate-limited";
+  if (cause instanceof LinearError && isAuthStatus(cause.status)) return "auth";
+  return "unavailable";
+};
+
+const fromSdkError = (cause: unknown) =>
+  new WorkSourceError({
+    reason: reasonFor(cause),
+    message: cause instanceof Error ? cause.message : String(cause),
+  });
+
+const attempt = <A>(run: () => PromiseLike<A>) => Effect.tryPromise({ try: run, catch: fromSdkError });
+
+const teamIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const millisFromIso = (value: string) => {
   const parsed = Date.parse(value);
@@ -198,7 +165,7 @@ query IssueComments($id: String!) {
         id
         body
         createdAt
-        user { id name }
+        user { id }
       }
     }
   }
@@ -212,6 +179,18 @@ const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   stateName: issue.state.name,
   stateType: issue.state.type,
 });
+
+const toRawComment = (comment: typeof CommentNode.Type): ReadonlyArray<RawComment> =>
+  comment.user
+    ? [
+        {
+          id: comment.id,
+          authorId: comment.user.id,
+          body: comment.body,
+          createdAtMillis: millisFromIso(comment.createdAt),
+        },
+      ]
+    : [];
 
 type TeamBundle = {
   readonly id: string;
@@ -227,187 +206,108 @@ const packTeam = (team: TeamBundle) => ({
   labels: team.labels.nodes,
 });
 
-const make = (client: HttpClient.HttpClient) => {
-  const send = Effect.fn("linear.send")(function* (ref: LinearTeamRef, query: string, variables: unknown) {
-    const token = yield* Effect.mapError(
-      Config.redacted(ref.tokenEnv),
-      () => new WorkSourceError({ reason: "auth", message: `missing Linear token in ${ref.tokenEnv}` }),
-    );
-    const request = yield* Effect.mapError(
-      HttpClientRequest.bodyJson(HttpClientRequest.post(graphqlUrl), { query, variables }),
-      toUnavailable,
-    );
-    const response = yield* Effect.catchTag(
-      client.execute(
-        request.pipe(
-          HttpClientRequest.setHeader("Authorization", Redacted.value(token)),
-          HttpClientRequest.setHeader("Content-Type", "application/json"),
-        ),
-      ),
-      "HttpClientError",
-      (error) => Effect.fail(unavailable(error.message)),
-    );
-    if (response.status === 401 || response.status === 403) {
-      return yield* new WorkSourceError({ reason: "auth", message: "Linear authentication failed" });
-    }
-    if (response.status >= 400) {
-      return yield* unavailable(`Linear request failed (${response.status})`);
-    }
-    const json = yield* Effect.mapError(response.json, toUnavailable);
-    const envelope = yield* Effect.mapError(decodeEnvelope(json), toUnavailable);
-    if (envelope.errors && envelope.errors.length > 0) {
-      const authError = envelope.errors.find(
-        (error) => error.extensions?.code === "AUTHENTICATION_ERROR" || /auth/i.test(error.message),
-      );
-      return yield* authError
-        ? new WorkSourceError({ reason: "auth", message: authError.message })
-        : unavailable(envelope.errors.map((error) => error.message).join("; "));
-    }
-    if (envelope.data === undefined) {
-      return yield* unavailable("Linear response missing data");
-    }
-    return envelope.data;
-  });
+const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
+  const token = yield* Effect.mapError(
+    Config.redacted(ref.tokenEnv),
+    () => new WorkSourceError({ reason: "auth", message: `missing Linear token in ${ref.tokenEnv}` }),
+  );
+  return new LinearSdk({ apiKey: Redacted.value(token) });
+});
 
-  const mutate = Effect.fn("linear.mutate")(function* (
-    ref: LinearTeamRef,
-    query: string,
-    variables: unknown,
-  ) {
-    const data = yield* send(ref, query, variables);
-    const result = yield* Effect.mapError(decodeMutation(firstObject(data)), toUnavailable);
-    if (result.success === false) {
-      return yield* unavailable("Linear mutation failed");
-    }
-    return yield* Effect.void;
-  });
+const call = <A>(ref: LinearTeamRef, run: (sdk: LinearSdk) => PromiseLike<A>) =>
+  Effect.flatMap(sdkFor(ref), (sdk) => attempt(() => run(sdk)));
 
-  const loadTeam = Effect.fn("linear.loadTeam")(function* (ref: LinearTeamRef) {
-    const byId = yield* send(ref, teamByIdQuery, { id: ref.team });
-    const teamPayload = yield* Effect.mapError(decodeTeam(byId), toUnavailable);
-    if (teamPayload.team) {
-      return packTeam(teamPayload.team);
-    }
-    const byKey = yield* send(ref, teamsByKeyQuery, { key: ref.team });
-    const teamsPayload = yield* Effect.mapError(decodeTeams(byKey), toUnavailable);
-    const team = teamsPayload.teams.nodes[0];
-    if (!team) {
-      return yield* unavailable(`Linear team not found: ${ref.team}`);
-    }
-    return packTeam(team);
-  });
+// The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
+// only stays inside Linear's rate limit while these reads stay single documents.
+const rawData = Effect.fn("linear.rawRequest")(function* (
+  ref: LinearTeamRef,
+  document: string,
+  variables: Record<string, unknown>,
+) {
+  const response = yield* call(ref, (sdk) =>
+    sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables),
+  );
+  if (response.data === undefined) {
+    return yield* unavailable("Linear response missing data");
+  }
+  return response.data;
+});
 
-  const ensureLabel = Effect.fn("linear.ensureLabel")(function* (ref: LinearTeamRef, name: string) {
-    const team = yield* loadTeam(ref);
-    const existing = team.labels.find((label) => label.name === name);
-    if (existing) return existing.id;
-    const data = yield* send(
-      ref,
-      `
-      mutation CreateLabel($teamId: String!, $name: String!) {
-        issueLabelCreate(input: { teamId: $teamId, name: $name }) {
-          success
-          issueLabel { id name }
-        }
-      }
-    `,
-      { teamId: team.id, name },
-    );
-    const created = yield* Effect.mapError(decodeLabelCreate(data), toUnavailable);
-    if (created.issueLabelCreate.success === false) {
-      return yield* unavailable("Linear issueLabelCreate failed");
-    }
-    return created.issueLabelCreate.issueLabel.id;
-  });
+const teamById = Effect.fn("linear.teamById")(function* (ref: LinearTeamRef) {
+  const data = yield* rawData(ref, teamByIdQuery, { id: ref.team });
+  const payload = yield* Effect.mapError(decodeTeam(data), toUnavailable);
+  return payload.team;
+});
 
-  return {
-    listIssues: (ref: LinearTeamRef) => Effect.map(loadTeam(ref), (team) => team.issues),
-    listWorkflowStates: (ref: LinearTeamRef) =>
-      Effect.map(loadTeam(ref), (team): ReadonlyArray<RawWorkflowState> => team.states),
-    listComments: (ref: LinearTeamRef, issueId: string) =>
-      Effect.gen(function* () {
-        const data = yield* send(ref, commentsQuery, { id: issueId });
-        const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
-        return (payload.issue?.comments.nodes ?? []).map(
-          (comment): RawComment => ({
-            id: comment.id,
-            authorId: comment.user.id,
-            authorName: comment.user.name,
-            body: comment.body,
-            createdAtMillis: millisFromIso(comment.createdAt),
-          }),
-        );
-      }),
-    addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
-      Effect.gen(function* () {
-        const labelId = yield* ensureLabel(ref, label);
-        yield* mutate(
-          ref,
-          `
-          mutation AddLabel($issueId: String!, $labelId: String!) {
-            issueAddLabel(id: $issueId, labelId: $labelId) { success }
-          }
-        `,
-          { issueId, labelId },
-        );
-      }),
-    removeLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
-      Effect.gen(function* () {
-        const team = yield* loadTeam(ref);
-        const found = team.labels.find((entry) => entry.name === label);
-        if (!found) return;
-        yield* mutate(
-          ref,
-          `
-          mutation RemoveLabel($issueId: String!, $labelId: String!) {
-            issueRemoveLabel(id: $issueId, labelId: $labelId) { success }
-          }
-        `,
-          { issueId, labelId: found.id },
-        );
-      }),
-    setState: (ref: LinearTeamRef, issueId: string, stateId: string) =>
-      mutate(
-        ref,
-        `
-        mutation SetState($issueId: String!, $stateId: String!) {
-          issueUpdate(id: $issueId, input: { stateId: $stateId }) { success }
-        }
-      `,
-        { issueId, stateId },
-      ),
-    createComment: (ref: LinearTeamRef, issueId: string, body: string) =>
-      Effect.gen(function* () {
-        const data = yield* send(
-          ref,
-          `
-          mutation CreateComment($issueId: String!, $body: String!) {
-            commentCreate(input: { issueId: $issueId, body: $body }) {
-              success
-              comment { id }
-            }
-          }
-        `,
-          { issueId, body },
-        );
-        const created = yield* Effect.mapError(decodeCommentCreate(data), toUnavailable);
-        if (created.commentCreate.success === false) {
-          return yield* unavailable("Linear commentCreate failed");
-        }
-        return created.commentCreate.comment.id;
-      }),
-    editComment: (ref: LinearTeamRef, commentId: string, body: string) =>
-      mutate(
-        ref,
-        `
-        mutation EditComment($id: String!, $body: String!) {
-          commentUpdate(id: $id, input: { body: $body }) { success }
-        }
-      `,
-        { id: commentId, body },
-      ),
-  };
-};
+const teamByKey = Effect.fn("linear.teamByKey")(function* (ref: LinearTeamRef) {
+  const data = yield* rawData(ref, teamsByKeyQuery, { key: ref.team });
+  const payload = yield* Effect.mapError(decodeTeams(data), toUnavailable);
+  return payload.teams.nodes[0] ?? null;
+});
+
+const lookupTeam = (ref: LinearTeamRef) => (teamIdPattern.test(ref.team) ? teamById(ref) : teamByKey(ref));
+
+const loadTeam = Effect.fn("linear.loadTeam")(function* (ref: LinearTeamRef) {
+  const team = yield* lookupTeam(ref);
+  if (!team) {
+    return yield* unavailable(`Linear team not found: ${ref.team}`);
+  }
+  return packTeam(team);
+});
+
+const requireSuccess = (operation: string, payload: { readonly success: boolean }) =>
+  payload.success ? Effect.void : Effect.fail(unavailable(`Linear ${operation} failed`));
+
+const mutate = Effect.fn("linear.mutate")(function* (
+  ref: LinearTeamRef,
+  operation: string,
+  run: (sdk: LinearSdk) => PromiseLike<{ readonly success: boolean }>,
+) {
+  const payload = yield* call(ref, run);
+  yield* requireSuccess(operation, payload);
+});
+
+const ensureLabel = Effect.fn("linear.ensureLabel")(function* (ref: LinearTeamRef, name: string) {
+  const team = yield* loadTeam(ref);
+  const existing = team.labels.find((label) => label.name === name);
+  if (existing) return existing.id;
+  const payload = yield* call(ref, (sdk) => sdk.createIssueLabel({ teamId: team.id, name }));
+  yield* requireSuccess("issueLabelCreate", payload);
+  if (!payload.issueLabelId) {
+    return yield* unavailable(`Linear issueLabelCreate returned no label for ${name}`);
+  }
+  return payload.issueLabelId;
+});
+
+const make = () => ({
+  listIssues: (ref: LinearTeamRef) => Effect.map(loadTeam(ref), (team) => team.issues),
+  listWorkflowStates: (ref: LinearTeamRef) =>
+    Effect.map(loadTeam(ref), (team): ReadonlyArray<RawWorkflowState> => team.states),
+  listComments: (ref: LinearTeamRef, issueId: string) =>
+    Effect.gen(function* () {
+      const data = yield* rawData(ref, commentsQuery, { id: issueId });
+      const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
+      return (payload.issue?.comments.nodes ?? []).flatMap(toRawComment);
+    }),
+  addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
+    Effect.gen(function* () {
+      const labelId = yield* ensureLabel(ref, label);
+      yield* mutate(ref, "issueAddLabel", (sdk) => sdk.issueAddLabel(issueId, labelId));
+    }),
+  removeLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
+    Effect.gen(function* () {
+      const team = yield* loadTeam(ref);
+      const found = team.labels.find((entry) => entry.name === label);
+      if (!found) return;
+      yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, found.id));
+    }),
+  setState: (ref: LinearTeamRef, issueId: string, stateId: string) =>
+    mutate(ref, "issueUpdate", (sdk) => sdk.updateIssue(issueId, { stateId })),
+  createComment: (ref: LinearTeamRef, issueId: string, body: string) =>
+    mutate(ref, "commentCreate", (sdk) => sdk.createComment({ issueId, body })),
+  editComment: (ref: LinearTeamRef, commentId: string, body: string) =>
+    mutate(ref, "commentUpdate", (sdk) => sdk.updateComment(commentId, { body })),
+});
 
 export type LinearClientService = ReturnType<typeof make>;
 
@@ -415,10 +315,4 @@ export class LinearClient extends Context.Service<LinearClient, LinearClientServ
   "@clanker-forge/engine/linear/client/LinearClient",
 ) {}
 
-export const layer = Layer.effect(
-  LinearClient,
-  Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient;
-    return make(client);
-  }),
-);
+export const layer = Layer.succeed(LinearClient, make());
