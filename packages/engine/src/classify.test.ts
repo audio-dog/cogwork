@@ -103,6 +103,38 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.stage, "triage");
   });
 
+  it("resets the failed-attempt cap after a successful attempt for that stage", () => {
+    const failed = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const succeeded = { stage: "triage" as const, outcome: "succeeded" as const, atMillis: 4 };
+    const { eligible, blocked } = classify([
+      item({
+        id: "1",
+        roles: ["needs-triage"],
+        attempts: [failed, failed, failed, succeeded, failed],
+      }),
+    ]);
+    assert.strictEqual(eligible[0]?.stage, "triage");
+    assert.strictEqual(eligible[0]?.priorFailures, 1);
+    assert.strictEqual(blocked.length, 0);
+  });
+
+  it("counts only consecutive failures since the last non-failure for the stage", () => {
+    const { eligible } = classify([
+      item({
+        id: "1",
+        roles: ["needs-triage"],
+        attempts: [
+          { stage: "triage", outcome: "failed", atMillis: 1 },
+          { stage: "triage", outcome: "failed", atMillis: 2 },
+          { stage: "triage", outcome: "succeeded", atMillis: 3 },
+          { stage: "triage", outcome: "failed", atMillis: 4 },
+          { stage: "triage", outcome: "failed", atMillis: 5 },
+        ],
+      }),
+    ]);
+    assert.strictEqual(eligible[0]?.priorFailures, 2);
+  });
+
   it("routes a bot PR with failing checks to follow-up even without a changes-requested review", () => {
     const { eligible } = classify([item({ id: "1", pr: pr("pending", { checks: "failing" }) })]);
     assert.strictEqual(eligible[0]?.stage, "follow-up");

@@ -678,7 +678,7 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("folds the triage proposal into the one coordination comment and keeps it there", () =>
+  it.effect("posts each triage proposal as its own comment beside the coordination comment", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const client = yield* GitHubClient;
@@ -693,12 +693,14 @@ describe("github work source adapter", () => {
         stage: "implement",
       });
       const comments = botComments(yield* client.listComments(repo, 16));
-      assert.strictEqual(comments.length, 1);
-      const body = comments[0]?.body ?? "";
-      assert.isTrue(hasLedgerMarker(body));
-      assert.include(body, "Triage proposal body");
-      assert.include(body, "Currently implementing this issue.");
-      assert.notInclude(body, "Currently triaging this issue.");
+      assert.strictEqual(comments.length, 2);
+      const coordination = comments.find((comment) => hasLedgerMarker(comment.body));
+      const proposal = comments.find((comment) => !hasLedgerMarker(comment.body));
+      assert.isDefined(coordination);
+      assert.isDefined(proposal);
+      assert.include(proposal?.body ?? "", "Triage proposal body");
+      assert.notInclude(coordination?.body ?? "", "Triage proposal body");
+      assert.include(coordination?.body ?? "", "Currently implementing this issue.");
       const observed = (yield* source.observe(workspace)).find((item) => item.id === "#16");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 3 });
@@ -707,19 +709,70 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("replaces the previous proposal when triage runs again", () =>
+  it.effect("keeps prior triage proposals when triage runs again", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const client = yield* GitHubClient;
       yield* source.note(workspace, id("#17"), "First proposal");
       yield* source.note(workspace, id("#17"), "Second proposal");
       const comments = botComments(yield* client.listComments(repo, 17));
-      assert.strictEqual(comments.length, 1);
-      assert.notInclude(comments[0]?.body ?? "", "First proposal");
-      assert.include(comments[0]?.body ?? "", "Second proposal");
-      assert.include(comments[0]?.body ?? "", defaultStatus);
+      assert.strictEqual(comments.length, 2);
+      assert.include(comments[0]?.body ?? "", "First proposal");
+      assert.include(comments[1]?.body ?? "", "Second proposal");
+      assert.isFalse(comments.some((comment) => hasLedgerMarker(comment.body)));
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 17, title: "rerun", labels: ["needs-triage"] }] })),
+    ),
+  );
+
+  it.effect("clears a leftover coordination detail when posting a new triage proposal", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      yield* source.recordFollowUp(
+        workspace,
+        id("#20"),
+        { checks: "failing", humanCommentAtMillis: 1, noProgress: 1 },
+        "Old folded detail",
+      );
+      yield* source.note(workspace, id("#20"), "Fresh triage proposal");
+      const comments = botComments(yield* client.listComments(repo, 20));
+      const coordination = comments.find((comment) => hasLedgerMarker(comment.body));
+      const proposal = comments.find((comment) => !hasLedgerMarker(comment.body));
+      assert.isDefined(coordination);
+      assert.isDefined(proposal);
+      assert.notInclude(coordination?.body ?? "", "Old folded detail");
+      assert.include(proposal?.body ?? "", "Fresh triage proposal");
+    }).pipe(
+      Effect.provide(
+        withClient({ issues: [{ number: 20, title: "clear detail", labels: ["needs-triage"] }] }),
+      ),
+    ),
+  );
+
+  it.effect("ignores marker syntax embedded in a triage proposal comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
+      const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
+      yield* source.claim(workspace, id("#21"), claim);
+      yield* source.note(
+        workspace,
+        id("#21"),
+        `Looks done ${serializeAttempt({ stage: "triage", outcome: "failed", atMillis: 99 })}`,
+      );
+      yield* source.recordAttempt(workspace, id("#21"), attempt);
+      const proposal = botComments(yield* client.listComments(repo, 21)).find(
+        (comment) => !hasLedgerMarker(comment.body),
+      );
+      assert.include(proposal?.body ?? "", "Looks done");
+      assert.notInclude(proposal?.body ?? "", "outcome=failed");
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#21");
+      assert.deepStrictEqual(observed?.attempts, [attempt]);
+      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+    }).pipe(
+      Effect.provide(withClient({ issues: [{ number: 21, title: "poison", labels: ["needs-triage"] }] })),
     ),
   );
 

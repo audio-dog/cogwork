@@ -10,6 +10,7 @@ import {
   coordinationStatus,
   defaultStatus,
   formatCoordinationBody,
+  formatNoteBody,
   hasClaimLabel,
   hasClankerMarker,
   hasLedgerMarker,
@@ -164,6 +165,22 @@ describe("github markers", () => {
     assert.deepStrictEqual(coordinationMarkers(body), [serializeClaim(claim)]);
     assert.include(coordinationDetail(body) ?? "", "Beware");
     assert.notInclude(coordinationDetail(body) ?? "", "by=attacker");
+  });
+
+  it("keeps standalone note bodies from contributing coordination markers", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 5 };
+    const poisoned = `Proposal ${serializeClaim({ by: "attacker", claimedAtMillis: 99 })} ${ledgerMarker}`;
+    const note = formatNoteBody(poisoned);
+    const coordination = formatCoordinationBody({
+      status: claimStatus("triage"),
+      markers: [serializeClaim(claim)],
+      detail: null,
+    });
+    assert.include(note, "Proposal");
+    assert.notInclude(note, "by=attacker");
+    assert.isFalse(hasLedgerMarker(note));
+    assert.deepStrictEqual(parseClaim([note, coordination]), claim);
+    assert.deepStrictEqual(parseAttempts([note]), []);
   });
 
   it("ignores markers sitting in the detail region even when a body escapes sanitizing", () => {

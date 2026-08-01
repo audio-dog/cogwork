@@ -44,7 +44,7 @@ Each executor run then:
 - **engine → contracts.** Every engine service consumes and produces contracts schemas. Contracts owns the nouns; engine owns the verbs.
 - **cli → engine.** The `daemon` command composes the engine's layers into a running server. `status` / `runs` / `watch` talk to it over the RPC group. `worktree` embeds the engine's worktree manager directly, with no RPC.
 - **cursor-acp → engine.** `cursorRunner` implements the engine's harness runner interface. The engine knows nothing about ACP or Cursor; cursor-acp knows nothing about scheduling.
-- **engine ↔ work source (GitHub).** Claims, attempts, and everything the bot has to say live in one coordination comment on the work source, so any daemon can rebuild its coordination view from GitHub alone. The "ledger" marker anchoring that comment is not the run ledger — see contracts.
+- **engine ↔ work source (GitHub).** Claims, attempts, and other coordination markers live in one coordination comment on the work source, so any daemon can rebuild its coordination view from GitHub alone. Human-facing triage proposals are separate comments (one per round) so the thread stays conversational. The "ledger" marker anchoring the coordination comment is not the run ledger — see contracts.
 
 ### Sync stands alone
 

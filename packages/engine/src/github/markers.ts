@@ -151,5 +151,10 @@ const detailSection = (detail: string | null) => {
   return visible === null ? [] : ["", detailMarker, "", visible];
 };
 
+export const formatNoteBody = (detail: string) => {
+  const visible = orNull(stripMarkers(detail));
+  return visible === null ? "" : [detailMarker, "", visible].join("\n");
+};
+
 export const formatCoordinationBody = ({ status, markers, detail }: CoordinationBody) =>
   [attribution, "", status, "", ledgerMarker, ...markers, ...detailSection(detail)].join("\n");
