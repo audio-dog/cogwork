@@ -1,7 +1,14 @@
+import { ndJsonStream } from "@agentclientprotocol/sdk";
 import type { HarnessName, TokenUsage } from "@clanker-forge/contracts";
 import { Harness } from "@clanker-forge/engine";
 import { chat, EventType, type StreamChunk } from "@tanstack/ai";
-import { acpCompatible } from "@tanstack/ai-acp";
+import {
+  type AcpHarnessContext,
+  type AcpJsonRpcStream,
+  type AcpSessionTransport,
+  acpCompatible,
+  spawnHandleToAcpTransport,
+} from "@tanstack/ai-acp";
 import { defineSandbox, defineWorkspace, withSandbox } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
@@ -68,6 +75,77 @@ const bridge = (stream: AsyncIterable<StreamChunk>) =>
     ),
   );
 
+type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
+
+// Cursor's agent sends these vendor JSON-RPC requests to report completed
+// tool calls (subagents, todo updates) it already ran in-process, then ignores
+// our reply. `@tanstack/ai-acp`'s client has no handler for them, so the ACP SDK
+// refuses each with -32601 and logs it. We ack them with an empty result so the
+// noise stops without touching the package.
+const swallowedCursorMethods = new Set<string>(["cursor/task", "cursor/update_todos"]);
+
+const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
+  const writer = base.writable.getWriter();
+  const outbound = { tail: Promise.resolve() };
+  const send = (message: AcpMessage) => {
+    const write = outbound.tail.then(() => writer.write(message));
+    outbound.tail = write.then(
+      () => undefined,
+      () => undefined,
+    );
+    return write;
+  };
+
+  const readable = new ReadableStream<AcpMessage>({
+    // @effect-diagnostics-next-line asyncFunction:off
+    async start(controller) {
+      const reader = base.readable.getReader();
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if ("method" in value && "id" in value && swallowedCursorMethods.has(value.method)) {
+            void send({ jsonrpc: "2.0", id: value.id, result: {} });
+            continue;
+          }
+          controller.enqueue(value);
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        reader.releaseLock();
+      }
+    },
+  });
+
+  const writable = new WritableStream<AcpMessage>({
+    write: (message) => send(message),
+    close: () => writer.close(),
+    abort: (reason) => writer.abort(reason),
+  });
+
+  return { readable, writable };
+};
+
+const openCursorTransport =
+  (agentBin: string) =>
+  // @effect-diagnostics-next-line asyncFunction:off
+  async (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
+    const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.effort);
+    const handle = await ctx.sandbox.process.spawn(`${agentBin} --model ${flag} acp`, {
+      cwd: ctx.cwd,
+      ...(ctx.signal ? { signal: ctx.signal } : {}),
+    });
+    const bytes = spawnHandleToAcpTransport(handle);
+    return {
+      kind: "stream",
+      stream: interceptCursorTelemetry(ndJsonStream(bytes.writable, bytes.readable)),
+      dispose: () => bytes.kill(),
+      stderrTail: bytes.stderrTail,
+    };
+  };
+
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {
   const agentBin = options.agentBin ?? "agent";
   const defaultModel = options.defaultModel ?? "auto";
@@ -84,8 +162,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             name: options.name,
             models: [model],
             modelOptions: emptyModelOptions,
-            command: ({ model: selected, modelOptions }) =>
-              `${agentBin} --model ${cursorModelFlag(selected, modelOptions?.effort)} acp`,
+            openTransport: openCursorTransport(agentBin),
             planEventName: `${options.name}.plan`,
             authMethodId,
           });

@@ -52,7 +52,7 @@ _Avoid_: Attempt (the durable, work-source form), job. Do not confuse with the h
 
 **Run ledger**:
 The daemon's local store of runs and their events — in-memory, or SQLite at `~/.clanker-forge/runs.db`. Holds run history, harness sessions, and token usage. It does not hold scheduling budgets (those live only in the scheduler's memory), and losing it is safe because the work source stays authoritative for coordination.
-_Avoid_: Source of truth, database, backlog. Not the GitHub coordination "ledger" comment.
+_Avoid_: Source of truth, database, backlog. Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
 
 **Run event**:
 One persisted, sequenced entry in a run's stream — an encoded harness event stored with a `seq` and timestamp.

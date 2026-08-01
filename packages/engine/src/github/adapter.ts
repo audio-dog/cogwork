@@ -18,14 +18,22 @@ import {
   type GitHubRepoRef,
   type RawComment,
   type RawPull,
+  type RawReview,
+  type ReviewDecision,
+  reviewDecisionOf,
 } from "./client";
 import {
   attemptStatus,
   claimLabel,
   claimStatus,
+  coordinationDetail,
   coordinationMarkers,
+  coordinationStatus,
+  defaultStatus,
   formatCoordinationBody,
+  formatNoteBody,
   hasClaimLabel,
+  hasClankerMarker,
   hasLedgerMarker,
   parseAttempts,
   parseClaim,
@@ -34,11 +42,26 @@ import {
   rolesFromLabels,
   serializeAttempt,
   serializeClaim,
+  serializeFollowUp,
 } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
   readonly botLogin: string | null;
 }
+
+interface CoordinationUpdate {
+  readonly status?: string;
+  readonly marker?: string;
+  readonly detail?: string | null;
+}
+
+const botLedger = (comments: ReadonlyArray<RawComment>, botLogin: string | null) =>
+  comments.find((comment) => comment.authorLogin === botLogin && hasLedgerMarker(comment.body));
+
+const nextDetail = (update: CoordinationUpdate, previous: string) => {
+  if (!Object.hasOwn(update, "detail")) return coordinationDetail(previous);
+  return update.detail ?? null;
+};
 
 const targetFor = (workspace: RegisteredWorkspace) => {
   const source = workspace.config.workSource;
@@ -60,10 +83,10 @@ export const linkedIssue = (body: string) => {
   return match?.[1] ? Number.parseInt(match[1], 10) : null;
 };
 
-export const prReview = (pull: RawPull): PrReview => {
+export const prReview = (pull: RawPull, decision: ReviewDecision): PrReview => {
   if (pull.draft) return "pending";
-  if (pull.reviewDecision === "changes-requested") return "changes-requested";
-  if (pull.reviewDecision === "approved") return "ready";
+  if (decision === "changes-requested") return "changes-requested";
+  if (decision === "approved") return "ready";
   return "pending";
 };
 
@@ -71,13 +94,34 @@ const freshPattern = /\/fresh\b/i;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-const trustedHuman = (comment: RawComment, botLogin: string) =>
-  comment.authorLogin !== botLogin && writeAccess.has(comment.authorAssociation);
+type Feedback = Pick<RawComment, "authorLogin" | "authorAssociation" | "body" | "createdAtMillis">;
 
-export const humanCommentSignal = (comments: ReadonlyArray<RawComment>, botLogin: string | null) => {
-  const humans = botLogin ? comments.filter((comment) => trustedHuman(comment, botLogin)) : [];
-  const newest = humans.reduce<RawComment | null>(
-    (max, comment) => (max && max.createdAtMillis >= comment.createdAtMillis ? max : comment),
+const isHumanFeedback = (feedback: Feedback, botLogin: string) =>
+  feedback.authorLogin !== botLogin && writeAccess.has(feedback.authorAssociation);
+
+export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
+  const latestApprovalMillis = reviews.reduce(
+    (latest, review) => (review.state === "APPROVED" ? Math.max(latest, review.submittedAtMillis) : latest),
+    Number.NEGATIVE_INFINITY,
+  );
+  return reviews.flatMap((review) =>
+    review.body && review.state !== "APPROVED" && review.submittedAtMillis > latestApprovalMillis
+      ? [
+          {
+            authorLogin: review.authorLogin,
+            authorAssociation: review.authorAssociation,
+            body: review.body,
+            createdAtMillis: review.submittedAtMillis,
+          },
+        ]
+      : [],
+  );
+};
+
+export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botLogin: string | null) => {
+  const humans = botLogin ? feedback.filter((item) => isHumanFeedback(item, botLogin)) : [];
+  const newest = humans.reduce<Feedback | null>(
+    (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
     null,
   );
   return {
@@ -85,6 +129,11 @@ export const humanCommentSignal = (comments: ReadonlyArray<RawComment>, botLogin
     fresh: newest ? freshPattern.test(newest.body) : false,
   };
 };
+
+const coordinationLast = (comments: ReadonlyArray<RawComment>) => [
+  ...comments.filter((comment) => !hasLedgerMarker(comment.body)),
+  ...comments.filter((comment) => hasLedgerMarker(comment.body)),
+];
 
 type PrSignals = Omit<ObservedPr, "followUp">;
 
@@ -119,31 +168,43 @@ const make = (client: GitHubClientService): WorkSourceService => {
   });
 
   const observePr = Effect.fn("github.observePr")(function* (target: GitHubTarget, pull: RawPull) {
-    const [checks, comments] = yield* Effect.all([
+    const [checks, comments, reviewComments, reviews] = yield* Effect.all([
       client.listCheckRuns(target, pull.headSha),
       client.listComments(target, pull.number),
+      client.listReviewComments(target, pull.number),
+      client.listReviews(target, pull.number),
     ]);
-    const human = humanCommentSignal(comments, target.botLogin);
+    const decision = reviewDecisionOf(
+      reviews
+        .filter((review) => writeAccess.has(review.authorAssociation))
+        .map((review) => ({ login: review.authorLogin, state: review.state })),
+    );
+    const human = humanCommentSignal(
+      [...comments, ...reviewComments, ...reviewFeedback(reviews)],
+      target.botLogin,
+    );
     return {
-      review: prReview(pull),
+      review: prReview(pull, decision),
       checks: checkState(checks),
       latestHumanCommentAtMillis: human.latestAtMillis,
       fresh: human.fresh,
     } satisfies PrSignals;
   });
 
-  const upsertMarker = Effect.fn("github.upsertMarker")(function* (
+  const upsertCoordination = Effect.fn("github.upsertCoordination")(function* (
     target: GitHubTarget,
     number: number,
-    marker: string,
-    status: string,
+    update: CoordinationUpdate,
   ) {
     const comments = yield* client.listComments(target, number);
-    const ledger = comments.find(
-      (comment) => comment.authorLogin === target.botLogin && hasLedgerMarker(comment.body),
-    );
-    const markers = [...(ledger ? coordinationMarkers(ledger.body) : []), marker];
-    const body = formatCoordinationBody(status, markers);
+    const ledger = botLedger(comments, target.botLogin);
+    const previous = ledger?.body ?? "";
+    const markers = coordinationMarkers(previous);
+    const body = formatCoordinationBody({
+      status: update.status ?? coordinationStatus(previous) ?? defaultStatus,
+      markers: update.marker === undefined ? markers : [...markers, update.marker],
+      detail: nextDetail(update, previous),
+    });
     if (ledger) {
       yield* client.editComment(target, ledger.id, body);
       return;
@@ -151,19 +212,19 @@ const make = (client: GitHubClientService): WorkSourceService => {
     yield* client.createComment(target, number, body);
   });
 
-  const prsByIssue = Effect.fn("github.prsByIssue")(function* (target: GitHubTarget) {
-    const pulls = yield* client.listPulls(target);
-    const bot = target.botLogin ? pulls.filter((pull) => pull.authorLogin === target.botLogin) : [];
-    const entries = yield* Effect.forEach(bot, (pull) =>
-      Effect.map(observePr(target, pull), (signals) => {
-        const issue = linkedIssue(pull.body);
-        return issue ? [[issue, signals] as const] : [];
-      }),
-    );
-    return new Map<number, PrSignals>(entries.flat());
-  });
+  const daemonPull = (target: GitHubTarget, pull: RawPull) =>
+    pull.authorLogin === target.botLogin || writeAccess.has(pull.authorAssociation);
 
-  const buildItem = (target: GitHubTarget, prs: Map<number, PrSignals>) =>
+  const pullsByIssue = (target: GitHubTarget, pulls: ReadonlyArray<RawPull>) =>
+    pulls.reduce((byIssue, pull) => {
+      const issue = linkedIssue(pull.body);
+      if (issue === null || !daemonPull(target, pull)) return byIssue;
+      const existing = byIssue.get(issue);
+      if (existing && existing.authorLogin === target.botLogin) return byIssue;
+      return new Map(byIssue).set(issue, pull);
+    }, new Map<number, RawPull>());
+
+  const buildItem = (target: GitHubTarget, pulls: Map<number, RawPull>) =>
     Effect.fn("github.buildItem")(function* (issue: {
       readonly number: number;
       readonly title: string;
@@ -171,11 +232,13 @@ const make = (client: GitHubClientService): WorkSourceService => {
     }) {
       const claimLabeled = hasClaimLabel(issue.labels);
       const comments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
-      const trusted = target.botLogin
-        ? comments.filter((comment) => comment.authorLogin === target.botLogin).map((comment) => comment.body)
-        : [];
+      const trusted = coordinationLast(
+        comments.filter((comment) => comment.authorLogin === target.botLogin),
+      ).map((comment) => comment.body);
       const id = yield* itemId(issue.number);
-      const signals = prs.get(issue.number);
+      const owned = trusted.some(hasClankerMarker);
+      const pull = pulls.get(issue.number);
+      const signals = owned && pull ? yield* observePr(target, pull) : null;
       return {
         id,
         title: issue.title,
@@ -188,10 +251,10 @@ const make = (client: GitHubClientService): WorkSourceService => {
     });
 
   const observeTarget = Effect.fn("github.observeTarget")(function* (target: GitHubTarget) {
-    const [issues, prs] = yield* Effect.all([client.listIssues(target), prsByIssue(target)]);
+    const [issues, pulls] = yield* Effect.all([client.listIssues(target), client.listPulls(target)]);
     return yield* Effect.forEach(
       issues.filter((issue) => !issue.isPullRequest),
-      buildItem(target, prs),
+      buildItem(target, pullsByIssue(target, pulls)),
     );
   });
 
@@ -209,7 +272,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
         const { target, number } = yield* resolveIssue(workspace, id);
         yield* client.addLabel(target, number, claimLabel);
         const status = claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
-        yield* upsertMarker(target, number, serializeClaim(claim), status);
+        yield* upsertCoordination(target, number, { status, marker: serializeClaim(claim) });
       }),
     release: (workspace, id) =>
       Effect.gen(function* () {
@@ -219,12 +282,25 @@ const make = (client: GitHubClientService): WorkSourceService => {
     recordAttempt: (workspace, id, attempt) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* upsertMarker(target, number, serializeAttempt(attempt), attemptStatus(attempt));
+        yield* upsertCoordination(target, number, {
+          status: attemptStatus(attempt),
+          marker: serializeAttempt(attempt),
+        });
       }),
-    comment: (workspace, id, body) =>
+    recordFollowUp: (workspace, id, marker, detail) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* client.createComment(target, number, body);
+        yield* upsertCoordination(target, number, { marker: serializeFollowUp(marker), detail });
+      }),
+    note: (workspace, id, detail) =>
+      Effect.gen(function* () {
+        const { target, number } = yield* resolveIssue(workspace, id);
+        const comments = yield* client.listComments(target, number);
+        const ledger = botLedger(comments, target.botLogin);
+        if (ledger && coordinationDetail(ledger.body) !== null) {
+          yield* upsertCoordination(target, number, { detail: null });
+        }
+        yield* client.createComment(target, number, formatNoteBody(detail));
       }),
     setRoles: (workspace, id, changes) =>
       Effect.gen(function* () {

@@ -15,7 +15,7 @@ export default defineWorkspace({
     botLogin: "audiodog-bot",
   },
   harness: { preferred: "cursor" },
-  concurrency: 1,
+  concurrency: 3,
   playbook: {
     triage: { enabled: true, model: triageModel },
     implement: { enabled: true, harness: "cursor", model: implementModel },

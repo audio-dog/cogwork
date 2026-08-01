@@ -46,12 +46,16 @@ A workspace's binding of a lifecycle stage to a prompt template, skill, and harn
 _Avoid_: Workflow, pipeline
 
 **Work source adapter**:
-A concrete implementation of the work source port. `GitHub.adapterLayer` is the only real one; it reads issues, labels, and comments, and writes coordination markers into a bot-owned comment.
+A concrete implementation of the work source port. `GitHub.adapterLayer` is the only real one; it reads issues, labels, and comments, writes coordination markers into the coordination comment, and posts human-facing notes (triage proposals) as separate comments.
 _Avoid_: Client (the GitHub HTTP client is a lower-level detail), plugin
 
 **Coordination markers**:
-The HTML-comment records (claim, attempt, ledger anchor) the GitHub adapter writes into a single bot-owned comment on an issue, so the control plane's coordination state travels with the work source.
+The HTML-comment records (claim, attempt, follow-up, ledger anchor) the GitHub adapter writes into the coordination comment, so the control plane's coordination state travels with the work source.
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.
+
+**Coordination comment**:
+The single bot-owned comment the GitHub adapter keeps on an issue for control-plane state. Every coordination write edits it in place rather than adding another comment. It holds the **status** (one line naming what the control plane is doing now), optional **detail** (a hand-off explanation such as a no-progress follow-up note), and the coordination markers. Triage proposals are not stored here — each triage round is a separate comment so the thread stays conversational and notifiable. A write that sets one part carries the others forward, so a status change never erases a hand-off detail.
+_Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
 
 **Worktree manager**:
 The git worktree lifecycle: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker.

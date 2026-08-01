@@ -119,12 +119,13 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   );
 });
 
-export const reconcileHeartbeat = Effect.gen(function* () {
-  const worker = yield* ReconcileWorker;
-  const receipt = yield* worker.submit();
-  yield* Effect.logInfo("reconcile tick", receipt);
-  yield* maintainWorktrees();
-}).pipe(Effect.repeat(Schedule.spaced("5 seconds")));
+export const reconcileHeartbeat = (pollIntervalMillis: number) =>
+  Effect.gen(function* () {
+    const worker = yield* ReconcileWorker;
+    const receipt = yield* worker.submit();
+    yield* Effect.logInfo("reconcile tick", receipt);
+    yield* maintainWorktrees();
+  }).pipe(Effect.repeat(Schedule.spaced(pollIntervalMillis)));
 
 export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;

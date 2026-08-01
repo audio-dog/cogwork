@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
+import type { FollowUpMarker } from "../followUp";
 import type { RegisteredWorkspace } from "../projector";
 import { WorkSource } from "../WorkSource";
 import { layer as adapterLayer } from "./adapter";
@@ -15,8 +16,9 @@ import {
   type GitHubRepoRef,
   type RawComment,
   type RawPull,
+  type RawReview,
 } from "./client";
-import { hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
+import { defaultStatus, hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -35,10 +37,21 @@ interface SeedComment {
   readonly createdAtMillis?: number;
 }
 
+interface SeedReview {
+  readonly pull: number;
+  readonly authorLogin?: string;
+  readonly authorAssociation?: string;
+  readonly state?: string;
+  readonly body?: string;
+  readonly submittedAtMillis?: number;
+}
+
 interface Seed {
   readonly issues: ReadonlyArray<SeedIssue>;
   readonly pulls?: ReadonlyArray<RawPull>;
   readonly comments?: ReadonlyArray<SeedComment>;
+  readonly reviewComments?: ReadonlyArray<SeedComment>;
+  readonly reviews?: ReadonlyArray<SeedReview>;
   readonly checks?: ReadonlyArray<{ readonly sha: string } & CheckRun>;
 }
 
@@ -64,6 +77,17 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   const seeded = seedComments(seed.comments ?? []);
   const nextId = yield* Ref.make((seed.comments?.length ?? 0) + 1);
   const commentsRef = yield* Ref.make(seeded);
+  const reviewComments = seedComments(seed.reviewComments ?? []);
+  const reviewsByPull = (seed.reviews ?? []).reduce((all, review) => {
+    const entry: RawReview = {
+      authorLogin: review.authorLogin ?? "maintainer",
+      authorAssociation: review.authorAssociation ?? "COLLABORATOR",
+      state: review.state ?? "COMMENTED",
+      body: review.body ?? "",
+      submittedAtMillis: review.submittedAtMillis ?? 0,
+    };
+    return all.set(review.pull, [...(all.get(review.pull) ?? []), entry]);
+  }, new Map<number, ReadonlyArray<RawReview>>());
   const checksBySha = (seed.checks ?? []).reduce(
     (all, { sha, ...run }) => all.set(sha, [...(all.get(sha) ?? []), run]),
     new Map<string, ReadonlyArray<CheckRun>>(),
@@ -91,6 +115,8 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     listPulls: () => Effect.succeed([...pulls]),
     listComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
+    listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
+    listReviews: (_repo, number) => Effect.succeed([...(reviewsByPull.get(number) ?? [])]),
     addLabel: (_repo, number, label) =>
       patch(number, (issue) => ({ ...issue, labels: [...issue.labels, label] })),
     removeLabel: (_repo, number, label) =>
@@ -144,9 +170,9 @@ const withClient = (seed: Seed) =>
 
 const pull = (over: Partial<RawPull> & { readonly number: number; readonly body: string }): RawPull => ({
   authorLogin: "clanker-forge[bot]",
+  authorAssociation: "MEMBER",
   draft: false,
   headSha: `sha-${over.number}`,
-  reviewDecision: "none",
   ...over,
 });
 
@@ -183,7 +209,15 @@ describe("github work source adapter", () => {
             { number: 5, title: "in review", labels: ["ready-for-agent"] },
             { number: 100, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 100, body: "Closes #5", reviewDecision: "changes-requested" })],
+          pulls: [pull({ number: 100, body: "Closes #5" })],
+          comments: [
+            {
+              issue: 5,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            },
+          ],
+          reviews: [{ pull: 100, state: "CHANGES_REQUESTED" }],
         }),
       ),
     ),
@@ -295,6 +329,193 @@ describe("github work source adapter", () => {
           ],
           checks: [
             { sha: "sha-100", name: "ci", status: "completed", conclusion: "failure", startedAtMillis: 1 },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("owns a write-access human-authored PR when the issue carries the daemon's marker", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const owned = items.find((item) => item.id === "#20");
+      const unowned = items.find((item) => item.id === "#21");
+      assert.strictEqual(owned?.pr?.review, "changes-requested");
+      assert.isNull(unowned?.pr ?? null);
+      const { eligible } = classify(items);
+      assert.strictEqual(eligible.find((entry) => entry.id === "#20")?.stage, "follow-up");
+      assert.strictEqual(eligible.find((entry) => entry.id === "#21")?.stage, "implement");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 20, title: "owned", labels: ["ready-for-agent"] },
+            { number: 21, title: "unowned", labels: ["ready-for-agent"] },
+            { number: 200, title: "human pr", labels: [], isPullRequest: true },
+            { number: 201, title: "human pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [
+            pull({
+              number: 200,
+              authorLogin: "taylorfsteele",
+              authorAssociation: "OWNER",
+              body: "Closes #20",
+            }),
+            pull({
+              number: 201,
+              authorLogin: "taylorfsteele",
+              authorAssociation: "OWNER",
+              body: "Closes #21",
+            }),
+          ],
+          comments: [
+            {
+              issue: 20,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            },
+          ],
+          reviews: [{ pull: 200, state: "CHANGES_REQUESTED" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("refuses to adopt a PR from an author without write access, even on an owned issue", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#25");
+      assert.isNull(observed?.pr ?? null);
+      assert.isUndefined(
+        classify(items).eligible.find((entry) => entry.id === "#25" && entry.stage === "follow-up"),
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 25, title: "owned issue, hostile pr", labels: ["ready-for-agent"] },
+            { number: 205, title: "fork pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [
+            pull({ number: 205, authorLogin: "drive-by", authorAssociation: "NONE", body: "Closes #25" }),
+          ],
+          comments: [
+            {
+              issue: 25,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            },
+          ],
+          reviews: [
+            { pull: 205, state: "CHANGES_REQUESTED", authorLogin: "drive-by", authorAssociation: "NONE" },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("ignores a changes-requested review from an author without write access", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#26");
+      assert.strictEqual(observed?.pr?.review, "pending");
+      assert.isUndefined(
+        classify(items).eligible.find((entry) => entry.id === "#26" && entry.stage === "follow-up"),
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 26, title: "owned bot pr, hostile review", labels: ["ready-for-agent"] },
+            { number: 206, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 206, body: "Closes #26" })],
+          comments: [
+            {
+              issue: 26,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            },
+          ],
+          reviews: [
+            { pull: 206, state: "CHANGES_REQUESTED", authorLogin: "drive-by", authorAssociation: "NONE" },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("treats an inline review comment as human feedback that triggers follow-up", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "#22");
+      assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 300);
+      assert.strictEqual(classify(items).eligible.find((entry) => entry.id === "#22")?.stage, "follow-up");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 22, title: "inline review", labels: ["ready-for-agent"] },
+            { number: 202, title: "human pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 202, authorLogin: "taylorfsteele", body: "Closes #22" })],
+          comments: [
+            {
+              issue: 22,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            },
+          ],
+          reviewComments: [
+            {
+              issue: 202,
+              authorLogin: "maintainer",
+              authorAssociation: "COLLABORATOR",
+              body: "tweak this line",
+              createdAtMillis: 300,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("treats a COMMENTED review with a body as feedback but ignores an empty one", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const withBody = items.find((item) => item.id === "#23");
+      const empty = items.find((item) => item.id === "#24");
+      assert.strictEqual(withBody?.pr?.latestHumanCommentAtMillis, 400);
+      assert.isNull(empty?.pr?.latestHumanCommentAtMillis ?? null);
+      const { eligible } = classify(items);
+      assert.strictEqual(eligible.find((entry) => entry.id === "#23")?.stage, "follow-up");
+      assert.isUndefined(eligible.find((entry) => entry.id === "#24"));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 23, title: "review with body", labels: ["ready-for-agent"] },
+            { number: 24, title: "empty review", labels: ["ready-for-agent"] },
+            { number: 203, title: "human pr", labels: [], isPullRequest: true },
+            { number: 204, title: "human pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [
+            pull({ number: 203, authorLogin: "taylorfsteele", body: "Closes #23" }),
+            pull({ number: 204, authorLogin: "taylorfsteele", body: "Closes #24" }),
+          ],
+          comments: [23, 24].map((issue) => ({
+            issue,
+            authorLogin: bot.login,
+            body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+          })),
+          reviews: [
+            { pull: 203, state: "COMMENTED", body: "please adjust", submittedAtMillis: 400 },
+            { pull: 204, state: "COMMENTED", body: "", submittedAtMillis: 400 },
           ],
         }),
       ),
@@ -457,22 +678,161 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("posts triage proposals as a separate comment from the coordination comment", () =>
+  it.effect("posts each triage proposal as its own comment beside the coordination comment", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const client = yield* GitHubClient;
+      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
+      const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
+      yield* source.claim(workspace, id("#16"), claim);
+      yield* source.note(workspace, id("#16"), "Triage proposal body");
+      yield* source.recordAttempt(workspace, id("#16"), attempt);
       yield* source.claim(workspace, id("#16"), {
         by: "clanker-forge",
-        claimedAtMillis: 1,
-        stage: "triage",
+        claimedAtMillis: 3,
+        stage: "implement",
       });
-      yield* source.comment(workspace, id("#16"), "Triage proposal body");
       const comments = botComments(yield* client.listComments(repo, 16));
       assert.strictEqual(comments.length, 2);
-      assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
-      assert.strictEqual(comments.filter((comment) => comment.body === "Triage proposal body").length, 1);
+      const coordination = comments.find((comment) => hasLedgerMarker(comment.body));
+      const proposal = comments.find((comment) => !hasLedgerMarker(comment.body));
+      assert.isDefined(coordination);
+      assert.isDefined(proposal);
+      assert.include(proposal?.body ?? "", "Triage proposal body");
+      assert.notInclude(coordination?.body ?? "", "Triage proposal body");
+      assert.include(coordination?.body ?? "", "Currently implementing this issue.");
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#16");
+      assert.deepStrictEqual(observed?.attempts, [attempt]);
+      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 3 });
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] })),
+    ),
+  );
+
+  it.effect("keeps prior triage proposals when triage runs again", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      yield* source.note(workspace, id("#17"), "First proposal");
+      yield* source.note(workspace, id("#17"), "Second proposal");
+      const comments = botComments(yield* client.listComments(repo, 17));
+      assert.strictEqual(comments.length, 2);
+      assert.include(comments[0]?.body ?? "", "First proposal");
+      assert.include(comments[1]?.body ?? "", "Second proposal");
+      assert.isFalse(comments.some((comment) => hasLedgerMarker(comment.body)));
+    }).pipe(
+      Effect.provide(withClient({ issues: [{ number: 17, title: "rerun", labels: ["needs-triage"] }] })),
+    ),
+  );
+
+  it.effect("clears a leftover coordination detail when posting a new triage proposal", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      yield* source.recordFollowUp(
+        workspace,
+        id("#20"),
+        { checks: "failing", humanCommentAtMillis: 1, noProgress: 1 },
+        "Old folded detail",
+      );
+      yield* source.note(workspace, id("#20"), "Fresh triage proposal");
+      const comments = botComments(yield* client.listComments(repo, 20));
+      const coordination = comments.find((comment) => hasLedgerMarker(comment.body));
+      const proposal = comments.find((comment) => !hasLedgerMarker(comment.body));
+      assert.isDefined(coordination);
+      assert.isDefined(proposal);
+      assert.notInclude(coordination?.body ?? "", "Old folded detail");
+      assert.include(proposal?.body ?? "", "Fresh triage proposal");
+    }).pipe(
+      Effect.provide(
+        withClient({ issues: [{ number: 20, title: "clear detail", labels: ["needs-triage"] }] }),
+      ),
+    ),
+  );
+
+  it.effect("ignores marker syntax embedded in a triage proposal comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
+      const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
+      yield* source.claim(workspace, id("#21"), claim);
+      yield* source.note(
+        workspace,
+        id("#21"),
+        `Looks done ${serializeAttempt({ stage: "triage", outcome: "failed", atMillis: 99 })}`,
+      );
+      yield* source.recordAttempt(workspace, id("#21"), attempt);
+      const proposal = botComments(yield* client.listComments(repo, 21)).find(
+        (comment) => !hasLedgerMarker(comment.body),
+      );
+      assert.include(proposal?.body ?? "", "Looks done");
+      assert.notInclude(proposal?.body ?? "", "outcome=failed");
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#21");
+      assert.deepStrictEqual(observed?.attempts, [attempt]);
+      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+    }).pipe(
+      Effect.provide(withClient({ issues: [{ number: 21, title: "poison", labels: ["needs-triage"] }] })),
+    ),
+  );
+
+  it.effect("lets the coordination comment outrank a legacy marker comment written after it", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const stale: FollowUpMarker = { checks: "pending", humanCommentAtMillis: 1, noProgress: 0 };
+      const current: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 9, noProgress: 2 };
+      yield* source.recordFollowUp(workspace, id("#19"), current);
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#19");
+      assert.notDeepEqual(observed?.pr?.followUp, stale);
+      assert.deepStrictEqual(observed?.pr?.followUp, current);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 19, title: "legacy follow-up", labels: ["ready-for-agent"] },
+            { number: 102, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 102, body: "Closes #19" })],
+          comments: [
+            {
+              issue: 19,
+              authorLogin: bot.login,
+              body: "<!-- clanker-forge:ledger -->\n<!-- clanker-forge:claim by=clanker-forge at=1 -->",
+              createdAtMillis: 1,
+            },
+            {
+              issue: 19,
+              authorLogin: bot.login,
+              body: serializeFollowUp({ checks: "pending", humanCommentAtMillis: 1, noProgress: 0 }),
+              createdAtMillis: 2,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("records a follow-up marker with a visible status instead of a marker-only comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* GitHubClient;
+      const marker: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 4, noProgress: 1 };
+      yield* source.recordFollowUp(workspace, id("#18"), marker);
+      const comments = botComments(yield* client.listComments(repo, 18));
+      assert.strictEqual(comments.length, 1);
+      assert.include(comments[0]?.body ?? "", defaultStatus);
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#18");
+      assert.deepStrictEqual(observed?.pr?.followUp, marker);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 18, title: "in review", labels: ["ready-for-agent"] },
+            { number: 101, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 101, body: "Closes #18" })],
+        }),
+      ),
     ),
   );
 });
