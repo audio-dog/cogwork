@@ -1,0 +1,28 @@
+apps/cli/src/ledger.test.ts
+  s_81c7ef06410701::t_741f1bca00a761 12
+  s_81c7ef06410701::t_9f83157e7da8ca 171-178,180,184-185
+  s_81c7ef06410701::t_8952d187eacade 179,181-183
+  s_81c7ef06410701::t_128b6a1b58d826 41-59
+  s_81c7ef06410701::t_d9939cc539534e 186
+  s_81c7ef06410701::t_2574bec6a8e960 1
+apps/cli/src/ledger.ts
+  s_81c7ef06410701::t_1279e488e9e871 139-141
+  s_81c7ef06410701::t_1e2e704349b8a7 152
+  s_81c7ef06410701::t_04ca7c9310c057 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "5df917c79908eb32ec4a14caca6ba489fce44367",
+  "prompts": {},
+  "sessions": {
+    "s_81c7ef06410701": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6a438498-ff12-4485-ad82-21bc4d778198",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
