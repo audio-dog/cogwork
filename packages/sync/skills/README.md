@@ -7,8 +7,12 @@ the bucket whose behavior you want to change.
 | Bucket | Path | Who uses it |
 |---|---|---|
 | **forge** | `forge/<name>/` | Agents and humans writing Clanker Forge itself |
-| **engine** | `engine/<name>/` | The orchestration daemon (headless playbooks) |
+| **engine** | [`packages/engine/skills/<name>/`](../../engine/skills/) | The orchestration daemon (headless playbooks) |
 | **sync** | `sync/<name>/` | The sync generator — copied into each tool's global skill store |
+
+The **engine** bucket lives in `packages/engine/`, next to the playbooks (`Playbook.ts`)
+that name its skills by string, rather than here — everything else authored for this
+generator's own buckets stays under this directory.
 
 Only **sync** is wired to anything today: it is the bucket `pnpm sync` and `pnpm link-skills`
 distribute, and it currently holds a copy of every skill. So the forge and engine

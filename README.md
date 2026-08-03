@@ -8,7 +8,7 @@ and MCP config, built to be portable across tools.
 
 | | What | How it ships |
 |---|---|---|
-| **Skills** (`packages/sync/skills/`) | Self-contained capabilities in `SKILL.md` format, in three buckets (`forge`, `engine`, `sync`) | The **sync** bucket is copied as-is into each tool's global skill store by `pnpm sync` |
+| **Skills** (`packages/sync/skills/forge,sync/`, `packages/engine/skills/`) | Self-contained capabilities in `SKILL.md` format, in three buckets (`forge`, `engine`, `sync`) | The **sync** bucket is copied as-is into each tool's global skill store by `pnpm sync` |
 | **Assets** (`packages/sync/assets/`) | Rules, commands, subagents, MCP config | Authored once, then **generated** into each tool's native format/location by `pnpm sync` |
 | **Repo config** (`repo-config/`, git-ignored) | Per-repo config for the forked engineering skills (issue tracker, triage labels, domain docs) | Copied to the shared `~/.agents/repo-config/` home by `pnpm sync --global` (or symlinked by `pnpm link-skills`) — see [repo-config/README.md](repo-config/README.md) |
 
@@ -80,7 +80,8 @@ clanker-forge is a pnpm monorepo. Authored skills and the sync generator live to
 ```
 packages/sync/          TypeScript generator behind `pnpm sync`/`pnpm check` (src/cli.ts, src/check.ts, targets/, lib/)
 packages/sync/assets/   Canonical source for rules, commands, subagents, MCP config
-packages/sync/skills/   Authored skills in three buckets — forge, engine, sync (see its README)
+packages/sync/skills/   Authored skills — forge and sync buckets (see its README)
+packages/engine/skills/ Authored skills — the engine bucket (headless playbooks), next to Playbook.ts
 packages/sync/bin/      link-skills.sh (symlink sync-bucket skills + repo-config for local dev)
 repo-config/            Per-repo config for the forked engineering skills (see repo-config/README.md)
 .agents/skills/         Consumer installs used in this repo (e.g. effect-ts), not authored here
@@ -106,7 +107,8 @@ the version changes.
 
 ## Contributing
 
-1. Add a skill under `packages/sync/skills/<bucket>/<name>/SKILL.md` (see
+1. Add a skill under `packages/sync/skills/<bucket>/<name>/SKILL.md` (`forge` or `sync`;
+   `engine` lives at `packages/engine/skills/<name>/SKILL.md` — see
    [packages/sync/skills/README.md](packages/sync/skills/README.md)), or an asset under
    `packages/sync/assets/`.
 2. Run `pnpm check` — validates the frontmatter of every skill, command, and subagent.

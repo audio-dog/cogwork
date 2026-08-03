@@ -12,10 +12,11 @@ Anything the generator loads and renders — rules, commands, subagents, MCP ser
 _Avoid_: Resource, file
 
 **Skill**:
-A self-contained, portable capability living in `skills/<bucket>/<name>/` with a `SKILL.md`.
-Buckets are `forge` (writing Clanker Forge), `engine` (orchestration playbooks), and `sync`
-(distributed to tools). Only the `sync` bucket is copied as-is (no rendering) to tools that
-support skills; overlaps across buckets are duplicate files so each audience can diverge.
+A self-contained, portable capability with a `SKILL.md`, living in one of three buckets:
+`skills/forge/<name>/` and `skills/sync/<name>/` here, or `packages/engine/skills/<name>/`
+for the orchestration playbooks (authored there so they sit next to the `Playbook.ts` that
+names them). Only the `sync` bucket is copied as-is (no rendering) to tools that support
+skills; overlaps across buckets are duplicate files so each audience can diverge.
 _Avoid_: Command, subagent, plugin
 
 **Command**:

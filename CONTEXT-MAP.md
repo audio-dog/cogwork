@@ -52,8 +52,8 @@ The `sync` context reads `packages/sync/assets/`, the `packages/sync/skills/sync
 repo-root `repo-config/`, and writes each **target's** native files. Its only tie to orchestration is
 indirect: the skills and rules it distributes are what the orchestration harnesses eventually run.
 
-Every authored skill lives under `packages/sync/skills/`, in one of three buckets:
-`forge/` (writing this repo), `engine/` (the daemon's headless playbooks), and `sync/` (what the
-generator distributes). Only `sync/` is read by the generator — the other two are authoring homes
-so each audience can diverge later, and today their skills reach their audience through the copy
-in `sync/`.
+Every authored skill lives in one of three buckets: `packages/sync/skills/forge/` (writing this
+repo), `packages/engine/skills/` (the daemon's headless playbooks, colocated with the `Playbook.ts`
+that names them), and `packages/sync/skills/sync/` (what the generator distributes). Only `sync/`
+is read by the generator — the other two are authoring homes so each audience can diverge later,
+and today their skills reach their audience through the copy in `sync/`.
