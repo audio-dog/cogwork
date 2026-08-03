@@ -31,7 +31,7 @@ A human-visible label expressing an item's triage outcome: `needs-triage`, `read
 _Avoid_: Status, state, label (when you mean the role's meaning)
 
 **Blocked / blocker / blocking**:
-An item is *blocked* when its work source reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the work source's own dependency relation (GitHub issue dependencies, Linear blocking relations), read per adapter. A blocked item is held out of the `implement` stage until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.
+An item is *blocked* when its work source reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the work source's own dependency relation (GitHub issue dependencies today; Linear blocking relations when its adapter reads them), read per adapter. A blocked item is held out of the `implement` stage until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.
 _Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those are needs-human — a person clears them); stuck / exhausted / stalled (failure outcomes, not dependencies).
 
 **Needs-human reason**:
