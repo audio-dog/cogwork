@@ -1,0 +1,27 @@
+apps/cli/src/status.test.ts
+  s_016733297102d5::t_404d9776d1489f 20
+  s_016733297102d5::t_4a4504fa00722c 60-78,80
+  s_016733297102d5::t_2c814783f1e010 79
+  s_016733297102d5::t_835c77762600a8 81
+apps/cli/src/status.ts
+  s_016733297102d5::t_17e2fedd19d064 18-19,21,31
+  s_016733297102d5::t_01db3646e619eb 6
+  s_016733297102d5::t_f3c369e48dd397 7
+  s_016733297102d5::t_569e0e2d7e76d9 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "044d8f4c89bdfb0601eac31749a039187de72acb",
+  "prompts": {},
+  "sessions": {
+    "s_016733297102d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a54b6c1f-64f2-4d82-8bd2-a8253fd9b61a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
