@@ -29,10 +29,10 @@ import { activityOf, RunEventBus } from "./RunEventBus";
 import { RunLedger } from "./RunLedger";
 import { decideResume } from "./resumePolicy";
 import { WorkSource, type WorkSourceError } from "./WorkSource";
-import { branchName, checkoutPathFor, WorktreeManager } from "./Worktree";
+import { branchName, checkoutPathFor, type WorktreeDivergedError, WorktreeManager } from "./Worktree";
 import type { WorktreeFsError } from "./WorktreeFs";
 
-type PrepareError = GitError | WorktreeFsError;
+type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError;
 
 interface RunAccumulator {
   readonly text: string;
@@ -117,8 +117,10 @@ const withFailureTerminal = (stream: Stream.Stream<HarnessEvent, HarnessError>) 
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
 
-const retryableOf = (error: PrepareError | HarnessError) =>
-  error._tag === "HarnessError" ? error.retryable : true;
+const retryableOf = (error: PrepareError | HarnessError) => {
+  if (error._tag === "HarnessError") return error.retryable;
+  return error._tag !== "WorktreeDivergedError";
+};
 
 const checkoutFor = (workspace: RegisteredWorkspace, item: EligibleWork) =>
   checkoutPathFor(workspace.config.checkoutPath, item, item.stage, workspace.config.worktrees);

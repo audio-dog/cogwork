@@ -1,13 +1,19 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Redacted from "effect/Redacted";
 import * as References from "effect/References";
-import { CredentialStore, layerEnv } from "./CredentialStore";
+import { CredentialStore, layerEnv, make, type StoredCredential, type StoredToken } from "./CredentialStore";
 
-const account = { key: "AUD", tokenEnv: "LINEAR_API_KEY" } as const;
+const account = {
+  key: "AUD",
+  workSource: "linear",
+  organization: null,
+  tokenEnv: "LINEAR_API_KEY",
+} as const;
 
 const withEnv = (env: Record<string, string>) =>
   Effect.provide(Layer.mergeAll(layerEnv, ConfigProvider.layer(ConfigProvider.fromEnv({ env }))));
@@ -28,16 +34,17 @@ describe("CredentialStore (env)", () => {
   it.effect("returns the token held by the account's env var", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;
-      const token = yield* store.bearerToken(account);
-      assert.strictEqual(Redacted.value(token), "test-key");
+      const credential = yield* store.bearerToken(account);
+      assert.strictEqual(Redacted.value(credential.token), "test-key");
+      assert.strictEqual(credential.source, "env");
     }).pipe(withEnv({ LINEAR_API_KEY: "test-key" })),
   );
 
   it.effect("reads the env var the account names rather than a default", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;
-      const token = yield* store.bearerToken({ key: "AUD", tokenEnv: "OTHER_LINEAR_KEY" });
-      assert.strictEqual(Redacted.value(token), "other-key");
+      const credential = yield* store.bearerToken({ ...account, tokenEnv: "OTHER_LINEAR_KEY" });
+      assert.strictEqual(Redacted.value(credential.token), "other-key");
     }).pipe(withEnv({ LINEAR_API_KEY: "test-key", OTHER_LINEAR_KEY: "other-key" })),
   );
 
@@ -64,5 +71,125 @@ describe("CredentialStore (env)", () => {
       const lines = yield* capturingLogs(store.bearerToken(account));
       assert.isTrue(lines.some((line) => line.includes("env") && line.includes("AUD")));
     }).pipe(withEnv({ LINEAR_API_KEY: "test-key" })),
+  );
+});
+
+const storedToken = (expiresAtMillis: number, accessToken = "oauth-token"): StoredToken => ({
+  accessToken: Redacted.make(accessToken),
+  refreshToken: null,
+  expiresAtMillis,
+  scopes: ["read", "write"],
+});
+
+const stored = (organization: string, token: StoredToken): StoredCredential => ({
+  workSource: "linear",
+  organization,
+  botUserId: `bot-${organization}`,
+  token,
+});
+
+const far = 4_000_000_000_000;
+
+const withStored = (
+  credentials: ReadonlyArray<StoredCredential>,
+  env: Record<string, string> = { LINEAR_API_KEY: "env-key" },
+) =>
+  Effect.provide(
+    Layer.mergeAll(
+      Layer.succeed(CredentialStore, make({ load: Effect.succeed(credentials), save: () => Effect.void })),
+      ConfigProvider.layer(ConfigProvider.fromEnv({ env })),
+    ),
+  );
+
+describe("CredentialStore (stored)", () => {
+  it.effect("prefers a live stored token over the account's env var", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken(account);
+      assert.strictEqual(credential.source, "stored-oauth");
+      assert.strictEqual(Redacted.value(credential.token), "oauth-token");
+    }).pipe(withStored([stored("acme", storedToken(far))])),
+  );
+
+  it.effect("reports the identity discovered alongside the stored token", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken(account);
+      assert.deepStrictEqual(credential.identity, { organization: "acme", botUserId: "bot-acme" });
+    }).pipe(withStored([stored("acme", storedToken(far))])),
+  );
+
+  it.effect("falls back to the env var once the stored token has expired", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken(account);
+      assert.strictEqual(credential.source, "env");
+      assert.strictEqual(Redacted.value(credential.token), "env-key");
+    }).pipe(withStored([stored("acme", storedToken(0))])),
+  );
+
+  const expiringIn = (millis: number) =>
+    Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      const store = make({
+        load: Effect.succeed([stored("acme", storedToken(now + millis))]),
+        save: () => Effect.void,
+      });
+      return yield* store.bearerToken(account);
+    }).pipe(
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: { LINEAR_API_KEY: "env-key" } }))),
+    );
+
+  it.effect("treats a token expiring inside the safety margin as expired", () =>
+    Effect.map(expiringIn(30_000), (credential) => assert.strictEqual(credential.source, "env")),
+  );
+
+  it.effect("still uses a token that outlives the safety margin", () =>
+    Effect.map(expiringIn(90_000), (credential) => assert.strictEqual(credential.source, "stored-oauth")),
+  );
+
+  it.effect("uses the stored token whose organization the account names", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken({ ...account, organization: "beta" });
+      assert.strictEqual(Redacted.value(credential.token), "beta-token");
+    }).pipe(
+      withStored([
+        stored("acme", storedToken(far, "acme-token")),
+        stored("beta", storedToken(far, "beta-token")),
+      ]),
+    ),
+  );
+
+  it.effect("never hands one work source's token to another", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken({ ...account, workSource: "github" });
+      assert.strictEqual(credential.source, "env");
+    }).pipe(withStored([stored("acme", storedToken(far))])),
+  );
+
+  it.effect("refuses to guess when several stored tokens could match", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken(account);
+      assert.strictEqual(credential.source, "env");
+    }).pipe(withStored([stored("acme", storedToken(far)), stored("beta", storedToken(far))])),
+  );
+
+  it.effect("fails when neither a stored token nor the env var is usable", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const error = yield* Effect.flip(store.bearerToken(account));
+      assert.include(error.message, "LINEAR_API_KEY");
+    }).pipe(withStored([stored("acme", storedToken(0))], {})),
+  );
+
+  it.effect("logs that it resolved from the stored credential", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const lines = yield* capturingLogs(store.bearerToken(account));
+      assert.isTrue(lines.some((line) => line.includes("stored-oauth")));
+    }).pipe(withStored([stored("acme", storedToken(far))])),
   );
 });

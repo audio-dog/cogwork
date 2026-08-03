@@ -40,6 +40,7 @@ export interface WorkspaceReconcileState {
 }
 
 export interface ReconcileSnapshot {
+  readonly generation: number;
   readonly workspaces: ReadonlyArray<WorkspaceReconcileState>;
 }
 
@@ -75,7 +76,7 @@ export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
   const workSource = yield* WorkSource;
   const queue = yield* Queue.make<ReconcileJob>();
-  const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ workspaces: [] });
+  const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ generation: 0, workspaces: [] });
 
   const pollWorkspace = (workspace: RegisteredWorkspace) =>
     workSource.observe(workspace).pipe(
@@ -96,7 +97,10 @@ export const make = Effect.gen(function* () {
     const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
       concurrency: 4,
     });
-    yield* Ref.set(snapshotRef, { workspaces: states });
+    yield* Ref.update(snapshotRef, (previous) => ({
+      generation: previous.generation + 1,
+      workspaces: states,
+    }));
     yield* Deferred.succeed(job.receipt, {
       workspaces: registry.workspaces.length,
       failures: registry.failures.length,

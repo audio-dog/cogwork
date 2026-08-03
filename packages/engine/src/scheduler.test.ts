@@ -52,6 +52,8 @@ const candidate = (
   keys: [`${workspace.config.name}:ticket:${item.id}`],
 });
 
+const stamp = (day: number, generation = 1): Scheduler.TickStamp => ({ day, generation });
+
 describe("Scheduler.plan", () => {
   const wsA = workspaceOf("a");
   const wsB = workspaceOf("b");
@@ -67,7 +69,7 @@ describe("Scheduler.plan", () => {
       candidates,
       Scheduler.initialState,
       { globalLimit: 2, dailyBudget: 100 },
-      0,
+      stamp(0),
     );
     assert.strictEqual(result.picks.length, 2);
     assert.strictEqual(result.state.global, 2);
@@ -75,7 +77,7 @@ describe("Scheduler.plan", () => {
 
   it("caps picks per workspace independently of the global limit", () => {
     const candidates = [candidate(wsA, work(1), 1), candidate(wsA, work(2), 1), candidate(wsB, work(3), 1)];
-    const result = Scheduler.plan(candidates, Scheduler.initialState, config, 0);
+    const result = Scheduler.plan(candidates, Scheduler.initialState, config, stamp(0));
     assert.strictEqual(result.picks.length, 2);
     assert.deepStrictEqual(
       result.picks.map((pick) => pick.work.id),
@@ -93,7 +95,7 @@ describe("Scheduler.plan", () => {
       candidates,
       Scheduler.initialState,
       { globalLimit: 1, dailyBudget: 100 },
-      0,
+      stamp(0),
     );
     assert.deepStrictEqual(
       result.picks.map((pick) => pick.work.stage),
@@ -104,7 +106,7 @@ describe("Scheduler.plan", () => {
   it("allows only one in-flight job per shared key", () => {
     const shared = candidate(wsA, work(1), 10);
     const duplicate = { ...candidate(wsA, work(2), 10), keys: shared.keys };
-    const result = Scheduler.plan([shared, duplicate], Scheduler.initialState, config, 0);
+    const result = Scheduler.plan([shared, duplicate], Scheduler.initialState, config, stamp(0));
     assert.strictEqual(result.picks.length, 1);
   });
 
@@ -114,7 +116,12 @@ describe("Scheduler.plan", () => {
       candidate(wsB, work(2), 10),
       candidate(wsA, work(3), 10),
     ];
-    const result = Scheduler.plan(candidates, Scheduler.initialState, { globalLimit: 10, dailyBudget: 2 }, 0);
+    const result = Scheduler.plan(
+      candidates,
+      Scheduler.initialState,
+      { globalLimit: 10, dailyBudget: 2 },
+      stamp(0),
+    );
     assert.strictEqual(result.picks.length, 2);
     assert.strictEqual(result.state.budgetUsed, 2);
   });
@@ -129,20 +136,68 @@ describe("Scheduler.plan", () => {
       [candidate(wsA, work(1), 10)],
       spent,
       { globalLimit: 10, dailyBudget: 2 },
-      1,
+      stamp(1),
     );
     assert.strictEqual(result.picks.length, 1);
     assert.strictEqual(result.state.budgetDay, 1);
     assert.strictEqual(result.state.budgetUsed, 1);
   });
+
+  it("skips a candidate already acted on in the current generation", () => {
+    const only = candidate(wsA, work(1), 10);
+    const acted: Scheduler.SchedulerState = {
+      ...Scheduler.initialState,
+      generation: 4,
+      acted: new Set(only.keys),
+    };
+    const result = Scheduler.plan([only], acted, config, stamp(0, 4));
+    assert.strictEqual(result.picks.length, 0);
+  });
+
+  it("drops the acted record when a newer generation arrives", () => {
+    const only = candidate(wsA, work(1), 10);
+    const acted: Scheduler.SchedulerState = {
+      ...Scheduler.initialState,
+      generation: 4,
+      acted: new Set(only.keys),
+    };
+    const result = Scheduler.plan([only], acted, config, stamp(0, 5));
+    assert.strictEqual(result.picks.length, 1);
+    assert.strictEqual(result.state.generation, 5);
+  });
+
+  it("prunes acted keys that left the snapshot and are not in flight", () => {
+    const present = candidate(wsA, work(1), 10);
+    const departed = candidate(wsB, work(2), 10);
+    const acted: Scheduler.SchedulerState = {
+      ...Scheduler.initialState,
+      generation: 4,
+      acted: new Set([...present.keys, ...departed.keys]),
+    };
+    const result = Scheduler.plan([present], acted, config, stamp(0, 4));
+    assert.deepStrictEqual([...result.state.acted], [...present.keys]);
+  });
+
+  it("keeps an acted key that is still in flight after leaving the snapshot", () => {
+    const running = candidate(wsA, work(1), 10);
+    const acted: Scheduler.SchedulerState = {
+      ...Scheduler.initialState,
+      generation: 4,
+      inflight: new Set(running.keys),
+      acted: new Set(running.keys),
+    };
+    const result = Scheduler.plan([], acted, config, stamp(0, 4));
+    assert.deepStrictEqual([...result.state.acted], [...running.keys]);
+  });
 });
 
-const snapshotOf = (
-  entries: ReadonlyArray<{
-    readonly workspace: RegisteredWorkspace;
-    readonly eligible: ReadonlyArray<EligibleWork>;
-  }>,
-): Reconcile.ReconcileSnapshot => ({
+interface SnapshotEntry {
+  readonly workspace: RegisteredWorkspace;
+  readonly eligible: ReadonlyArray<EligibleWork>;
+}
+
+const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileSnapshot => ({
+  generation: 1,
   workspaces: entries.map(({ workspace, eligible }) => ({
     name: workspace.config.name,
     poll: { status: "ok" },
@@ -154,10 +209,15 @@ const snapshotOf = (
   })),
 });
 
-const workerLayer = (snapshot: Reconcile.ReconcileSnapshot) =>
+const snapshotRef = (entries: ReadonlyArray<SnapshotEntry>) => Ref.make(snapshotOf(entries));
+
+const republish = (snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
+  Ref.update(snapshots, (snapshot) => ({ ...snapshot, generation: snapshot.generation + 1 }));
+
+const workerLayer = (snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
-    snapshot: Effect.succeed(snapshot),
+    snapshot: Ref.get(snapshots),
   });
 
 const registryLayer = (workspaces: ReadonlyArray<RegisteredWorkspace>) =>
@@ -179,7 +239,7 @@ const schedulerLayer = (
   config: Scheduler.SchedulerConfig,
   deps: {
     readonly registry: ReadonlyArray<RegisteredWorkspace>;
-    readonly snapshot: Reconcile.ReconcileSnapshot;
+    readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
     readonly execute: ExecuteFn;
     readonly workSource?: Partial<WorkSourceService>;
   },
@@ -188,7 +248,7 @@ const schedulerLayer = (
     Layer.provide(
       Layer.mergeAll(
         registryLayer(deps.registry),
-        workerLayer(deps.snapshot),
+        workerLayer(deps.snapshots),
         Layer.succeed(Executor.Executor, { execute: deps.execute }),
         workSourceStub(deps.workSource ?? {}),
         RunLedger.layerMemory,
@@ -209,7 +269,7 @@ describe("Scheduler.tick", () => {
           Effect.andThen(Deferred.await(gate)),
           Effect.map(() => true),
         );
-      const snapshot = snapshotOf([
+      const snapshots = yield* snapshotRef([
         { workspace: wsA, eligible: [work(1), work(2), work(3)] },
         { workspace: wsB, eligible: [work(4), work(5), work(6)] },
       ]);
@@ -231,7 +291,7 @@ describe("Scheduler.tick", () => {
         assert.strictEqual(drained.global, 0);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 3, dailyBudget: 100 }, { registry: [wsA, wsB], snapshot, execute }),
+          schedulerLayer({ globalLimit: 3, dailyBudget: 100 }, { registry: [wsA, wsB], snapshots, execute }),
         ),
       );
     }),
@@ -246,7 +306,7 @@ describe("Scheduler.tick", () => {
             workspace.config.name === wsA.config.name ? Effect.die(new Error("boom")) : Effect.succeed(true),
           ),
         );
-      const snapshot = snapshotOf([
+      const snapshots = yield* snapshotRef([
         { workspace: wsA, eligible: [work(1)] },
         { workspace: wsB, eligible: [work(2)] },
       ]);
@@ -260,11 +320,12 @@ describe("Scheduler.tick", () => {
         const drained = yield* scheduler.stats;
         assert.strictEqual(drained.global, 0);
 
+        yield* republish(snapshots);
         const again = yield* scheduler.tick();
         assert.strictEqual(again.length, 2);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 4, dailyBudget: 100 }, { registry: [wsA, wsB], snapshot, execute }),
+          schedulerLayer({ globalLimit: 4, dailyBudget: 100 }, { registry: [wsA, wsB], snapshots, execute }),
         ),
       );
     }),
@@ -273,7 +334,7 @@ describe("Scheduler.tick", () => {
   it.effect("stops starting sessions once the daily budget is exhausted and resets by UTC day", () =>
     Effect.gen(function* () {
       const execute: ExecuteFn = () => Effect.succeed(true);
-      const snapshot = snapshotOf([{ workspace: wsA, eligible: [work(1)] }]);
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
       yield* Effect.gen(function* () {
         const scheduler = yield* Scheduler.Scheduler;
 
@@ -281,16 +342,74 @@ describe("Scheduler.tick", () => {
         yield* Fiber.awaitAll(first);
         assert.strictEqual(first.length, 1);
 
+        yield* republish(snapshots);
         const exhausted = yield* scheduler.tick();
         assert.strictEqual(exhausted.length, 0);
 
         yield* TestClock.adjust("25 hours");
+        yield* republish(snapshots);
         const nextDay = yield* scheduler.tick();
         yield* Fiber.awaitAll(nextDay);
         assert.strictEqual(nextDay.length, 1);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 5, dailyBudget: 1 }, { registry: [wsA], snapshot, execute }),
+          schedulerLayer({ globalLimit: 5, dailyBudget: 1 }, { registry: [wsA], snapshots, execute }),
+        ),
+      );
+    }),
+  );
+
+  it.effect("picks an item once per generation and again once a newer snapshot lands", () =>
+    Effect.gen(function* () {
+      const runs = yield* Ref.make(0);
+      const execute: ExecuteFn = () => Ref.update(runs, (n) => n + 1).pipe(Effect.map(() => true));
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+
+        const first = yield* scheduler.tick();
+        yield* Fiber.awaitAll(first);
+        assert.strictEqual(first.length, 1);
+        assert.strictEqual((yield* scheduler.stats).global, 0);
+
+        const repeat = yield* scheduler.tick();
+        assert.strictEqual(repeat.length, 0);
+        assert.strictEqual(yield* Ref.get(runs), 1);
+
+        yield* republish(snapshots);
+        const refreshed = yield* scheduler.tick();
+        yield* Fiber.awaitAll(refreshed);
+        assert.strictEqual(refreshed.length, 1);
+        assert.strictEqual(yield* Ref.get(runs), 2);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer({ globalLimit: 5, dailyBudget: 100 }, { registry: [wsA], snapshots, execute }),
+        ),
+      );
+    }),
+  );
+
+  it.effect("holds a run that outlives a generation boundary behind its reservation", () =>
+    Effect.gen(function* () {
+      const gate = yield* Deferred.make<void>();
+      const execute: ExecuteFn = () => Deferred.await(gate).pipe(Effect.map(() => true));
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+
+        const first = yield* scheduler.tick();
+        assert.strictEqual(first.length, 1);
+
+        yield* republish(snapshots);
+        const duringRun = yield* scheduler.tick();
+        assert.strictEqual(duringRun.length, 0);
+        assert.strictEqual((yield* scheduler.stats).global, 1);
+
+        yield* Deferred.succeed(gate, undefined);
+        yield* Fiber.awaitAll(first);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer({ globalLimit: 5, dailyBudget: 100 }, { registry: [wsA], snapshots, execute }),
         ),
       );
     }),
@@ -342,6 +461,7 @@ describe("Scheduler.recover", () => {
           Ref.update(attempts, (xs) => [...xs, { item: itemId, reason }]),
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
       };
+      const snapshots = yield* snapshotRef([]);
       yield* Effect.gen(function* () {
         const scheduler = yield* Scheduler.Scheduler;
         yield* scheduler.recover();
@@ -352,7 +472,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshot: snapshotOf([]), execute: () => Effect.succeed(true), workSource },
+            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
           ),
         ),
       );
@@ -376,6 +496,7 @@ describe("Scheduler.recover", () => {
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
         setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
       };
+      const snapshots = yield* snapshotRef([]);
       yield* Effect.gen(function* () {
         const scheduler = yield* Scheduler.Scheduler;
         yield* scheduler.recover();
@@ -387,7 +508,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshot: snapshotOf([]), execute: () => Effect.succeed(true), workSource },
+            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
           ),
         ),
       );

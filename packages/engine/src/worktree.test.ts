@@ -3,8 +3,16 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import { type AddWorktreeArgs, Git, type GitService, type WorktreeEntry } from "./Git";
+import {
+  type AddWorktreeArgs,
+  type BranchDivergence,
+  Git,
+  GitError,
+  type GitService,
+  type WorktreeEntry,
+} from "./Git";
 import * as Worktree from "./Worktree";
 import { type FileStat, WorktreeFs, type WorktreeFsService } from "./WorktreeFs";
 
@@ -27,6 +35,7 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
     added: yield* Ref.make<ReadonlyArray<AddWorktreeArgs>>([]),
     removed: yield* Ref.make<ReadonlyArray<{ readonly path: string; readonly force: boolean }>>([]),
     fastForwarded: yield* Ref.make<ReadonlyArray<string>>([]),
+    rebased: yield* Ref.make<ReadonlyArray<string>>([]),
     linked: yield* Ref.make<ReadonlyArray<{ readonly target: string; readonly linkPath: string }>>([]),
     commands: yield* Ref.make<ReadonlyArray<{ readonly cwd: string; readonly command: string }>>([]),
   };
@@ -34,11 +43,15 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
 
 type Recorder = Effect.Success<ReturnType<typeof makeRecorder>>;
 
+const inSync: BranchDivergence = { ahead: 0, behind: 0 };
+
 const fakeGit = (
   recorder: Recorder,
   options: {
     readonly worktrees?: ReadonlyArray<WorktreeEntry>;
     readonly remoteBranches?: ReadonlyArray<string>;
+    readonly divergence?: BranchDivergence;
+    readonly rebaseFailure?: string;
   },
 ) => {
   const remotes = new Set(options.remoteBranches ?? []);
@@ -52,6 +65,17 @@ const fakeGit = (
     listWorktrees: (_repoPath: string) => Effect.succeed(options.worktrees ?? []),
     fastForward: (worktreePath: string, _remote: string, _branch: string) =>
       Ref.update(recorder.fastForwarded, (log) => [...log, worktreePath]),
+    divergence: (_worktreePath: string, _remote: string, _branch: string) =>
+      Effect.succeed(options.divergence ?? inSync),
+    rebase: (worktreePath: string, remote: string, branch: string) =>
+      options.rebaseFailure === undefined
+        ? Ref.update(recorder.rebased, (log) => [...log, worktreePath])
+        : Effect.fail(
+            new GitError({
+              command: `rebase ${remote}/${branch}`,
+              message: options.rebaseFailure,
+            }),
+          ),
   } satisfies GitService;
 };
 
@@ -135,6 +159,91 @@ describe("Worktree.ensure", () => {
       assert.deepStrictEqual(fastForwarded, [worktreePath]);
       const added = yield* Ref.get(recorder.added);
       assert.strictEqual(added.length, 0);
+    }),
+  );
+
+  it.effect("replays local commits onto the remote when the branch has diverged", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
+      const git = fakeGit(recorder, {
+        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        remoteBranches: ["13-worktree-lifecycle"],
+        divergence: { ahead: 2, behind: 5 },
+      });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+      const result = yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
+      assert.strictEqual(result.created, false);
+      assert.deepStrictEqual(yield* Ref.get(recorder.rebased), [worktreePath]);
+      assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
+      assert.strictEqual((yield* Ref.get(recorder.added)).length, 0);
+    }),
+  );
+
+  it.effect("still fast-forwards a branch that is only ahead of its remote", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
+      const git = fakeGit(recorder, {
+        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        remoteBranches: ["13-worktree-lifecycle"],
+        divergence: { ahead: 3, behind: 0 },
+      });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+      yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
+      assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), [worktreePath]);
+      assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
+    }),
+  );
+
+  it.effect("reports an unresolvable divergence without discarding local commits", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
+      const git = fakeGit(recorder, {
+        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        remoteBranches: ["13-worktree-lifecycle"],
+        divergence: { ahead: 2, behind: 5 },
+        rebaseFailure: "CONFLICT (content): Merge conflict in src/index.ts",
+      });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+      const result = yield* Effect.result(
+        manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
+          id: "#13",
+          title: "Worktree lifecycle",
+        }),
+      );
+      const failure = Result.isFailure(result) ? result.failure : null;
+      assert.strictEqual(failure?._tag, "WorktreeDivergedError");
+      assert.include(failure?.message ?? "", "2 local commits");
+      assert.include(failure?.message ?? "", "5 remote commits");
+      assert.include(failure?.message ?? "", "Merge conflict");
+      assert.include(failure?.message ?? "", "no local commits were discarded");
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
+    }),
+  );
+
+  it.effect("reuses a worktree whose branch has no counterpart on the remote", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
+      const git = fakeGit(recorder, {
+        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+      });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+      const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
+        id: "#13",
+        title: "Worktree lifecycle",
+      });
+      assert.strictEqual(result.created, false);
+      assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
+      assert.strictEqual((yield* Ref.get(recorder.added)).length, 0);
+      assert.deepStrictEqual(yield* Ref.get(recorder.commands), [
+        { cwd: worktreePath, command: "pnpm install" },
+      ]);
     }),
   );
 

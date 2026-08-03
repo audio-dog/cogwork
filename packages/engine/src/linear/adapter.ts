@@ -59,6 +59,7 @@ const targetFor = (workspace: RegisteredWorkspace) => {
   return {
     team: source.team,
     tokenEnv: source.tokenEnv ?? "LINEAR_API_KEY",
+    organization: source.organization ?? null,
     botUserId: source.botUserId ?? null,
     roleLabels: roleLabelsFor(source.roleLabels),
   } satisfies LinearTarget;

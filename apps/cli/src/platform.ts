@@ -39,6 +39,19 @@ const parseWorktrees = (stdout: string) =>
       return [{ path: worktreePath, branch: branchRef ? branchRef.replace("refs/heads/", "") : null }];
     });
 
+const countAt = (parts: ReadonlyArray<string>, index: number) => {
+  const value = Number(parts[index]);
+  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+};
+
+const parseDivergence = (stdout: string) => {
+  const parts = stdout.trim().split(/\s+/);
+  const behind = countAt(parts, 0);
+  const ahead = countAt(parts, 1);
+  if (behind === null || ahead === null) return null;
+  return { ahead, behind } satisfies Git.BranchDivergence;
+};
+
 export const gitLayer = Layer.effect(
   Git.Git,
   Effect.gen(function* () {
@@ -58,7 +71,7 @@ export const gitLayer = Layer.effect(
     };
 
     return {
-      fetch: (repoPath, remote) => runGit(repoPath, ["fetch", remote]).pipe(Effect.asVoid),
+      fetch: (repoPath, remote) => runGit(repoPath, ["fetch", "--prune", remote]).pipe(Effect.asVoid),
       remoteBranchExists: (repoPath, remote, branch) =>
         runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
           Effect.map(() => true),
@@ -75,6 +88,24 @@ export const gitLayer = Layer.effect(
         runGit(repoPath, ["worktree", "list", "--porcelain"]).pipe(Effect.map(parseWorktrees)),
       fastForward: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
+      divergence: (worktreePath, remote, branch) => {
+        const range = `${remote}/${branch}...refs/heads/${branch}`;
+        return runGit(worktreePath, ["rev-list", "--left-right", "--count", range]).pipe(
+          Effect.flatMap((stdout) => {
+            const parsed = parseDivergence(stdout);
+            if (parsed) return Effect.succeed(parsed);
+            return new Git.GitError({
+              command: `rev-list --left-right --count ${range}`,
+              message: `unreadable divergence output "${stdout.trim()}"`,
+            });
+          }),
+        );
+      },
+      rebase: (worktreePath, remote, branch) =>
+        runGit(worktreePath, ["rebase", `${remote}/${branch}`, branch]).pipe(
+          Effect.tapError(() => Effect.ignore(runGit(worktreePath, ["rebase", "--abort"]))),
+          Effect.asVoid,
+        ),
     } satisfies Git.GitService;
   }),
 );
