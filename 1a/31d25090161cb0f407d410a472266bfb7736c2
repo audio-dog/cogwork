@@ -1,0 +1,27 @@
+packages/engine/docs/adr/0001-scheduler-acts-once-per-snapshot-generation.md
+  s_9dfd2b254e3e70::t_779dcc71ef520f 1-16
+packages/engine/CONTEXT.md
+  s_9dfd2b254e3e70::t_c1f6188612042e 25,28-30
+  s_9dfd2b254e3e70::t_4ca8c942b62b52 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "1a31d25090161cb0f407d410a472266bfb7736c2",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_9dfd2b254e3e70": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "aadb4cdb-b629-429a-86df-fb6798c0ad89",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
