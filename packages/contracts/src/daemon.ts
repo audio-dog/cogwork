@@ -34,9 +34,17 @@ export const NeedsHumanItem = Schema.Struct({
 });
 export type NeedsHumanItem = typeof NeedsHumanItem.Type;
 
+export const PollPauseReason = Schema.Literals(["auth", "unavailable", "rate-limited"]);
+export type PollPauseReason = typeof PollPauseReason.Type;
+
 export const PollState = Schema.Union([
   Schema.Struct({ status: Schema.Literal("ok") }),
-  Schema.Struct({ status: Schema.Literal("paused"), message: Schema.String }),
+  Schema.Struct({
+    status: Schema.Literal("paused"),
+    reason: PollPauseReason,
+    message: Schema.String,
+    retryAtMillis: Schema.NullOr(Schema.Finite),
+  }),
 ]);
 export type PollState = typeof PollState.Type;
 

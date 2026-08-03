@@ -225,6 +225,7 @@ const registryLayer = (workspaces: ReadonlyArray<RegisteredWorkspace>) =>
 
 const workSourceStub = (service: Partial<WorkSourceService>) =>
   Layer.succeed(WorkSource, {
+    rateLimitScope: () => null,
     observe: () => Effect.succeed([]),
     claim: () => Effect.void,
     release: () => Effect.void,

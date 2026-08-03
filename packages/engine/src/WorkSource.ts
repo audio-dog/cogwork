@@ -1,4 +1,10 @@
-import type { AttemptRecord, Claim, TriageRole, WorkItemId } from "@clanker-forge/contracts";
+import {
+  type AttemptRecord,
+  type Claim,
+  PollPauseReason,
+  type TriageRole,
+  type WorkItemId,
+} from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,8 +31,9 @@ export interface RoleChanges {
 }
 
 export class WorkSourceError extends Schema.TaggedErrorClass<WorkSourceError>()("WorkSourceError", {
-  reason: Schema.Literals(["auth", "unavailable", "rate-limited"]),
+  reason: PollPauseReason,
   message: Schema.String,
+  retryAfterMillis: Schema.optional(Schema.Finite),
 }) {}
 
 const noAdapter = (workspace: RegisteredWorkspace) =>
@@ -55,6 +62,7 @@ const observeEmpty = Effect.fn("WorkSource.observe")(function* (workspace: Regis
 });
 
 export const makeEmpty = Effect.succeed({
+  rateLimitScope: (_workspace: RegisteredWorkspace): string | null => null,
   observe: observeEmpty,
   claim: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: Claim) => failWhenRemote(workspace),
   release: (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace),

@@ -9,8 +9,10 @@ import type { RegisteredWorkspace } from "../projector";
 import { WorkSource, WorkSourceError } from "../WorkSource";
 import { layer as adapterLayer } from "./adapter";
 import {
+  type CoordinationScope,
   LinearClient,
   type LinearClientService,
+  type ObservedRawIssue,
   type RawComment,
   type RawIssue,
   type RawWorkflowState,
@@ -40,6 +42,7 @@ interface Seed {
   >;
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
+  readonly observeCalls?: Ref.Ref<number>;
 }
 
 const bot = { id: "bot-user" } as const;
@@ -82,8 +85,36 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
       ? Effect.fail(new WorkSourceError({ reason: "auth", message: "Linear authentication failed" }))
       : effect;
 
+  const countObserve = seed.observeCalls;
+
+  // Deliberately looser than Linear's own filter: the adapter must not lean on the server to keep a
+  // forged coordination comment out of the ledger.
+  const coordinationFor = (
+    identifier: string,
+    comments: Map<string, ReadonlyArray<RawComment>>,
+    coordination: CoordinationScope | null,
+  ) =>
+    coordination === null
+      ? []
+      : (comments.get(identifier) ?? []).filter((comment) =>
+          comment.body.includes(coordination.ledgerMarker),
+        );
+
   return {
-    listIssues: () => guard(Ref.get(issuesRef)),
+    observeIssues: (_ref, coordination) =>
+      guard(
+        Effect.gen(function* () {
+          if (countObserve) yield* Ref.update(countObserve, (count) => count + 1);
+          const issues = yield* Ref.get(issuesRef);
+          const comments = yield* Ref.get(commentsRef);
+          return issues.map(
+            (issue): ObservedRawIssue => ({
+              ...issue,
+              coordinationComments: coordinationFor(issue.identifier, comments, coordination),
+            }),
+          );
+        }),
+      ),
     listWorkflowStates: () => guard(Effect.succeed(states)),
     listComments: (_ref, issueId) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
@@ -442,11 +473,10 @@ describe("linear work source adapter", () => {
         remove: ["needs-triage"],
         add: ["wontfix"],
       });
-      const issues = yield* client.listIssues({
-        team: "AUD",
-        tokenEnv: "LINEAR_API_KEY",
-        organization: null,
-      });
+      const issues = yield* client.observeIssues(
+        { team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null },
+        null,
+      );
       const issue = issues.find((entry) => entry.identifier === "AUD-9");
       assert.isFalse(issue?.labels.includes("state:needs-triage") ?? true);
       assert.isTrue(issue?.labels.includes("state:wontfix") ?? false);
@@ -493,6 +523,30 @@ describe("linear work source adapter", () => {
         }),
       ),
     ),
+  );
+
+  it.effect("observes a whole backlog with one client read regardless of issue count", () =>
+    Effect.gen(function* () {
+      const observeCalls = yield* Ref.make(0);
+      const backlog = Array.from({ length: 60 }, (_, index) => ({
+        identifier: `AUD-${index + 1}`,
+        title: `issue ${index + 1}`,
+        labels: ["state:ready-for-agent"],
+      }));
+      yield* Effect.gen(function* () {
+        const source = yield* WorkSource;
+        const items = yield* source.observe(workspace);
+        assert.strictEqual(items.length, 60);
+        assert.strictEqual(yield* Ref.get(observeCalls), 1);
+      }).pipe(Effect.provide(withClient({ issues: backlog, observeCalls })));
+    }),
+  );
+
+  it.effect("reports the rate-limit scope from the token env so shared credentials back off together", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      assert.strictEqual(source.rateLimitScope(workspace), "linear:LINEAR_API_KEY");
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
   it.effect("surfaces auth failure as WorkSourceError reason auth", () =>

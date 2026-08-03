@@ -12,6 +12,7 @@ export const route = (github: WorkSourceService, linear: WorkSourceService): Wor
     workspace.config.workSource.type === "linear" ? linear : github;
 
   return {
+    rateLimitScope: (workspace) => forWorkspace(workspace).rateLimitScope(workspace),
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
     claim: (workspace, id, claim) => forWorkspace(workspace).claim(workspace, id, claim),
     release: (workspace, id) => forWorkspace(workspace).release(workspace, id),

@@ -2,10 +2,12 @@ import type {
   BlockedItem,
   ClaimedItem,
   NeedsHumanItem,
+  PollPauseReason,
   PollState,
   WorkItemId,
   WorkspaceId,
 } from "@clanker-forge/contracts";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -15,7 +17,7 @@ import * as Ref from "effect/Ref";
 import { type Classification, classify, type EligibleWork } from "./classify";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./Registry";
-import { type ObservedItem, WorkSource } from "./WorkSource";
+import { type ObservedItem, WorkSource, type WorkSourceError } from "./WorkSource";
 
 export interface ObservedRef {
   readonly id: WorkItemId;
@@ -62,9 +64,15 @@ const okState = (
   observed: observed.map((item) => ({ id: item.id, title: item.title })),
 });
 
-const pausedState = (workspace: RegisteredWorkspace, message: string): WorkspaceReconcileState => ({
+interface Pause {
+  readonly reason: PollPauseReason;
+  readonly message: string;
+  readonly retryAtMillis: number | null;
+}
+
+const pausedState = (workspace: RegisteredWorkspace, pause: Pause): WorkspaceReconcileState => ({
   name: workspace.config.name,
-  poll: { status: "paused", message },
+  poll: { status: "paused", ...pause },
   eligible: [],
   claimed: [],
   blocked: [],
@@ -72,26 +80,122 @@ const pausedState = (workspace: RegisteredWorkspace, message: string): Workspace
   observed: [],
 });
 
+interface Cooldown {
+  readonly untilMillis: number;
+  readonly consecutive: number;
+}
+
+interface CooldownEntry {
+  readonly entered: boolean;
+  readonly retryAtMillis: number | null;
+}
+
+const baseBackoffMillis = 60_000;
+const maxBackoffMillis = 900_000;
+
+const backoffMillis = (consecutive: number) =>
+  Math.min(baseBackoffMillis * 2 ** (consecutive - 1), maxBackoffMillis);
+
+const activeAt = (cooldown: Cooldown | undefined, nowMillis: number) =>
+  cooldown !== undefined && cooldown.untilMillis > nowMillis ? cooldown : null;
+
+const withoutScope = (cooldowns: Map<string, Cooldown>, scope: string) => {
+  if (!cooldowns.has(scope)) return cooldowns;
+  const next = new Map(cooldowns);
+  next.delete(scope);
+  return next;
+};
+
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
   const workSource = yield* WorkSource;
   const queue = yield* Queue.make<ReconcileJob>();
   const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ generation: 0, workspaces: [] });
+  const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
 
-  const pollWorkspace = (workspace: RegisteredWorkspace) =>
-    workSource.observe(workspace).pipe(
+  const heldCooldown = Effect.fn("ReconcileWorker.heldCooldown")(function* (scope: string | null) {
+    if (scope === null) return null;
+    const nowMillis = yield* Clock.currentTimeMillis;
+    return activeAt((yield* Ref.get(cooldowns)).get(scope), nowMillis);
+  });
+
+  // Only the first failure into a window logs, so a pinned credential does not warn on every tick.
+  const enterCooldown = (
+    scope: string | null,
+    nowMillis: number,
+    retryAfterMillis: number | undefined,
+  ): Effect.Effect<CooldownEntry> => {
+    if (scope === null) {
+      const retryAtMillis = retryAfterMillis === undefined ? null : nowMillis + retryAfterMillis;
+      return Effect.succeed({ entered: true, retryAtMillis });
+    }
+    return Ref.modify(cooldowns, (current): readonly [CooldownEntry, Map<string, Cooldown>] => {
+      const held = activeAt(current.get(scope), nowMillis);
+      if (held) return [{ entered: false, retryAtMillis: held.untilMillis }, current];
+      const consecutive = (current.get(scope)?.consecutive ?? 0) + 1;
+      const cooldown: Cooldown = {
+        untilMillis: nowMillis + (retryAfterMillis ?? backoffMillis(consecutive)),
+        consecutive,
+      };
+      return [{ entered: true, retryAtMillis: cooldown.untilMillis }, new Map(current).set(scope, cooldown)];
+    });
+  };
+
+  const pauseForRateLimit = Effect.fn("ReconcileWorker.pauseForRateLimit")(function* (
+    workspace: RegisteredWorkspace,
+    scope: string | null,
+    error: WorkSourceError,
+  ) {
+    const nowMillis = yield* Clock.currentTimeMillis;
+    const { entered, retryAtMillis } = yield* enterCooldown(scope, nowMillis, error.retryAfterMillis);
+    if (entered) {
+      yield* Effect.logWarning("work source rate limited; backing off", {
+        workspace: workspace.config.name,
+        scope,
+        message: error.message,
+        retryAtMillis,
+      });
+    }
+    return pausedState(workspace, { reason: "rate-limited", message: error.message, retryAtMillis });
+  });
+
+  const pauseFor = Effect.fn("ReconcileWorker.pauseFor")(function* (
+    workspace: RegisteredWorkspace,
+    scope: string | null,
+    error: WorkSourceError,
+  ) {
+    if (error.reason === "rate-limited") {
+      return yield* pauseForRateLimit(workspace, scope, error);
+    }
+    yield* Effect.logWarning("work source polling paused", {
+      workspace: workspace.config.name,
+      reason: error.reason,
+      message: error.message,
+    });
+    return pausedState(workspace, { reason: error.reason, message: error.message, retryAtMillis: null });
+  });
+
+  const clearCooldown = (scope: string | null) =>
+    scope === null ? Effect.void : Ref.update(cooldowns, (current) => withoutScope(current, scope));
+
+  const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
+    workspace: RegisteredWorkspace,
+  ) {
+    const scope = workSource.rateLimitScope(workspace);
+    const held = yield* heldCooldown(scope);
+    if (held) {
+      return pausedState(workspace, {
+        reason: "rate-limited",
+        message: `waiting out the ${scope} rate limit window`,
+        retryAtMillis: held.untilMillis,
+      });
+    }
+    return yield* workSource.observe(workspace).pipe(
+      Effect.tap(() => clearCooldown(scope)),
       Effect.map((items) => okState(workspace, items, classify(items))),
-      Effect.catchTag("WorkSourceError", (error) =>
-        Effect.gen(function* () {
-          yield* Effect.logWarning("work source polling paused", {
-            workspace: workspace.config.name,
-            reason: error.reason,
-            message: error.message,
-          });
-          return pausedState(workspace, error.message);
-        }),
-      ),
+      Effect.catchTag("WorkSourceError", (error) => pauseFor(workspace, scope, error)),
     );
+  });
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* (job: ReconcileJob) {
     const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
