@@ -161,7 +161,7 @@ describe("classify", () => {
       }),
     ]);
     assert.strictEqual(eligible[0]?.followUp?.noProgress, 2);
-    assert.isFalse(eligible[0]?.followUp?.blocked);
+    assert.isFalse(eligible[0]?.followUp?.stalled);
   });
 
   it("resets the no-progress counter when a human responds since the last attempt", () => {
@@ -178,7 +178,7 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.followUp?.noProgress, 0);
   });
 
-  it("keeps a no-progress-exhausted follow-up eligible but flagged blocked at the limit", () => {
+  it("keeps a no-progress follow-up eligible but flagged stalled at the limit", () => {
     const { eligible } = classify([
       item({
         id: "1",
@@ -191,7 +191,7 @@ describe("classify", () => {
     ]);
     assert.strictEqual(eligible[0]?.stage, "follow-up");
     assert.strictEqual(eligible[0]?.followUp?.noProgress, followUpNoProgressLimit);
-    assert.isTrue(eligible[0]?.followUp?.blocked);
+    assert.isTrue(eligible[0]?.followUp?.stalled);
   });
 
   it("orders eligible work follow-up > triage > implement > verify", () => {

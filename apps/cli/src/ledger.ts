@@ -135,6 +135,10 @@ const ensureBranchColumn = (sqlite: DatabaseSync) => {
   }
 };
 
+const migrateBlockedToExhausted = (sqlite: DatabaseSync) => {
+  sqlite.exec("UPDATE runs SET status = 'exhausted' WHERE status = 'blocked'");
+};
+
 const open = (ledgerPath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -145,6 +149,7 @@ const open = (ledgerPath: string) =>
         const sqlite = new DatabaseSync(ledgerPath);
         sqlite.exec(bootstrapSql);
         ensureBranchColumn(sqlite);
+        migrateBlockedToExhausted(sqlite);
         return drizzle({ client: sqlite });
       }),
       (db) => Effect.sync(() => db.$client.close()),

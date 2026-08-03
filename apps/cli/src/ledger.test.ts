@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import {
   HarnessName,
   RunId,
@@ -8,7 +9,7 @@ import {
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, describe, layer } from "@effect/vitest";
+import { assert, describe, it, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -36,6 +37,25 @@ const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecor
   endedAtMillis: null,
   ...overrides,
 });
+
+const insertRunAt = (ledgerPath: string, run: RunRecord) =>
+  Effect.provide(
+    Effect.flatMap(RunLedger.RunLedger, (ledger) => ledger.insertRun(run)),
+    ledgerLayer(ledgerPath),
+  );
+
+const listRunsAt = (ledgerPath: string) =>
+  Effect.provide(
+    Effect.flatMap(RunLedger.RunLedger, (ledger) => ledger.listRuns(10)),
+    ledgerLayer(ledgerPath),
+  );
+
+const writeRetiredStatus = (ledgerPath: string) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => new DatabaseSync(ledgerPath)),
+    (sqlite) => Effect.sync(() => sqlite.exec("UPDATE runs SET status = 'blocked'")),
+    (sqlite) => Effect.sync(() => sqlite.close()),
+  );
 
 describe("sqlite RunLedger", () => {
   layer(
@@ -147,4 +167,20 @@ describe("sqlite RunLedger", () => {
       }),
     );
   });
+});
+
+describe("sqlite RunLedger migration", () => {
+  it.effect("reads a run left at the retired blocked status as exhausted", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-ledger-retired-" });
+      const ledgerPath = path.join(dir, "runs.db");
+      yield* insertRunAt(ledgerPath, record("retired-1", 1000));
+      yield* writeRetiredStatus(ledgerPath);
+      const [summary] = yield* listRunsAt(ledgerPath);
+      assert.isDefined(summary);
+      assert.strictEqual(summary?.status, "exhausted");
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
 });

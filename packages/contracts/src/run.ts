@@ -15,7 +15,7 @@ export const TokenUsage = Schema.Struct({
 });
 export type TokenUsage = typeof TokenUsage.Type;
 
-export const RunStatus = Schema.Literals(["running", "succeeded", "failed", "blocked"]);
+export const RunStatus = Schema.Literals(["running", "succeeded", "failed", "exhausted"]);
 export type RunStatus = typeof RunStatus.Type;
 
 export const RunEvent = Schema.Struct({

@@ -355,7 +355,7 @@ describe("Scheduler.recover", () => {
     }),
   );
 
-  it.effect("hands an exhausted recovery to a human with a blocked note", () =>
+  it.effect("hands an exhausted recovery to a human with a handoff note", () =>
     Effect.gen(function* () {
       const exhausted: ObservedItem = {
         ...claimedByUs,
@@ -376,7 +376,7 @@ describe("Scheduler.recover", () => {
         const scheduler = yield* Scheduler.Scheduler;
         yield* scheduler.recover();
         const note = (yield* Ref.get(notes))[0] ?? "";
-        assert.include(note, "Blocked after 3 failed implement attempts");
+        assert.include(note, "Exhausted after 3 failed implement attempts");
         assert.include(note, recoveryReason);
         assert.deepStrictEqual(yield* Ref.get(roles), ["ready-for-human"]);
       }).pipe(

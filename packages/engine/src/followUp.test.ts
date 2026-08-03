@@ -84,7 +84,7 @@ describe("noProgressCount", () => {
 });
 
 describe("followUpContext", () => {
-  it("flags blocked once the counter reaches the limit", () => {
+  it("flags stalled once the counter reaches the limit", () => {
     const context = followUpContext(
       pr({
         checks: "failing",
@@ -94,7 +94,7 @@ describe("followUpContext", () => {
       }),
     );
     assert.strictEqual(context.noProgress, followUpNoProgressLimit);
-    assert.isTrue(context.blocked);
+    assert.isTrue(context.stalled);
     assert.isTrue(context.fresh);
   });
 });
