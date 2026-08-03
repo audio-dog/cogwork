@@ -12,7 +12,7 @@ export const TriageRole = Schema.Literals([
 ]);
 export type TriageRole = typeof TriageRole.Type;
 
-export const BlockReason = Schema.Literals(["needs-info", "ready-for-human"]);
-export type BlockReason = typeof BlockReason.Type;
+export const NeedsHumanReason = Schema.Literals(["needs-info", "ready-for-human"]);
+export type NeedsHumanReason = typeof NeedsHumanReason.Type;
 
 export const stagePriority: ReadonlyArray<LifecycleStage> = ["follow-up", "triage", "implement", "verify"];

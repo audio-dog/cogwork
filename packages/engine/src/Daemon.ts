@@ -80,7 +80,7 @@ const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcile
   poll: state?.poll ?? okPoll,
   eligible: (state?.eligible ?? []).map((work) => ({ id: work.id, title: work.title, stage: work.stage })),
   claimed: state?.claimed ?? [],
-  blocked: state?.blocked ?? [],
+  needsHuman: state?.needsHuman ?? [],
 });
 
 export const handlersLayer = DaemonRpcs.toLayer({
