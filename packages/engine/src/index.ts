@@ -1,3 +1,4 @@
+export * as CredentialStore from "./CredentialStore";
 export * as Daemon from "./Daemon";
 export { defineWorkspace } from "./defineWorkspace";
 export * as Executor from "./Executor";
