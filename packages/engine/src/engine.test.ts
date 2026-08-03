@@ -33,6 +33,22 @@ const sampleResult: Registry.LoadResult = {
   failures: [{ source: "unreadable.workspace.ts", message: "boom" }],
 };
 
+const id = Schema.decodeSync(WorkItemId);
+
+const stub = (service: Partial<WorkSource.WorkSourceService>): WorkSource.WorkSourceService => ({
+  observe: () => Effect.succeed([]),
+  claim: () => Effect.void,
+  release: () => Effect.void,
+  recordAttempt: () => Effect.void,
+  recordFollowUp: () => Effect.void,
+  note: () => Effect.void,
+  setRoles: () => Effect.void,
+  ...service,
+});
+
+const observing = (items: ReadonlyArray<ObservedItem>) =>
+  Layer.succeed(WorkSource.WorkSource, stub({ observe: () => Effect.succeed(items) }));
+
 describe("buildRegistry", () => {
   it("registers valid configs and isolates malformed and unreadable ones", () => {
     const state = Registry.buildRegistry(sampleResult);
@@ -117,7 +133,6 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
   );
 
-  const id = Schema.decodeSync(WorkItemId);
   const eligibleItem: ObservedItem = {
     id: id("AUD-1"),
     title: "first ticket",
@@ -127,22 +142,9 @@ describe("reconcile worker", () => {
     attempts: [],
     pr: null,
   };
-  const stub = (service: Partial<WorkSource.WorkSourceService>): WorkSource.WorkSourceService => ({
-    observe: () => Effect.succeed([]),
-    claim: () => Effect.void,
-    release: () => Effect.void,
-    recordAttempt: () => Effect.void,
-    recordFollowUp: () => Effect.void,
-    note: () => Effect.void,
-    setRoles: () => Effect.void,
-    ...service,
-  });
-
-  const workingSource = Layer.succeed(
-    WorkSource.WorkSource,
-    stub({ observe: () => Effect.succeed([eligibleItem]) }),
+  const workerWithWork = Reconcile.layer.pipe(
+    Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
   );
-  const workerWithWork = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, workingSource)));
 
   it.effect("classifies observed work into the eligible set per workspace", () =>
     Effect.gen(function* () {
@@ -170,12 +172,8 @@ describe("reconcile worker", () => {
       followUp: null,
     },
   };
-  const inReviewSource = Layer.succeed(
-    WorkSource.WorkSource,
-    stub({ observe: () => Effect.succeed([inReviewItem]) }),
-  );
   const workerWithInReview = Reconcile.layer.pipe(
-    Layer.provide(Layer.mergeAll(registryLayer, inReviewSource)),
+    Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem]))),
   );
 
   it.effect("retains a non-actionable but open ticket in the observed set", () =>
@@ -185,7 +183,7 @@ describe("reconcile worker", () => {
       const state = (yield* worker.snapshot).workspaces[0];
       assert.strictEqual(state?.eligible.length, 0);
       assert.strictEqual(state?.claimed.length, 0);
-      assert.strictEqual(state?.blocked.length, 0);
+      assert.strictEqual(state?.needsHuman.length, 0);
       assert.deepStrictEqual(
         state?.observed.map((item) => item.id),
         [id("AUD-2")],
@@ -227,9 +225,6 @@ describe("reconcile worker", () => {
 
 describe("daemon status over rpc", () => {
   const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
-  const workerLayer = Reconcile.layer.pipe(
-    Layer.provide(Layer.mergeAll(registryLayer, WorkSource.emptyLayer)),
-  );
   const schedulerStub = Layer.succeed(Scheduler.Scheduler, {
     tick: () => Effect.succeed([]),
     recover: () => Effect.void,
@@ -242,14 +237,17 @@ describe("daemon status over rpc", () => {
       budgetUsed: 7,
     }),
   });
-  const layer = Daemon.handlersLayer.pipe(
-    Layer.provideMerge(Daemon.daemonInfoLayer),
-    Layer.provideMerge(workerLayer),
-    Layer.provideMerge(registryLayer),
-    Layer.provideMerge(schedulerStub),
-    Layer.provideMerge(RunLedger.layerMemory),
-    Layer.provideMerge(RunEventBus.layer),
-  );
+  const daemonLayer = (sourceLayer: Layer.Layer<WorkSource.WorkSource>) =>
+    Daemon.handlersLayer.pipe(
+      Layer.provideMerge(Daemon.daemonInfoLayer),
+      Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
+      Layer.provideMerge(registryLayer),
+      Layer.provideMerge(schedulerStub),
+      Layer.provideMerge(RunLedger.layerMemory),
+      Layer.provideMerge(RunEventBus.layer),
+    );
+
+  const layer = daemonLayer(WorkSource.emptyLayer);
 
   it.effect("reports health, registered workspaces, their derived work, and failures", () =>
     Effect.gen(function* () {
@@ -264,6 +262,28 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.failures.length, 2);
       assert.isAtLeast(status.uptimeMillis, 0);
     }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
+  const needsInfoItem: ObservedItem = {
+    id: id("AUD-7"),
+    title: "waiting on details",
+    roles: ["needs-info"],
+    claimLabeled: false,
+    claim: null,
+    attempts: [],
+    pr: null,
+  };
+
+  it.effect("carries needs-human items and their reason across the status boundary", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const status = yield* client.GetStatus();
+      assert.deepStrictEqual(status.workspaces[0]?.needsHuman, [
+        { id: id("AUD-7"), title: "waiting on details", reason: "needs-info" },
+      ]);
+    }).pipe(Effect.provide(daemonLayer(observing([needsInfoItem]))), Effect.scoped),
   );
 
   it.effect("surfaces scheduler caps and budget in the status payload", () =>

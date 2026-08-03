@@ -184,7 +184,7 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const items = yield* source.observe(workspace);
-      const { eligible, blocked, claimed } = classify(items);
+      const { eligible, needsHuman, claimed } = classify(items);
       assert.deepStrictEqual(
         eligible.map((entry) => [entry.id, entry.stage]),
         [
@@ -194,7 +194,7 @@ describe("github work source adapter", () => {
         ],
       );
       assert.deepStrictEqual(
-        blocked.map((entry) => entry.id),
+        needsHuman.map((entry) => entry.id),
         ["#3"],
       );
       assert.strictEqual(claimed.length, 0);
@@ -204,7 +204,7 @@ describe("github work source adapter", () => {
           issues: [
             { number: 1, title: "implement me", labels: ["ready-for-agent"] },
             { number: 2, title: "triage me", labels: ["needs-triage"] },
-            { number: 3, title: "blocked", labels: ["needs-info"] },
+            { number: 3, title: "needs a human", labels: ["needs-info"] },
             { number: 4, title: "rejected", labels: ["wontfix", "ready-for-agent"] },
             { number: 5, title: "in review", labels: ["ready-for-agent"] },
             { number: 100, title: "bot pr", labels: [], isPullRequest: true },
@@ -535,16 +535,16 @@ describe("github work source adapter", () => {
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
-  it.effect("counts prior attempts and blocks past the cap even without the claim label", () =>
+  it.effect("counts prior attempts and escalates past the cap even without the claim label", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const items = yield* source.observe(workspace);
       const observed = items.find((item) => item.id === "#9");
       assert.strictEqual(observed?.attempts.length, 3);
-      const { eligible, blocked } = classify(items);
+      const { eligible, needsHuman } = classify(items);
       assert.strictEqual(eligible.length, 0);
       assert.include(
-        blocked.map((entry) => entry.id),
+        needsHuman.map((entry) => entry.id),
         id("#9"),
       );
     }).pipe(
@@ -589,7 +589,7 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("keeps every failed attempt across edits so the cap still blocks", () =>
+  it.effect("keeps every failed attempt across edits so the cap still escalates", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const client = yield* GitHubClient;
@@ -607,7 +607,7 @@ describe("github work source adapter", () => {
       const observed = items.find((item) => item.id === "#12");
       assert.strictEqual(observed?.attempts.length, 3);
       assert.include(
-        classify(items).blocked.map((entry) => entry.id),
+        classify(items).needsHuman.map((entry) => entry.id),
         id("#12"),
       );
     }).pipe(

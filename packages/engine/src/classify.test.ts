@@ -51,10 +51,10 @@ describe("classify", () => {
   });
 
   it("drops in-flight items whose PR is still pending", () => {
-    const { eligible, claimed, blocked } = classify([
+    const { eligible, claimed, needsHuman } = classify([
       item({ id: "1", roles: ["ready-for-agent"], pr: pr("pending") }),
     ]);
-    assert.deepStrictEqual([eligible.length, claimed.length, blocked.length], [0, 0, 0]);
+    assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
   });
 
   it("excludes claimed items from eligible and reports them as claimed", () => {
@@ -65,36 +65,36 @@ describe("classify", () => {
   });
 
   it("excludes claim-labeled items whose marker is missing to avoid double-claiming", () => {
-    const { eligible, claimed, blocked } = classify([
+    const { eligible, claimed, needsHuman } = classify([
       item({ id: "1", roles: ["ready-for-agent"], claimLabeled: true }),
     ]);
-    assert.deepStrictEqual([eligible.length, claimed.length, blocked.length], [0, 0, 0]);
+    assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
   });
 
   it("drops terminal wontfix items entirely", () => {
-    const { eligible, claimed, blocked } = classify([
+    const { eligible, claimed, needsHuman } = classify([
       item({ id: "1", roles: ["wontfix", "ready-for-agent"] }),
     ]);
-    assert.deepStrictEqual([eligible.length, claimed.length, blocked.length], [0, 0, 0]);
+    assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
   });
 
-  it("reports needs-info and ready-for-human as blocked with their reason", () => {
-    const { blocked } = classify([
+  it("reports needs-info and ready-for-human as needs-human with their reason", () => {
+    const { needsHuman } = classify([
       item({ id: "1", roles: ["needs-info"] }),
       item({ id: "2", roles: ["ready-for-human"] }),
     ]);
-    const reasons = Object.fromEntries(blocked.map((b) => [b.id, b.reason]));
+    const reasons = Object.fromEntries(needsHuman.map((entry) => [entry.id, entry.reason]));
     assert.strictEqual(reasons["1"], "needs-info");
     assert.strictEqual(reasons["2"], "ready-for-human");
   });
 
-  it("blocks an item as ready-for-human once its stage exhausts the failed-attempt cap", () => {
+  it("hands an item to a human as ready-for-human once its stage exhausts the failed-attempt cap", () => {
     const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
-    const { eligible, blocked } = classify([
+    const { eligible, needsHuman } = classify([
       item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] }),
     ]);
     assert.strictEqual(eligible.length, 0);
-    assert.strictEqual(blocked[0]?.reason, "ready-for-human");
+    assert.strictEqual(needsHuman[0]?.reason, "ready-for-human");
   });
 
   it("keeps an item eligible while it is still under the failed-attempt cap", () => {
@@ -106,7 +106,7 @@ describe("classify", () => {
   it("resets the failed-attempt cap after a successful attempt for that stage", () => {
     const failed = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
     const succeeded = { stage: "triage" as const, outcome: "succeeded" as const, atMillis: 4 };
-    const { eligible, blocked } = classify([
+    const { eligible, needsHuman } = classify([
       item({
         id: "1",
         roles: ["needs-triage"],
@@ -115,7 +115,7 @@ describe("classify", () => {
     ]);
     assert.strictEqual(eligible[0]?.stage, "triage");
     assert.strictEqual(eligible[0]?.priorFailures, 1);
-    assert.strictEqual(blocked.length, 0);
+    assert.strictEqual(needsHuman.length, 0);
   });
 
   it("counts only consecutive failures since the last non-failure for the stage", () => {
