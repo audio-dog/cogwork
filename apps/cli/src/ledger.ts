@@ -185,13 +185,7 @@ const make = (ledgerPath: string) =>
 
     const latestRunWhere = (operation: string, where: SQL | undefined) =>
       readRun(operation, () =>
-        db
-          .select(runRecordSelection)
-          .from(runs)
-          .where(and(where, isNotNull(runs.session)))
-          .orderBy(desc(runs.startedAt))
-          .limit(1)
-          .get(),
+        db.select(runRecordSelection).from(runs).where(where).orderBy(desc(runs.startedAt)).limit(1).get(),
       );
 
     const service: RunLedger.RunLedgerService = {
@@ -215,6 +209,16 @@ const make = (ledgerPath: string) =>
           db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run();
         }),
 
+      closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+        write("closeRunning", () => {
+          db.update(runs)
+            .set({ status: "failed", endedAt: endedAtMillis })
+            .where(
+              and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")),
+            )
+            .run();
+        }),
+
       appendEvent: (runId: RunId, event: RunEvent) =>
         write("appendEvent", () => {
           const values = {
@@ -232,7 +236,13 @@ const make = (ledgerPath: string) =>
         }),
 
       latestRunByBranch: (workspace: string, branch: string) =>
-        latestRunWhere("latestRunByBranch", and(eq(runs.workspace, workspace), eq(runs.branch, branch))),
+        latestRunWhere(
+          "latestRunByBranch",
+          and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)),
+        ),
+
+      latestRunForItem: (workspace: string, workItem: string) =>
+        latestRunWhere("latestRunForItem", and(eq(runs.workspace, workspace), eq(runs.workItem, workItem))),
 
       listRuns: (limit: number) =>
         readRows("listRuns", () =>

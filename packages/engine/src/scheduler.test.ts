@@ -8,10 +8,12 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import type { EligibleWork } from "./classify";
+import { recoveryReason } from "./comments";
 import * as Executor from "./Executor";
 import type { RegisteredWorkspace } from "./projector";
 import * as Reconcile from "./Reconcile";
 import * as Registry from "./Registry";
+import * as RunLedger from "./RunLedger";
 import * as Scheduler from "./Scheduler";
 import type { ObservedItem } from "./WorkSource";
 import { WorkSource, type WorkSourceService } from "./WorkSource";
@@ -188,6 +190,7 @@ const schedulerLayer = (
         workerLayer(deps.snapshot),
         Layer.succeed(Executor.Executor, { execute: deps.execute }),
         workSourceStub(deps.workSource ?? {}),
+        RunLedger.layerMemory,
       ),
     ),
   );
@@ -298,9 +301,9 @@ describe("Scheduler.recover", () => {
   const claimedByUs: ObservedItem = {
     id: id("#1"),
     title: "ours",
-    roles: [],
+    roles: ["ready-for-agent"],
     claimLabeled: true,
-    claim: { by: "clanker-bot", claimedAtMillis: 1 },
+    claim: { by: "clanker-bot", claimedAtMillis: 1, stage: "implement" },
     attempts: [],
     pr: null,
   };
@@ -323,17 +326,59 @@ describe("Scheduler.recover", () => {
     pr: null,
   };
 
-  it.effect("releases only stale claims left by this daemon", () =>
+  it.effect("releases only stale claims left by this daemon and records a recovery attempt", () =>
     Effect.gen(function* () {
       const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<{ item: string; reason?: string }>>([]);
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
       const workSource: Partial<WorkSourceService> = {
         observe: () => Effect.succeed([claimedByUs, claimedByOther, unclaimed]),
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId, _attempt, reason) =>
+          Ref.update(attempts, (xs) => [...xs, { item: itemId, reason }]),
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
       };
       yield* Effect.gen(function* () {
         const scheduler = yield* Scheduler.Scheduler;
         yield* scheduler.recover();
         assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(attempts), [{ item: id("#1"), reason: recoveryReason }]);
+        assert.deepStrictEqual(yield* Ref.get(notes), []);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshot: snapshotOf([]), execute: () => Effect.succeed(true), workSource },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("hands an exhausted recovery to a human with a blocked note", () =>
+    Effect.gen(function* () {
+      const exhausted: ObservedItem = {
+        ...claimedByUs,
+        attempts: [
+          { stage: "implement", outcome: "failed", atMillis: 1 },
+          { stage: "implement", outcome: "failed", atMillis: 2 },
+        ],
+      };
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([exhausted]),
+        release: () => Effect.void,
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        const note = (yield* Ref.get(notes))[0] ?? "";
+        assert.include(note, "Blocked after 3 failed implement attempts");
+        assert.include(note, recoveryReason);
+        assert.deepStrictEqual(yield* Ref.get(roles), ["ready-for-human"]);
       }).pipe(
         Effect.provide(
           schedulerLayer(

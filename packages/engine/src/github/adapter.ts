@@ -284,11 +284,11 @@ const make = (client: GitHubClientService): WorkSourceService => {
         const { target, number } = yield* resolveIssue(workspace, id);
         yield* client.removeLabel(target, number, claimLabel);
       }),
-    recordAttempt: (workspace, id, attempt) =>
+    recordAttempt: (workspace, id, attempt, reason) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
         yield* upsertCoordination(target, number, {
-          status: attemptStatus(attempt),
+          status: attemptStatus(attempt, reason),
           marker: serializeAttempt(attempt),
         });
       }),

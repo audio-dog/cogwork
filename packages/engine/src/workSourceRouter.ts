@@ -15,7 +15,8 @@ export const route = (github: WorkSourceService, linear: WorkSourceService): Wor
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
     claim: (workspace, id, claim) => forWorkspace(workspace).claim(workspace, id, claim),
     release: (workspace, id) => forWorkspace(workspace).release(workspace, id),
-    recordAttempt: (workspace, id, attempt) => forWorkspace(workspace).recordAttempt(workspace, id, attempt),
+    recordAttempt: (workspace, id, attempt, reason) =>
+      forWorkspace(workspace).recordAttempt(workspace, id, attempt, reason),
     recordFollowUp: (workspace, id, marker, detail) =>
       forWorkspace(workspace).recordFollowUp(workspace, id, marker, detail),
     note: (workspace, id, detail) => forWorkspace(workspace).note(workspace, id, detail),

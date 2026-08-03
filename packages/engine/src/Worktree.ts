@@ -42,6 +42,16 @@ export const worktreeRoot = (checkoutPath: string, config?: WorktreeSettings) =>
 
 export const worktreePathFor = (root: string, branch: string) => joinPath(root, branch);
 
+export const checkoutPathFor = (
+  checkoutPath: string,
+  item: WorkItemRef,
+  stage: string,
+  config?: WorktreeSettings,
+) => {
+  if (stage === "triage") return checkoutPath;
+  return worktreePathFor(worktreeRoot(checkoutPath, config), branchName(item));
+};
+
 const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
 
 const remoteOf = (config?: WorktreeSettings) => config?.remote ?? "origin";

@@ -57,8 +57,12 @@ export const makeEmpty = Effect.succeed({
   observe: observeEmpty,
   claim: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: Claim) => failWhenRemote(workspace),
   release: (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace),
-  recordAttempt: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _attempt: AttemptRecord) =>
-    failWhenRemote(workspace),
+  recordAttempt: (
+    workspace: RegisteredWorkspace,
+    _itemId: WorkItemId,
+    _attempt: AttemptRecord,
+    _reason?: string,
+  ) => failWhenRemote(workspace),
   recordFollowUp: (
     workspace: RegisteredWorkspace,
     _itemId: WorkItemId,

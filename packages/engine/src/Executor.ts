@@ -8,7 +8,8 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { type EligibleWork, maxAttemptsPerStage } from "./classify";
+import { blockRoleFor, type EligibleWork, maxAttemptsPerStage } from "./classify";
+import { agentFailureReason, attachCommand, blockedComment, prepareFailureReason } from "./comments";
 import type { FollowUpContext } from "./followUp";
 import type { GitError } from "./Git";
 import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./Harness";
@@ -28,7 +29,7 @@ import { activityOf, RunEventBus } from "./RunEventBus";
 import { RunLedger } from "./RunLedger";
 import { decideResume } from "./resumePolicy";
 import { WorkSource, type WorkSourceError } from "./WorkSource";
-import { branchName, WorktreeManager } from "./Worktree";
+import { branchName, checkoutPathFor, WorktreeManager } from "./Worktree";
 import type { WorktreeFsError } from "./WorktreeFs";
 
 type PrepareError = GitError | WorktreeFsError;
@@ -38,8 +39,6 @@ interface RunAccumulator {
   readonly session: string | null;
   readonly usage: TokenUsage | null;
 }
-
-const emptyAccumulator: RunAccumulator = { text: "", session: null, usage: null };
 
 interface StageOps {
   readonly resolved: ResolvedStage;
@@ -121,6 +120,15 @@ const withFailureTerminal = (stream: Stream.Stream<HarnessEvent, HarnessError>) 
 const retryableOf = (error: PrepareError | HarnessError) =>
   error._tag === "HarnessError" ? error.retryable : true;
 
+const checkoutFor = (workspace: RegisteredWorkspace, item: EligibleWork) =>
+  checkoutPathFor(workspace.config.checkoutPath, item, item.stage, workspace.config.worktrees);
+
+const blockCause = (retryable: boolean, attempts: number) =>
+  retryable ? ({ kind: "exhausted", attempts } as const) : ({ kind: "non-retryable" } as const);
+
+const resumeFor = (workspace: RegisteredWorkspace, item: EligibleWork, session: SessionId | null) =>
+  session ? attachCommand(checkoutFor(workspace, item), session) : undefined;
+
 export const claimant = (workspace: RegisteredWorkspace) =>
   workspace.config.workSource.botLogin ?? "clanker-forge";
 
@@ -169,10 +177,12 @@ export const make = Effect.gen(function* () {
   });
 
   const foldRun = Effect.fn("Executor.foldRun")(function* (record: RunRecord, request: HarnessRequest) {
+    const initial: RunAccumulator = { text: "", session: null, usage: null };
     return yield* Stream.runFoldEffect(
       Stream.zipWithIndex(withFailureTerminal(harness.run(request))),
-      () => emptyAccumulator,
-      (acc, [event, seq]) => Effect.map(persistEvent(record, seq, event), () => mergeEvent(acc, event)),
+      () => initial,
+      (acc: RunAccumulator, [event, seq]: readonly [HarnessEvent, number]) =>
+        Effect.map(persistEvent(record, seq, event), () => mergeEvent(acc, event)),
     );
   });
 
@@ -182,20 +192,40 @@ export const make = Effect.gen(function* () {
     blockRole: TriageRole | null,
     runId: RunId,
     retryable: boolean,
+    reason: string,
     session: SessionId | null,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* workSource.recordAttempt(workspace, item.id, {
+    const attempts = item.priorFailures + 1;
+    const block = !retryable || attempts >= maxAttemptsPerStage;
+    yield* Effect.logWarning("stage attempt failed", {
       stage: item.stage,
-      outcome: "failed",
-      atMillis: endedAtMillis,
+      item: item.id,
+      reason,
+      retryable,
+      block,
     });
-    const block = !retryable || item.priorFailures + 1 >= maxAttemptsPerStage;
+    yield* workSource.recordAttempt(
+      workspace,
+      item.id,
+      { stage: item.stage, outcome: "failed", atMillis: endedAtMillis },
+      reason,
+    );
     if (block) {
       yield* workSource.setRoles(workspace, item.id, {
         remove: blockRole ? [blockRole] : [],
         add: ["ready-for-human"],
       });
+      yield* workSource.note(
+        workspace,
+        item.id,
+        blockedComment(
+          item.stage,
+          blockCause(retryable, attempts),
+          reason,
+          resumeFor(workspace, item, session),
+        ),
+      );
     }
     yield* ledger.updateRun(runId, {
       status: block ? "blocked" : "failed",
@@ -253,7 +283,16 @@ export const make = Effect.gen(function* () {
       return yield* applyImplementSuccess(workspace, item, runId, acc);
     }
     const session = yield* sessionOf(acc.session);
-    return yield* applyFailure(workspace, item, "ready-for-agent", runId, result !== "blocked", session);
+    const reason = agentFailureReason(acc.text, result === "blocked" ? "blocked" : "missing-sentinel");
+    return yield* applyFailure(
+      workspace,
+      item,
+      "ready-for-agent",
+      runId,
+      result !== "blocked",
+      reason,
+      session,
+    );
   });
 
   const releaseClaim = Effect.fn("Executor.releaseClaim")(function* (
@@ -294,7 +333,7 @@ export const make = Effect.gen(function* () {
         harnessRequest(resolved, workspace.config.checkoutPath, buildTriagePrompt(resolved, item), null),
       ),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
-      blockRole: "needs-triage",
+      blockRole: blockRoleFor("triage"),
     }) satisfies StageOps;
 
   const implementOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
@@ -304,7 +343,7 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareImplement(workspace, item, resolved, branch),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
-      blockRole: "ready-for-agent",
+      blockRole: blockRoleFor("implement"),
     } satisfies StageOps;
   };
 
@@ -344,7 +383,8 @@ export const make = Effect.gen(function* () {
       return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
     }
     const session = yield* sessionOf(acc.session);
-    return yield* applyFailure(workspace, item, null, runId, result !== "blocked", session);
+    const reason = agentFailureReason(acc.text, result === "blocked" ? "blocked" : "missing-sentinel");
+    return yield* applyFailure(workspace, item, null, runId, result !== "blocked", reason, session);
   });
 
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
@@ -383,7 +423,7 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareFollowUp(workspace, item, resolved, branch, context),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
-      blockRole: null,
+      blockRole: blockRoleFor("follow-up"),
     } satisfies StageOps;
   };
 
@@ -435,11 +475,24 @@ export const make = Effect.gen(function* () {
     };
     yield* ledger.insertRun(record);
     const outcome = yield* Effect.result(
-      ops.prepare.pipe(Effect.flatMap((request) => foldRun(record, request))),
+      ops.prepare.pipe(
+        Effect.flatMap(
+          (request): Effect.Effect<RunAccumulator, PrepareError | HarnessError> => foldRun(record, request),
+        ),
+      ),
     );
-    yield* Result.isSuccess(outcome)
-      ? ops.complete(runId, outcome.success)
-      : applyFailure(workspace, item, ops.blockRole, runId, retryableOf(outcome.failure), null);
+    if (Result.isSuccess(outcome)) {
+      return yield* ops.complete(runId, outcome.success);
+    }
+    return yield* applyFailure(
+      workspace,
+      item,
+      ops.blockRole,
+      runId,
+      retryableOf(outcome.failure),
+      prepareFailureReason(outcome.failure),
+      null,
+    );
   });
 
   const runOrBlock = Effect.fn("Executor.runOrBlock")(function* (

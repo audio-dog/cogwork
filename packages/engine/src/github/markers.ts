@@ -1,6 +1,7 @@
 import { AttemptRecord, Claim, type LifecycleStage, type TriageRole } from "@clanker-forge/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import { statusReason } from "../comments";
 import { FollowUpMarker } from "../followUp";
 
 const roleLabels = {
@@ -73,8 +74,10 @@ const extractMarkers = (name: string, bodies: ReadonlyArray<string>) =>
     [...coordinationRegion(body).matchAll(markerPattern(name))].map((match) => parsePairs(match[1] ?? "")),
   );
 
-export const serializeClaim = (claim: Claim) =>
-  `<!-- clanker-forge:claim by=${claim.by} at=${claim.claimedAtMillis} -->`;
+export const serializeClaim = (claim: Claim) => {
+  const stage = claim.stage === undefined ? "" : ` stage=${claim.stage}`;
+  return `<!-- clanker-forge:claim by=${claim.by} at=${claim.claimedAtMillis}${stage} -->`;
+};
 
 export const serializeAttempt = (attempt: AttemptRecord) =>
   `<!-- clanker-forge:attempt stage=${attempt.stage} outcome=${attempt.outcome} at=${attempt.atMillis} -->`;
@@ -88,7 +91,13 @@ const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
 
 export const parseClaim = (bodies: ReadonlyArray<string>) => {
   const candidates = extractMarkers("claim", bodies).flatMap((pairs) =>
-    okToArray(decodeClaim({ by: pairs.by, claimedAtMillis: Number(pairs.at) })),
+    okToArray(
+      decodeClaim({
+        by: pairs.by,
+        claimedAtMillis: Number(pairs.at),
+        ...(pairs.stage === undefined ? {} : { stage: pairs.stage }),
+      }),
+    ),
   );
   return candidates.at(-1) ?? null;
 };
@@ -120,9 +129,11 @@ const stageGerund: Record<LifecycleStage, string> = {
 
 export const claimStatus = (stage: LifecycleStage) => `Currently ${stageGerund[stage]} this issue.`;
 
-export const attemptStatus = (attempt: AttemptRecord) => {
+export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) => {
   if (attempt.outcome === "succeeded") return `${attempt.stage} completed.`;
   if (attempt.outcome === "abandoned") return `${attempt.stage} abandoned.`;
+  const trimmed = reason ? statusReason(reason) : "";
+  if (trimmed) return `Last ${attempt.stage} attempt failed: ${trimmed}`;
   return `Last ${attempt.stage} attempt failed.`;
 };
 
