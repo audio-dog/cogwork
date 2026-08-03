@@ -1,0 +1,50 @@
+packages/engine/src/scheduler.test.ts
+  s_02aaf85de93899::t_1b078857376564 271
+  s_02aaf85de93899::t_be5a25df817a3e 55-56,72,80,98,109,119-124,139,145-191
+  s_02aaf85de93899::t_0d4b73f80b4a60 394,405
+  s_02aaf85de93899::t_3043a2fa1d24b9 364
+  s_02aaf85de93899::t_4c237d0ea8a525 194-199,211
+  s_02aaf85de93899::t_590d5313e1b791 460,495
+  s_02aaf85de93899::t_b49c0c4f45848f 308
+  s_02aaf85de93899::t_df2a6b50b2cc7c 507
+  s_02aaf85de93899::t_a779c529ace5c0 241,250
+  s_02aaf85de93899::t_5859b67f0a47e4 471
+  s_02aaf85de93899::t_ee706b2cdc3d31 293
+  s_02aaf85de93899::t_5fc25a9d65803d 322,327
+  s_02aaf85de93899::t_2adeddd62213e6 200,213-216,219
+  s_02aaf85de93899::t_7fa35dadbc31f5 344,349,355-363,366-393,396-404,406-411
+  s_02aaf85de93899::t_77ec34275f213f 336,365,395
+  s_02aaf85de93899::t_3cf4b40ea557ee 212
+packages/engine/src/Scheduler.ts
+  s_02aaf85de93899::t_4127b6412fd0a1 116-118
+  s_02aaf85de93899::t_6e11eacd9333b1 106,108
+  s_02aaf85de93899::t_c67f985f5d2681 34-35,44-45
+  s_02aaf85de93899::t_0d55c5e8bf7270 83
+  s_02aaf85de93899::t_db4be6afb8b430 102-105,107,109-115,128
+  s_02aaf85de93899::t_65fcf4e1ab4e4d 137
+  s_02aaf85de93899::t_9adc511675f9df 189,199
+  s_02aaf85de93899::t_69b807dae10c85 68
+packages/engine/src/engine.test.ts
+  s_02aaf85de93899::t_ba7d160bcbfaf1 149-159
+  s_02aaf85de93899::t_3320b238191013 244
+packages/engine/src/Reconcile.ts
+  s_02aaf85de93899::t_a1d86f8fadfe19 75
+  s_02aaf85de93899::t_9fea1ee366f691 41
+  s_02aaf85de93899::t_d24d6106244fe2 96-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "5fa5deec92db8a7b613486445233790c81182b7d",
+  "prompts": {},
+  "sessions": {
+    "s_02aaf85de93899": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e4d0215-613c-4ab5-b655-2ac8f821ea66",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
