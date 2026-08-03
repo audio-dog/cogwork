@@ -27,7 +27,7 @@ context.
 
 The **daemon** (hosted by the `cli`) runs two heartbeats over every registered **workspace**:
 
-1. **Reconcile.** The reconcile worker polls each workspace's **work source** (GitHub today), then `classify` partitions the observed items into **eligible**, **claimed**, and **blocked**, each tagged with a **lifecycle stage**. The result is held in an in-memory snapshot.
+1. **Reconcile.** The reconcile worker polls each workspace's **work source** (GitHub today), then `classify` partitions the observed items into **eligible**, **claimed**, **blocked** (open dependencies), and **needs-human** (triage parked it), each tagged with a **lifecycle stage**. The result is held in an in-memory snapshot.
 2. **Execute.** The **scheduler** picks eligible **candidates** from that snapshot under its concurrency limits and daily budget, and forks one **executor** per candidate.
 
 Each executor run then:
