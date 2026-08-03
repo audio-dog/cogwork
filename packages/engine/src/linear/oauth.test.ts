@@ -3,11 +3,12 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import { afterEach, vi } from "vitest";
 import {
   authorizeUrl,
   codeChallenge,
-  decodeDiscovery,
   decodeTokenResponse,
+  discoverIdentity,
   makePkce,
   makeState,
   redirectUri,
@@ -37,7 +38,35 @@ const tokenBody = {
   refresh_token: "linear-refresh-token",
 };
 
+interface StubResponse {
+  readonly status?: number;
+  readonly body: unknown;
+}
+
+const documentOf = (init: RequestInit | undefined) => {
+  const body = init?.body;
+  if (typeof body !== "string") return "";
+  const parsed: { readonly query?: string } = JSON.parse(body);
+  return parsed.query ?? "";
+};
+
+const stubLinear = (route: (document: string) => StubResponse) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((_input: unknown, init?: RequestInit) => {
+      const { status = 200, body } = route(documentOf(init));
+      return Promise.resolve(
+        new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }),
+      );
+    }),
+  );
+};
+
 describe("linear oauth helpers", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it.effect("derives the RFC 7636 code challenge from a verifier", () =>
     Effect.gen(function* () {
       const challenge = yield* codeChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk");
@@ -134,20 +163,34 @@ describe("linear oauth helpers", () => {
     }),
   );
 
-  it.effect("decodes the organization and bot user id from a discovery response", () =>
+  it.effect("discovers the organization's urlKey and the viewer's id via the SDK", () =>
     Effect.gen(function* () {
-      const discovery = yield* decodeDiscovery({
-        data: {
-          viewer: { id: "bot-user" },
-          organization: { id: "org-uuid", name: "Acme", urlKey: "acme" },
-        },
-      });
-      assert.strictEqual(discovery.data.viewer.id, "bot-user");
-      assert.strictEqual(discovery.data.organization.urlKey, "acme");
+      stubLinear((document) =>
+        document.includes("query viewer")
+          ? { body: { data: { viewer: { id: "bot-user" } } } }
+          : {
+              body: {
+                data: {
+                  organization: {
+                    id: "org-uuid",
+                    name: "Acme",
+                    urlKey: "acme",
+                    projectStatuses: [],
+                  },
+                },
+              },
+            },
+      );
+      const identity = yield* discoverIdentity("access-token");
+      assert.deepStrictEqual(identity, { organization: "acme", botUserId: "bot-user" });
     }),
   );
 
-  it.effect("rejects a discovery response without a viewer", () =>
-    Effect.flip(decodeDiscovery({ data: { organization: { id: "o", name: "Acme", urlKey: "acme" } } })),
+  it.effect("fails when Linear rejects the discovery request", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({ status: 401, body: { errors: [{ message: "not authorized" }] } }));
+      const error = yield* Effect.flip(discoverIdentity("bad-token"));
+      assert.include(error.message, "identity discovery failed");
+    }),
   );
 });

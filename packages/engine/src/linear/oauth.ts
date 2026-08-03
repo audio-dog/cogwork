@@ -1,4 +1,5 @@
 import type { OAuthAppConfig } from "@clanker-forge/contracts";
+import { LinearClient as LinearSdk } from "@linear/sdk";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
@@ -6,9 +7,10 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import type { StoredToken } from "../CredentialStore";
 
+// The GraphQL API only covers requests made with a token already in hand; getting that token is a
+// two-legged redirect + POST flow the SDK does not wrap, so these two endpoints stay hand-built.
 export const authorizeEndpoint = "https://linear.app/oauth/authorize";
 export const tokenEndpoint = "https://api.linear.app/oauth/token";
-export const graphqlEndpoint = "https://api.linear.app/graphql";
 
 export const defaultRedirectPort = 39_517;
 export const defaultScopes = ["read", "write", "app:assignable", "app:mentionable"] as const;
@@ -95,7 +97,6 @@ export const tokenExchangeRequest = (params: TokenExchangeParams) =>
     }).toString(),
   }) satisfies FormRequest;
 
-// Apps registered before Dec 2023 get `scope` back as an array; everyone else gets it space separated.
 const Scopes = Schema.Union([Schema.String, Schema.Array(Schema.String)]);
 
 export const TokenResponse = Schema.Struct({
@@ -120,18 +121,25 @@ export const storedTokenFrom = (response: TokenResponse, nowMillis: number) =>
     scopes: scopesOf(response.scope),
   }) satisfies StoredToken;
 
-export const discoveryQuery = `query ClankerForgeIdentity { viewer { id } organization { id name urlKey } }`;
+export class LinearOAuthError extends Schema.TaggedErrorClass<LinearOAuthError>()("LinearOAuthError", {
+  message: Schema.String,
+}) {}
 
-export const DiscoveryResponse = Schema.Struct({
-  data: Schema.Struct({
-    viewer: Schema.Struct({ id: Schema.String.check(Schema.isNonEmpty()) }),
-    organization: Schema.Struct({
-      id: Schema.String.check(Schema.isNonEmpty()),
-      name: Schema.String,
-      urlKey: Schema.String.check(Schema.isNonEmpty()),
-    }),
-  }),
+export interface DiscoveredIdentity {
+  readonly organization: string;
+  readonly botUserId: string;
+}
+
+// The org's urlKey is what `workSource.organization` config and `StoredCredential.organization`
+// carry — it's the slug operators already see in Linear's URLs, unlike the opaque org id.
+export const discoverIdentity = Effect.fn("linear.oauth.discoverIdentity")(function* (accessToken: string) {
+  const sdk = new LinearSdk({ accessToken });
+  const [viewer, organization] = yield* Effect.tryPromise({
+    try: () => Promise.all([sdk.viewer, sdk.organization]),
+    catch: (cause) =>
+      new LinearOAuthError({
+        message: `Linear identity discovery failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+      }),
+  });
+  return { organization: organization.urlKey, botUserId: viewer.id } satisfies DiscoveredIdentity;
 });
-export type DiscoveryResponse = typeof DiscoveryResponse.Type;
-
-export const decodeDiscovery = Schema.decodeUnknownEffect(DiscoveryResponse);
