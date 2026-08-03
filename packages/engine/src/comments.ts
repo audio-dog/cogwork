@@ -10,8 +10,8 @@ const stripMarkers = (text: string) => text.replace(htmlMarker, "").replace(text
 
 const maxReasonChars = 800;
 
-export type BlockCause =
-  | { readonly kind: "exhausted"; readonly attempts: number }
+export type HandoffCause =
+  | { readonly kind: "max-attempts"; readonly attempts: number }
   | { readonly kind: "non-retryable" };
 
 const attemptWord = (count: number) => (count === 1 ? "attempt" : "attempts");
@@ -48,22 +48,22 @@ export const prepareFailureReason = (error: {
   return error.message;
 };
 
-export const agentFailureReason = (text: string, kind: "blocked" | "missing-sentinel") => {
+export const agentFailureReason = (text: string, kind: "stuck" | "missing-sentinel") => {
   const cleaned = truncate(stripResultLines(text));
-  if (kind === "blocked") return cleaned || "agent reported blocked";
+  if (kind === "stuck") return cleaned || "agent reported stuck";
   return cleaned ? `agent produced no result line — ${cleaned}` : "agent produced no result line";
 };
 
-const headline = (stage: LifecycleStage, cause: BlockCause) => {
-  if (cause.kind === "exhausted") {
-    return `**Blocked after ${cause.attempts} failed ${stage} ${attemptWord(cause.attempts)}.**`;
+const headline = (stage: LifecycleStage, cause: HandoffCause) => {
+  if (cause.kind === "max-attempts") {
+    return `**Exhausted after ${cause.attempts} failed ${stage} ${attemptWord(cause.attempts)}.**`;
   }
-  return `**Blocked: ${stage} hit a non-retryable failure.**`;
+  return `**Exhausted: ${stage} hit a non-retryable failure.**`;
 };
 
-export const blockedComment = (
+export const handoffComment = (
   stage: LifecycleStage,
-  cause: BlockCause,
+  cause: HandoffCause,
   reason: string,
   resume: string | undefined,
 ) => {

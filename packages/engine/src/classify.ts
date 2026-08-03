@@ -47,7 +47,7 @@ const stageFor = (item: ObservedItem) => {
 
 export const observedStage = (item: ObservedItem) => item.claim?.stage ?? stageFor(item);
 
-export const blockRoleFor = (stage: LifecycleStage) => {
+export const handoffRoleFor = (stage: LifecycleStage) => {
   if (stage === "implement") return "ready-for-agent" as const;
   if (stage === "triage") return "needs-triage" as const;
   return null;

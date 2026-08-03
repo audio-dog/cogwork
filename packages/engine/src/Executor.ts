@@ -8,8 +8,8 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { blockRoleFor, type EligibleWork, maxAttemptsPerStage } from "./classify";
-import { agentFailureReason, attachCommand, blockedComment, prepareFailureReason } from "./comments";
+import { type EligibleWork, handoffRoleFor, maxAttemptsPerStage } from "./classify";
+import { agentFailureReason, attachCommand, handoffComment, prepareFailureReason } from "./comments";
 import type { FollowUpContext } from "./followUp";
 import type { GitError } from "./Git";
 import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./Harness";
@@ -45,7 +45,7 @@ interface StageOps {
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
   readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, WorkSourceError>;
-  readonly blockRole: TriageRole | null;
+  readonly handoffRole: TriageRole | null;
 }
 
 const harnessRequest = (
@@ -66,7 +66,7 @@ const defaultFollowUp: FollowUpContext = {
   checks: "pending",
   humanCommentAtMillis: 0,
   noProgress: 0,
-  blocked: false,
+  stalled: false,
   fresh: false,
 };
 
@@ -123,8 +123,8 @@ const retryableOf = (error: PrepareError | HarnessError) =>
 const checkoutFor = (workspace: RegisteredWorkspace, item: EligibleWork) =>
   checkoutPathFor(workspace.config.checkoutPath, item, item.stage, workspace.config.worktrees);
 
-const blockCause = (retryable: boolean, attempts: number) =>
-  retryable ? ({ kind: "exhausted", attempts } as const) : ({ kind: "non-retryable" } as const);
+const handoffCause = (retryable: boolean, attempts: number) =>
+  retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
 const resumeFor = (workspace: RegisteredWorkspace, item: EligibleWork, session: SessionId | null) =>
   session ? attachCommand(checkoutFor(workspace, item), session) : undefined;
@@ -189,7 +189,7 @@ export const make = Effect.gen(function* () {
   const applyFailure = Effect.fn("Executor.applyFailure")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    blockRole: TriageRole | null,
+    handoffRole: TriageRole | null,
     runId: RunId,
     retryable: boolean,
     reason: string,
@@ -197,13 +197,13 @@ export const make = Effect.gen(function* () {
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     const attempts = item.priorFailures + 1;
-    const block = !retryable || attempts >= maxAttemptsPerStage;
+    const exhausted = !retryable || attempts >= maxAttemptsPerStage;
     yield* Effect.logWarning("stage attempt failed", {
       stage: item.stage,
       item: item.id,
       reason,
       retryable,
-      block,
+      exhausted,
     });
     yield* workSource.recordAttempt(
       workspace,
@@ -211,25 +211,25 @@ export const make = Effect.gen(function* () {
       { stage: item.stage, outcome: "failed", atMillis: endedAtMillis },
       reason,
     );
-    if (block) {
+    if (exhausted) {
       yield* workSource.setRoles(workspace, item.id, {
-        remove: blockRole ? [blockRole] : [],
+        remove: handoffRole ? [handoffRole] : [],
         add: ["ready-for-human"],
       });
       yield* workSource.note(
         workspace,
         item.id,
-        blockedComment(
+        handoffComment(
           item.stage,
-          blockCause(retryable, attempts),
+          handoffCause(retryable, attempts),
           reason,
           resumeFor(workspace, item, session),
         ),
       );
     }
     yield* ledger.updateRun(runId, {
-      status: block ? "blocked" : "failed",
-      session: block ? null : session,
+      status: exhausted ? "exhausted" : "failed",
+      session: exhausted ? null : session,
       usage: null,
       endedAtMillis,
     });
@@ -283,13 +283,13 @@ export const make = Effect.gen(function* () {
       return yield* applyImplementSuccess(workspace, item, runId, acc);
     }
     const session = yield* sessionOf(acc.session);
-    const reason = agentFailureReason(acc.text, result === "blocked" ? "blocked" : "missing-sentinel");
+    const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
     return yield* applyFailure(
       workspace,
       item,
       "ready-for-agent",
       runId,
-      result !== "blocked",
+      result !== "stuck",
       reason,
       session,
     );
@@ -333,7 +333,7 @@ export const make = Effect.gen(function* () {
         harnessRequest(resolved, workspace.config.checkoutPath, buildTriagePrompt(resolved, item), null),
       ),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
-      blockRole: blockRoleFor("triage"),
+      handoffRole: handoffRoleFor("triage"),
     }) satisfies StageOps;
 
   const implementOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
@@ -343,7 +343,7 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareImplement(workspace, item, resolved, branch),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
-      blockRole: blockRoleFor("implement"),
+      handoffRole: handoffRoleFor("implement"),
     } satisfies StageOps;
   };
 
@@ -383,8 +383,8 @@ export const make = Effect.gen(function* () {
       return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
     }
     const session = yield* sessionOf(acc.session);
-    const reason = agentFailureReason(acc.text, result === "blocked" ? "blocked" : "missing-sentinel");
-    return yield* applyFailure(workspace, item, null, runId, result !== "blocked", reason, session);
+    const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
+    return yield* applyFailure(workspace, item, null, runId, result !== "stuck", reason, session);
   });
 
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
@@ -423,11 +423,11 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareFollowUp(workspace, item, resolved, branch, context),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
-      blockRole: blockRoleFor("follow-up"),
+      handoffRole: handoffRoleFor("follow-up"),
     } satisfies StageOps;
   };
 
-  const blockNoProgress = Effect.fn("Executor.blockNoProgress")(function* (
+  const handoffStalled = Effect.fn("Executor.handoffStalled")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
@@ -487,7 +487,7 @@ export const make = Effect.gen(function* () {
     return yield* applyFailure(
       workspace,
       item,
-      ops.blockRole,
+      ops.handoffRole,
       runId,
       retryableOf(outcome.failure),
       prepareFailureReason(outcome.failure),
@@ -495,14 +495,14 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const runOrBlock = Effect.fn("Executor.runOrBlock")(function* (
+  const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     resolved: ResolvedStage,
     startedAtMillis: number,
   ) {
-    if (item.stage === "follow-up" && item.followUp?.blocked) {
-      return yield* blockNoProgress(workspace, item);
+    if (item.stage === "follow-up" && item.followUp?.stalled) {
+      return yield* handoffStalled(workspace, item);
     }
     yield* runClaimed(workspace, item, opsFor(workspace, item, resolved), startedAtMillis);
   });
@@ -520,7 +520,7 @@ export const make = Effect.gen(function* () {
     if (!claimed) {
       return false;
     }
-    yield* runOrBlock(workspace, item, resolved, startedAtMillis).pipe(
+    yield* runOrHandoff(workspace, item, resolved, startedAtMillis).pipe(
       Effect.ensuring(releaseClaim(workspace, item)),
     );
     return true;

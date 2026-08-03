@@ -71,12 +71,12 @@ const implementEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
 ];
 
-const blockedImplementEvents: ReadonlyArray<HarnessEvent> = [
+const stuckImplementEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
   {
     type: "TEXT_MESSAGE_CONTENT",
     name: null,
-    text: "The brief contradicts itself; leaving for a human.\nIMPLEMENT-RESULT: blocked",
+    text: "The brief contradicts itself; leaving for a human.\nIMPLEMENT-RESULT: stuck",
     sessionId: null,
     usage: null,
     finishReason: null,
@@ -118,7 +118,7 @@ const followUpItem = {
     checks: "failing" as const,
     humanCommentAtMillis: 0,
     noProgress: 0,
-    blocked: false,
+    stalled: false,
     fresh: false,
   },
 };
@@ -343,7 +343,7 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("marks a non-retryable harness failure as blocked and hands it to a human", () =>
+  it.effect("marks a non-retryable harness failure as exhausted and hands it to a human", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const error = new HarnessError({ reason: "launch", retryable: false, message: "no cli" });
@@ -363,12 +363,12 @@ describe("Executor.execute", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
-        assert.strictEqual(runs[0]?.status, "blocked");
+        assert.strictEqual(runs[0]?.status, "exhausted");
       }).pipe(Effect.provide(layer));
     }),
   );
 
-  it.effect("records a retryable failure as an attempt without a blocked marker", () =>
+  it.effect("records a retryable failure as an attempt without a handoff note", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const error = new HarnessError({ reason: "turn", retryable: true, message: "network blip" });
@@ -409,7 +409,7 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("blocks a retryable failure once its attempt reaches the cap", () =>
+  it.effect("exhausts a retryable failure once its attempt reaches the cap", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const error = new HarnessError({ reason: "turn", retryable: true, message: "network blip" });
@@ -426,7 +426,7 @@ describe("Executor.execute", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
-        assert.strictEqual(runs[0]?.status, "blocked");
+        assert.strictEqual(runs[0]?.status, "exhausted");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -508,7 +508,7 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("blocks a failed implement job and hands the issue back to a human", () =>
+  it.effect("exhausts a failed implement job and hands the issue back to a human", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const error = new HarnessError({ reason: "launch", retryable: false, message: "no cli" });
@@ -527,15 +527,15 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.stage, "implement");
-        assert.strictEqual(run?.status, "blocked");
+        assert.strictEqual(run?.status, "exhausted");
       }).pipe(Effect.provide(layer));
     }),
   );
 
-  it.effect("hands a self-reported blocked implement run to a human without retrying", () =>
+  it.effect("hands a self-reported stuck implement run to a human without retrying", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
-      const layer = provide(recorder(calls), [runner(blockedImplementEvents)]);
+      const layer = provide(recorder(calls), [runner(stuckImplementEvents)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
         yield* executor.execute(implementWorkspace, implementItem);
@@ -553,7 +553,7 @@ describe("Executor.execute", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        assert.strictEqual(run?.status, "blocked");
+        assert.strictEqual(run?.status, "exhausted");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -633,18 +633,18 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("blocks a no-progress follow-up with a human handoff and no harness run", () =>
+  it.effect("hands a stalled follow-up to a human with no harness run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
       const layer = provide(recorder(calls), [capturingRunner(requests, followUpEvents)]);
-      const blockedItem = {
+      const stalledItem = {
         ...followUpItem,
-        followUp: { ...followUpItem.followUp, noProgress: 3, blocked: true },
+        followUp: { ...followUpItem.followUp, noProgress: 3, stalled: true },
       };
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        yield* executor.execute(followUpWorkspace, blockedItem);
+        yield* executor.execute(followUpWorkspace, stalledItem);
 
         assert.strictEqual((yield* Ref.get(requests)).length, 0);
         const log = yield* Ref.get(calls);

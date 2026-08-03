@@ -23,7 +23,7 @@ export interface FollowUpContext {
   readonly checks: CheckState;
   readonly humanCommentAtMillis: number;
   readonly noProgress: number;
-  readonly blocked: boolean;
+  readonly stalled: boolean;
   readonly fresh: boolean;
 }
 
@@ -51,7 +51,7 @@ export const followUpContext = (pr: ObservedPr): FollowUpContext => {
     checks: pr.checks,
     humanCommentAtMillis: humanCommentAt(pr),
     noProgress,
-    blocked: noProgress >= followUpNoProgressLimit,
+    stalled: noProgress >= followUpNoProgressLimit,
     fresh: pr.fresh,
   };
 };

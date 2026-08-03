@@ -30,9 +30,13 @@ _Avoid_: Step, phase, task type
 A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; stages drive execution.
 _Avoid_: Status, state, label (when you mean the role's meaning)
 
+**Blocked / blocker / blocking**:
+An item is *blocked* when its work source reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the work source's own dependency relation (GitHub issue dependencies, Linear blocking relations), read per adapter. A blocked item is held out of the `implement` stage until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.
+_Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those are needs-human — a person clears them); stuck / exhausted / stalled (failure outcomes, not dependencies).
+
 **Needs-human reason**:
-Why an item is waiting on a person — `needs-info` or `ready-for-human`. A needs-human item is neither eligible nor claimed.
-_Avoid_: Block reason (blocking is reserved for dependencies), error, failure
+Why triage parked an item for a person: `needs-info` (waiting on the reporter) or `ready-for-human` (needs a human implementer). A needs-human item is neither eligible, claimed, nor blocked; a person clears it by changing the role.
+_Avoid_: Block reason (blocking now means open dependencies), error, failure.
 
 ### Coordination
 
@@ -43,6 +47,12 @@ _Avoid_: Lock, lease, reservation
 **Attempt record**:
 A coordination record of one finished stage attempt on an item: its stage, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the work source.
 _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
+
+### Credentials
+
+**Credential store**:
+The daemon's durable, secret store of work-source credentials — an OAuth token pair (access + refresh) or a client-credentials token — keyed by the work source's account (a Linear organization). A seam: the backing layer is a `0600` file today, an OS keychain on desktop, a per-user database row on a hosted server. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo.
+_Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id` lives in config, not here), keychain (only one possible backing layer).
 
 ### Runs
 
@@ -66,6 +76,10 @@ _Avoid_: Run event (the persisted form), notification
 A harness's own conversation handle (`SessionId`), stored on a run so a later stage on the same branch can resume the same agent session.
 _Avoid_: Run, connection
 
+**Exhausted / stalled / stuck**:
+The three failure outcomes — how the control plane stops spending tokens on an item after it has already tried. A run is *exhausted* when it gives up after too many failed attempts or a non-retryable error: the terminal `RunStatus`, which escalates the item to `ready-for-human`. A follow-up is *stalled* when it hits the no-progress limit without the checks going green or a human replying. An agent is *stuck* when its own output reports it cannot proceed — a non-retryable cause that feeds exhaustion. All three are distinct from *blocked*, which is about unresolved dependencies before any attempt.
+_Avoid_: Blocked (dependencies now), failed (the single, still-retryable attempt status).
+
 ### Harness contract
 
 **Harness**:
@@ -86,6 +100,6 @@ _Avoid_: Message, token
 The snapshot the daemon reports over RPC: health, uptime, scheduler stats, per-workspace info, and load failures.
 _Avoid_: State, health check
 
-**Actionable / claimed / needs-human item**:
-The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, and waiting on a person. Narrowed views of a work item, not new entities.
+**Actionable / claimed / blocked / needs-human item**:
+The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, and parked for a person. Narrowed views of a work item, not new entities.
 _Avoid_: Reusing "work item" for these narrowed views

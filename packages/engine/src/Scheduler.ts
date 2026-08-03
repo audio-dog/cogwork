@@ -6,13 +6,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import {
-  blockRoleFor,
   consecutiveFailures,
   type EligibleWork,
+  handoffRoleFor,
   maxAttemptsPerStage,
   observedStage,
 } from "./classify";
-import { attachCommand, blockedComment, recoveryReason } from "./comments";
+import { attachCommand, handoffComment, recoveryReason } from "./comments";
 import { claimant, Executor } from "./Executor";
 import { runnable } from "./Playbook";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
@@ -188,7 +188,7 @@ export const make = (config: SchedulerConfig) =>
       attempts: number,
       session: string | null | undefined,
     ) {
-      const role = blockRoleFor(stage);
+      const role = handoffRoleFor(stage);
       const checkout = checkoutForStage(workspace, item, stage);
       const resume = session === null || session === undefined ? undefined : attachCommand(checkout, session);
       yield* workSource.setRoles(workspace, item.id, {
@@ -198,7 +198,7 @@ export const make = (config: SchedulerConfig) =>
       yield* workSource.note(
         workspace,
         item.id,
-        blockedComment(stage, { kind: "exhausted", attempts }, recoveryReason, resume),
+        handoffComment(stage, { kind: "max-attempts", attempts }, recoveryReason, resume),
       );
     });
 
@@ -210,14 +210,14 @@ export const make = (config: SchedulerConfig) =>
       session: string | null | undefined,
     ) {
       const attempts = consecutiveFailures(item, stage) + 1;
-      const block = attempts >= maxAttemptsPerStage;
+      const exhausted = attempts >= maxAttemptsPerStage;
       yield* Effect.logWarning("recovered stale claim", {
         workspace: workspace.config.name,
         item: item.id,
         stage,
         reason: recoveryReason,
         attempts,
-        block,
+        exhausted,
       });
       yield* workSource.recordAttempt(
         workspace,
@@ -225,7 +225,7 @@ export const make = (config: SchedulerConfig) =>
         { stage, outcome: "failed", atMillis: endedAtMillis },
         recoveryReason,
       );
-      if (!block) return;
+      if (!exhausted) return;
       yield* handoffRecovery(workspace, item, stage, attempts, session);
     });
 
