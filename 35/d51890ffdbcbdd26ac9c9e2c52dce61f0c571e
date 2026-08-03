@@ -1,0 +1,19 @@
+packages/engine/src/linear/linear.test.ts
+  s_3e007465223843::t_86a31320967e27 350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "35d51890ffdbcbdd26ac9c9e2c52dce61f0c571e",
+  "prompts": {},
+  "sessions": {
+    "s_3e007465223843": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ee939fb7-9ae1-48a7-bc78-1db383b800a7",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
