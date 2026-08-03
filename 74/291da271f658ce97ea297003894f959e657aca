@@ -1,0 +1,24 @@
+apps/cli/config/feldspar.workspace.ts
+  s_36fa73ec72f21a::t_203fd704a8fa44 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "74291da271f658ce97ea297003894f959e657aca",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_36fa73ec72f21a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "93454018-92b4-4fd6-a693-b4b2980244d5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
