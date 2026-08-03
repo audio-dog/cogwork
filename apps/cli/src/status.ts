@@ -3,6 +3,8 @@ import type { DaemonStatus, SchedulerStats, WorkspaceInfo } from "@clanker-forge
 const section = (label: string, lines: ReadonlyArray<string>) =>
   lines.length === 0 ? [] : [`      ${label}:`, ...lines.map((line) => `        · ${line}`)];
 
+const blockersLabel = (count: number) => `${count} open blocker${count === 1 ? "" : "s"}`;
+
 const formatWorkspace = (workspace: WorkspaceInfo) => {
   const poll = workspace.poll.status === "paused" ? [`      paused: ${workspace.poll.message}`] : [];
   const eligible = section(
@@ -13,6 +15,10 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     "claimed",
     workspace.claimed.map((item) => `${item.id} ${item.title} (by ${item.claim.by})`),
   );
+  const blocked = section(
+    "blocked",
+    workspace.blocked.map((item) => `${item.id} ${item.title} (${blockersLabel(item.openBlockers)})`),
+  );
   const needsHuman = section(
     "needs-human",
     workspace.needsHuman.map((item) => `${item.reason} ${item.id} ${item.title}`),
@@ -22,6 +28,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     ...poll,
     ...eligible,
     ...claimed,
+    ...blocked,
     ...needsHuman,
   ].join("\n");
 };
