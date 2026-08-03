@@ -1,0 +1,39 @@
+packages/engine/CONTEXT.md
+  s_24eabd88f315fd::t_314021b3a1d37c 21
+CONTEXT-MAP.md
+  s_24eabd88f315fd::t_219855ed65f9cf 30
+packages/contracts/CONTEXT.md
+  s_24eabd88f315fd::t_e0fce6055cf02b 103-104
+  s_24eabd88f315fd::t_736648625eb1cb 79-82
+  s_24eabd88f315fd::t_4a3481d28b437d 33-39
+  s_391f4561c8a30a::t_a87aab391b6e8a 51-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "f2242654ce10115ecb6df4edfe5f4a45a0841b9b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_24eabd88f315fd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6274aadf-05af-4d2f-9bab-4ccf1d9be2d0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_391f4561c8a30a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a20afa96-85dd-4498-84ea-aa4eef1c05f8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
