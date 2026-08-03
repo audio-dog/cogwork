@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import {
   agentFailureReason,
   attachCommand,
-  blockedComment,
+  handoffComment,
   oneLine,
   prepareFailureReason,
   recoveryReason,
@@ -27,8 +27,8 @@ describe("comments", () => {
     );
   });
 
-  it("keeps plain-text markers out of the blocked handoff body", () => {
-    const body = blockedComment(
+  it("keeps plain-text markers out of the handoff body", () => {
+    const body = handoffComment(
       "implement",
       { kind: "non-retryable" },
       "boom\nclanker-forge:ledger",
@@ -49,14 +49,14 @@ describe("comments", () => {
 
   it("strips result sentinel lines from agent text", () => {
     assert.strictEqual(
-      stripResultLines("Brief contradicts itself.\nIMPLEMENT-RESULT: blocked\n"),
+      stripResultLines("Brief contradicts itself.\nIMPLEMENT-RESULT: stuck\n"),
       "Brief contradicts itself.",
     );
   });
 
-  it("prefers the agent's final message when reporting a blocked run", () => {
+  it("prefers the agent's final message when reporting a stuck run", () => {
     assert.strictEqual(
-      agentFailureReason("Cannot reconcile the brief.\nIMPLEMENT-RESULT: blocked", "blocked"),
+      agentFailureReason("Cannot reconcile the brief.\nIMPLEMENT-RESULT: stuck", "stuck"),
       "Cannot reconcile the brief.",
     );
   });
@@ -79,14 +79,14 @@ describe("comments", () => {
     );
   });
 
-  it("builds a blocked handoff note with an optional resume command", () => {
-    const body = blockedComment(
+  it("builds an exhausted handoff note with an optional resume command", () => {
+    const body = handoffComment(
       "implement",
-      { kind: "exhausted", attempts: 3 },
+      { kind: "max-attempts", attempts: 3 },
       "network blip",
       attachCommand("/wt/15-feature", "sess-1"),
     );
-    assert.include(body, "Blocked after 3 failed implement attempts.");
+    assert.include(body, "Exhausted after 3 failed implement attempts.");
     assert.include(body, "ready-for-human");
     assert.include(body, "Last failure: network blip");
     assert.include(body, "```sh");
@@ -94,7 +94,7 @@ describe("comments", () => {
   });
 
   it("omits the resume block when no session is available", () => {
-    const body = blockedComment("triage", { kind: "non-retryable" }, "no cli", undefined);
+    const body = handoffComment("triage", { kind: "non-retryable" }, "no cli", undefined);
     assert.include(body, "non-retryable failure");
     assert.notInclude(body, "Resume the session");
   });

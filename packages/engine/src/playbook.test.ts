@@ -119,14 +119,14 @@ describe("buildFollowUpPrompt", () => {
     const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" });
     assert.include(prompt, "`follow-up-agent`");
     assert.include(prompt, "Never merge");
-    assert.include(prompt, "FOLLOWUP-RESULT: <pushed | blocked>");
+    assert.include(prompt, "FOLLOWUP-RESULT: <pushed | stuck>");
   });
 });
 
 describe("parseFollowUpResult", () => {
-  it("reads the last pushed/blocked sentinel", () => {
+  it("reads the last pushed/stuck sentinel", () => {
     assert.strictEqual(parseFollowUpResult("work\nFOLLOWUP-RESULT: pushed"), "pushed");
-    assert.strictEqual(parseFollowUpResult("FOLLOWUP-RESULT: pushed\nFOLLOWUP-RESULT: blocked"), "blocked");
+    assert.strictEqual(parseFollowUpResult("FOLLOWUP-RESULT: pushed\nFOLLOWUP-RESULT: stuck"), "stuck");
     assert.isNull(parseFollowUpResult("FOLLOWUP-RESULT: banana"));
   });
 });

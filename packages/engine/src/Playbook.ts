@@ -173,15 +173,15 @@ export const resolveTriageDecision = (text: string): TriageDecision => {
   };
 };
 
-export type ImplementResult = "opened-pr" | "blocked";
+export type ImplementResult = "opened-pr" | "stuck";
 
-const implementResults: ReadonlyArray<ImplementResult> = ["opened-pr", "blocked"];
+const implementResults: ReadonlyArray<ImplementResult> = ["opened-pr", "stuck"];
 
 const implementFooter = [
   "",
   "End your final message with exactly one line, and nothing after it:",
-  "IMPLEMENT-RESULT: <opened-pr | blocked>",
-  "Use `opened-pr` only when you opened a pull request that references {id}; otherwise use `blocked`.",
+  "IMPLEMENT-RESULT: <opened-pr | stuck>",
+  "Use `opened-pr` only when you opened a pull request that references {id}; otherwise use `stuck`.",
 ].join("\n");
 
 const implementResultPattern = /IMPLEMENT-RESULT:\s*([a-z-]+)/gi;
@@ -192,15 +192,15 @@ export const buildImplementPrompt = (resolved: ResolvedStage, item: PromptItem) 
 export const parseImplementResult = (text: string) =>
   parseLastSentinel(implementResultPattern, implementResults, text);
 
-export type FollowUpResult = "pushed" | "blocked";
+export type FollowUpResult = "pushed" | "stuck";
 
-const followUpResults: ReadonlyArray<FollowUpResult> = ["pushed", "blocked"];
+const followUpResults: ReadonlyArray<FollowUpResult> = ["pushed", "stuck"];
 
 const followUpFooter = [
   "",
   "End your final message with exactly one line, and nothing after it:",
-  "FOLLOWUP-RESULT: <pushed | blocked>",
-  "Use `pushed` only when you pushed a fix to the PR's branch; otherwise use `blocked`.",
+  "FOLLOWUP-RESULT: <pushed | stuck>",
+  "Use `pushed` only when you pushed a fix to the PR's branch; otherwise use `stuck`.",
 ].join("\n");
 
 const followUpResultPattern = /FOLLOWUP-RESULT:\s*([a-z-]+)/gi;
