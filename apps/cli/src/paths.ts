@@ -6,4 +6,8 @@ export const defaultSocketPath = path.join(os.tmpdir(), "clanker-forge.sock");
 
 export const defaultConfigHome = path.resolve(import.meta.dirname, "../config");
 
-export const defaultLedgerPath = path.join(os.homedir(), ".clanker-forge", "runs.db");
+const daemonHome = path.join(os.homedir(), ".clanker-forge");
+
+export const defaultLedgerPath = path.join(daemonHome, "runs.db");
+
+export const defaultCredentialsPath = path.join(daemonHome, "credentials.json");

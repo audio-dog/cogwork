@@ -54,8 +54,12 @@ A concrete implementation of the work source port. `GitHub.adapterLayer` and `Li
 _Avoid_: Client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Credential store**:
-The seam every work-source credential is resolved through: given an account (the work source's logical identity plus the env var naming its legacy API key), it hands back a bearer token and logs which source that token came from. One env-var-backed layer implements it today; browser-login and client-credentials sources arrive behind the same seam later, as does a keychain- or database-backed layer.
+The seam every work-source credential is resolved through: given an account (the work source's logical identity plus the env var naming its legacy API key), it hands back a credential — the token, the source it came from, and any identity discovered alongside it — and logs which source it used. A stored OAuth token wins over the env var; an expired one (or an ambiguous match across organizations) falls back to it. Only the Linear client resolves through the store today; GitHub still reads its token from the environment directly. Client-credentials sources arrive behind the same seam later, as does a keychain-backed layer.
 _Avoid_: Secret manager, token cache (nothing is cached yet), auth provider
+
+**Stored credential**:
+One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `botUserId` the app posts as). Keyed by work source and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
+_Avoid_: Session, login (the login command that mints these does not exist yet)
 
 **Coordination markers**:
 Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the work source. GitHub embeds them as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments).
