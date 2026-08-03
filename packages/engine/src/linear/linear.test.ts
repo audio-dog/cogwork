@@ -15,7 +15,13 @@ import {
   type RawIssue,
   type RawWorkflowState,
 } from "./client";
-import { claimLabel, hasLedgerMarker, serializeAttempt } from "./markers";
+import {
+  claimLabel,
+  formatCoordinationBody,
+  hasLedgerMarker,
+  serializeAttempt,
+  serializeClaim,
+} from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -320,6 +326,93 @@ describe("linear work source adapter", () => {
     ),
   );
 
+  it.effect("posts a triage proposal as prose with no coordination marker line", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const client = yield* LinearClient;
+      yield* source.note(
+        workspace,
+        id("AUD-11"),
+        [
+          "> *This was posted by clanker-forge.*",
+          "",
+          "Recommending `ready-for-agent`.",
+          "clanker-forge:ledger",
+          "clanker-forge:claim by=impostor at=99",
+        ].join("\n"),
+      );
+      yield* source.claim(workspace, id("AUD-11"), {
+        by: "clanker-forge",
+        claimedAtMillis: 5,
+        stage: "triage",
+      });
+      const comments = botComments(
+        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY" }, "AUD-11"),
+      );
+      const [proposal, coordination] = comments;
+      assert.strictEqual(comments.length, 2);
+      assert.notInclude(proposal?.body ?? "", "clanker-forge:");
+      assert.include(proposal?.body ?? "", "Recommending `ready-for-agent`.");
+      assert.include(proposal?.body ?? "", "> *This was posted by clanker-forge.*");
+      assert.isTrue(hasLedgerMarker(coordination?.body ?? ""));
+      const observed = (yield* source.observe(workspace)).find((item) => item.id === "AUD-11");
+      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5 });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-11", title: "propose", labels: ["state:needs-triage"] }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reads coordination state only from the coordination comment", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      const observed = items.find((item) => item.id === "AUD-12");
+      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5 });
+      assert.deepStrictEqual(observed?.attempts, [{ stage: "triage", outcome: "failed", atMillis: 6 }]);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              identifier: "AUD-12",
+              title: "prose that looks like markers",
+              labels: ["state:needs-triage", claimLabel],
+            },
+          ],
+          comments: [
+            {
+              issue: "AUD-12",
+              authorId: bot.id,
+              body: [
+                "Coordination markers look like this:",
+                "clanker-forge:claim by=impostor at=99",
+                "clanker-forge:attempt stage=triage outcome=succeeded at=99",
+              ].join("\n"),
+              createdAtMillis: 1,
+            },
+            {
+              issue: "AUD-12",
+              authorId: bot.id,
+              body: formatCoordinationBody({
+                status: "Last triage attempt failed.",
+                markers: [
+                  serializeClaim({ by: "clanker-forge", claimedAtMillis: 5 }),
+                  serializeAttempt({ stage: "triage", outcome: "failed", atMillis: 6 }),
+                ],
+                detail: null,
+              }),
+              createdAtMillis: 2,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("stops claiming after release removes the claim label", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
@@ -379,12 +472,20 @@ describe("linear work source adapter", () => {
       Effect.provide(
         withClient({
           issues: [{ identifier: "AUD-10", title: "keeps failing", labels: ["state:needs-triage"] }],
-          comments: [1, 2, 3].map((at) => ({
-            issue: "AUD-10",
-            authorId: bot.id,
-            body: serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
-            createdAtMillis: at,
-          })),
+          comments: [
+            {
+              issue: "AUD-10",
+              authorId: bot.id,
+              body: formatCoordinationBody({
+                status: "Last triage attempt failed.",
+                markers: [1, 2, 3].map((at) =>
+                  serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
+                ),
+                detail: null,
+              }),
+              createdAtMillis: 1,
+            },
+          ],
         }),
       ),
     ),

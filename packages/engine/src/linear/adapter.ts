@@ -67,11 +67,6 @@ const targetFor = (workspace: RegisteredWorkspace) => {
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
 const itemId = (identifier: string) => decodeItemId(identifier).pipe(Effect.orDie);
 
-const coordinationLast = (comments: ReadonlyArray<RawComment>) => [
-  ...comments.filter((comment) => !hasLedgerMarker(comment.body)),
-  ...comments.filter((comment) => hasLedgerMarker(comment.body)),
-];
-
 const notLinear = (workspace: RegisteredWorkspace) =>
   new WorkSourceError({
     reason: "unavailable",
@@ -119,17 +114,15 @@ const make = (client: LinearClientService): WorkSourceService => {
     }) {
       const claimLabeled = hasClaimLabel(issue.labels);
       const comments = target.botUserId ? yield* client.listComments(target, issue.identifier) : [];
-      const trusted = coordinationLast(comments.filter((comment) => isBotComment(comment, target))).map(
-        (comment) => comment.body,
-      );
+      const coordination = botLedger(comments, target)?.body ?? "";
       const id = yield* itemId(issue.identifier);
       return {
         id,
         title: issue.title,
         roles: rolesFrom(issue.labels, { name: issue.stateName, type: issue.stateType }, target.roleLabels),
         claimLabeled,
-        claim: claimLabeled ? parseClaim(trusted) : null,
-        attempts: parseAttempts(trusted),
+        claim: claimLabeled ? parseClaim(coordination) : null,
+        attempts: parseAttempts(coordination),
         pr: null,
       };
     });

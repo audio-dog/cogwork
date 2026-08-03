@@ -69,9 +69,11 @@ const ledgerLine = "clanker-forge:ledger";
 const detailLine = "clanker-forge:detail";
 const ledgerPattern = /^clanker-forge:ledger\s*$/m;
 const detailPattern = /^clanker-forge:detail\s*$/m;
-const anyMarkerPattern = /^clanker-forge:\S+.*$/gm;
+const coordinationMarkerPattern = /^clanker-forge:\S+.*$/gm;
 
 export const hasLedgerMarker = (body: string) => ledgerPattern.test(body);
+
+const stripMarkerLines = (text: string) => text.replace(coordinationMarkerPattern, "");
 
 const before = (body: string, pattern: RegExp) => {
   const at = body.search(pattern);
@@ -94,10 +96,8 @@ const toPair = (token: string) => {
 
 const parsePairs = (payload: string) => Object.fromEntries(payload.split(/\s+/).flatMap(toPair));
 
-const extractLines = (name: string, bodies: ReadonlyArray<string>) =>
-  bodies.flatMap((body) =>
-    [...coordinationRegion(body).matchAll(linePattern(name))].map((match) => parsePairs(match[1] ?? "")),
-  );
+const extractLines = (name: string, body: string) =>
+  [...coordinationRegion(body).matchAll(linePattern(name))].map((match) => parsePairs(match[1] ?? ""));
 
 export const serializeClaim = (claim: Claim) =>
   `clanker-forge:claim by=${claim.by} at=${claim.claimedAtMillis}`;
@@ -111,15 +111,15 @@ export const serializeFollowUp = (marker: FollowUpMarker) =>
 const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
 
-export const parseClaim = (bodies: ReadonlyArray<string>) =>
+export const parseClaim = (coordinationBody: string) =>
   lastOf(
-    extractLines("claim", bodies).flatMap((pairs) =>
+    extractLines("claim", coordinationBody).flatMap((pairs) =>
       okToArray(decodeClaim({ by: pairs.by, claimedAtMillis: Number(pairs.at) })),
     ),
   );
 
-export const parseAttempts = (bodies: ReadonlyArray<string>) =>
-  extractLines("attempt", bodies).flatMap((pairs) =>
+export const parseAttempts = (coordinationBody: string) =>
+  extractLines("attempt", coordinationBody).flatMap((pairs) =>
     okToArray(decodeAttempt({ stage: pairs.stage, outcome: pairs.outcome, atMillis: Number(pairs.at) })),
   );
 
@@ -150,7 +150,7 @@ export const coordinationStatus = (body: string) =>
 export const coordinationDetail = (body: string) => orNull(after(body, detailPattern));
 
 export const coordinationMarkers = (body: string) =>
-  [...coordinationRegion(body).matchAll(anyMarkerPattern)]
+  [...coordinationRegion(body).matchAll(coordinationMarkerPattern)]
     .map((match) => match[0])
     .filter((marker) => marker !== ledgerLine && !marker.startsWith(detailLine));
 
@@ -165,10 +165,7 @@ const detailSection = (detail: string | null) => {
   return visible === null ? [] : ["", detailLine, "", visible];
 };
 
-export const formatNoteBody = (detail: string) => {
-  const visible = orNull(detail);
-  return visible === null ? "" : [detailLine, "", visible].join("\n");
-};
+export const formatNoteBody = (detail: string) => orNull(stripMarkerLines(detail)) ?? "";
 
 export const formatCoordinationBody = ({ status, markers, detail }: CoordinationBody) =>
   [attribution, "", status, "", ledgerLine, ...markers, ...detailSection(detail)].join("\n");
