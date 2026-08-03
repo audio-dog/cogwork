@@ -73,6 +73,10 @@ _Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment
 The git worktree lifecycle: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker.
 _Avoid_: Checkout, clone
 
+**Branch divergence**:
+A worktree branch holding commits its remote branch lacks while the remote holds commits the branch lacks, so no fast-forward can bring them together. The worktree manager resolves it by rebasing the local commits onto the remote; when that rebase will not apply, the divergence is a non-retryable prepare failure that hands the item to a human with its commits untouched (see ADR 0002).
+_Avoid_: Conflict (that's one reason a rebase fails), drift, stale branch (that's just being behind)
+
 **Workspace registry**:
 The loaded set of registered workspaces (and the failures from loading), built by folding workspace registration events. The engine's view of which repos it's driving.
 _Avoid_: Config store. Distinct from the harness runner map, which is also a "registry" of sorts.

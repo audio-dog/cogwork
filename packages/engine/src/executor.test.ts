@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Executor from "./Executor";
+import { GitError } from "./Git";
 import {
   HarnessError,
   type HarnessEvent,
@@ -17,7 +18,7 @@ import type { RegisteredWorkspace } from "./projector";
 import * as RunEventBus from "./RunEventBus";
 import * as RunLedger from "./RunLedger";
 import { WorkSource, type WorkSourceService } from "./WorkSource";
-import { branchName, WorktreeManager, type WorktreeManagerService } from "./Worktree";
+import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./Worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const id = Schema.decodeSync(WorkItemId);
@@ -206,6 +207,24 @@ const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
 });
 
 const worktreeStub = worktreeStubCreated(true);
+
+const divergedWorktree: WorktreeManagerService = {
+  ...worktreeStub,
+  ensure: (_workspace, item) =>
+    Effect.fail(
+      new WorktreeDivergedError({
+        remote: "origin",
+        branch: branchName(item),
+        message: "branch has diverged from origin and replaying the local commits failed",
+      }),
+    ),
+};
+
+const unreachableRemoteWorktree: WorktreeManagerService = {
+  ...worktreeStub,
+  ensure: () =>
+    Effect.fail(new GitError({ command: "fetch origin", message: "could not resolve host github.com" })),
+};
 
 const failingRunner = (error: HarnessError): HarnessRunner => ({
   name: cursor,
@@ -528,6 +547,53 @@ describe("Executor.execute", () => {
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.stage, "implement");
         assert.strictEqual(run?.status, "exhausted");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("hands a diverged worktree to a human on the first attempt without retrying", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)], divergedWorktree);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        assert.strictEqual((yield* Ref.get(requests)).length, 0);
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        assert.include(log.find((c) => c.method === "recordAttempt")?.reason ?? "", "diverged");
+        const roles = log.find((c) => c.method === "setRoles");
+        assert.deepStrictEqual(roles?.remove, ["ready-for-agent"]);
+        assert.deepStrictEqual(roles?.add, ["ready-for-human"]);
+        const note = log.find((c) => c.method === "note")?.body ?? "";
+        assert.include(note, "non-retryable failure");
+        assert.include(note, "diverged");
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "exhausted");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("keeps retrying a prepare failure that is not a divergence", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(recorder(calls), [runner(implementEvents)], unreachableRemoteWorktree);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "failed");
+        assert.isFalse(log.some((c) => c.method === "setRoles"));
+        assert.isFalse(log.some((c) => c.method === "note"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "failed");
       }).pipe(Effect.provide(layer));
     }),
   );

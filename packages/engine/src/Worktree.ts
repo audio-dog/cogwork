@@ -1,9 +1,19 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { Git, GitError, type WorktreeEntry } from "./Git";
+import * as Schema from "effect/Schema";
+import { type BranchDivergence, Git, GitError, type WorktreeEntry } from "./Git";
 import type { RegisteredWorkspace } from "./projector";
 import { WorktreeFs } from "./WorktreeFs";
+
+export class WorktreeDivergedError extends Schema.TaggedErrorClass<WorktreeDivergedError>()(
+  "WorktreeDivergedError",
+  {
+    remote: Schema.String,
+    branch: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
 export interface WorkItemRef {
   readonly id: string;
@@ -75,6 +85,25 @@ const logRemovalFailure = Effect.fn("Worktree.logRemovalFailure")(function* (pat
   return null;
 });
 
+const logMissingRemote = Effect.fn("Worktree.logMissingRemote")(function* (remote: string, branch: string) {
+  yield* Effect.logWarning(
+    "reusing a worktree whose branch has no counterpart on the remote; its local commits are kept as they are",
+    { branch, remote },
+  );
+});
+
+const commitWord = (count: number) => (count === 1 ? "commit" : "commits");
+
+const unresolvableMessage = (remote: string, branch: string, divergence: BranchDivergence, reason: string) =>
+  [
+    `branch ${branch} has diverged from ${remote}/${branch}`,
+    `(${divergence.ahead} local ${commitWord(divergence.ahead)} the remote lacks,`,
+    `${divergence.behind} remote ${commitWord(divergence.behind)} the branch lacks)`,
+    `and replaying the local commits onto ${remote}/${branch} failed: ${reason}.`,
+    "The worktree was left as it was, so no local commits were discarded —",
+    "a human needs to decide how to reconcile the branch.",
+  ].join(" ");
+
 export const make = Effect.gen(function* () {
   const git = yield* Git;
   const fs = yield* WorktreeFs;
@@ -116,6 +145,42 @@ export const make = Effect.gen(function* () {
     return entries.filter((entry) => entry.path.startsWith(prefix));
   });
 
+  const replayOntoRemote = Effect.fn("Worktree.replayOntoRemote")(function* (
+    worktreePath: string,
+    remote: string,
+    branch: string,
+    divergence: BranchDivergence,
+  ) {
+    yield* Effect.logWarning("worktree branch diverged from its remote; replaying local commits", {
+      branch,
+      remote,
+      ...divergence,
+    });
+    return yield* git.rebase(worktreePath, remote, branch).pipe(
+      Effect.catchTag(
+        "GitError",
+        (error) =>
+          new WorktreeDivergedError({
+            remote,
+            branch,
+            message: unresolvableMessage(remote, branch, divergence, error.message),
+          }),
+      ),
+    );
+  });
+
+  const syncBranch = Effect.fn("Worktree.syncBranch")(function* (
+    worktreePath: string,
+    remote: string,
+    branch: string,
+  ) {
+    const divergence = yield* git.divergence(worktreePath, remote, branch);
+    if (divergence.ahead === 0 || divergence.behind === 0) {
+      return yield* git.fastForward(worktreePath, remote, branch);
+    }
+    return yield* replayOntoRemote(worktreePath, remote, branch, divergence);
+  });
+
   const ensure = Effect.fn("Worktree.ensure")(function* (workspace: RegisteredWorkspace, item: WorkItemRef) {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
@@ -132,7 +197,9 @@ export const make = Effect.gen(function* () {
       const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
       yield* git.addWorktree({ repoPath, worktreePath, branch, startPoint });
     } else if (hasRemoteBranch) {
-      yield* git.fastForward(worktreePath, remote, branch);
+      yield* syncBranch(worktreePath, remote, branch);
+    } else {
+      yield* logMissingRemote(remote, branch);
     }
 
     yield* runSetup(repoPath, worktreePath, config);
