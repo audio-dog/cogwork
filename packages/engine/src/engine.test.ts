@@ -146,6 +146,17 @@ describe("reconcile worker", () => {
     Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
   );
 
+  it.effect("advances the snapshot generation on every published reconcile", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      assert.strictEqual((yield* worker.snapshot).generation, 0);
+      yield* worker.submit();
+      assert.strictEqual((yield* worker.snapshot).generation, 1);
+      yield* worker.submit();
+      assert.strictEqual((yield* worker.snapshot).generation, 2);
+    }).pipe(Effect.provide(workerLayer), Effect.scoped),
+  );
+
   it.effect("classifies observed work into the eligible set per workspace", () =>
     Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
@@ -230,9 +241,9 @@ describe("daemon status over rpc", () => {
     recover: () => Effect.void,
     config: { globalLimit: 4, dailyBudget: 50 },
     stats: Effect.succeed({
+      ...Scheduler.initialState,
       global: 3,
       perWorkspace: new Map([[Schema.decodeSync(WorkspaceId)("example"), 2]]),
-      inflight: new Set<string>(),
       budgetDay: 0,
       budgetUsed: 7,
     }),

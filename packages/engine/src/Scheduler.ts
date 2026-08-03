@@ -31,6 +31,8 @@ export interface SchedulerState {
   readonly global: number;
   readonly perWorkspace: ReadonlyMap<WorkspaceId, number>;
   readonly inflight: ReadonlySet<string>;
+  readonly generation: number;
+  readonly acted: ReadonlySet<string>;
   readonly budgetDay: number;
   readonly budgetUsed: number;
 }
@@ -39,6 +41,8 @@ export const initialState: SchedulerState = {
   global: 0,
   perWorkspace: new Map(),
   inflight: new Set(),
+  generation: -1,
+  acted: new Set(),
   budgetDay: -1,
   budgetUsed: 0,
 };
@@ -61,7 +65,7 @@ const fits = (candidate: Candidate, state: SchedulerState, config: SchedulerConf
   state.global < config.globalLimit &&
   (state.perWorkspace.get(candidate.workspace.config.name) ?? 0) < candidate.workspaceLimit &&
   state.budgetUsed < config.dailyBudget &&
-  candidate.keys.every((key) => !state.inflight.has(key));
+  candidate.keys.every((key) => !state.inflight.has(key) && !state.acted.has(key));
 
 const bumped = (map: ReadonlyMap<WorkspaceId, number>, key: WorkspaceId, delta: number) => {
   const next = new Map(map);
@@ -76,6 +80,7 @@ const reserve = (state: SchedulerState, candidate: Candidate) => ({
   global: state.global + 1,
   perWorkspace: bumped(state.perWorkspace, candidate.workspace.config.name, 1),
   inflight: new Set([...state.inflight, ...candidate.keys]),
+  acted: new Set([...state.acted, ...candidate.keys]),
   budgetUsed: state.budgetUsed + 1,
 });
 
@@ -94,6 +99,23 @@ const refundBudget = (state: SchedulerState) => ({
 const rolledOver = (state: SchedulerState, day: number) =>
   state.budgetDay === day ? state : { ...state, budgetDay: day, budgetUsed: 0 };
 
+const liveKeys = (state: SchedulerState, candidates: ReadonlyArray<Candidate>) =>
+  new Set([...candidates.flatMap((candidate) => candidate.keys), ...state.inflight]);
+
+const atGeneration = (state: SchedulerState, generation: number, candidates: ReadonlyArray<Candidate>) => {
+  const carried = state.generation === generation ? state.acted : new Set<string>();
+  const live = liveKeys(state, candidates);
+  return { ...state, generation, acted: new Set([...carried].filter((key) => live.has(key))) };
+};
+
+export interface TickStamp {
+  readonly day: number;
+  readonly generation: number;
+}
+
+const refreshed = (state: SchedulerState, stamp: TickStamp, candidates: ReadonlyArray<Candidate>) =>
+  atGeneration(rolledOver(state, stamp.day), stamp.generation, candidates);
+
 export interface Plan {
   readonly state: SchedulerState;
   readonly picks: ReadonlyArray<Candidate>;
@@ -103,7 +125,7 @@ export const plan = (
   candidates: ReadonlyArray<Candidate>,
   state: SchedulerState,
   config: SchedulerConfig,
-  day: number,
+  stamp: TickStamp,
 ) =>
   [...candidates]
     .sort(byPriority)
@@ -112,7 +134,7 @@ export const plan = (
         fits(candidate, acc.state, config)
           ? { state: reserve(acc.state, candidate), picks: [...acc.picks, candidate] }
           : acc,
-      { state: rolledOver(state, day), picks: [] },
+      { state: refreshed(state, stamp, candidates), picks: [] },
     );
 
 const keysFor = (workspace: RegisteredWorkspace, work: EligibleWork) => {
@@ -164,7 +186,7 @@ export const make = (config: SchedulerConfig) =>
       const candidates = candidatesOf(registry, snapshot, config);
       const day = utcDay(yield* Clock.currentTimeMillis);
       const planned = yield* Ref.modify(stateRef, (state) => {
-        const next = plan(candidates, state, config, day);
+        const next = plan(candidates, state, config, { day, generation: snapshot.generation });
         return [next, next.state];
       });
       if (planned.picks.length > 0) {
@@ -174,6 +196,7 @@ export const make = (config: SchedulerConfig) =>
             item: c.work.id,
             stage: c.work.stage,
           })),
+          generation: snapshot.generation,
           inFlight: planned.state.global,
           budgetUsed: planned.state.budgetUsed,
         });
