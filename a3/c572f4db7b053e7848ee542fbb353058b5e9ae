@@ -1,0 +1,76 @@
+packages/engine/src/WorkSource.ts
+  s_016733297102d5::t_63488cb849de1c 19
+packages/engine/src/linear/adapter.ts
+  s_016733297102d5::t_79b2440d984b3e 127
+packages/engine/src/scheduler.test.ts
+  s_016733297102d5::t_294ec3bd79e5b5 310
+  s_016733297102d5::t_e04a3ecf722b2e 151
+  s_016733297102d5::t_172870866338b5 330
+  s_016733297102d5::t_648af8e12d0005 320
+packages/engine/src/github/client.ts
+  s_016733297102d5::t_9e1b2932b0ddbc 68,72,78
+  s_016733297102d5::t_03d4dd24a97751 148-155,160
+  s_016733297102d5::t_1d46bf686d08dc 31
+  s_016733297102d5::t_c3c252a2583fae 156-159
+  s_016733297102d5::t_71f85a3b973bd2 319
+  s_016733297102d5::t_0a20625fbd8d06 69-71
+packages/engine/src/classify.ts
+  s_016733297102d5::t_ce69f8f468ebc9 75
+  s_016733297102d5::t_a96c2a71157e34 22
+  s_016733297102d5::t_00dbc723d59507 102
+  s_016733297102d5::t_a013e799a760d4 101,103,107
+  s_016733297102d5::t_1183ed4230d846 34
+  s_016733297102d5::t_87c710845b09a1 3
+packages/engine/src/github/github-helpers.test.ts
+  s_016733297102d5::t_d415ebd791a68f 4
+  s_016733297102d5::t_98a26c73a0b559 62-82,84-87,90-92,94-98
+  s_016733297102d5::t_53de92b49d8667 83,88-89,93
+  s_016733297102d5::t_8d798b88b79339 2
+packages/contracts/src/daemon.ts
+  s_016733297102d5::t_c1ba756c70abc9 23-29
+  s_016733297102d5::t_b13b75de79b397 51
+packages/engine/src/classify.test.ts
+  s_016733297102d5::t_029d3d118b42f3 82-113,115-117,119-121,123-135
+  s_016733297102d5::t_c6161e085ca948 114,118,122
+  s_016733297102d5::t_6b1f1fd9c8a92d 18
+packages/engine/src/Reconcile.ts
+  s_016733297102d5::t_c62f1ac9f00de7 69
+  s_016733297102d5::t_e66c6e0fe23264 37
+  s_016733297102d5::t_125b2041906133 59
+  s_016733297102d5::t_79b426cca5445f 2
+packages/engine/src/engine.test.ts
+  s_016733297102d5::t_3e9ac2a59562d7 144
+  s_016733297102d5::t_58a67d2dd10747 175
+  s_016733297102d5::t_ce975e0720b1bb 277,292-314
+  s_016733297102d5::t_0421ee18b641cc 315-316
+packages/engine/src/Daemon.ts
+  s_016733297102d5::t_9d89f3bf95cd0d 83
+packages/engine/src/github/adapter.ts
+  s_016733297102d5::t_7b814b4e88c67b 251
+  s_016733297102d5::t_4abd8660837870 20
+  s_016733297102d5::t_9b0385d76e8d34 233
+packages/engine/src/github/github.test.ts
+  s_016733297102d5::t_67e57172ca4ac3 77-78,80-83
+  s_016733297102d5::t_4499f18744ad9a 223,234-235
+  s_016733297102d5::t_964f0b54245f05 104,109
+  s_016733297102d5::t_1409ed7972c72e 18
+  s_016733297102d5::t_b5ec1af7b42020 221-222,224-233,236-247
+  s_016733297102d5::t_52d12048c67bff 31
+  s_016733297102d5::t_05ad13098d52f2 79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "a3c572f4db7b053e7848ee542fbb353058b5e9ae",
+  "prompts": {},
+  "sessions": {
+    "s_016733297102d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a54b6c1f-64f2-4d82-8bd2-a8253fd9b61a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
