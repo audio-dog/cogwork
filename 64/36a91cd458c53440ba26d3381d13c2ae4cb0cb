@@ -1,0 +1,109 @@
+packages/engine/src/executor.test.ts
+  s_15436548364b96::t_ca133a5690deca 168
+packages/contracts/src/daemon.ts
+  s_15436548364b96::t_b25dc22b29c2c8 30-32,35-40
+apps/cli/src/status.ts
+  s_15436548364b96::t_7083abc92ad5cd 2-3,8-9
+  s_15436548364b96::t_6a17fa4f7aa956 1,10-20,22
+packages/engine/src/engine.test.ts
+  s_9cf02bd7c20d92::t_b5415882b3a1cc 358
+  s_15436548364b96::t_53e8c3b2d3c020 6,8
+  s_15436548364b96::t_c5c7195abfe04e 42
+  s_15436548364b96::t_3cbe1b4025415c 322-356
+  s_15436548364b96::t_93202be599d77b 318-321
+  s_15436548364b96::t_cd1337b3aa519b 287,296,298
+  s_15436548364b96::t_38211981ab05a3 233-237,241-286,288-295,297,299-317
+  s_9cf02bd7c20d92::t_70be17bdb1a8de 357
+  s_15436548364b96::t_b0046c0bc30ce9 5
+packages/engine/src/github/adapter.ts
+  s_15436548364b96::t_0c0e159a2f9cda 267
+packages/engine/CONTEXT.md
+  s_15436548364b96::t_eab4404efb2eb3 27
+  s_15436548364b96::t_64777cf9f575de 17,20-26
+packages/engine/src/scheduler.test.ts
+  s_15436548364b96::t_39620e027f69af 227
+packages/engine/src/linear/client.ts
+  s_15436548364b96::t_922ea3b1967f93 2,4,7,9-10,21-24,34-37,56-67,79,93,97-100,124-135,139,142-148,157-158,161-163,167-172,174-181,183,185-188,204-214,216-250,272-274,287-289,303-334,343-345,353-369,371-381,394-395,406,408,422-423,434,436,442
+  s_15436548364b96::t_1e1731098ce9f4 159-160
+  s_15436548364b96::t_f44f178d205681 215
+  s_15436548364b96::t_d72e7d5ae46d05 173
+packages/engine/src/linear/linear.test.ts
+  s_15436548364b96::t_715f70d9b98535 476-479
+  s_15436548364b96::t_80b4a88122af42 90-91,99-100
+  s_15436548364b96::t_e8d2c6185811b8 12,15
+  s_15436548364b96::t_d721425d7e6dd0 45
+  s_15436548364b96::t_85ae8a89b04f26 528-551
+  s_15436548364b96::t_d254902b9d0c15 88-89
+  s_15436548364b96::t_752663b186816a 92-98,101-102,104-106,108-117
+  s_15436548364b96::t_6e236cd57834f1 107
+packages/engine/src/Reconcile.ts
+  s_15436548364b96::t_61235dbbd2e775 86
+  s_15436548364b96::t_160e81ba5004f1 64-70,72,79-83,89-104,110-118,141-145,147-151,153-154,156-175,177-190,192
+  s_15436548364b96::t_c7dbd2772c611e 4,9,19
+  s_15436548364b96::t_0a55c63c569c6c 84-85,87-88
+  s_15436548364b96::t_bfb61926ae0b98 119-127,130-136
+  s_15436548364b96::t_1010856e5c26cf 194
+  s_15436548364b96::t_05a3c9564491bb 146,152,155
+  s_15436548364b96::t_9c76f1d7e76496 128-129,137-140
+apps/cli/src/status.test.ts
+  s_15436548364b96::t_728918cdb34606 96-100,105,109-125
+  s_4b312f7f76a9ba::t_3fa52bf9e17653 126-127
+packages/engine/src/linear/adapter.ts
+  s_15436548364b96::t_d99ddc2b9b02be 7
+  s_15436548364b96::t_bdbca38074ecf5 8-14,28
+  s_15436548364b96::t_af4c4d995012f2 119,121,135
+  s_15436548364b96::t_01859e19a39e62 53-55
+  s_15436548364b96::t_74a3a5de62991f 154-157
+packages/engine/src/linear/markers.ts
+  s_15436548364b96::t_239c058d553a54 68
+  s_15436548364b96::t_d886d079cf999a 171
+  s_15436548364b96::t_a316fea90e2e4e 155
+packages/engine/src/workSourceRouter.ts
+  s_15436548364b96::t_e16f0a48ac1b54 15
+packages/engine/src/WorkSource.ts
+  s_15436548364b96::t_b59855b24419e4 1
+  s_15436548364b96::t_98c87737886ab2 2-7,33,35,64
+packages/engine/src/linear/client.test.ts
+  s_15436548364b96::t_c59bb7b241295f 297
+  s_15436548364b96::t_59e6adfdd8467e 36,43-44
+  s_15436548364b96::t_d72eb8ac3035c9 50,53,55-57,60-61,64,68,76-78
+  s_15436548364b96::t_d6d42f238b1f57 150-152
+  s_15436548364b96::t_3509de71938be4 46,179,292
+  s_15436548364b96::t_fb75cfa113f6b6 2,4,7,14-35,37-42,45
+  s_15436548364b96::t_d8a73e0c672f5a 180-226,235-247
+  s_15436548364b96::t_0ea5457b4a924c 227-231,233-234
+  s_15436548364b96::t_8e0c382f42b0a6 232
+  s_15436548364b96::t_e8b17b0a39de6d 132,149,165,174,287,294,296,298,300-309,317,322-361,366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "6436a91cd458c53440ba26d3381d13c2ae4cb0cb",
+  "prompts": {},
+  "sessions": {
+    "s_15436548364b96": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a8131a99-75c2-4640-89e9-c18b8ea172d1",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    },
+    "s_4b312f7f76a9ba": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a8dd9c13-c0a6-4735-b341-1d91e842ffe8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9cf02bd7c20d92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3575e807-cf1b-4174-95e1-723b2d797c48",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
