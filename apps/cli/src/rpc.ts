@@ -1,6 +1,7 @@
 import { DaemonRpcs, HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
 import {
+  CredentialStore,
   Daemon,
   Executor,
   GitHub,
@@ -58,6 +59,7 @@ const registryLayer = (configHome: string) =>
 const workSourceLayer = workSourceRoutedLayer.pipe(
   Layer.provide(GitHub.clientLayer),
   Layer.provide(Linear.clientLayer),
+  Layer.provide(CredentialStore.layerEnv),
   Layer.provide(FetchHttpClient.layer),
 );
 

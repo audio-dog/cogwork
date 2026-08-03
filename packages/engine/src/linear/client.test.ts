@@ -1,8 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
-import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import { afterEach, vi } from "vitest";
+import { CredentialError, CredentialStore } from "../CredentialStore";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
 
 const ref: LinearTeamRef = { team: "AUD", tokenEnv: "LINEAR_API_KEY" };
@@ -33,8 +34,21 @@ const stubLinear = (route: (document: string) => StubResponse) => {
   return fetchStub;
 };
 
-const withToken = (env: Record<string, string> = { LINEAR_API_KEY: "test-key" }) =>
-  Effect.provide(Layer.mergeAll(clientLayer, ConfigProvider.layer(ConfigProvider.fromEnv({ env }))));
+const stubCredentials = (token: string | null) =>
+  Layer.succeed(CredentialStore, {
+    bearerToken: (account) =>
+      token === null
+        ? Effect.fail(
+            new CredentialError({
+              account: account.key,
+              message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
+            }),
+          )
+        : Effect.succeed(Redacted.make(token)),
+  });
+
+const withToken = (token: string | null = "test-key") =>
+  Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token))));
 
 const teamBundle = {
   id: "team-uuid",
@@ -155,7 +169,7 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("reports a missing token as reason auth without calling Linear", () =>
+  it.effect("reports an unresolvable credential as reason auth without calling Linear", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: {} }));
       const client = yield* LinearClient;
@@ -163,7 +177,7 @@ describe("linear client", () => {
       assert.strictEqual(error.reason, "auth");
       assert.include(error.message, "LINEAR_API_KEY");
       assert.strictEqual(fetchStub.mock.calls.length, 0);
-    }).pipe(withToken({})),
+    }).pipe(withToken(null)),
   );
 
   it.effect("fails when a mutation reports no success", () =>
