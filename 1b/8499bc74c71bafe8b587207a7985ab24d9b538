@@ -1,0 +1,63 @@
+CONTEXT-MAP.md
+  s_382875b49b3763::t_9e7166c8ccee52 30
+apps/cli/config/feldspar.workspace.ts
+  s_382875b49b3763::t_2a561b31330b62 1-27
+apps/cli/src/ledger.test.ts
+  s_382875b49b3763::t_7bc8de176f11c8 1,12,41-59,171-186
+apps/cli/src/ledger.ts
+  s_382875b49b3763::t_8612f63f562d93 138-141,152
+packages/contracts/CONTEXT.md
+  s_382875b49b3763::t_84bf64dbee1db9 33-36,38-39,51-56,79-82,103-104
+packages/contracts/src/run.ts
+  s_382875b49b3763::t_17a6b9b4d1ccb1 18
+packages/engine/CONTEXT.md
+  s_382875b49b3763::t_c80039faed1f00 21
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_382875b49b3763::t_d0c7f63f566b8b 17,81,85
+packages/engine/skills/implement-agent/SKILL.md
+  s_382875b49b3763::t_35fabb6ec37924 18,114,118
+packages/engine/src/Executor.ts
+  s_382875b49b3763::t_6c4e5fb1241d0b 11-12,48,69,126-127,192,200,206,214,216,222,224,231-232,286,292,336,346,386-387,426,430,490,498,504-505,523
+packages/engine/src/Playbook.ts
+  s_382875b49b3763::t_9a3e08b15ea083 176,178,183-184,195,197,202-203
+packages/engine/src/Scheduler.ts
+  s_382875b49b3763::t_4c5e5d192580dd 11,15,191,201,213,220,228
+packages/engine/src/classify.test.ts
+  s_382875b49b3763::t_b6c6d930c71fff 164,181,194
+packages/engine/src/classify.ts
+  s_382875b49b3763::t_5a67103d23cb97 50
+packages/engine/src/comments.test.ts
+  s_382875b49b3763::t_71409d3c098e4f 5,30-31,52,57,59,82-83,85,89,97
+packages/engine/src/comments.ts
+  s_382875b49b3763::t_d1096d2bb50424 13-14,51,53,57-59,61,64,66
+packages/engine/src/executor.test.ts
+  s_382875b49b3763::t_a33d55bd0ef864 74,79,121,346,366,371,412,429,511,530,535,538,556,636,641,643,647
+packages/engine/src/followUp.test.ts
+  s_382875b49b3763::t_50a01ce4fb1fd1 87,97
+packages/engine/src/followUp.ts
+  s_382875b49b3763::t_4cc1a94d53571e 26,54
+packages/engine/src/playbook.test.ts
+  s_382875b49b3763::t_bedefc087e81a5 122,127,129
+packages/engine/src/scheduler.test.ts
+  s_382875b49b3763::t_12ee62bf18ff10 358,379
+packages/sync/skills/sync/follow-up-agent/SKILL.md
+  s_382875b49b3763::t_4396ac6c550535 17,81,85
+packages/sync/skills/sync/implement-agent/SKILL.md
+  s_382875b49b3763::t_329715dc9458a5 18,114,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "1b8499bc74c71bafe8b587207a7985ab24d9b538",
+  "prompts": {},
+  "sessions": {
+    "s_382875b49b3763": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4eed2cbf-39db-4c51-b363-9f35dfe1e667",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
