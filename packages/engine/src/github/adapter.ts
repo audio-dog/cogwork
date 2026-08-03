@@ -262,6 +262,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
   });
 
   return {
+    rateLimitScope: () => null,
     observe: (workspace) =>
       Effect.gen(function* () {
         const target = targetFor(workspace);
