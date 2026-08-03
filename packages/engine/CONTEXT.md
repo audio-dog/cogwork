@@ -22,8 +22,12 @@ The partition of a work source's observed items into eligible, claimed, blocked,
 _Avoid_: Filtering, triage (triage is a stage, not this)
 
 **Scheduler**:
-The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. In-flight counts and budgets live here and nowhere else.
+The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. In-flight counts and budgets live here and nowhere else. It acts on a given work item at most once per snapshot generation: a completed item is not re-picked until a newer snapshot re-confirms it is eligible, which is what stops a fast execute tick from re-running work that a slow reconcile has not yet caught up on (see ADR 0001).
 _Avoid_: Queue, dispatcher, runner
+
+**Snapshot generation**:
+The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the work source from the next, so it can act on each work item at most once per observation.
+_Avoid_: Version, revision, epoch
 
 **Candidate**:
 A schedulable pairing of a registered workspace with one eligible work item, plus the reservation keys that keep it from being picked twice.
