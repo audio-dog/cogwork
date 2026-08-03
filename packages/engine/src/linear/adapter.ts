@@ -43,7 +43,10 @@ const isBotComment = (comment: RawComment, { botUserId }: LinearTarget) =>
   Boolean(botUserId) && comment.authorId === botUserId;
 
 const botLedger = (comments: ReadonlyArray<RawComment>, target: LinearTarget) =>
-  comments.find((comment) => isBotComment(comment, target) && hasLedgerMarker(comment.body));
+  comments
+    .filter((comment) => isBotComment(comment, target) && hasLedgerMarker(comment.body))
+    .toSorted((left, right) => left.createdAtMillis - right.createdAtMillis)
+    .at(0);
 
 const nextDetail = (update: CoordinationUpdate, previous: string) => {
   if (!Object.hasOwn(update, "detail")) return coordinationDetail(previous);
