@@ -1,0 +1,26 @@
+packages/contracts/CONTEXT.md
+  s_4b312f7f76a9ba::t_6376550a9fc607 83-86
+packages/engine/docs/adr/0002-restart-recovery-resumes-sessions.md
+  s_4b312f7f76a9ba::t_92f596c25f0dd0 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "87e23852afeb49c4da8f619f271830b63cb50649",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_4b312f7f76a9ba": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a8dd9c13-c0a6-4735-b341-1d91e842ffe8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
