@@ -3,10 +3,10 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { afterEach, vi } from "vitest";
-import { CredentialError, CredentialStore } from "../CredentialStore";
+import { CredentialError, type CredentialSource, CredentialStore } from "../CredentialStore";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
 
-const ref: LinearTeamRef = { team: "AUD", tokenEnv: "LINEAR_API_KEY" };
+const ref: LinearTeamRef = { team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null };
 
 interface StubResponse {
   readonly status?: number;
@@ -34,7 +34,12 @@ const stubLinear = (route: (document: string) => StubResponse) => {
   return fetchStub;
 };
 
-const stubCredentials = (token: string | null) =>
+const authorizationOf = (fetchStub: { readonly mock: { readonly calls: ReadonlyArray<unknown> } }) => {
+  const [, init] = (fetchStub.mock.calls[0] ?? []) as [unknown, RequestInit | undefined];
+  return new Headers(init?.headers).get("authorization");
+};
+
+const stubCredentials = (token: string | null, source: CredentialSource = "env") =>
   Layer.succeed(CredentialStore, {
     bearerToken: (account) =>
       token === null
@@ -44,11 +49,12 @@ const stubCredentials = (token: string | null) =>
               message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
             }),
           )
-        : Effect.succeed(Redacted.make(token)),
+        : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
+    persist: () => Effect.void,
   });
 
-const withToken = (token: string | null = "test-key") =>
-  Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token))));
+const withToken = (token: string | null = "test-key", source: CredentialSource = "env") =>
+  Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source))));
 
 const teamBundle = {
   id: "team-uuid",
@@ -105,6 +111,24 @@ describe("linear client", () => {
       );
       assert.strictEqual(fetchStub.mock.calls.length, 1);
     }).pipe(withToken()),
+  );
+
+  it.effect("sends an API key as the bare Authorization value", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.listIssues(ref);
+      assert.strictEqual(authorizationOf(fetchStub), "test-key");
+    }).pipe(withToken("test-key", "env")),
+  );
+
+  it.effect("sends a stored OAuth token as a Bearer credential", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.listIssues(ref);
+      assert.strictEqual(authorizationOf(fetchStub), "Bearer oauth-token");
+    }).pipe(withToken("oauth-token", "stored-oauth")),
   );
 
   it.effect("skips comments Linear reports without an author", () =>

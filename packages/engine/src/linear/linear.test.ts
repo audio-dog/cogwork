@@ -243,7 +243,7 @@ describe("linear work source adapter", () => {
       yield* source.claim(workspace, id("AUD-7"), claim);
       yield* source.recordAttempt(workspace, id("AUD-7"), attempt);
       const comments = botComments(
-        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY" }, "AUD-7"),
+        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null }, "AUD-7"),
       );
       assert.strictEqual(comments.length, 1);
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
@@ -276,7 +276,7 @@ describe("linear work source adapter", () => {
         "git worktree add: boom",
       );
       const comments = botComments(
-        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY" }, "AUD-8"),
+        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null }, "AUD-8"),
       );
       assert.include(comments[0]?.body ?? "", "Last implement attempt failed: git worktree add: boom");
     }).pipe(
@@ -349,7 +349,11 @@ describe("linear work source adapter", () => {
         remove: ["needs-triage"],
         add: ["wontfix"],
       });
-      const issues = yield* client.listIssues({ team: "AUD", tokenEnv: "LINEAR_API_KEY" });
+      const issues = yield* client.listIssues({
+        team: "AUD",
+        tokenEnv: "LINEAR_API_KEY",
+        organization: null,
+      });
       const issue = issues.find((entry) => entry.identifier === "AUD-9");
       assert.isFalse(issue?.labels.includes("state:needs-triage") ?? true);
       assert.isTrue(issue?.labels.includes("state:wontfix") ?? false);
