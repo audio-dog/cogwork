@@ -347,7 +347,7 @@ describe("linear work source adapter", () => {
         stage: "triage",
       });
       const comments = botComments(
-        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY" }, "AUD-11"),
+        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null }, "AUD-11"),
       );
       const [proposal, coordination] = comments;
       assert.strictEqual(comments.length, 2);
