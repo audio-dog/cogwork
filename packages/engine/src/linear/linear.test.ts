@@ -170,7 +170,7 @@ describe("linear work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const items = yield* source.observe(workspace);
-      const { eligible, blocked, claimed } = classify(items);
+      const { eligible, needsHuman, claimed } = classify(items);
       assert.deepStrictEqual(
         eligible.map((entry) => [entry.id, entry.stage]),
         [
@@ -179,7 +179,7 @@ describe("linear work source adapter", () => {
         ],
       );
       assert.deepStrictEqual(
-        blocked.map((entry) => entry.id),
+        needsHuman.map((entry) => entry.id),
         ["AUD-3", "AUD-6"],
       );
       assert.strictEqual(claimed.length, 0);
@@ -193,7 +193,7 @@ describe("linear work source adapter", () => {
           issues: [
             { identifier: "AUD-1", title: "implement me", labels: ["state:ready-for-agent"] },
             { identifier: "AUD-2", title: "triage me", labels: ["state:needs-triage"] },
-            { identifier: "AUD-3", title: "blocked", labels: ["state:needs-info"] },
+            { identifier: "AUD-3", title: "needs a human", labels: ["state:needs-info"] },
             { identifier: "AUD-6", title: "human", labels: ["state:ready-for-human"] },
             {
               identifier: "AUD-4",
@@ -367,16 +367,16 @@ describe("linear work source adapter", () => {
     ),
   );
 
-  it.effect("counts prior attempts and blocks past the cap even without the claim label", () =>
+  it.effect("counts prior attempts and escalates past the cap even without the claim label", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const items = yield* source.observe(workspace);
       const observed = items.find((item) => item.id === "AUD-10");
       assert.strictEqual(observed?.attempts.length, 3);
-      const { eligible, blocked } = classify(items);
+      const { eligible, needsHuman } = classify(items);
       assert.strictEqual(eligible.length, 0);
       assert.include(
-        blocked.map((entry) => entry.id),
+        needsHuman.map((entry) => entry.id),
         id("AUD-10"),
       );
     }).pipe(

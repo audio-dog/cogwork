@@ -1,4 +1,10 @@
-import type { BlockedItem, ClaimedItem, PollState, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import type {
+  ClaimedItem,
+  NeedsHumanItem,
+  PollState,
+  WorkItemId,
+  WorkspaceId,
+} from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -27,7 +33,7 @@ export interface WorkspaceReconcileState {
   readonly poll: PollState;
   readonly eligible: ReadonlyArray<EligibleWork>;
   readonly claimed: ReadonlyArray<ClaimedItem>;
-  readonly blocked: ReadonlyArray<BlockedItem>;
+  readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
   readonly observed: ReadonlyArray<ObservedRef>;
 }
 
@@ -48,7 +54,7 @@ const okState = (
   poll: { status: "ok" },
   eligible: classified.eligible,
   claimed: classified.claimed,
-  blocked: classified.blocked,
+  needsHuman: classified.needsHuman,
   observed: observed.map((item) => ({ id: item.id, title: item.title })),
 });
 
@@ -57,7 +63,7 @@ const pausedState = (workspace: RegisteredWorkspace, message: string): Workspace
   poll: { status: "paused", message },
   eligible: [],
   claimed: [],
-  blocked: [],
+  needsHuman: [],
   observed: [],
 });
 

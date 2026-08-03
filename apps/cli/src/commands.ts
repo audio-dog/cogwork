@@ -1,12 +1,4 @@
-import {
-  DaemonRpcs,
-  type DaemonStatus,
-  type RunEvent,
-  RunId,
-  type RunSummary,
-  type SchedulerStats,
-  type WorkspaceInfo,
-} from "@clanker-forge/contracts";
+import { DaemonRpcs, type RunEvent, RunId, type RunSummary } from "@clanker-forge/contracts";
 import { Daemon, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -18,6 +10,7 @@ import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { defaultConfigHome, defaultCredentialsPath, defaultLedgerPath, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
+import { formatStatus } from "./status";
 import { flushWatch, initialWatchState, stepWatch } from "./watch";
 
 const socketFlag = Flag.string("socket").pipe(
@@ -87,54 +80,6 @@ const runDaemon = Effect.fn("commands.runDaemon")(
   },
   (effect, options) => effect.pipe(Effect.provide(serverLayer(options))),
 );
-
-const section = (label: string, lines: ReadonlyArray<string>) =>
-  lines.length === 0 ? [] : [`      ${label}:`, ...lines.map((line) => `        · ${line}`)];
-
-const formatWorkspace = (w: WorkspaceInfo) => {
-  const poll = w.poll.status === "paused" ? [`      paused: ${w.poll.message}`] : [];
-  const eligible = section(
-    "eligible",
-    w.eligible.map((item) => `${item.stage} ${item.id} ${item.title}`),
-  );
-  const claimed = section(
-    "claimed",
-    w.claimed.map((item) => `${item.id} ${item.title} (by ${item.claim.by})`),
-  );
-  const blocked = section(
-    "blocked",
-    w.blocked.map((item) => `${item.reason} ${item.id} ${item.title}`),
-  );
-  return [
-    `  - ${w.name} [${w.workSource}/${w.harness}] ${w.checkoutPath}`,
-    ...poll,
-    ...eligible,
-    ...claimed,
-    ...blocked,
-  ].join("\n");
-};
-
-const formatScheduler = (s: SchedulerStats) => {
-  const loads = s.perWorkspace.map((w) => `${w.name}=${w.inFlight}`).join(" ");
-  const suffix = loads.length === 0 ? "" : ` (${loads})`;
-  return `scheduler: ${s.globalInFlight}/${s.globalLimit} in-flight · budget ${s.dailyBudgetUsed}/${s.dailyBudgetLimit}${suffix}`;
-};
-
-const formatStatus = (status: DaemonStatus) => {
-  const header = `daemon: ${status.health} (uptime ${Math.round(status.uptimeMillis / 1000)}s)`;
-  const workspaces =
-    status.workspaces.length === 0
-      ? "  (no workspaces registered)"
-      : status.workspaces.map(formatWorkspace).join("\n");
-  const failures = status.failures.map((f) => `  ! ${f.source}: ${f.message}`).join("\n");
-  return [
-    header,
-    formatScheduler(status.scheduler),
-    "workspaces:",
-    workspaces,
-    ...(status.failures.length > 0 ? ["failures:", failures] : []),
-  ].join("\n");
-};
 
 const formatRun = (run: RunSummary) => {
   const session = run.session ? `  session=${run.session}` : "";
