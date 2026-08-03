@@ -171,11 +171,11 @@ const make = (client: LinearClientService): WorkSourceService => {
         const target = yield* requireTarget(workspace);
         yield* client.removeLabel(target, id, claimLabel);
       }),
-    recordAttempt: (workspace, id, attempt) =>
+    recordAttempt: (workspace, id, attempt, reason) =>
       Effect.gen(function* () {
         const target = yield* requireTarget(workspace);
         yield* upsertCoordination(target, id, {
-          status: attemptStatus(attempt),
+          status: attemptStatus(attempt, reason),
           marker: serializeAttempt(attempt),
         });
       }),
