@@ -17,6 +17,7 @@ const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   poll: { status: "ok" },
   eligible: [],
   claimed: [],
+  blocked: [],
   needsHuman: [],
   ...over,
 });
@@ -54,6 +55,28 @@ describe("formatStatus", () => {
     assert.include(output, "      needs-human:");
     assert.include(output, "        · needs-info #3 waiting on details");
     assert.include(output, "        · ready-for-human #9 keeps failing");
+  });
+
+  it("renders a blocked section with each item's open-blocker count", () => {
+    const output = formatStatus(
+      status({
+        workspaces: [
+          workspace({
+            blocked: [
+              { id: workItemId("#4"), title: "waiting on one", openBlockers: 1 },
+              { id: workItemId("#5"), title: "waiting on two", openBlockers: 2 },
+            ],
+          }),
+        ],
+      }),
+    );
+    assert.include(output, "      blocked:");
+    assert.include(output, "        · #4 waiting on one (1 open blocker)");
+    assert.include(output, "        · #5 waiting on two (2 open blockers)");
+  });
+
+  it("omits the blocked section when nothing has an open blocker", () => {
+    assert.notInclude(formatStatus(status()), "      blocked:");
   });
 
   it("omits the needs-human section when nothing is waiting on a human", () => {

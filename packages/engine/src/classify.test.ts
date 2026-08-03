@@ -15,6 +15,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   claim: over.claim ?? null,
   attempts: over.attempts ?? [],
   pr: over.pr ?? null,
+  openBlockers: over.openBlockers ?? 0,
 });
 
 const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"] => ({
@@ -76,6 +77,60 @@ describe("classify", () => {
       item({ id: "1", roles: ["wontfix", "ready-for-agent"] }),
     ]);
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
+  });
+
+  it("holds a ready-for-agent item with an open blocker out of eligible and reports its blocker count", () => {
+    const { eligible, blocked, needsHuman } = classify([
+      item({ id: "1", roles: ["ready-for-agent"], openBlockers: 2 }),
+    ]);
+    assert.strictEqual(eligible.length, 0);
+    assert.strictEqual(needsHuman.length, 0);
+    assert.deepStrictEqual(blocked, [{ id: id("1"), title: "item 1", openBlockers: 2 }]);
+  });
+
+  it("makes the same item eligible once its last blocker closes, with no role change", () => {
+    const roles = ["ready-for-agent"] as const;
+    const held = classify([item({ id: "1", roles, openBlockers: 1 })]);
+    const freed = classify([item({ id: "1", roles, openBlockers: 0 })]);
+    assert.strictEqual(held.blocked.length, 1);
+    assert.strictEqual(freed.blocked.length, 0);
+    assert.strictEqual(freed.eligible[0]?.stage, "implement");
+  });
+
+  it("reports an open blocker as blocked even once the stage has exhausted the failed-attempt cap", () => {
+    const attempt = { stage: "implement" as const, outcome: "failed" as const, atMillis: 1 };
+    const { blocked, needsHuman } = classify([
+      item({
+        id: "1",
+        roles: ["ready-for-agent"],
+        openBlockers: 1,
+        attempts: [attempt, attempt, attempt],
+      }),
+    ]);
+    assert.strictEqual(needsHuman.length, 0);
+    assert.strictEqual(blocked[0]?.openBlockers, 1);
+  });
+
+  it("lets an open blocker hold implement without holding triage, follow-up, or verify", () => {
+    const { eligible, blocked } = classify([
+      item({ id: "1", roles: ["needs-triage"], openBlockers: 1 }),
+      item({ id: "2", roles: ["ready-for-agent"], openBlockers: 1, pr: pr("changes-requested") }),
+      item({ id: "3", roles: ["ready-for-agent"], openBlockers: 1, pr: pr("ready") }),
+    ]);
+    assert.deepStrictEqual(
+      eligible.map((entry) => entry.stage),
+      ["follow-up", "triage", "verify"],
+    );
+    assert.strictEqual(blocked.length, 0);
+  });
+
+  it("keeps a claimed item claimed even while a blocker is open", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1000, stage: "implement" };
+    const { blocked, claimed } = classify([
+      item({ id: "1", roles: ["ready-for-agent"], claim, openBlockers: 1 }),
+    ]);
+    assert.strictEqual(blocked.length, 0);
+    assert.deepStrictEqual(claimed[0]?.claim, claim);
   });
 
   it("reports needs-info and ready-for-human as needs-human with their reason", () => {

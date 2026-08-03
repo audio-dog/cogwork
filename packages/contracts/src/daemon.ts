@@ -20,6 +20,13 @@ export const ClaimedItem = Schema.Struct({
 });
 export type ClaimedItem = typeof ClaimedItem.Type;
 
+export const BlockedItem = Schema.Struct({
+  id: WorkItemId,
+  title: TrimmedNonEmptyString,
+  openBlockers: Schema.Natural,
+});
+export type BlockedItem = typeof BlockedItem.Type;
+
 export const NeedsHumanItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
@@ -41,6 +48,7 @@ export const WorkspaceInfo = Schema.Struct({
   poll: PollState,
   eligible: Schema.Array(ActionableItem),
   claimed: Schema.Array(ClaimedItem),
+  blocked: Schema.Array(BlockedItem),
   needsHuman: Schema.Array(NeedsHumanItem),
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;

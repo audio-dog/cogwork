@@ -125,6 +125,7 @@ const make = (client: LinearClientService): WorkSourceService => {
         claim: claimLabeled ? parseClaim(coordination) : null,
         attempts: parseAttempts(coordination),
         pr: null,
+        openBlockers: 0,
       };
     });
 
