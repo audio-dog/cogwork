@@ -4,12 +4,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { CredentialStore, type CredentialStoreService } from "../CredentialStore";
+import { type Credential, CredentialStore, type CredentialStoreService } from "../CredentialStore";
 import { WorkSourceError } from "../WorkSource";
 
 export interface LinearTeamRef {
   readonly team: string;
   readonly tokenEnv: string;
+  readonly organization: string | null;
 }
 
 export interface RawIssue {
@@ -209,13 +210,25 @@ const packTeam = (team: TeamBundle) => ({
 const requireSuccess = (operation: string, payload: { readonly success: boolean }) =>
   payload.success ? Effect.void : Effect.fail(unavailable(`Linear ${operation} failed`));
 
+// A Linear API key authenticates as itself; an OAuth token is a bearer credential and has to reach
+// the SDK as `accessToken` or it is sent without the `Bearer` prefix.
+const sdkAuth = (credential: Credential) =>
+  credential.source === "stored-oauth"
+    ? { accessToken: Redacted.value(credential.token) }
+    : { apiKey: Redacted.value(credential.token) };
+
 const make = (credentials: CredentialStoreService) => {
   const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
-    const token = yield* Effect.mapError(
-      credentials.bearerToken({ key: ref.team, tokenEnv: ref.tokenEnv }),
+    const credential = yield* Effect.mapError(
+      credentials.bearerToken({
+        key: ref.team,
+        workSource: "linear",
+        organization: ref.organization,
+        tokenEnv: ref.tokenEnv,
+      }),
       (error) => new WorkSourceError({ reason: "auth", message: error.message }),
     );
-    return new LinearSdk({ apiKey: Redacted.value(token) });
+    return new LinearSdk(sdkAuth(credential));
   });
 
   const call = <A>(ref: LinearTeamRef, run: (sdk: LinearSdk) => PromiseLike<A>) =>

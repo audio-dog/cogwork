@@ -1,7 +1,6 @@
 import { DaemonRpcs, HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
 import {
-  CredentialStore,
   Daemon,
   Executor,
   GitHub,
@@ -23,6 +22,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import { layer as credentialsLayer } from "./credentials";
 import { layer as ledgerLayer } from "./ledger";
 import { loadFromDisk } from "./loader";
 import { worktreeManagerLayer } from "./platform";
@@ -31,6 +31,7 @@ export interface DaemonOptions {
   readonly socketPath: string;
   readonly configHome: string;
   readonly ledgerPath: string;
+  readonly credentialsPath: string;
   readonly maxConcurrency: number;
   readonly dailyBudget: number;
   readonly pollIntervalMillis: number;
@@ -56,12 +57,13 @@ const socketServerLayer = (socketPath: string) =>
 const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
-const workSourceLayer = workSourceRoutedLayer.pipe(
-  Layer.provide(GitHub.clientLayer),
-  Layer.provide(Linear.clientLayer),
-  Layer.provide(CredentialStore.layerEnv),
-  Layer.provide(FetchHttpClient.layer),
-);
+const workSourceLayer = (credentialsPath: string) =>
+  workSourceRoutedLayer.pipe(
+    Layer.provide(GitHub.clientLayer),
+    Layer.provide(Linear.clientLayer),
+    Layer.provide(credentialsLayer(credentialsPath)),
+    Layer.provide(FetchHttpClient.layer),
+  );
 
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
 const harnessLayer = Harness.layer([cursorRunner({ name: cursorName })]);
@@ -70,7 +72,7 @@ const sharedLayer = (options: DaemonOptions) => {
   const base = Layer.mergeAll(
     registryLayer(options.configHome),
     Daemon.daemonInfoLayer,
-    workSourceLayer,
+    workSourceLayer(options.credentialsPath),
     ledgerLayer(options.ledgerPath),
     harnessLayer,
     RunEventBus.layer,
