@@ -1,0 +1,38 @@
+packages/engine/src/linear/adapter.ts
+  s_070aeabd7e4a59::t_f50194dc331b6b 117,124-125
+packages/engine/src/linear/linear.test.ts
+  s_070aeabd7e4a59::t_a3d4cffd1d22e8 18-24
+  s_070aeabd7e4a59::t_78e75229bbad55 336-342,344-348,352-359
+  s_070aeabd7e4a59::t_ce86c87519561b 329-335,343,349-351,360-415
+  s_070aeabd7e4a59::t_b5c7c360ad4d75 475-488
+packages/engine/src/linear/markers.ts
+  s_070aeabd7e4a59::t_98a893dcefdd1f 153
+  s_070aeabd7e4a59::t_d7b10688521050 168
+  s_070aeabd7e4a59::t_249d10fabad2b5 76
+  s_070aeabd7e4a59::t_70e3f4cb0acaf3 114,116,121-122
+  s_070aeabd7e4a59::t_07ed9b8aec7046 72
+  s_070aeabd7e4a59::t_8207f56c80ca90 99-100
+  s_070aeabd7e4a59::t_dc34cf6ed2800e 77
+packages/engine/src/linear/markers.test.ts
+  s_070aeabd7e4a59::t_b62b6ef95ca166 56
+  s_070aeabd7e4a59::t_eade9e257011a1 71-72,76-84,86-92
+  s_070aeabd7e4a59::t_7e8c7515a683c2 98,100
+  s_070aeabd7e4a59::t_478cab1489166c 85,93-97,99
+  s_070aeabd7e4a59::t_60cb35553e0abc 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "b6cc6bc8b5f4e2f29aa75956ad2fdf816e3bc950",
+  "prompts": {},
+  "sessions": {
+    "s_070aeabd7e4a59": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b408336c-3225-45e9-93ff-645b9aec77db",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
