@@ -49,6 +49,10 @@ _Avoid_: Workflow, pipeline
 A concrete implementation of the work source port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by `workSource.type` via `workSourceRoutedLayer`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear returns `pr: null` (PR follow-up stays GitHub's problem for now).
 _Avoid_: Client (the HTTP/GraphQL client is a lower-level detail), plugin
 
+**Credential store**:
+The seam every work-source credential is resolved through: given an account (the work source's logical identity plus the env var naming its legacy API key), it hands back a bearer token and logs which source that token came from. One env-var-backed layer implements it today; browser-login and client-credentials sources arrive behind the same seam later, as does a keychain- or database-backed layer.
+_Avoid_: Secret manager, token cache (nothing is cached yet), auth provider
+
 **Coordination markers**:
 Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the work source. GitHub embeds them as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments).
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.

@@ -1,10 +1,10 @@
 import { LinearError, LinearClient as LinearSdk, RatelimitedLinearError } from "@linear/sdk";
-import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import { CredentialStore, type CredentialStoreService } from "../CredentialStore";
 import { WorkSourceError } from "../WorkSource";
 
 export interface LinearTeamRef {
@@ -206,108 +206,110 @@ const packTeam = (team: TeamBundle) => ({
   labels: team.labels.nodes,
 });
 
-const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
-  const token = yield* Effect.mapError(
-    Config.redacted(ref.tokenEnv),
-    () => new WorkSourceError({ reason: "auth", message: `missing Linear token in ${ref.tokenEnv}` }),
-  );
-  return new LinearSdk({ apiKey: Redacted.value(token) });
-});
-
-const call = <A>(ref: LinearTeamRef, run: (sdk: LinearSdk) => PromiseLike<A>) =>
-  Effect.flatMap(sdkFor(ref), (sdk) => attempt(() => run(sdk)));
-
-// The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
-// only stays inside Linear's rate limit while these reads stay single documents.
-const rawData = Effect.fn("linear.rawRequest")(function* (
-  ref: LinearTeamRef,
-  document: string,
-  variables: Record<string, unknown>,
-) {
-  const response = yield* call(ref, (sdk) =>
-    sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables),
-  );
-  if (response.data === undefined) {
-    return yield* unavailable("Linear response missing data");
-  }
-  return response.data;
-});
-
-const teamById = Effect.fn("linear.teamById")(function* (ref: LinearTeamRef) {
-  const data = yield* rawData(ref, teamByIdQuery, { id: ref.team });
-  const payload = yield* Effect.mapError(decodeTeam(data), toUnavailable);
-  return payload.team;
-});
-
-const teamByKey = Effect.fn("linear.teamByKey")(function* (ref: LinearTeamRef) {
-  const data = yield* rawData(ref, teamsByKeyQuery, { key: ref.team });
-  const payload = yield* Effect.mapError(decodeTeams(data), toUnavailable);
-  return payload.teams.nodes[0] ?? null;
-});
-
-const lookupTeam = (ref: LinearTeamRef) => (teamIdPattern.test(ref.team) ? teamById(ref) : teamByKey(ref));
-
-const loadTeam = Effect.fn("linear.loadTeam")(function* (ref: LinearTeamRef) {
-  const team = yield* lookupTeam(ref);
-  if (!team) {
-    return yield* unavailable(`Linear team not found: ${ref.team}`);
-  }
-  return packTeam(team);
-});
-
 const requireSuccess = (operation: string, payload: { readonly success: boolean }) =>
   payload.success ? Effect.void : Effect.fail(unavailable(`Linear ${operation} failed`));
 
-const mutate = Effect.fn("linear.mutate")(function* (
-  ref: LinearTeamRef,
-  operation: string,
-  run: (sdk: LinearSdk) => PromiseLike<{ readonly success: boolean }>,
-) {
-  const payload = yield* call(ref, run);
-  yield* requireSuccess(operation, payload);
-});
+const make = (credentials: CredentialStoreService) => {
+  const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
+    const token = yield* Effect.mapError(
+      credentials.bearerToken({ key: ref.team, tokenEnv: ref.tokenEnv }),
+      (error) => new WorkSourceError({ reason: "auth", message: error.message }),
+    );
+    return new LinearSdk({ apiKey: Redacted.value(token) });
+  });
 
-const ensureLabel = Effect.fn("linear.ensureLabel")(function* (ref: LinearTeamRef, name: string) {
-  const team = yield* loadTeam(ref);
-  const existing = team.labels.find((label) => label.name === name);
-  if (existing) return existing.id;
-  const payload = yield* call(ref, (sdk) => sdk.createIssueLabel({ teamId: team.id, name }));
-  yield* requireSuccess("issueLabelCreate", payload);
-  if (!payload.issueLabelId) {
-    return yield* unavailable(`Linear issueLabelCreate returned no label for ${name}`);
-  }
-  return payload.issueLabelId;
-});
+  const call = <A>(ref: LinearTeamRef, run: (sdk: LinearSdk) => PromiseLike<A>) =>
+    Effect.flatMap(sdkFor(ref), (sdk) => attempt(() => run(sdk)));
 
-const make = () => ({
-  listIssues: (ref: LinearTeamRef) => Effect.map(loadTeam(ref), (team) => team.issues),
-  listWorkflowStates: (ref: LinearTeamRef) =>
-    Effect.map(loadTeam(ref), (team): ReadonlyArray<RawWorkflowState> => team.states),
-  listComments: (ref: LinearTeamRef, issueId: string) =>
-    Effect.gen(function* () {
-      const data = yield* rawData(ref, commentsQuery, { id: issueId });
-      const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
-      return (payload.issue?.comments.nodes ?? []).flatMap(toRawComment);
-    }),
-  addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
-    Effect.gen(function* () {
-      const labelId = yield* ensureLabel(ref, label);
-      yield* mutate(ref, "issueAddLabel", (sdk) => sdk.issueAddLabel(issueId, labelId));
-    }),
-  removeLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
-    Effect.gen(function* () {
-      const team = yield* loadTeam(ref);
-      const found = team.labels.find((entry) => entry.name === label);
-      if (!found) return;
-      yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, found.id));
-    }),
-  setState: (ref: LinearTeamRef, issueId: string, stateId: string) =>
-    mutate(ref, "issueUpdate", (sdk) => sdk.updateIssue(issueId, { stateId })),
-  createComment: (ref: LinearTeamRef, issueId: string, body: string) =>
-    mutate(ref, "commentCreate", (sdk) => sdk.createComment({ issueId, body })),
-  editComment: (ref: LinearTeamRef, commentId: string, body: string) =>
-    mutate(ref, "commentUpdate", (sdk) => sdk.updateComment(commentId, { body })),
-});
+  // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
+  // only stays inside Linear's rate limit while these reads stay single documents.
+  const rawData = Effect.fn("linear.rawRequest")(function* (
+    ref: LinearTeamRef,
+    document: string,
+    variables: Record<string, unknown>,
+  ) {
+    const response = yield* call(ref, (sdk) =>
+      sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables),
+    );
+    if (response.data === undefined) {
+      return yield* unavailable("Linear response missing data");
+    }
+    return response.data;
+  });
+
+  const teamById = Effect.fn("linear.teamById")(function* (ref: LinearTeamRef) {
+    const data = yield* rawData(ref, teamByIdQuery, { id: ref.team });
+    const payload = yield* Effect.mapError(decodeTeam(data), toUnavailable);
+    return payload.team;
+  });
+
+  const teamByKey = Effect.fn("linear.teamByKey")(function* (ref: LinearTeamRef) {
+    const data = yield* rawData(ref, teamsByKeyQuery, { key: ref.team });
+    const payload = yield* Effect.mapError(decodeTeams(data), toUnavailable);
+    return payload.teams.nodes[0] ?? null;
+  });
+
+  const lookupTeam = (ref: LinearTeamRef) => (teamIdPattern.test(ref.team) ? teamById(ref) : teamByKey(ref));
+
+  const loadTeam = Effect.fn("linear.loadTeam")(function* (ref: LinearTeamRef) {
+    const team = yield* lookupTeam(ref);
+    if (!team) {
+      return yield* unavailable(`Linear team not found: ${ref.team}`);
+    }
+    return packTeam(team);
+  });
+
+  const mutate = Effect.fn("linear.mutate")(function* (
+    ref: LinearTeamRef,
+    operation: string,
+    run: (sdk: LinearSdk) => PromiseLike<{ readonly success: boolean }>,
+  ) {
+    const payload = yield* call(ref, run);
+    yield* requireSuccess(operation, payload);
+  });
+
+  const ensureLabel = Effect.fn("linear.ensureLabel")(function* (ref: LinearTeamRef, name: string) {
+    const team = yield* loadTeam(ref);
+    const existing = team.labels.find((label) => label.name === name);
+    if (existing) return existing.id;
+    const payload = yield* call(ref, (sdk) => sdk.createIssueLabel({ teamId: team.id, name }));
+    yield* requireSuccess("issueLabelCreate", payload);
+    if (!payload.issueLabelId) {
+      return yield* unavailable(`Linear issueLabelCreate returned no label for ${name}`);
+    }
+    return payload.issueLabelId;
+  });
+
+  return {
+    listIssues: (ref: LinearTeamRef) => Effect.map(loadTeam(ref), (team) => team.issues),
+    listWorkflowStates: (ref: LinearTeamRef) =>
+      Effect.map(loadTeam(ref), (team): ReadonlyArray<RawWorkflowState> => team.states),
+    listComments: (ref: LinearTeamRef, issueId: string) =>
+      Effect.gen(function* () {
+        const data = yield* rawData(ref, commentsQuery, { id: issueId });
+        const payload = yield* Effect.mapError(decodeComments(data), toUnavailable);
+        return (payload.issue?.comments.nodes ?? []).flatMap(toRawComment);
+      }),
+    addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
+      Effect.gen(function* () {
+        const labelId = yield* ensureLabel(ref, label);
+        yield* mutate(ref, "issueAddLabel", (sdk) => sdk.issueAddLabel(issueId, labelId));
+      }),
+    removeLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
+      Effect.gen(function* () {
+        const team = yield* loadTeam(ref);
+        const found = team.labels.find((entry) => entry.name === label);
+        if (!found) return;
+        yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, found.id));
+      }),
+    setState: (ref: LinearTeamRef, issueId: string, stateId: string) =>
+      mutate(ref, "issueUpdate", (sdk) => sdk.updateIssue(issueId, { stateId })),
+    createComment: (ref: LinearTeamRef, issueId: string, body: string) =>
+      mutate(ref, "commentCreate", (sdk) => sdk.createComment({ issueId, body })),
+    editComment: (ref: LinearTeamRef, commentId: string, body: string) =>
+      mutate(ref, "commentUpdate", (sdk) => sdk.updateComment(commentId, { body })),
+  };
+};
 
 export type LinearClientService = ReturnType<typeof make>;
 
@@ -315,4 +317,4 @@ export class LinearClient extends Context.Service<LinearClient, LinearClientServ
   "@clanker-forge/engine/linear/client/LinearClient",
 ) {}
 
-export const layer = Layer.succeed(LinearClient, make());
+export const layer = Layer.effect(LinearClient, Effect.map(CredentialStore, make));
