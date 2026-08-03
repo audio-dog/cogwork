@@ -19,11 +19,18 @@ export interface AddWorktreeArgs {
   readonly startPoint: string;
 }
 
+export interface BranchDivergence {
+  readonly ahead: number;
+  readonly behind: number;
+}
+
 const unavailable = Effect.fn("Git.unavailable")(function* (command: string) {
   return yield* new GitError({ command, message: "git adapter not provided" });
 });
 
 const noWorktrees: ReadonlyArray<WorktreeEntry> = [];
+
+const noDivergence: BranchDivergence = { ahead: 0, behind: 0 };
 
 const makeUnavailable = () => ({
   fetch: (_repoPath: string, remote: string) => Effect.asVoid(unavailable(`fetch ${remote}`)),
@@ -35,6 +42,10 @@ const makeUnavailable = () => ({
   listWorktrees: (_repoPath: string) => Effect.map(unavailable("worktree list"), () => noWorktrees),
   fastForward: (_worktreePath: string, remote: string, branch: string) =>
     Effect.asVoid(unavailable(`merge ${remote}/${branch}`)),
+  divergence: (_worktreePath: string, remote: string, branch: string) =>
+    Effect.map(unavailable(`rev-list ${remote}/${branch}...HEAD`), () => noDivergence),
+  rebase: (_worktreePath: string, remote: string, branch: string) =>
+    Effect.asVoid(unavailable(`rebase ${remote}/${branch}`)),
 });
 
 export type GitService = ReturnType<typeof makeUnavailable>;
