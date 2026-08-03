@@ -1,0 +1,19 @@
+packages/engine/src/linear/adapter.ts
+  s_070aeabd7e4a59::t_967e0d011a363b 46-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "34d8d7ae965734a0b4aac297c992c65940af8c6f",
+  "prompts": {},
+  "sessions": {
+    "s_070aeabd7e4a59": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b408336c-3225-45e9-93ff-645b9aec77db",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
