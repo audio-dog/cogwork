@@ -1,9 +1,9 @@
 # Sync (agent toolkit generator)
 
-The single-source generator: it reads authored `assets/` (plus repo-root `skills/` and
-`repo-config/`) and renders them into each coding tool's native config — one canonical source, edited
-once, written out per tool. This context shares no vocabulary with orchestration; there are no runs
-or work sources here.
+The single-source generator: it reads authored `assets/` and the `skills/sync/` bucket (plus
+repo-root `repo-config/`) and renders them into each coding tool's native config — one canonical source,
+edited once, written out per tool. This context shares no vocabulary with orchestration; there
+are no runs or work sources here.
 
 ## Language
 
@@ -12,7 +12,11 @@ Anything the generator loads and renders — rules, commands, subagents, MCP ser
 _Avoid_: Resource, file
 
 **Skill**:
-A self-contained, portable capability living in a `skills/<name>/` directory with a `SKILL.md`. Copied as-is (no rendering) to tools that support skills.
+A self-contained, portable capability with a `SKILL.md`, living in one of three buckets:
+`skills/forge/<name>/` and `skills/sync/<name>/` here, or `packages/engine/skills/<name>/`
+for the orchestration playbooks (authored there so they sit next to the `Playbook.ts` that
+names them). Only the `sync` bucket is copied as-is (no rendering) to tools that support
+skills; overlaps across buckets are duplicate files so each audience can diverge.
 _Avoid_: Command, subagent, plugin
 
 **Command**:

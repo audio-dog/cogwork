@@ -28,9 +28,14 @@ function requireKeys(file: string, keys: string[]) {
   }
 }
 
-// Skills: every SKILL.md needs name + description.
-for (const file of walk(join(repoRoot, "skills"), (n) => n === "SKILL.md")) {
-  requireKeys(file, ["name", "description"]);
+// Skills: every SKILL.md needs name + description. The forge and sync buckets live
+// alongside this generator; the engine bucket lives in packages/engine, next to the
+// playbooks that name its skills.
+const skillDirs = [join(packageRoot, "skills"), join(repoRoot, "packages", "engine", "skills")];
+for (const skillDir of skillDirs) {
+  for (const file of walk(skillDir, (n) => n === "SKILL.md")) {
+    requireKeys(file, ["name", "description"]);
+  }
 }
 
 // Commands: need a description so agents know when to use them.
