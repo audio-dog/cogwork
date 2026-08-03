@@ -30,9 +30,9 @@ _Avoid_: Step, phase, task type
 A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; stages drive execution.
 _Avoid_: Status, state, label (when you mean the role's meaning)
 
-**Block reason**:
-Why an item is held out of execution — `needs-info` or `ready-for-human`. A blocked item is neither eligible nor claimed.
-_Avoid_: Error, failure
+**Needs-human reason**:
+Why an item is waiting on a person — `needs-info` or `ready-for-human`. A needs-human item is neither eligible nor claimed.
+_Avoid_: Block reason (blocking is reserved for dependencies), error, failure
 
 ### Coordination
 
@@ -86,6 +86,6 @@ _Avoid_: Message, token
 The snapshot the daemon reports over RPC: health, uptime, scheduler stats, per-workspace info, and load failures.
 _Avoid_: State, health check
 
-**Actionable / claimed / blocked item**:
-The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, and blocked. Narrowed views of a work item, not new entities.
+**Actionable / claimed / needs-human item**:
+The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, and waiting on a person. Narrowed views of a work item, not new entities.
 _Avoid_: Reusing "work item" for these narrowed views

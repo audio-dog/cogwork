@@ -148,7 +148,7 @@ const snapshotOf = (
     poll: { status: "ok" },
     eligible,
     claimed: [],
-    blocked: [],
+    needsHuman: [],
     observed: [],
   })),
 });

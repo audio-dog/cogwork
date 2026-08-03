@@ -18,7 +18,7 @@ The background worker that polls every workspace's work source, classifies the r
 _Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (releasing stale claims).
 
 **Classification**:
-The partition of a work source's observed items into eligible, claimed, and blocked, each tagged with a lifecycle stage. Produced by `classify`.
+The partition of a work source's observed items into eligible (each tagged with a lifecycle stage), claimed, and needs-human (each tagged with a reason). Produced by `classify`.
 _Avoid_: Filtering, triage (triage is a stage, not this)
 
 **Scheduler**:

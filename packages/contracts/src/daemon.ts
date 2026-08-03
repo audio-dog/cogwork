@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkSourceType, WorkspaceId } from "./baseSchemas";
 import { Claim } from "./coordination";
-import { BlockReason, LifecycleStage } from "./triage";
+import { LifecycleStage, NeedsHumanReason } from "./triage";
 
 export const DaemonHealth = Schema.Literals(["running"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -20,12 +20,12 @@ export const ClaimedItem = Schema.Struct({
 });
 export type ClaimedItem = typeof ClaimedItem.Type;
 
-export const BlockedItem = Schema.Struct({
+export const NeedsHumanItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
-  reason: BlockReason,
+  reason: NeedsHumanReason,
 });
-export type BlockedItem = typeof BlockedItem.Type;
+export type NeedsHumanItem = typeof NeedsHumanItem.Type;
 
 export const PollState = Schema.Union([
   Schema.Struct({ status: Schema.Literal("ok") }),
@@ -41,7 +41,7 @@ export const WorkspaceInfo = Schema.Struct({
   poll: PollState,
   eligible: Schema.Array(ActionableItem),
   claimed: Schema.Array(ClaimedItem),
-  blocked: Schema.Array(BlockedItem),
+  needsHuman: Schema.Array(NeedsHumanItem),
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
