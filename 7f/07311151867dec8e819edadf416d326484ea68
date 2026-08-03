@@ -1,0 +1,100 @@
+packages/engine/src/followUp.ts
+  s_81c7ef06410701::t_0aebd59ee771c0 54
+  s_81c7ef06410701::t_71b8b7606b9af7 26
+packages/engine/src/Playbook.ts
+  s_81c7ef06410701::t_e4ae4c7235c179 195,197,202-203
+  s_81c7ef06410701::t_a04937bc374d0c 176,178,183-184
+packages/engine/src/executor.test.ts
+  s_81c7ef06410701::t_cf46d9d80e61bc 121
+  s_81c7ef06410701::t_a8fb8c117a2f8d 366
+  s_81c7ef06410701::t_3be511d103a735 530
+  s_81c7ef06410701::t_e487331a76e901 535,538
+  s_81c7ef06410701::t_bb43316daecab2 556
+  s_81c7ef06410701::t_f90b00b15161fe 346
+  s_81c7ef06410701::t_061adf353ee159 636,641,643,647
+  s_81c7ef06410701::t_c88543d72a34ef 74,79
+  s_81c7ef06410701::t_89aa0ec6b180fe 371
+  s_81c7ef06410701::t_b0464f2c3032c4 412
+  s_81c7ef06410701::t_8678f2b7dcb9c6 429
+  s_81c7ef06410701::t_7b6be2abdb9d1b 511
+packages/engine/src/Executor.ts
+  s_81c7ef06410701::t_30cc238500870d 386-387
+  s_81c7ef06410701::t_3a310b3aeff1f9 69
+  s_81c7ef06410701::t_2e26a1c5e260b0 498
+  s_81c7ef06410701::t_bcf102c59a8b45 504
+  s_81c7ef06410701::t_4f511c7abb40d2 192,200,206
+  s_81c7ef06410701::t_3f5307d2004901 490
+  s_81c7ef06410701::t_2beb03ccd7fcf9 336
+  s_81c7ef06410701::t_dc77c7f90c473d 523
+  s_81c7ef06410701::t_cb616722135df1 127
+  s_81c7ef06410701::t_84e0177e98b73a 505
+  s_81c7ef06410701::t_090d70e69ce93d 214,216,222,224,231-232
+  s_81c7ef06410701::t_0beda88f97e788 11-12
+  s_81c7ef06410701::t_4cbe71107a3b59 126
+  s_81c7ef06410701::t_ef762d792f69be 286
+  s_81c7ef06410701::t_c92a815fa4c939 346
+  s_81c7ef06410701::t_5ba8cbaf8805b1 48
+  s_81c7ef06410701::t_ab7c1e21e107a4 430
+  s_81c7ef06410701::t_9d0a084f35e5a1 292
+  s_81c7ef06410701::t_6411bcc003a812 426
+packages/engine/src/comments.test.ts
+  s_81c7ef06410701::t_92c5cd55850b8d 82-83,89
+  s_81c7ef06410701::t_a0018e3e453565 5
+  s_81c7ef06410701::t_b049bbaf3e2243 52,57,59
+  s_81c7ef06410701::t_4fb11fdfc0e142 85
+  s_81c7ef06410701::t_8b39c0e39bdec7 97
+  s_81c7ef06410701::t_c286a71404f5bd 30-31
+packages/engine/src/playbook.test.ts
+  s_81c7ef06410701::t_17b8fbfa5e9d28 122,127,129
+packages/engine/src/classify.test.ts
+  s_81c7ef06410701::t_bd0616042fa749 181
+  s_81c7ef06410701::t_b3ce7215725e91 194
+  s_81c7ef06410701::t_e98054d7fe3a3b 164
+packages/engine/src/Scheduler.ts
+  s_81c7ef06410701::t_4f508d00604e10 213,220
+  s_81c7ef06410701::t_2c98ec4116d1da 11,15
+  s_81c7ef06410701::t_29926e4504d605 191
+  s_81c7ef06410701::t_54df83a41a0b5e 201
+  s_81c7ef06410701::t_149dbac3e46313 228
+packages/engine/src/comments.ts
+  s_81c7ef06410701::t_170f4b2a6c7a46 51,53,57,59,61,64,66
+  s_81c7ef06410701::t_90e92d6ec7382f 13
+  s_81c7ef06410701::t_6e413e794dfd7c 14
+  s_81c7ef06410701::t_dc124151de19ff 58
+packages/engine/src/followUp.test.ts
+  s_81c7ef06410701::t_b3ed13cd26d6e2 97
+  s_81c7ef06410701::t_948814a7174065 87
+packages/engine/skills/implement-agent/SKILL.md
+  s_81c7ef06410701::t_97b615e467cd98 114,118
+  s_81c7ef06410701::t_ad5de86357ce7b 18
+packages/engine/src/scheduler.test.ts
+  s_81c7ef06410701::t_e0bc0105b040bc 358
+  s_81c7ef06410701::t_9d813d56ff85d1 379
+packages/engine/src/classify.ts
+  s_81c7ef06410701::t_17afbfab8e1a24 50
+packages/contracts/src/run.ts
+  s_81c7ef06410701::t_36c64ffd9237ae 18
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_81c7ef06410701::t_25d0dae7db8e35 81,85
+  s_81c7ef06410701::t_abb74b375e3057 17
+packages/sync/skills/sync/follow-up-agent/SKILL.md
+  s_81c7ef06410701::t_60ac9b210ba71e 17,81,85
+packages/sync/skills/sync/implement-agent/SKILL.md
+  s_81c7ef06410701::t_45894e684e0cf6 18,114,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "7f07311151867dec8e819edadf416d326484ea68",
+  "prompts": {},
+  "sessions": {
+    "s_81c7ef06410701": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6a438498-ff12-4485-ad82-21bc4d778198",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
