@@ -8,7 +8,7 @@ import * as Stream from "effect/Stream";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import { defaultConfigHome, defaultLedgerPath, defaultSocketPath } from "./paths";
+import { defaultConfigHome, defaultCredentialsPath, defaultLedgerPath, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatStatus } from "./status";
 import { flushWatch, initialWatchState, stepWatch } from "./watch";
@@ -26,6 +26,11 @@ const configHomeFlag = Flag.string("config-home").pipe(
 const ledgerFlag = Flag.string("ledger").pipe(
   Flag.withDescription("Path to the run ledger (disposable SQLite cache)"),
   Flag.withDefault(defaultLedgerPath),
+);
+
+const credentialsFlag = Flag.string("credentials").pipe(
+  Flag.withDescription("Path to the stored OAuth credential file (0600)"),
+  Flag.withDefault(defaultCredentialsPath),
 );
 
 const maxConcurrencyFlag = Flag.integer("max-concurrency").pipe(
@@ -150,19 +155,22 @@ export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
   configHome: configHomeFlag,
   ledger: ledgerFlag,
+  credentials: credentialsFlag,
   maxConcurrency: maxConcurrencyFlag,
   dailyBudget: dailyBudgetFlag,
   pollInterval: pollIntervalFlag,
 }).pipe(
-  Command.withHandler(({ socket, configHome, ledger, maxConcurrency, dailyBudget, pollInterval }) =>
-    runDaemon({
-      socketPath: socket,
-      configHome,
-      ledgerPath: ledger,
-      maxConcurrency,
-      dailyBudget,
-      pollIntervalMillis: pollInterval * 1000,
-    }),
+  Command.withHandler(
+    ({ socket, configHome, ledger, credentials, maxConcurrency, dailyBudget, pollInterval }) =>
+      runDaemon({
+        socketPath: socket,
+        configHome,
+        ledgerPath: ledger,
+        credentialsPath: credentials,
+        maxConcurrency,
+        dailyBudget,
+        pollIntervalMillis: pollInterval * 1000,
+      }),
   ),
 );
 

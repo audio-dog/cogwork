@@ -22,6 +22,10 @@ _Avoid_: Daemon (the running process is the daemon; this is how it's assembled)
 The directory of `*.workspace.ts` files the daemon loads at startup to learn which workspaces to drive.
 _Avoid_: Config file, settings
 
+**Credential file**:
+Where stored OAuth credentials live on this machine — `~/.clanker-forge/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held.
+_Avoid_: Keychain, secret store (this is a plain file; a keychain-backed layer would be a different implementation of the same engine seam)
+
 **Watch**:
 The live view — the `watch` subcommand streams run activity over RPC and folds it into per-run terminal output.
 _Avoid_: Tail, log

@@ -5,3 +5,4 @@ export {
   type LinearTeamRef,
   layer as clientLayer,
 } from "./client";
+export * as OAuth from "./oauth";

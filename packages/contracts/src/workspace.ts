@@ -10,11 +10,19 @@ export const TriageRoleLabels = Schema.Struct({
 });
 export type TriageRoleLabels = typeof TriageRoleLabels.Type;
 
+export const OAuthAppConfig = Schema.Struct({
+  clientId: TrimmedNonEmptyString,
+  redirectPort: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThan(65536))),
+});
+export type OAuthAppConfig = typeof OAuthAppConfig.Type;
+
 export const WorkSourceConfig = Schema.Struct({
   type: WorkSourceType,
   repo: Schema.optional(TrimmedNonEmptyString),
   team: Schema.optional(TrimmedNonEmptyString),
+  organization: Schema.optional(TrimmedNonEmptyString),
   tokenEnv: Schema.optional(TrimmedNonEmptyString),
+  oauth: Schema.optional(OAuthAppConfig),
   botLogin: Schema.optional(TrimmedNonEmptyString),
   botUserId: Schema.optional(TrimmedNonEmptyString),
   roleLabels: Schema.optional(TriageRoleLabels),
