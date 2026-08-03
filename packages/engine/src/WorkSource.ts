@@ -16,6 +16,7 @@ export interface ObservedItem {
   readonly claim: Claim | null;
   readonly attempts: ReadonlyArray<AttemptRecord>;
   readonly pr: ObservedPr | null;
+  readonly openBlockers: number;
 }
 
 export interface RoleChanges {

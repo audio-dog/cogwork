@@ -141,6 +141,7 @@ describe("reconcile worker", () => {
     claim: null,
     attempts: [],
     pr: null,
+    openBlockers: 0,
   };
   const workerWithWork = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
@@ -171,6 +172,7 @@ describe("reconcile worker", () => {
       fresh: false,
       followUp: null,
     },
+    openBlockers: 0,
   };
   const workerWithInReview = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem]))),
@@ -272,6 +274,7 @@ describe("daemon status over rpc", () => {
     claim: null,
     attempts: [],
     pr: null,
+    openBlockers: 0,
   };
 
   it.effect("carries needs-human items and their reason across the status boundary", () =>
@@ -284,6 +287,31 @@ describe("daemon status over rpc", () => {
         { id: id("AUD-7"), title: "waiting on details", reason: "needs-info" },
       ]);
     }).pipe(Effect.provide(daemonLayer(observing([needsInfoItem]))), Effect.scoped),
+  );
+
+  const blockedItem: ObservedItem = {
+    id: id("AUD-8"),
+    title: "waiting on a dependency",
+    roles: ["ready-for-agent"],
+    claimLabeled: false,
+    claim: null,
+    attempts: [],
+    pr: null,
+    openBlockers: 2,
+  };
+
+  it.effect("carries blocked items and their open-blocker count across the status boundary", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const receipt = yield* worker.submit();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const status = yield* client.GetStatus();
+      assert.strictEqual(receipt.pendingWork, 0);
+      assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
+      assert.deepStrictEqual(status.workspaces[0]?.blocked, [
+        { id: id("AUD-8"), title: "waiting on a dependency", openBlockers: 2 },
+      ]);
+    }).pipe(Effect.provide(daemonLayer(observing([blockedItem]))), Effect.scoped),
   );
 
   it.effect("surfaces scheduler caps and budget in the status payload", () =>

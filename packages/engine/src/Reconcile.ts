@@ -1,4 +1,5 @@
 import type {
+  BlockedItem,
   ClaimedItem,
   NeedsHumanItem,
   PollState,
@@ -33,6 +34,7 @@ export interface WorkspaceReconcileState {
   readonly poll: PollState;
   readonly eligible: ReadonlyArray<EligibleWork>;
   readonly claimed: ReadonlyArray<ClaimedItem>;
+  readonly blocked: ReadonlyArray<BlockedItem>;
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
   readonly observed: ReadonlyArray<ObservedRef>;
 }
@@ -54,6 +56,7 @@ const okState = (
   poll: { status: "ok" },
   eligible: classified.eligible,
   claimed: classified.claimed,
+  blocked: classified.blocked,
   needsHuman: classified.needsHuman,
   observed: observed.map((item) => ({ id: item.id, title: item.title })),
 });
@@ -63,6 +66,7 @@ const pausedState = (workspace: RegisteredWorkspace, message: string): Workspace
   poll: { status: "paused", message },
   eligible: [],
   claimed: [],
+  blocked: [],
   needsHuman: [],
   observed: [],
 });

@@ -15,6 +15,7 @@ import {
   type GitHubClientService,
   type GitHubRepoRef,
   type RawComment,
+  type RawIssue,
   type RawPull,
   type RawReview,
 } from "./client";
@@ -27,6 +28,7 @@ interface SeedIssue {
   readonly title: string;
   readonly labels: ReadonlyArray<string>;
   readonly isPullRequest?: boolean;
+  readonly openBlockers?: number;
 }
 
 interface SeedComment {
@@ -72,7 +74,13 @@ const seedComments = (comments: ReadonlyArray<SeedComment>) =>
 
 const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   const issuesRef = yield* Ref.make(
-    seed.issues.map((issue) => ({ ...issue, isPullRequest: issue.isPullRequest ?? false })),
+    seed.issues.map(
+      (issue): RawIssue => ({
+        ...issue,
+        isPullRequest: issue.isPullRequest ?? false,
+        openBlockers: issue.openBlockers ?? 0,
+      }),
+    ),
   );
   const seeded = seedComments(seed.comments ?? []);
   const nextId = yield* Ref.make((seed.comments?.length ?? 0) + 1);
@@ -93,25 +101,12 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     new Map<string, ReadonlyArray<CheckRun>>(),
   );
   const pulls = seed.pulls ?? [];
-  const patch = (
-    number: number,
-    update: (issue: SeedIssue & { isPullRequest: boolean }) => SeedIssue & { isPullRequest: boolean },
-  ) =>
+  const patch = (number: number, update: (issue: RawIssue) => RawIssue) =>
     Ref.update(issuesRef, (issues) =>
       issues.map((issue) => (issue.number === number ? update(issue) : issue)),
     );
   return {
-    listIssues: () =>
-      Ref.get(issuesRef).pipe(
-        Effect.map((issues) =>
-          issues.map((issue) => ({
-            number: issue.number,
-            title: issue.title,
-            labels: issue.labels,
-            isPullRequest: issue.isPullRequest,
-          })),
-        ),
-      ),
+    listIssues: () => Ref.get(issuesRef),
     listPulls: () => Effect.succeed([...pulls]),
     listComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
@@ -218,6 +213,33 @@ describe("github work source adapter", () => {
             },
           ],
           reviews: [{ pull: 100, state: "CHANGES_REQUESTED" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reads open blockers from the issue listing and holds those tickets as blocked", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      assert.strictEqual(items.find((item) => item.id === "#30")?.openBlockers, 1);
+      assert.strictEqual(items.find((item) => item.id === "#31")?.openBlockers, 0);
+      const { eligible, blocked } = classify(items);
+      assert.deepStrictEqual(blocked, [{ id: id("#30"), title: "waits on #31", openBlockers: 1 }]);
+      assert.deepStrictEqual(
+        eligible.map((entry) => entry.id),
+        [id("#31")],
+      );
+      assert.deepStrictEqual(yield* client.listComments(repo, 30), []);
+      assert.deepStrictEqual((yield* client.listIssues(repo)).at(0)?.labels, ["ready-for-agent"]);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 30, title: "waits on #31", labels: ["ready-for-agent"], openBlockers: 1 },
+            { number: 31, title: "the blocker", labels: ["ready-for-agent"] },
+          ],
         }),
       ),
     ),

@@ -17,6 +17,7 @@ import {
   type GitHubClientService,
   type GitHubRepoRef,
   type RawComment,
+  type RawIssue,
   type RawPull,
   type RawReview,
   type ReviewDecision,
@@ -229,11 +230,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
     }, new Map<number, RawPull>());
 
   const buildItem = (target: GitHubTarget, pulls: Map<number, RawPull>) =>
-    Effect.fn("github.buildItem")(function* (issue: {
-      readonly number: number;
-      readonly title: string;
-      readonly labels: ReadonlyArray<string>;
-    }) {
+    Effect.fn("github.buildItem")(function* (issue: RawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
       const comments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
       const trusted = coordinationLast(
@@ -251,6 +248,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
         claim: claimLabeled ? parseClaim(trusted) : null,
         attempts: parseAttempts(trusted),
         pr: signals ? { ...signals, followUp: parseFollowUp(trusted) } : null,
+        openBlockers: issue.openBlockers,
       } satisfies ObservedItem;
     });
 
