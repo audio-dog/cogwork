@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace } from "../projector";
-import { WorkSource, WorkSourceError, type WorkSourceService } from "../WorkSource";
+import { type TrackerItem, WorkSource, WorkSourceError, type WorkSourceService } from "../work-source";
 import {
   LinearClient,
   type LinearClientService,
@@ -24,10 +24,12 @@ import {
   formatCoordinationBody,
   formatNoteBody,
   hasClaimLabel,
+  hasClankerMarker,
   hasLedgerMarker,
   ledgerMarker,
   parseAttempts,
   parseClaim,
+  parseFollowUp,
   roleLabel,
   roleLabelsFor,
   rolesFrom,
@@ -132,9 +134,10 @@ const make = (client: LinearClientService): WorkSourceService => {
         claimLabeled,
         claim: claimLabeled ? parseClaim(coordination) : null,
         attempts: parseAttempts(coordination),
-        pr: null,
+        owned: hasClankerMarker(coordination),
+        followUp: parseFollowUp(coordination),
         openBlockers: issue.openBlockers,
-      };
+      } satisfies TrackerItem;
     });
 
   const observeTarget = Effect.fn("linear.observeTarget")(function* (target: LinearTarget) {

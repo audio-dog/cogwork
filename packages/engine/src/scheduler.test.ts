@@ -18,14 +18,15 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
-import * as Executor from "./Executor";
+import * as Executor from "./executor";
 import type { RegisteredWorkspace } from "./projector";
-import * as Reconcile from "./Reconcile";
-import * as Registry from "./Registry";
-import * as RunLedger from "./RunLedger";
-import * as Scheduler from "./Scheduler";
-import type { ObservedItem } from "./WorkSource";
-import { WorkSource, type WorkSourceService } from "./WorkSource";
+import * as Reconcile from "./reconcile";
+import * as Registry from "./registry";
+import * as RunLedger from "./run-ledger";
+import * as Scheduler from "./scheduler";
+import * as SourceControl from "./source-control";
+import type { TrackerItem } from "./work-source";
+import { WorkSource, type WorkSourceService } from "./work-source";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -264,6 +265,7 @@ const schedulerLayer = (
         workerLayer(deps.snapshots),
         Layer.succeed(Executor.Executor, { execute: deps.execute }),
         workSourceStub(deps.workSource ?? {}),
+        SourceControl.emptyLayer,
         deps.ledger ? Layer.succeed(RunLedger.RunLedger, deps.ledger) : RunLedger.layerMemory,
       ),
     ),
@@ -579,34 +581,37 @@ describe("Scheduler.recover", () => {
     endedAtMillis: null,
   };
   const session = Schema.decodeSync(SessionId)("sess-abc");
-  const claimedByUs: ObservedItem = {
+  const claimedByUs: TrackerItem = {
     id: id("#1"),
     title: "ours",
     roles: ["ready-for-agent"],
     claimLabeled: true,
     claim: { by: "clanker-bot", claimedAtMillis: 1, stage: "implement" },
     attempts: [],
-    pr: null,
+    owned: true,
+    followUp: null,
     openBlockers: 0,
   };
-  const claimedByOther: ObservedItem = {
+  const claimedByOther: TrackerItem = {
     id: id("#2"),
     title: "theirs",
     roles: [],
     claimLabeled: true,
     claim: { by: "someone-else", claimedAtMillis: 1 },
     attempts: [],
-    pr: null,
+    owned: true,
+    followUp: null,
     openBlockers: 0,
   };
-  const unclaimed: ObservedItem = {
+  const unclaimed: TrackerItem = {
     id: id("#3"),
     title: "free",
     roles: ["needs-triage"],
     claimLabeled: false,
     claim: null,
     attempts: [],
-    pr: null,
+    owned: false,
+    followUp: null,
     openBlockers: 0,
   };
 
@@ -718,7 +723,7 @@ describe("Scheduler.recover", () => {
       const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
       const roles = yield* Ref.make<ReadonlyArray<string>>([]);
       const ran = yield* Latch.make();
-      const nearExhausted: ObservedItem = {
+      const nearExhausted: TrackerItem = {
         ...claimedByUs,
         attempts: [
           { stage: "implement", outcome: "failed", atMillis: 1 },
@@ -783,7 +788,7 @@ describe("Scheduler.recover", () => {
 
   it.effect("hands an exhausted recovery the session its run persisted before the daemon died", () =>
     Effect.gen(function* () {
-      const exhausted: ObservedItem = {
+      const exhausted: TrackerItem = {
         ...claimedByUs,
         attempts: [
           { stage: "implement", outcome: "failed", atMillis: 1 },
@@ -820,7 +825,7 @@ describe("Scheduler.recover", () => {
 
   it.effect("hands an exhausted recovery to a human with a handoff note", () =>
     Effect.gen(function* () {
-      const exhausted: ObservedItem = {
+      const exhausted: TrackerItem = {
         ...claimedByUs,
         attempts: [
           { stage: "implement", outcome: "failed", atMillis: 1 },

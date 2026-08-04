@@ -14,11 +14,11 @@ The long-lived host process that runs the engine on one machine: it serves the R
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
-The background worker that polls every workspace's work source, classifies the results, and stores them in an in-memory reconcile snapshot. One of the daemon's two heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
+The background worker that polls every workspace's issue tracker (and, when one is configured, attaches its source control provider's PR state), classifies the results, and stores them in an in-memory reconcile snapshot. One of the daemon's two heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
 _Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (resuming this daemon's own interrupted runs or releasing genuinely stale claims).
 
 **Rate-limit scope**:
-The key a work source hands the reconcile worker to say *whose* request budget a poll spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. GitHub returns none: its client already fails fast inside its own cooldown, so there is nothing for reconcile to add.
+The key an issue tracker hands the reconcile worker to say *whose* request budget a poll spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. GitHub returns none: its client already fails fast inside its own cooldown, so there is nothing for reconcile to add.
 _Avoid_: Credential id (the credential store's business), workspace key (the point is that it is *not* per workspace)
 
 **Cooldown window**:
@@ -26,7 +26,7 @@ The span a rate-limit scope is held out of polling for, opened when a source rep
 _Avoid_: Circuit breaker (nothing is tripped open by error rate), throttle
 
 **Classification**:
-The partition of a work source's observed items into eligible, claimed, blocked, and needs-human, each tagged with a lifecycle stage. *Blocked* means the work source reports open blockers, so `implement` is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
+The partition of an issue tracker's observed items into eligible, claimed, blocked, and needs-human, each tagged with a lifecycle stage. *Blocked* means the issue tracker reports open blockers, so `implement` is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
 _Avoid_: Filtering, triage (triage is a stage, not this)
 
 **Scheduler**:
@@ -38,7 +38,7 @@ The scheduler's graceful stop: it picks no further candidates and gives the runs
 _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
 
 **Snapshot generation**:
-The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the work source from the next, so it can act on each work item at most once per observation.
+The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the issue tracker from the next, so it can act on each work item at most once per observation.
 _Avoid_: Version, revision, epoch
 
 **Candidate**:
@@ -61,16 +61,20 @@ _Avoid_: Harness service, adapter (adapter is the work-source term)
 A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model/effort choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Model and effort are harness-native strings (e.g. Cursor CLI model ids and `effort=` bracket values); stages can be disabled per workspace; only `triage`, `implement`, and `follow-up` are wired today.
 _Avoid_: Workflow, pipeline
 
-**Work source adapter**:
-A concrete implementation of the work source port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by `workSource.type` via `workSourceRoutedLayer`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`) but returns `pr: null` (PR follow-up stays GitHub's problem for now).
-_Avoid_: Client (the HTTP/GraphQL client is a lower-level detail), plugin
+**Issue tracker adapter**:
+A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
+_Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
+
+**Source control provider adapter**:
+A concrete implementation of the source control provider port — read-only PR observation, GitHub the only one today. Given a work item, it resolves the item's PR by the link key (the open PR whose head branch starts with `ticketSlug(item.id)`) and reads its checks, reviews, mergeable / base-divergence signal, and human comments; it writes nothing. A GitHub issue tracker doubles as its own provider by default; a Linear tracker pairs with a GitHub provider through an explicit `sourceControl` config block.
+_Avoid_: Forge, code host, client (the HTTP client is a lower-level detail), plugin
 
 **Credential store**:
-The seam every work-source credential is resolved through: given an account (the work source's logical identity, the env var naming its legacy API key, the OAuth app id for browser-login refresh, and the OAuth app to mint from when client credentials are configured), it hands back a credential — the token, the source it came from, and any identity discovered alongside it — and logs which source it used. Precedence is the stored browser-login token (refreshed first when at or near expiry — see token refresh), then client credentials, then the env-var API key. An expired stored token it cannot refresh — no refresh token, no OAuth client id — or an ambiguous match across organizations falls through, and so does an account that never asked for client credentials. `invalidate` drops whatever was minted for an account, which is how a rejected token gets replaced. Only the Linear client resolves through the store today; GitHub still reads its token from the environment directly. A keychain-backed layer arrives behind the same seam later.
+The seam every issue-tracker credential is resolved through: given an account (the issue tracker's logical identity, the env var naming its legacy API key, the OAuth app id for browser-login refresh, and the OAuth app to mint from when client credentials are configured), it hands back a credential — the token, the source it came from, and any identity discovered alongside it — and logs which source it used. Precedence is the stored browser-login token (refreshed first when at or near expiry — see token refresh), then client credentials, then the env-var API key. An expired stored token it cannot refresh — no refresh token, no OAuth client id — or an ambiguous match across organizations falls through, and so does an account that never asked for client credentials. `invalidate` drops whatever was minted for an account, which is how a rejected token gets replaced. Only the Linear client resolves through the store today; GitHub still reads its token from the environment directly. A keychain-backed layer arrives behind the same seam later.
 _Avoid_: Secret manager, token cache (the credential file, not the store, holds tokens), auth provider
 
 **Token refresh**:
-The exchange that trades a stored refresh token for a rotated pair at the work source's token endpoint, and the store's rule for when to run it. It is **reactive** — nothing schedules it, a read that finds an expired or near-expired token triggers it — and **single-flight** per stored credential, so concurrent reads share one exchange rather than racing to spend the same refresh token. The rotated pair is written back to the credential file before the token is handed out, keeping the file the source of truth. A refresh that fails is an auth error, not a quiet fall back to the env var. The store owns the timing; the work source's adapter owns the exchange (`Linear.OAuth.makeTokenRefresh`).
+The exchange that trades a stored refresh token for a rotated pair at the issue tracker's token endpoint, and the store's rule for when to run it. It is **reactive** — nothing schedules it, a read that finds an expired or near-expired token triggers it — and **single-flight** per stored credential, so concurrent reads share one exchange rather than racing to spend the same refresh token. The rotated pair is written back to the credential file before the token is handed out, keeping the file the source of truth. A refresh that fails is an auth error, not a quiet fall back to the env var. The store owns the timing; the issue tracker's adapter owns the exchange (`Linear.OAuth.makeTokenRefresh`).
 _Avoid_: Token renewal loop, background refresh (there are no timers), re-authentication (that is a fresh grant, not a refresh)
 
 **Client-credentials grant**:
@@ -78,11 +82,11 @@ The store's non-interactive source: it trades an OAuth app's `client_id` and a `
 _Avoid_: Service account, machine token, app token (that is what it mints, not the source)
 
 **Stored credential**:
-One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `botUserId` the app posts as). Keyed by work source and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
+One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `botUserId` the app posts as). Keyed by issue tracker and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
 _Avoid_: Session, login (the login command that mints these does not exist yet)
 
 **Coordination markers**:
-Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the work source. GitHub embeds them as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments).
+Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. GitHub embeds them as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments).
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.
 
 **Coordination comment**:
@@ -98,7 +102,7 @@ A worktree branch holding commits its remote branch lacks while the remote holds
 _Avoid_: Conflict (that's one reason a rebase fails), drift, stale branch (that's just being behind)
 
 **Base divergence**:
-A bot pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the work source's mergeable signal (GitHub's `dirty`) on the reconcile poll and treats it as a fourth follow-up trigger; the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
+A bot pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the source control provider's mergeable signal (GitHub's `dirty`) on the reconcile poll and treats it as a fourth follow-up trigger; the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
 _Avoid_: Branch divergence (that's the branch versus its own remote, not the base), merge conflict (one reason integrating the base fails), stale branch (that's merely behind)
 
 **Workspace registry**:

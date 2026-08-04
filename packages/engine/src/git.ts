@@ -50,4 +50,4 @@ const makeUnavailable = () => ({
 
 export type GitService = ReturnType<typeof makeUnavailable>;
 
-export class Git extends Context.Service<Git, GitService>()("@clanker-forge/engine/Git") {}
+export class Git extends Context.Service<Git, GitService>()("@clanker-forge/engine/git") {}

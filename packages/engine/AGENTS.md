@@ -8,5 +8,5 @@ in `src/linear/client.ts` (`rawRequest`, used for reads where the SDK's lazy nes
 cost extra round trips); anything else needing the SDK for the first time should use its typed methods
 (e.g. `client.viewer`, `client.organization`), not a raw request. The Linear OAuth token endpoint
 (`/oauth/token`) has no SDK equivalent and is the one legitimate raw-HTTP case outside `client.ts` —
-see `src/linear/oauth.ts` for the request shapes and `src/linear/clientCredentials.ts` for the only
+see `src/linear/oauth.ts` for the request shapes and `src/linear/client-credentials.ts` for the only
 place that sends one.

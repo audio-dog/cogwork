@@ -13,20 +13,20 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Executor from "./Executor";
-import { GitError } from "./Git";
+import * as Executor from "./executor";
+import { GitError } from "./git";
 import {
   HarnessError,
   type HarnessEvent,
   type HarnessRequest,
   type HarnessRunner,
   layer as harnessLayer,
-} from "./Harness";
+} from "./harness";
 import type { RegisteredWorkspace } from "./projector";
-import * as RunEventBus from "./RunEventBus";
-import * as RunLedger from "./RunLedger";
-import { WorkSource, type WorkSourceService } from "./WorkSource";
-import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./Worktree";
+import * as RunEventBus from "./run-event-bus";
+import * as RunLedger from "./run-ledger";
+import { WorkSource, type WorkSourceService } from "./work-source";
+import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const id = Schema.decodeSync(WorkItemId);
@@ -149,6 +149,7 @@ const followUpItem = {
     noProgress: 0,
     stalled: false,
     fresh: false,
+    baseDivergence: "none" as const,
   },
 };
 

@@ -38,6 +38,7 @@ const defaultFollowUpPrompt = [
   "Follow the `{skill}` skill to move the PR forward: read the PR's failing checks and any human review",
   "comments, make the fix, pass the local gate, and push to the same branch.",
   "Never merge the PR and never resolve review threads — a human gates the code.",
+  "Linear history for this repository is {linearHistory}.",
 ].join("\n");
 
 interface StageDefaults {
@@ -113,9 +114,28 @@ interface PromptItem {
   readonly title: string;
 }
 
-const buildPrompt = (resolved: ResolvedStage, item: PromptItem, footer: string) => {
-  const values = { id: item.id, title: item.title, skill: resolved.skill };
-  return `${fill(resolved.promptTemplate, values)}\n${fill(footer, values)}`;
+const communicationStyle = [
+  "",
+  "When you write for a person to read — your triage proposal, the pull request title and description,",
+  "review or follow-up comments — explain it like you're talking to a sharp colleague who's tired, not",
+  "like you're writing documentation.",
+  "",
+  "- Prefer plain words over jargon. If a term of art is genuinely the right word, use it, but don't stack three of them in one sentence.",
+  "- Shorter sentences, one idea each. Longer is fine when it makes the point easier to read — dense is worse than long.",
+  "- Warm and conversational beats precise and mechanical. It's okay to sound like a person.",
+  "- When a concept is genuinely abstract, an occasional analogy earns its place. Use them sparingly — one or two at most, or none land.",
+  "- Say the main thing, then the one caveat that actually matters. Don't pack a paragraph with five qualifications.",
+  "- For a long or hard write-up, add a short **Bottom line:** near the end that stands on its own. Most don't need one.",
+].join("\n");
+
+const buildPrompt = (
+  resolved: ResolvedStage,
+  item: PromptItem,
+  footer: string,
+  extra: Record<string, string> = {},
+) => {
+  const values = { id: item.id, title: item.title, skill: resolved.skill, ...extra };
+  return `${fill(resolved.promptTemplate, values)}\n${communicationStyle}\n${fill(footer, values)}`;
 };
 
 const parseLastSentinel = <A extends string>(pattern: RegExp, valid: ReadonlyArray<A>, text: string) => {
@@ -213,8 +233,10 @@ const followUpFooter = [
 
 const followUpResultPattern = /FOLLOWUP-RESULT:\s*([a-z-]+)/gi;
 
-export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem) =>
-  buildPrompt(resolved, item, followUpFooter);
+export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem, linearHistory: boolean) =>
+  buildPrompt(resolved, item, followUpFooter, {
+    linearHistory: linearHistory ? "required" : "not required",
+  });
 
 export const parseFollowUpResult = (text: string) =>
   parseLastSentinel(followUpResultPattern, followUpResults, text);

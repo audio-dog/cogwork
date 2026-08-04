@@ -59,7 +59,7 @@ const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
 const workSourceLayer = (credentialsPath: string) =>
-  workSourceRoutedLayer.pipe(
+  Layer.mergeAll(workSourceRoutedLayer, GitHub.providerLayer).pipe(
     Layer.provide(GitHub.clientLayer),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentialsLayer(credentialsPath)),

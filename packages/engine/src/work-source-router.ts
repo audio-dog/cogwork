@@ -5,7 +5,7 @@ import { GitHubClient } from "./github/client";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
 import type { RegisteredWorkspace } from "./projector";
-import { WorkSource, type WorkSourceService } from "./WorkSource";
+import { WorkSource, type WorkSourceService } from "./work-source";
 
 export const route = (github: WorkSourceService, linear: WorkSourceService): WorkSourceService => {
   const forWorkspace = (workspace: RegisteredWorkspace) =>

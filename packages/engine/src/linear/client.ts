@@ -14,8 +14,8 @@ import {
   type Credential,
   CredentialStore,
   type CredentialStoreService,
-} from "../CredentialStore";
-import { WorkSourceError } from "../WorkSource";
+} from "../credential-store";
+import { WorkSourceError } from "../work-source";
 
 export interface LinearTeamRef {
   readonly team: string;

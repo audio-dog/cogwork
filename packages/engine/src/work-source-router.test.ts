@@ -3,8 +3,8 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace } from "./projector";
-import type { WorkSourceService } from "./WorkSource";
-import { route } from "./workSourceRouter";
+import type { WorkSourceService } from "./work-source";
+import { route } from "./work-source-router";
 
 const id = Schema.decodeSync(WorkItemId);
 

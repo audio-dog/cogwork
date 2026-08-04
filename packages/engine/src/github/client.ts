@@ -13,7 +13,7 @@ import type * as Headers from "effect/unstable/http/Headers";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
-import { WorkSourceError } from "../WorkSource";
+import { WorkSourceError } from "../work-source";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -35,9 +35,9 @@ export interface RawPull {
   readonly number: number;
   readonly authorLogin: string;
   readonly authorAssociation: string;
-  readonly body: string;
   readonly draft: boolean;
   readonly headSha: string;
+  readonly headRef: string;
 }
 
 export interface RawComment {
@@ -81,10 +81,13 @@ const IssueSchema = Schema.Struct({
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
   user: Schema.Struct({ login: Schema.String }),
-  body: Schema.NullOr(Schema.String),
   draft: Schema.optional(Schema.Boolean),
-  head: Schema.Struct({ sha: Schema.String }),
+  head: Schema.Struct({ sha: Schema.String, ref: Schema.String }),
   author_association: Schema.optional(Schema.String),
+});
+
+const PullDetailSchema = Schema.Struct({
+  mergeable_state: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 const ReviewSchema = Schema.Struct({
@@ -127,6 +130,7 @@ const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema)
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
+const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
 const decodeComments = Schema.decodeUnknownEffect(Schema.Array(CommentSchema));
 
@@ -327,11 +331,17 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
             number: pull.number,
             authorLogin: pull.user.login,
             authorAssociation: pull.author_association ?? "NONE",
-            body: pull.body ?? "",
             draft: pull.draft ?? false,
             headSha: pull.head.sha,
+            headRef: pull.head.ref,
           }),
         );
+      }),
+    pullMergeableState: (repo: GitHubRepoRef, pullNumber: number) =>
+      Effect.gen(function* () {
+        const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}`));
+        const detail = yield* Effect.mapError(decodePullDetail(json), toUnavailable);
+        return detail.mergeable_state ?? null;
       }),
     listComments: (repo: GitHubRepoRef, issueNumber: number) =>
       Effect.gen(function* () {

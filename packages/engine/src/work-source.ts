@@ -9,20 +9,32 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import type { FollowUpMarker, ObservedPr } from "./followUp";
+import type { FollowUpMarker, ObservedPr } from "./follow-up";
 import type { RegisteredWorkspace } from "./projector";
 
-export type { FollowUpMarker, ObservedPr, PrReview } from "./followUp";
+export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
 
-export interface ObservedItem {
+interface ObservedItemBase {
   readonly id: WorkItemId;
   readonly title: string;
   readonly roles: ReadonlyArray<TriageRole>;
   readonly claimLabeled: boolean;
   readonly claim: Claim | null;
   readonly attempts: ReadonlyArray<AttemptRecord>;
-  readonly pr: ObservedPr | null;
   readonly openBlockers: number;
+}
+
+// What an issue tracker observes on its own: backlog state plus the coordination it owns. It no
+// longer reads pull requests — the source control provider does, and the reconcile poll merges the
+// two into an `ObservedItem`. `owned` (daemon-owned coordination) and `followUp` are the two signals
+// the merge needs from the tracker to gate and assemble PR state.
+export interface TrackerItem extends ObservedItemBase {
+  readonly owned: boolean;
+  readonly followUp: FollowUpMarker | null;
+}
+
+export interface ObservedItem extends ObservedItemBase {
+  readonly pr: ObservedPr | null;
 }
 
 export interface RoleChanges {
@@ -58,7 +70,7 @@ const observeEmpty = Effect.fn("WorkSource.observe")(function* (workspace: Regis
   if (hasRemoteSource(workspace)) {
     return yield* noAdapter(workspace);
   }
-  return [] as ReadonlyArray<ObservedItem>;
+  return [] as ReadonlyArray<TrackerItem>;
 });
 
 export const makeEmpty = Effect.succeed({
@@ -86,7 +98,7 @@ export const makeEmpty = Effect.succeed({
 export type WorkSourceService = Effect.Success<typeof makeEmpty>;
 
 export class WorkSource extends Context.Service<WorkSource, WorkSourceService>()(
-  "@clanker-forge/engine/WorkSource",
+  "@clanker-forge/engine/work-source/WorkSource",
 ) {}
 
 export const emptyLayer = Layer.effect(WorkSource, makeEmpty);

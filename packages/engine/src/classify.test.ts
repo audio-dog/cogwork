@@ -2,8 +2,8 @@ import { type Claim, WorkItemId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
-import { followUpNoProgressLimit, type ObservedPr } from "./followUp";
-import type { ObservedItem, PrReview } from "./WorkSource";
+import { followUpNoProgressLimit, type ObservedPr } from "./follow-up";
+import type { ObservedItem, PrReview } from "./work-source";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -23,6 +23,7 @@ const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"
   checks: "passing",
   latestHumanCommentAtMillis: null,
   fresh: false,
+  baseDivergence: "none",
   followUp: null,
   ...over,
 });
@@ -197,6 +198,38 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.followUp?.noProgress, 0);
   });
 
+  it("routes a conflicting bot PR to follow-up even with green checks, no review, and no new comment", () => {
+    const { eligible } = classify([item({ id: "1", pr: pr("pending", { baseDivergence: "conflict" }) })]);
+    assert.strictEqual(eligible[0]?.stage, "follow-up");
+    assert.strictEqual(eligible[0]?.followUp?.baseDivergence, "conflict");
+    assert.strictEqual(eligible[0]?.followUp?.noProgress, 0);
+  });
+
+  it("leaves a merely-behind (clean) bot PR alone rather than routing it to follow-up", () => {
+    const { eligible } = classify([item({ id: "1", pr: pr("pending", { baseDivergence: "clean" }) })]);
+    assert.strictEqual(eligible.length, 0);
+  });
+
+  it("hands a conflict that persists three rounds with no other progress to a human", () => {
+    const { eligible } = classify([
+      item({
+        id: "1",
+        pr: pr("pending", {
+          baseDivergence: "conflict",
+          followUp: {
+            checks: "passing",
+            humanCommentAtMillis: 0,
+            noProgress: followUpNoProgressLimit - 1,
+            baseDivergence: "conflict",
+          },
+        }),
+      }),
+    ]);
+    assert.strictEqual(eligible[0]?.stage, "follow-up");
+    assert.strictEqual(eligible[0]?.followUp?.noProgress, followUpNoProgressLimit);
+    assert.isTrue(eligible[0]?.followUp?.stalled);
+  });
+
   it("routes a bot PR with a new human comment and green checks to follow-up", () => {
     const { eligible } = classify([
       item({ id: "1", pr: pr("pending", { checks: "passing", latestHumanCommentAtMillis: 100 }) }),
@@ -211,7 +244,7 @@ describe("classify", () => {
         pr: pr("pending", {
           checks: "failing",
           latestHumanCommentAtMillis: 50,
-          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 1 },
+          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 1, baseDivergence: "none" },
         }),
       }),
     ]);
@@ -226,7 +259,7 @@ describe("classify", () => {
         pr: pr("pending", {
           checks: "failing",
           latestHumanCommentAtMillis: 100,
-          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 2 },
+          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 2, baseDivergence: "none" },
         }),
       }),
     ]);
@@ -240,7 +273,12 @@ describe("classify", () => {
         pr: pr("pending", {
           checks: "failing",
           latestHumanCommentAtMillis: 50,
-          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: followUpNoProgressLimit - 1 },
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 50,
+            noProgress: followUpNoProgressLimit - 1,
+            baseDivergence: "none",
+          },
         }),
       }),
     ]);

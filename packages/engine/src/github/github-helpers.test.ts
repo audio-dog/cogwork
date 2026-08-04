@@ -1,8 +1,14 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { humanCommentSignal, linkedIssue, prReview, reviewFeedback } from "./adapter";
 import { parseIssues, type RawComment, type RawPull, type RawReview, reviewDecisionOf } from "./client";
 import { ledgerMarker } from "./markers";
+import {
+  baseDivergenceOf,
+  branchBelongsToSlug,
+  humanCommentSignal,
+  prReview,
+  reviewFeedback,
+} from "./provider";
 
 const review = (login: string, state: string) => ({ login, state });
 
@@ -28,10 +34,28 @@ const pull = (over: Partial<RawPull>): RawPull => ({
   number: 1,
   authorLogin: "clanker-forge[bot]",
   authorAssociation: "MEMBER",
-  body: "",
   draft: false,
   headSha: "sha",
+  headRef: "1-x",
   ...over,
+});
+
+describe("baseDivergenceOf", () => {
+  it("maps a dirty mergeable_state to a conflict", () => {
+    assert.strictEqual(baseDivergenceOf("dirty"), "conflict");
+  });
+
+  it("maps a behind mergeable_state to clean, since it still merges", () => {
+    assert.strictEqual(baseDivergenceOf("behind"), "clean");
+  });
+
+  it("maps every other state, including a not-yet-computed null, to none", () => {
+    assert.strictEqual(baseDivergenceOf(null), "none");
+    assert.strictEqual(baseDivergenceOf("clean"), "none");
+    assert.strictEqual(baseDivergenceOf("blocked"), "none");
+    assert.strictEqual(baseDivergenceOf("unknown"), "none");
+    assert.strictEqual(baseDivergenceOf("unstable"), "none");
+  });
 });
 
 describe("reviewDecisionOf", () => {
@@ -96,16 +120,16 @@ describe("parseIssues", () => {
   );
 });
 
-describe("linkedIssue", () => {
-  it("extracts the issue number from a closing keyword", () => {
-    assert.strictEqual(linkedIssue("Closes #5"), 5);
-    assert.strictEqual(linkedIssue("this fixes #12 finally"), 12);
-    assert.strictEqual(linkedIssue("resolved #3"), 3);
+describe("branchBelongsToSlug", () => {
+  it("matches the bare slug and any slug-prefixed branch", () => {
+    assert.isTrue(branchBelongsToSlug("13", "13"));
+    assert.isTrue(branchBelongsToSlug("13-worktree-lifecycle", "13"));
+    assert.isTrue(branchBelongsToSlug("aud-1-add-login", "aud-1"));
   });
 
-  it("returns null when no closing keyword is present", () => {
-    assert.isNull(linkedIssue("references #9 but does not close it"));
-    assert.isNull(linkedIssue("no link here"));
+  it("does not let one slug swallow a longer number that merely starts the same", () => {
+    assert.isFalse(branchBelongsToSlug("130-something", "13"));
+    assert.isFalse(branchBelongsToSlug("14-other", "13"));
   });
 });
 

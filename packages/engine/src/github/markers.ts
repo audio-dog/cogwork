@@ -2,7 +2,7 @@ import { AttemptRecord, Claim, type LifecycleStage, type TriageRole } from "@cla
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { statusReason } from "../comments";
-import { FollowUpMarker } from "../followUp";
+import { FollowUpMarker } from "../follow-up";
 
 const roleLabels = {
   "needs-triage": "needs-triage",
@@ -83,7 +83,7 @@ export const serializeAttempt = (attempt: AttemptRecord) =>
   `<!-- clanker-forge:attempt stage=${attempt.stage} outcome=${attempt.outcome} at=${attempt.atMillis} -->`;
 
 export const serializeFollowUp = (marker: FollowUpMarker) =>
-  `<!-- clanker-forge:follow-up checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} -->`;
+  `<!-- clanker-forge:follow-up checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence} -->`;
 
 const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
@@ -115,6 +115,8 @@ export const parseFollowUp = (bodies: ReadonlyArray<string>) =>
           checks: pairs.checks,
           humanCommentAtMillis: Number(pairs.human),
           noProgress: Number(pairs.noProgress),
+          // Markers written before base divergence existed have no `base=`; read them as "none".
+          baseDivergence: pairs.base ?? "none",
         }),
       ),
     )

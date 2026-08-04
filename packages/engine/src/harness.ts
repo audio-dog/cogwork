@@ -30,7 +30,7 @@ export interface HarnessService {
   readonly run: (request: HarnessRequest) => Stream.Stream<HarnessEvent, HarnessError>;
 }
 
-export class Harness extends Context.Service<Harness, HarnessService>()("@clanker-forge/engine/Harness") {}
+export class Harness extends Context.Service<Harness, HarnessService>()("@clanker-forge/engine/harness") {}
 
 const unknownHarness = (harness: HarnessName) =>
   new HarnessError({

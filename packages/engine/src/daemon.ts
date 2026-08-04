@@ -14,15 +14,15 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { RegisteredWorkspace } from "./projector";
-import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./Reconcile";
-import { WorkspaceRegistry } from "./Registry";
-import { activityOf, RunEventBus } from "./RunEventBus";
-import { RunLedger } from "./RunLedger";
-import { type DrainOptions, Scheduler, type SchedulerConfig, type SchedulerState } from "./Scheduler";
-import { ticketSlug, WorktreeManager } from "./Worktree";
+import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
+import { WorkspaceRegistry } from "./registry";
+import { activityOf, RunEventBus } from "./run-event-bus";
+import { RunLedger } from "./run-ledger";
+import { type DrainOptions, Scheduler, type SchedulerConfig, type SchedulerState } from "./scheduler";
+import { ticketSlug, WorktreeManager } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
-  "@clanker-forge/engine/Daemon/DaemonInfo",
+  "@clanker-forge/engine/daemon/DaemonInfo",
 ) {}
 
 export const daemonInfoLayer = Layer.effect(

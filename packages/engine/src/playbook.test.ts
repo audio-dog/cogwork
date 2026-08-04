@@ -14,7 +14,7 @@ import {
   resolveStage,
   resolveTriage,
   resolveTriageDecision,
-} from "./Playbook";
+} from "./playbook";
 
 const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
   Schema.decodeSync(WorkspaceConfig)({
@@ -115,12 +115,32 @@ describe("resolveStage", () => {
   });
 });
 
+describe("WorkspaceConfig.linearHistory", () => {
+  it("defaults to false when the key is omitted", () => {
+    assert.strictEqual(config().linearHistory, false);
+  });
+
+  it("accepts an explicit true", () => {
+    assert.strictEqual(config({ linearHistory: true }).linearHistory, true);
+  });
+});
+
 describe("buildFollowUpPrompt", () => {
   it("names the skill, forbids merging, and appends the follow-up sentinel", () => {
-    const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" });
+    const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, false);
     assert.include(prompt, "`follow-up-agent`");
     assert.include(prompt, "Never merge");
     assert.include(prompt, "FOLLOWUP-RESULT: <pushed | stuck>");
+  });
+
+  it("states linear history is not required by default", () => {
+    const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, false);
+    assert.include(prompt, "Linear history for this repository is not required.");
+  });
+
+  it("states linear history is required when the flag is set", () => {
+    const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, true);
+    assert.include(prompt, "Linear history for this repository is required.");
   });
 });
 

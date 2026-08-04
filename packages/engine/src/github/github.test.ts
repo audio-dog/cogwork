@@ -6,9 +6,11 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
-import type { FollowUpMarker } from "../followUp";
+import type { FollowUpMarker } from "../follow-up";
+import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
-import { WorkSource } from "../WorkSource";
+import { SourceControlProvider } from "../source-control";
+import { WorkSource } from "../work-source";
 import { layer as adapterLayer } from "./adapter";
 import {
   GitHubClient,
@@ -20,6 +22,7 @@ import {
   type RawReview,
 } from "./client";
 import { defaultStatus, hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
+import { layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -55,6 +58,7 @@ interface Seed {
   readonly reviewComments?: ReadonlyArray<SeedComment>;
   readonly reviews?: ReadonlyArray<SeedReview>;
   readonly checks?: ReadonlyArray<{ readonly sha: string } & CheckRun>;
+  readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
 }
 
 const bot = { login: "clanker-forge[bot]" } as const;
@@ -101,6 +105,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     new Map<string, ReadonlyArray<CheckRun>>(),
   );
   const pulls = seed.pulls ?? [];
+  const mergeableByPull = new Map((seed.mergeable ?? []).map(({ pull, state }) => [pull, state]));
   const patch = (number: number, update: (issue: RawIssue) => RawIssue) =>
     Ref.update(issuesRef, (issues) =>
       issues.map((issue) => (issue.number === number ? update(issue) : issue)),
@@ -108,6 +113,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   return {
     listIssues: () => Ref.get(issuesRef),
     listPulls: () => Effect.succeed([...pulls]),
+    pullMergeableState: (_repo, number) => Effect.succeed(mergeableByPull.get(number) ?? null),
     listComments: (_repo, number) =>
       Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(number) ?? [])])),
     listReviewComments: (_repo, number) => Effect.succeed([...(reviewComments.get(number) ?? [])]),
@@ -161,9 +167,19 @@ const workspace: RegisteredWorkspace = {
 };
 
 const withClient = (seed: Seed) =>
-  adapterLayer.pipe(Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))));
+  Layer.mergeAll(adapterLayer, providerLayer).pipe(
+    Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
+  );
 
-const pull = (over: Partial<RawPull> & { readonly number: number; readonly body: string }): RawPull => ({
+// Mirrors the reconcile poll: the tracker yields items, the provider attaches PR state.
+const observeItems = (workspace: RegisteredWorkspace) =>
+  Effect.gen(function* () {
+    const tracker = yield* WorkSource;
+    const provider = yield* SourceControlProvider;
+    return yield* observeWorkspace(tracker, provider)(workspace);
+  });
+
+const pull = (over: Partial<RawPull> & { readonly number: number; readonly headRef: string }): RawPull => ({
   authorLogin: "clanker-forge[bot]",
   authorAssociation: "MEMBER",
   draft: false,
@@ -177,8 +193,7 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
 describe("github work source adapter", () => {
   it.effect("derives the actionable set from labels and bot-PR state", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const { eligible, needsHuman, claimed } = classify(items);
       assert.deepStrictEqual(
         eligible.map((entry) => [entry.id, entry.stage]),
@@ -204,7 +219,7 @@ describe("github work source adapter", () => {
             { number: 5, title: "in review", labels: ["ready-for-agent"] },
             { number: 100, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 100, body: "Closes #5" })],
+          pulls: [pull({ number: 100, headRef: "5-in-review" })],
           comments: [
             {
               issue: 5,
@@ -218,11 +233,65 @@ describe("github work source adapter", () => {
     ),
   );
 
+  it.effect("reads a dirty mergeable_state as a conflict and routes the PR to follow-up", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#6");
+      assert.strictEqual(observed?.pr?.baseDivergence, "conflict");
+      const eligible = classify(items).eligible.find((entry) => entry.id === "#6");
+      assert.strictEqual(eligible?.stage, "follow-up");
+      assert.strictEqual(eligible?.followUp?.baseDivergence, "conflict");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 6, title: "conflicting", labels: ["ready-for-agent"] },
+            { number: 103, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 103, headRef: "6-conflicting" })],
+          comments: [
+            {
+              issue: 6,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            },
+          ],
+          mergeable: [{ pull: 103, state: "dirty" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("leaves a merely-behind bot PR out of follow-up", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      assert.strictEqual(items.find((item) => item.id === "#9")?.pr?.baseDivergence, "clean");
+      assert.strictEqual(classify(items).eligible.length, 0);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 9, title: "behind but clean", labels: ["ready-for-agent"] },
+            { number: 104, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [pull({ number: 104, headRef: "9-behind-but-clean" })],
+          comments: [
+            {
+              issue: 9,
+              authorLogin: bot.login,
+              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            },
+          ],
+          mergeable: [{ pull: 104, state: "behind" }],
+        }),
+      ),
+    ),
+  );
+
   it.effect("reads open blockers from the issue listing and holds those tickets as blocked", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       assert.strictEqual(items.find((item) => item.id === "#30")?.openBlockers, 1);
       assert.strictEqual(items.find((item) => item.id === "#31")?.openBlockers, 0);
       const { eligible, blocked } = classify(items);
@@ -252,7 +321,7 @@ describe("github work source adapter", () => {
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
       yield* source.claim(workspace, id("#7"), claim);
       yield* source.recordAttempt(workspace, id("#7"), attempt, "git worktree add: boom");
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#7");
       assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
@@ -269,8 +338,7 @@ describe("github work source adapter", () => {
 
   it.effect("ignores a claim marker forged by a non-bot commenter", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#8");
       assert.isNull(observed?.claim ?? null);
       const { eligible, claimed } = classify(items);
@@ -303,7 +371,7 @@ describe("github work source adapter", () => {
         stage: "implement",
       });
       yield* source.release(workspace, id("#7"));
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       assert.isNull(items.find((item) => item.id === "#7")?.claim ?? null);
       assert.strictEqual(classify(items).eligible.length, 1);
     }).pipe(
@@ -313,8 +381,7 @@ describe("github work source adapter", () => {
 
   it.effect("reads failing checks, PR human comments, /fresh, and the follow-up marker from a bot PR", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#5");
       assert.strictEqual(observed?.pr?.checks, "failing");
       assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 200);
@@ -323,6 +390,7 @@ describe("github work source adapter", () => {
         checks: "failing",
         humanCommentAtMillis: 100,
         noProgress: 1,
+        baseDivergence: "none",
       });
       const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
       assert.strictEqual(eligible?.stage, "follow-up");
@@ -335,7 +403,7 @@ describe("github work source adapter", () => {
             { number: 5, title: "in review", labels: ["ready-for-agent"] },
             { number: 100, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 100, body: "Closes #5" })],
+          pulls: [pull({ number: 100, headRef: "5-in-review" })],
           comments: [
             {
               issue: 100,
@@ -348,7 +416,12 @@ describe("github work source adapter", () => {
               issue: 5,
               authorLogin: bot.login,
               authorAssociation: "NONE",
-              body: serializeFollowUp({ checks: "failing", humanCommentAtMillis: 100, noProgress: 1 }),
+              body: serializeFollowUp({
+                checks: "failing",
+                humanCommentAtMillis: 100,
+                noProgress: 1,
+                baseDivergence: "none",
+              }),
               createdAtMillis: 150,
             },
           ],
@@ -362,8 +435,7 @@ describe("github work source adapter", () => {
 
   it.effect("owns a write-access human-authored PR when the issue carries the daemon's marker", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const owned = items.find((item) => item.id === "#20");
       const unowned = items.find((item) => item.id === "#21");
       assert.strictEqual(owned?.pr?.review, "changes-requested");
@@ -385,13 +457,13 @@ describe("github work source adapter", () => {
               number: 200,
               authorLogin: "taylorfsteele",
               authorAssociation: "OWNER",
-              body: "Closes #20",
+              headRef: "20-owned",
             }),
             pull({
               number: 201,
               authorLogin: "taylorfsteele",
               authorAssociation: "OWNER",
-              body: "Closes #21",
+              headRef: "21-unowned",
             }),
           ],
           comments: [
@@ -407,10 +479,58 @@ describe("github work source adapter", () => {
     ),
   );
 
+  it.effect("resolves the PR by the branch prefix, preferring exact branch, then bot, then newest", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      // On each item only the branch the tie-break should pick carries a changes-requested review;
+      // the rest are approved. So a changes-requested result proves we picked the intended branch.
+      assert.strictEqual(items.find((item) => item.id === "#40")?.pr?.review, "changes-requested");
+      assert.strictEqual(items.find((item) => item.id === "#41")?.pr?.review, "changes-requested");
+      assert.strictEqual(items.find((item) => item.id === "#42")?.pr?.review, "changes-requested");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 40, title: "pick me", labels: ["ready-for-agent"] },
+            { number: 41, title: "bot beats newest", labels: ["ready-for-agent"] },
+            { number: 42, title: "newest wins", labels: ["ready-for-agent"] },
+          ],
+          pulls: [
+            pull({ number: 300, headRef: "40-stale" }),
+            pull({
+              number: 301,
+              headRef: "40-pick-me",
+              authorLogin: "taylorfsteele",
+              authorAssociation: "OWNER",
+            }),
+            pull({ number: 302, headRef: "40-newer" }),
+            pull({ number: 310, headRef: "41-a" }),
+            pull({ number: 311, headRef: "41-b", authorLogin: "taylorfsteele", authorAssociation: "OWNER" }),
+            pull({ number: 320, headRef: "42-a" }),
+            pull({ number: 321, headRef: "42-b" }),
+          ],
+          comments: [40, 41, 42].map((issue) => ({
+            issue,
+            authorLogin: bot.login,
+            body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+          })),
+          reviews: [
+            { pull: 300, state: "APPROVED" },
+            { pull: 301, state: "CHANGES_REQUESTED" },
+            { pull: 302, state: "APPROVED" },
+            { pull: 310, state: "CHANGES_REQUESTED" },
+            { pull: 311, state: "APPROVED" },
+            { pull: 320, state: "APPROVED" },
+            { pull: 321, state: "CHANGES_REQUESTED" },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("refuses to adopt a PR from an author without write access, even on an owned issue", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#25");
       assert.isNull(observed?.pr ?? null);
       assert.isUndefined(
@@ -424,7 +544,7 @@ describe("github work source adapter", () => {
             { number: 205, title: "fork pr", labels: [], isPullRequest: true },
           ],
           pulls: [
-            pull({ number: 205, authorLogin: "drive-by", authorAssociation: "NONE", body: "Closes #25" }),
+            pull({ number: 205, authorLogin: "drive-by", authorAssociation: "NONE", headRef: "25-hostile" }),
           ],
           comments: [
             {
@@ -443,8 +563,7 @@ describe("github work source adapter", () => {
 
   it.effect("ignores a changes-requested review from an author without write access", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#26");
       assert.strictEqual(observed?.pr?.review, "pending");
       assert.isUndefined(
@@ -457,7 +576,7 @@ describe("github work source adapter", () => {
             { number: 26, title: "owned bot pr, hostile review", labels: ["ready-for-agent"] },
             { number: 206, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 206, body: "Closes #26" })],
+          pulls: [pull({ number: 206, headRef: "26-hostile-review" })],
           comments: [
             {
               issue: 26,
@@ -475,8 +594,7 @@ describe("github work source adapter", () => {
 
   it.effect("treats an inline review comment as human feedback that triggers follow-up", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#22");
       assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 300);
       assert.strictEqual(classify(items).eligible.find((entry) => entry.id === "#22")?.stage, "follow-up");
@@ -487,7 +605,7 @@ describe("github work source adapter", () => {
             { number: 22, title: "inline review", labels: ["ready-for-agent"] },
             { number: 202, title: "human pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 202, authorLogin: "taylorfsteele", body: "Closes #22" })],
+          pulls: [pull({ number: 202, authorLogin: "taylorfsteele", headRef: "22-inline-review" })],
           comments: [
             {
               issue: 22,
@@ -511,8 +629,7 @@ describe("github work source adapter", () => {
 
   it.effect("treats a COMMENTED review with a body as feedback but ignores an empty one", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const withBody = items.find((item) => item.id === "#23");
       const empty = items.find((item) => item.id === "#24");
       assert.strictEqual(withBody?.pr?.latestHumanCommentAtMillis, 400);
@@ -530,8 +647,8 @@ describe("github work source adapter", () => {
             { number: 204, title: "human pr", labels: [], isPullRequest: true },
           ],
           pulls: [
-            pull({ number: 203, authorLogin: "taylorfsteele", body: "Closes #23" }),
-            pull({ number: 204, authorLogin: "taylorfsteele", body: "Closes #24" }),
+            pull({ number: 203, authorLogin: "taylorfsteele", headRef: "23-review-with-body" }),
+            pull({ number: 204, authorLogin: "taylorfsteele", headRef: "24-empty-review" }),
           ],
           comments: [23, 24].map((issue) => ({
             issue,
@@ -549,18 +666,21 @@ describe("github work source adapter", () => {
 
   it.effect("never exposes a merge or review-thread-resolution capability", () =>
     Effect.gen(function* () {
-      const forbidden = /merge|resolve/i;
+      // Reading GitHub's `mergeable_state` is allowed (ADR 0003); merging a PR or resolving a
+      // review thread is not — so the merge guard excludes the "mergeable" read accessor.
+      const forbidden = /merge(?!able)|resolve/i;
       const client = yield* fakeClient({ issues: [] });
       assert.isFalse(Object.keys(client).some((method) => forbidden.test(method)));
       const source = yield* WorkSource;
       assert.isFalse(Object.keys(source).some((method) => forbidden.test(method)));
+      const provider = yield* SourceControlProvider;
+      assert.isFalse(Object.keys(provider).some((method) => forbidden.test(method)));
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
   it.effect("counts prior attempts and escalates past the cap even without the claim label", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#9");
       assert.strictEqual(observed?.attempts.length, 3);
       const { eligible, needsHuman } = classify(items);
@@ -600,7 +720,7 @@ describe("github work source adapter", () => {
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
       assert.include(comments[0]?.body ?? "", "Currently implementing this issue.");
       assert.include(comments[0]?.body ?? "", "<!-- clanker-forge:attempt");
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#11");
       assert.deepStrictEqual(observed?.claim, second);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
@@ -625,7 +745,7 @@ describe("github work source adapter", () => {
       const comments = botComments(yield* client.listComments(repo, 12));
       assert.strictEqual(comments.length, 1);
       assert.include(comments[0]?.body ?? "", "Last triage attempt failed.");
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#12");
       assert.strictEqual(observed?.attempts.length, 3);
       assert.include(
@@ -681,7 +801,7 @@ describe("github work source adapter", () => {
       const comments = botComments(yield* client.listComments(repo, 15));
       assert.strictEqual(comments.length, 2);
       assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#15");
       assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [legacyAttempt]);
@@ -726,7 +846,7 @@ describe("github work source adapter", () => {
       assert.include(proposal?.body ?? "", "Triage proposal body");
       assert.notInclude(coordination?.body ?? "", "Triage proposal body");
       assert.include(coordination?.body ?? "", "Currently implementing this issue.");
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#16");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#16");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       assert.deepStrictEqual(observed?.claim, {
         by: "clanker-forge",
@@ -761,7 +881,7 @@ describe("github work source adapter", () => {
       yield* source.recordFollowUp(
         workspace,
         id("#20"),
-        { checks: "failing", humanCommentAtMillis: 1, noProgress: 1 },
+        { checks: "failing", humanCommentAtMillis: 1, noProgress: 1, baseDivergence: "none" },
         "Old folded detail",
       );
       yield* source.note(workspace, id("#20"), "Fresh triage proposal");
@@ -797,7 +917,7 @@ describe("github work source adapter", () => {
       );
       assert.include(proposal?.body ?? "", "Looks done");
       assert.notInclude(proposal?.body ?? "", "outcome=failed");
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#21");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#21");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       assert.deepStrictEqual(observed?.claim, claim);
     }).pipe(
@@ -808,10 +928,20 @@ describe("github work source adapter", () => {
   it.effect("lets the coordination comment outrank a legacy marker comment written after it", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;
-      const stale: FollowUpMarker = { checks: "pending", humanCommentAtMillis: 1, noProgress: 0 };
-      const current: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 9, noProgress: 2 };
+      const stale: FollowUpMarker = {
+        checks: "pending",
+        humanCommentAtMillis: 1,
+        noProgress: 0,
+        baseDivergence: "none",
+      };
+      const current: FollowUpMarker = {
+        checks: "failing",
+        humanCommentAtMillis: 9,
+        noProgress: 2,
+        baseDivergence: "conflict",
+      };
       yield* source.recordFollowUp(workspace, id("#19"), current);
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#19");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#19");
       assert.notDeepEqual(observed?.pr?.followUp, stale);
       assert.deepStrictEqual(observed?.pr?.followUp, current);
     }).pipe(
@@ -821,7 +951,7 @@ describe("github work source adapter", () => {
             { number: 19, title: "legacy follow-up", labels: ["ready-for-agent"] },
             { number: 102, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 102, body: "Closes #19" })],
+          pulls: [pull({ number: 102, headRef: "19-legacy-follow-up" })],
           comments: [
             {
               issue: 19,
@@ -832,7 +962,12 @@ describe("github work source adapter", () => {
             {
               issue: 19,
               authorLogin: bot.login,
-              body: serializeFollowUp({ checks: "pending", humanCommentAtMillis: 1, noProgress: 0 }),
+              body: serializeFollowUp({
+                checks: "pending",
+                humanCommentAtMillis: 1,
+                noProgress: 0,
+                baseDivergence: "none",
+              }),
               createdAtMillis: 2,
             },
           ],
@@ -845,12 +980,17 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* WorkSource;
       const client = yield* GitHubClient;
-      const marker: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 4, noProgress: 1 };
+      const marker: FollowUpMarker = {
+        checks: "failing",
+        humanCommentAtMillis: 4,
+        noProgress: 1,
+        baseDivergence: "clean",
+      };
       yield* source.recordFollowUp(workspace, id("#18"), marker);
       const comments = botComments(yield* client.listComments(repo, 18));
       assert.strictEqual(comments.length, 1);
       assert.include(comments[0]?.body ?? "", defaultStatus);
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#18");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#18");
       assert.deepStrictEqual(observed?.pr?.followUp, marker);
     }).pipe(
       Effect.provide(
@@ -859,7 +999,7 @@ describe("github work source adapter", () => {
             { number: 18, title: "in review", labels: ["ready-for-agent"] },
             { number: 101, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 101, body: "Closes #18" })],
+          pulls: [pull({ number: 101, headRef: "18-in-review" })],
         }),
       ),
     ),
