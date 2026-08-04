@@ -1,7 +1,7 @@
 import { SessionId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { decideResume, type ResumeInputs } from "./resumePolicy";
+import { decideResume, type ResumeInputs } from "./resume-policy";
 
 const session = Schema.decodeSync(SessionId)("sess-1");
 

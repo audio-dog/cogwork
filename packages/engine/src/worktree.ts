@@ -2,9 +2,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { type BranchDivergence, Git, GitError, type WorktreeEntry } from "./Git";
+import { type BranchDivergence, Git, GitError, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
-import { WorktreeFs } from "./WorktreeFs";
+import { WorktreeFs } from "./worktree-fs";
 
 export class WorktreeDivergedError extends Schema.TaggedErrorClass<WorktreeDivergedError>()(
   "WorktreeDivergedError",
@@ -278,7 +278,7 @@ export const make = Effect.gen(function* () {
 export type WorktreeManagerService = Effect.Success<typeof make>;
 
 export class WorktreeManager extends Context.Service<WorktreeManager, WorktreeManagerService>()(
-  "@clanker-forge/engine/Worktree/WorktreeManager",
+  "@clanker-forge/engine/worktree/WorktreeManager",
 ) {}
 
 export const managerLayer = Layer.effect(WorktreeManager, make);

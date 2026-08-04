@@ -13,7 +13,7 @@ import type * as Headers from "effect/unstable/http/Headers";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
-import { WorkSourceError } from "../WorkSource";
+import { WorkSourceError } from "../work-source";
 
 export interface GitHubRepoRef {
   readonly owner: string;

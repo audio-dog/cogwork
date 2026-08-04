@@ -16,8 +16,8 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import { type Classification, classify, type EligibleWork } from "./classify";
 import type { RegisteredWorkspace } from "./projector";
-import { WorkspaceRegistry } from "./Registry";
-import { type ObservedItem, WorkSource, type WorkSourceError } from "./WorkSource";
+import { WorkspaceRegistry } from "./registry";
+import { type ObservedItem, WorkSource, type WorkSourceError } from "./work-source";
 
 export interface ObservedRef {
   readonly id: WorkItemId;
@@ -225,7 +225,7 @@ export const make = Effect.gen(function* () {
 });
 
 export class ReconcileWorker extends Context.Service<ReconcileWorker, Effect.Success<typeof make>>()(
-  "@clanker-forge/engine/Reconcile/ReconcileWorker",
+  "@clanker-forge/engine/reconcile/ReconcileWorker",
 ) {}
 
 export const layer = Layer.effect(ReconcileWorker, make);

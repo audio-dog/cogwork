@@ -14,7 +14,7 @@ _Avoid_: Resource, file
 **Skill**:
 A self-contained, portable capability with a `SKILL.md`, living in one of three buckets:
 `skills/forge/<name>/` and `skills/sync/<name>/` here, or `packages/engine/skills/<name>/`
-for the orchestration playbooks (authored there so they sit next to the `Playbook.ts` that
+for the orchestration playbooks (authored there so they sit next to the `playbook.ts` that
 names them). Only the `sync` bucket is copied as-is (no rendering) to tools that support
 skills; overlaps across buckets are duplicate files so each audience can diverge.
 _Avoid_: Command, subagent, plugin

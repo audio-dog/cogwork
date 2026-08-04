@@ -19,7 +19,7 @@ import {
   type StoredCredentials,
   type StoredToken,
   type TokenRefresh,
-} from "./CredentialStore";
+} from "./credential-store";
 
 const account = {
   key: "AUD",

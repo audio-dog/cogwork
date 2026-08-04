@@ -9,15 +9,15 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
-import * as Daemon from "./Daemon";
-import * as Reconcile from "./Reconcile";
-import * as Registry from "./Registry";
-import * as RunEventBus from "./RunEventBus";
-import * as RunLedger from "./RunLedger";
-import * as Scheduler from "./Scheduler";
-import type { ObservedItem } from "./WorkSource";
-import * as WorkSource from "./WorkSource";
-import { WorktreeManager } from "./Worktree";
+import * as Daemon from "./daemon";
+import * as Reconcile from "./reconcile";
+import * as Registry from "./registry";
+import * as RunEventBus from "./run-event-bus";
+import * as RunLedger from "./run-ledger";
+import * as Scheduler from "./scheduler";
+import type { ObservedItem } from "./work-source";
+import * as WorkSource from "./work-source";
+import { WorktreeManager } from "./worktree";
 
 const validModule: Registry.LoadedWorkspace = {
   source: "example.workspace.ts",

@@ -2,8 +2,8 @@ import { type Claim, WorkItemId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
-import { followUpNoProgressLimit, type ObservedPr } from "./followUp";
-import type { ObservedItem, PrReview } from "./WorkSource";
+import { followUpNoProgressLimit, type ObservedPr } from "./follow-up";
+import type { ObservedItem, PrReview } from "./work-source";
 
 const id = Schema.decodeSync(WorkItemId);
 

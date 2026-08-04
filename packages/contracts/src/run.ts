@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./baseSchemas";
+import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { LifecycleStage } from "./triage";
 
 export const RunId = TrimmedNonEmptyString.pipe(Schema.brand("RunId"));

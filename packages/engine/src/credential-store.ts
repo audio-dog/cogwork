@@ -106,7 +106,7 @@ export interface CredentialStoreService {
 }
 
 export class CredentialStore extends Context.Service<CredentialStore, CredentialStoreService>()(
-  "@clanker-forge/engine/CredentialStore",
+  "@clanker-forge/engine/credential-store/CredentialStore",
 ) {}
 
 export const accountOf = (credential: StoredCredential) =>

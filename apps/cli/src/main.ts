@@ -6,8 +6,8 @@ import * as Layer from "effect/Layer";
 import * as Command from "effect/unstable/cli/Command";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { daemonCommand, runEventsCommand, runsCommand, statusCommand, watchCommand } from "./commands";
-import { loginCommand } from "./loginCommands";
-import { worktreeCommand } from "./worktreeCommands";
+import { loginCommand } from "./login-commands";
+import { worktreeCommand } from "./worktree-commands";
 
 const cli = Command.make("clanker-forge").pipe(
   Command.withSubcommands([

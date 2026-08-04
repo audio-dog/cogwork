@@ -8,8 +8,8 @@ import type {
   NeedsHumanReason,
 } from "@clanker-forge/contracts";
 import { stagePriority } from "@clanker-forge/contracts";
-import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./followUp";
-import type { ObservedItem } from "./WorkSource";
+import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./follow-up";
+import type { ObservedItem } from "./work-source";
 
 export interface EligibleWork extends ActionableItem {
   readonly priorFailures: number;

@@ -18,14 +18,14 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
-import * as Executor from "./Executor";
+import * as Executor from "./executor";
 import type { RegisteredWorkspace } from "./projector";
-import * as Reconcile from "./Reconcile";
-import * as Registry from "./Registry";
-import * as RunLedger from "./RunLedger";
-import * as Scheduler from "./Scheduler";
-import type { ObservedItem } from "./WorkSource";
-import { WorkSource, type WorkSourceService } from "./WorkSource";
+import * as Reconcile from "./reconcile";
+import * as Registry from "./registry";
+import * as RunLedger from "./run-ledger";
+import * as Scheduler from "./scheduler";
+import type { ObservedItem } from "./work-source";
+import { WorkSource, type WorkSourceService } from "./work-source";
 
 const id = Schema.decodeSync(WorkItemId);
 

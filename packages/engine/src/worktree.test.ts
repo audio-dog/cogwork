@@ -12,9 +12,9 @@ import {
   GitError,
   type GitService,
   type WorktreeEntry,
-} from "./Git";
-import * as Worktree from "./Worktree";
-import { type FileStat, WorktreeFs, type WorktreeFsService } from "./WorktreeFs";
+} from "./git";
+import * as Worktree from "./worktree";
+import { type FileStat, WorktreeFs, type WorktreeFsService } from "./worktree-fs";
 
 const decodeConfig = Schema.decodeSync(WorkspaceConfig);
 

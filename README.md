@@ -81,7 +81,7 @@ clanker-forge is a pnpm monorepo. Authored skills and the sync generator live to
 packages/sync/          TypeScript generator behind `pnpm sync`/`pnpm check` (src/cli.ts, src/check.ts, targets/, lib/)
 packages/sync/assets/   Canonical source for rules, commands, subagents, MCP config
 packages/sync/skills/   Authored skills — forge and sync buckets (see its README)
-packages/engine/skills/ Authored skills — the engine bucket (headless playbooks), next to Playbook.ts
+packages/engine/skills/ Authored skills — the engine bucket (headless playbooks), next to playbook.ts
 packages/sync/bin/      link-skills.sh (symlink sync-bucket skills + repo-config for local dev)
 repo-config/            Per-repo config for the forked engineering skills (see repo-config/README.md)
 .agents/skills/         Consumer installs used in this repo (e.g. effect-ts), not authored here

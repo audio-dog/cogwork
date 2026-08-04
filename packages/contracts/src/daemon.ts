@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkSourceType, WorkspaceId } from "./baseSchemas";
+import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkSourceType, WorkspaceId } from "./base-schemas";
 import { Claim } from "./coordination";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
 

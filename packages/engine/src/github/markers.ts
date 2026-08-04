@@ -2,7 +2,7 @@ import { AttemptRecord, Claim, type LifecycleStage, type TriageRole } from "@cla
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { statusReason } from "../comments";
-import { FollowUpMarker } from "../followUp";
+import { FollowUpMarker } from "../follow-up";
 
 const roleLabels = {
   "needs-triage": "needs-triage",

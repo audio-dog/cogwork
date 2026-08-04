@@ -10,7 +10,7 @@ the bucket whose behavior you want to change.
 | **engine** | [`packages/engine/skills/<name>/`](../../engine/skills/) | The orchestration daemon (headless playbooks) |
 | **sync** | `sync/<name>/` | The sync generator — copied into each tool's global skill store |
 
-The **engine** bucket lives in `packages/engine/`, next to the playbooks (`Playbook.ts`)
+The **engine** bucket lives in `packages/engine/`, next to the playbooks (`playbook.ts`)
 that name its skills by string, rather than here — everything else authored for this
 generator's own buckets stays under this directory.
 

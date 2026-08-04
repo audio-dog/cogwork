@@ -133,7 +133,7 @@ export const makeMemory = Effect.gen(function* () {
 export type RunLedgerService = Effect.Success<typeof makeMemory>;
 
 export class RunLedger extends Context.Service<RunLedger, RunLedgerService>()(
-  "@clanker-forge/engine/RunLedger",
+  "@clanker-forge/engine/run-ledger/RunLedger",
 ) {}
 
 export const layerMemory = Layer.effect(RunLedger, makeMemory);
