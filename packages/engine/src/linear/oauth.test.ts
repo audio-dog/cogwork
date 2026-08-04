@@ -3,6 +3,8 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 import { afterEach, vi } from "vitest";
 import {
   authorizeUrl,
@@ -12,6 +14,7 @@ import {
   discoverIdentity,
   makePkce,
   makeState,
+  makeTokenRefresh,
   redirectUri,
   storedTokenFrom,
   tokenExchangeRequest,
@@ -50,6 +53,34 @@ const documentOf = (init: RequestInit | undefined) => {
   const parsed: { readonly query?: string } = JSON.parse(body);
   return parsed.query ?? "";
 };
+
+const formBodyOf = (init: RequestInit | undefined) => {
+  const body = init?.body;
+  if (typeof body === "string") return body;
+  return body instanceof Uint8Array ? new TextDecoder().decode(body) : "";
+};
+
+const jsonResponse = ({ status = 200, body }: StubResponse) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+// The Fetch reference resolves `globalThis.fetch` once and keeps it, so a stubbed global would leak
+// the first test's routing into every later one; the reference has to carry the stub instead.
+const tokenEndpoint = (route: () => StubResponse) => {
+  const sent: Array<string> = [];
+  const fetch: typeof globalThis.fetch = (_input, init) => {
+    sent.push(formBodyOf(init));
+    return Promise.resolve(jsonResponse(route()));
+  };
+  return { fetch, sentBody: () => sent.at(-1) ?? "" };
+};
+
+const withTokenEndpoint =
+  (stub: ReturnType<typeof tokenEndpoint>) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(
+      Effect.provide(FetchHttpClient.layer),
+      Effect.provideService(FetchHttpClient.Fetch, stub.fetch),
+    );
 
 const stubLinear = (route: (document: string) => StubResponse) => {
   vi.stubGlobal(
@@ -129,6 +160,47 @@ describe("linear oauth helpers", () => {
       code: "auth-code",
       code_verifier: "verifier-1",
     });
+  });
+
+  const refresh = (refreshToken: string) =>
+    Effect.flatMap(HttpClient.HttpClient, (client) =>
+      makeTokenRefresh(client)({
+        account: "AUD",
+        clientId: "client-1",
+        refreshToken: Redacted.make(refreshToken),
+      }),
+    );
+
+  it.effect("exchanges a refresh token for a rotated pair", () => {
+    const endpoint = tokenEndpoint(() => ({ body: tokenBody }));
+    return Effect.gen(function* () {
+      const token = yield* refresh("refresh-1");
+      assert.deepStrictEqual(Object.fromEntries(new URLSearchParams(endpoint.sentBody())), {
+        grant_type: "refresh_token",
+        client_id: "client-1",
+        refresh_token: "refresh-1",
+      });
+      assert.strictEqual(Redacted.value(token.accessToken), "linear-access-token");
+      assert.strictEqual(token.refreshToken && Redacted.value(token.refreshToken), "linear-refresh-token");
+    }).pipe(withTokenEndpoint(endpoint));
+  });
+
+  it.effect("reports a rejected refresh without quoting the refresh token", () => {
+    const endpoint = tokenEndpoint(() => ({ status: 400, body: { error: "invalid_grant" } }));
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(refresh("super-secret-refresh"));
+      assert.strictEqual(error.account, "AUD");
+      assert.include(error.message, "400");
+      assert.notInclude(error.message, "super-secret-refresh");
+    }).pipe(withTokenEndpoint(endpoint));
+  });
+
+  it.effect("rejects a token response the schema does not accept", () => {
+    const endpoint = tokenEndpoint(() => ({ body: { token_type: "Bearer" } }));
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(refresh("refresh-1"));
+      assert.include(error.message, "unexpected payload");
+    }).pipe(withTokenEndpoint(endpoint));
   });
 
   it("builds a form-encoded client-credentials request carrying the secret", () => {

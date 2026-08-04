@@ -14,6 +14,7 @@ const ref: LinearTeamRef = {
   tokenEnv: "LINEAR_API_KEY",
   organization: null,
   clientCredentials: null,
+  oauthClientId: null,
 };
 
 const linearMaxQueryComplexity = 10_000;

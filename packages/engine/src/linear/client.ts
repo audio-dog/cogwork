@@ -22,6 +22,7 @@ export interface LinearTeamRef {
   readonly tokenEnv: string;
   readonly organization: string | null;
   readonly clientCredentials: ClientCredentialsRef | null;
+  readonly oauthClientId: string | null;
 }
 
 // Linear's request budget is per user and shared across every key that user owns, so every workspace
@@ -322,6 +323,7 @@ const accountFor = (ref: LinearTeamRef) => ({
   organization: ref.organization,
   tokenEnv: ref.tokenEnv,
   clientCredentials: ref.clientCredentials,
+  oauthClientId: ref.oauthClientId,
 });
 
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {

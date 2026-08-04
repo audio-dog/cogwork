@@ -4,6 +4,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 
 const fileMode = 0o600;
 const directoryMode = 0o700;
@@ -78,7 +79,12 @@ export const layer = (filePath: string) =>
     CredentialStore.CredentialStore,
     Effect.gen(function* () {
       const stored = yield* makeFileStore(filePath);
+      const client = yield* HttpClient.HttpClient;
       const clientCredentials = yield* Linear.ClientCredentials.make();
-      return CredentialStore.make({ stored, clientCredentials });
+      return CredentialStore.make({
+        stored,
+        clientCredentials,
+        refresh: Linear.OAuth.makeTokenRefresh(client),
+      });
     }),
   );

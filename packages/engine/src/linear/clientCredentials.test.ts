@@ -16,6 +16,7 @@ const account: CredentialAccount = {
   organization: null,
   tokenEnv: "LINEAR_API_KEY",
   clientCredentials: { clientId: "client-1", secretEnv },
+  oauthClientId: null,
 };
 
 const browserOnly: CredentialAccount = { ...account, clientCredentials: null };
