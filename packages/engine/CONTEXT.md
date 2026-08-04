@@ -14,8 +14,16 @@ The long-lived host process that runs the engine on one machine: it serves the R
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
-The background worker that polls every workspace's work source, classifies the results, and stores them in an in-memory reconcile snapshot. One of the daemon's two heartbeats.
+The background worker that polls every workspace's work source, classifies the results, and stores them in an in-memory reconcile snapshot. One of the daemon's two heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
 _Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (releasing stale claims).
+
+**Rate-limit scope**:
+The key a work source hands the reconcile worker to say *whose* request budget a poll spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. GitHub returns none: its client already fails fast inside its own cooldown, so there is nothing for reconcile to add.
+_Avoid_: Credential id (the credential store's business), workspace key (the point is that it is *not* per workspace)
+
+**Cooldown window**:
+The span a rate-limit scope is held out of polling for, opened when a source reports `rate-limited`. Length comes from the source's own retry timing when it has any (Linear's `retryAfter` / `requestsResetAt`), and from exponential backoff when it doesn't. Entering a window warns once; the skipped ticks in between are quiet, and a successful poll closes it.
+_Avoid_: Circuit breaker (nothing is tripped open by error rate), throttle
 
 **Classification**:
 The partition of a work source's observed items into eligible, claimed, blocked, and needs-human, each tagged with a lifecycle stage. *Blocked* means the work source reports open blockers, so `implement` is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
@@ -50,7 +58,7 @@ A workspace's binding of a lifecycle stage to a prompt template, skill, and harn
 _Avoid_: Workflow, pipeline
 
 **Work source adapter**:
-A concrete implementation of the work source port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by `workSource.type` via `workSourceRoutedLayer`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear returns `pr: null` (PR follow-up stays GitHub's problem for now).
+A concrete implementation of the work source port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by `workSource.type` via `workSourceRoutedLayer`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear returns `pr: null` and `openBlockers: 0` (PR follow-up and dependency blocking stay GitHub's problem for now).
 _Avoid_: Client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Credential store**:

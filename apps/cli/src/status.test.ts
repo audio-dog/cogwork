@@ -17,6 +17,7 @@ const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   poll: { status: "ok" },
   eligible: [],
   claimed: [],
+  blocked: [],
   needsHuman: [],
   ...over,
 });
@@ -56,6 +57,28 @@ describe("formatStatus", () => {
     assert.include(output, "        · ready-for-human #9 keeps failing");
   });
 
+  it("renders a blocked section with each item's open-blocker count", () => {
+    const output = formatStatus(
+      status({
+        workspaces: [
+          workspace({
+            blocked: [
+              { id: workItemId("#4"), title: "waiting on one", openBlockers: 1 },
+              { id: workItemId("#5"), title: "waiting on two", openBlockers: 2 },
+            ],
+          }),
+        ],
+      }),
+    );
+    assert.include(output, "      blocked:");
+    assert.include(output, "        · #4 waiting on one (1 open blocker)");
+    assert.include(output, "        · #5 waiting on two (2 open blockers)");
+  });
+
+  it("omits the blocked section when nothing has an open blocker", () => {
+    assert.notInclude(formatStatus(status()), "      blocked:");
+  });
+
   it("omits the needs-human section when nothing is waiting on a human", () => {
     const output = formatStatus(status());
     assert.include(output, "  - forge [github/cursor] /tmp/forge");
@@ -93,13 +116,36 @@ describe("formatStatus", () => {
           dailyBudgetLimit: 50,
           perWorkspace: [{ name: workspaceId("forge"), inFlight: 1 }],
         },
-        workspaces: [workspace({ poll: { status: "paused", message: "auth failed" } })],
+        workspaces: [
+          workspace({
+            poll: { status: "paused", reason: "auth", message: "auth failed", retryAtMillis: null },
+          }),
+        ],
         failures: [{ source: "broken.workspace.ts", message: "boom" }],
       }),
     );
     assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 (forge=1)");
-    assert.include(output, "      paused: auth failed");
+    assert.include(output, "      paused: auth (needs attention) — auth failed");
     assert.include(output, "  ! broken.workspace.ts: boom");
+  });
+
+  it("renders a rate-limited pause as self-healing with the retry-at instant", () => {
+    const output = formatStatus(
+      status({
+        workspaces: [
+          workspace({
+            poll: {
+              status: "paused",
+              reason: "rate-limited",
+              message: "Linear rate limit active",
+              retryAtMillis: 1_785_800_000_000,
+            },
+          }),
+        ],
+      }),
+    );
+    assert.include(output, "      paused: rate-limited (self-healing, retrying after 2026-08-03T");
+    assert.notInclude(output, "needs attention");
   });
 
   it("says so when no workspaces are registered", () => {

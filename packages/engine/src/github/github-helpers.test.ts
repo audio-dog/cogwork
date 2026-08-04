@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import { humanCommentSignal, linkedIssue, prReview, reviewFeedback } from "./adapter";
-import { type RawComment, type RawPull, type RawReview, reviewDecisionOf } from "./client";
+import { parseIssues, type RawComment, type RawPull, type RawReview, reviewDecisionOf } from "./client";
 import { ledgerMarker } from "./markers";
 
 const review = (login: string, state: string) => ({ login, state });
@@ -56,6 +57,43 @@ describe("reviewDecisionOf", () => {
   it("clears an approval that was later dismissed", () => {
     assert.strictEqual(reviewDecisionOf([review("a", "APPROVED"), review("a", "DISMISSED")]), "none");
   });
+});
+
+describe("parseIssues", () => {
+  const issue = (over: Record<string, unknown>) => ({
+    number: 1,
+    title: "an issue",
+    labels: ["ready-for-agent"],
+    ...over,
+  });
+
+  it.effect("reads open blockers from the dependency summary GitHub sends with the listing", () =>
+    Effect.gen(function* () {
+      const issues = yield* parseIssues([
+        issue({ number: 1, issue_dependencies_summary: { blocked_by: 2, total_blocked_by: 5 } }),
+        issue({ number: 2, issue_dependencies_summary: { blocked_by: 0 } }),
+      ]);
+      assert.deepStrictEqual(
+        issues.map((raw) => raw.openBlockers),
+        [2, 0],
+      );
+    }),
+  );
+
+  it.effect("treats a null, absent, or countless dependency summary as no open blockers", () =>
+    Effect.gen(function* () {
+      const issues = yield* parseIssues([
+        issue({ number: 1, issue_dependencies_summary: null }),
+        issue({ number: 2 }),
+        issue({ number: 3, issue_dependencies_summary: { total_blocked_by: 4 } }),
+        issue({ number: 4, issue_dependencies_summary: { blocked_by: null } }),
+      ]);
+      assert.deepStrictEqual(
+        issues.map((raw) => raw.openBlockers),
+        [0, 0, 0, 0],
+      );
+    }),
+  );
 });
 
 describe("linkedIssue", () => {

@@ -1,5 +1,6 @@
 import type {
   ActionableItem,
+  BlockedItem,
   Claim,
   ClaimedItem,
   LifecycleStage,
@@ -18,6 +19,7 @@ export interface EligibleWork extends ActionableItem {
 export interface Classification {
   readonly eligible: ReadonlyArray<EligibleWork>;
   readonly claimed: ReadonlyArray<ClaimedItem>;
+  readonly blocked: ReadonlyArray<BlockedItem>;
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
 }
 
@@ -29,6 +31,7 @@ type Outcome =
       readonly followUp?: FollowUpContext;
     }
   | { readonly kind: "claimed"; readonly claim: Claim }
+  | { readonly kind: "blocked" }
   | { readonly kind: "needs-human"; readonly reason: NeedsHumanReason }
   | { readonly kind: "drop" };
 
@@ -69,6 +72,7 @@ const classifyOne = (item: ObservedItem): Outcome => {
   if (item.roles.includes("ready-for-human")) return { kind: "needs-human", reason: "ready-for-human" };
   const stage = stageFor(item);
   if (!stage) return { kind: "drop" };
+  if (stage === "implement" && item.openBlockers > 0) return { kind: "blocked" };
   const failures = consecutiveFailures(item, stage);
   if (failures >= maxAttemptsPerStage) return { kind: "needs-human", reason: "ready-for-human" };
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
@@ -94,8 +98,11 @@ export const classify = (items: ReadonlyArray<ObservedItem>) => {
   const claimed = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "claimed" ? [{ id: item.id, title: item.title, claim: outcome.claim }] : [],
   );
+  const blocked = outcomes.flatMap(({ item, outcome }) =>
+    outcome.kind === "blocked" ? [{ id: item.id, title: item.title, openBlockers: item.openBlockers }] : [],
+  );
   const needsHuman = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "needs-human" ? [{ id: item.id, title: item.title, reason: outcome.reason }] : [],
   );
-  return { eligible, claimed, needsHuman };
+  return { eligible, claimed, blocked, needsHuman };
 };

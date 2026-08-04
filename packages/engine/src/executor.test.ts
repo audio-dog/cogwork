@@ -165,6 +165,7 @@ const record = (calls: Ref.Ref<ReadonlyArray<Call>>, entry: Call) =>
   Ref.update(calls, (xs) => [...xs, entry]);
 
 const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): WorkSourceService => ({
+  rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
   claim: (_workspace, itemId) => record(calls, { method: "claim", item: itemId }),
   release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),

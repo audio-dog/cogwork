@@ -28,6 +28,7 @@ export interface RawIssue {
   readonly title: string;
   readonly labels: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
+  readonly openBlockers: number;
 }
 
 export interface RawPull {
@@ -64,11 +65,17 @@ const baseHeaders = {
 const LabelName = Schema.Union([Schema.String, Schema.Struct({ name: Schema.String })]);
 const labelName = (label: typeof LabelName.Type) => (typeof label === "string" ? label : label.name);
 
+// GitHub reports `blocked_by` as open blockers only; `total_blocked_by` counts closed ones too.
+const DependenciesSummarySchema = Schema.Struct({
+  blocked_by: Schema.optional(Schema.NullOr(Schema.Natural)),
+});
+
 const IssueSchema = Schema.Struct({
   number: Schema.Finite,
   title: Schema.String,
   labels: Schema.Array(LabelName),
   pull_request: Schema.optional(Schema.Unknown),
+  issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
 });
 
 const PullSchema = Schema.Struct({
@@ -137,6 +144,19 @@ const millisFromIso = (value: string | null) => {
 
 const unavailable = (message: string) => new WorkSourceError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
+
+const toRawIssue = (issue: typeof IssueSchema.Type): RawIssue => ({
+  number: issue.number,
+  title: issue.title,
+  labels: issue.labels.map(labelName),
+  isPullRequest: issue.pull_request !== undefined,
+  openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
+});
+
+export const parseIssues = Effect.fn("github.parseIssues")(function* (json: unknown) {
+  const issues = yield* Effect.mapError(decodeIssues(json), toUnavailable);
+  return issues.map(toRawIssue);
+});
 
 const defaultCooldownMillis = 60_000;
 
@@ -296,15 +316,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     listIssues: (repo: GitHubRepoRef) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
-        const issues = yield* Effect.mapError(decodeIssues(json), toUnavailable);
-        return issues.map(
-          (issue): RawIssue => ({
-            number: issue.number,
-            title: issue.title,
-            labels: issue.labels.map(labelName),
-            isPullRequest: issue.pull_request !== undefined,
-          }),
-        );
+        return yield* parseIssues(json);
       }),
     listPulls: (repo: GitHubRepoRef) =>
       Effect.gen(function* () {

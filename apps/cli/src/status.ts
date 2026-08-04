@@ -1,10 +1,27 @@
-import type { DaemonStatus, SchedulerStats, WorkspaceInfo } from "@clanker-forge/contracts";
+import type { DaemonStatus, PollState, SchedulerStats, WorkspaceInfo } from "@clanker-forge/contracts";
+import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
 
 const section = (label: string, lines: ReadonlyArray<string>) =>
   lines.length === 0 ? [] : [`      ${label}:`, ...lines.map((line) => `        · ${line}`)];
 
+const blockersLabel = (count: number) => `${count} open blocker${count === 1 ? "" : "s"}`;
+
+const isoOrMillis = (millis: number) =>
+  Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
+
+const pauseQualifier = (poll: Extract<PollState, { readonly status: "paused" }>) => {
+  if (poll.reason !== "rate-limited") return " (needs attention)";
+  return poll.retryAtMillis === null
+    ? " (self-healing)"
+    : ` (self-healing, retrying after ${isoOrMillis(poll.retryAtMillis)})`;
+};
+
+const formatPoll = (poll: PollState) =>
+  poll.status === "ok" ? [] : [`      paused: ${poll.reason}${pauseQualifier(poll)} — ${poll.message}`];
+
 const formatWorkspace = (workspace: WorkspaceInfo) => {
-  const poll = workspace.poll.status === "paused" ? [`      paused: ${workspace.poll.message}`] : [];
+  const poll = formatPoll(workspace.poll);
   const eligible = section(
     "eligible",
     workspace.eligible.map((item) => `${item.stage} ${item.id} ${item.title}`),
@@ -12,6 +29,10 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
   const claimed = section(
     "claimed",
     workspace.claimed.map((item) => `${item.id} ${item.title} (by ${item.claim.by})`),
+  );
+  const blocked = section(
+    "blocked",
+    workspace.blocked.map((item) => `${item.id} ${item.title} (${blockersLabel(item.openBlockers)})`),
   );
   const needsHuman = section(
     "needs-human",
@@ -22,6 +43,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     ...poll,
     ...eligible,
     ...claimed,
+    ...blocked,
     ...needsHuman,
   ].join("\n");
 };

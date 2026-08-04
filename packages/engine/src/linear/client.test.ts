@@ -1,7 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as TestClock from "effect/testing/TestClock";
 import { afterEach, vi } from "vitest";
 import { CredentialError, type CredentialSource, CredentialStore } from "../CredentialStore";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
@@ -13,31 +16,70 @@ const ref: LinearTeamRef = {
   clientCredentials: null,
 };
 
+const linearMaxQueryComplexity = 10_000;
+const linearDefaultPageSize = 50;
+const objectPoints = 1;
+const propertyPoints = 0.1;
+const propertiesPerIssue = 5;
+const propertiesPerCoordinationComment = 4;
+
+const connectionPattern = /(\w+)\s*(?:\(([^)]*)\))?\s*\{\s*nodes\b/g;
+
+const connectionsOf = (document: string) =>
+  [...document.matchAll(connectionPattern)].map(([, name, args]) => {
+    const first = /\bfirst:\s*(\d+)/.exec(args ?? "");
+    return { name: name ?? "", pageSize: first ? Number(first[1]) : linearDefaultPageSize };
+  });
+
+const pageSizesOf = (document: string) =>
+  new Map(connectionsOf(document).map(({ name, pageSize }) => [name, pageSize]));
+
+const connectionPoints = (pageSize: number, nodePoints: number) => pageSize * (objectPoints + nodePoints);
+
+const complexityOf = (document: string) => {
+  const pageSizes = pageSizesOf(document);
+  const sizeOf = (name: string) => pageSizes.get(name) ?? 1;
+  const commentPoints = propertiesPerCoordinationComment * propertyPoints + objectPoints;
+  const issuePoints =
+    propertiesPerIssue * propertyPoints +
+    objectPoints +
+    connectionPoints(sizeOf("labels"), propertyPoints) +
+    connectionPoints(sizeOf("comments"), commentPoints);
+  const teamPoints = connectionPoints(sizeOf("issues"), issuePoints);
+  return Math.ceil(connectionPoints(sizeOf("teams"), teamPoints));
+};
+
 interface StubResponse {
   readonly status?: number;
   readonly body: unknown;
+  readonly headers?: Record<string, string>;
 }
 
-const documentOf = (init: RequestInit | undefined) => {
+const requestOf = (init: RequestInit | undefined) => {
   const body = init?.body;
-  if (typeof body !== "string") return "";
-  const parsed: { readonly query?: string } = JSON.parse(body);
-  return parsed.query ?? "";
+  if (typeof body !== "string") return { query: "", variables: {} };
+  const parsed: { readonly query?: string; readonly variables?: Record<string, unknown> } = JSON.parse(body);
+  return { query: parsed.query ?? "", variables: parsed.variables ?? {} };
 };
+
+const documentOf = (init: RequestInit | undefined) => requestOf(init).query;
 
 const stubLinear = (route: (document: string) => StubResponse) => {
   const fetchStub = vi.fn((_input: unknown, init?: RequestInit) => {
-    const { status = 200, body } = route(documentOf(init));
+    const { status = 200, body, headers = {} } = route(documentOf(init));
     return Promise.resolve(
       new Response(JSON.stringify(body), {
         status,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...headers },
       }),
     );
   });
   vi.stubGlobal("fetch", fetchStub);
   return fetchStub;
 };
+
+const sentRequests = (fetchStub: { readonly mock: { readonly calls: ReadonlyArray<unknown> } }) =>
+  fetchStub.mock.calls.map((call) => requestOf((call as [unknown, RequestInit | undefined])[1]));
 
 const authorizationOf = (fetchStub: { readonly mock: { readonly calls: ReadonlyArray<unknown> } }) => {
   const [, init] = (fetchStub.mock.calls[0] ?? []) as [unknown, RequestInit | undefined];
@@ -96,7 +138,7 @@ describe("linear client", () => {
           : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
       );
       const client = yield* LinearClient;
-      const issues = yield* client.listIssues(ref);
+      const issues = yield* client.observeIssues(ref, null);
       assert.deepStrictEqual(
         issues.map((issue) => [issue.identifier, issue.stateName]),
         [["AUD-1", "Todo"]],
@@ -113,7 +155,10 @@ describe("linear client", () => {
           : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
       );
       const client = yield* LinearClient;
-      const issues = yield* client.listIssues({ ...ref, team: "8dcbf3d4-6c9e-4a11-9f2f-0f1a2b3c4d5e" });
+      const issues = yield* client.observeIssues(
+        { ...ref, team: "8dcbf3d4-6c9e-4a11-9f2f-0f1a2b3c4d5e" },
+        null,
+      );
       assert.deepStrictEqual(
         issues.map((issue) => issue.identifier),
         ["AUD-1"],
@@ -126,7 +171,7 @@ describe("linear client", () => {
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
       const client = yield* LinearClient;
-      yield* client.listIssues(ref);
+      yield* client.observeIssues(ref, null);
       assert.strictEqual(authorizationOf(fetchStub), "test-key");
     }).pipe(withToken("test-key", "env")),
   );
@@ -135,7 +180,7 @@ describe("linear client", () => {
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
       const client = yield* LinearClient;
-      yield* client.listIssues(ref);
+      yield* client.observeIssues(ref, null);
       assert.strictEqual(authorizationOf(fetchStub), "Bearer oauth-token");
     }).pipe(withToken("oauth-token", "stored-oauth")),
   );
@@ -144,9 +189,78 @@ describe("linear client", () => {
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
       const client = yield* LinearClient;
-      yield* client.listIssues(ref);
+      yield* client.observeIssues(ref, null);
       assert.strictEqual(authorizationOf(fetchStub), "Bearer app-token");
     }).pipe(withToken("app-token", "client-credentials")),
+  );
+
+  it.effect("reads every issue's coordination comments in the same request as the issue list", () =>
+    Effect.gen(function* () {
+      const backlog = Array.from({ length: 100 }, (_, index) => ({
+        ...(teamBundle.issues.nodes[0] ?? {}),
+        id: `issue-${index}`,
+        identifier: `AUD-${index + 1}`,
+        comments: {
+          nodes: [
+            {
+              id: `ledger-${index}`,
+              body: "clanker-forge:ledger",
+              createdAt: "2026-07-31T00:00:00.000Z",
+              user: { id: "bot-user" },
+            },
+          ],
+        },
+      }));
+      const fetchStub = stubLinear(() => ({
+        body: { data: { teams: { nodes: [{ ...teamBundle, issues: { nodes: backlog } }] } } },
+      }));
+      const client = yield* LinearClient;
+      const issues = yield* client.observeIssues(ref, {
+        botUserId: "bot-user",
+        ledgerMarker: "clanker-forge:ledger",
+      });
+      assert.strictEqual(issues.length, 100);
+      assert.deepStrictEqual(
+        issues[0]?.coordinationComments.map((comment) => comment.authorId),
+        ["bot-user"],
+      );
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+      const [request] = sentRequests(fetchStub);
+      assert.include(request?.query ?? "", "comments(");
+      assert.deepStrictEqual(request?.variables, {
+        key: "AUD",
+        bot: "bot-user",
+        ledger: "clanker-forge:ledger",
+      });
+    }).pipe(withToken()),
+  );
+
+  it.effect("keeps the nested observe query under Linear's single-query complexity cap", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, { botUserId: "bot-user", ledgerMarker: "clanker-forge:ledger" });
+      const [request] = sentRequests(fetchStub);
+      const document = request?.query ?? "";
+      assert.deepStrictEqual(
+        connectionsOf(document)
+          .map((connection) => connection.name)
+          .toSorted(),
+        ["comments", "issues", "labels", "teams"],
+      );
+      assert.isAtMost(complexityOf(document), linearMaxQueryComplexity);
+    }).pipe(withToken()),
+  );
+
+  it.effect("omits the comment selection entirely when no bot user is configured", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      const issues = yield* client.observeIssues(ref, null);
+      assert.deepStrictEqual(issues[0]?.coordinationComments, []);
+      const [request] = sentRequests(fetchStub);
+      assert.notInclude(request?.query ?? "", "comments(");
+    }).pipe(withToken()),
   );
 
   it.effect("skips comments Linear reports without an author", () =>
@@ -188,7 +302,7 @@ describe("linear client", () => {
     Effect.gen(function* () {
       stubLinear(() => ({ status: 401, body: {} }));
       const client = yield* LinearClient;
-      const error = yield* Effect.flip(client.listIssues(ref));
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
       assert.strictEqual(error.reason, "auth");
     }).pipe(withToken()),
   );
@@ -198,27 +312,39 @@ describe("linear client", () => {
     return Effect.gen(function* () {
       stubLinear(() => ({ status: 401, body: {} }));
       const client = yield* LinearClient;
-      yield* Effect.flip(client.listIssues(ref));
+      yield* Effect.flip(client.observeIssues(ref, null));
       assert.deepStrictEqual(invalidated, ["AUD"]);
     }).pipe(withToken("app-token", "client-credentials", invalidated));
   });
 
-  it.effect("leaves the credential in place when Linear fails for another reason", () => {
+  it.effect("keeps the credential when Linear throttles rather than rejects", () => {
     const invalidated: Array<string> = [];
     return Effect.gen(function* () {
-      stubLinear(() => ({ status: 404, body: {} }));
+      stubLinear(() => ({ status: 429, body: {} }));
       const client = yield* LinearClient;
-      yield* Effect.flip(client.listIssues(ref));
+      yield* Effect.flip(client.observeIssues(ref, null));
       assert.deepStrictEqual(invalidated, []);
     }).pipe(withToken("app-token", "client-credentials", invalidated));
   });
 
-  it.effect("reports a non-credential client error as reason unavailable", () =>
+  it.effect("retries a transient failure with backoff before reporting it unavailable", () =>
     Effect.gen(function* () {
-      stubLinear(() => ({ status: 404, body: {} }));
+      const fetchStub = stubLinear(() => ({ status: 500, body: {} }));
       const client = yield* LinearClient;
-      const error = yield* Effect.flip(client.listIssues(ref));
+      const failure = yield* Effect.forkChild(Effect.flip(client.observeIssues(ref, null)));
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Fiber.join(failure);
       assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(fetchStub.mock.calls.length, 4);
+    }).pipe(withToken()),
+  );
+
+  it.effect("does not retry an auth failure", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ status: 401, body: {} }));
+      const client = yield* LinearClient;
+      yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
     }).pipe(withToken()),
   );
 
@@ -226,8 +352,48 @@ describe("linear client", () => {
     Effect.gen(function* () {
       stubLinear(() => ({ status: 429, body: {} }));
       const client = yield* LinearClient;
-      const error = yield* Effect.flip(client.listIssues(ref));
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
       assert.strictEqual(error.reason, "rate-limited");
+    }).pipe(withToken()),
+  );
+
+  it.effect("carries the SDK's retry-after seconds onto the work source error", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({ status: 429, body: {}, headers: { "retry-after": "42" } }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(error.retryAfterMillis, 42_000);
+    }).pipe(withToken()),
+  );
+
+  it.effect("falls back to the requests-reset instant when there is no retry-after", () =>
+    Effect.gen(function* () {
+      const nowMillis = yield* Clock.currentTimeMillis;
+      stubLinear(() => ({
+        status: 429,
+        body: {},
+        headers: { "x-ratelimit-requests-reset": String(nowMillis + 90_000) },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(error.retryAfterMillis, 90_000);
+    }).pipe(withToken()),
+  );
+
+  it.effect("fails fast without calling Linear while the credential is in a cooldown window", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ status: 429, body: {}, headers: { "retry-after": "30" } }));
+      const client = yield* LinearClient;
+      yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+
+      const blocked = yield* Effect.flip(client.observeIssues({ ...ref, team: "OPS" }, null));
+      assert.strictEqual(blocked.reason, "rate-limited");
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+
+      yield* TestClock.adjust("31 seconds");
+      yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
     }).pipe(withToken()),
   );
 
@@ -235,7 +401,7 @@ describe("linear client", () => {
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: {} }));
       const client = yield* LinearClient;
-      const error = yield* Effect.flip(client.listIssues(ref));
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
       assert.strictEqual(error.reason, "auth");
       assert.include(error.message, "LINEAR_API_KEY");
       assert.strictEqual(fetchStub.mock.calls.length, 0);

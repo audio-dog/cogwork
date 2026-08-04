@@ -2,7 +2,10 @@ import { DaemonRpcs, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./Daemon";
 import * as Reconcile from "./Reconcile";
@@ -36,6 +39,7 @@ const sampleResult: Registry.LoadResult = {
 const id = Schema.decodeSync(WorkItemId);
 
 const stub = (service: Partial<WorkSource.WorkSourceService>): WorkSource.WorkSourceService => ({
+  rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
   claim: () => Effect.void,
   release: () => Effect.void,
@@ -141,6 +145,7 @@ describe("reconcile worker", () => {
     claim: null,
     attempts: [],
     pr: null,
+    openBlockers: 0,
   };
   const workerWithWork = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
@@ -182,6 +187,7 @@ describe("reconcile worker", () => {
       fresh: false,
       followUp: null,
     },
+    openBlockers: 0,
   };
   const workerWithInReview = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem]))),
@@ -226,11 +232,131 @@ describe("reconcile worker", () => {
       assert.strictEqual(receipt.pendingWork, 0);
       const state = (yield* worker.snapshot).workspaces[0];
       assert.strictEqual(state?.poll.status, "paused");
-      assert.strictEqual(
-        state?.poll.status === "paused" ? state.poll.message : null,
-        "GitHub authentication failed (401)",
+      assert.deepStrictEqual(
+        state?.poll.status === "paused"
+          ? { reason: state.poll.reason, retryAtMillis: state.poll.retryAtMillis }
+          : null,
+        { reason: "auth", retryAtMillis: null },
       );
     }).pipe(Effect.provide(workerWithAuthFailure), Effect.scoped),
+  );
+
+  const rateLimitedSource = (observes: Ref.Ref<number>, retryAfterMillis: number | undefined) =>
+    Layer.succeed(
+      WorkSource.WorkSource,
+      stub({
+        rateLimitScope: () => "linear:LINEAR_API_KEY",
+        observe: () =>
+          Effect.flatMap(
+            Ref.update(observes, (count) => count + 1),
+            () =>
+              Effect.fail(
+                new WorkSource.WorkSourceError({
+                  reason: "rate-limited",
+                  message: "Linear rate limit exceeded",
+                  retryAfterMillis,
+                }),
+              ),
+          ),
+      }),
+    );
+
+  const rateLimitedWorker = (observes: Ref.Ref<number>, retryAfterMillis?: number) =>
+    Reconcile.layer.pipe(
+      Layer.provide(Layer.mergeAll(registryLayer, rateLimitedSource(observes, retryAfterMillis))),
+    );
+
+  it.effect("skips polling a rate-limited credential until its window elapses", () =>
+    Effect.gen(function* () {
+      const observes = yield* Ref.make(0);
+      yield* Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        yield* worker.submit();
+        assert.strictEqual(yield* Ref.get(observes), 1);
+
+        yield* worker.submit();
+        assert.strictEqual(yield* Ref.get(observes), 1);
+        const paused = (yield* worker.snapshot).workspaces[0]?.poll;
+        assert.strictEqual(paused?.status === "paused" ? paused.reason : null, "rate-limited");
+        assert.isNotNull(paused?.status === "paused" ? paused.retryAtMillis : null);
+
+        yield* TestClock.adjust("31 seconds");
+        yield* worker.submit();
+        assert.strictEqual(yield* Ref.get(observes), 2);
+      }).pipe(Effect.provide(rateLimitedWorker(observes, 30_000)), Effect.scoped);
+    }),
+  );
+
+  it.effect("warns once on entering a backoff window rather than on every skipped tick", () =>
+    Effect.gen(function* () {
+      const observes = yield* Ref.make(0);
+      const logged: Array<string> = [];
+      yield* Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        yield* worker.submit();
+        yield* worker.submit();
+        yield* worker.submit();
+      }).pipe(
+        Effect.provide(rateLimitedWorker(observes, 30_000)),
+        Effect.scoped,
+        Effect.withLogger(Logger.make(({ message }) => void logged.push(String(message)))),
+      );
+      const warnings = logged.filter((line) => line.includes("work source rate limited; backing off"));
+      assert.strictEqual(warnings.length, 1);
+    }),
+  );
+
+  it.effect("falls back to exponential backoff when the source reports no retry timing", () =>
+    Effect.gen(function* () {
+      const observes = yield* Ref.make(0);
+      yield* Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        yield* worker.submit();
+        yield* TestClock.adjust("59 seconds");
+        yield* worker.submit();
+        assert.strictEqual(yield* Ref.get(observes), 1);
+        yield* TestClock.adjust("2 seconds");
+        yield* worker.submit();
+        assert.strictEqual(yield* Ref.get(observes), 2);
+      }).pipe(Effect.provide(rateLimitedWorker(observes)), Effect.scoped);
+    }),
+  );
+
+  const scopelessSource = (observes: Ref.Ref<number>) =>
+    Layer.succeed(
+      WorkSource.WorkSource,
+      stub({
+        observe: () =>
+          Effect.flatMap(
+            Ref.update(observes, (count) => count + 1),
+            () =>
+              Effect.fail(
+                new WorkSource.WorkSourceError({ reason: "rate-limited", message: "secondary rate limit" }),
+              ),
+          ),
+      }),
+    );
+
+  it.effect("keeps polling a source that reports no rate-limit scope, and invents no retry time", () =>
+    Effect.gen(function* () {
+      const observes = yield* Ref.make(0);
+      yield* Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        yield* worker.submit();
+        yield* worker.submit();
+        assert.strictEqual(yield* Ref.get(observes), 2);
+        const paused = (yield* worker.snapshot).workspaces[0]?.poll;
+        assert.deepStrictEqual(
+          paused?.status === "paused" ? { reason: paused.reason, retryAtMillis: paused.retryAtMillis } : null,
+          { reason: "rate-limited", retryAtMillis: null },
+        );
+      }).pipe(
+        Effect.provide(
+          Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, scopelessSource(observes)))),
+        ),
+        Effect.scoped,
+      );
+    }),
   );
 });
 
@@ -283,6 +409,7 @@ describe("daemon status over rpc", () => {
     claim: null,
     attempts: [],
     pr: null,
+    openBlockers: 0,
   };
 
   it.effect("carries needs-human items and their reason across the status boundary", () =>
@@ -295,6 +422,31 @@ describe("daemon status over rpc", () => {
         { id: id("AUD-7"), title: "waiting on details", reason: "needs-info" },
       ]);
     }).pipe(Effect.provide(daemonLayer(observing([needsInfoItem]))), Effect.scoped),
+  );
+
+  const blockedItem: ObservedItem = {
+    id: id("AUD-8"),
+    title: "waiting on a dependency",
+    roles: ["ready-for-agent"],
+    claimLabeled: false,
+    claim: null,
+    attempts: [],
+    pr: null,
+    openBlockers: 2,
+  };
+
+  it.effect("carries blocked items and their open-blocker count across the status boundary", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const receipt = yield* worker.submit();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const status = yield* client.GetStatus();
+      assert.strictEqual(receipt.pendingWork, 0);
+      assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
+      assert.deepStrictEqual(status.workspaces[0]?.blocked, [
+        { id: id("AUD-8"), title: "waiting on a dependency", openBlockers: 2 },
+      ]);
+    }).pipe(Effect.provide(daemonLayer(observing([blockedItem]))), Effect.scoped),
   );
 
   it.effect("surfaces scheduler caps and budget in the status payload", () =>

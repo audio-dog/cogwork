@@ -203,6 +203,7 @@ const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileS
     poll: { status: "ok" },
     eligible,
     claimed: [],
+    blocked: [],
     needsHuman: [],
     observed: [],
   })),
@@ -224,6 +225,7 @@ const registryLayer = (workspaces: ReadonlyArray<RegisteredWorkspace>) =>
 
 const workSourceStub = (service: Partial<WorkSourceService>) =>
   Layer.succeed(WorkSource, {
+    rateLimitScope: () => null,
     observe: () => Effect.succeed([]),
     claim: () => Effect.void,
     release: () => Effect.void,
@@ -425,6 +427,7 @@ describe("Scheduler.recover", () => {
     claim: { by: "clanker-bot", claimedAtMillis: 1, stage: "implement" },
     attempts: [],
     pr: null,
+    openBlockers: 0,
   };
   const claimedByOther: ObservedItem = {
     id: id("#2"),
@@ -434,6 +437,7 @@ describe("Scheduler.recover", () => {
     claim: { by: "someone-else", claimedAtMillis: 1 },
     attempts: [],
     pr: null,
+    openBlockers: 0,
   };
   const unclaimed: ObservedItem = {
     id: id("#3"),
@@ -443,6 +447,7 @@ describe("Scheduler.recover", () => {
     claim: null,
     attempts: [],
     pr: null,
+    openBlockers: 0,
   };
 
   it.effect("releases only stale claims left by this daemon and records a recovery attempt", () =>
