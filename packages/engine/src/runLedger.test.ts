@@ -97,9 +97,7 @@ describe("RunLedger (memory)", () => {
       );
       assert.isNull(yield* sessionByBranch("7-fix-export"));
 
-      yield* ledger.insertRun(
-        record("earlier", 1000, { branch: "7-fix-export", session, status: "failed" }),
-      );
+      yield* ledger.insertRun(record("earlier", 1000, { branch: "7-fix-export", session, status: "failed" }));
       assert.strictEqual(yield* sessionByBranch("7-fix-export"), "sess-abc");
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
