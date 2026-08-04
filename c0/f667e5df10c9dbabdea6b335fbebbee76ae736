@@ -1,0 +1,28 @@
+packages/engine/CONTEXT.md
+  s_73440e5a382080::t_41e27fe38af557 96-99
+packages/engine/docs/adr/0003-base-divergence-resolved-in-follow-up-by-merging-the-base.md
+  s_73440e5a382080::t_ad6c00e3b82cfd 1-21
+apps/cli/config/feldspar.workspace.ts
+  h_46518a29d4dd91 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "c0f667e5df10c9dbabdea6b335fbebbee76ae736",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_73440e5a382080": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "259333ca-07b1-4c96-b7af-6da86f1516d5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
