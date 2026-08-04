@@ -1,4 +1,10 @@
-import { HarnessName, type TokenUsage, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import {
+  HarnessName,
+  SessionId,
+  type TokenUsage,
+  WorkItemId,
+  WorkspaceConfig,
+} from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -24,6 +30,7 @@ import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManage
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const id = Schema.decodeSync(WorkItemId);
+const previousSession = Schema.decodeSync(SessionId)("sess-prev");
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
@@ -232,6 +239,16 @@ const worktreeStubCreated = (created: boolean): WorktreeManagerService => ({
 });
 
 const worktreeStub = worktreeStubCreated(true);
+
+const resumeRecordingWorktree = (ensured: Ref.Ref<ReadonlyArray<boolean>>): WorktreeManagerService => ({
+  ensure: (_workspace, item, options) =>
+    Ref.update(ensured, (xs) => [...xs, options?.resume ?? false]).pipe(
+      Effect.map(() => ({ branch: branchName(item), path: `/wt/${branchName(item)}`, created: false })),
+    ),
+  list: () => Effect.succeed([]),
+  remove: () => Effect.void,
+  reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+});
 
 const divergedWorktree: WorktreeManagerService = {
   ...worktreeStub,
@@ -631,6 +648,40 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured.length, 2);
         assert.isNull(captured[0]?.sessionId ?? null);
         assert.strictEqual(captured[1]?.sessionId, "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("resumes an interrupted run with a continuation nudge and its persisted session", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const ensured = yield* Ref.make<ReadonlyArray<boolean>>([]);
+      const resumeItem = {
+        ...implementItem,
+        resume: { session: previousSession, reason: "interrupted" as const },
+      };
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, implementEvents)],
+        resumeRecordingWorktree(ensured),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, resumeItem);
+
+        const [request] = yield* Ref.get(requests);
+        assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
+        assert.strictEqual(request?.sessionId, "sess-prev");
+        assert.include(request?.prompt ?? "", "You were interrupted part-way through");
+        assert.include(request?.prompt ?? "", `Inspect /wt/${implementBranch}`);
+        assert.notInclude(request?.prompt ?? "", "implement-agent");
+        assert.notInclude(request?.prompt ?? "", "IMPLEMENT-RESULT");
+
+        assert.deepStrictEqual(yield* Ref.get(ensured), [true]);
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
       }).pipe(Effect.provide(layer));
     }),
   );

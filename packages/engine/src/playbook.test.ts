@@ -2,6 +2,7 @@ import { WorkspaceConfig } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
+  buildContinuationNudge,
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
@@ -141,6 +142,18 @@ describe("buildImplementPrompt", () => {
     assert.include(prompt, "Implement playbook");
     assert.include(prompt, "`implement-agent`");
     assert.notInclude(prompt, "TRIAGE-DECISION");
+  });
+});
+
+describe("buildContinuationNudge", () => {
+  it("sends the agent to the worktree without restating the stage prompt", () => {
+    const nudge = buildContinuationNudge("/wt/15-implement-playbook");
+    assert.include(nudge, "You were interrupted part-way through the task above");
+    assert.include(nudge, "Inspect /wt/15-implement-playbook to see how far you got");
+    assert.include(nudge, "Do not start over and do not redo completed work");
+    assert.include(nudge, "say COMPLETE and stop");
+    assert.notInclude(nudge, "implement-agent");
+    assert.notInclude(nudge, "IMPLEMENT-RESULT");
   });
 });
 
