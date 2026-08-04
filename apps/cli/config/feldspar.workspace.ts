@@ -24,8 +24,8 @@ export default defineWorkspace({
   sourceControl: {
     type: "github",
     repo: "colonylabs/feldspar",
-    tokenEnv: "GITHUB_TOKEN",
-    botLogin: "audiodog-bot",
+    tokenEnv: "PERSONAL_GITHUB_TOKEN",
+    botLogin: "taylorfsteele",
   },
   harness: { preferred: "cursor" },
   concurrency: 3,
