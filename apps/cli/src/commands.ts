@@ -11,6 +11,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { defaultConfigHome, defaultCredentialsPath, defaultLedgerPath, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatStatus } from "./status";
+import { secondStopSignal } from "./stopSignal";
 import { flushWatch, initialWatchState, stepWatch } from "./watch";
 
 const socketFlag = Flag.string("socket").pipe(
@@ -48,6 +49,13 @@ const pollIntervalFlag = Flag.integer("poll-interval").pipe(
   Flag.withDefault(60),
 );
 
+const drainGraceFlag = Flag.integer("drain-grace").pipe(
+  Flag.withDescription(
+    "Seconds in-flight runs get to finish after a stop signal (a second signal ends the wait)",
+  ),
+  Flag.withDefault(300),
+);
+
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
 const watchIdFlag = Flag.string("id").pipe(
@@ -74,11 +82,13 @@ const runDaemon = Effect.fn("commands.runDaemon")(
       { discard: true },
     );
     yield* Daemon.bootstrap;
-    yield* Effect.all([Daemon.reconcileHeartbeat(options.pollIntervalMillis), Daemon.executeHeartbeat], {
-      concurrency: "unbounded",
+    const abort = yield* secondStopSignal;
+    yield* Daemon.heartbeats({
+      pollIntervalMillis: options.pollIntervalMillis,
+      drain: { graceMillis: options.drainGraceMillis, abort },
     });
   },
-  (effect, options) => effect.pipe(Effect.provide(serverLayer(options))),
+  (effect, options) => effect.pipe(Effect.scoped, Effect.provide(serverLayer(options))),
 );
 
 const formatRun = (run: RunSummary) => {
@@ -159,9 +169,10 @@ export const daemonCommand = Command.make("daemon", {
   maxConcurrency: maxConcurrencyFlag,
   dailyBudget: dailyBudgetFlag,
   pollInterval: pollIntervalFlag,
+  drainGrace: drainGraceFlag,
 }).pipe(
   Command.withHandler(
-    ({ socket, configHome, ledger, credentials, maxConcurrency, dailyBudget, pollInterval }) =>
+    ({ socket, configHome, ledger, credentials, maxConcurrency, dailyBudget, pollInterval, drainGrace }) =>
       runDaemon({
         socketPath: socket,
         configHome,
@@ -170,6 +181,7 @@ export const daemonCommand = Command.make("daemon", {
         maxConcurrency,
         dailyBudget,
         pollIntervalMillis: pollInterval * 1000,
+        drainGraceMillis: drainGrace * 1000,
       }),
   ),
 );

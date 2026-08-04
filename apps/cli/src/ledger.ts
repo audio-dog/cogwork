@@ -6,7 +6,7 @@ import {
   RunSummary as RunSummarySchema,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
-import { and, desc, eq, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -212,6 +212,14 @@ const make = (ledgerPath: string) =>
       updateRun: (runId: RunId, patch: RunLedger.RunUpdate) =>
         write("updateRun", () => {
           db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run();
+        }),
+
+      interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
+        write("interruptRunning", () => {
+          db.update(runs)
+            .set({ status: "interrupted", endedAt: endedAtMillis })
+            .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
+            .run();
         }),
 
       closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
