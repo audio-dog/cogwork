@@ -1,0 +1,84 @@
+packages/engine/src/linear/linear.test.ts
+  s_470507aa3a215a::t_74325acfb840f9 14
+  s_470507aa3a215a::t_801d95f359df94 48-54
+  s_470507aa3a215a::t_163462ff2f07ee 259,290,353,447
+packages/contracts/src/workspace.ts
+  s_470507aa3a215a::t_cd2a05f2de5673 15
+packages/engine/src/linear/client.ts
+  s_470507aa3a215a::t_428e5096a816f1 243-244
+  s_470507aa3a215a::t_38c8882be786f9 222-232,237,246-248,250-251
+  s_470507aa3a215a::t_8c9bfef16d322b 7-12,19
+  s_470507aa3a215a::t_b095780be9cd89 249
+packages/engine/src/linear/adapter.ts
+  s_470507aa3a215a::t_1396692df05c43 1
+  s_470507aa3a215a::t_58605078b11b8e 56-58,66
+apps/cli/CONTEXT.md
+  s_470507aa3a215a::t_4b89ddf3d66f21 26
+packages/engine/src/linear/clientCredentials.ts
+  s_470507aa3a215a::t_6f324f88011c0e 1-102
+packages/engine/src/CredentialStore.ts
+  s_470507aa3a215a::t_4f539469a04f92 10-16,22
+  s_470507aa3a215a::t_021053c0e0715e 70
+  s_470507aa3a215a::t_fd14450ce8682f 192
+  s_470507aa3a215a::t_507e1d81176569 117
+  s_470507aa3a215a::t_d3005e986be8be 149-168,170,177-178
+  s_470507aa3a215a::t_bd2c1ff2f90a01 57,71-82,86
+packages/engine/src/credentialStore.test.ts
+  s_470507aa3a215a::t_3ce89bccca6380 9-17
+  s_470507aa3a215a::t_39ee070b1644d7 108-111
+  s_470507aa3a215a::t_d207bcbf4fce14 24
+  s_470507aa3a215a::t_3059b98bc79d48 306-310,312-313
+  s_470507aa3a215a::t_7236b65e0d1b45 147-148,150
+  s_470507aa3a215a::t_feef945d554058 210-212,214-279,285-286,289-305,311,314-321
+  s_470507aa3a215a::t_d7058cb5354ad6 280-284,287-288
+  s_4b312f7f76a9ba::t_cb647fae8b4479 149,213
+packages/engine/src/linear/client.test.ts
+  s_470507aa3a215a::t_6e6498a3abe41a 9-14
+  s_470507aa3a215a::t_2a48512e159ee0 143-151
+  s_470507aa3a215a::t_bc2363d3461ef4 196-215
+  s_470507aa3a215a::t_cd667b67ce045a 47,59,62-66
+packages/engine/src/linear/clientCredentials.test.ts
+  s_470507aa3a215a::t_022a6e464cb209 1-41,48-51,53-207
+  s_470507aa3a215a::t_9ec801c35edd5c 42-47,52
+  s_470507aa3a215a::t_843aa6d3df32fe 208-212
+apps/cli/src/credentials.ts
+  s_470507aa3a215a::t_1f18888951931d 1
+  s_470507aa3a215a::t_aeacc95c381668 77-84
+packages/engine/src/linear/oauth.test.ts
+  s_470507aa3a215a::t_87dcb141c26813 134-149
+  s_470507aa3a215a::t_8aa09c4c7a9bf0 9
+packages/engine/CONTEXT.md
+  s_470507aa3a215a::t_6f2d5fd8a4c6c1 57-62
+packages/engine/AGENTS.md
+  s_470507aa3a215a::t_75a1f6fedcf5c6 11-12
+packages/engine/src/linear/oauth.ts
+  s_470507aa3a215a::t_1696e812d4c30f 100-120
+apps/cli/src/credentials.test.ts
+  s_470507aa3a215a::t_9b817acaab5a2a 30,69,171,183,194
+packages/engine/src/linear/index.ts
+  s_470507aa3a215a::t_321ea050161853 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "d00ceefb7f9ab8de980182fdd5ab9443ff05f818",
+  "prompts": {},
+  "sessions": {
+    "s_470507aa3a215a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "93b26944-7ea1-4c88-b41b-67968a620b4e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_4b312f7f76a9ba": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a8dd9c13-c0a6-4735-b341-1d91e842ffe8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
