@@ -86,7 +86,11 @@ export const makeMemory = Effect.gen(function* () {
       Effect.map(Ref.get(runsRef), (runs) =>
         latestRunWhere(
           runs,
-          (run) => run.session !== null && run.workspace === workspace && run.branch === branch,
+          (run) =>
+            run.session !== null &&
+            run.status !== "interrupted" &&
+            run.workspace === workspace &&
+            run.branch === branch,
         ),
       ),
     latestRunForItem: (workspace: string, workItem: string) =>
