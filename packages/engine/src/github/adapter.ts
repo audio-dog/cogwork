@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import { checkState } from "../ci";
 import type { RegisteredWorkspace } from "../projector";
 import {
+  type BaseDivergence,
   type ObservedItem,
   type ObservedPr,
   type PrReview,
@@ -82,6 +83,12 @@ const closingPattern = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i;
 export const linkedIssue = (body: string) => {
   const match = body.match(closingPattern);
   return match?.[1] ? Number.parseInt(match[1], 10) : null;
+};
+
+export const baseDivergenceOf = (mergeableState: string | null): BaseDivergence => {
+  if (mergeableState === "dirty") return "conflict";
+  if (mergeableState === "behind") return "clean";
+  return "none";
 };
 
 export const prReview = (pull: RawPull, decision: ReviewDecision): PrReview => {
@@ -173,11 +180,12 @@ const make = (client: GitHubClientService): WorkSourceService => {
   });
 
   const observePr = Effect.fn("github.observePr")(function* (target: GitHubTarget, pull: RawPull) {
-    const [checks, comments, reviewComments, reviews] = yield* Effect.all([
+    const [checks, comments, reviewComments, reviews, mergeableState] = yield* Effect.all([
       client.listCheckRuns(target, pull.headSha),
       client.listComments(target, pull.number),
       client.listReviewComments(target, pull.number),
       client.listReviews(target, pull.number),
+      client.pullMergeableState(target, pull.number),
     ]);
     const decision = reviewDecisionOf(
       reviews
@@ -193,6 +201,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
       checks: checkState(checks),
       latestHumanCommentAtMillis: human.latestAtMillis,
       fresh: human.fresh,
+      baseDivergence: baseDivergenceOf(mergeableState),
     } satisfies PrSignals;
   });
 

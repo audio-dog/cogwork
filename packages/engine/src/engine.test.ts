@@ -188,6 +188,7 @@ describe("reconcile worker", () => {
       checks: "passing",
       latestHumanCommentAtMillis: null,
       fresh: false,
+      baseDivergence: "none",
       followUp: null,
     },
     openBlockers: 0,
