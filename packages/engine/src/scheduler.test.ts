@@ -610,6 +610,83 @@ describe("Scheduler.recover", () => {
     openBlockers: 0,
   };
 
+  const interrupted: RunRecord = { ...interruptedRun, status: "interrupted", endedAtMillis: 2 };
+
+  it.effect("reschedules an interrupted run while holding its claim and recording no attempt", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const started = yield* Ref.make<ReadonlyArray<string>>([]);
+      const ran = yield* Latch.make();
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([claimedByUs]),
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+      };
+      const execute: ExecuteFn = (_workspace, item) =>
+        Ref.update(started, (xs) => [...xs, item.id]).pipe(
+          Effect.andThen(ran.open),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        yield* ran.await;
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.deepStrictEqual(yield* Ref.get(started), [id("#1")]);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("never escalates an interrupted item to a human, even one attempt from exhaustion", () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const ran = yield* Latch.make();
+      const nearExhausted: ObservedItem = {
+        ...claimedByUs,
+        attempts: [
+          { stage: "implement", outcome: "failed", atMillis: 1 },
+          { stage: "implement", outcome: "failed", atMillis: 2 },
+        ],
+      };
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([nearExhausted]),
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      const execute: ExecuteFn = () => ran.open.pipe(Effect.map(() => true));
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        yield* ran.await;
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.deepStrictEqual(yield* Ref.get(roles), []);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
+          ),
+        ),
+      );
+    }),
+  );
+
   it.effect("releases only stale claims left by this daemon and records a recovery attempt", () =>
     Effect.gen(function* () {
       const released = yield* Ref.make<ReadonlyArray<string>>([]);
@@ -659,7 +736,7 @@ describe("Scheduler.recover", () => {
       const snapshots = yield* snapshotRef([]);
       yield* Effect.gen(function* () {
         const ledger = yield* RunLedger.RunLedger;
-        yield* ledger.insertRun(interruptedRun);
+        yield* ledger.insertRun({ ...interruptedRun, status: "failed", endedAtMillis: 2 });
         yield* ledger.recordSession(interruptedRun.id, session);
 
         const scheduler = yield* Scheduler.Scheduler;
@@ -707,6 +784,133 @@ describe("Scheduler.recover", () => {
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
             { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
+          ),
+        ),
+      );
+    }),
+  );
+
+  const crashedRun = (idStr: string, startedAtMillis: number, status: RunRecord["status"]): RunRecord => ({
+    ...interruptedRun,
+    id: Schema.decodeSync(RunId)(idStr),
+    status,
+    startedAtMillis,
+    endedAtMillis: status === "running" ? null : startedAtMillis + 1,
+  });
+
+  it.effect("marks a run still running at startup as crashed and reschedules it, recording no attempt", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const started = yield* Ref.make<ReadonlyArray<string>>([]);
+      const ran = yield* Latch.make();
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([claimedByUs]),
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+      };
+      const execute: ExecuteFn = (_workspace, item) =>
+        Ref.update(started, (xs) => [...xs, item.id]).pipe(
+          Effect.andThen(ran.open),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interruptedRun);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        yield* ran.await;
+        assert.deepStrictEqual(yield* Ref.get(started), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.strictEqual((yield* ledger.getRun(interruptedRun.id))?.status, "crashed");
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("resumes a fresh crash when an earlier success reset the crash count", () =>
+    Effect.gen(function* () {
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const started = yield* Ref.make<ReadonlyArray<string>>([]);
+      const ran = yield* Latch.make();
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([claimedByUs]),
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      const execute: ExecuteFn = (_workspace, item) =>
+        Ref.update(started, (xs) => [...xs, item.id]).pipe(
+          Effect.andThen(ran.open),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* ledger.insertRun(crashedRun("ok", 3, "succeeded"));
+      yield* ledger.insertRun(crashedRun("crash-c", 4, "running"));
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        yield* ran.await;
+        assert.deepStrictEqual(yield* Ref.get(started), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(roles), []);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("caps a crash loop, escalating to a human without an attempt and releasing the claim", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const started = yield* Ref.make<ReadonlyArray<string>>([]);
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([claimedByUs]),
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      const execute: ExecuteFn = (_workspace, item) =>
+        Ref.update(started, (xs) => [...xs, item.id]).pipe(Effect.map(() => true));
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const running = crashedRun("crash-c", 3, "running");
+      yield* ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* ledger.insertRun(running);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        const note = (yield* Ref.get(notes))[0] ?? "";
+        assert.include(note, "Exhausted after 3 consecutive implement crashes");
+        assert.include(note, recoveryReason);
+        assert.deepStrictEqual(yield* Ref.get(roles), ["ready-for-human"]);
+        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.deepStrictEqual(yield* Ref.get(started), []);
+        assert.strictEqual((yield* ledger.getRun(running.id))?.status, "crashed");
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
           ),
         ),
       );

@@ -20,6 +20,7 @@ import { layer as ledgerLayer } from "./ledger";
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
+const crashItem = Schema.decodeSync(WorkItemId)("#101");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
@@ -172,6 +173,38 @@ describe("sqlite RunLedger", () => {
           ["interrupted", 5000],
           ["succeeded", 4200],
         ]);
+      }),
+    );
+
+    it.effect("crashes the item's running runs and counts crashes until a success resets them", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(record("crash-c1", 1000, { workItem: crashItem, status: "crashed" }));
+        yield* ledger.insertRun(record("crash-running", 2000, { workItem: crashItem }));
+        yield* ledger.crashRunning("gh", "#101", 2500);
+
+        assert.strictEqual((yield* ledger.getRun(runId("crash-running")))?.status, "crashed");
+        assert.strictEqual(yield* ledger.consecutiveCrashes("gh", "#101"), 2);
+
+        yield* ledger.insertRun(record("crash-ok", 3000, { workItem: crashItem, status: "succeeded" }));
+        assert.strictEqual(yield* ledger.consecutiveCrashes("gh", "#101"), 0);
+      }),
+    );
+
+    it.effect("does not offer a crashed run's session for resume", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        const sessionByBranch = (branch: string) =>
+          Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
+        yield* ledger.insertRun(
+          record("crashed-branch", 5000, { branch: "13-crash", session, status: "crashed" }),
+        );
+        assert.isNull(yield* sessionByBranch("13-crash"));
+
+        yield* ledger.insertRun(
+          record("crashed-earlier", 1000, { branch: "13-crash", session, status: "failed" }),
+        );
+        assert.strictEqual(yield* sessionByBranch("13-crash"), "sess-abc");
       }),
     );
 

@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 
 // Naming the secret's env var is how an operator asks for the client-credentials source at all: an
 // OAuth app configured for browser login alone leaves it unset and keeps the legacy env-key floor.
@@ -20,6 +21,7 @@ export interface CredentialAccount {
   readonly organization: string | null;
   readonly tokenEnv: string;
   readonly clientCredentials: ClientCredentialsRef | null;
+  readonly oauthClientId: string | null;
 }
 
 export class CredentialError extends Schema.TaggedErrorClass<CredentialError>()("CredentialError", {
@@ -67,6 +69,22 @@ export interface StoredCredentials {
   readonly save: (credential: StoredCredential) => Effect.Effect<void, CredentialError>;
 }
 
+export interface TokenRefreshRequest {
+  readonly account: string;
+  readonly clientId: string;
+  readonly refreshToken: Redacted.Redacted<string>;
+}
+
+export type TokenRefresh = (request: TokenRefreshRequest) => Effect.Effect<StoredToken, CredentialError>;
+
+const refreshUnavailable: TokenRefresh = (request) =>
+  Effect.fail(
+    new CredentialError({
+      account: request.account,
+      message: `cannot refresh the stored token for ${request.account}: this credential store has no token refresh wired`,
+    }),
+  );
+
 // `token` answers `null` for an account that never asked for client credentials, never an error.
 export interface ClientCredentialsGrant {
   readonly token: (
@@ -78,6 +96,7 @@ export interface ClientCredentialsGrant {
 export interface CredentialSources {
   readonly stored: StoredCredentials;
   readonly clientCredentials?: ClientCredentialsGrant;
+  readonly refresh?: TokenRefresh;
 }
 
 export interface CredentialStoreService {
@@ -112,11 +131,14 @@ const matching = (account: CredentialAccount) => (credential: StoredCredential) 
   credential.workSource === account.workSource &&
   (account.organization === null || credential.organization === account.organization);
 
-// Nothing refreshes a stored token yet, so one that lapses mid-request comes back as an opaque 401
-// instead of falling back; the margin keeps a request from starting on a token that close to expiry.
 export const expiryMarginMillis = 60_000;
 
-const selectStored = Effect.fn("CredentialStore.selectStored")(function* (
+interface StoredMatch {
+  readonly credential: StoredCredential;
+  readonly live: boolean;
+}
+
+const matchStored = Effect.fn("CredentialStore.matchStored")(function* (
   stored: StoredCredentials,
   account: CredentialAccount,
 ) {
@@ -128,15 +150,11 @@ const selectStored = Effect.fn("CredentialStore.selectStored")(function* (
     });
     return null;
   }
-  const candidate = candidates[0];
-  if (!candidate) return null;
+  const credential = candidates[0];
+  if (!credential) return null;
   const now = yield* Clock.currentTimeMillis;
-  if (candidate.token.expiresAtMillis > now + expiryMarginMillis) return candidate;
-  yield* Effect.logInfo("stored credential expired; falling back to the environment", {
-    account: account.key,
-    organization: candidate.organization,
-  });
-  return null;
+  const live = credential.token.expiresAtMillis > now + expiryMarginMillis;
+  return { credential, live } satisfies StoredMatch;
 });
 
 const storedCredential = (credential: StoredCredential) =>
@@ -146,37 +164,91 @@ const storedCredential = (credential: StoredCredential) =>
     identity: { organization: credential.organization, botUserId: credential.botUserId },
   }) satisfies Credential;
 
-const grantedCredential = Effect.fn("CredentialStore.clientCredentials")(function* (
-  grant: ClientCredentialsGrant | undefined,
-  account: CredentialAccount,
-) {
-  const token = grant ? yield* grant.token(account) : null;
-  if (!token) return null;
-  return { source: "client-credentials", token, identity: null } satisfies Credential;
-});
+export const make = (sources: CredentialSources): CredentialStoreService => {
+  const refresh = sources.refresh ?? refreshUnavailable;
+  const gates = new Map<string, Semaphore.Semaphore>();
+  const gateFor = (key: string) => {
+    const existing = gates.get(key);
+    if (existing) return existing;
+    const gate = Semaphore.makeUnsafe(1);
+    gates.set(key, gate);
+    return gate;
+  };
 
-const resolve = Effect.fn("CredentialStore.resolve")(function* (
-  sources: CredentialSources,
-  account: CredentialAccount,
-) {
-  const candidate = yield* selectStored(sources.stored, account);
-  if (candidate) return storedCredential(candidate);
-  const granted = yield* grantedCredential(sources.clientCredentials, account);
-  return granted ?? (yield* envCredential(account));
-});
-
-export const make = (sources: CredentialSources): CredentialStoreService => ({
-  bearerToken: Effect.fn("CredentialStore.bearerToken")(function* (account: CredentialAccount) {
-    const credential = yield* resolve(sources, account);
-    yield* Effect.logDebug("credential resolved", {
+  const rotate = Effect.fn("CredentialStore.rotate")(function* (
+    account: CredentialAccount,
+    stale: StoredCredential,
+    clientId: string,
+    fallbackRefreshToken: Redacted.Redacted<string>,
+  ) {
+    // Not a redundant load: whoever held the gate first rewrote the file, and reading it again is
+    // what stops the fibers queued behind them spending the same refresh token over again.
+    const match = yield* matchStored(sources.stored, account);
+    if (match?.live) return match.credential;
+    const credential = match?.credential ?? stale;
+    const presented = credential.token.refreshToken ?? fallbackRefreshToken;
+    const token = yield* refresh({ account: account.key, clientId, refreshToken: presented });
+    // Linear leaves refresh_token out of a response when it does not rotate one, so the presented
+    // token has to carry forward or the next refresh has nothing to present.
+    const rotated = {
+      ...credential,
+      token: { ...token, refreshToken: token.refreshToken ?? presented },
+    } satisfies StoredCredential;
+    yield* sources.stored.save(rotated);
+    yield* Effect.logInfo("refreshed the stored credential", {
       account: account.key,
-      source: credential.source,
+      organization: rotated.organization,
     });
-    return credential;
-  }),
-  persist: sources.stored.save,
-  invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,
-});
+    return rotated;
+  });
+
+  const resolveStored = Effect.fn("CredentialStore.resolveStored")(function* (account: CredentialAccount) {
+    const match = yield* matchStored(sources.stored, account);
+    if (!match) return null;
+    if (match.live) return match.credential;
+    const clientId = account.oauthClientId;
+    const refreshToken = match.credential.token.refreshToken;
+    if (!clientId || !refreshToken) {
+      yield* Effect.logInfo("stored credential expired and cannot be refreshed; falling through", {
+        account: account.key,
+        organization: match.credential.organization,
+      });
+      return null;
+    }
+    return yield* gateFor(accountOf(match.credential)).withPermit(
+      rotate(account, match.credential, clientId, refreshToken),
+    );
+  });
+
+  const grantedCredential = Effect.fn("CredentialStore.clientCredentials")(function* (
+    grant: ClientCredentialsGrant | undefined,
+    account: CredentialAccount,
+  ) {
+    const token = grant ? yield* grant.token(account) : null;
+    if (!token) return null;
+    return { source: "client-credentials", token, identity: null } satisfies Credential;
+  });
+
+  const resolve = Effect.fn("CredentialStore.resolve")(function* (account: CredentialAccount) {
+    const candidate = yield* resolveStored(account);
+    if (candidate) return storedCredential(candidate);
+    const granted = yield* grantedCredential(sources.clientCredentials, account);
+    return granted ?? (yield* envCredential(account));
+  });
+
+  return {
+    bearerToken: Effect.fn("CredentialStore.bearerToken")(function* (account: CredentialAccount) {
+      const credential = yield* resolve(account);
+      yield* Effect.logDebug("credential resolved", {
+        account: account.key,
+        source: credential.source,
+      });
+      return credential;
+    }),
+    persist: sources.stored.save,
+    invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,
+  };
+};
 
 export const envOnly: StoredCredentials = {
   load: Effect.succeed([]),

@@ -1,5 +1,6 @@
 import type { OAuthAppConfig } from "@clanker-forge/contracts";
 import { LinearClient as LinearSdk } from "@linear/sdk";
+import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
@@ -7,7 +8,12 @@ import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import type { StoredToken } from "../CredentialStore";
+import {
+  CredentialError,
+  type StoredToken,
+  type TokenRefresh,
+  type TokenRefreshRequest,
+} from "../CredentialStore";
 
 // The GraphQL API only covers requests made with a token already in hand; getting that token is a
 // two-legged redirect + POST flow the SDK does not wrap, so these two endpoints stay hand-built.
@@ -177,6 +183,41 @@ export const storedTokenFrom = (response: TokenResponse, nowMillis: number) =>
     expiresAtMillis: nowMillis + response.expires_in * 1000,
     scopes: scopesOf(response.scope),
   }) satisfies StoredToken;
+
+// A PKCE app has no client secret, so the refresh grant carries only the client id alongside the
+// refresh token.
+const refreshRequest = (request: TokenRefreshRequest) =>
+  HttpClientRequest.post(tokenEndpoint).pipe(
+    HttpClientRequest.setHeader("accept", "application/json"),
+    HttpClientRequest.bodyUrlParams({
+      grant_type: "refresh_token",
+      client_id: request.clientId,
+      refresh_token: Redacted.value(request.refreshToken),
+    }),
+  );
+
+// Transport errors and schema issues both quote the payload that failed, and here that payload is
+// the token pair itself, so no cause may reach the reported message.
+const refreshFailed = (account: string, detail: string) =>
+  new CredentialError({ account, message: `Linear token refresh failed: ${detail}` });
+
+export const makeTokenRefresh = (client: HttpClient.HttpClient): TokenRefresh =>
+  Effect.fn("linear.oauth.tokenRefresh")(function* (request: TokenRefreshRequest) {
+    const response = yield* Effect.mapError(client.execute(refreshRequest(request)), () =>
+      refreshFailed(request.account, "the token endpoint could not be reached"),
+    );
+    if (response.status !== 200) {
+      return yield* refreshFailed(request.account, `the token endpoint returned ${response.status}`);
+    }
+    const body = yield* Effect.mapError(response.json, () =>
+      refreshFailed(request.account, "the token endpoint returned an unreadable body"),
+    );
+    const decoded = yield* Effect.mapError(decodeTokenResponse(body), () =>
+      refreshFailed(request.account, "the token endpoint returned an unexpected payload"),
+    );
+    const now = yield* Clock.currentTimeMillis;
+    return storedTokenFrom(decoded, now);
+  });
 
 export class LinearOAuthError extends Schema.TaggedErrorClass<LinearOAuthError>()("LinearOAuthError", {
   message: Schema.String,

@@ -7,7 +7,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
-import { makeFileStore } from "./credentials";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { layer, makeFileStore } from "./credentials";
 
 const stored = (accessToken: string, expiresAtMillis = Number.MAX_SAFE_INTEGER) =>
   ({
@@ -28,7 +29,22 @@ const account: CredentialStore.CredentialAccount = {
   organization: "acme",
   tokenEnv: "LINEAR_API_KEY",
   clientCredentials: null,
+  oauthClientId: null,
 };
+
+const tokenEndpoint: typeof globalThis.fetch = () =>
+  Promise.resolve(
+    new Response(
+      JSON.stringify({
+        access_token: "rotated-token",
+        token_type: "Bearer",
+        expires_in: 86_400,
+        scope: "read write",
+        refresh_token: "rotated-refresh",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  );
 
 const onDisk = <A, E>(
   use: (paths: {
@@ -195,6 +211,25 @@ describe("file-backed credential store", () => {
         const credential = yield* store.bearerToken(account);
         assert.strictEqual(credential.source, "env");
       }),
+    ),
+  );
+
+  it.effect("refreshes an expired stored token through the wired layer and rewrites the file", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        yield* file.save(stored("stale-token", 0));
+        const store = yield* CredentialStore.CredentialStore;
+        const credential = yield* store.bearerToken({ ...account, oauthClientId: "client-1" });
+        assert.strictEqual(credential.source, "stored-oauth");
+        assert.strictEqual(Redacted.value(credential.token), "rotated-token");
+        const saved = (yield* file.load)[0]?.token;
+        assert.strictEqual(saved && Redacted.value(saved.accessToken), "rotated-token");
+        assert.strictEqual(saved?.refreshToken && Redacted.value(saved.refreshToken), "rotated-refresh");
+      }).pipe(
+        Effect.provide(Layer.provide(layer(filePath), FetchHttpClient.layer)),
+        Effect.provideService(FetchHttpClient.Fetch, tokenEndpoint),
+      ),
     ),
   );
 });

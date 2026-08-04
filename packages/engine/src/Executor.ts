@@ -3,6 +3,7 @@ import { RunId, SessionId } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
@@ -68,6 +69,7 @@ const defaultFollowUp: FollowUpContext = {
   noProgress: 0,
   stalled: false,
   fresh: false,
+  baseDivergence: "none",
 };
 
 const decisionLine = /^\s*TRIAGE-DECISION:.*$/gim;
@@ -385,6 +387,7 @@ export const make = Effect.gen(function* () {
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
     noProgress: context.noProgress,
+    baseDivergence: context.baseDivergence,
   });
 
   const applyFollowUpSuccess = Effect.fn("Executor.applyFollowUpSuccess")(function* (
@@ -558,7 +561,7 @@ export const make = Effect.gen(function* () {
       return false;
     }
     yield* runOrHandoff(workspace, item, resolved, startedAtMillis).pipe(
-      Effect.ensuring(releaseClaim(workspace, item)),
+      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item))),
     );
     return true;
   });

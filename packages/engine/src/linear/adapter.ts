@@ -75,6 +75,7 @@ const targetFor = (workspace: RegisteredWorkspace) => {
     tokenEnv: source.tokenEnv ?? "LINEAR_API_KEY",
     organization: source.organization ?? null,
     clientCredentials: clientCredentialsFor(source.oauth),
+    oauthClientId: source.oauth?.clientId ?? null,
     botUserId: source.botUserId ?? null,
     roleLabels: roleLabelsFor(source.roleLabels),
   } satisfies LinearTarget;
@@ -132,7 +133,7 @@ const make = (client: LinearClientService): WorkSourceService => {
         claim: claimLabeled ? parseClaim(coordination) : null,
         attempts: parseAttempts(coordination),
         pr: null,
-        openBlockers: 0,
+        openBlockers: issue.openBlockers,
       };
     });
 

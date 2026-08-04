@@ -14,6 +14,7 @@ const ref: LinearTeamRef = {
   tokenEnv: "LINEAR_API_KEY",
   organization: null,
   clientCredentials: null,
+  oauthClientId: null,
 };
 
 const linearMaxQueryComplexity = 10_000;
@@ -22,6 +23,8 @@ const objectPoints = 1;
 const propertyPoints = 0.1;
 const propertiesPerIssue = 5;
 const propertiesPerCoordinationComment = 4;
+const propertiesPerRelation = 2;
+const objectsPerRelation = 2;
 
 const connectionPattern = /(\w+)\s*(?:\(([^)]*)\))?\s*\{\s*nodes\b/g;
 
@@ -40,11 +43,13 @@ const complexityOf = (document: string) => {
   const pageSizes = pageSizesOf(document);
   const sizeOf = (name: string) => pageSizes.get(name) ?? 1;
   const commentPoints = propertiesPerCoordinationComment * propertyPoints + objectPoints;
+  const relationPoints = propertiesPerRelation * propertyPoints + objectsPerRelation * objectPoints;
   const issuePoints =
     propertiesPerIssue * propertyPoints +
     objectPoints +
     connectionPoints(sizeOf("labels"), propertyPoints) +
-    connectionPoints(sizeOf("comments"), commentPoints);
+    connectionPoints(sizeOf("comments"), commentPoints) +
+    connectionPoints(sizeOf("inverseRelations"), relationPoints);
   const teamPoints = connectionPoints(sizeOf("issues"), issuePoints);
   return Math.ceil(connectionPoints(sizeOf("teams"), teamPoints));
 };
@@ -246,9 +251,58 @@ describe("linear client", () => {
         connectionsOf(document)
           .map((connection) => connection.name)
           .toSorted(),
-        ["comments", "issues", "labels", "teams"],
+        ["comments", "inverseRelations", "issues", "labels", "teams"],
       );
       assert.isAtMost(complexityOf(document), linearMaxQueryComplexity);
+    }).pipe(withToken()),
+  );
+
+  it.effect("counts open blocking relations across open states, ignoring resolved and non-blocks", () =>
+    Effect.gen(function* () {
+      const withRelations = {
+        ...teamBundle.issues.nodes[0],
+        inverseRelations: {
+          nodes: [
+            { type: "blocks", issue: { state: { type: "started" } } },
+            { type: "blocks", issue: { state: { type: "unstarted" } } },
+            { type: "blocks", issue: { state: { type: "backlog" } } },
+            { type: "blocks", issue: { state: { type: "completed" } } },
+            { type: "blocks", issue: { state: { type: "canceled" } } },
+            { type: "related", issue: { state: { type: "unstarted" } } },
+          ],
+        },
+      };
+      stubLinear(() => ({
+        body: { data: { teams: { nodes: [{ ...teamBundle, issues: { nodes: [withRelations] } }] } } },
+      }));
+      const client = yield* LinearClient;
+      const issues = yield* client.observeIssues(ref, null);
+      assert.strictEqual(issues[0]?.openBlockers, 3);
+    }).pipe(withToken()),
+  );
+
+  it.effect("treats an issue with no blocking relations as unblocked", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      const issues = yield* client.observeIssues(ref, null);
+      assert.strictEqual(issues[0]?.openBlockers, 0);
+    }).pipe(withToken()),
+  );
+
+  it.effect("holds an issue whose relation page is full even when every visible blocker is resolved", () =>
+    Effect.gen(function* () {
+      const fullPage = Array.from({ length: 8 }, () => ({
+        type: "blocks",
+        issue: { state: { type: "completed" } },
+      }));
+      const withRelations = { ...teamBundle.issues.nodes[0], inverseRelations: { nodes: fullPage } };
+      stubLinear(() => ({
+        body: { data: { teams: { nodes: [{ ...teamBundle, issues: { nodes: [withRelations] } }] } } },
+      }));
+      const client = yield* LinearClient;
+      const issues = yield* client.observeIssues(ref, null);
+      assert.strictEqual(issues[0]?.openBlockers, 1);
     }).pipe(withToken()),
   );
 

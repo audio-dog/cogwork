@@ -58,6 +58,8 @@ export const handoffRoleFor = (stage: LifecycleStage) => {
 
 export const maxAttemptsPerStage = 3;
 
+export const maxCrashesPerItem = 3;
+
 export const consecutiveFailures = (item: ObservedItem, stage: LifecycleStage) => {
   const forStage = item.attempts.filter((attempt) => attempt.stage === stage);
   const lastNonFailure = forStage.findLastIndex((attempt) => attempt.outcome !== "failed");

@@ -142,6 +142,7 @@ const followUpItem = {
     noProgress: 0,
     stalled: false,
     fresh: false,
+    baseDivergence: "none" as const,
   },
 };
 
@@ -562,6 +563,30 @@ describe("Executor.execute", () => {
         const [finished] = yield* ledger.listRuns(10);
         assert.strictEqual(finished?.status, "succeeded");
         assert.strictEqual(finished?.session, "sess-42");
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
+
+  it.effect("holds the claim when the run is interrupted so recovery can resume it", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const release = yield* Deferred.make<void>();
+      const layer = provide(recorder(calls), [gatedRunner(release)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const bus = yield* RunEventBus.RunEventBus;
+        const subscription = yield* bus.subscribe();
+        const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+
+        yield* Stream.fromSubscription(subscription).pipe(
+          Stream.filter((item) => item.event.text !== null),
+          Stream.runHead,
+        );
+        yield* Fiber.interrupt(running);
+
+        const log = yield* Ref.get(calls);
+        assert.isTrue(log.some((c) => c.method === "claim"));
+        assert.isFalse(log.some((c) => c.method === "release"));
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );

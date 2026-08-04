@@ -6,7 +6,7 @@ import {
   RunSummary as RunSummarySchema,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
-import { and, desc, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNotNull, notInArray, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -237,6 +237,35 @@ const make = (ledgerPath: string) =>
             .run();
         }),
 
+      crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+        write("crashRunning", () => {
+          db.update(runs)
+            .set({ status: "crashed", endedAt: endedAtMillis })
+            .where(
+              and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")),
+            )
+            .run();
+        }),
+
+      consecutiveCrashes: (workspace: string, workItem: string) =>
+        readRows("consecutiveCrashes", () =>
+          db
+            .select({ count: sql<number>`count(*)` })
+            .from(runs)
+            .where(
+              and(
+                eq(runs.workspace, workspace),
+                eq(runs.workItem, workItem),
+                eq(runs.status, "crashed"),
+                gt(
+                  runs.startedAt,
+                  sql<number>`coalesce((select max(${runs.startedAt}) from ${runs} where ${runs.workspace} = ${workspace} and ${runs.workItem} = ${workItem} and ${runs.status} <> 'crashed'), -1)`,
+                ),
+              ),
+            )
+            .all(),
+        ).pipe(Effect.map((rows) => Number(rows[0]?.count ?? 0))),
+
       appendEvent: (runId: RunId, event: RunEvent) =>
         write("appendEvent", () => {
           const values = {
@@ -256,7 +285,12 @@ const make = (ledgerPath: string) =>
       latestRunByBranch: (workspace: string, branch: string) =>
         latestRunWhere(
           "latestRunByBranch",
-          and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)),
+          and(
+            eq(runs.workspace, workspace),
+            eq(runs.branch, branch),
+            isNotNull(runs.session),
+            notInArray(runs.status, ["interrupted", "crashed"]),
+          ),
         ),
 
       latestRunForItem: (workspace: string, workItem: string) =>

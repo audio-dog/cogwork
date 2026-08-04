@@ -106,7 +106,7 @@ export const serializeAttempt = (attempt: AttemptRecord) =>
   `clanker-forge:attempt stage=${attempt.stage} outcome=${attempt.outcome} at=${attempt.atMillis}`;
 
 export const serializeFollowUp = (marker: FollowUpMarker) =>
-  `clanker-forge:follow-up checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress}`;
+  `clanker-forge:follow-up checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence}`;
 
 const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);

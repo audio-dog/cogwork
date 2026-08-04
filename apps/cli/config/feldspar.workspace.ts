@@ -2,6 +2,8 @@ import type { CursorModel } from "@clanker-forge/cursor-acp";
 import { defineWorkspace } from "@clanker-forge/engine";
 
 const triageModel = "composer-2.5" satisfies CursorModel;
+const implementModel = "claude-opus-4-8-thinking-high" satisfies CursorModel;
+const followUpModel = "composer-2.5" satisfies CursorModel;
 
 export default defineWorkspace({
   name: "feldspar",
@@ -23,5 +25,8 @@ export default defineWorkspace({
   concurrency: 3,
   playbook: {
     triage: { enabled: true, model: triageModel },
+    implement: { enabled: true, model: implementModel },
+    "follow-up": { enabled: true, model: followUpModel },
+    verify: { enabled: true },
   },
 });

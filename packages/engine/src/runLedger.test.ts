@@ -87,6 +87,87 @@ describe("RunLedger (memory)", () => {
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 
+  it.effect("does not offer an interrupted run's session for resume", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      const sessionByBranch = (branch: string) =>
+        Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
+      yield* ledger.insertRun(
+        record("interrupted", 5000, { branch: "7-fix-export", session, status: "interrupted" }),
+      );
+      assert.isNull(yield* sessionByBranch("7-fix-export"));
+
+      yield* ledger.insertRun(record("earlier", 1000, { branch: "7-fix-export", session, status: "failed" }));
+      assert.strictEqual(yield* sessionByBranch("7-fix-export"), "sess-abc");
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("does not offer a crashed run's session for resume", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      const sessionByBranch = (branch: string) =>
+        Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
+      yield* ledger.insertRun(
+        record("crashed", 5000, { branch: "7-fix-export", session, status: "crashed" }),
+      );
+      assert.isNull(yield* sessionByBranch("7-fix-export"));
+
+      yield* ledger.insertRun(record("earlier", 1000, { branch: "7-fix-export", session, status: "failed" }));
+      assert.strictEqual(yield* sessionByBranch("7-fix-export"), "sess-abc");
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("marks only the item's running runs as crashed", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("crash-running", 4000));
+      yield* ledger.insertRun(record("crash-done", 4100));
+      yield* ledger.updateRun(runId("crash-done"), {
+        status: "succeeded",
+        session,
+        usage: null,
+        endedAtMillis: 4200,
+      });
+
+      yield* ledger.crashRunning("gh", "#7", 5000);
+
+      const statuses = yield* Effect.forEach(["crash-running", "crash-done"], (id) =>
+        Effect.map(ledger.getRun(runId(id)), (run) => [run?.status, run?.endedAtMillis]),
+      );
+      assert.deepStrictEqual(statuses, [
+        ["crashed", 5000],
+        ["succeeded", 4200],
+      ]);
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("counts consecutive crashes and resets the count after a success", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      const crashes = () => ledger.consecutiveCrashes("gh", "#7");
+      yield* ledger.insertRun(record("c1", 1000, { status: "crashed" }));
+      yield* ledger.insertRun(record("c2", 2000, { status: "crashed" }));
+      assert.strictEqual(yield* crashes(), 2);
+
+      yield* ledger.insertRun(record("ok", 3000, { status: "succeeded" }));
+      assert.strictEqual(yield* crashes(), 0);
+
+      yield* ledger.insertRun(record("c3", 4000, { status: "crashed" }));
+      assert.strictEqual(yield* crashes(), 1);
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("resets the crash streak on any completed run between crashes", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      const crashes = () => ledger.consecutiveCrashes("gh", "#7");
+      yield* ledger.insertRun(record("c1", 1000, { status: "crashed" }));
+      yield* ledger.insertRun(record("failed", 2000, { status: "failed" }));
+      yield* ledger.insertRun(record("c2", 3000, { status: "crashed" }));
+      assert.strictEqual(yield* crashes(), 1);
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
   it.effect("interrupts runs this daemon started and leaves older or finished ones alone", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger;
