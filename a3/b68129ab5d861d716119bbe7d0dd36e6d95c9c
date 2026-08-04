@@ -1,0 +1,44 @@
+packages/sync/assets/toolkit-servers/servers.json
+  s_aa67064309d463::t_5ff1e60cf850b5 2
+packages/sync/src/targets/claude.ts
+  s_aa67064309d463::t_5c33fba91a3a8b 42-43,47,59
+  s_aa67064309d463::t_a66c5025039aad 10
+packages/contracts/CONTEXT.md
+  s_aa67064309d463::t_5fa3ab7469d0f1 107
+packages/sync/src/targets/codex.ts
+  s_aa67064309d463::t_76b3f6f0663d68 4
+  s_aa67064309d463::t_6b585ad56acb20 30,34
+packages/sync/src/lib/types.ts
+  s_aa67064309d463::t_6840d4ca75f3be 52
+  s_aa67064309d463::t_fbaa8a934dae9c 35-36
+README.md
+  s_aa67064309d463::t_342c1fa0306d4e 48
+packages/sync/src/targets/cursor.ts
+  s_aa67064309d463::t_b38ce4b9ab639e 50-51
+  s_aa67064309d463::t_b4fa1fb5ecf6c6 52-54
+packages/sync/src/lib/assets.ts
+  s_aa67064309d463::t_30cc0b235e2e9c 13
+  s_aa67064309d463::t_8e053c893af776 75,78-79
+  s_aa67064309d463::t_b25b60285dd409 4
+packages/sync/CONTEXT.md
+  s_aa67064309d463::t_a4dcb8cc333839 11
+  s_aa67064309d463::t_f21717fefc3e45 30-33
+packages/sync/src/lib/toml.ts
+  s_aa67064309d463::t_b27eb056c73d2c 1,4,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "a3b68129ab5d861d716119bbe7d0dd36e6d95c9c",
+  "prompts": {},
+  "sessions": {
+    "s_aa67064309d463": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "107a18a7-fe8b-4d94-9f4f-9e44b81891f3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
