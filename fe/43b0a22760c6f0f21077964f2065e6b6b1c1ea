@@ -1,0 +1,41 @@
+packages/engine/src/CredentialStore.ts
+  s_ee325453a7b4e1::t_f76ea1711c68a5 209
+  s_ee325453a7b4e1::t_245194ddd309ce 117-120,132-133,135
+  s_ee325453a7b4e1::t_ed825b42d4ca81 9,16
+  s_ee325453a7b4e1::t_91f761e29bdea8 148-173,175,177-208,210-229
+  s_ee325453a7b4e1::t_a3d487875d68b0 64-79
+  s_ee325453a7b4e1::t_02fee54563117c 111-112,115-116,136,146-147
+packages/engine/src/linear/client.ts
+  s_ee325453a7b4e1::t_c117f44a83d254 14
+  s_ee325453a7b4e1::t_ca6775cd1933e0 229
+packages/engine/src/credentialStore.test.ts
+  s_ee325453a7b4e1::t_c36e274061fd53 209-256,259-364
+  s_ee325453a7b4e1::t_ec2a58c3011ec3 257-258
+  s_ee325453a7b4e1::t_d10c36e2ca9ff2 8,10-21
+  s_ee325453a7b4e1::t_ee7b538a3f6ffe 28
+  s_ee325453a7b4e1::t_516b152c39e77d 365-367
+packages/engine/src/linear/linear.test.ts
+  s_ee325453a7b4e1::t_e27d44aeee79ed 48-54
+  s_ee325453a7b4e1::t_dae69fb7361129 14
+  s_ee325453a7b4e1::t_f60427cd0a8499 259,290,353,447
+packages/engine/src/linear/adapter.ts
+  s_ee325453a7b4e1::t_89574b3c614d4d 63
+packages/engine/src/linear/client.test.ts
+  s_ee325453a7b4e1::t_89fd471030484c 9-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "fe43b0a22760c6f0f21077964f2065e6b6b1c1ea",
+  "prompts": {},
+  "sessions": {
+    "s_ee325453a7b4e1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e7843d8-5305-4481-b914-8b1e10b02077",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
