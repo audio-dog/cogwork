@@ -15,7 +15,8 @@
     "sync": "pnpm --filter @clanker-forge/sync run sync",
     "check": "pnpm --filter @clanker-forge/sync run check",
     "link-skills": "pnpm --filter @clanker-forge/sync run link-skills",
-    "vendor": "node scripts/vendor.mjs"
+    "vendor": "node scripts/vendor.mjs",
+    "setup-worktree": "node scripts/setup-worktree.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
