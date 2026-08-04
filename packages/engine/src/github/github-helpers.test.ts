@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { humanCommentSignal, linkedIssue, prReview, reviewFeedback } from "./adapter";
+import { baseDivergenceOf, humanCommentSignal, linkedIssue, prReview, reviewFeedback } from "./adapter";
 import { parseIssues, type RawComment, type RawPull, type RawReview, reviewDecisionOf } from "./client";
 import { ledgerMarker } from "./markers";
 
@@ -32,6 +32,24 @@ const pull = (over: Partial<RawPull>): RawPull => ({
   draft: false,
   headSha: "sha",
   ...over,
+});
+
+describe("baseDivergenceOf", () => {
+  it("maps a dirty mergeable_state to a conflict", () => {
+    assert.strictEqual(baseDivergenceOf("dirty"), "conflict");
+  });
+
+  it("maps a behind mergeable_state to clean, since it still merges", () => {
+    assert.strictEqual(baseDivergenceOf("behind"), "clean");
+  });
+
+  it("maps every other state, including a not-yet-computed null, to none", () => {
+    assert.strictEqual(baseDivergenceOf(null), "none");
+    assert.strictEqual(baseDivergenceOf("clean"), "none");
+    assert.strictEqual(baseDivergenceOf("blocked"), "none");
+    assert.strictEqual(baseDivergenceOf("unknown"), "none");
+    assert.strictEqual(baseDivergenceOf("unstable"), "none");
+  });
 });
 
 describe("reviewDecisionOf", () => {

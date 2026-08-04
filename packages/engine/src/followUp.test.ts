@@ -12,6 +12,7 @@ const pr = (over: Partial<ObservedPr> = {}): ObservedPr => ({
   checks: "passing",
   latestHumanCommentAtMillis: null,
   fresh: false,
+  baseDivergence: "none",
   followUp: null,
   ...over,
 });
@@ -31,10 +32,18 @@ describe("triggersFollowUp", () => {
       triggersFollowUp(
         pr({
           latestHumanCommentAtMillis: 10,
-          followUp: { checks: "passing", humanCommentAtMillis: 10, noProgress: 0 },
+          followUp: { checks: "passing", humanCommentAtMillis: 10, noProgress: 0, baseDivergence: "none" },
         }),
       ),
     );
+  });
+
+  it("triggers on a base-divergence conflict even when checks pass and nothing else moved", () => {
+    assert.isTrue(triggersFollowUp(pr({ baseDivergence: "conflict" })));
+  });
+
+  it("does not trigger on a merely-behind base (clean), which still merges", () => {
+    assert.isFalse(triggersFollowUp(pr({ baseDivergence: "clean" })));
   });
 
   it("does not trigger on a green, unreviewed, unchanged PR", () => {
@@ -53,7 +62,7 @@ describe("noProgressCount", () => {
         pr({
           checks: "failing",
           latestHumanCommentAtMillis: 5,
-          followUp: { checks: "failing", humanCommentAtMillis: 5, noProgress: 1 },
+          followUp: { checks: "failing", humanCommentAtMillis: 5, noProgress: 1, baseDivergence: "none" },
         }),
       ),
       2,
@@ -63,7 +72,10 @@ describe("noProgressCount", () => {
   it("resets when the checks turned green", () => {
     assert.strictEqual(
       noProgressCount(
-        pr({ checks: "passing", followUp: { checks: "failing", humanCommentAtMillis: 0, noProgress: 2 } }),
+        pr({
+          checks: "passing",
+          followUp: { checks: "failing", humanCommentAtMillis: 0, noProgress: 2, baseDivergence: "none" },
+        }),
       ),
       0,
     );
@@ -75,7 +87,31 @@ describe("noProgressCount", () => {
         pr({
           checks: "failing",
           latestHumanCommentAtMillis: 20,
-          followUp: { checks: "failing", humanCommentAtMillis: 10, noProgress: 2 },
+          followUp: { checks: "failing", humanCommentAtMillis: 10, noProgress: 2, baseDivergence: "none" },
+        }),
+      ),
+      0,
+    );
+  });
+
+  it("increments when a conflict persists with nothing else moving", () => {
+    assert.strictEqual(
+      noProgressCount(
+        pr({
+          baseDivergence: "conflict",
+          followUp: { checks: "passing", humanCommentAtMillis: 0, noProgress: 1, baseDivergence: "conflict" },
+        }),
+      ),
+      2,
+    );
+  });
+
+  it("resets when a dirty PR became mergeable since the marker", () => {
+    assert.strictEqual(
+      noProgressCount(
+        pr({
+          baseDivergence: "clean",
+          followUp: { checks: "passing", humanCommentAtMillis: 0, noProgress: 2, baseDivergence: "conflict" },
         }),
       ),
       0,
@@ -90,11 +126,33 @@ describe("followUpContext", () => {
         checks: "failing",
         latestHumanCommentAtMillis: 5,
         fresh: true,
-        followUp: { checks: "failing", humanCommentAtMillis: 5, noProgress: followUpNoProgressLimit - 1 },
+        followUp: {
+          checks: "failing",
+          humanCommentAtMillis: 5,
+          noProgress: followUpNoProgressLimit - 1,
+          baseDivergence: "none",
+        },
       }),
     );
     assert.strictEqual(context.noProgress, followUpNoProgressLimit);
     assert.isTrue(context.stalled);
     assert.isTrue(context.fresh);
+  });
+
+  it("stalls a conflict that persists to the limit and carries its base-divergence state", () => {
+    const context = followUpContext(
+      pr({
+        baseDivergence: "conflict",
+        followUp: {
+          checks: "passing",
+          humanCommentAtMillis: 0,
+          noProgress: followUpNoProgressLimit - 1,
+          baseDivergence: "conflict",
+        },
+      }),
+    );
+    assert.strictEqual(context.noProgress, followUpNoProgressLimit);
+    assert.isTrue(context.stalled);
+    assert.strictEqual(context.baseDivergence, "conflict");
   });
 });

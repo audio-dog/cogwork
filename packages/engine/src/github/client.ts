@@ -87,6 +87,10 @@ const PullSchema = Schema.Struct({
   author_association: Schema.optional(Schema.String),
 });
 
+const PullDetailSchema = Schema.Struct({
+  mergeable_state: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
 const ReviewSchema = Schema.Struct({
   state: Schema.String,
   user: Schema.Struct({ login: Schema.String }),
@@ -127,6 +131,7 @@ const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema)
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
+const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
 const decodeReviews = Schema.decodeUnknownEffect(Schema.Array(ReviewSchema));
 const decodeComments = Schema.decodeUnknownEffect(Schema.Array(CommentSchema));
 
@@ -332,6 +337,12 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
             headSha: pull.head.sha,
           }),
         );
+      }),
+    pullMergeableState: (repo: GitHubRepoRef, pullNumber: number) =>
+      Effect.gen(function* () {
+        const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}`));
+        const detail = yield* Effect.mapError(decodePullDetail(json), toUnavailable);
+        return detail.mergeable_state ?? null;
       }),
     listComments: (repo: GitHubRepoRef, issueNumber: number) =>
       Effect.gen(function* () {

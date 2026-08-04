@@ -69,6 +69,7 @@ const defaultFollowUp: FollowUpContext = {
   noProgress: 0,
   stalled: false,
   fresh: false,
+  baseDivergence: "none",
 };
 
 const decisionLine = /^\s*TRIAGE-DECISION:.*$/gim;
@@ -386,6 +387,7 @@ export const make = Effect.gen(function* () {
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
     noProgress: context.noProgress,
+    baseDivergence: context.baseDivergence,
   });
 
   const applyFollowUpSuccess = Effect.fn("Executor.applyFollowUpSuccess")(function* (
