@@ -21,6 +21,12 @@ export default defineWorkspace({
       wontfix: "wontfix",
     },
   },
+  sourceControl: {
+    type: "github",
+    repo: "colonylabs/feldspar",
+    tokenEnv: "GITHUB_TOKEN",
+    botLogin: "audiodog-bot",
+  },
   harness: { preferred: "cursor" },
   concurrency: 3,
   playbook: {
