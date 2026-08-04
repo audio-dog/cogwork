@@ -1,0 +1,26 @@
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_a54a11bc8bc37d::t_0ace77847d056a 10
+  s_a54a11bc8bc37d::t_c31228207488a4 35
+  s_a54a11bc8bc37d::t_42ab1d805b1d74 73,77-79
+  s_a54a11bc8bc37d::t_7b2120c8ebca3c 16-17
+  s_a54a11bc8bc37d::t_bc30695c9d3fb3 63
+  s_a54a11bc8bc37d::t_84e9d658a20cd3 41-53
+packages/sync/skills/sync/follow-up-agent/SKILL.md
+  s_a54a11bc8bc37d::t_d4861cd7fb5c94 10,16-17,35,41-53,63,73,77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "e7fc08139ab151696123eb47d3d5f2e1a0634021",
+  "prompts": {},
+  "sessions": {
+    "s_a54a11bc8bc37d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "03e33a20-9dd3-4341-a53d-325a8f8d3199",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
