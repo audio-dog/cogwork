@@ -1,0 +1,19 @@
+packages/engine/src/runLedger.test.ts
+  s_ce9c17862d3dfc::t_f2ae20f78eac3a 100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "8d27fd8ab1fb143c131c055eafea90e334b780a5",
+  "prompts": {},
+  "sessions": {
+    "s_ce9c17862d3dfc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c261e06c-cd79-44d4-984e-fbdbd5d4a651",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
