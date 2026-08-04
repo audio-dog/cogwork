@@ -1,0 +1,125 @@
+packages/engine/src/CredentialStore.ts
+  s_b8b2fbaefc36ea::t_d77af19d1f0a23 24,59,88-101,105,134,167-168,186,197,206,209,212,223-238,241,248-249
+  s_b8b2fbaefc36ea::t_d5942d2b9ff80b 23
+  s_b8b2fbaefc36ea::t_e71edf8cc14516 11-17,264
+packages/engine/src/linear/clientCredentials.test.ts
+  s_b8b2fbaefc36ea::t_cb290f4a315070 19
+  s_b8b2fbaefc36ea::t_64533c5fb326c9 16-18
+  s_b8b2fbaefc36ea::t_10ea2836124b5b 20-22
+  s_b8b2fbaefc36ea::t_7f74e057b739db 1-15,23-213
+packages/engine/src/linear/client.test.ts
+  s_b8b2fbaefc36ea::t_f73f6e8fe18135 17
+  s_b8b2fbaefc36ea::t_594e988652f7b8 16
+  s_b8b2fbaefc36ea::t_c096e9cba08c8d 90,102,105-109,189-197,311-330
+packages/engine/src/linear/client.ts
+  s_b8b2fbaefc36ea::t_879690a9e53bc1 25
+  s_b8b2fbaefc36ea::t_a59d1cbd8fcfe4 300
+  s_b8b2fbaefc36ea::t_328e802e84f87f 24
+  s_b8b2fbaefc36ea::t_add928887f1fd2 297-299
+  s_b8b2fbaefc36ea::t_ddb21031f283e3 301
+  s_b8b2fbaefc36ea::t_0da31d88afac78 12-17,290-296,308,325-338,349
+packages/engine/src/linear/linear.test.ts
+  s_b8b2fbaefc36ea::t_75d5f835ca2c9f 56
+  s_b8b2fbaefc36ea::t_672fb023a725f9 55
+packages/engine/src/linear/adapter.ts
+  s_b8b2fbaefc36ea::t_b71eb3ea618fb0 78
+  s_b8b2fbaefc36ea::t_d6201ef0000146 77
+  s_b8b2fbaefc36ea::t_9b6b738ae96585 1,67-69
+apps/cli/src/credentials.ts
+  s_b8b2fbaefc36ea::t_4df4dc98386c35 84-88
+  s_b8b2fbaefc36ea::t_db51e4045fe80b 83
+apps/cli/src/credentials.test.ts
+  s_b8b2fbaefc36ea::t_658a26d1081276 32
+  s_b8b2fbaefc36ea::t_28e40e54462db8 223
+  s_b8b2fbaefc36ea::t_df697c92f5f033 31
+  s_b8b2fbaefc36ea::t_7594441ad9adcd 85,187,199,210
+packages/engine/src/credentialStore.test.ts
+  s_b8b2fbaefc36ea::t_47a11d41a73977 258
+  s_b8b2fbaefc36ea::t_11cb51920ad7e2 153,155-156,388-391,398
+  s_b8b2fbaefc36ea::t_376f302f2b1d75 217
+  s_b8b2fbaefc36ea::t_94382b8ad8cac1 12,29-30
+  s_b8b2fbaefc36ea::t_7dd9989a3ddfba 154
+  s_b8b2fbaefc36ea::t_23bdf2407539df 399-401
+  s_b8b2fbaefc36ea::t_9f21525922c7a1 114-117,402-509
+packages/engine/CONTEXT.md
+  s_b8b2fbaefc36ea::t_b196db31cd8f5a 69,73
+  s_b8b2fbaefc36ea::t_06c54de7461304 36-39,76-79
+apps/cli/CONTEXT.md
+  s_b8b2fbaefc36ea::t_1507b07fb7a449 21-24,30
+apps/cli/config/clanker-forge.workspace.ts
+  s_b8b2fbaefc36ea::t_b05e0fc304b972 5-6
+apps/cli/src/commands.ts
+  s_b8b2fbaefc36ea::t_e487ef3d3162ae 14,52-58,85-88,91,172,175,184
+apps/cli/src/ledger.test.ts
+  s_b8b2fbaefc36ea::t_83c6747bbae666 151-194
+apps/cli/src/ledger.ts
+  s_b8b2fbaefc36ea::t_e70af2548a144d 2,9,217-229
+apps/cli/src/rpc.ts
+  s_b8b2fbaefc36ea::t_0711360ca322da 38
+apps/cli/src/stopSignal.test.ts
+  s_b8b2fbaefc36ea::t_dd5da3c0209194 1-32
+apps/cli/src/stopSignal.ts
+  s_b8b2fbaefc36ea::t_f0e1fdb7011bc3 1-28
+packages/contracts/CONTEXT.md
+  s_b8b2fbaefc36ea::t_084f0b2fe00a3c 76
+packages/contracts/src/run.ts
+  s_b8b2fbaefc36ea::t_281d68e83489bf 18
+packages/contracts/src/workspace.ts
+  s_b8b2fbaefc36ea::t_2da5ddc746e8d3 15
+packages/cursor-acp/.gitignore
+  s_b8b2fbaefc36ea::t_5b44b7379752f0 5
+packages/cursor-acp/FINDINGS-RESUME.md
+  s_b8b2fbaefc36ea::t_48cc607c217ba2 1-226
+packages/cursor-acp/FINDINGS.md
+  s_b8b2fbaefc36ea::t_44cb7530655f8a 9-11
+packages/cursor-acp/package.json
+  s_b8b2fbaefc36ea::t_a4a5b753a7f768 16-17
+packages/cursor-acp/probe-resume.ts
+  s_b8b2fbaefc36ea::t_aa9d7bc61dda9e 1-370
+packages/engine/AGENTS.md
+  s_b8b2fbaefc36ea::t_ad5d47bb40f28c 11-12
+packages/engine/src/Daemon.ts
+  s_b8b2fbaefc36ea::t_6e6b4acaffb722 21,156,171-184
+packages/engine/src/Executor.ts
+  s_b8b2fbaefc36ea::t_82208fd9a6562e 39,100,102,181-205,212,281-286,302-307,328,404-409,424,531
+packages/engine/src/RunLedger.ts
+  s_b8b2fbaefc36ea::t_4d8721bd17b600 22-24,32-40,70-76
+packages/engine/src/Scheduler.ts
+  s_b8b2fbaefc36ea::t_d21020a4105812 3,7,40,51,54-63,79,183,185,190-197,222-238,353
+packages/engine/src/Worktree.ts
+  s_b8b2fbaefc36ea::t_753c287e507459 70-75,120,136-138
+packages/engine/src/engine.test.ts
+  s_b8b2fbaefc36ea::t_2cb45dea4f84b2 4-5,20,366-387,389-428
+packages/engine/src/executor.test.ts
+  s_b8b2fbaefc36ea::t_5de00b4b98d32c 3,5,63,76-86,100-108,215,220-222,537-595,614-637
+packages/engine/src/linear/clientCredentials.ts
+  s_b8b2fbaefc36ea::t_313e006a693def 1-102
+packages/engine/src/linear/index.ts
+  s_b8b2fbaefc36ea::t_52b30662699c5f 8
+packages/engine/src/linear/oauth.ts
+  s_b8b2fbaefc36ea::t_1baf547606cd59 108-128
+packages/engine/src/runLedger.test.ts
+  s_b8b2fbaefc36ea::t_f88f53e3a58a05 90-132
+packages/engine/src/scheduler.test.ts
+  s_b8b2fbaefc36ea::t_f5f25472c7f2fc 1-9,14,32-33,257,267,270,433-565,568-581,643-679
+packages/engine/src/worktree.test.ts
+  s_b8b2fbaefc36ea::t_1a6c9239f4b23f 147-159
+packages/engine/src/linear/oauth.test.ts
+  s_b8b2fbaefc36ea::t_7769f3aff8d4f8 11,206-221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "85b8ea0f10ea9b2809df55edb4e3dac5e937612b",
+  "prompts": {},
+  "sessions": {
+    "s_b8b2fbaefc36ea": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "18c3bf50-9c55-4125-9b4f-d16c9bfcb296",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
