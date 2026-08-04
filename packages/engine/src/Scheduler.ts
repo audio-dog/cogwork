@@ -1,8 +1,10 @@
 import type { LifecycleStage, WorkspaceId } from "@clanker-forge/contracts";
 import { stagePriority } from "@clanker-forge/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import {
@@ -35,6 +37,7 @@ export interface SchedulerState {
   readonly acted: ReadonlySet<string>;
   readonly budgetDay: number;
   readonly budgetUsed: number;
+  readonly stopping: boolean;
 }
 
 export const initialState: SchedulerState = {
@@ -45,7 +48,18 @@ export const initialState: SchedulerState = {
   acted: new Set(),
   budgetDay: -1,
   budgetUsed: 0,
+  stopping: false,
 };
+
+export interface DrainOptions {
+  readonly graceMillis: number;
+  readonly abort: Effect.Effect<void>;
+}
+
+export interface DrainOutcome {
+  readonly inFlight: number;
+  readonly interrupted: number;
+}
 
 const millisPerDay = 86_400_000;
 
@@ -62,6 +76,7 @@ const byPriority = (a: Candidate, b: Candidate) =>
   stagePriority.indexOf(a.work.stage) - stagePriority.indexOf(b.work.stage);
 
 const fits = (candidate: Candidate, state: SchedulerState, config: SchedulerConfig) =>
+  !state.stopping &&
   state.global < config.globalLimit &&
   (state.perWorkspace.get(candidate.workspace.config.name) ?? 0) < candidate.workspaceLimit &&
   state.budgetUsed < config.dailyBudget &&
@@ -165,18 +180,21 @@ export const make = (config: SchedulerConfig) =>
     const executor = yield* Executor;
     const workSource = yield* WorkSource;
     const ledger = yield* RunLedger;
-    const scope = yield* Effect.scope;
+    const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(initialState);
+    const startedAtMillis = yield* Clock.currentTimeMillis;
 
     const runJob = (candidate: Candidate) =>
       executor.execute(candidate.workspace, candidate.work).pipe(
         Effect.flatMap((started) => (started ? Effect.void : Ref.update(stateRef, refundBudget))),
-        Effect.catchCause((cause) =>
-          Effect.logWarning("scheduled job crashed", {
-            workspace: candidate.workspace.config.name,
-            item: candidate.work.id,
-            cause,
-          }),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("scheduled job crashed", {
+              workspace: candidate.workspace.config.name,
+              item: candidate.work.id,
+              cause,
+            }),
         ),
         Effect.ensuring(Ref.update(stateRef, (state) => release(state, candidate))),
       );
@@ -201,7 +219,23 @@ export const make = (config: SchedulerConfig) =>
           budgetUsed: planned.state.budgetUsed,
         });
       }
-      return yield* Effect.forEach(planned.picks, (candidate) => Effect.forkIn(runJob(candidate), scope));
+      return yield* Effect.forEach(planned.picks, (candidate) => FiberSet.run(jobs, runJob(candidate)));
+    });
+
+    const drain = Effect.fn("Scheduler.drain")(function* (options: DrainOptions) {
+      yield* Ref.update(stateRef, (state) => ({ ...state, stopping: true }));
+      const inFlight = yield* FiberSet.size(jobs);
+      yield* Effect.logInfo("draining in-flight runs", {
+        inFlight,
+        graceMillis: options.graceMillis,
+      });
+      yield* Effect.raceAll([FiberSet.awaitEmpty(jobs), Effect.sleep(options.graceMillis), options.abort]);
+      const interrupted = yield* FiberSet.size(jobs);
+      const endedAtMillis = yield* Clock.currentTimeMillis;
+      yield* ledger.interruptRunning(startedAtMillis, endedAtMillis);
+      yield* FiberSet.clear(jobs);
+      yield* Effect.logInfo("drain complete", { inFlight, interrupted });
+      return { inFlight, interrupted } satisfies DrainOutcome;
     });
 
     const handoffRecovery = Effect.fn("Scheduler.handoffRecovery")(function* (
@@ -316,7 +350,7 @@ export const make = (config: SchedulerConfig) =>
       );
     });
 
-    return { tick, recover, stats: Ref.get(stateRef), config } as const;
+    return { tick, drain, recover, stats: Ref.get(stateRef), config } as const;
   });
 
 export class Scheduler extends Context.Service<Scheduler, Effect.Success<ReturnType<typeof make>>>()(

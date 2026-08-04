@@ -18,7 +18,7 @@ import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState }
 import { WorkspaceRegistry } from "./Registry";
 import { activityOf, RunEventBus } from "./RunEventBus";
 import { RunLedger } from "./RunLedger";
-import { Scheduler, type SchedulerConfig, type SchedulerState } from "./Scheduler";
+import { type DrainOptions, Scheduler, type SchedulerConfig, type SchedulerState } from "./Scheduler";
 import { ticketSlug, WorktreeManager } from "./Worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -153,7 +153,7 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   );
 });
 
-export const reconcileHeartbeat = (pollIntervalMillis: number) =>
+const reconcileHeartbeat = (pollIntervalMillis: number) =>
   Effect.gen(function* () {
     const worker = yield* ReconcileWorker;
     const receipt = yield* worker.submit();
@@ -168,7 +168,17 @@ export const bootstrap = Effect.gen(function* () {
   yield* scheduler.recover();
 });
 
-export const executeHeartbeat = Effect.gen(function* () {
-  const scheduler = yield* Scheduler;
-  yield* scheduler.tick();
-}).pipe(Effect.repeat(Schedule.spaced("5 seconds")));
+const executeHeartbeat = () =>
+  Effect.flatMap(Scheduler, (scheduler) => scheduler.tick()).pipe(
+    Effect.repeat(Schedule.spaced("5 seconds")),
+  );
+
+export interface HeartbeatOptions {
+  readonly pollIntervalMillis: number;
+  readonly drain: DrainOptions;
+}
+
+export const heartbeats = (options: HeartbeatOptions) =>
+  Effect.all([reconcileHeartbeat(options.pollIntervalMillis), executeHeartbeat()], {
+    concurrency: "unbounded",
+  }).pipe(Effect.onInterrupt(() => Effect.flatMap(Scheduler, (scheduler) => scheduler.drain(options.drain))));

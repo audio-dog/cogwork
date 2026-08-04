@@ -87,6 +87,32 @@ describe("RunLedger (memory)", () => {
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 
+  it.effect("interrupts runs this daemon started and leaves older or finished ones alone", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("stale", 3900));
+      yield* ledger.insertRun(record("in-flight", 4000));
+      yield* ledger.insertRun(record("done", 4100));
+      yield* ledger.updateRun(runId("done"), {
+        status: "succeeded",
+        session,
+        usage: null,
+        endedAtMillis: 4200,
+      });
+
+      yield* ledger.interruptRunning(4000, 5000);
+
+      const statuses = yield* Effect.forEach(["stale", "in-flight", "done"], (id) =>
+        Effect.map(ledger.getRun(runId(id)), (run) => [run?.status, run?.endedAtMillis]),
+      );
+      assert.deepStrictEqual(statuses, [
+        ["running", null],
+        ["interrupted", 5000],
+        ["succeeded", 4200],
+      ]);
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
   it.effect("records a session on a run that has not reached a terminal status", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger;

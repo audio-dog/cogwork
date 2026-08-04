@@ -33,6 +33,10 @@ _Avoid_: Filtering, triage (triage is a stage, not this)
 The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. In-flight counts and budgets live here and nowhere else. It acts on a given work item at most once per snapshot generation: a completed item is not re-picked until a newer snapshot re-confirms it is eligible, which is what stops a fast execute tick from re-running work that a slow reconcile has not yet caught up on (see ADR 0001).
 _Avoid_: Queue, dispatcher, runner
 
+**Drain**:
+The scheduler's graceful stop: it picks no further candidates and gives the runs already in flight a **grace window** to finish on their own and record their normal outcome. Whatever is still running when the window closes — or when a second stop signal ends the wait early — is recorded `interrupted` and its agent torn down.
+_Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
+
 **Snapshot generation**:
 The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the work source from the next, so it can act on each work item at most once per observation.
 _Avoid_: Version, revision, epoch

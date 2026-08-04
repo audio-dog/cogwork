@@ -18,6 +18,10 @@ _Avoid_: Frontend. Note: the `worktree` subcommand embeds the engine directly ra
 The full composition of engine layers — registry, work source, ledger, harness, reconcile, executor, scheduler, RPC handlers — that the `daemon` command boots.
 _Avoid_: Daemon (the running process is the daemon; this is how it's assembled)
 
+**Stop signal**:
+A `SIGINT` or `SIGTERM` to the daemon process. The first one starts the engine's **drain** — the runtime interrupts the heartbeats and the drain runs as their shutdown finalizer, giving in-flight runs `--drain-grace` seconds to finish. A second stop signal ends that wait.
+_Avoid_: Kill, cancel
+
 **Config home**:
 The directory of `*.workspace.ts` files the daemon loads at startup to learn which workspaces to drive.
 _Avoid_: Config file, settings
