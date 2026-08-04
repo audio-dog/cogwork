@@ -36,7 +36,7 @@ type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError;
 
 interface RunAccumulator {
   readonly text: string;
-  readonly session: string | null;
+  readonly session: SessionId | null;
   readonly usage: TokenUsage | null;
 }
 
@@ -97,9 +97,9 @@ const warnTriageDecision = Effect.fn("Executor.warnTriageDecision")(function* (
   }
 });
 
-const mergeEvent = (acc: RunAccumulator, event: HarnessEvent): RunAccumulator => ({
+const mergeEvent = (acc: RunAccumulator, event: HarnessEvent, session: SessionId | null): RunAccumulator => ({
   text: event.text ? acc.text + event.text : acc.text,
-  session: event.sessionId ?? acc.session,
+  session,
   usage: event.usage ?? acc.usage,
 });
 
@@ -178,13 +178,38 @@ export const make = Effect.gen(function* () {
     yield* bus.publish(activityOf(record, seq, atMillis, event));
   });
 
+  const nextSession = Effect.fn("Executor.nextSession")(function* (
+    runId: RunId,
+    current: SessionId | null,
+    raw: string | null,
+  ) {
+    if (raw === null || raw === current) return current;
+    const session = yield* sessionOf(raw);
+    if (session === null) return current;
+    yield* ledger.recordSession(runId, session);
+    return session;
+  });
+
+  const ledgeredSession = (runId: RunId) => Effect.map(ledger.getRun(runId), (run) => run?.session ?? null);
+
+  const foldEvent = Effect.fn("Executor.foldEvent")(function* (
+    record: RunRecord,
+    acc: RunAccumulator,
+    seq: number,
+    event: HarnessEvent,
+  ) {
+    const session = yield* nextSession(record.id, acc.session, event.sessionId);
+    yield* persistEvent(record, seq, event);
+    return mergeEvent(acc, event, session);
+  });
+
   const foldRun = Effect.fn("Executor.foldRun")(function* (record: RunRecord, request: HarnessRequest) {
     const initial: RunAccumulator = { text: "", session: null, usage: null };
     return yield* Stream.runFoldEffect(
       Stream.zipWithIndex(withFailureTerminal(harness.run(request))),
       () => initial,
       (acc: RunAccumulator, [event, seq]: readonly [HarnessEvent, number]) =>
-        Effect.map(persistEvent(record, seq, event), () => mergeEvent(acc, event)),
+        foldEvent(record, acc, seq, event),
     );
   });
 
@@ -245,7 +270,6 @@ export const make = Effect.gen(function* () {
   ) {
     const decision = resolveTriageDecision(acc.text);
     yield* warnTriageDecision(item, decision);
-    const session = yield* sessionOf(acc.session);
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* workSource.note(workspace, item.id, proposalBody(acc.text));
     yield* workSource.setRoles(workspace, item.id, { remove: ["needs-triage"], add: [decision.role] });
@@ -254,7 +278,12 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       atMillis: endedAtMillis,
     });
-    yield* ledger.updateRun(runId, { status: "succeeded", session, usage: acc.usage, endedAtMillis });
+    yield* ledger.updateRun(runId, {
+      status: "succeeded",
+      session: acc.session,
+      usage: acc.usage,
+      endedAtMillis,
+    });
   });
 
   const applyImplementSuccess = Effect.fn("Executor.applyImplementSuccess")(function* (
@@ -263,7 +292,6 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     acc: RunAccumulator,
   ) {
-    const session = yield* sessionOf(acc.session);
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* workSource.setRoles(workspace, item.id, { remove: ["ready-for-agent"], add: [] });
     yield* workSource.recordAttempt(workspace, item.id, {
@@ -271,7 +299,12 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       atMillis: endedAtMillis,
     });
-    yield* ledger.updateRun(runId, { status: "succeeded", session, usage: acc.usage, endedAtMillis });
+    yield* ledger.updateRun(runId, {
+      status: "succeeded",
+      session: acc.session,
+      usage: acc.usage,
+      endedAtMillis,
+    });
   });
 
   const completeImplement = Effect.fn("Executor.completeImplement")(function* (
@@ -284,7 +317,6 @@ export const make = Effect.gen(function* () {
     if (result === "opened-pr") {
       return yield* applyImplementSuccess(workspace, item, runId, acc);
     }
-    const session = yield* sessionOf(acc.session);
     const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
     return yield* applyFailure(
       workspace,
@@ -293,7 +325,7 @@ export const make = Effect.gen(function* () {
       runId,
       result !== "stuck",
       reason,
-      session,
+      acc.session,
     );
   });
 
@@ -362,7 +394,6 @@ export const make = Effect.gen(function* () {
     acc: RunAccumulator,
     context: FollowUpContext,
   ) {
-    const session = yield* sessionOf(acc.session);
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* workSource.recordFollowUp(workspace, item.id, followUpMarker(context));
     yield* workSource.recordAttempt(workspace, item.id, {
@@ -370,7 +401,12 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       atMillis: endedAtMillis,
     });
-    yield* ledger.updateRun(runId, { status: "succeeded", session, usage: acc.usage, endedAtMillis });
+    yield* ledger.updateRun(runId, {
+      status: "succeeded",
+      session: acc.session,
+      usage: acc.usage,
+      endedAtMillis,
+    });
   });
 
   const completeFollowUp = Effect.fn("Executor.completeFollowUp")(function* (
@@ -384,9 +420,8 @@ export const make = Effect.gen(function* () {
     if (result === "pushed") {
       return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
     }
-    const session = yield* sessionOf(acc.session);
     const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
-    return yield* applyFailure(workspace, item, null, runId, result !== "stuck", reason, session);
+    return yield* applyFailure(workspace, item, null, runId, result !== "stuck", reason, acc.session);
   });
 
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
@@ -493,7 +528,7 @@ export const make = Effect.gen(function* () {
       runId,
       retryableOf(outcome.failure),
       prepareFailureReason(outcome.failure),
-      null,
+      yield* ledgeredSession(runId),
     );
   });
 
