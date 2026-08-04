@@ -94,8 +94,8 @@ The single bot-owned comment an adapter keeps on an issue for control-plane stat
 _Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
 
 **Worktree manager**:
-The git worktree lifecycle: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker.
-_Avoid_: Checkout, clone
+The git worktree lifecycle for the repos clanker-forge *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on clanker-forge itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
+_Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)
 
 **Branch divergence**:
 A worktree branch holding commits its remote branch lacks while the remote holds commits the branch lacks, so no fast-forward can bring them together. The worktree manager resolves it by rebasing the local commits onto the remote; when that rebase will not apply, the divergence is a non-retryable prepare failure that hands the item to a human with its commits untouched (see ADR 0002).
