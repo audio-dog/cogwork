@@ -93,6 +93,18 @@ describe("comments", () => {
     assert.include(body, "cd '/wt/15-feature' && agent --resume 'sess-1'");
   });
 
+  it("builds a crash-loop handoff note capturing the crash count", () => {
+    const body = handoffComment(
+      "implement",
+      { kind: "crash-loop", crashes: 3 },
+      "worker did not survive a daemon restart",
+      undefined,
+    );
+    assert.include(body, "Exhausted after 3 consecutive implement crashes.");
+    assert.include(body, "ready-for-human");
+    assert.notInclude(body, "Resume the session");
+  });
+
   it("omits the resume block when no session is available", () => {
     const body = handoffComment("triage", { kind: "non-retryable" }, "no cli", undefined);
     assert.include(body, "non-retryable failure");
