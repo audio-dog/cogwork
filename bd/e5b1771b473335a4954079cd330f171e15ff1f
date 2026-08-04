@@ -1,0 +1,23 @@
+packages/engine/src/worktree.test.ts
+  s_8c93c95f6967bf::t_35bf3c9160131a 147-159
+packages/engine/src/Worktree.ts
+  s_8c93c95f6967bf::t_b38fa9669acc18 136-138
+  s_8c93c95f6967bf::t_2ca5d5f1493d7c 120
+  s_8c93c95f6967bf::t_280518cec3e700 70-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "bde5b1771b473335a4954079cd330f171e15ff1f",
+  "prompts": {},
+  "sessions": {
+    "s_8c93c95f6967bf": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1b07cc47-46e2-4424-99c8-a3220563b44d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
