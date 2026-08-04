@@ -12,6 +12,7 @@ export * as Registry from "./registry";
 export * as RunEventBus from "./run-event-bus";
 export * as RunLedger from "./run-ledger";
 export * as Scheduler from "./scheduler";
+export * as SourceControl from "./source-control";
 export * as WorkSource from "./work-source";
 export { routedLayer as workSourceRoutedLayer } from "./work-source-router";
 export * as Worktree from "./worktree";

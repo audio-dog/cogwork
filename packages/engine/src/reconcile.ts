@@ -15,8 +15,10 @@ import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import { type Classification, classify, type EligibleWork } from "./classify";
+import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
+import { SourceControlProvider } from "./source-control";
 import { type ObservedItem, WorkSource, type WorkSourceError } from "./work-source";
 
 export interface ObservedRef {
@@ -109,6 +111,8 @@ const withoutScope = (cooldowns: Map<string, Cooldown>, scope: string) => {
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
   const workSource = yield* WorkSource;
+  const provider = yield* SourceControlProvider;
+  const observe = observeWorkspace(workSource, provider);
   const queue = yield* Queue.make<ReconcileJob>();
   const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ generation: 0, workspaces: [] });
   const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
@@ -190,7 +194,7 @@ export const make = Effect.gen(function* () {
         retryAtMillis: held.untilMillis,
       });
     }
-    return yield* workSource.observe(workspace).pipe(
+    return yield* observe(workspace).pipe(
       Effect.tap(() => clearCooldown(scope)),
       Effect.map((items) => okState(workspace, items, classify(items))),
       Effect.catchTag("WorkSourceError", (error) => pauseFor(workspace, scope, error)),

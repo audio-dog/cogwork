@@ -1,8 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { baseDivergenceOf, humanCommentSignal, linkedIssue, prReview, reviewFeedback } from "./adapter";
 import { parseIssues, type RawComment, type RawPull, type RawReview, reviewDecisionOf } from "./client";
 import { ledgerMarker } from "./markers";
+import { baseDivergenceOf, humanCommentSignal, linkedIssue, prReview, reviewFeedback } from "./provider";
 
 const review = (login: string, state: string) => ({ login, state });
 

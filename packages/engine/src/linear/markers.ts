@@ -8,7 +8,7 @@ import {
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { statusReason } from "../comments";
-import type { FollowUpMarker } from "../follow-up";
+import { FollowUpMarker } from "../follow-up";
 
 const triageRoles = [
   "needs-triage",
@@ -70,8 +70,11 @@ const detailLine = "clanker-forge:detail";
 const ledgerPattern = /^clanker-forge:ledger\s*$/m;
 const detailPattern = /^clanker-forge:detail\s*$/m;
 const coordinationMarkerPattern = /^clanker-forge:\S+.*$/gm;
+const clankerMarkerPattern = /^clanker-forge:\S+/m;
 
 export const hasLedgerMarker = (body: string) => ledgerPattern.test(body);
+
+export const hasClankerMarker = (body: string) => clankerMarkerPattern.test(body);
 
 const stripMarkerLines = (text: string) => text.replace(coordinationMarkerPattern, "");
 
@@ -110,6 +113,22 @@ export const serializeFollowUp = (marker: FollowUpMarker) =>
 
 const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
+const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
+
+export const parseFollowUp = (coordinationBody: string) =>
+  lastOf(
+    extractLines("follow-up", coordinationBody).flatMap((pairs) =>
+      okToArray(
+        decodeFollowUp({
+          checks: pairs.checks,
+          humanCommentAtMillis: Number(pairs.human),
+          noProgress: Number(pairs.noProgress),
+          // Markers written before base divergence existed have no `base=`; read them as "none".
+          baseDivergence: pairs.base ?? "none",
+        }),
+      ),
+    ),
+  );
 
 export const parseClaim = (coordinationBody: string) =>
   lastOf(
