@@ -278,6 +278,48 @@ describe("Worktree.ensure", () => {
       assert.deepStrictEqual(commands, [{ cwd: worktreePath, command: "pnpm install" }]);
     }),
   );
+
+  it.effect("reuses an existing worktree untouched when resuming, leaving uncommitted work in place", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
+      const git = fakeGit(recorder, {
+        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        remoteBranches: ["13-worktree-lifecycle"],
+        divergence: { ahead: 2, behind: 5 },
+      });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+      const result = yield* manager.ensure(
+        workspaceWith({ setup: ["pnpm install"] }),
+        { id: "#13", title: "Worktree lifecycle" },
+        { resume: true },
+      );
+      assert.strictEqual(result.created, false);
+      assert.strictEqual(result.path, worktreePath);
+      assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
+    }),
+  );
+
+  it.effect("creates a fresh worktree when resuming one that no longer exists", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const git = fakeGit(recorder, { remoteBranches: ["13-worktree-lifecycle"] });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+      const result = yield* manager.ensure(
+        workspaceWith({ setup: ["pnpm install"] }),
+        { id: "#13", title: "Worktree lifecycle" },
+        { resume: true },
+      );
+      assert.strictEqual(result.created, true);
+      const added = yield* Ref.get(recorder.added);
+      assert.strictEqual(added[0]?.startPoint, "origin/13-worktree-lifecycle");
+      assert.deepStrictEqual(yield* Ref.get(recorder.commands), [
+        { cwd: "/repo.worktrees/13-worktree-lifecycle", command: "pnpm install" },
+      ]);
+    }),
+  );
 });
 
 describe("Worktree.reconcile", () => {

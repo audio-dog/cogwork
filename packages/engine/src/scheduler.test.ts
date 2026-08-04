@@ -654,6 +654,70 @@ describe("Scheduler.recover", () => {
     }),
   );
 
+  it.effect("hands the rescheduled run its persisted session and a continuation reason", () =>
+    Effect.gen(function* () {
+      const resumed = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ran = yield* Latch.make();
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([claimedByUs]),
+      };
+      const execute: ExecuteFn = (_workspace, item) =>
+        Ref.update(resumed, (xs) => [...xs, item]).pipe(
+          Effect.andThen(ran.open),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun({ ...interrupted, session });
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        yield* ran.await;
+        const [work] = yield* Ref.get(resumed);
+        assert.deepStrictEqual(work?.resume, { session, reason: "interrupted" });
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("reschedules without a resume context when the interrupted run left no session", () =>
+    Effect.gen(function* () {
+      const resumed = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ran = yield* Latch.make();
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([claimedByUs]),
+      };
+      const execute: ExecuteFn = (_workspace, item) =>
+        Ref.update(resumed, (xs) => [...xs, item]).pipe(
+          Effect.andThen(ran.open),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        yield* ran.await;
+        const [work] = yield* Ref.get(resumed);
+        assert.isUndefined(work?.resume);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
+          ),
+        ),
+      );
+    }),
+  );
+
   it.effect("never escalates an interrupted item to a human, even one attempt from exhaustion", () =>
     Effect.gen(function* () {
       const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
@@ -830,6 +894,38 @@ describe("Scheduler.recover", () => {
         assert.deepStrictEqual(yield* Ref.get(released), []);
         assert.deepStrictEqual(yield* Ref.get(attempts), []);
         assert.strictEqual((yield* ledger.getRun(interruptedRun.id))?.status, "crashed");
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute, workSource, ledger },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("hands a rescheduled crash its persisted session and a crashed reason", () =>
+    Effect.gen(function* () {
+      const resumed = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ran = yield* Latch.make();
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([claimedByUs]),
+      };
+      const execute: ExecuteFn = (_workspace, item) =>
+        Ref.update(resumed, (xs) => [...xs, item]).pipe(
+          Effect.andThen(ran.open),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun({ ...crashedRun("crash-live", 1, "running"), session });
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+        yield* ran.await;
+        const [work] = yield* Ref.get(resumed);
+        assert.deepStrictEqual(work?.resume, { session, reason: "crashed" });
       }).pipe(
         Effect.provide(
           schedulerLayer(

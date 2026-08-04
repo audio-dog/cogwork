@@ -1,4 +1,4 @@
-import type { LifecycleStage, WorkspaceId } from "@clanker-forge/contracts";
+import type { LifecycleStage, SessionId, WorkspaceId } from "@clanker-forge/contracts";
 import { stagePriority } from "@clanker-forge/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -353,8 +353,10 @@ export const make = (config: SchedulerConfig) =>
       item: ObservedItem,
       stage: LifecycleStage,
       reason: "interrupted" | "crashed",
+      session: SessionId | null,
     ) {
-      const work = eligibleFromObserved(item, stage);
+      const observed = eligibleFromObserved(item, stage);
+      const work: EligibleWork = session ? { ...observed, resume: { session, reason } } : observed;
       const candidate: Candidate = {
         workspace,
         work,
@@ -392,13 +394,13 @@ export const make = (config: SchedulerConfig) =>
       workspace: RegisteredWorkspace,
       item: ObservedItem,
       stage: LifecycleStage,
-      session: string | null | undefined,
+      session: SessionId | null,
     ) {
       const endedAtMillis = yield* Clock.currentTimeMillis;
       yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
       const crashes = yield* ledger.consecutiveCrashes(workspace.config.name, item.id);
       if (crashes < maxCrashesPerItem) {
-        return yield* reschedule(workspace, item, stage, "crashed");
+        return yield* reschedule(workspace, item, stage, "crashed", session);
       }
       yield* handoffCrashLoop(workspace, item, stage, crashes, session);
     });
@@ -410,7 +412,7 @@ export const make = (config: SchedulerConfig) =>
       const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
       const stage = observedStage(item);
       if (stage && last?.status === "interrupted") {
-        return yield* reschedule(workspace, item, stage, "interrupted");
+        return yield* reschedule(workspace, item, stage, "interrupted", last.session);
       }
       if (stage && last?.status === "running") {
         return yield* recoverCrashed(workspace, item, stage, last.session);
