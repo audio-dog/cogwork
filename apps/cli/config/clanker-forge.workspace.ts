@@ -18,7 +18,7 @@ export default defineWorkspace({
   concurrency: 3,
   playbook: {
     triage: { enabled: true, model: triageModel },
-    implement: { enabled: true, harness: "cursor", model: implementModel },
+    implement: { enabled: true, model: implementModel },
     "follow-up": { enabled: true, model: followUpModel },
     verify: { enabled: true },
   },
