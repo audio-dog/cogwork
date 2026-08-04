@@ -1,0 +1,27 @@
+.gitignore
+  s_48a9db8dff6ac5::t_a3a59c6f565e19 22-24
+scripts/setup-worktree.mjs
+  s_48a9db8dff6ac5::t_897924e06b9811 1-83
+turbo.json
+  s_48a9db8dff6ac5::t_89f56c0e94db6f 3
+package.json
+  s_48a9db8dff6ac5::t_fd29cd95cc9e6c 18-19
+scripts/worktree-manifest.json
+  s_48a9db8dff6ac5::t_dc8298a209a7c9 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "24cd6858c107a6daf19d1a1a65f6f453685de086",
+  "prompts": {},
+  "sessions": {
+    "s_48a9db8dff6ac5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "598144f2-7847-485f-ae3f-3bf38c5fab42",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
