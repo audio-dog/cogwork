@@ -5,10 +5,10 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "../classify";
+import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import * as SourceControl from "../source-control";
-import { WorkSource, WorkSourceError } from "../work-source";
 import { layer as adapterLayer } from "./adapter";
 import {
   type CoordinationScope,
@@ -95,7 +95,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
 
   const guard = <A>(effect: Effect.Effect<A>) =>
     seed.authError
-      ? Effect.fail(new WorkSourceError({ reason: "auth", message: "Linear authentication failed" }))
+      ? Effect.fail(new IssueTrackerError({ reason: "auth", message: "Linear authentication failed" }))
       : effect;
 
   const countObserve = seed.observeCalls;
@@ -189,7 +189,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "lin",
     checkoutPath: "/repos/lin",
-    workSource: {
+    issueTracker: {
       type: "linear",
       team: "AUD",
       botUserId: bot.id,
@@ -202,8 +202,8 @@ const customRolesWorkspace: RegisteredWorkspace = {
   ...workspace,
   config: {
     ...workspace.config,
-    workSource: {
-      ...workspace.config.workSource,
+    issueTracker: {
+      ...workspace.config.issueTracker,
       roleLabels: { "ready-for-agent": "custom:agent-ready" },
     },
   },
@@ -218,7 +218,7 @@ const withClient = (seed: Seed) =>
 // reports no pull request, so every item observes `pr: null`.
 const observeItems = (workspace: RegisteredWorkspace) =>
   Effect.gen(function* () {
-    const tracker = yield* WorkSource;
+    const tracker = yield* IssueTracker;
     const provider = yield* SourceControl.SourceControlProvider;
     return yield* observeWorkspace(tracker, provider)(workspace);
   });
@@ -323,7 +323,7 @@ describe("linear work source adapter", () => {
 
   it.effect("round-trips a claim and an attempt through visible Linear representations", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* LinearClient;
       const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
@@ -352,7 +352,7 @@ describe("linear work source adapter", () => {
 
   it.effect("puts the failure reason on the attempt status line", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* LinearClient;
       yield* source.recordAttempt(
         workspace,
@@ -404,7 +404,7 @@ describe("linear work source adapter", () => {
 
   it.effect("posts a triage proposal as prose with no coordination marker line", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* LinearClient;
       yield* source.note(
         workspace,
@@ -488,7 +488,7 @@ describe("linear work source adapter", () => {
 
   it.effect("stops claiming after release removes the claim label", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       yield* source.claim(workspace, id("AUD-7"), {
         by: "clanker-forge",
         claimedAtMillis: 1,
@@ -509,7 +509,7 @@ describe("linear work source adapter", () => {
 
   it.effect("setRoles applies configured labels and moves wontfix to Canceled", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* LinearClient;
       yield* source.setRoles(workspace, id("AUD-9"), {
         remove: ["needs-triage"],
@@ -581,20 +581,20 @@ describe("linear work source adapter", () => {
 
   it.effect("reports the rate-limit scope from the token env so shared credentials back off together", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       assert.strictEqual(source.rateLimitScope(workspace), "linear:LINEAR_API_KEY");
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
-  it.effect("surfaces auth failure as WorkSourceError reason auth", () =>
+  it.effect("surfaces auth failure as IssueTrackerError reason auth", () =>
     Effect.gen(function* () {
       const result = yield* Effect.result(observeItems(workspace));
       if (result._tag !== "Failure") {
         assert.fail("expected auth failure");
         return;
       }
-      if (result.failure._tag !== "WorkSourceError") {
-        assert.fail("expected WorkSourceError");
+      if (result.failure._tag !== "IssueTrackerError") {
+        assert.fail("expected IssueTrackerError");
         return;
       }
       assert.strictEqual(result.failure.reason, "auth");

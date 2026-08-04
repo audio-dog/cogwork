@@ -2,14 +2,14 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { makeAdapter as makeGitHub } from "./github/adapter";
 import { GitHubClient } from "./github/client";
+import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
 import type { RegisteredWorkspace } from "./projector";
-import { WorkSource, type WorkSourceService } from "./work-source";
 
-export const route = (github: WorkSourceService, linear: WorkSourceService): WorkSourceService => {
+export const route = (github: IssueTrackerService, linear: IssueTrackerService): IssueTrackerService => {
   const forWorkspace = (workspace: RegisteredWorkspace) =>
-    workspace.config.workSource.type === "linear" ? linear : github;
+    workspace.config.issueTracker.type === "linear" ? linear : github;
 
   return {
     rateLimitScope: (workspace) => forWorkspace(workspace).rateLimitScope(workspace),
@@ -26,7 +26,7 @@ export const route = (github: WorkSourceService, linear: WorkSourceService): Wor
 };
 
 export const routedLayer = Layer.effect(
-  WorkSource,
+  IssueTracker,
   Effect.gen(function* () {
     return route(makeGitHub(yield* GitHubClient), makeLinear(yield* LinearClient));
   }),

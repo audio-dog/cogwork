@@ -23,7 +23,7 @@ import {
 
 const account = {
   key: "AUD",
-  workSource: "linear",
+  issueTracker: "linear",
   organization: null,
   tokenEnv: "LINEAR_API_KEY",
   clientCredentials: null,
@@ -97,7 +97,7 @@ const storedToken = (expiresAtMillis: number, accessToken = "oauth-token"): Stor
 });
 
 const stored = (organization: string, token: StoredToken): StoredCredential => ({
-  workSource: "linear",
+  issueTracker: "linear",
   organization,
   botUserId: `bot-${organization}`,
   token,
@@ -184,7 +184,7 @@ describe("CredentialStore (stored)", () => {
   it.effect("never hands one work source's token to another", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;
-      const credential = yield* store.bearerToken({ ...account, workSource: "github" });
+      const credential = yield* store.bearerToken({ ...account, issueTracker: "github" });
       assert.strictEqual(credential.source, "env");
     }).pipe(withStored([stored("acme", storedToken(far))])),
   );

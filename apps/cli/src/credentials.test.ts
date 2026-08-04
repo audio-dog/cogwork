@@ -12,7 +12,7 @@ import { layer, makeFileStore } from "./credentials";
 
 const stored = (accessToken: string, expiresAtMillis = Number.MAX_SAFE_INTEGER) =>
   ({
-    workSource: "linear",
+    issueTracker: "linear",
     organization: "acme",
     botUserId: "bot-user",
     token: {
@@ -25,7 +25,7 @@ const stored = (accessToken: string, expiresAtMillis = Number.MAX_SAFE_INTEGER) 
 
 const account: CredentialStore.CredentialAccount = {
   key: "AUD",
-  workSource: "linear",
+  issueTracker: "linear",
   organization: "acme",
   tokenEnv: "LINEAR_API_KEY",
   clientCredentials: null,
@@ -206,7 +206,7 @@ describe("file-backed credential store", () => {
   it.effect("falls back to the env key when the file has the wrong shape", () =>
     onDisk(({ filePath, fs }) =>
       Effect.gen(function* () {
-        yield* seed(fs, filePath, `{"version":1,"credentials":[{"workSource":"linear"}]}`);
+        yield* seed(fs, filePath, `{"version":1,"credentials":[{"issueTracker":"linear"}]}`);
         const store = CredentialStore.make({ stored: yield* makeFileStore(filePath) });
         const credential = yield* store.bearerToken(account);
         assert.strictEqual(credential.source, "env");

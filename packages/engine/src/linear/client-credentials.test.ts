@@ -12,7 +12,7 @@ const secretEnv = "LINEAR_CLIENT_SECRET";
 
 const account: CredentialAccount = {
   key: "AUD",
-  workSource: "linear",
+  issueTracker: "linear",
   organization: null,
   tokenEnv: "LINEAR_API_KEY",
   clientCredentials: { clientId: "client-1", secretEnv },

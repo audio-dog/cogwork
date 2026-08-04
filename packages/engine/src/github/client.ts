@@ -13,7 +13,7 @@ import type * as Headers from "effect/unstable/http/Headers";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
-import { WorkSourceError } from "../work-source";
+import { IssueTrackerError } from "../issue-tracker";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -146,7 +146,7 @@ const millisFromIso = (value: string | null) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-const unavailable = (message: string) => new WorkSourceError({ reason: "unavailable", message });
+const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
 const toRawIssue = (issue: typeof IssueSchema.Type): RawIssue => ({
@@ -168,7 +168,7 @@ const isoMillis = (millis: number) =>
   Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
 
 const rateLimited = (resumeAtMillis: number) =>
-  new WorkSourceError({
+  new IssueTrackerError({
     reason: "rate-limited",
     message: `GitHub rate limit exceeded; resuming after ${isoMillis(resumeAtMillis)}`,
   });
@@ -185,7 +185,7 @@ const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
   return reset === null ? null : reset * 1000;
 };
 
-const isTransient = (error: WorkSourceError) => error.reason === "unavailable";
+const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 
 interface EtagEntry {
@@ -237,7 +237,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       yield* Ref.set(resumeAtRef, resumeAt);
     }
     if (response.status === 401) {
-      return yield* new WorkSourceError({ reason: "auth", message: "GitHub authentication failed (401)" });
+      return yield* new IssueTrackerError({ reason: "auth", message: "GitHub authentication failed (401)" });
     }
     const throttled =
       response.status === 429 ||
@@ -259,7 +259,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   ) {
     const token = yield* Effect.mapError(
       Config.redacted(repo.tokenEnv),
-      () => new WorkSourceError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
+      () => new IssueTrackerError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
     );
     return yield* execute(request, token);
   });

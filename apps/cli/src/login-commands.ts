@@ -1,4 +1,4 @@
-import type { WorkSourceConfig } from "@clanker-forge/contracts";
+import type { IssueTrackerConfig } from "@clanker-forge/contracts";
 import { Linear, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -34,33 +34,35 @@ const credentialsFlag = Flag.string("credentials").pipe(
   Flag.withDefault(defaultCredentialsPath),
 );
 
-const findWorkSource = (configHome: string, name: string) =>
+const findIssueTracker = (configHome: string, name: string) =>
   loadFromDisk(configHome).pipe(
     Effect.map((result) => Registry.buildRegistry(result).workspaces.find((w) => w.config.name === name)),
     Effect.flatMap((workspace) =>
       workspace
-        ? Effect.succeed(workspace.config.workSource)
+        ? Effect.succeed(workspace.config.issueTracker)
         : new LoginConfigError({ detail: `workspace "${name}" not found in ${configHome}` }),
     ),
   );
 
-const resolveConfig = (workSource: WorkSourceConfig): Effect.Effect<LinearLoginConfig, LoginConfigError> => {
-  if (workSource.type !== "linear") {
+const resolveConfig = (
+  issueTracker: IssueTrackerConfig,
+): Effect.Effect<LinearLoginConfig, LoginConfigError> => {
+  if (issueTracker.type !== "linear") {
     return Effect.fail(
-      new LoginConfigError({ detail: `login linear needs a linear work source, not "${workSource.type}"` }),
+      new LoginConfigError({ detail: `login linear needs a linear work source, not "${issueTracker.type}"` }),
     );
   }
-  const clientId = workSource.oauth?.clientId;
+  const clientId = issueTracker.oauth?.clientId;
   if (!clientId) {
     return Effect.fail(
       new LoginConfigError({
-        detail: "missing OAuth client_id; set workSource.oauth.clientId in the workspace config",
+        detail: "missing OAuth client_id; set issueTracker.oauth.clientId in the workspace config",
       }),
     );
   }
   return Effect.succeed({
     clientId,
-    redirectPort: workSource.oauth?.redirectPort ?? Linear.OAuth.defaultRedirectPort,
+    redirectPort: issueTracker.oauth?.redirectPort ?? Linear.OAuth.defaultRedirectPort,
   });
 };
 
@@ -70,8 +72,8 @@ const runLogin = (options: {
   readonly credentials: string;
 }) =>
   Effect.gen(function* () {
-    const workSource = yield* findWorkSource(options.configHome, options.workspace);
-    const config = yield* resolveConfig(workSource);
+    const issueTracker = yield* findIssueTracker(options.configHome, options.workspace);
+    const config = yield* resolveConfig(issueTracker);
     const result = yield* loginLinear(config);
     yield* Console.log(`Logged in to Linear org "${result.organization}" as bot ${result.botUserId}.`);
   }).pipe(

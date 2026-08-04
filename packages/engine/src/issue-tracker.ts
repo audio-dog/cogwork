@@ -42,31 +42,31 @@ export interface RoleChanges {
   readonly remove: ReadonlyArray<TriageRole>;
 }
 
-export class WorkSourceError extends Schema.TaggedErrorClass<WorkSourceError>()("WorkSourceError", {
+export class IssueTrackerError extends Schema.TaggedErrorClass<IssueTrackerError>()("IssueTrackerError", {
   reason: PollPauseReason,
   message: Schema.String,
   retryAfterMillis: Schema.optional(Schema.Finite),
 }) {}
 
 const noAdapter = (workspace: RegisteredWorkspace) =>
-  new WorkSourceError({
+  new IssueTrackerError({
     reason: "unavailable",
     message: `no work source adapter configured for ${workspace.config.name}`,
   });
 
 const hasRemoteSource = (workspace: RegisteredWorkspace) => {
-  const { type, team, repo } = workspace.config.workSource;
+  const { type, team, repo } = workspace.config.issueTracker;
   return type === "linear" ? Boolean(team) : Boolean(repo);
 };
 
-const failWhenRemote = Effect.fn("WorkSource.guard")(function* (workspace: RegisteredWorkspace) {
+const failWhenRemote = Effect.fn("IssueTracker.guard")(function* (workspace: RegisteredWorkspace) {
   if (hasRemoteSource(workspace)) {
     return yield* noAdapter(workspace);
   }
   return yield* Effect.void;
 });
 
-const observeEmpty = Effect.fn("WorkSource.observe")(function* (workspace: RegisteredWorkspace) {
+const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: RegisteredWorkspace) {
   if (hasRemoteSource(workspace)) {
     return yield* noAdapter(workspace);
   }
@@ -95,10 +95,10 @@ export const makeEmpty = Effect.succeed({
     failWhenRemote(workspace),
 } as const);
 
-export type WorkSourceService = Effect.Success<typeof makeEmpty>;
+export type IssueTrackerService = Effect.Success<typeof makeEmpty>;
 
-export class WorkSource extends Context.Service<WorkSource, WorkSourceService>()(
-  "@clanker-forge/engine/work-source/WorkSource",
+export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
+  "@clanker-forge/engine/issue-tracker/IssueTracker",
 ) {}
 
-export const emptyLayer = Layer.effect(WorkSource, makeEmpty);
+export const emptyLayer = Layer.effect(IssueTracker, makeEmpty);

@@ -8,7 +8,7 @@ const followUpModel = "composer-2.5" satisfies CursorModel;
 export default defineWorkspace({
   name: "feldspar",
   checkoutPath: "/Users/taylorsteele/sites/feldspar",
-  workSource: {
+  issueTracker: {
     type: "linear",
     team: "FEL",
     tokenEnv: "LINEAR_API_KEY",
