@@ -1,0 +1,23 @@
+packages/engine/src/comments.test.ts
+  s_eddb26b412af68::t_9834abb8f88d07 96-107
+packages/engine/src/comments.ts
+  s_eddb26b412af68::t_fbfa1298a716b9 58-59,64-65
+  s_eddb26b412af68::t_8475cb51631915 15-16
+  s_eddb26b412af68::t_fde033b789dba9 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "3f49e24dfbd5ee93396e888ba1728a228c44d8b3",
+  "prompts": {},
+  "sessions": {
+    "s_eddb26b412af68": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "30626066-5792-4b38-9aff-ce8f09116acf",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
