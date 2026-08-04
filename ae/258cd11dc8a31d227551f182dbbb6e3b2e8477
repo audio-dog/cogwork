@@ -1,0 +1,20 @@
+packages/engine/src/scheduler.test.ts
+  s_c834710fb5a1bd::t_eee4e344e6922a 682,714,933
+  s_c834710fb5a1bd::t_f00ebba1361158 661,693,912
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "ae258cd11dc8a31d227551f182dbbb6e3b2e8477",
+  "prompts": {},
+  "sessions": {
+    "s_c834710fb5a1bd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ce6370c9-353d-4693-acf2-f4aff240b90f",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
