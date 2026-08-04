@@ -1,0 +1,47 @@
+packages/engine/src/Executor.ts
+  s_fdb2bc30e71f1c::t_847c1a67d22ec8 72,390
+packages/engine/src/WorkSource.ts
+  s_fdb2bc30e71f1c::t_31f18000f94728 15
+packages/engine/src/classify.test.ts
+  s_fdb2bc30e71f1c::t_f88e99ede23b31 26,201-232,247,262,276-281
+packages/engine/src/engine.test.ts
+  s_fdb2bc30e71f1c::t_a0bff17d1822f6 191
+packages/engine/src/executor.test.ts
+  s_fdb2bc30e71f1c::t_4690cc91d5f861 145
+packages/engine/src/followUp.test.ts
+  s_fdb2bc30e71f1c::t_5d6acf84524573 15,35,41-48,65,75-78,90-114,129-134,141-157
+packages/engine/src/followUp.ts
+  s_fdb2bc30e71f1c::t_d400029810a062 6-7,12,22,32,42-48,53,67
+packages/engine/src/github/adapter.ts
+  s_fdb2bc30e71f1c::t_bc23949751c049 8,88-93,183,188,204
+packages/engine/src/github/client.ts
+  s_fdb2bc30e71f1c::t_dc44d5b90e4f9f 90-93,134,341-346
+packages/engine/src/github/github-helpers.test.ts
+  s_fdb2bc30e71f1c::t_ee8200a3f02695 3,37-54
+packages/engine/src/github/github.test.ts
+  s_fdb2bc30e71f1c::t_c29325c9da276f 58,105,113,224-280,386,412-417,618-620,832,879-890,913-918,931-936
+packages/engine/src/github/markers.test.ts
+  s_fdb2bc30e71f1c::t_682d6e1f70f4fb 88-99,107-113,133-140,255-260
+packages/engine/src/github/markers.ts
+  s_fdb2bc30e71f1c::t_7634b847c9b7fc 86,118-119
+packages/engine/src/linear/markers.ts
+  s_fdb2bc30e71f1c::t_6ee69bc33f82b4 109
+packages/engine/src/Playbook.ts
+  s_fdb2bc30e71f1c::t_10ab3147e9bc3c 117-130,138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "2d6f411b1c024ce614597695b7ec6f4aa604af10",
+  "prompts": {},
+  "sessions": {
+    "s_fdb2bc30e71f1c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21ec468f-de38-497d-8554-060ec7f1e3e8",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
