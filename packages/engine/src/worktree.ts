@@ -79,6 +79,10 @@ export interface EnsuredWorktree {
   readonly created: boolean;
 }
 
+export interface EnsureOptions {
+  readonly resume?: boolean;
+}
+
 export interface ReconcileOutcome {
   readonly tornDown: ReadonlyArray<string>;
   readonly reaped: ReadonlyArray<string>;
@@ -183,7 +187,11 @@ export const make = Effect.gen(function* () {
     return yield* replayOntoRemote(worktreePath, remote, branch, divergence);
   });
 
-  const ensure = Effect.fn("Worktree.ensure")(function* (workspace: RegisteredWorkspace, item: WorkItemRef) {
+  const ensure = Effect.fn("Worktree.ensure")(function* (
+    workspace: RegisteredWorkspace,
+    item: WorkItemRef,
+    options?: EnsureOptions,
+  ) {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
     const remote = remoteOf(config);
@@ -192,9 +200,13 @@ export const make = Effect.gen(function* () {
 
     yield* git.fetch(repoPath, remote);
     const entries = yield* git.listWorktrees(repoPath);
-    const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
     const exists = entries.some((entry) => entry.path === worktreePath);
 
+    if (exists && options?.resume) {
+      return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
+    }
+
+    const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
     if (!exists) {
       const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
       yield* git.addWorktree({ repoPath, worktreePath, branch, startPoint });

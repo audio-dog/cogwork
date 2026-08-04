@@ -209,6 +209,14 @@ const implementResultPattern = /IMPLEMENT-RESULT:\s*([a-z-]+)/gi;
 export const buildImplementPrompt = (resolved: ResolvedStage, item: PromptItem) =>
   buildPrompt(resolved, item, implementFooter);
 
+export const buildContinuationNudge = (worktreePath: string) =>
+  [
+    "You were interrupted part-way through the task above and this session has just been resumed.",
+    `Nothing has changed except that time passed. Inspect ${worktreePath} to see how far you got, then`,
+    "continue from exactly where you stopped. Do not start over and do not redo completed work. If the",
+    "task is already complete, say COMPLETE and stop.",
+  ].join("\n");
+
 export const parseImplementResult = (text: string) =>
   parseLastSentinel(implementResultPattern, implementResults, text);
 

@@ -16,6 +16,7 @@ import type { GitError } from "./git";
 import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError } from "./issue-tracker";
 import {
+  buildContinuationNudge,
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
@@ -487,10 +488,31 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+  const resumePrepare = Effect.fn("Executor.resumePrepare")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    resolved: ResolvedStage,
+    session: SessionId,
+  ) {
+    if (item.stage === "triage") {
+      const path = workspace.config.checkoutPath;
+      return harnessRequest(resolved, path, buildContinuationNudge(path), session);
+    }
+    const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
+    return harnessRequest(resolved, worktree.path, buildContinuationNudge(worktree.path), session);
+  });
+
+  const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
     if (item.stage === "implement") return implementOps(workspace, item, resolved);
     if (item.stage === "follow-up") return followUpOps(workspace, item, resolved);
     return triageOps(workspace, item, resolved);
+  };
+
+  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+    const ops = stageOps(workspace, item, resolved);
+    const session = item.resume?.session;
+    if (!session) return ops;
+    return { ...ops, prepare: resumePrepare(workspace, item, resolved, session) };
   };
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
