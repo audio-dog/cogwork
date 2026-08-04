@@ -8,7 +8,7 @@ are no runs or work sources here.
 ## Language
 
 **Asset**:
-Anything the generator loads and renders — rules, commands, subagents, MCP servers, skills, and repo configs — bundled together and handed to every target.
+Anything the generator loads and renders — rules, commands, subagents, toolkit servers, skills, and repo configs — bundled together and handed to every target.
 _Avoid_: Resource, file
 
 **Skill**:
@@ -26,6 +26,10 @@ _Avoid_: Skill. Codex renders commands as "prompts" — that's the output name, 
 **Subagent**:
 A specialized agent persona authored as a markdown asset under `assets/subagents/`, with its own tools and model tier. Rendered as an "agent" in each tool's output.
 _Avoid_: Agent (that's the output name), skill, harness
+
+**Toolkit server**:
+One of the human's local tool servers, authored in `assets/toolkit-servers/servers.json` and rendered into each target's native MCP config (`.cursor/mcp.json`, Claude's `.mcp.json` / `~/.claude.json`, a Codex `config.toml` snippet). The rendered output keeps each tool's own `mcpServers` / `mcp_servers` key; only sync's internal name changed.
+_Avoid_: MCP server (that name now belongs to orchestration's MCP skill — see `packages/contracts/CONTEXT.md`), MCP skill
 
 **Target**:
 A coding tool the generator renders for — `claude`, `cursor`, or `codex` — each a module that writes its own native files.

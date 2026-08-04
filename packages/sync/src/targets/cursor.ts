@@ -47,8 +47,11 @@ export const cursor: Target = {
       writer.write(join(base, "agents", `${agent.name}.md`), serializeFrontmatter(fm, agent.body));
     }
 
-    if (Object.keys(assets.mcpServers).length > 0) {
-      writer.write(join(base, "mcp.json"), `${JSON.stringify({ mcpServers: assets.mcpServers }, null, 2)}\n`);
+    if (Object.keys(assets.toolkitServers).length > 0) {
+      writer.write(
+        join(base, "mcp.json"),
+        `${JSON.stringify({ mcpServers: assets.toolkitServers }, null, 2)}\n`,
+      );
     }
 
     if (assets.skills.length === 0) return;

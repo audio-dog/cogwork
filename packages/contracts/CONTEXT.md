@@ -104,7 +104,7 @@ _Avoid_: Prompt (that's one field), job
 
 **MCP skill**:
 An external MCP server the engine provisions onto a run so the harness can call its tools — named and configured (endpoint + auth) by the engine, not by the harness. The engine assembles the set for a run; the harness runner projects each into the harness's native MCP channel (for an ACP harness like Cursor, the `newSession` `mcpServers` field — no config file is written; a file-based harness would instead get an `--mcp-config`). Read-only where the server offers a read-only endpoint. The name follows TanStack AI's `mcpSkill`; it is the first kind of engine-provisioned run capability.
-_Avoid_: MCP server (sync's separate term for a human's local-toolkit server), tool (one server exposes many), harness tool (the harness's own built-ins), plugin
+_Avoid_: MCP server (the coding tools' native config term; sync renders those and now calls them "toolkit servers" — see `packages/sync/CONTEXT.md`), tool (one server exposes many), harness tool (the harness's own built-ins), plugin
 
 **Harness event**:
 A normalized event streamed from a harness run — text, tool calls, session id, usage, finish reason. The engine persists these as run events and republishes them as run activity.
