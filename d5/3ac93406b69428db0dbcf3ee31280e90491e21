@@ -1,0 +1,34 @@
+packages/engine/src/CredentialStore.ts
+  s_c6b73e79ce0ff2::t_c35b9a23f4064f 72
+  s_b8b2fbaefc36ea::t_cf32ea28a94997 197-199
+  s_c6b73e79ce0ff2::t_463e2b536d834d 159,161,163-171,174,184,186-187,189,193
+packages/engine/src/credentialStore.test.ts
+  s_b8b2fbaefc36ea::t_43ffa10c8714bb 320-340
+packages/engine/src/linear/oauth.ts
+  s_c6b73e79ce0ff2::t_6b55322fe3bad0 132-141,151
+  s_c6b73e79ce0ff2::t_d91556ffa53f62 98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "d53ac93406b69428db0dbcf3ee31280e90491e21",
+  "prompts": {},
+  "sessions": {
+    "s_b8b2fbaefc36ea": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "18c3bf50-9c55-4125-9b4f-d16c9bfcb296",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c6b73e79ce0ff2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16b5bce2-7052-4bd5-9ae1-41acffa0aaff",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
