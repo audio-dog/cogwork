@@ -1,9 +1,10 @@
-import { CredentialStore } from "@clanker-forge/engine";
+import { CredentialStore, Linear } from "@clanker-forge/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 
 const fileMode = 0o600;
 const directoryMode = 0o700;
@@ -74,4 +75,11 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
 });
 
 export const layer = (filePath: string) =>
-  Layer.effect(CredentialStore.CredentialStore, Effect.map(makeFileStore(filePath), CredentialStore.make));
+  Layer.effect(
+    CredentialStore.CredentialStore,
+    Effect.gen(function* () {
+      const stored = yield* makeFileStore(filePath);
+      const client = yield* HttpClient.HttpClient;
+      return CredentialStore.make(stored, Linear.OAuth.makeTokenRefresh(client));
+    }),
+  );
