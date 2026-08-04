@@ -1,0 +1,59 @@
+packages/engine/src/source-control.ts
+  s_526574b5470091::t_f838cc966694b5 13-14
+  s_526574b5470091::t_eaf8f49eaa4d3a 15-19,25
+packages/engine/src/observe.ts
+  s_526574b5470091::t_d6249bac5719e0 26
+packages/engine/src/github/provider.ts
+  s_526574b5470091::t_1fd0de9e7b2e4d 148-161,168,172,175-179,181-182
+  s_526574b5470091::t_4ea0ad04a43435 53-57
+  s_526574b5470091::t_6ce152a91810ba 1,7-13
+  s_526574b5470091::t_cd470245b9f6b8 162-167
+  s_526574b5470091::t_2d45d6b29ebf50 146-147
+packages/sync/skills/sync/follow-up-agent/SKILL.md
+  s_526574b5470091::t_927ac34781b044 10-12
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_526574b5470091::t_848269fa32eb72 10-12
+packages/engine/src/github/github.test.ts
+  s_526574b5470091::t_681756f49fd292 251
+  s_526574b5470091::t_d55cfe7be46fa5 547
+  s_526574b5470091::t_9001ec49d107e6 222,406
+  s_526574b5470091::t_2751657d4bfc14 1002
+  s_526574b5470091::t_cc4ffed2a681b2 182
+  s_526574b5470091::t_a2aba09553787e 482-484,487-503,505-530
+  s_526574b5470091::t_870913fdc5a042 277
+  s_526574b5470091::t_ae39884f307bbd 579
+  s_526574b5470091::t_95688eca9d115e 608
+  s_526574b5470091::t_73c4e0c896c8d9 954
+  s_526574b5470091::t_3e70ae0b8f7929 485-486
+  s_526574b5470091::t_ffda61e5f575a5 650-651
+  s_526574b5470091::t_a748e628d2fa8a 460,466
+  s_526574b5470091::t_5297d8a642f61d 504
+packages/engine/src/github/github-helpers.test.ts
+  s_526574b5470091::t_c43cc6433a1ef8 5
+  s_526574b5470091::t_e3fc109785742e 124-126
+  s_526574b5470091::t_86826a5a669c87 6-11,39,123,127,130-132
+packages/sync/skills/sync/implement-agent/SKILL.md
+  s_526574b5470091::t_c9976ed3c57d84 12-14
+packages/engine/skills/implement-agent/SKILL.md
+  s_526574b5470091::t_1501c99d2cef7d 12-14
+packages/engine/src/github/client.ts
+  s_526574b5470091::t_f041ac4a1b285b 336
+  s_526574b5470091::t_c80a1518e22ead 85
+  s_526574b5470091::t_48e5776d148944 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "d4e0677b82b576a09548062e8f63d8d67c02368e",
+  "prompts": {},
+  "sessions": {
+    "s_526574b5470091": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "41d61512-be4d-4b40-bd13-e95790e82313",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
