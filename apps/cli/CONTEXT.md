@@ -23,7 +23,7 @@ The directory of `*.workspace.ts` files the daemon loads at startup to learn whi
 _Avoid_: Config file, settings
 
 **Credential file**:
-Where stored OAuth credentials live on this machine — `~/.clanker-forge/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held.
+Where stored OAuth credentials live on this machine — `~/.clanker-forge/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held. This file is the CLI's half of the engine's credential store; the CLI also hands the store Linear's client-credentials grant, so a machine with no file can still authenticate from a secret in the environment.
 _Avoid_: Keychain, secret store (this is a plain file; a keychain-backed layer would be a different implementation of the same engine seam)
 
 **Watch**:
