@@ -6,7 +6,12 @@ import { afterEach, vi } from "vitest";
 import { CredentialError, type CredentialSource, CredentialStore } from "../CredentialStore";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
 
-const ref: LinearTeamRef = { team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null };
+const ref: LinearTeamRef = {
+  team: "AUD",
+  tokenEnv: "LINEAR_API_KEY",
+  organization: null,
+  clientId: null,
+};
 
 interface StubResponse {
   readonly status?: number;

@@ -5,14 +5,27 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Redacted from "effect/Redacted";
+import * as Ref from "effect/Ref";
 import * as References from "effect/References";
-import { CredentialStore, layerEnv, make, type StoredCredential, type StoredToken } from "./CredentialStore";
+import {
+  accountOf,
+  CredentialError,
+  CredentialStore,
+  type CredentialStoreService,
+  layerEnv,
+  make,
+  type StoredCredential,
+  type StoredCredentials,
+  type StoredToken,
+  type TokenRefresh,
+} from "./CredentialStore";
 
 const account = {
   key: "AUD",
   workSource: "linear",
   organization: null,
   tokenEnv: "LINEAR_API_KEY",
+  clientId: null,
 } as const;
 
 const withEnv = (env: Record<string, string>) =>
@@ -191,5 +204,164 @@ describe("CredentialStore (stored)", () => {
       const lines = yield* capturingLogs(store.bearerToken(account));
       assert.isTrue(lines.some((line) => line.includes("stored-oauth")));
     }).pipe(withStored([stored("acme", storedToken(far))])),
+  );
+});
+
+const oauthAccount = { ...account, clientId: "client-1" };
+
+const expiredWithRefresh = (refreshToken = "refresh-1"): StoredToken => ({
+  ...storedToken(0),
+  refreshToken: Redacted.make(refreshToken),
+});
+
+const rotatedToken = (refreshToken: string | null = "refresh-2"): StoredToken => ({
+  accessToken: Redacted.make("rotated-token"),
+  refreshToken: refreshToken === null ? null : Redacted.make(refreshToken),
+  expiresAtMillis: far,
+  scopes: ["read", "write"],
+});
+
+interface Harness {
+  readonly store: CredentialStoreService;
+  readonly refreshes: Effect.Effect<number>;
+  readonly savedToken: Effect.Effect<StoredToken | undefined>;
+}
+
+const harness = Effect.fn("harness")(function* (options: {
+  readonly initial: ReadonlyArray<StoredCredential>;
+  readonly onRefresh: (attempt: number) => Effect.Effect<StoredToken, CredentialError>;
+}) {
+  const credentials = yield* Ref.make(options.initial);
+  const attempts = yield* Ref.make(0);
+  const refresh: TokenRefresh = () =>
+    Effect.gen(function* () {
+      const attempt = yield* Ref.updateAndGet(attempts, (count) => count + 1);
+      yield* Effect.yieldNow;
+      return yield* options.onRefresh(attempt);
+    });
+  const stored: StoredCredentials = {
+    load: Ref.get(credentials),
+    save: (credential) =>
+      Ref.update(credentials, (entries) => [
+        ...entries.filter((entry) => accountOf(entry) !== accountOf(credential)),
+        credential,
+      ]),
+  };
+  return {
+    store: make(stored, refresh),
+    refreshes: Ref.get(attempts),
+    savedToken: Effect.map(Ref.get(credentials), (entries) => entries[0]?.token),
+  } satisfies Harness;
+});
+
+const withRefreshEnv = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.provide(
+    effect,
+    ConfigProvider.layer(ConfigProvider.fromEnv({ env: { LINEAR_API_KEY: "env-key" } })),
+  );
+
+describe("CredentialStore (refresh)", () => {
+  it.effect("refreshes an expired token and hands back the rotated one", () =>
+    Effect.gen(function* () {
+      const { store, refreshes } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () => Effect.succeed(rotatedToken()),
+      });
+      const credential = yield* store.bearerToken(oauthAccount);
+      assert.strictEqual(credential.source, "stored-oauth");
+      assert.strictEqual(Redacted.value(credential.token), "rotated-token");
+      assert.strictEqual(yield* refreshes, 1);
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("writes the rotated pair back so the file stays the source of truth", () =>
+    Effect.gen(function* () {
+      const { store, savedToken } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () => Effect.succeed(rotatedToken()),
+      });
+      yield* store.bearerToken(oauthAccount);
+      const token = yield* savedToken;
+      assert.strictEqual(token && Redacted.value(token.accessToken), "rotated-token");
+      assert.strictEqual(token?.refreshToken && Redacted.value(token.refreshToken), "refresh-2");
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("keeps the previous refresh token when the response rotates only the access token", () =>
+    Effect.gen(function* () {
+      const { store, savedToken } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () => Effect.succeed(rotatedToken(null)),
+      });
+      yield* store.bearerToken(oauthAccount);
+      const token = yield* savedToken;
+      assert.strictEqual(token?.refreshToken && Redacted.value(token.refreshToken), "refresh-1");
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("refreshes once for concurrent gets", () =>
+    Effect.gen(function* () {
+      const { store, refreshes } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () => Effect.succeed(rotatedToken()),
+      });
+      const credentials = yield* Effect.all(
+        [store.bearerToken(oauthAccount), store.bearerToken(oauthAccount), store.bearerToken(oauthAccount)],
+        { concurrency: "unbounded" },
+      );
+      assert.strictEqual(yield* refreshes, 1);
+      assert.deepStrictEqual(
+        credentials.map((credential) => Redacted.value(credential.token)),
+        ["rotated-token", "rotated-token", "rotated-token"],
+      );
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("does not refresh again once the rotated token is stored", () =>
+    Effect.gen(function* () {
+      const { store, refreshes } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () => Effect.succeed(rotatedToken()),
+      });
+      yield* store.bearerToken(oauthAccount);
+      yield* store.bearerToken(oauthAccount);
+      assert.strictEqual(yield* refreshes, 1);
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("surfaces a failed refresh instead of falling back to the environment", () =>
+    Effect.gen(function* () {
+      const { store } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () =>
+          Effect.fail(new CredentialError({ account: "AUD", message: "refresh grant rejected" })),
+      });
+      const error = yield* Effect.flip(store.bearerToken(oauthAccount));
+      assert.strictEqual(error.account, "AUD");
+      assert.include(error.message, "refresh grant rejected");
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("falls back to the environment when the account has no OAuth client id", () =>
+    Effect.gen(function* () {
+      const { store, refreshes } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () => Effect.succeed(rotatedToken()),
+      });
+      const credential = yield* store.bearerToken(account);
+      assert.strictEqual(credential.source, "env");
+      assert.strictEqual(yield* refreshes, 0);
+    }).pipe(withRefreshEnv),
+  );
+
+  it.effect("reports an auth error when no refresh is wired into the store", () =>
+    Effect.gen(function* () {
+      const store = make({
+        load: Effect.succeed([stored("acme", expiredWithRefresh())]),
+        save: () => Effect.void,
+      });
+      const error = yield* Effect.flip(store.bearerToken(oauthAccount));
+      assert.include(error.message, "no token refresh");
+    }).pipe(withRefreshEnv),
   );
 });

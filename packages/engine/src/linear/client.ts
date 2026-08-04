@@ -11,6 +11,7 @@ export interface LinearTeamRef {
   readonly team: string;
   readonly tokenEnv: string;
   readonly organization: string | null;
+  readonly clientId: string | null;
 }
 
 export interface RawIssue {
@@ -225,6 +226,7 @@ const make = (credentials: CredentialStoreService) => {
         workSource: "linear",
         organization: ref.organization,
         tokenEnv: ref.tokenEnv,
+        clientId: ref.clientId,
       }),
       (error) => new WorkSourceError({ reason: "auth", message: error.message }),
     );
