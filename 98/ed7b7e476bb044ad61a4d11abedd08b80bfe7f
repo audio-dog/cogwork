@@ -1,0 +1,32 @@
+packages/contracts/src/run.ts
+  s_148c0802f33bb2::t_0d15f39db85ea0 66
+  s_148c0802f33bb2::t_5bac505b949d34 2
+packages/contracts/src/ag-ui.ts
+  s_148c0802f33bb2::t_2c3fc5434e67c6 5
+  s_148c0802f33bb2::t_0c2dd93bbef3fd 1-4,9-17,19-53
+  s_148c0802f33bb2::t_48490cdaaa42d2 6-8
+  s_148c0802f33bb2::t_5c94f3b3309994 18
+packages/contracts/src/index.ts
+  s_148c0802f33bb2::t_f735255f477d4e 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "98ed7b7e476bb044ad61a4d11abedd08b80bfe7f",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_148c0802f33bb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2651bef3-06ea-4d6f-889a-2ab35a485121",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
