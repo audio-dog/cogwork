@@ -1,0 +1,84 @@
+packages/engine/src/RunLedger.ts
+  s_0d04d26491107e::t_7f1cb5449fff10 29-34
+  s_0d04d26491107e::t_e7f725efc23a1d 35-37
+  s_0d04d26491107e::t_b51d1b92064c20 68,70
+  s_0d04d26491107e::t_598ac81a1ab7b1 69,71
+apps/cli/src/commands.ts
+  s_0d04d26491107e::t_ac297a8a1f1739 52
+  s_0d04d26491107e::t_8b0f6715865573 184
+  s_0d04d26491107e::t_c03a02edd6259f 53-58
+  s_0d04d26491107e::t_69d42f00b72099 85-88,91
+  s_0d04d26491107e::t_b3d6db61e75f14 172,175
+  s_0d04d26491107e::t_e01e522b7c8553 14
+apps/cli/src/stopSignal.test.ts
+  s_0d04d26491107e::t_8ac40d074c41dc 1-32
+apps/cli/CONTEXT.md
+  s_0d04d26491107e::t_88b6d21e387bb9 21,23-24
+  s_0d04d26491107e::t_3e771464178630 22
+packages/engine/CONTEXT.md
+  s_0d04d26491107e::t_b6beb5153fffe9 36,38-39
+  s_0d04d26491107e::t_0686fb64cdcdb1 37
+apps/cli/src/ledger.test.ts
+  s_0d04d26491107e::t_4bcb583c414b95 152-153,155-163,165,175-177
+  s_0d04d26491107e::t_f4f4c804284ff3 151,154,164,166-174
+apps/cli/src/rpc.ts
+  s_0d04d26491107e::t_5c9fc1af52eaf4 38
+packages/contracts/src/run.ts
+  s_0d04d26491107e::t_6293ee332a816a 18
+packages/engine/src/engine.test.ts
+  s_0d04d26491107e::t_93f05be3470d92 366-387,389-428
+  s_0d04d26491107e::t_db5a4c7e40d094 4-5,20
+packages/engine/src/Daemon.ts
+  s_0d04d26491107e::t_f9c22a3282677a 175-181,183-184
+  s_0d04d26491107e::t_93dca7e0b69bd9 156
+  s_0d04d26491107e::t_c2ecab34878e29 21
+  s_0d04d26491107e::t_7947689a9d448a 171-174,182
+packages/engine/src/Scheduler.ts
+  s_0d04d26491107e::t_bcc72e5e50e16c 40,51,54-62
+  s_0d04d26491107e::t_25556bb1b62d2e 79
+  s_0d04d26491107e::t_b54ec0f5790313 3
+  s_0d04d26491107e::t_30b0bec9ea45e0 185
+  s_0d04d26491107e::t_454b0af7deeb8f 234-235
+  s_0d04d26491107e::t_aa8f1ee86c97b6 190-197
+  s_0d04d26491107e::t_814bc61a09ac49 222-233,236-238
+  s_0d04d26491107e::t_ef1ac313df5c74 183
+  s_0d04d26491107e::t_10db50cec6d0cb 7
+  s_0d04d26491107e::t_8e1964eba1aa24 353
+  s_0d04d26491107e::t_1d01e261f1cb39 63
+apps/cli/src/ledger.ts
+  s_0d04d26491107e::t_3a70d6bab3bfe6 9
+  s_0d04d26491107e::t_0387da01898a9e 217-218,221
+  s_0d04d26491107e::t_9aac0c57d9335e 219-220,222-224
+packages/engine/src/runLedger.test.ts
+  s_0d04d26491107e::t_eea2d640f6ca7e 90-115
+apps/cli/src/stopSignal.ts
+  s_0d04d26491107e::t_c74ef340f29b2d 6,9-15
+  s_0d04d26491107e::t_1f9b55e4680dbf 18-24,26-28
+  s_0d04d26491107e::t_31017b1587a487 1-5,7-8,16-17,25
+packages/engine/src/scheduler.test.ts
+  s_0d04d26491107e::t_83cec83973f665 434-436,439-450,465,470-471,473-482,490,492,495-496,502,508,512,514,520,527-529,533-548,557
+  s_0d04d26491107e::t_612a71757b05b5 256
+  s_0d04d26491107e::t_0fc49a750388da 483-484
+  s_0d04d26491107e::t_5c80f29a31f331 13
+  s_0d04d26491107e::t_9f7acc16917324 266
+  s_0d04d26491107e::t_37ad8eb9997241 1-8
+  s_0d04d26491107e::t_1dc4b9dc13dd27 437-438,451-460
+  s_0d04d26491107e::t_9f393ef1171566 431-433,461-464,466-469,472,485-489,491,493-494,497-501,503-507,509-511,513,515-519,521-526,530-532,549-556,558-563
+  s_0d04d26491107e::t_b5606f4dcd9aed 31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "2118a65ac2429d7f2b1cf3b573dc17bdedb8bcc9",
+  "prompts": {},
+  "sessions": {
+    "s_0d04d26491107e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "83591530-d72c-451d-914e-c6d57f04afb1",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
