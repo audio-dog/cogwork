@@ -23,7 +23,7 @@ const workspaceWith = (worktrees?: Worktree.WorktreeSettings) => ({
   config: decodeConfig({
     name: "demo",
     checkoutPath: "/repo",
-    workSource: { type: "github" },
+    issueTracker: { type: "github" },
     harness: { preferred: "cursor" },
     worktrees,
   }),

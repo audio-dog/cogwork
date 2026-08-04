@@ -45,7 +45,7 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
     if (explicit.type !== "github" || !explicit.repo) return null;
     return targetFromRepo(explicit.repo, explicit.tokenEnv, explicit.botLogin);
   }
-  const source = workspace.config.workSource;
+  const source = workspace.config.issueTracker;
   if (source.type !== "github" || !source.repo) return null;
   return targetFromRepo(source.repo, source.tokenEnv, source.botLogin);
 };

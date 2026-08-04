@@ -18,6 +18,7 @@ import {
 import { attachCommand, type HandoffCause, handoffComment, recoveryReason } from "./comments";
 import { claimant, Executor } from "./executor";
 import { followUpContext } from "./follow-up";
+import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import { runnable } from "./playbook";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
@@ -25,7 +26,6 @@ import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { SourceControlProvider } from "./source-control";
-import { type ObservedItem, WorkSource } from "./work-source";
 import { branchName, checkoutPathFor, ticketSlug } from "./worktree";
 
 export interface SchedulerConfig {
@@ -188,9 +188,9 @@ export const make = (config: SchedulerConfig) =>
     const registry = yield* WorkspaceRegistry;
     const worker = yield* ReconcileWorker;
     const executor = yield* Executor;
-    const workSource = yield* WorkSource;
+    const issueTracker = yield* IssueTracker;
     const provider = yield* SourceControlProvider;
-    const observe = observeWorkspace(workSource, provider);
+    const observe = observeWorkspace(issueTracker, provider);
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(initialState);
@@ -260,11 +260,11 @@ export const make = (config: SchedulerConfig) =>
       const role = handoffRoleFor(stage);
       const checkout = checkoutForStage(workspace, item, stage);
       const resume = session ? attachCommand(checkout, session) : undefined;
-      yield* workSource.setRoles(workspace, item.id, {
+      yield* issueTracker.setRoles(workspace, item.id, {
         remove: role ? [role] : [],
         add: ["ready-for-human"],
       });
-      yield* workSource.note(workspace, item.id, handoffComment(stage, cause, recoveryReason, resume));
+      yield* issueTracker.note(workspace, item.id, handoffComment(stage, cause, recoveryReason, resume));
     });
 
     const handoffRecovery = (
@@ -292,7 +292,7 @@ export const make = (config: SchedulerConfig) =>
         attempts,
         exhausted,
       });
-      yield* workSource.recordAttempt(
+      yield* issueTracker.recordAttempt(
         workspace,
         item.id,
         { stage, outcome: "failed", atMillis: endedAtMillis },
@@ -306,8 +306,8 @@ export const make = (config: SchedulerConfig) =>
       workspace: RegisteredWorkspace,
       item: ObservedItem,
     ) {
-      yield* workSource.release(workspace, item.id).pipe(
-        Effect.catchTag("WorkSourceError", (error) =>
+      yield* issueTracker.release(workspace, item.id).pipe(
+        Effect.catchTag("IssueTrackerError", (error) =>
           Effect.logWarning("claim release failed", {
             workspace: workspace.config.name,
             item: item.id,
@@ -332,7 +332,7 @@ export const make = (config: SchedulerConfig) =>
               workspace: workspace.config.name,
               item: item.id,
             });
-            yield* workSource.note(
+            yield* issueTracker.note(
               workspace,
               item.id,
               [
@@ -434,7 +434,7 @@ export const make = (config: SchedulerConfig) =>
         registry.workspaces,
         (workspace) =>
           recoverWorkspace(workspace).pipe(
-            Effect.catchTag("WorkSourceError", (error) =>
+            Effect.catchTag("IssueTrackerError", (error) =>
               Effect.logWarning("claim recovery skipped", {
                 workspace: workspace.config.name,
                 message: error.message,

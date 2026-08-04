@@ -55,7 +55,7 @@ _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
 A pluggable implementation of one agent backend: a `name` plus a `run` that returns a stream of harness events. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
-_Avoid_: Harness service, adapter (adapter is the work-source term)
+_Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **Playbook**:
 A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model/effort choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Model and effort are harness-native strings (e.g. Cursor CLI model ids and `effort=` bracket values); stages can be disabled per workspace; only `triage`, `implement`, and `follow-up` are wired today.
@@ -78,7 +78,7 @@ The exchange that trades a stored refresh token for a rotated pair at the issue 
 _Avoid_: Token renewal loop, background refresh (there are no timers), re-authentication (that is a fresh grant, not a refresh)
 
 **Client-credentials grant**:
-The store's non-interactive source: it trades an OAuth app's `client_id` and a `client_secret` read from an env var for an `app`-actor token, which is how a headless or CI daemon authenticates with no browser. Naming the secret's env var in `workSource.oauth.clientSecretEnv` is what asks for the source at all — an app configured for browser login alone leaves it unset and keeps the env-key floor, while naming a var whose value is missing is an error rather than a silent fall-through. The minted token is held until its lifetime runs out or the store is told it was rejected; this grant has no refresh token, so a rejection means minting a new one.
+The store's non-interactive source: it trades an OAuth app's `client_id` and a `client_secret` read from an env var for an `app`-actor token, which is how a headless or CI daemon authenticates with no browser. Naming the secret's env var in `issueTracker.oauth.clientSecretEnv` is what asks for the source at all — an app configured for browser login alone leaves it unset and keeps the env-key floor, while naming a var whose value is missing is an error rather than a silent fall-through. The minted token is held until its lifetime runs out or the store is told it was rejected; this grant has no refresh token, so a rejection means minting a new one.
 _Avoid_: Service account, machine token, app token (that is what it mints, not the source)
 
 **Stored credential**:

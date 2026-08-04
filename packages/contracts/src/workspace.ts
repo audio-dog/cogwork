@@ -2,9 +2,9 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
   HarnessName,
+  IssueTrackerType,
   SourceControlType,
   TrimmedNonEmptyString,
-  WorkSourceType,
   WorkspaceId,
 } from "./base-schemas";
 
@@ -24,8 +24,8 @@ export const OAuthAppConfig = Schema.Struct({
 });
 export type OAuthAppConfig = typeof OAuthAppConfig.Type;
 
-export const WorkSourceConfig = Schema.Struct({
-  type: WorkSourceType,
+export const IssueTrackerConfig = Schema.Struct({
+  type: IssueTrackerType,
   repo: Schema.optional(TrimmedNonEmptyString),
   team: Schema.optional(TrimmedNonEmptyString),
   organization: Schema.optional(TrimmedNonEmptyString),
@@ -35,7 +35,7 @@ export const WorkSourceConfig = Schema.Struct({
   botUserId: Schema.optional(TrimmedNonEmptyString),
   roleLabels: Schema.optional(TriageRoleLabels),
 });
-export type WorkSourceConfig = typeof WorkSourceConfig.Type;
+export type IssueTrackerConfig = typeof IssueTrackerConfig.Type;
 
 export const SourceControlConfig = Schema.Struct({
   type: SourceControlType,
@@ -83,7 +83,7 @@ export type WorktreeConfig = typeof WorktreeConfig.Type;
 export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,
   checkoutPath: TrimmedNonEmptyString,
-  workSource: WorkSourceConfig,
+  issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   harness: HarnessPreferences,
   playbook: Schema.optional(PlaybookConfig),

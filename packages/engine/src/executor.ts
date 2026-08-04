@@ -14,6 +14,7 @@ import { agentFailureReason, attachCommand, handoffComment, prepareFailureReason
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
 import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./harness";
+import { IssueTracker, type IssueTrackerError } from "./issue-tracker";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
@@ -30,7 +31,6 @@ import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
 import { activityOf, RunEventBus } from "./run-event-bus";
 import { RunLedger } from "./run-ledger";
-import { WorkSource, type WorkSourceError } from "./work-source";
 import { branchName, checkoutPathFor, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
@@ -46,7 +46,7 @@ interface StageOps {
   readonly resolved: ResolvedStage;
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
-  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, WorkSourceError>;
+  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
   readonly handoffRole: TriageRole | null;
 }
 
@@ -135,7 +135,7 @@ const resumeFor = (workspace: RegisteredWorkspace, item: EligibleWork, session: 
   session ? attachCommand(checkoutFor(workspace, item), session) : undefined;
 
 export const claimant = (workspace: RegisteredWorkspace) =>
-  workspace.config.workSource.botLogin ?? "clanker-forge";
+  workspace.config.issueTracker.botLogin ?? "clanker-forge";
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
 const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
@@ -145,7 +145,7 @@ const sessionOf = (raw: string | null) =>
   raw === null ? Effect.succeed(null) : decodeSessionId(raw).pipe(Effect.orElseSucceed(() => null));
 
 export const make = Effect.gen(function* () {
-  const workSource = yield* WorkSource;
+  const issueTracker = yield* IssueTracker;
   const harness = yield* Harness;
   const ledger = yield* RunLedger;
   const bus = yield* RunEventBus;
@@ -164,7 +164,7 @@ export const make = Effect.gen(function* () {
     at: number,
   ) {
     const claim = { by: claimant(workspace), claimedAtMillis: at, stage: item.stage };
-    const result = yield* Effect.result(workSource.claim(workspace, item.id, claim));
+    const result = yield* Effect.result(issueTracker.claim(workspace, item.id, claim));
     if (Result.isSuccess(result)) return true;
     yield* Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error: result.failure });
     return false;
@@ -235,18 +235,18 @@ export const make = Effect.gen(function* () {
       retryable,
       exhausted,
     });
-    yield* workSource.recordAttempt(
+    yield* issueTracker.recordAttempt(
       workspace,
       item.id,
       { stage: item.stage, outcome: "failed", atMillis: endedAtMillis },
       reason,
     );
     if (exhausted) {
-      yield* workSource.setRoles(workspace, item.id, {
+      yield* issueTracker.setRoles(workspace, item.id, {
         remove: handoffRole ? [handoffRole] : [],
         add: ["ready-for-human"],
       });
-      yield* workSource.note(
+      yield* issueTracker.note(
         workspace,
         item.id,
         handoffComment(
@@ -274,9 +274,9 @@ export const make = Effect.gen(function* () {
     const decision = resolveTriageDecision(acc.text);
     yield* warnTriageDecision(item, decision);
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* workSource.note(workspace, item.id, proposalBody(acc.text));
-    yield* workSource.setRoles(workspace, item.id, { remove: ["needs-triage"], add: [decision.role] });
-    yield* workSource.recordAttempt(workspace, item.id, {
+    yield* issueTracker.note(workspace, item.id, proposalBody(acc.text));
+    yield* issueTracker.setRoles(workspace, item.id, { remove: ["needs-triage"], add: [decision.role] });
+    yield* issueTracker.recordAttempt(workspace, item.id, {
       stage: "triage",
       outcome: "succeeded",
       atMillis: endedAtMillis,
@@ -296,8 +296,8 @@ export const make = Effect.gen(function* () {
     acc: RunAccumulator,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* workSource.setRoles(workspace, item.id, { remove: ["ready-for-agent"], add: [] });
-    yield* workSource.recordAttempt(workspace, item.id, {
+    yield* issueTracker.setRoles(workspace, item.id, { remove: ["ready-for-agent"], add: [] });
+    yield* issueTracker.recordAttempt(workspace, item.id, {
       stage: "implement",
       outcome: "succeeded",
       atMillis: endedAtMillis,
@@ -336,7 +336,7 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    const result = yield* Effect.result(workSource.release(workspace, item.id));
+    const result = yield* Effect.result(issueTracker.release(workspace, item.id));
     if (Result.isFailure(result)) {
       yield* Effect.logWarning("claim release failed", {
         stage: item.stage,
@@ -399,8 +399,8 @@ export const make = Effect.gen(function* () {
     context: FollowUpContext,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* workSource.recordFollowUp(workspace, item.id, followUpMarker(context));
-    yield* workSource.recordAttempt(workspace, item.id, {
+    yield* issueTracker.recordFollowUp(workspace, item.id, followUpMarker(context));
+    yield* issueTracker.recordAttempt(workspace, item.id, {
       stage: "follow-up",
       outcome: "succeeded",
       atMillis: endedAtMillis,
@@ -474,14 +474,14 @@ export const make = Effect.gen(function* () {
   ) {
     const atMillis = yield* Clock.currentTimeMillis;
     const context = item.followUp ?? defaultFollowUp;
-    yield* workSource.recordFollowUp(
+    yield* issueTracker.recordFollowUp(
       workspace,
       item.id,
       followUpMarker(context),
       `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.`,
     );
-    yield* workSource.setRoles(workspace, item.id, { remove: [], add: ["ready-for-human"] });
-    yield* workSource.recordAttempt(workspace, item.id, {
+    yield* issueTracker.setRoles(workspace, item.id, { remove: [], add: ["ready-for-human"] });
+    yield* issueTracker.recordAttempt(workspace, item.id, {
       stage: "follow-up",
       outcome: "abandoned",
       atMillis,

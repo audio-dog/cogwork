@@ -15,7 +15,7 @@ import {
   CredentialStore,
   type CredentialStoreService,
 } from "../credential-store";
-import { WorkSourceError } from "../work-source";
+import { IssueTrackerError } from "../issue-tracker";
 
 export interface LinearTeamRef {
   readonly team: string;
@@ -124,12 +124,12 @@ const CommentsPayload = Schema.Struct({
 
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 
-const unavailable = (message: string) => new WorkSourceError({ reason: "unavailable", message });
+const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
 const isAuthStatus = (status: number | undefined) => status === 401 || status === 403;
 
-const reasonFor = (cause: unknown): WorkSourceError["reason"] => {
+const reasonFor = (cause: unknown): IssueTrackerError["reason"] => {
   if (cause instanceof RatelimitedLinearError) return "rate-limited";
   if (cause instanceof LinearError && isAuthStatus(cause.status)) return "auth";
   return "unavailable";
@@ -147,7 +147,7 @@ const retryAfterMillisOf = (cause: unknown, nowMillis: number) => {
 };
 
 const fromSdkError = (cause: unknown, nowMillis: number) =>
-  new WorkSourceError({
+  new IssueTrackerError({
     reason: reasonFor(cause),
     message: cause instanceof Error ? cause.message : String(cause),
     retryAfterMillis: retryAfterMillisOf(cause, nowMillis),
@@ -158,7 +158,7 @@ const isoMillis = (millis: number) =>
 
 const defaultCooldownMillis = 60_000;
 
-const isTransient = (error: WorkSourceError) => error.reason === "unavailable";
+const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 
 const teamIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -222,7 +222,7 @@ query IssueComments($id: String!) {
 interface TeamAddressing<A> {
   readonly document: string;
   readonly variables: (team: string) => Record<string, unknown>;
-  readonly decode: (data: unknown) => Effect.Effect<A | null, WorkSourceError>;
+  readonly decode: (data: unknown) => Effect.Effect<A | null, IssueTrackerError>;
 }
 
 interface TeamShape<A> {
@@ -319,7 +319,7 @@ const sdkAuth = (credential: Credential) =>
 
 const accountFor = (ref: LinearTeamRef) => ({
   key: ref.team,
-  workSource: "linear",
+  issueTracker: "linear",
   organization: ref.organization,
   tokenEnv: ref.tokenEnv,
   clientCredentials: ref.clientCredentials,
@@ -332,7 +332,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
     const credential = yield* Effect.mapError(
       credentials.bearerToken(accountFor(ref)),
-      (error) => new WorkSourceError({ reason: "auth", message: error.message }),
+      (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
     );
     return new LinearSdk(sdkAuth(credential));
   });
@@ -340,14 +340,14 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   const holdOff = Effect.fn("linear.holdOff")(function* (ref: LinearTeamRef, nowMillis: number) {
     const until = (yield* Ref.get(resumeAt)).get(rateLimitScopeOf(ref.tokenEnv));
     if (until === undefined || until <= nowMillis) return;
-    return yield* new WorkSourceError({
+    return yield* new IssueTrackerError({
       reason: "rate-limited",
       message: `Linear rate limit active; resuming after ${isoMillis(until)}`,
       retryAfterMillis: until - nowMillis,
     });
   });
 
-  const noteRateLimit = (ref: LinearTeamRef, nowMillis: number, error: WorkSourceError) =>
+  const noteRateLimit = (ref: LinearTeamRef, nowMillis: number, error: IssueTrackerError) =>
     Ref.update(resumeAt, (entries) =>
       new Map(entries).set(
         rateLimitScopeOf(ref.tokenEnv),
@@ -357,7 +357,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
 
   // A client-credentials token carries no refresh token, so a rejection is the only signal the
   // store ever gets that the token it holds has to be minted again.
-  const noteFailure = (ref: LinearTeamRef, nowMillis: number, error: WorkSourceError) => {
+  const noteFailure = (ref: LinearTeamRef, nowMillis: number, error: IssueTrackerError) => {
     if (error.reason === "rate-limited") return noteRateLimit(ref, nowMillis, error);
     if (error.reason === "auth") return credentials.invalidate(accountFor(ref));
     return Effect.void;

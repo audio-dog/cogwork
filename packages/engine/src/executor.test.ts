@@ -22,10 +22,10 @@ import {
   type HarnessRunner,
   layer as harnessLayer,
 } from "./harness";
+import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunEventBus from "./run-event-bus";
 import * as RunLedger from "./run-ledger";
-import { WorkSource, type WorkSourceService } from "./work-source";
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
@@ -37,7 +37,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    workSource: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
   }),
@@ -52,7 +52,7 @@ const implementWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    workSource: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { implement: { enabled: true } },
   }),
@@ -132,7 +132,7 @@ const followUpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    workSource: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { "follow-up": { enabled: true } },
   }),
@@ -174,7 +174,7 @@ const disabledWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    workSource: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github", repo: "owner/repo" },
     harness: { preferred: "cursor" },
   }),
 };
@@ -193,7 +193,7 @@ interface Call {
 const record = (calls: Ref.Ref<ReadonlyArray<Call>>, entry: Call) =>
   Ref.update(calls, (xs) => [...xs, entry]);
 
-const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): WorkSourceService => ({
+const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
   claim: (_workspace, itemId) => record(calls, { method: "claim", item: itemId }),
@@ -297,14 +297,14 @@ const successEvents: ReadonlyArray<HarnessEvent> = [
 ];
 
 const provide = (
-  ws: WorkSourceService,
+  ws: IssueTrackerService,
   runners: ReadonlyArray<HarnessRunner>,
   worktree: WorktreeManagerService = worktreeStub,
 ) =>
   Executor.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        Layer.succeed(WorkSource, ws),
+        Layer.succeed(IssueTracker, ws),
         harnessLayer(runners),
         RunLedger.layerMemory,
         RunEventBus.layer,

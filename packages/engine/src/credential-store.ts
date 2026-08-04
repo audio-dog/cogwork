@@ -17,7 +17,7 @@ export interface ClientCredentialsRef {
 
 export interface CredentialAccount {
   readonly key: string;
-  readonly workSource: string;
+  readonly issueTracker: string;
   readonly organization: string | null;
   readonly tokenEnv: string;
   readonly clientCredentials: ClientCredentialsRef | null;
@@ -38,7 +38,7 @@ export const StoredToken = Schema.Struct({
 export type StoredToken = typeof StoredToken.Type;
 
 export const StoredCredential = Schema.Struct({
-  workSource: TrimmedNonEmptyString,
+  issueTracker: TrimmedNonEmptyString,
   organization: TrimmedNonEmptyString,
   botUserId: TrimmedNonEmptyString,
   token: StoredToken,
@@ -110,7 +110,7 @@ export class CredentialStore extends Context.Service<CredentialStore, Credential
 ) {}
 
 export const accountOf = (credential: StoredCredential) =>
-  `${credential.workSource}/${credential.organization}`;
+  `${credential.issueTracker}/${credential.organization}`;
 
 const envToken = (account: CredentialAccount) =>
   Config.redacted(account.tokenEnv).pipe(Effect.orElseSucceed(() => Redacted.make("")));
@@ -128,7 +128,7 @@ const envCredential = Effect.fn("CredentialStore.env")(function* (account: Crede
 });
 
 const matching = (account: CredentialAccount) => (credential: StoredCredential) =>
-  credential.workSource === account.workSource &&
+  credential.issueTracker === account.issueTracker &&
   (account.organization === null || credential.organization === account.organization);
 
 export const expiryMarginMillis = 60_000;
@@ -144,7 +144,7 @@ const matchStored = Effect.fn("CredentialStore.matchStored")(function* (
 ) {
   const candidates = (yield* stored.load).filter(matching(account));
   if (candidates.length > 1) {
-    yield* Effect.logWarning("multiple stored credentials match; set workSource.organization", {
+    yield* Effect.logWarning("multiple stored credentials match; set issueTracker.organization", {
       account: account.key,
       matches: candidates.length,
     });

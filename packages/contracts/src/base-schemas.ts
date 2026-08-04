@@ -15,8 +15,8 @@ export type WorkItemId = typeof WorkItemId.Type;
 export const HarnessName = makeBrand("HarnessName");
 export type HarnessName = typeof HarnessName.Type;
 
-export const WorkSourceType = makeBrand("WorkSourceType");
-export type WorkSourceType = typeof WorkSourceType.Type;
+export const IssueTrackerType = makeBrand("IssueTrackerType");
+export type IssueTrackerType = typeof IssueTrackerType.Type;
 
 export const SourceControlType = makeBrand("SourceControlType");
 export type SourceControlType = typeof SourceControlType.Type;
