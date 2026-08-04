@@ -1,0 +1,93 @@
+packages/engine/src/index.ts
+  s_e3cdc5af29010c::t_8d14fb5c857318 15
+packages/engine/src/observe.ts
+  s_e3cdc5af29010c::t_67ce1caca46647 2-3,5-6,9-16,18-29
+  s_e3cdc5af29010c::t_a9996f0a0e6bf3 1,4,7-8,17
+packages/contracts/src/workspace.ts
+  s_e3cdc5af29010c::t_35b3715cbb725c 40-47
+  s_e3cdc5af29010c::t_ba9dce8b0d863e 87
+  s_e3cdc5af29010c::t_29eaf6f9c3b6f3 3-9
+apps/cli/src/rpc.ts
+  s_e3cdc5af29010c::t_e892b4fdf27742 62
+packages/engine/src/github/github.test.ts
+  s_e3cdc5af29010c::t_dd26911a3ad508 196,238,267,294,324,341,374,384,438,484,517,548,583,634,674,699,755,800,871,895,944
+  s_e3cdc5af29010c::t_27f01ccb100b6c 627-628
+  s_e3cdc5af29010c::t_5ed7cce2c8a52b 170-180
+  s_e3cdc5af29010c::t_67558912f519b1 10,12
+  s_e3cdc5af29010c::t_60ad3952c2e5f7 25
+packages/engine/src/scheduler.ts
+  s_e3cdc5af29010c::t_95acffe625eb11 424
+  s_e3cdc5af29010c::t_08c3337fba0084 21,27
+  s_e3cdc5af29010c::t_b0e5db5b69717e 192-193
+packages/engine/src/linear/markers.ts
+  s_e3cdc5af29010c::t_86e07a719260a4 11
+  s_e3cdc5af29010c::t_72efbe0fcbd8ed 73,77
+  s_e3cdc5af29010c::t_a6c86c403c838c 116-131
+  s_e3cdc5af29010c::t_6d30695df32efc 78
+packages/engine/src/linear/linear.test.ts
+  s_e3cdc5af29010c::t_a87f8084b8200d 213-224
+  s_e3cdc5af29010c::t_d11bd7156cee9d 232,260,336,376,432,445,498,534,575,591
+  s_e3cdc5af29010c::t_f162b7d63ee282 306
+  s_e3cdc5af29010c::t_f69bc195022ba0 8,10
+packages/engine/src/github/provider.ts
+  s_e3cdc5af29010c::t_fd94749e2edb41 170,173-174,179,181
+  s_e3cdc5af29010c::t_96c60dafe42398 1-169,171-172,175-178,180,182-187
+packages/engine/src/github/index.ts
+  s_e3cdc5af29010c::t_1b6d94e2dbc23e 3
+packages/contracts/src/base-schemas.ts
+  s_e3cdc5af29010c::t_12f49dac47b661 20-22
+packages/engine/src/engine.test.ts
+  s_e3cdc5af29010c::t_00d60696b783fd 154,161-162
+  s_e3cdc5af29010c::t_74e5a4b89d6827 347-360
+  s_e3cdc5af29010c::t_ccff4dd87e30d1 228-240
+  s_e3cdc5af29010c::t_bb57fd1184c3a6 434
+  s_e3cdc5af29010c::t_4e22be18b6e869 57-68
+  s_e3cdc5af29010c::t_da95874a316451 18-19
+  s_e3cdc5af29010c::t_99b6d0ff826a06 140
+  s_e3cdc5af29010c::t_1357833d5c4df2 191,198-199,202-208,210,486,510
+  s_e3cdc5af29010c::t_fc924afa57331b 264-282
+  s_e3cdc5af29010c::t_d662b439e0537e 435-436,451,461,478,485,502,509
+packages/engine/src/work-source.ts
+  s_e3cdc5af29010c::t_9c7e11547fe5f9 73
+  s_e3cdc5af29010c::t_4e9087747f52bd 17,27-38
+  s_e3cdc5af29010c::t_994e054070a111 39
+packages/engine/src/github/adapter.ts
+  s_e3cdc5af29010c::t_cd447e0ccd44ce 124,139-140,142,146
+  s_e3cdc5af29010c::t_e2049389b7bd68 6
+  s_e3cdc5af29010c::t_d225cd8370ab4a 149-152,162
+packages/engine/src/source-control.ts
+  s_e3cdc5af29010c::t_1feebc3dbeccba 1-33
+packages/engine/src/reconcile.ts
+  s_e3cdc5af29010c::t_90a5cc3df8fe7a 18,21
+  s_e3cdc5af29010c::t_096c444cc6dff3 114-115
+  s_e3cdc5af29010c::t_d8f57c00d67879 197
+packages/engine/src/linear/adapter.ts
+  s_e3cdc5af29010c::t_16ae09ae7ea3fb 137-138,140
+  s_e3cdc5af29010c::t_b4bd3cd2461dcf 27,32
+  s_e3cdc5af29010c::t_78fdb731eb94d6 6
+packages/engine/src/scheduler.test.ts
+  s_e3cdc5af29010c::t_161956f6ea1483 268
+  s_e3cdc5af29010c::t_c7a8904b988941 584,591-592,595,602-603,606,613-614
+  s_e3cdc5af29010c::t_c8504faa5a3f46 662
+  s_e3cdc5af29010c::t_8bcb5cb8b09844 764
+  s_e3cdc5af29010c::t_afcb153e486921 27-28
+  s_e3cdc5af29010c::t_fd278e58254fd7 727
+packages/engine/src/github/github-helpers.test.ts
+  s_e3cdc5af29010c::t_0f1fb45df4b56c 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "018410869b111b248add9b9735e8f76ff61dd661",
+  "prompts": {},
+  "sessions": {
+    "s_e3cdc5af29010c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1fb9cf3c-2289-43fe-974d-899242b8b593",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
