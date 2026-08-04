@@ -1,0 +1,21 @@
+packages/engine/docs/adr/0005-worktree-setup-for-harnesses-is-repo-local.md
+  s_a9afc721375a45::t_baeba876772284 1-24
+packages/engine/CONTEXT.md
+  s_a9afc721375a45::t_bcd4129e9dd352 97-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "df7f49d617f100b9506d22250de62ed82a9e6168",
+  "prompts": {},
+  "sessions": {
+    "s_a9afc721375a45": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0810358c-535e-4ef0-b004-c7bf8203a06f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
