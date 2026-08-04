@@ -12,7 +12,8 @@ const maxReasonChars = 800;
 
 export type HandoffCause =
   | { readonly kind: "max-attempts"; readonly attempts: number }
-  | { readonly kind: "non-retryable" };
+  | { readonly kind: "non-retryable" }
+  | { readonly kind: "crash-loop"; readonly crashes: number };
 
 const attemptWord = (count: number) => (count === 1 ? "attempt" : "attempts");
 
@@ -54,9 +55,14 @@ export const agentFailureReason = (text: string, kind: "stuck" | "missing-sentin
   return cleaned ? `agent produced no result line — ${cleaned}` : "agent produced no result line";
 };
 
+const crashWord = (count: number) => (count === 1 ? "crash" : "crashes");
+
 const headline = (stage: LifecycleStage, cause: HandoffCause) => {
   if (cause.kind === "max-attempts") {
     return `**Exhausted after ${cause.attempts} failed ${stage} ${attemptWord(cause.attempts)}.**`;
+  }
+  if (cause.kind === "crash-loop") {
+    return `**Exhausted after ${cause.crashes} consecutive ${stage} ${crashWord(cause.crashes)}.**`;
   }
   return `**Exhausted: ${stage} hit a non-retryable failure.**`;
 };
