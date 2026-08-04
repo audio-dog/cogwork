@@ -6,7 +6,12 @@ import { afterEach, vi } from "vitest";
 import { CredentialError, type CredentialSource, CredentialStore } from "../CredentialStore";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
 
-const ref: LinearTeamRef = { team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null };
+const ref: LinearTeamRef = {
+  team: "AUD",
+  tokenEnv: "LINEAR_API_KEY",
+  organization: null,
+  clientCredentials: null,
+};
 
 interface StubResponse {
   readonly status?: number;
@@ -39,7 +44,7 @@ const authorizationOf = (fetchStub: { readonly mock: { readonly calls: ReadonlyA
   return new Headers(init?.headers).get("authorization");
 };
 
-const stubCredentials = (token: string | null, source: CredentialSource = "env") =>
+const stubCredentials = (token: string | null, source: CredentialSource, invalidated: Array<string>) =>
   Layer.succeed(CredentialStore, {
     bearerToken: (account) =>
       token === null
@@ -51,10 +56,14 @@ const stubCredentials = (token: string | null, source: CredentialSource = "env")
           )
         : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
     persist: () => Effect.void,
+    invalidate: (account) => Effect.sync(() => invalidated.push(account.key)),
   });
 
-const withToken = (token: string | null = "test-key", source: CredentialSource = "env") =>
-  Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source))));
+const withToken = (
+  token: string | null = "test-key",
+  source: CredentialSource = "env",
+  invalidated: Array<string> = [],
+) => Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source, invalidated))));
 
 const teamBundle = {
   id: "team-uuid",
@@ -131,6 +140,15 @@ describe("linear client", () => {
     }).pipe(withToken("oauth-token", "stored-oauth")),
   );
 
+  it.effect("sends a client-credentials token as a Bearer credential", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.listIssues(ref);
+      assert.strictEqual(authorizationOf(fetchStub), "Bearer app-token");
+    }).pipe(withToken("app-token", "client-credentials")),
+  );
+
   it.effect("skips comments Linear reports without an author", () =>
     Effect.gen(function* () {
       stubLinear(() => ({
@@ -174,6 +192,26 @@ describe("linear client", () => {
       assert.strictEqual(error.reason, "auth");
     }).pipe(withToken()),
   );
+
+  it.effect("tells the store to drop the credential Linear rejected", () => {
+    const invalidated: Array<string> = [];
+    return Effect.gen(function* () {
+      stubLinear(() => ({ status: 401, body: {} }));
+      const client = yield* LinearClient;
+      yield* Effect.flip(client.listIssues(ref));
+      assert.deepStrictEqual(invalidated, ["AUD"]);
+    }).pipe(withToken("app-token", "client-credentials", invalidated));
+  });
+
+  it.effect("leaves the credential in place when Linear fails for another reason", () => {
+    const invalidated: Array<string> = [];
+    return Effect.gen(function* () {
+      stubLinear(() => ({ status: 404, body: {} }));
+      const client = yield* LinearClient;
+      yield* Effect.flip(client.listIssues(ref));
+      assert.deepStrictEqual(invalidated, []);
+    }).pipe(withToken("app-token", "client-credentials", invalidated));
+  });
 
   it.effect("reports a non-credential client error as reason unavailable", () =>
     Effect.gen(function* () {

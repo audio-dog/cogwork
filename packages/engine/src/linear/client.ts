@@ -4,13 +4,19 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { type Credential, CredentialStore, type CredentialStoreService } from "../CredentialStore";
+import {
+  type ClientCredentialsRef,
+  type Credential,
+  CredentialStore,
+  type CredentialStoreService,
+} from "../CredentialStore";
 import { WorkSourceError } from "../WorkSource";
 
 export interface LinearTeamRef {
   readonly team: string;
   readonly tokenEnv: string;
   readonly organization: string | null;
+  readonly clientCredentials: ClientCredentialsRef | null;
 }
 
 export interface RawIssue {
@@ -213,26 +219,36 @@ const requireSuccess = (operation: string, payload: { readonly success: boolean 
 // A Linear API key authenticates as itself; an OAuth token is a bearer credential and has to reach
 // the SDK as `accessToken` or it is sent without the `Bearer` prefix.
 const sdkAuth = (credential: Credential) =>
-  credential.source === "stored-oauth"
-    ? { accessToken: Redacted.value(credential.token) }
-    : { apiKey: Redacted.value(credential.token) };
+  credential.source === "env"
+    ? { apiKey: Redacted.value(credential.token) }
+    : { accessToken: Redacted.value(credential.token) };
+
+const accountFor = (ref: LinearTeamRef) => ({
+  key: ref.team,
+  workSource: "linear",
+  organization: ref.organization,
+  tokenEnv: ref.tokenEnv,
+  clientCredentials: ref.clientCredentials,
+});
 
 const make = (credentials: CredentialStoreService) => {
   const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
     const credential = yield* Effect.mapError(
-      credentials.bearerToken({
-        key: ref.team,
-        workSource: "linear",
-        organization: ref.organization,
-        tokenEnv: ref.tokenEnv,
-      }),
+      credentials.bearerToken(accountFor(ref)),
       (error) => new WorkSourceError({ reason: "auth", message: error.message }),
     );
     return new LinearSdk(sdkAuth(credential));
   });
 
+  // A client-credentials token carries no refresh token, so a rejection is the only signal the
+  // store ever gets that the token it holds has to be minted again.
   const call = <A>(ref: LinearTeamRef, run: (sdk: LinearSdk) => PromiseLike<A>) =>
-    Effect.flatMap(sdkFor(ref), (sdk) => attempt(() => run(sdk)));
+    Effect.flatMap(sdkFor(ref), (sdk) =>
+      Effect.tapError(
+        attempt(() => run(sdk)),
+        (error) => (error.reason === "auth" ? credentials.invalidate(accountFor(ref)) : Effect.void),
+      ),
+    );
 
   // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
   // only stays inside Linear's rate limit while these reads stay single documents.

@@ -11,6 +11,7 @@ import { layer as adapterLayer } from "./adapter";
 import {
   LinearClient,
   type LinearClientService,
+  type LinearTeamRef,
   type RawComment,
   type RawIssue,
   type RawWorkflowState,
@@ -43,6 +44,13 @@ interface Seed {
 }
 
 const bot = { id: "bot-user" } as const;
+
+const teamRef: LinearTeamRef = {
+  team: "AUD",
+  tokenEnv: "LINEAR_API_KEY",
+  organization: null,
+  clientCredentials: null,
+};
 
 const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
   const issuesRef = yield* Ref.make(
@@ -248,9 +256,7 @@ describe("linear work source adapter", () => {
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
       yield* source.claim(workspace, id("AUD-7"), claim);
       yield* source.recordAttempt(workspace, id("AUD-7"), attempt);
-      const comments = botComments(
-        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null }, "AUD-7"),
-      );
+      const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
       assert.strictEqual(comments.length, 1);
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
       assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
@@ -281,9 +287,7 @@ describe("linear work source adapter", () => {
         { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 },
         "git worktree add: boom",
       );
-      const comments = botComments(
-        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null }, "AUD-8"),
-      );
+      const comments = botComments(yield* client.listComments(teamRef, "AUD-8"));
       assert.include(comments[0]?.body ?? "", "Last implement attempt failed: git worktree add: boom");
     }).pipe(
       Effect.provide(
@@ -346,9 +350,7 @@ describe("linear work source adapter", () => {
         claimedAtMillis: 5,
         stage: "triage",
       });
-      const comments = botComments(
-        yield* client.listComments({ team: "AUD", tokenEnv: "LINEAR_API_KEY", organization: null }, "AUD-11"),
-      );
+      const comments = botComments(yield* client.listComments(teamRef, "AUD-11"));
       const [proposal, coordination] = comments;
       assert.strictEqual(comments.length, 2);
       assert.notInclude(proposal?.body ?? "", "clanker-forge:");
@@ -442,11 +444,7 @@ describe("linear work source adapter", () => {
         remove: ["needs-triage"],
         add: ["wontfix"],
       });
-      const issues = yield* client.listIssues({
-        team: "AUD",
-        tokenEnv: "LINEAR_API_KEY",
-        organization: null,
-      });
+      const issues = yield* client.listIssues(teamRef);
       const issue = issues.find((entry) => entry.identifier === "AUD-9");
       assert.isFalse(issue?.labels.includes("state:needs-triage") ?? true);
       assert.isTrue(issue?.labels.includes("state:wontfix") ?? false);
