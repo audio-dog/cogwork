@@ -448,7 +448,7 @@ export const make = Effect.gen(function* () {
     return harnessRequest(
       resolved,
       worktree.path,
-      buildFollowUpPrompt(resolved, item),
+      buildFollowUpPrompt(resolved, item, workspace.config.linearHistory),
       decision.kind === "resume" ? decision.sessionId : null,
     );
   });

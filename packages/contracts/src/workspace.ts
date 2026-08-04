@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from "./baseSchemas";
 
@@ -73,6 +74,7 @@ export const WorkspaceConfig = Schema.Struct({
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),
   concurrency: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+  linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
 export type WorkspaceConfigInput = Schema.Codec.Encoded<typeof WorkspaceConfig>;

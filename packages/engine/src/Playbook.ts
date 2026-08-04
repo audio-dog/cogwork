@@ -38,6 +38,7 @@ const defaultFollowUpPrompt = [
   "Follow the `{skill}` skill to move the PR forward: read the PR's failing checks and any human review",
   "comments, make the fix, pass the local gate, and push to the same branch.",
   "Never merge the PR and never resolve review threads — a human gates the code.",
+  "Linear history for this repository is {linearHistory}.",
 ].join("\n");
 
 interface StageDefaults {
@@ -113,8 +114,13 @@ interface PromptItem {
   readonly title: string;
 }
 
-const buildPrompt = (resolved: ResolvedStage, item: PromptItem, footer: string) => {
-  const values = { id: item.id, title: item.title, skill: resolved.skill };
+const buildPrompt = (
+  resolved: ResolvedStage,
+  item: PromptItem,
+  footer: string,
+  extra: Record<string, string> = {},
+) => {
+  const values = { id: item.id, title: item.title, skill: resolved.skill, ...extra };
   return `${fill(resolved.promptTemplate, values)}\n${fill(footer, values)}`;
 };
 
@@ -205,8 +211,10 @@ const followUpFooter = [
 
 const followUpResultPattern = /FOLLOWUP-RESULT:\s*([a-z-]+)/gi;
 
-export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem) =>
-  buildPrompt(resolved, item, followUpFooter);
+export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem, linearHistory: boolean) =>
+  buildPrompt(resolved, item, followUpFooter, {
+    linearHistory: linearHistory ? "required" : "not required",
+  });
 
 export const parseFollowUpResult = (text: string) =>
   parseLastSentinel(followUpResultPattern, followUpResults, text);
