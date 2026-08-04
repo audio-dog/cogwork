@@ -148,6 +148,50 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("interrupts runs this daemon started and leaves older or finished ones alone", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(record("interrupt-stale", 3900));
+        yield* ledger.insertRun(record("interrupt-running", 4000));
+        yield* ledger.insertRun(record("interrupt-done", 4100));
+        yield* ledger.updateRun(runId("interrupt-done"), {
+          status: "succeeded",
+          session,
+          usage: null,
+          endedAtMillis: 4200,
+        });
+
+        yield* ledger.interruptRunning(4000, 5000);
+
+        const statuses = yield* Effect.forEach(
+          ["interrupt-stale", "interrupt-running", "interrupt-done"],
+          (id) => Effect.map(ledger.getRun(runId(id)), (run) => [run?.status, run?.endedAtMillis]),
+        );
+        assert.deepStrictEqual(statuses, [
+          ["running", null],
+          ["interrupted", 5000],
+          ["succeeded", 4200],
+        ]);
+      }),
+    );
+
+    it.effect("records a session on a run that has not reached a terminal status", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        const id = runId("in-flight");
+        yield* ledger.insertRun(record("in-flight", 7000, { branch: "11-mid-run" }));
+        yield* ledger.recordSession(id, session);
+
+        const inFlight = yield* ledger.getRun(id);
+        assert.strictEqual(inFlight?.session, "sess-abc");
+        assert.strictEqual(inFlight?.status, "running");
+        assert.isNull(inFlight?.endedAtMillis);
+
+        const byBranch = yield* ledger.latestRunByBranch("gh", "11-mid-run");
+        assert.strictEqual(byBranch?.id, id);
+      }),
+    );
+
     it.effect("collapses absent token usage fields to omitted keys", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.RunLedger;

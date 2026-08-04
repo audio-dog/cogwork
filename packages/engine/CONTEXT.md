@@ -33,6 +33,10 @@ _Avoid_: Filtering, triage (triage is a stage, not this)
 The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. In-flight counts and budgets live here and nowhere else. It acts on a given work item at most once per snapshot generation: a completed item is not re-picked until a newer snapshot re-confirms it is eligible, which is what stops a fast execute tick from re-running work that a slow reconcile has not yet caught up on (see ADR 0001).
 _Avoid_: Queue, dispatcher, runner
 
+**Drain**:
+The scheduler's graceful stop: it picks no further candidates and gives the runs already in flight a **grace window** to finish on their own and record their normal outcome. Whatever is still running when the window closes — or when a second stop signal ends the wait early — is recorded `interrupted` and its agent torn down.
+_Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
+
 **Snapshot generation**:
 The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the work source from the next, so it can act on each work item at most once per observation.
 _Avoid_: Version, revision, epoch
@@ -62,8 +66,12 @@ A concrete implementation of the work source port. `GitHub.adapterLayer` and `Li
 _Avoid_: Client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Credential store**:
-The seam every work-source credential is resolved through: given an account (the work source's logical identity plus the env var naming its legacy API key), it hands back a credential — the token, the source it came from, and any identity discovered alongside it — and logs which source it used. A stored OAuth token wins over the env var; an expired one (or an ambiguous match across organizations) falls back to it. Only the Linear client resolves through the store today; GitHub still reads its token from the environment directly. Client-credentials sources arrive behind the same seam later, as does a keychain-backed layer.
-_Avoid_: Secret manager, token cache (nothing is cached yet), auth provider
+The seam every work-source credential is resolved through: given an account (the work source's logical identity, the env var naming its legacy API key, and the OAuth app to mint from when one is configured), it hands back a credential — the token, the source it came from, and any identity discovered alongside it — and logs which source it used. Precedence is the stored browser-login token, then client credentials, then the env-var API key. An expired stored token (or an ambiguous match across organizations) falls through, and so does an account that never asked for client credentials. `invalidate` drops whatever was minted for an account, which is how a rejected token gets replaced. Only the Linear client resolves through the store today; GitHub still reads its token from the environment directly. A keychain-backed layer arrives behind the same seam later.
+_Avoid_: Secret manager, auth provider
+
+**Client-credentials grant**:
+The store's non-interactive source: it trades an OAuth app's `client_id` and a `client_secret` read from an env var for an `app`-actor token, which is how a headless or CI daemon authenticates with no browser. Naming the secret's env var in `workSource.oauth.clientSecretEnv` is what asks for the source at all — an app configured for browser login alone leaves it unset and keeps the env-key floor, while naming a var whose value is missing is an error rather than a silent fall-through. The minted token is held until its lifetime runs out or the store is told it was rejected; this grant has no refresh token, so a rejection means minting a new one.
+_Avoid_: Service account, machine token, app token (that is what it mints, not the source)
 
 **Stored credential**:
 One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `botUserId` the app posts as). Keyed by work source and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
@@ -84,6 +92,10 @@ _Avoid_: Checkout, clone
 **Branch divergence**:
 A worktree branch holding commits its remote branch lacks while the remote holds commits the branch lacks, so no fast-forward can bring them together. The worktree manager resolves it by rebasing the local commits onto the remote; when that rebase will not apply, the divergence is a non-retryable prepare failure that hands the item to a human with its commits untouched (see ADR 0002).
 _Avoid_: Conflict (that's one reason a rebase fails), drift, stale branch (that's just being behind)
+
+**Base divergence**:
+A bot pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the work source's mergeable signal (GitHub's `dirty`) on the reconcile poll and treats it as a fourth follow-up trigger; the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
+_Avoid_: Branch divergence (that's the branch versus its own remote, not the base), merge conflict (one reason integrating the base fails), stale branch (that's merely behind)
 
 **Workspace registry**:
 The loaded set of registered workspaces (and the failures from loading), built by folding workspace registration events. The engine's view of which repos it's driving.

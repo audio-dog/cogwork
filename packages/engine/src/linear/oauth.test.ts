@@ -7,6 +7,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { afterEach, vi } from "vitest";
 import {
   authorizeUrl,
+  clientCredentialsRequest,
   codeChallenge,
   decodeTokenResponse,
   discoverIdentity,
@@ -129,6 +130,22 @@ describe("linear oauth helpers", () => {
       redirect_uri: "http://localhost:39517/oauth/callback",
       code: "auth-code",
       code_verifier: "verifier-1",
+    });
+  });
+
+  it("builds a form-encoded client-credentials request carrying the secret", () => {
+    const grant = clientCredentialsRequest({
+      clientId: "client-1",
+      clientSecret: Redacted.make("s3cret"),
+      scopes: ["read", "write"],
+    });
+    assert.strictEqual(grant.url, "https://api.linear.app/oauth/token");
+    assert.strictEqual(grant.method, "POST");
+    assert.deepStrictEqual(Object.fromEntries(new URLSearchParams(grant.body)), {
+      grant_type: "client_credentials",
+      client_id: "client-1",
+      client_secret: "s3cret",
+      scope: "read,write",
     });
   });
 

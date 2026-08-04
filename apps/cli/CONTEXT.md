@@ -18,12 +18,16 @@ _Avoid_: Frontend. Note: the `worktree` subcommand embeds the engine directly ra
 The full composition of engine layers — registry, work source, ledger, harness, reconcile, executor, scheduler, RPC handlers — that the `daemon` command boots.
 _Avoid_: Daemon (the running process is the daemon; this is how it's assembled)
 
+**Stop signal**:
+A `SIGINT` or `SIGTERM` to the daemon process. The first one starts the engine's **drain** — the runtime interrupts the heartbeats and the drain runs as their shutdown finalizer, giving in-flight runs `--drain-grace` seconds to finish. A second stop signal ends that wait.
+_Avoid_: Kill, cancel
+
 **Config home**:
 The directory of `*.workspace.ts` files the daemon loads at startup to learn which workspaces to drive.
 _Avoid_: Config file, settings
 
 **Credential file**:
-Where stored OAuth credentials live on this machine — `~/.clanker-forge/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held.
+Where stored OAuth credentials live on this machine — `~/.clanker-forge/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held. This file is the CLI's half of the engine's credential store; the CLI also hands the store Linear's client-credentials grant, so a machine with no file can still authenticate from a secret in the environment.
 _Avoid_: Keychain, secret store (this is a plain file; a keychain-backed layer would be a different implementation of the same engine seam)
 
 **Watch**:

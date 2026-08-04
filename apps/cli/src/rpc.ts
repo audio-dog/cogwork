@@ -35,6 +35,7 @@ export interface DaemonOptions {
   readonly maxConcurrency: number;
   readonly dailyBudget: number;
   readonly pollIntervalMillis: number;
+  readonly drainGraceMillis: number;
 }
 
 const clearStaleSocket = (socketPath: string) =>

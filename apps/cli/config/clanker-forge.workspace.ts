@@ -2,8 +2,8 @@ import type { CursorModel } from "@clanker-forge/cursor-acp";
 import { defineWorkspace } from "@clanker-forge/engine";
 
 const triageModel = "composer-2.5" satisfies CursorModel;
-const implementModel = "claude-opus-5-thinking-high" satisfies CursorModel;
-const followUpModel = "claude-sonnet-5-thinking-medium" satisfies CursorModel;
+const implementModel = "claude-opus-4-8-thinking-high" satisfies CursorModel;
+const followUpModel = "composer-2.5" satisfies CursorModel;
 
 export default defineWorkspace({
   name: "clanker-forge",

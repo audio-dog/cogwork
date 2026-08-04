@@ -19,12 +19,24 @@ const applyUpdate = (record: RunRecord, update: RunUpdate): RunRecord => ({
   endedAtMillis: update.endedAtMillis,
 });
 
+const patchRun = (runs: ReadonlyArray<RunRecord>, runId: RunId, patch: (run: RunRecord) => RunRecord) =>
+  runs.map((run) => (run.id === runId ? patch(run) : run));
+
 const closeRunningUpdate = (record: RunRecord, endedAtMillis: number) => ({
   status: "failed" as const,
   session: record.session,
   usage: null,
   endedAtMillis,
 });
+
+const interrupted = (record: RunRecord, endedAtMillis: number): RunRecord => ({
+  ...record,
+  status: "interrupted",
+  endedAtMillis,
+});
+
+const stillRunning = (record: RunRecord, startedFromMillis: number) =>
+  record.status === "running" && record.startedAtMillis >= startedFromMillis;
 
 const latestRunWhere = (runs: ReadonlyArray<RunRecord>, match: (run: RunRecord) => boolean) =>
   [...runs]
@@ -55,7 +67,13 @@ export const makeMemory = Effect.gen(function* () {
     appendEvent: (runId: RunId, event: RunEvent) =>
       Ref.update(eventsRef, (events) => new Map(events).set(runId, [...(events.get(runId) ?? []), event])),
     updateRun: (runId: RunId, update: RunUpdate) =>
-      Ref.update(runsRef, (runs) => runs.map((run) => (run.id === runId ? applyUpdate(run, update) : run))),
+      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
+    interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
+      Ref.update(runsRef, (runs) =>
+        runs.map((run) => (stillRunning(run, startedFromMillis) ? interrupted(run, endedAtMillis) : run)),
+      ),
+    recordSession: (runId: RunId, session: SessionId) =>
+      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => ({ ...run, session }))),
     closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
       Ref.update(runsRef, (runs) =>
         runs.map((run) =>

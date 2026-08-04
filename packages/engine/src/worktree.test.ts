@@ -144,6 +144,19 @@ describe("Worktree.ensure", () => {
     }),
   );
 
+  it.effect("symlinks .repos from the checkout when it exists", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const fs = fakeFs(recorder, { "/repo/.repos": { mtimeMillis: 1 } });
+      const manager = yield* Effect.provide(Worktree.make, provide(fakeGit(recorder, {}), fs));
+      yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
+      const linked = yield* Ref.get(recorder.linked);
+      assert.deepStrictEqual(linked, [
+        { target: "/repo/.repos", linkPath: "/repo.worktrees/13-worktree-lifecycle/.repos" },
+      ]);
+    }),
+  );
+
   it.effect("fast-forwards an existing worktree instead of recreating it", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
