@@ -5,8 +5,8 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type { CredentialAccount } from "../CredentialStore";
-import { make } from "./clientCredentials";
+import type { CredentialAccount } from "../credential-store";
+import { make } from "./client-credentials";
 
 const secretEnv = "LINEAR_CLIENT_SECRET";
 

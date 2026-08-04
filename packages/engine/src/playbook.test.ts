@@ -13,7 +13,7 @@ import {
   resolveStage,
   resolveTriage,
   resolveTriageDecision,
-} from "./Playbook";
+} from "./playbook";
 
 const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
   Schema.decodeSync(WorkspaceConfig)({

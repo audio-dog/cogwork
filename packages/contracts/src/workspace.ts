@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from "./baseSchemas";
+import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from "./base-schemas";
 
 export const TriageRoleLabels = Schema.Struct({
   "needs-triage": Schema.optional(TrimmedNonEmptyString),

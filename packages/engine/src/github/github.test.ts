@@ -6,9 +6,9 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
-import type { FollowUpMarker } from "../followUp";
+import type { FollowUpMarker } from "../follow-up";
 import type { RegisteredWorkspace } from "../projector";
-import { WorkSource } from "../WorkSource";
+import { WorkSource } from "../work-source";
 import { layer as adapterLayer } from "./adapter";
 import {
   GitHubClient,

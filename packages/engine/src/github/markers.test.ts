@@ -1,6 +1,6 @@
 import type { AttemptRecord, Claim } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import type { FollowUpMarker } from "../followUp";
+import type { FollowUpMarker } from "../follow-up";
 import {
   attemptStatus,
   claimLabel,

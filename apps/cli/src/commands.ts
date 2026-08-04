@@ -11,7 +11,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { defaultConfigHome, defaultCredentialsPath, defaultLedgerPath, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatStatus } from "./status";
-import { secondStopSignal } from "./stopSignal";
+import { secondStopSignal } from "./stop-signal";
 import { flushWatch, initialWatchState, stepWatch } from "./watch";
 
 const socketFlag = Flag.string("socket").pipe(

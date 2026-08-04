@@ -11,9 +11,9 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, handoffRoleFor, maxAttemptsPerStage } from "./classify";
 import { agentFailureReason, attachCommand, handoffComment, prepareFailureReason } from "./comments";
-import type { FollowUpContext } from "./followUp";
-import type { GitError } from "./Git";
-import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./Harness";
+import type { FollowUpContext } from "./follow-up";
+import type { GitError } from "./git";
+import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./harness";
 import {
   buildFollowUpPrompt,
   buildImplementPrompt,
@@ -24,14 +24,14 @@ import {
   resolveStage,
   resolveTriageDecision,
   type TriageDecision,
-} from "./Playbook";
+} from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
-import { activityOf, RunEventBus } from "./RunEventBus";
-import { RunLedger } from "./RunLedger";
-import { decideResume } from "./resumePolicy";
-import { WorkSource, type WorkSourceError } from "./WorkSource";
-import { branchName, checkoutPathFor, type WorktreeDivergedError, WorktreeManager } from "./Worktree";
-import type { WorktreeFsError } from "./WorktreeFs";
+import { decideResume } from "./resume-policy";
+import { activityOf, RunEventBus } from "./run-event-bus";
+import { RunLedger } from "./run-ledger";
+import { WorkSource, type WorkSourceError } from "./work-source";
+import { branchName, checkoutPathFor, type WorktreeDivergedError, WorktreeManager } from "./worktree";
+import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError;
 
@@ -570,7 +570,7 @@ export const make = Effect.gen(function* () {
 });
 
 export class Executor extends Context.Service<Executor, Effect.Success<typeof make>>()(
-  "@clanker-forge/engine/Executor",
+  "@clanker-forge/engine/executor",
 ) {}
 
 export const layer = Layer.effect(Executor, make);

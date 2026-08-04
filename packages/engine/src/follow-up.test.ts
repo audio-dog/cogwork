@@ -5,7 +5,7 @@ import {
   noProgressCount,
   type ObservedPr,
   triggersFollowUp,
-} from "./followUp";
+} from "./follow-up";
 
 const pr = (over: Partial<ObservedPr> = {}): ObservedPr => ({
   review: "pending",

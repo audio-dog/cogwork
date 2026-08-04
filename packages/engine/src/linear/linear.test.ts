@@ -6,7 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "../classify";
 import type { RegisteredWorkspace } from "../projector";
-import { WorkSource, WorkSourceError } from "../WorkSource";
+import { WorkSource, WorkSourceError } from "../work-source";
 import { layer as adapterLayer } from "./adapter";
 import {
   type CoordinationScope,

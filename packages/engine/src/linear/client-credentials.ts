@@ -13,7 +13,7 @@ import {
   type CredentialAccount,
   CredentialError,
   expiryMarginMillis,
-} from "../CredentialStore";
+} from "../credential-store";
 import { clientCredentialsRequest, decodeTokenResponse } from "./oauth";
 
 class GrantKey extends Data.Class<{

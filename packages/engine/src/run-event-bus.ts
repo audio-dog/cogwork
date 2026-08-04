@@ -32,7 +32,7 @@ export const make = Effect.gen(function* () {
 export type RunEventBusService = Effect.Success<typeof make>;
 
 export class RunEventBus extends Context.Service<RunEventBus, RunEventBusService>()(
-  "@clanker-forge/engine/RunEventBus",
+  "@clanker-forge/engine/run-event-bus/RunEventBus",
 ) {}
 
 export const layer = Layer.effect(RunEventBus, make);

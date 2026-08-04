@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString } from "./baseSchemas";
+import { TrimmedNonEmptyString } from "./base-schemas";
 import { LifecycleStage } from "./triage";
 
 export const Claim = Schema.Struct({

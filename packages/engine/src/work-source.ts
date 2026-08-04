@@ -9,10 +9,10 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import type { FollowUpMarker, ObservedPr } from "./followUp";
+import type { FollowUpMarker, ObservedPr } from "./follow-up";
 import type { RegisteredWorkspace } from "./projector";
 
-export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./followUp";
+export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
 
 export interface ObservedItem {
   readonly id: WorkItemId;
@@ -86,7 +86,7 @@ export const makeEmpty = Effect.succeed({
 export type WorkSourceService = Effect.Success<typeof makeEmpty>;
 
 export class WorkSource extends Context.Service<WorkSource, WorkSourceService>()(
-  "@clanker-forge/engine/WorkSource",
+  "@clanker-forge/engine/work-source/WorkSource",
 ) {}
 
 export const emptyLayer = Layer.effect(WorkSource, makeEmpty);

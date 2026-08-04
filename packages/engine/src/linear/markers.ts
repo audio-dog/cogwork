@@ -8,7 +8,7 @@ import {
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { statusReason } from "../comments";
-import type { FollowUpMarker } from "../followUp";
+import type { FollowUpMarker } from "../follow-up";
 
 const triageRoles = [
   "needs-triage",

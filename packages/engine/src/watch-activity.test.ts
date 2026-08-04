@@ -7,10 +7,10 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Daemon from "./Daemon";
-import * as RunEventBus from "./RunEventBus";
-import { activityOf } from "./RunEventBus";
-import * as RunLedger from "./RunLedger";
+import * as Daemon from "./daemon";
+import * as RunEventBus from "./run-event-bus";
+import { activityOf } from "./run-event-bus";
+import * as RunLedger from "./run-ledger";
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("example");

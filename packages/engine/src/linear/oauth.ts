@@ -13,7 +13,7 @@ import {
   type StoredToken,
   type TokenRefresh,
   type TokenRefreshRequest,
-} from "../CredentialStore";
+} from "../credential-store";
 
 // The GraphQL API only covers requests made with a token already in hand; getting that token is a
 // two-legged redirect + POST flow the SDK does not wrap, so these two endpoints stay hand-built.

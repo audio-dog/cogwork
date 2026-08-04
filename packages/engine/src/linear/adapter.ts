@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace } from "../projector";
-import { WorkSource, WorkSourceError, type WorkSourceService } from "../WorkSource";
+import { WorkSource, WorkSourceError, type WorkSourceService } from "../work-source";
 import {
   LinearClient,
   type LinearClientService,

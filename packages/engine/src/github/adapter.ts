@@ -12,7 +12,7 @@ import {
   WorkSource,
   WorkSourceError,
   type WorkSourceService,
-} from "../WorkSource";
+} from "../work-source";
 import {
   GitHubClient,
   type GitHubClientService,
