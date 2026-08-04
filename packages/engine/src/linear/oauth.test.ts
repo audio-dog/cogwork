@@ -3,12 +3,14 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { afterEach, vi } from "vitest";
 import {
   authorizeUrl,
   codeChallenge,
   decodeTokenResponse,
   discoverIdentity,
+  exchangeToken,
   makePkce,
   makeState,
   redirectUri,
@@ -160,6 +162,52 @@ describe("linear oauth helpers", () => {
     Effect.gen(function* () {
       const { access_token: _omitted, ...body } = tokenBody;
       yield* Effect.flip(decodeTokenResponse(body));
+    }),
+  );
+
+  const exchangeParams = {
+    clientId: "client-1",
+    redirectUri: redirectUri(39_517),
+    code: "auth-code",
+    verifier: "verifier-1",
+  };
+
+  const bodyText = (body: BodyInit | null | undefined) =>
+    typeof body === "string" ? body : body instanceof Uint8Array ? new TextDecoder().decode(body) : "";
+
+  const withFetch =
+    (impl: typeof globalThis.fetch) =>
+    <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(Effect.provide(FetchHttpClient.layer), Effect.provideService(FetchHttpClient.Fetch, impl));
+
+  it.effect("posts the code and decodes the token pair Linear returns", () =>
+    Effect.gen(function* () {
+      const calls: Array<{ readonly url: string; readonly body: string }> = [];
+      const response = yield* exchangeToken(exchangeParams).pipe(
+        withFetch((input, init) => {
+          calls.push({ url: String(input), body: bodyText(init?.body) });
+          return Promise.resolve(
+            new Response(JSON.stringify(tokenBody), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            }),
+          );
+        }),
+      );
+      assert.strictEqual(response.access_token, "linear-access-token");
+      assert.strictEqual(calls[0]?.url, "https://api.linear.app/oauth/token");
+      assert.include(calls[0]?.body ?? "", "code=auth-code");
+    }),
+  );
+
+  it.effect("reports a clear error when Linear rejects the token exchange", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        exchangeToken(exchangeParams).pipe(
+          withFetch(() => Promise.resolve(new Response("denied", { status: 400 }))),
+        ),
+      );
+      assert.include(error.message, "HTTP 400");
     }),
   );
 

@@ -5,6 +5,8 @@ import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { StoredToken } from "../CredentialStore";
 
 // The GraphQL API only covers requests made with a token already in hand; getting that token is a
@@ -109,6 +111,40 @@ export const TokenResponse = Schema.Struct({
 export type TokenResponse = typeof TokenResponse.Type;
 
 export const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse);
+
+export const exchangeToken = Effect.fn("linear.oauth.exchangeToken")(function* (params: TokenExchangeParams) {
+  const client = yield* HttpClient.HttpClient;
+  const request = tokenExchangeRequest(params);
+  const response = yield* client
+    .execute(
+      HttpClientRequest.post(request.url).pipe(
+        HttpClientRequest.setHeaders(request.headers),
+        HttpClientRequest.bodyText(request.body, request.headers["content-type"]),
+      ),
+    )
+    .pipe(
+      Effect.catchTag("HttpClientError", (error) =>
+        Effect.fail(
+          new LinearOAuthError({ message: `Linear token exchange could not reach Linear: ${error.message}` }),
+        ),
+      ),
+    );
+  if (response.status >= 400) {
+    return yield* new LinearOAuthError({
+      message: `Linear rejected the token exchange (HTTP ${response.status})`,
+    });
+  }
+  const body = yield* response.json.pipe(
+    Effect.catchTag("HttpClientError", () =>
+      Effect.fail(new LinearOAuthError({ message: "Linear token exchange returned an unreadable body" })),
+    ),
+  );
+  return yield* decodeTokenResponse(body).pipe(
+    Effect.mapError(
+      () => new LinearOAuthError({ message: "Linear token exchange returned an unexpected shape" }),
+    ),
+  );
+});
 
 const scopesOf = (scope: TokenResponse["scope"]) =>
   typeof scope === "string" ? scope.split(/[\s,]+/).filter((entry) => entry.length > 0) : scope;

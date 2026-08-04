@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Command from "effect/unstable/cli/Command";
 import { daemonCommand, runEventsCommand, runsCommand, statusCommand, watchCommand } from "./commands";
+import { loginCommand } from "./loginCommands";
 import { worktreeCommand } from "./worktreeCommands";
 
 const cli = Command.make("clanker-forge").pipe(
@@ -14,6 +15,7 @@ const cli = Command.make("clanker-forge").pipe(
     runEventsCommand,
     watchCommand,
     worktreeCommand,
+    loginCommand,
   ]),
 );
 
