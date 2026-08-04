@@ -175,6 +175,23 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("records a session on a run that has not reached a terminal status", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        const id = runId("in-flight");
+        yield* ledger.insertRun(record("in-flight", 7000, { branch: "11-mid-run" }));
+        yield* ledger.recordSession(id, session);
+
+        const inFlight = yield* ledger.getRun(id);
+        assert.strictEqual(inFlight?.session, "sess-abc");
+        assert.strictEqual(inFlight?.status, "running");
+        assert.isNull(inFlight?.endedAtMillis);
+
+        const byBranch = yield* ledger.latestRunByBranch("gh", "11-mid-run");
+        assert.strictEqual(byBranch?.id, id);
+      }),
+    );
+
     it.effect("collapses absent token usage fields to omitted keys", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.RunLedger;

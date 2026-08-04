@@ -113,6 +113,23 @@ describe("RunLedger (memory)", () => {
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 
+  it.effect("records a session on a run that has not reached a terminal status", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      const id = runId("run-1");
+      yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export" }));
+      yield* ledger.recordSession(id, session);
+
+      const inFlight = yield* ledger.getRun(id);
+      assert.strictEqual(inFlight?.session, "sess-abc");
+      assert.strictEqual(inFlight?.status, "running");
+      assert.isNull(inFlight?.endedAtMillis);
+
+      const byBranch = yield* ledger.latestRunByBranch("gh", "7-fix-export");
+      assert.strictEqual(byBranch?.id, id);
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
   it.effect("orders runs newest first", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger;

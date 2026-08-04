@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import type { RunEvent, RunId, RunRecord, TokenUsage } from "@clanker-forge/contracts";
+import type { RunEvent, RunId, RunRecord, SessionId, TokenUsage } from "@clanker-forge/contracts";
 import {
   RunEvent as RunEventSchema,
   RunRecord as RunRecordSchema,
@@ -220,6 +220,11 @@ const make = (ledgerPath: string) =>
             .set({ status: "interrupted", endedAt: endedAtMillis })
             .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
             .run();
+        }),
+
+      recordSession: (runId: RunId, session: SessionId) =>
+        write("recordSession", () => {
+          db.update(runs).set({ session }).where(eq(runs.id, runId)).run();
         }),
 
       closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>

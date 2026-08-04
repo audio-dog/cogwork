@@ -12,6 +12,7 @@ export type TriageRoleLabels = typeof TriageRoleLabels.Type;
 
 export const OAuthAppConfig = Schema.Struct({
   clientId: TrimmedNonEmptyString,
+  clientSecretEnv: Schema.optional(TrimmedNonEmptyString),
   redirectPort: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThan(65536))),
 });
 export type OAuthAppConfig = typeof OAuthAppConfig.Type;

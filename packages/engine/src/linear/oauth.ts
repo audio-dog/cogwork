@@ -97,6 +97,27 @@ export const tokenExchangeRequest = (params: TokenExchangeParams) =>
     }).toString(),
   }) satisfies FormRequest;
 
+export interface ClientCredentialsParams {
+  readonly clientId: string;
+  readonly clientSecret: Redacted.Redacted<string>;
+  readonly scopes?: ReadonlyArray<string>;
+}
+
+// The grant mints an `app`-actor token on its own, so unlike the authorize URL it takes no `actor`
+// parameter; Linear rejects the request outright unless the app has client-credentials enabled.
+export const clientCredentialsRequest = (params: ClientCredentialsParams) =>
+  ({
+    url: tokenEndpoint,
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: params.clientId,
+      client_secret: Redacted.value(params.clientSecret),
+      scope: (params.scopes ?? defaultScopes).join(","),
+    }).toString(),
+  }) satisfies FormRequest;
+
 const Scopes = Schema.Union([Schema.String, Schema.Array(Schema.String)]);
 
 export const TokenResponse = Schema.Struct({

@@ -1,6 +1,8 @@
 import { HarnessName, type TokenUsage, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -58,7 +60,7 @@ const implementItem = {
 
 const implementBranch = branchName(implementItem);
 
-const implementEvents: ReadonlyArray<HarnessEvent> = [
+const implementStreamEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
   { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
   {
@@ -69,8 +71,18 @@ const implementEvents: ReadonlyArray<HarnessEvent> = [
     usage: null,
     finishReason: null,
   },
-  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
 ];
+
+const implementFinished: HarnessEvent = {
+  type: "RUN_FINISHED",
+  name: null,
+  text: null,
+  sessionId: null,
+  usage,
+  finishReason: "stop",
+};
+
+const implementEvents: ReadonlyArray<HarnessEvent> = [...implementStreamEvents, implementFinished];
 
 const stuckImplementEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
@@ -84,6 +96,15 @@ const stuckImplementEvents: ReadonlyArray<HarnessEvent> = [
   },
   { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
 ];
+
+const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
+  name: cursor,
+  run: () =>
+    Stream.concat(
+      Stream.fromArray(implementStreamEvents),
+      Stream.unwrap(Deferred.await(release).pipe(Effect.map(() => Stream.fromArray([implementFinished])))),
+    ),
+});
 
 const noSentinelImplementEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
@@ -191,11 +212,14 @@ const runner = (events: ReadonlyArray<HarnessEvent>): HarnessRunner => ({
 const capturingRunner = (
   requests: Ref.Ref<ReadonlyArray<HarnessRequest>>,
   events: ReadonlyArray<HarnessEvent>,
+  tail: Stream.Stream<HarnessEvent, HarnessError> = Stream.empty,
 ): HarnessRunner => ({
   name: cursor,
   run: (request) =>
     Stream.unwrap(
-      Ref.update(requests, (xs) => [...xs, request]).pipe(Effect.map(() => Stream.fromArray(events))),
+      Ref.update(requests, (xs) => [...xs, request]).pipe(
+        Effect.map(() => Stream.concat(Stream.fromArray(events), tail)),
+      ),
     ),
 });
 
@@ -510,6 +534,65 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("ledgers the session while the run is still in flight", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const release = yield* Deferred.make<void>();
+      const layer = provide(recorder(calls), [gatedRunner(release)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        const bus = yield* RunEventBus.RunEventBus;
+        const subscription = yield* bus.subscribe();
+        const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+
+        yield* Stream.fromSubscription(subscription).pipe(
+          Stream.filter((item) => item.event.text !== null),
+          Stream.runHead,
+        );
+
+        const [inFlight] = yield* ledger.listRuns(10);
+        assert.strictEqual(inFlight?.status, "running");
+        assert.strictEqual(inFlight?.session, "sess-42");
+        assert.isNull(inFlight?.endedAtMillis);
+
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(running);
+
+        const [finished] = yield* ledger.listRuns(10);
+        assert.strictEqual(finished?.status, "succeeded");
+        assert.strictEqual(finished?.session, "sess-42");
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
+
+  it.effect("ledgers the newest session when the harness starts a fresh one mid-run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const restarted: ReadonlyArray<HarnessEvent> = [
+        ...implementStreamEvents,
+        {
+          type: "CUSTOM",
+          name: "session",
+          text: null,
+          sessionId: "sess-99",
+          usage: null,
+          finishReason: null,
+        },
+        implementFinished,
+      ];
+      const layer = provide(recorder(calls), [runner(restarted)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.session, "sess-99");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("resumes the branch's persisted session on a later implement run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
@@ -523,6 +606,30 @@ describe("Executor.execute", () => {
         const captured = yield* Ref.get(requests);
         assert.strictEqual(captured.length, 2);
         assert.isNull(captured[0]?.sessionId ?? null);
+        assert.strictEqual(captured[1]?.sessionId, "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("keeps the session of a run the harness failed mid-stream so the retry resumes it", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const error = new HarnessError({ reason: "turn", retryable: true, message: "network blip" });
+      const layer = provide(recorder(calls), [
+        capturingRunner(requests, implementStreamEvents, Stream.fail(error)),
+      ]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "failed");
+        assert.strictEqual(run?.session, "sess-42");
+
+        yield* executor.execute(implementWorkspace, implementItem);
+        const captured = yield* Ref.get(requests);
         assert.strictEqual(captured[1]?.sessionId, "sess-42");
       }).pipe(Effect.provide(layer));
     }),
