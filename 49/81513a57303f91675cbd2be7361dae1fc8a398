@@ -1,0 +1,53 @@
+packages/engine/src/playbook.ts
+  s_4c027fa7f80076::t_acf482b5b92fa4 66
+  s_4c027fa7f80076::t_ecdeaa5b0c73c8 4,19
+packages/contracts/src/mcp-skill.ts
+  s_4c027fa7f80076::t_15e119ea7a3707 1-8
+packages/contracts/src/index.ts
+  s_4c027fa7f80076::t_b6e282e0ade630 5
+packages/cursor-acp/src/harness.ts
+  s_4c027fa7f80076::t_a78df314bddd17 31
+  s_4c027fa7f80076::t_4024bfb93045d5 12
+  s_4c027fa7f80076::t_56e6e214807b48 32-33
+  s_4c027fa7f80076::t_9415cc51d2d5fb 2
+  s_4c027fa7f80076::t_7f41560c9299c1 172,176-179
+packages/cursor-acp/src/harness.test.ts
+  s_4c027fa7f80076::t_204b28bfc19c31 1-18
+packages/engine/src/harness.ts
+  s_4c027fa7f80076::t_5a65c4551bc6a0 1
+  s_4c027fa7f80076::t_a2c98736dc61c6 16
+packages/engine/src/playbook.test.ts
+  s_4c027fa7f80076::t_093b6d89c17ae6 118-133
+packages/engine/src/executor.test.ts
+  s_4c027fa7f80076::t_c0fc9f4e0af1ec 547
+  s_4c027fa7f80076::t_5c7e04d5b07b59 61-72
+  s_4c027fa7f80076::t_8c4e53e362508e 568-584
+packages/contracts/src/workspace.ts
+  s_4c027fa7f80076::t_00858d15c017b5 90
+  s_4c027fa7f80076::t_2345cbc750cf6e 10
+packages/engine/src/executor.ts
+  s_4c027fa7f80076::t_17f1b6d0d3a0c7 65
+packages/cursor-acp/probe-mcp.ts
+  s_4c027fa7f80076::t_54f9ea76ce331e 1-4,6,8-27,30-32,34-38,40-85
+  s_4c027fa7f80076::t_8dd76dc2c8ec14 28-29,33
+  s_4c027fa7f80076::t_ec030ca8a2e2c9 39
+  s_4c027fa7f80076::t_6d87436561ef71 5,7
+packages/cursor-acp/package.json
+  s_4c027fa7f80076::t_2d1c9d22b7219c 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "4981513a57303f91675cbd2be7361dae1fc8a398",
+  "prompts": {},
+  "sessions": {
+    "s_4c027fa7f80076": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2a524fe2-745d-43e0-8bcd-d3804e461bcb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
