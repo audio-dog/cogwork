@@ -1,0 +1,141 @@
+packages/engine/src/scheduler.ts
+  s_886cba8e172cc2::t_a8507cf451ae3c 446
+  s_886cba8e172cc2::t_f32f16f11116b5 19-21,23-27
+packages/engine/src/harness.ts
+  s_886cba8e172cc2::t_6f19717e2bf51c 33
+packages/engine/src/worktree.ts
+  s_886cba8e172cc2::t_065fc870105d0f 281
+  s_886cba8e172cc2::t_81788698179412 5,7
+packages/engine/src/run-event-bus.ts
+  s_886cba8e172cc2::t_144d3c034fbaff 35
+packages/engine/AGENTS.md
+  s_886cba8e172cc2::t_fea4b2b890b5b4 11
+packages/sync/CONTEXT.md
+  s_886cba8e172cc2::t_9f0a2d2fb9b63f 17
+CONTEXT-MAP.md
+  s_886cba8e172cc2::t_061876ea9cebb9 56
+packages/sync/skills/README.md
+  s_886cba8e172cc2::t_97663b53fb7aaa 13
+packages/engine/src/worktree-fs.ts
+  s_886cba8e172cc2::t_464d40f51a2c58 27
+packages/engine/src/registry.ts
+  s_886cba8e172cc2::t_84e3b0bfdcd76c 21
+packages/engine/src/git.ts
+  s_886cba8e172cc2::t_c5a9e47ccf7e4c 53
+packages/engine/src/executor.ts
+  s_886cba8e172cc2::t_3858e548c85b36 572
+  s_886cba8e172cc2::t_463af42423dfe5 14-16,27,29-34,573
+packages/engine/src/credential-store.ts
+  s_886cba8e172cc2::t_9146f430b9dfe4 109
+packages/engine/src/run-ledger.ts
+  s_886cba8e172cc2::t_6ad5f5d7f3687f 136
+packages/engine/src/work-source.ts
+  s_886cba8e172cc2::t_fc08d4b7423483 89
+  s_886cba8e172cc2::t_8e9ef4a85687fd 12,15
+packages/engine/src/reconcile.ts
+  s_886cba8e172cc2::t_afcb65df9dc11f 228
+  s_886cba8e172cc2::t_08c6ca6b900cde 19-20
+README.md
+  s_886cba8e172cc2::t_35eba07a23a430 84
+packages/engine/src/daemon.ts
+  s_886cba8e172cc2::t_440eafc7e0733f 25
+  s_886cba8e172cc2::t_760ba973b13605 17-22
+biome.json
+  s_886cba8e172cc2::t_1a2918841ed636 19-27
+apps/cli/src/commands.ts
+  s_886cba8e172cc2::t_fd121a3a34dbf6 14
+apps/cli/src/main.ts
+  s_886cba8e172cc2::t_d748a7403ad752 9-10
+apps/cli/src/stop-signal.test.ts
+  s_886cba8e172cc2::t_057f54aaa52a4b 6
+packages/contracts/src/coordination.ts
+  s_886cba8e172cc2::t_7521ce03cb8adf 2
+packages/contracts/src/daemon.ts
+  s_886cba8e172cc2::t_5ef3fc010aeaf0 2
+packages/contracts/src/events.ts
+  s_886cba8e172cc2::t_3f1678be59625b 2
+packages/contracts/src/index.ts
+  s_886cba8e172cc2::t_00922bb3952d5d 1,8
+packages/contracts/src/run.ts
+  s_886cba8e172cc2::t_de61ee95f9bac5 2
+packages/contracts/src/work-item.ts
+  s_886cba8e172cc2::t_dcdd2a826c1a02 2
+packages/contracts/src/workspace.ts
+  s_886cba8e172cc2::t_ad1795899b011b 3
+packages/engine/src/classify.test.ts
+  s_886cba8e172cc2::t_0d3fb3832aff03 5-6
+packages/engine/src/classify.ts
+  s_886cba8e172cc2::t_3ea4ce4b551986 11-12
+packages/engine/src/credential-store.test.ts
+  s_886cba8e172cc2::t_76626fde3a0479 22
+packages/engine/src/engine.test.ts
+  s_886cba8e172cc2::t_a0243466ead1e7 12-20
+packages/engine/src/executor.test.ts
+  s_886cba8e172cc2::t_7db22ac7028a22 10-11,18,20-23
+packages/engine/src/follow-up.test.ts
+  s_886cba8e172cc2::t_db4cbc03157c83 8
+packages/engine/src/github/adapter.ts
+  s_886cba8e172cc2::t_06dbc8c68cdb2c 15
+packages/engine/src/github/client.ts
+  s_886cba8e172cc2::t_a43dc83c1b3df6 16
+packages/engine/src/github/github.test.ts
+  s_886cba8e172cc2::t_55dbd50c8f6eb3 9,11
+packages/engine/src/github/markers.test.ts
+  s_886cba8e172cc2::t_026313c1c83cf5 3
+packages/engine/src/github/markers.ts
+  s_886cba8e172cc2::t_a9dab9c2f80d92 5
+packages/engine/src/index.ts
+  s_886cba8e172cc2::t_f7f58e4caf66d1 1-5,7,9-18
+packages/engine/src/linear/adapter.ts
+  s_886cba8e172cc2::t_4d7caf7c3e9a4a 6
+packages/engine/src/linear/client-credentials.test.ts
+  s_886cba8e172cc2::t_ff382efd74c137 8-9
+packages/engine/src/linear/client-credentials.ts
+  s_886cba8e172cc2::t_e9c188c8b25c72 16
+packages/engine/src/linear/client.test.ts
+  s_886cba8e172cc2::t_2e4b71b20a8c76 9
+packages/engine/src/linear/client.ts
+  s_886cba8e172cc2::t_d8066e2c3c70fc 17-18
+packages/engine/src/linear/index.ts
+  s_886cba8e172cc2::t_9ae69537c5f7cf 8
+packages/engine/src/linear/linear.test.ts
+  s_886cba8e172cc2::t_f6f1c02c4e5232 9
+packages/engine/src/linear/markers.ts
+  s_886cba8e172cc2::t_ad85b487d05914 11
+packages/engine/src/linear/oauth.ts
+  s_886cba8e172cc2::t_1e832aeeed729a 16
+packages/engine/src/playbook.test.ts
+  s_886cba8e172cc2::t_28f665b5318260 16
+packages/engine/src/resume-policy.test.ts
+  s_886cba8e172cc2::t_7b869fb0f3ed19 4
+packages/engine/src/run-ledger.test.ts
+  s_886cba8e172cc2::t_d78fcb7b76531f 12
+packages/engine/src/scheduler.test.ts
+  s_886cba8e172cc2::t_bdc7decad782a0 21,23-28
+packages/engine/src/watch-activity.test.ts
+  s_886cba8e172cc2::t_da738d63561ff2 10-13
+packages/engine/src/work-source-router.test.ts
+  s_886cba8e172cc2::t_55ca1bec65c05d 6-7
+packages/engine/src/work-source-router.ts
+  s_886cba8e172cc2::t_77cc28887fa22f 8
+packages/engine/src/worktree-naming.test.ts
+  s_886cba8e172cc2::t_8d5096cbadd81d 2
+packages/engine/src/worktree.test.ts
+  s_886cba8e172cc2::t_57defcdd81864d 15-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "b3bb25e52dc343870b1f2b001457b13a245f1de8",
+  "prompts": {},
+  "sessions": {
+    "s_886cba8e172cc2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5fe8cf54-d4f1-41bf-b837-7244bc6ab582",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
