@@ -1,0 +1,16 @@
+apps/cli/config/feldspar.workspace.ts
+  h_46518a29d4dd91 5-6,28-30
+apps/cli/config/clanker-forge.workspace.ts
+  h_46518a29d4dd91 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "69a2796ee267b1936fad31b30123a969ee42715a",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
