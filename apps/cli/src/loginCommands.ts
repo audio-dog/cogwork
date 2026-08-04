@@ -76,7 +76,10 @@ const runLogin = (options: {
     yield* Console.log(`Logged in to Linear org "${result.organization}" as bot ${result.botUserId}.`);
   }).pipe(
     Effect.provide(
-      Layer.mergeAll(credentialsLayer(options.credentials), browserOpenerLayer, FetchHttpClient.layer),
+      browserOpenerLayer.pipe(
+        Layer.provideMerge(credentialsLayer(options.credentials)),
+        Layer.provide(FetchHttpClient.layer),
+      ),
     ),
     Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
   );

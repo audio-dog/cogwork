@@ -76,7 +76,10 @@ describe("login linear", () => {
           Layer.mergeAll(
             Layer.effect(
               CredentialStore.CredentialStore,
-              Effect.map(makeFileStore(filePath), CredentialStore.make),
+              Effect.gen(function* () {
+                const stored = yield* makeFileStore(filePath);
+                return CredentialStore.make({ stored });
+              }),
             ),
             fakeBrowser,
             FetchHttpClient.layer,
