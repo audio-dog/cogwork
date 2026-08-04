@@ -9,7 +9,9 @@ The headless implementation playbook the daemon runs for an `implement` job. The
 
 The **work source** is whatever ticket provider this workspace is bound to (GitHub, GitLab, Linear, …). Speak in terms of the ticket, and link your pull request back to it with that provider's convention (see [step 4](#4-commit-and-open-the-pr)).
 
-The engine has already done the setup for you: you are in a **worktree on a fresh branch dedicated to this ticket**, cut from the current base branch. Do not create or switch branches — build on the one you are on.
+The engine has already done the setup for you: you are in a **worktree on a fresh branch dedicated to this ticket**, cut from the current base branch. **The engine owns that branch — it creates and names it, and you must never create, rename, or switch branches.** Build on the one you are on.
+
+This is not a style preference. The source control provider links your pull request back to the ticket by the branch's prefix — `ticketSlug(item.id)`, the stable head the engine cut — so a branch you rename or replace is a PR the daemon can no longer find. The engine also enforces the naming with a branch-name guard, so an off-convention branch is a hard error, not a quiet mismatch. Leave the branch to the engine and spend your changes on the code.
 
 ## Authority boundary
 

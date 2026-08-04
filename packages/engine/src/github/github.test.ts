@@ -179,7 +179,7 @@ const observeItems = (workspace: RegisteredWorkspace) =>
     return yield* observeWorkspace(tracker, provider)(workspace);
   });
 
-const pull = (over: Partial<RawPull> & { readonly number: number; readonly body: string }): RawPull => ({
+const pull = (over: Partial<RawPull> & { readonly number: number; readonly headRef: string }): RawPull => ({
   authorLogin: "clanker-forge[bot]",
   authorAssociation: "MEMBER",
   draft: false,
@@ -219,7 +219,7 @@ describe("github work source adapter", () => {
             { number: 5, title: "in review", labels: ["ready-for-agent"] },
             { number: 100, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 100, body: "Closes #5" })],
+          pulls: [pull({ number: 100, headRef: "5-in-review" })],
           comments: [
             {
               issue: 5,
@@ -248,7 +248,7 @@ describe("github work source adapter", () => {
             { number: 6, title: "conflicting", labels: ["ready-for-agent"] },
             { number: 103, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 103, body: "Closes #6" })],
+          pulls: [pull({ number: 103, headRef: "6-conflicting" })],
           comments: [
             {
               issue: 6,
@@ -274,7 +274,7 @@ describe("github work source adapter", () => {
             { number: 9, title: "behind but clean", labels: ["ready-for-agent"] },
             { number: 104, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 104, body: "Closes #9" })],
+          pulls: [pull({ number: 104, headRef: "9-behind-but-clean" })],
           comments: [
             {
               issue: 9,
@@ -403,7 +403,7 @@ describe("github work source adapter", () => {
             { number: 5, title: "in review", labels: ["ready-for-agent"] },
             { number: 100, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 100, body: "Closes #5" })],
+          pulls: [pull({ number: 100, headRef: "5-in-review" })],
           comments: [
             {
               issue: 100,
@@ -457,13 +457,13 @@ describe("github work source adapter", () => {
               number: 200,
               authorLogin: "taylorfsteele",
               authorAssociation: "OWNER",
-              body: "Closes #20",
+              headRef: "20-owned",
             }),
             pull({
               number: 201,
               authorLogin: "taylorfsteele",
               authorAssociation: "OWNER",
-              body: "Closes #21",
+              headRef: "21-unowned",
             }),
           ],
           comments: [
@@ -474,6 +474,55 @@ describe("github work source adapter", () => {
             },
           ],
           reviews: [{ pull: 200, state: "CHANGES_REQUESTED" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("resolves the PR by the branch prefix, preferring exact branch, then bot, then newest", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      // On each item only the branch the tie-break should pick carries a changes-requested review;
+      // the rest are approved. So a changes-requested result proves we picked the intended branch.
+      assert.strictEqual(items.find((item) => item.id === "#40")?.pr?.review, "changes-requested");
+      assert.strictEqual(items.find((item) => item.id === "#41")?.pr?.review, "changes-requested");
+      assert.strictEqual(items.find((item) => item.id === "#42")?.pr?.review, "changes-requested");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 40, title: "pick me", labels: ["ready-for-agent"] },
+            { number: 41, title: "bot beats newest", labels: ["ready-for-agent"] },
+            { number: 42, title: "newest wins", labels: ["ready-for-agent"] },
+          ],
+          pulls: [
+            pull({ number: 300, headRef: "40-stale" }),
+            pull({
+              number: 301,
+              headRef: "40-pick-me",
+              authorLogin: "taylorfsteele",
+              authorAssociation: "OWNER",
+            }),
+            pull({ number: 302, headRef: "40-newer" }),
+            pull({ number: 310, headRef: "41-a" }),
+            pull({ number: 311, headRef: "41-b", authorLogin: "taylorfsteele", authorAssociation: "OWNER" }),
+            pull({ number: 320, headRef: "42-a" }),
+            pull({ number: 321, headRef: "42-b" }),
+          ],
+          comments: [40, 41, 42].map((issue) => ({
+            issue,
+            authorLogin: bot.login,
+            body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+          })),
+          reviews: [
+            { pull: 300, state: "APPROVED" },
+            { pull: 301, state: "CHANGES_REQUESTED" },
+            { pull: 302, state: "APPROVED" },
+            { pull: 310, state: "CHANGES_REQUESTED" },
+            { pull: 311, state: "APPROVED" },
+            { pull: 320, state: "APPROVED" },
+            { pull: 321, state: "CHANGES_REQUESTED" },
+          ],
         }),
       ),
     ),
@@ -495,7 +544,7 @@ describe("github work source adapter", () => {
             { number: 205, title: "fork pr", labels: [], isPullRequest: true },
           ],
           pulls: [
-            pull({ number: 205, authorLogin: "drive-by", authorAssociation: "NONE", body: "Closes #25" }),
+            pull({ number: 205, authorLogin: "drive-by", authorAssociation: "NONE", headRef: "25-hostile" }),
           ],
           comments: [
             {
@@ -527,7 +576,7 @@ describe("github work source adapter", () => {
             { number: 26, title: "owned bot pr, hostile review", labels: ["ready-for-agent"] },
             { number: 206, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 206, body: "Closes #26" })],
+          pulls: [pull({ number: 206, headRef: "26-hostile-review" })],
           comments: [
             {
               issue: 26,
@@ -556,7 +605,7 @@ describe("github work source adapter", () => {
             { number: 22, title: "inline review", labels: ["ready-for-agent"] },
             { number: 202, title: "human pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 202, authorLogin: "taylorfsteele", body: "Closes #22" })],
+          pulls: [pull({ number: 202, authorLogin: "taylorfsteele", headRef: "22-inline-review" })],
           comments: [
             {
               issue: 22,
@@ -598,8 +647,8 @@ describe("github work source adapter", () => {
             { number: 204, title: "human pr", labels: [], isPullRequest: true },
           ],
           pulls: [
-            pull({ number: 203, authorLogin: "taylorfsteele", body: "Closes #23" }),
-            pull({ number: 204, authorLogin: "taylorfsteele", body: "Closes #24" }),
+            pull({ number: 203, authorLogin: "taylorfsteele", headRef: "23-review-with-body" }),
+            pull({ number: 204, authorLogin: "taylorfsteele", headRef: "24-empty-review" }),
           ],
           comments: [23, 24].map((issue) => ({
             issue,
@@ -902,7 +951,7 @@ describe("github work source adapter", () => {
             { number: 19, title: "legacy follow-up", labels: ["ready-for-agent"] },
             { number: 102, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 102, body: "Closes #19" })],
+          pulls: [pull({ number: 102, headRef: "19-legacy-follow-up" })],
           comments: [
             {
               issue: 19,
@@ -950,7 +999,7 @@ describe("github work source adapter", () => {
             { number: 18, title: "in review", labels: ["ready-for-agent"] },
             { number: 101, title: "bot pr", labels: [], isPullRequest: true },
           ],
-          pulls: [pull({ number: 101, body: "Closes #18" })],
+          pulls: [pull({ number: 101, headRef: "18-in-review" })],
         }),
       ),
     ),

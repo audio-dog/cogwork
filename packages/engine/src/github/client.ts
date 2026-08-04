@@ -35,9 +35,9 @@ export interface RawPull {
   readonly number: number;
   readonly authorLogin: string;
   readonly authorAssociation: string;
-  readonly body: string;
   readonly draft: boolean;
   readonly headSha: string;
+  readonly headRef: string;
 }
 
 export interface RawComment {
@@ -81,9 +81,8 @@ const IssueSchema = Schema.Struct({
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
   user: Schema.Struct({ login: Schema.String }),
-  body: Schema.NullOr(Schema.String),
   draft: Schema.optional(Schema.Boolean),
-  head: Schema.Struct({ sha: Schema.String }),
+  head: Schema.Struct({ sha: Schema.String, ref: Schema.String }),
   author_association: Schema.optional(Schema.String),
 });
 
@@ -332,9 +331,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
             number: pull.number,
             authorLogin: pull.user.login,
             authorAssociation: pull.author_association ?? "NONE",
-            body: pull.body ?? "",
             draft: pull.draft ?? false,
             headSha: pull.head.sha,
+            headRef: pull.head.ref,
           }),
         );
       }),

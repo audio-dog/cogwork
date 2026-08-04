@@ -23,7 +23,7 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
 export const observeWorkspace = (tracker: WorkSourceService, provider: SourceControlProviderService) =>
   Effect.fn("observeWorkspace")(function* (workspace: RegisteredWorkspace) {
     const items = yield* tracker.observe(workspace);
-    const owned = items.flatMap((item) => (item.owned ? [item.id] : []));
+    const owned = items.flatMap((item) => (item.owned ? [{ id: item.id, title: item.title }] : []));
     const signals = yield* provider.observe(workspace, owned);
     return items.map((item) => composed(item, signals));
   });
