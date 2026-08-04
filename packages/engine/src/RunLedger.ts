@@ -19,6 +19,9 @@ const applyUpdate = (record: RunRecord, update: RunUpdate): RunRecord => ({
   endedAtMillis: update.endedAtMillis,
 });
 
+const patchRun = (runs: ReadonlyArray<RunRecord>, runId: RunId, patch: (run: RunRecord) => RunRecord) =>
+  runs.map((run) => (run.id === runId ? patch(run) : run));
+
 const closeRunningUpdate = (record: RunRecord, endedAtMillis: number) => ({
   status: "failed" as const,
   session: record.session,
@@ -55,7 +58,9 @@ export const makeMemory = Effect.gen(function* () {
     appendEvent: (runId: RunId, event: RunEvent) =>
       Ref.update(eventsRef, (events) => new Map(events).set(runId, [...(events.get(runId) ?? []), event])),
     updateRun: (runId: RunId, update: RunUpdate) =>
-      Ref.update(runsRef, (runs) => runs.map((run) => (run.id === runId ? applyUpdate(run, update) : run))),
+      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
+    recordSession: (runId: RunId, session: SessionId) =>
+      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => ({ ...run, session }))),
     closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
       Ref.update(runsRef, (runs) =>
         runs.map((run) =>

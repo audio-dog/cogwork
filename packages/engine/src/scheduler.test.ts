@@ -1,4 +1,12 @@
-import { type LifecycleStage, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import {
+  HarnessName,
+  type LifecycleStage,
+  RunId,
+  type RunRecord,
+  SessionId,
+  WorkItemId,
+  WorkspaceConfig,
+} from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -252,9 +260,9 @@ const schedulerLayer = (
         workerLayer(deps.snapshots),
         Layer.succeed(Executor.Executor, { execute: deps.execute }),
         workSourceStub(deps.workSource ?? {}),
-        RunLedger.layerMemory,
       ),
     ),
+    Layer.provideMerge(RunLedger.layerMemory),
   );
 
 describe("Scheduler.tick", () => {
@@ -419,6 +427,20 @@ describe("Scheduler.tick", () => {
 
 describe("Scheduler.recover", () => {
   const wsA = workspaceOf("a");
+  const interruptedRun: RunRecord = {
+    id: Schema.decodeSync(RunId)("run-1"),
+    workspace: wsA.config.name,
+    workItem: id("#1"),
+    stage: "implement",
+    harness: Schema.decodeSync(HarnessName)("cursor"),
+    branch: "1-ours",
+    session: null,
+    usage: null,
+    status: "running",
+    startedAtMillis: 1,
+    endedAtMillis: null,
+  };
+  const session = Schema.decodeSync(SessionId)("sess-abc");
   const claimedByUs: ObservedItem = {
     id: id("#1"),
     title: "ours",
@@ -469,6 +491,43 @@ describe("Scheduler.recover", () => {
         assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
         assert.deepStrictEqual(yield* Ref.get(attempts), [{ item: id("#1"), reason: recoveryReason }]);
         assert.deepStrictEqual(yield* Ref.get(notes), []);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("hands an exhausted recovery the session its run persisted before the daemon died", () =>
+    Effect.gen(function* () {
+      const exhausted: ObservedItem = {
+        ...claimedByUs,
+        attempts: [
+          { stage: "implement", outcome: "failed", atMillis: 1 },
+          { stage: "implement", outcome: "failed", atMillis: 2 },
+        ],
+      };
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([exhausted]),
+        release: () => Effect.void,
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+        setRoles: () => Effect.void,
+      };
+      const snapshots = yield* snapshotRef([]);
+      yield* Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(interruptedRun);
+        yield* ledger.recordSession(interruptedRun.id, session);
+
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+
+        assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'sess-abc'");
       }).pipe(
         Effect.provide(
           schedulerLayer(
