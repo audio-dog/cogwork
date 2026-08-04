@@ -67,6 +67,12 @@ const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
 const remoteOf = (config?: WorktreeSettings) => config?.remote ?? "origin";
 const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main";
 
+const defaultLinkPaths = [".repos"] as const;
+
+const linkPathsFor = (config?: WorktreeSettings) => [
+  ...new Set([...defaultLinkPaths, ...(config?.linkEnvFiles ?? [])]),
+];
+
 export interface EnsuredWorktree {
   readonly branch: string;
   readonly path: string;
@@ -111,7 +117,7 @@ export const make = Effect.gen(function* () {
   const pathFor = (repoPath: string, config: WorktreeSettings | undefined, branch: string) =>
     worktreePathFor(worktreeRoot(repoPath, config), branch);
 
-  const linkEnv = Effect.fn("Worktree.linkEnv")(function* (
+  const linkPath = Effect.fn("Worktree.linkPath")(function* (
     repoPath: string,
     worktreePath: string,
     relative: string,
@@ -127,13 +133,9 @@ export const make = Effect.gen(function* () {
     worktreePath: string,
     config?: WorktreeSettings,
   ) {
-    yield* Effect.forEach(
-      config?.linkEnvFiles ?? [],
-      (relative) => linkEnv(repoPath, worktreePath, relative),
-      {
-        discard: true,
-      },
-    );
+    yield* Effect.forEach(linkPathsFor(config), (relative) => linkPath(repoPath, worktreePath, relative), {
+      discard: true,
+    });
     yield* Effect.forEach(config?.setup ?? [], (command) => fs.runCommand(worktreePath, command), {
       discard: true,
     });
