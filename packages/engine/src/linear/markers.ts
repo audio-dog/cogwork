@@ -65,7 +65,7 @@ export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(
 
 const linePattern = (name: string) => new RegExp(`^clanker-forge:${name}(?:\\s+(.*))?$`, "gm");
 
-const ledgerLine = "clanker-forge:ledger";
+export const ledgerMarker = "clanker-forge:ledger";
 const detailLine = "clanker-forge:detail";
 const ledgerPattern = /^clanker-forge:ledger\s*$/m;
 const detailPattern = /^clanker-forge:detail\s*$/m;
@@ -152,7 +152,7 @@ export const coordinationDetail = (body: string) => orNull(after(body, detailPat
 export const coordinationMarkers = (body: string) =>
   [...coordinationRegion(body).matchAll(coordinationMarkerPattern)]
     .map((match) => match[0])
-    .filter((marker) => marker !== ledgerLine && !marker.startsWith(detailLine));
+    .filter((marker) => marker !== ledgerMarker && !marker.startsWith(detailLine));
 
 interface CoordinationBody {
   readonly status: string;
@@ -168,4 +168,4 @@ const detailSection = (detail: string | null) => {
 export const formatNoteBody = (detail: string) => orNull(stripMarkerLines(detail)) ?? "";
 
 export const formatCoordinationBody = ({ status, markers, detail }: CoordinationBody) =>
-  [attribution, "", status, "", ledgerLine, ...markers, ...detailSection(detail)].join("\n");
+  [attribution, "", status, "", ledgerMarker, ...markers, ...detailSection(detail)].join("\n");

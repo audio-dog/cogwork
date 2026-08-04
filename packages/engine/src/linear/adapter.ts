@@ -4,7 +4,14 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace } from "../projector";
 import { WorkSource, WorkSourceError, type WorkSourceService } from "../WorkSource";
-import { LinearClient, type LinearClientService, type LinearTeamRef, type RawComment } from "./client";
+import {
+  LinearClient,
+  type LinearClientService,
+  type LinearTeamRef,
+  type ObservedRawIssue,
+  type RawComment,
+  rateLimitScopeOf,
+} from "./client";
 import {
   attemptStatus,
   canceledStateName,
@@ -18,6 +25,7 @@ import {
   formatNoteBody,
   hasClaimLabel,
   hasLedgerMarker,
+  ledgerMarker,
   parseAttempts,
   parseClaim,
   roleLabel,
@@ -41,6 +49,9 @@ interface CoordinationUpdate {
 
 const isBotComment = (comment: RawComment, { botUserId }: LinearTarget) =>
   Boolean(botUserId) && comment.authorId === botUserId;
+
+const coordinationScope = ({ botUserId }: LinearTarget) =>
+  botUserId === null ? null : { botUserId, ledgerMarker };
 
 const botLedger = (comments: ReadonlyArray<RawComment>, target: LinearTarget) =>
   comments
@@ -106,17 +117,9 @@ const make = (client: LinearClientService): WorkSourceService => {
   });
 
   const buildItem = (target: LinearTarget) =>
-    Effect.fn("linear.buildItem")(function* (issue: {
-      readonly id: string;
-      readonly identifier: string;
-      readonly title: string;
-      readonly labels: ReadonlyArray<string>;
-      readonly stateName: string;
-      readonly stateType: string;
-    }) {
+    Effect.fn("linear.buildItem")(function* (issue: ObservedRawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
-      const comments = target.botUserId ? yield* client.listComments(target, issue.identifier) : [];
-      const coordination = botLedger(comments, target)?.body ?? "";
+      const coordination = botLedger(issue.coordinationComments, target)?.body ?? "";
       const id = yield* itemId(issue.identifier);
       return {
         id,
@@ -126,11 +129,12 @@ const make = (client: LinearClientService): WorkSourceService => {
         claim: claimLabeled ? parseClaim(coordination) : null,
         attempts: parseAttempts(coordination),
         pr: null,
+        openBlockers: 0,
       };
     });
 
   const observeTarget = Effect.fn("linear.observeTarget")(function* (target: LinearTarget) {
-    const issues = yield* client.listIssues(target);
+    const issues = yield* client.observeIssues(target, coordinationScope(target));
     return yield* Effect.forEach(issues, buildItem(target));
   });
 
@@ -149,6 +153,10 @@ const make = (client: LinearClientService): WorkSourceService => {
   });
 
   return {
+    rateLimitScope: (workspace) => {
+      const target = targetFor(workspace);
+      return target === null ? null : rateLimitScopeOf(target.tokenEnv);
+    },
     observe: (workspace) =>
       Effect.gen(function* () {
         const target = targetFor(workspace);
