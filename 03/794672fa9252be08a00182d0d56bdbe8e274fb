@@ -1,0 +1,43 @@
+packages/engine/CONTEXT.md
+  s_c1e789a7b61134::t_83caef1b929cb2 29
+  s_c1e789a7b61134::t_7af475b73113c4 17
+  s_c1e789a7b61134::t_c6b02efa59cd33 77
+  s_c1e789a7b61134::t_e6bdaa385ed3f0 105
+  s_c1e789a7b61134::t_f160e483b3fe76 85
+  s_c1e789a7b61134::t_8924a9757a5376 41
+  s_c1e789a7b61134::t_f3548028614381 89
+  s_c1e789a7b61134::t_34777622f24013 21
+  s_c1e789a7b61134::t_6b1ec7f6e522c5 64-70
+  s_c1e789a7b61134::t_64b9234960d47d 73
+packages/contracts/CONTEXT.md
+  s_c1e789a7b61134::t_a889bb41e290f2 11-17,20-25,28
+  s_c1e789a7b61134::t_b62658040cbd00 52,56
+  s_c1e789a7b61134::t_098b73d93e34d8 72
+  s_c1e789a7b61134::t_5eeddf1a3a5cbe 42
+  s_c1e789a7b61134::t_9bef6f6d2cad4f 69
+  s_c1e789a7b61134::t_16b544e449dbe8 62
+CONTEXT-MAP.md
+  s_c1e789a7b61134::t_fd3b2fa347ba92 30
+  s_c1e789a7b61134::t_e46a305d7f0306 47-48
+  s_c1e789a7b61134::t_b67098bbb619c1 35
+  s_c1e789a7b61134::t_af85a4c402dee1 16
+  s_c1e789a7b61134::t_aee8cf9dc44bed 40
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_c1e789a7b61134::t_7f7d7836e6bedf 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "03794672fa9252be08a00182d0d56bdbe8e274fb",
+  "prompts": {},
+  "sessions": {
+    "s_c1e789a7b61134": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "271f1909-7607-40f6-82e3-c28dc7b2ccdc",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
