@@ -2,6 +2,7 @@ import type { RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts
 import { RunId, SessionId } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -42,13 +43,22 @@ interface RunAccumulator {
   readonly usage: TokenUsage | null;
 }
 
+const emptyAccumulator: RunAccumulator = { text: "", session: null, usage: null };
+
 interface StageOps {
   readonly resolved: ResolvedStage;
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
   readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, WorkSourceError>;
   readonly handoffRole: TriageRole | null;
+  readonly fullPrompt: string;
+  readonly resumeSession: SessionId | null;
 }
+
+class SessionRestarted extends Data.TaggedError("SessionRestarted")<{
+  readonly session: SessionId;
+  readonly nextSeq: number;
+}> {}
 
 const harnessRequest = (
   resolved: ResolvedStage,
@@ -61,6 +71,12 @@ const harnessRequest = (
   prompt,
   model: resolved.model,
   effort: resolved.effort,
+  sessionId,
+});
+
+const withPrompt = (request: HarnessRequest, prompt: string, sessionId: SessionId): HarnessRequest => ({
+  ...request,
+  prompt,
   sessionId,
 });
 
@@ -206,13 +222,52 @@ export const make = Effect.gen(function* () {
     return mergeEvent(acc, event, session);
   });
 
-  const foldRun = Effect.fn("Executor.foldRun")(function* (record: RunRecord, request: HarnessRequest) {
-    const initial: RunAccumulator = { text: "", session: null, usage: null };
-    return yield* Stream.runFoldEffect(
+  const foldStream = <E, R>(
+    request: HarnessRequest,
+    step: (acc: RunAccumulator, event: HarnessEvent, index: number) => Effect.Effect<RunAccumulator, E, R>,
+  ) =>
+    Stream.runFoldEffect(
       Stream.zipWithIndex(withFailureTerminal(harness.run(request))),
-      () => initial,
-      (acc: RunAccumulator, [event, seq]: readonly [HarnessEvent, number]) =>
-        foldEvent(record, acc, seq, event),
+      () => emptyAccumulator,
+      (acc: RunAccumulator, [event, index]: readonly [HarnessEvent, number]) => step(acc, event, index),
+    );
+
+  const foldRun = Effect.fn("Executor.foldRun")(function* (
+    record: RunRecord,
+    request: HarnessRequest,
+    startSeq: number,
+  ) {
+    return yield* foldStream(request, (acc, event, index) => foldEvent(record, acc, index + startSeq, event));
+  });
+
+  const guardResume = (prev: RunAccumulator, next: RunAccumulator, index: number, expected: SessionId) =>
+    prev.session === null && next.session !== null && next.session !== expected
+      ? Effect.fail(new SessionRestarted({ session: next.session, nextSeq: index + 1 }))
+      : Effect.succeed(next);
+
+  const foldResume = Effect.fn("Executor.foldResume")(function* (
+    record: RunRecord,
+    request: HarnessRequest,
+    expected: SessionId,
+  ) {
+    return yield* foldStream(request, (acc, event, index) =>
+      foldEvent(record, acc, index, event).pipe(
+        Effect.flatMap((next) => guardResume(acc, next, index, expected)),
+      ),
+    );
+  });
+
+  const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
+    record: RunRecord,
+    ops: StageOps,
+    request: HarnessRequest,
+  ) {
+    const expected = ops.resumeSession;
+    if (!expected) return yield* foldRun(record, request, 0);
+    return yield* foldResume(record, request, expected).pipe(
+      Effect.catchTag("SessionRestarted", (restart) =>
+        foldRun(record, withPrompt(request, ops.fullPrompt, restart.session), restart.nextSeq),
+      ),
     );
   });
 
@@ -351,36 +406,37 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     resolved: ResolvedStage,
     branch: string,
+    prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
-    return harnessRequest(
-      resolved,
-      worktree.path,
-      buildImplementPrompt(resolved, item),
-      last?.session ?? null,
-    );
+    return harnessRequest(resolved, worktree.path, prompt, last?.session ?? null);
   });
 
-  const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) =>
-    ({
+  const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+    const fullPrompt = buildTriagePrompt(resolved, item);
+    return {
       resolved,
       branch: null,
-      prepare: Effect.succeed(
-        harnessRequest(resolved, workspace.config.checkoutPath, buildTriagePrompt(resolved, item), null),
-      ),
+      prepare: Effect.succeed(harnessRequest(resolved, workspace.config.checkoutPath, fullPrompt, null)),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
       handoffRole: handoffRoleFor("triage"),
-    }) satisfies StageOps;
+      fullPrompt,
+      resumeSession: null,
+    } satisfies StageOps;
+  };
 
   const implementOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
     const branch = branchName(item);
+    const fullPrompt = buildImplementPrompt(resolved, item);
     return {
       resolved,
       branch,
-      prepare: prepareImplement(workspace, item, resolved, branch),
+      prepare: prepareImplement(workspace, item, resolved, branch, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
       handoffRole: handoffRoleFor("implement"),
+      fullPrompt,
+      resumeSession: null,
     } satisfies StageOps;
   };
 
@@ -434,6 +490,7 @@ export const make = Effect.gen(function* () {
     resolved: ResolvedStage,
     branch: string,
     context: FollowUpContext,
+    prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
@@ -451,7 +508,7 @@ export const make = Effect.gen(function* () {
     return harnessRequest(
       resolved,
       worktree.path,
-      buildFollowUpPrompt(resolved, item, workspace.config.linearHistory),
+      prompt,
       decision.kind === "resume" ? decision.sessionId : null,
     );
   });
@@ -459,12 +516,15 @@ export const make = Effect.gen(function* () {
   const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
     const branch = branchName(item);
     const context = item.followUp ?? defaultFollowUp;
+    const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {
       resolved,
       branch,
-      prepare: prepareFollowUp(workspace, item, resolved, branch, context),
+      prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
       handoffRole: handoffRoleFor("follow-up"),
+      fullPrompt,
+      resumeSession: null,
     } satisfies StageOps;
   };
 
@@ -512,7 +572,11 @@ export const make = Effect.gen(function* () {
     const ops = stageOps(workspace, item, resolved);
     const session = item.resume?.session;
     if (!session) return ops;
-    return { ...ops, prepare: resumePrepare(workspace, item, resolved, session) };
+    return {
+      ...ops,
+      prepare: resumePrepare(workspace, item, resolved, session),
+      resumeSession: session,
+    } satisfies StageOps;
   };
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
@@ -539,7 +603,8 @@ export const make = Effect.gen(function* () {
     const outcome = yield* Effect.result(
       ops.prepare.pipe(
         Effect.flatMap(
-          (request): Effect.Effect<RunAccumulator, PrepareError | HarnessError> => foldRun(record, request),
+          (request): Effect.Effect<RunAccumulator, PrepareError | HarnessError> =>
+            foldOutcome(record, ops, request),
         ),
       ),
     );
