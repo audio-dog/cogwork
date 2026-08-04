@@ -12,9 +12,10 @@ import {
   type EligibleWork,
   handoffRoleFor,
   maxAttemptsPerStage,
+  maxCrashesPerItem,
   observedStage,
 } from "./classify";
-import { attachCommand, handoffComment, recoveryReason } from "./comments";
+import { attachCommand, type HandoffCause, handoffComment, recoveryReason } from "./comments";
 import { claimant, Executor } from "./Executor";
 import { followUpContext } from "./followUp";
 import { runnable } from "./Playbook";
@@ -245,26 +246,30 @@ export const make = (config: SchedulerConfig) =>
       return { inFlight, interrupted } satisfies DrainOutcome;
     });
 
-    const handoffRecovery = Effect.fn("Scheduler.handoffRecovery")(function* (
+    const escalateToHuman = Effect.fn("Scheduler.escalateToHuman")(function* (
+      workspace: RegisteredWorkspace,
+      item: ObservedItem,
+      stage: LifecycleStage,
+      cause: HandoffCause,
+      session: string | null | undefined,
+    ) {
+      const role = handoffRoleFor(stage);
+      const checkout = checkoutForStage(workspace, item, stage);
+      const resume = session ? attachCommand(checkout, session) : undefined;
+      yield* workSource.setRoles(workspace, item.id, {
+        remove: role ? [role] : [],
+        add: ["ready-for-human"],
+      });
+      yield* workSource.note(workspace, item.id, handoffComment(stage, cause, recoveryReason, resume));
+    });
+
+    const handoffRecovery = (
       workspace: RegisteredWorkspace,
       item: ObservedItem,
       stage: LifecycleStage,
       attempts: number,
       session: string | null | undefined,
-    ) {
-      const role = handoffRoleFor(stage);
-      const checkout = checkoutForStage(workspace, item, stage);
-      const resume = session === null || session === undefined ? undefined : attachCommand(checkout, session);
-      yield* workSource.setRoles(workspace, item.id, {
-        remove: role ? [role] : [],
-        add: ["ready-for-human"],
-      });
-      yield* workSource.note(
-        workspace,
-        item.id,
-        handoffComment(stage, { kind: "max-attempts", attempts }, recoveryReason, resume),
-      );
-    });
+    ) => escalateToHuman(workspace, item, stage, { kind: "max-attempts", attempts }, session);
 
     const recordRecovery = Effect.fn("Scheduler.recordRecovery")(function* (
       workspace: RegisteredWorkspace,
@@ -291,6 +296,21 @@ export const make = (config: SchedulerConfig) =>
       );
       if (!exhausted) return;
       yield* handoffRecovery(workspace, item, stage, attempts, session);
+    });
+
+    const releaseClaim = Effect.fn("Scheduler.releaseClaim")(function* (
+      workspace: RegisteredWorkspace,
+      item: ObservedItem,
+    ) {
+      yield* workSource.release(workspace, item.id).pipe(
+        Effect.catchTag("WorkSourceError", (error) =>
+          Effect.logWarning("claim release failed", {
+            workspace: workspace.config.name,
+            item: item.id,
+            message: error.message,
+          }),
+        ),
+      );
     });
 
     const recoverStale = Effect.fn("Scheduler.recoverStale")(function* (
@@ -321,21 +341,14 @@ export const make = (config: SchedulerConfig) =>
             );
           });
       yield* recover;
-      yield* workSource.release(workspace, item.id).pipe(
-        Effect.catchTag("WorkSourceError", (error) =>
-          Effect.logWarning("claim release failed", {
-            workspace: workspace.config.name,
-            item: item.id,
-            message: error.message,
-          }),
-        ),
-      );
+      yield* releaseClaim(workspace, item);
     });
 
-    const resumeInterrupted = Effect.fn("Scheduler.resumeInterrupted")(function* (
+    const reschedule = Effect.fn("Scheduler.reschedule")(function* (
       workspace: RegisteredWorkspace,
       item: ObservedItem,
       stage: LifecycleStage,
+      reason: "interrupted" | "crashed",
     ) {
       const work = eligibleFromObserved(item, stage);
       const candidate: Candidate = {
@@ -344,13 +357,46 @@ export const make = (config: SchedulerConfig) =>
         workspaceLimit: workspace.config.concurrency ?? config.globalLimit,
         keys: keysFor(workspace, work),
       };
-      yield* Effect.logInfo("rescheduled interrupted run", {
+      yield* Effect.logInfo("rescheduled resumable run", {
         workspace: workspace.config.name,
         item: item.id,
         stage,
+        reason,
       });
       yield* Ref.update(stateRef, (state) => reserve(state, candidate));
       yield* FiberSet.run(jobs, runJob(candidate));
+    });
+
+    const handoffCrashLoop = Effect.fn("Scheduler.handoffCrashLoop")(function* (
+      workspace: RegisteredWorkspace,
+      item: ObservedItem,
+      stage: LifecycleStage,
+      crashes: number,
+      session: string | null | undefined,
+    ) {
+      yield* Effect.logWarning("crash loop capped", {
+        workspace: workspace.config.name,
+        item: item.id,
+        stage,
+        crashes,
+      });
+      yield* escalateToHuman(workspace, item, stage, { kind: "crash-loop", crashes }, session);
+      yield* releaseClaim(workspace, item);
+    });
+
+    const recoverCrashed = Effect.fn("Scheduler.recoverCrashed")(function* (
+      workspace: RegisteredWorkspace,
+      item: ObservedItem,
+      stage: LifecycleStage,
+      session: string | null | undefined,
+    ) {
+      const endedAtMillis = yield* Clock.currentTimeMillis;
+      yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
+      const crashes = yield* ledger.consecutiveCrashes(workspace.config.name, item.id);
+      if (crashes < maxCrashesPerItem) {
+        return yield* reschedule(workspace, item, stage, "crashed");
+      }
+      yield* handoffCrashLoop(workspace, item, stage, crashes, session);
     });
 
     const recoverItem = Effect.fn("Scheduler.recoverItem")(function* (
@@ -359,8 +405,11 @@ export const make = (config: SchedulerConfig) =>
     ) {
       const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
       const stage = observedStage(item);
-      if (last?.status === "interrupted" && stage) {
-        return yield* resumeInterrupted(workspace, item, stage);
+      if (stage && last?.status === "interrupted") {
+        return yield* reschedule(workspace, item, stage, "interrupted");
+      }
+      if (stage && last?.status === "running") {
+        return yield* recoverCrashed(workspace, item, stage, last.session);
       }
       yield* recoverStale(workspace, item, stage, last?.session);
     });
