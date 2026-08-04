@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { AgUiEvent } from "./ag-ui";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { LifecycleStage } from "./triage";
 
@@ -34,16 +35,6 @@ export const RunEvent = Schema.Struct({
 });
 export type RunEvent = typeof RunEvent.Type;
 
-export const HarnessEvent = Schema.Struct({
-  type: Schema.String,
-  name: Schema.NullOr(Schema.String),
-  text: Schema.NullOr(Schema.String),
-  sessionId: Schema.NullOr(Schema.String),
-  usage: Schema.NullOr(TokenUsage),
-  finishReason: Schema.NullOr(Schema.String),
-});
-export type HarnessEvent = typeof HarnessEvent.Type;
-
 export const RunRecord = Schema.Struct({
   id: RunId,
   workspace: WorkspaceId,
@@ -72,6 +63,6 @@ export const RunActivity = Schema.Struct({
   stage: LifecycleStage,
   seq: Schema.Natural,
   atMillis: Schema.Natural,
-  event: HarnessEvent,
+  event: AgUiEvent,
 });
 export type RunActivity = typeof RunActivity.Type;
