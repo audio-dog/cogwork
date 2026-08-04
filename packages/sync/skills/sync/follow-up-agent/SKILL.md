@@ -7,7 +7,9 @@ description: Headless follow-up playbook for the orchestration daemon's follow-u
 
 The headless follow-up playbook the daemon runs for a `follow-up` job. There is **no human in the session** — the daemon's prompt is a thin invoker that names this skill and the work item. A pull request that resolves the work item already exists; your job is to move it forward, not to open a new one.
 
-The engine triggers a follow-up when the bot PR has **failing required checks**, a **new human comment / changes-requested review**, or a **base that has diverged** — the branch and `main` both moved and now conflict, so the PR can no longer merge. It has already placed you in the **worktree on that PR's branch** and, when it was safe to, resumed the prior session so you keep the context you built while implementing. Do not create or switch branches — build on the one you are on and push there.
+The engine triggers a follow-up when the bot PR has **failing required checks**, a **new human comment / changes-requested review**, or a **base that has diverged** — the branch and `main` both moved and now conflict, so the PR can no longer merge. It has already placed you in the **worktree on that PR's branch** and, when it was safe to, resumed the prior session so you keep the context you built while implementing. **The engine owns this branch — never create, rename, or switch branches;** build on the one you are on and push there.
+
+This matters as much on follow-up as on the first implement: the PR is linked to the work item by the branch's prefix — `ticketSlug(item.id)`, the stable head the engine cut — so renaming or replacing the branch strands the PR where the next reconcile can't find it. The engine enforces the naming with a branch-name guard, so an off-convention branch is a hard error rather than a silent orphan.
 
 ## Authority boundary
 

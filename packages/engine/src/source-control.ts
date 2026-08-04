@@ -10,12 +10,19 @@ import type { WorkSourceError } from "./work-source";
 // tracker's coordination state, not the PR's, so it is attached during composition rather than here.
 export type PrSignals = Omit<ObservedPr, "followUp">;
 
+// The title is here, not just the id, because the exact-branch tie-break needs the full
+// `branchName(item)` and not only its `ticketSlug` prefix.
+export interface OwnedItem {
+  readonly id: WorkItemId;
+  readonly title: string;
+}
+
 export interface SourceControlProviderService {
   // Given the items the tracker considers daemon-owned, resolve each one's pull request and report
   // its state. Returns signals only for the owned items whose PR passes the trusted-author gate.
   readonly observe: (
     workspace: RegisteredWorkspace,
-    owned: ReadonlyArray<WorkItemId>,
+    owned: ReadonlyArray<OwnedItem>,
   ) => Effect.Effect<ReadonlyMap<WorkItemId, PrSignals>, WorkSourceError>;
 }
 

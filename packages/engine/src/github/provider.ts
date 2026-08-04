@@ -1,11 +1,16 @@
-import { WorkItemId } from "@clanker-forge/contracts";
+import type { WorkItemId } from "@clanker-forge/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 import { checkState } from "../ci";
 import type { BaseDivergence, PrReview } from "../follow-up";
 import type { RegisteredWorkspace } from "../projector";
-import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
+import {
+  type OwnedItem,
+  type PrSignals,
+  SourceControlProvider,
+  type SourceControlProviderService,
+} from "../source-control";
+import { branchName, ticketSlug } from "../worktree";
 import {
   GitHubClient,
   type GitHubClientService,
@@ -45,12 +50,11 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
   return targetFromRepo(source.repo, source.tokenEnv, source.botLogin);
 };
 
-const closingPattern = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i;
-
-export const linkedIssue = (body: string) => {
-  const match = body.match(closingPattern);
-  return match?.[1] ? Number.parseInt(match[1], 10) : null;
-};
+// The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.
+// A PR belongs to the item when its head branch is that slug or a `slug-…` extension of it — the `-`
+// keeps `12` from swallowing `120`, mirroring the worktree reaper's ownership check.
+export const branchBelongsToSlug = (headRef: string, slug: string) =>
+  headRef === slug || headRef.startsWith(`${slug}-`);
 
 export const baseDivergenceOf = (mergeableState: string | null): BaseDivergence => {
   if (mergeableState === "dirty") return "conflict";
@@ -109,9 +113,6 @@ export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botLogin: 
   };
 };
 
-const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
-const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
-
 const make = (client: GitHubClientService): SourceControlProviderService => {
   const observePr = Effect.fn("github.observePr")(function* (target: GitHubTarget, pull: RawPull) {
     const [checks, comments, reviewComments, reviews, mergeableState] = yield* Effect.all([
@@ -142,29 +143,43 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   const daemonPull = (target: GitHubTarget, pull: RawPull) =>
     pull.authorLogin === target.botLogin || writeAccess.has(pull.authorAssociation);
 
-  const pullsByIssue = (target: GitHubTarget, pulls: ReadonlyArray<RawPull>) =>
-    pulls.reduce((byIssue, pull) => {
-      const issue = linkedIssue(pull.body);
-      if (issue === null || !daemonPull(target, pull)) return byIssue;
-      const existing = byIssue.get(issue);
-      if (existing && existing.authorLogin === target.botLogin) return byIssue;
-      return new Map(byIssue).set(issue, pull);
-    }, new Map<number, RawPull>());
+  // The final key is the PR number: the higher number is the newer PR, since GitHub numbers them in
+  // creation order.
+  const rank = (target: GitHubTarget, branch: string, pull: RawPull) =>
+    [pull.headRef === branch ? 1 : 0, pull.authorLogin === target.botLogin ? 1 : 0, pull.number] as const;
+
+  const outranks = (target: GitHubTarget, branch: string, a: RawPull, b: RawPull) => {
+    const [aExact, aBot, aNumber] = rank(target, branch, a);
+    const [bExact, bBot, bNumber] = rank(target, branch, b);
+    if (aExact !== bExact) return aExact > bExact;
+    if (aBot !== bBot) return aBot > bBot;
+    return aNumber > bNumber;
+  };
+
+  const linkedPull = (target: GitHubTarget, item: OwnedItem, trusted: ReadonlyArray<RawPull>) => {
+    const slug = ticketSlug(item.id);
+    const branch = branchName(item);
+    const better = (best: RawPull | null, pull: RawPull) => {
+      if (!branchBelongsToSlug(pull.headRef, slug)) return best;
+      if (best === null) return pull;
+      return outranks(target, branch, pull, best) ? pull : best;
+    };
+    return trusted.reduce<RawPull | null>(better, null);
+  };
 
   const observeOwned = Effect.fn("github.observeOwned")(function* (
     target: GitHubTarget,
-    owned: ReadonlyArray<WorkItemId>,
+    owned: ReadonlyArray<OwnedItem>,
   ) {
-    const ownedNumbers = new Set(owned.map((id) => Number.parseInt(id.replace(/^#/, ""), 10)));
     const pulls = yield* client.listPulls(target);
-    const byIssue = pullsByIssue(target, pulls);
+    const trusted = pulls.filter((pull) => daemonPull(target, pull));
+    const matches = owned.flatMap((item) => {
+      const pull = linkedPull(target, item, trusted);
+      return pull ? [[item.id, pull] as const] : [];
+    });
     const entries = yield* Effect.forEach(
-      [...byIssue].filter(([issue]) => ownedNumbers.has(issue)),
-      ([issue, pull]) =>
-        Effect.map(
-          Effect.all([itemId(issue), observePr(target, pull)]),
-          ([id, signals]) => [id, signals] as const,
-        ),
+      matches,
+      ([id, pull]) => Effect.map(observePr(target, pull), (signals) => [id, signals] as const),
       { concurrency: 10 },
     );
     return new Map<WorkItemId, PrSignals>(entries);
