@@ -5,7 +5,9 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "../classify";
+import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
+import * as SourceControl from "../source-control";
 import { WorkSource, WorkSourceError } from "../work-source";
 import { layer as adapterLayer } from "./adapter";
 import {
@@ -208,7 +210,18 @@ const customRolesWorkspace: RegisteredWorkspace = {
 };
 
 const withClient = (seed: Seed) =>
-  adapterLayer.pipe(Layer.provideMerge(Layer.effect(LinearClient, fakeClient(seed))));
+  Layer.mergeAll(adapterLayer, SourceControl.emptyLayer).pipe(
+    Layer.provideMerge(Layer.effect(LinearClient, fakeClient(seed))),
+  );
+
+// A Linear tracker with no source control provider still composes the poll — the provider just
+// reports no pull request, so every item observes `pr: null`.
+const observeItems = (workspace: RegisteredWorkspace) =>
+  Effect.gen(function* () {
+    const tracker = yield* WorkSource;
+    const provider = yield* SourceControl.SourceControlProvider;
+    return yield* observeWorkspace(tracker, provider)(workspace);
+  });
 
 const botComments = (comments: ReadonlyArray<RawComment>) =>
   comments.filter((comment) => comment.authorId === bot.id);
@@ -216,8 +229,7 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
 describe("linear work source adapter", () => {
   it.effect("holds a ready-for-agent ticket with an open blocker out of the eligible set", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       assert.strictEqual(items.find((item) => item.id === "AUD-30")?.openBlockers, 1);
       assert.strictEqual(items.find((item) => item.id === "AUD-31")?.openBlockers, 0);
       const { eligible, blocked } = classify(items);
@@ -245,8 +257,7 @@ describe("linear work source adapter", () => {
 
   it.effect("derives the actionable set from state: labels and Canceled workflow state", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const { eligible, needsHuman, claimed } = classify(items);
       assert.deepStrictEqual(
         eligible.map((entry) => [entry.id, entry.stage]),
@@ -292,8 +303,7 @@ describe("linear work source adapter", () => {
 
   it.effect("uses configured role label strings instead of hardcoded defaults", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(customRolesWorkspace);
+      const items = yield* observeItems(customRolesWorkspace);
       const { eligible } = classify(items);
       assert.deepStrictEqual(
         eligible.map((entry) => entry.id),
@@ -323,7 +333,7 @@ describe("linear work source adapter", () => {
       assert.strictEqual(comments.length, 1);
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
       assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "AUD-7");
       assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
       assert.deepStrictEqual(observed?.attempts, [attempt]);
@@ -363,8 +373,7 @@ describe("linear work source adapter", () => {
 
   it.effect("ignores a claim line forged by a non-bot commenter", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "AUD-8");
       assert.isNull(observed?.claim ?? null);
       const { eligible, claimed } = classify(items);
@@ -420,7 +429,7 @@ describe("linear work source adapter", () => {
       assert.include(proposal?.body ?? "", "Recommending `ready-for-agent`.");
       assert.include(proposal?.body ?? "", "> *This was posted by clanker-forge.*");
       assert.isTrue(hasLedgerMarker(coordination?.body ?? ""));
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "AUD-11");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-11");
       assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5 });
     }).pipe(
       Effect.provide(
@@ -433,8 +442,7 @@ describe("linear work source adapter", () => {
 
   it.effect("reads coordination state only from the coordination comment", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "AUD-12");
       assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5 });
       assert.deepStrictEqual(observed?.attempts, [{ stage: "triage", outcome: "failed", atMillis: 6 }]);
@@ -487,7 +495,7 @@ describe("linear work source adapter", () => {
         stage: "implement",
       });
       yield* source.release(workspace, id("AUD-7"));
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       assert.isNull(items.find((item) => item.id === "AUD-7")?.claim ?? null);
       assert.strictEqual(classify(items).eligible.length, 1);
     }).pipe(
@@ -523,8 +531,7 @@ describe("linear work source adapter", () => {
 
   it.effect("counts prior attempts and escalates past the cap even without the claim label", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "AUD-10");
       assert.strictEqual(observed?.attempts.length, 3);
       const { eligible, needsHuman } = classify(items);
@@ -565,8 +572,7 @@ describe("linear work source adapter", () => {
         labels: ["state:ready-for-agent"],
       }));
       yield* Effect.gen(function* () {
-        const source = yield* WorkSource;
-        const items = yield* source.observe(workspace);
+        const items = yield* observeItems(workspace);
         assert.strictEqual(items.length, 60);
         assert.strictEqual(yield* Ref.get(observeCalls), 1);
       }).pipe(Effect.provide(withClient({ issues: backlog, observeCalls })));
@@ -582,8 +588,7 @@ describe("linear work source adapter", () => {
 
   it.effect("surfaces auth failure as WorkSourceError reason auth", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const result = yield* Effect.result(source.observe(workspace));
+      const result = yield* Effect.result(observeItems(workspace));
       if (result._tag !== "Failure") {
         assert.fail("expected auth failure");
         return;

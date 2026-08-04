@@ -18,11 +18,13 @@ import {
 import { attachCommand, type HandoffCause, handoffComment, recoveryReason } from "./comments";
 import { claimant, Executor } from "./executor";
 import { followUpContext } from "./follow-up";
+import { observeWorkspace } from "./observe";
 import { runnable } from "./playbook";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
+import { SourceControlProvider } from "./source-control";
 import { type ObservedItem, WorkSource } from "./work-source";
 import { branchName, checkoutPathFor, ticketSlug } from "./worktree";
 
@@ -187,6 +189,8 @@ export const make = (config: SchedulerConfig) =>
     const worker = yield* ReconcileWorker;
     const executor = yield* Executor;
     const workSource = yield* WorkSource;
+    const provider = yield* SourceControlProvider;
+    const observe = observeWorkspace(workSource, provider);
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(initialState);
@@ -417,7 +421,7 @@ export const make = (config: SchedulerConfig) =>
     const recoverWorkspace = Effect.fn("Scheduler.recoverWorkspace")(function* (
       workspace: RegisteredWorkspace,
     ) {
-      const observed = yield* workSource.observe(workspace);
+      const observed = yield* observe(workspace);
       const owner = claimant(workspace);
       const claimedByUs = observed.filter((item) => item.claim?.by === owner);
       yield* Effect.forEach(claimedByUs, (item) => recoverItem(workspace, item), { discard: true });

@@ -1,6 +1,12 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { HarnessName, TrimmedNonEmptyString, WorkSourceType, WorkspaceId } from "./base-schemas";
+import {
+  HarnessName,
+  SourceControlType,
+  TrimmedNonEmptyString,
+  WorkSourceType,
+  WorkspaceId,
+} from "./base-schemas";
 
 export const TriageRoleLabels = Schema.Struct({
   "needs-triage": Schema.optional(TrimmedNonEmptyString),
@@ -30,6 +36,14 @@ export const WorkSourceConfig = Schema.Struct({
   roleLabels: Schema.optional(TriageRoleLabels),
 });
 export type WorkSourceConfig = typeof WorkSourceConfig.Type;
+
+export const SourceControlConfig = Schema.Struct({
+  type: SourceControlType,
+  repo: Schema.optional(TrimmedNonEmptyString),
+  tokenEnv: Schema.optional(TrimmedNonEmptyString),
+  botLogin: Schema.optional(TrimmedNonEmptyString),
+});
+export type SourceControlConfig = typeof SourceControlConfig.Type;
 
 export const HarnessPreferences = Schema.Struct({
   preferred: HarnessName,
@@ -70,6 +84,7 @@ export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,
   checkoutPath: TrimmedNonEmptyString,
   workSource: WorkSourceConfig,
+  sourceControl: Schema.optional(SourceControlConfig),
   harness: HarnessPreferences,
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),

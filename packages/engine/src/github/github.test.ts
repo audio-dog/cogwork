@@ -7,7 +7,9 @@ import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
 import type { FollowUpMarker } from "../follow-up";
+import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
+import { SourceControlProvider } from "../source-control";
 import { WorkSource } from "../work-source";
 import { layer as adapterLayer } from "./adapter";
 import {
@@ -20,6 +22,7 @@ import {
   type RawReview,
 } from "./client";
 import { defaultStatus, hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
+import { layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -164,7 +167,17 @@ const workspace: RegisteredWorkspace = {
 };
 
 const withClient = (seed: Seed) =>
-  adapterLayer.pipe(Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))));
+  Layer.mergeAll(adapterLayer, providerLayer).pipe(
+    Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
+  );
+
+// Mirrors the reconcile poll: the tracker yields items, the provider attaches PR state.
+const observeItems = (workspace: RegisteredWorkspace) =>
+  Effect.gen(function* () {
+    const tracker = yield* WorkSource;
+    const provider = yield* SourceControlProvider;
+    return yield* observeWorkspace(tracker, provider)(workspace);
+  });
 
 const pull = (over: Partial<RawPull> & { readonly number: number; readonly body: string }): RawPull => ({
   authorLogin: "clanker-forge[bot]",
@@ -180,8 +193,7 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
 describe("github work source adapter", () => {
   it.effect("derives the actionable set from labels and bot-PR state", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const { eligible, needsHuman, claimed } = classify(items);
       assert.deepStrictEqual(
         eligible.map((entry) => [entry.id, entry.stage]),
@@ -223,8 +235,7 @@ describe("github work source adapter", () => {
 
   it.effect("reads a dirty mergeable_state as a conflict and routes the PR to follow-up", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#6");
       assert.strictEqual(observed?.pr?.baseDivergence, "conflict");
       const eligible = classify(items).eligible.find((entry) => entry.id === "#6");
@@ -253,8 +264,7 @@ describe("github work source adapter", () => {
 
   it.effect("leaves a merely-behind bot PR out of follow-up", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       assert.strictEqual(items.find((item) => item.id === "#9")?.pr?.baseDivergence, "clean");
       assert.strictEqual(classify(items).eligible.length, 0);
     }).pipe(
@@ -281,8 +291,7 @@ describe("github work source adapter", () => {
   it.effect("reads open blockers from the issue listing and holds those tickets as blocked", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       assert.strictEqual(items.find((item) => item.id === "#30")?.openBlockers, 1);
       assert.strictEqual(items.find((item) => item.id === "#31")?.openBlockers, 0);
       const { eligible, blocked } = classify(items);
@@ -312,7 +321,7 @@ describe("github work source adapter", () => {
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
       yield* source.claim(workspace, id("#7"), claim);
       yield* source.recordAttempt(workspace, id("#7"), attempt, "git worktree add: boom");
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#7");
       assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
@@ -329,8 +338,7 @@ describe("github work source adapter", () => {
 
   it.effect("ignores a claim marker forged by a non-bot commenter", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#8");
       assert.isNull(observed?.claim ?? null);
       const { eligible, claimed } = classify(items);
@@ -363,7 +371,7 @@ describe("github work source adapter", () => {
         stage: "implement",
       });
       yield* source.release(workspace, id("#7"));
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       assert.isNull(items.find((item) => item.id === "#7")?.claim ?? null);
       assert.strictEqual(classify(items).eligible.length, 1);
     }).pipe(
@@ -373,8 +381,7 @@ describe("github work source adapter", () => {
 
   it.effect("reads failing checks, PR human comments, /fresh, and the follow-up marker from a bot PR", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#5");
       assert.strictEqual(observed?.pr?.checks, "failing");
       assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 200);
@@ -428,8 +435,7 @@ describe("github work source adapter", () => {
 
   it.effect("owns a write-access human-authored PR when the issue carries the daemon's marker", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const owned = items.find((item) => item.id === "#20");
       const unowned = items.find((item) => item.id === "#21");
       assert.strictEqual(owned?.pr?.review, "changes-requested");
@@ -475,8 +481,7 @@ describe("github work source adapter", () => {
 
   it.effect("refuses to adopt a PR from an author without write access, even on an owned issue", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#25");
       assert.isNull(observed?.pr ?? null);
       assert.isUndefined(
@@ -509,8 +514,7 @@ describe("github work source adapter", () => {
 
   it.effect("ignores a changes-requested review from an author without write access", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#26");
       assert.strictEqual(observed?.pr?.review, "pending");
       assert.isUndefined(
@@ -541,8 +545,7 @@ describe("github work source adapter", () => {
 
   it.effect("treats an inline review comment as human feedback that triggers follow-up", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#22");
       assert.strictEqual(observed?.pr?.latestHumanCommentAtMillis, 300);
       assert.strictEqual(classify(items).eligible.find((entry) => entry.id === "#22")?.stage, "follow-up");
@@ -577,8 +580,7 @@ describe("github work source adapter", () => {
 
   it.effect("treats a COMMENTED review with a body as feedback but ignores an empty one", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const withBody = items.find((item) => item.id === "#23");
       const empty = items.find((item) => item.id === "#24");
       assert.strictEqual(withBody?.pr?.latestHumanCommentAtMillis, 400);
@@ -622,13 +624,14 @@ describe("github work source adapter", () => {
       assert.isFalse(Object.keys(client).some((method) => forbidden.test(method)));
       const source = yield* WorkSource;
       assert.isFalse(Object.keys(source).some((method) => forbidden.test(method)));
+      const provider = yield* SourceControlProvider;
+      assert.isFalse(Object.keys(provider).some((method) => forbidden.test(method)));
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
   it.effect("counts prior attempts and escalates past the cap even without the claim label", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#9");
       assert.strictEqual(observed?.attempts.length, 3);
       const { eligible, needsHuman } = classify(items);
@@ -668,7 +671,7 @@ describe("github work source adapter", () => {
       assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
       assert.include(comments[0]?.body ?? "", "Currently implementing this issue.");
       assert.include(comments[0]?.body ?? "", "<!-- clanker-forge:attempt");
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#11");
       assert.deepStrictEqual(observed?.claim, second);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
@@ -693,7 +696,7 @@ describe("github work source adapter", () => {
       const comments = botComments(yield* client.listComments(repo, 12));
       assert.strictEqual(comments.length, 1);
       assert.include(comments[0]?.body ?? "", "Last triage attempt failed.");
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#12");
       assert.strictEqual(observed?.attempts.length, 3);
       assert.include(
@@ -749,7 +752,7 @@ describe("github work source adapter", () => {
       const comments = botComments(yield* client.listComments(repo, 15));
       assert.strictEqual(comments.length, 2);
       assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
-      const items = yield* source.observe(workspace);
+      const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#15");
       assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [legacyAttempt]);
@@ -794,7 +797,7 @@ describe("github work source adapter", () => {
       assert.include(proposal?.body ?? "", "Triage proposal body");
       assert.notInclude(coordination?.body ?? "", "Triage proposal body");
       assert.include(coordination?.body ?? "", "Currently implementing this issue.");
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#16");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#16");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       assert.deepStrictEqual(observed?.claim, {
         by: "clanker-forge",
@@ -865,7 +868,7 @@ describe("github work source adapter", () => {
       );
       assert.include(proposal?.body ?? "", "Looks done");
       assert.notInclude(proposal?.body ?? "", "outcome=failed");
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#21");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#21");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       assert.deepStrictEqual(observed?.claim, claim);
     }).pipe(
@@ -889,7 +892,7 @@ describe("github work source adapter", () => {
         baseDivergence: "conflict",
       };
       yield* source.recordFollowUp(workspace, id("#19"), current);
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#19");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#19");
       assert.notDeepEqual(observed?.pr?.followUp, stale);
       assert.deepStrictEqual(observed?.pr?.followUp, current);
     }).pipe(
@@ -938,7 +941,7 @@ describe("github work source adapter", () => {
       const comments = botComments(yield* client.listComments(repo, 18));
       assert.strictEqual(comments.length, 1);
       assert.include(comments[0]?.body ?? "", defaultStatus);
-      const observed = (yield* source.observe(workspace)).find((item) => item.id === "#18");
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "#18");
       assert.deepStrictEqual(observed?.pr?.followUp, marker);
     }).pipe(
       Effect.provide(

@@ -15,7 +15,8 @@ import * as Registry from "./registry";
 import * as RunEventBus from "./run-event-bus";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
-import type { ObservedItem } from "./work-source";
+import { type PrSignals, SourceControlProvider } from "./source-control";
+import type { TrackerItem } from "./work-source";
 import * as WorkSource from "./work-source";
 import { WorktreeManager } from "./worktree";
 
@@ -53,8 +54,18 @@ const stub = (service: Partial<WorkSource.WorkSourceService>): WorkSource.WorkSo
   ...service,
 });
 
-const observing = (items: ReadonlyArray<ObservedItem>) =>
-  Layer.succeed(WorkSource.WorkSource, stub({ observe: () => Effect.succeed(items) }));
+const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = []) =>
+  Layer.succeed(SourceControlProvider, { observe: () => Effect.succeed(new Map(prs)) });
+
+const sources = (
+  workSourceLayer: Layer.Layer<WorkSource.WorkSource>,
+  prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [],
+) => Layer.mergeAll(workSourceLayer, providerStub(prs));
+
+const observing = (
+  items: ReadonlyArray<TrackerItem>,
+  prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [],
+) => sources(Layer.succeed(WorkSource.WorkSource, stub({ observe: () => Effect.succeed(items) })), prs);
 
 describe("buildRegistry", () => {
   it("registers valid configs and isolates malformed and unreadable ones", () => {
@@ -126,7 +137,7 @@ describe("reconcile worker", () => {
   const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
 
   const workerLayer = Reconcile.layer.pipe(
-    Layer.provide(Layer.mergeAll(registryLayer, WorkSource.emptyLayer)),
+    Layer.provide(Layer.mergeAll(registryLayer, sources(WorkSource.emptyLayer))),
   );
 
   it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
@@ -140,14 +151,15 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
   );
 
-  const eligibleItem: ObservedItem = {
+  const eligibleItem: TrackerItem = {
     id: id("AUD-1"),
     title: "first ticket",
     roles: ["ready-for-agent"],
     claimLabeled: false,
     claim: null,
     attempts: [],
-    pr: null,
+    owned: false,
+    followUp: null,
     openBlockers: 0,
   };
   const workerWithWork = Reconcile.layer.pipe(
@@ -176,25 +188,26 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(workerWithWork), Effect.scoped),
   );
 
-  const inReviewItem: ObservedItem = {
+  const inReviewItem: TrackerItem = {
     id: id("AUD-2"),
     title: "pr under review",
     roles: [],
     claimLabeled: false,
     claim: null,
     attempts: [],
-    pr: {
-      review: "pending",
-      checks: "passing",
-      latestHumanCommentAtMillis: null,
-      fresh: false,
-      baseDivergence: "none",
-      followUp: null,
-    },
+    owned: true,
+    followUp: null,
     openBlockers: 0,
   };
+  const inReviewPr: PrSignals = {
+    review: "pending",
+    checks: "passing",
+    latestHumanCommentAtMillis: null,
+    fresh: false,
+    baseDivergence: "none",
+  };
   const workerWithInReview = Reconcile.layer.pipe(
-    Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem]))),
+    Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem], [[id("AUD-2"), inReviewPr]]))),
   );
 
   it.effect("retains a non-actionable but open ticket in the observed set", () =>
@@ -212,17 +225,19 @@ describe("reconcile worker", () => {
     }).pipe(Effect.provide(workerWithInReview), Effect.scoped),
   );
 
-  const authFailingSource = Layer.succeed(
-    WorkSource.WorkSource,
-    stub({
-      observe: () =>
-        Effect.fail(
-          new WorkSource.WorkSourceError({
-            reason: "auth",
-            message: "GitHub authentication failed (401)",
-          }),
-        ),
-    }),
+  const authFailingSource = sources(
+    Layer.succeed(
+      WorkSource.WorkSource,
+      stub({
+        observe: () =>
+          Effect.fail(
+            new WorkSource.WorkSourceError({
+              reason: "auth",
+              message: "GitHub authentication failed (401)",
+            }),
+          ),
+      }),
+    ),
   );
   const workerWithAuthFailure = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, authFailingSource)),
@@ -246,23 +261,25 @@ describe("reconcile worker", () => {
   );
 
   const rateLimitedSource = (observes: Ref.Ref<number>, retryAfterMillis: number | undefined) =>
-    Layer.succeed(
-      WorkSource.WorkSource,
-      stub({
-        rateLimitScope: () => "linear:LINEAR_API_KEY",
-        observe: () =>
-          Effect.flatMap(
-            Ref.update(observes, (count) => count + 1),
-            () =>
-              Effect.fail(
-                new WorkSource.WorkSourceError({
-                  reason: "rate-limited",
-                  message: "Linear rate limit exceeded",
-                  retryAfterMillis,
-                }),
-              ),
-          ),
-      }),
+    sources(
+      Layer.succeed(
+        WorkSource.WorkSource,
+        stub({
+          rateLimitScope: () => "linear:LINEAR_API_KEY",
+          observe: () =>
+            Effect.flatMap(
+              Ref.update(observes, (count) => count + 1),
+              () =>
+                Effect.fail(
+                  new WorkSource.WorkSourceError({
+                    reason: "rate-limited",
+                    message: "Linear rate limit exceeded",
+                    retryAfterMillis,
+                  }),
+                ),
+            ),
+        }),
+      ),
     );
 
   const rateLimitedWorker = (observes: Ref.Ref<number>, retryAfterMillis?: number) =>
@@ -327,18 +344,20 @@ describe("reconcile worker", () => {
   );
 
   const scopelessSource = (observes: Ref.Ref<number>) =>
-    Layer.succeed(
-      WorkSource.WorkSource,
-      stub({
-        observe: () =>
-          Effect.flatMap(
-            Ref.update(observes, (count) => count + 1),
-            () =>
-              Effect.fail(
-                new WorkSource.WorkSourceError({ reason: "rate-limited", message: "secondary rate limit" }),
-              ),
-          ),
-      }),
+    sources(
+      Layer.succeed(
+        WorkSource.WorkSource,
+        stub({
+          observe: () =>
+            Effect.flatMap(
+              Ref.update(observes, (count) => count + 1),
+              () =>
+                Effect.fail(
+                  new WorkSource.WorkSourceError({ reason: "rate-limited", message: "secondary rate limit" }),
+                ),
+            ),
+        }),
+      ),
     );
 
   it.effect("keeps polling a source that reports no rate-limit scope, and invents no retry time", () =>
@@ -412,7 +431,9 @@ describe("daemon heartbeats", () => {
       }).pipe(
         Effect.provide(
           Layer.mergeAll(
-            Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registeredSample, WorkSource.emptyLayer))),
+            Reconcile.layer.pipe(
+              Layer.provide(Layer.mergeAll(registeredSample, sources(WorkSource.emptyLayer))),
+            ),
             registeredSample,
             schedulerStub,
             worktreeStub,
@@ -427,7 +448,7 @@ describe("daemon heartbeats", () => {
 describe("daemon status over rpc", () => {
   const registryLayer = registeredSample;
   const schedulerStub = Layer.succeed(Scheduler.Scheduler, schedulerStubService);
-  const daemonLayer = (sourceLayer: Layer.Layer<WorkSource.WorkSource>) =>
+  const daemonLayer = (sourceLayer: Layer.Layer<WorkSource.WorkSource | SourceControlProvider>) =>
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
@@ -437,7 +458,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(RunEventBus.layer),
     );
 
-  const layer = daemonLayer(WorkSource.emptyLayer);
+  const layer = daemonLayer(sources(WorkSource.emptyLayer));
 
   it.effect("reports health, registered workspaces, their derived work, and failures", () =>
     Effect.gen(function* () {
@@ -454,14 +475,15 @@ describe("daemon status over rpc", () => {
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 
-  const needsInfoItem: ObservedItem = {
+  const needsInfoItem: TrackerItem = {
     id: id("AUD-7"),
     title: "waiting on details",
     roles: ["needs-info"],
     claimLabeled: false,
     claim: null,
     attempts: [],
-    pr: null,
+    owned: false,
+    followUp: null,
     openBlockers: 0,
   };
 
@@ -477,14 +499,15 @@ describe("daemon status over rpc", () => {
     }).pipe(Effect.provide(daemonLayer(observing([needsInfoItem]))), Effect.scoped),
   );
 
-  const blockedItem: ObservedItem = {
+  const blockedItem: TrackerItem = {
     id: id("AUD-8"),
     title: "waiting on a dependency",
     roles: ["ready-for-agent"],
     claimLabeled: false,
     claim: null,
     attempts: [],
-    pr: null,
+    owned: false,
+    followUp: null,
     openBlockers: 2,
   };
 
