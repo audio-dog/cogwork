@@ -1,0 +1,14 @@
+apps/cli/config/clanker-forge.workspace.ts
+  h_46518a29d4dd91 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "f5580e11a781f48a07673f2c0ddd6811efbba6b2",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
