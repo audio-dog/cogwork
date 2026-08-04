@@ -1,0 +1,41 @@
+apps/cli/src/loginCommands.ts
+  s_fdb2bc30e71f1c::t_6ca2df3c9ab91c 1-86
+  s_fdb2bc30e71f1c::t_0da8285c68b724 87-90
+apps/cli/src/login.test.ts
+  s_fdb2bc30e71f1c::t_197fd9d8fb4c44 38-39
+  s_fdb2bc30e71f1c::t_e5f1af0b3337bd 57
+  s_fdb2bc30e71f1c::t_d3ca8aee1acf44 1-37,40-56,58-96
+  s_fdb2bc30e71f1c::t_284900fb536897 97-99
+packages/engine/src/linear/oauth.test.ts
+  s_fdb2bc30e71f1c::t_144754c5603968 175-182,186-188,200,205-207,209
+  s_fdb2bc30e71f1c::t_3a076599eb2ba4 168-174,183-185,189-199,201-204,208,210-211,213
+  s_fdb2bc30e71f1c::t_3dee91e341a0b7 6,13
+  s_fdb2bc30e71f1c::t_fa0be841695cc3 212
+apps/cli/src/main.ts
+  s_fdb2bc30e71f1c::t_9c857cb0327777 7,18
+packages/engine/src/linear/oauth.ts
+  s_fdb2bc30e71f1c::t_7c7eba1ad224a8 115-142
+  s_fdb2bc30e71f1c::t_f2eee170136b57 8-9
+  s_fdb2bc30e71f1c::t_74ff8ca97076b5 143-148
+apps/cli/src/login.ts
+  s_fdb2bc30e71f1c::t_619b32211024cd 1-30,32-47,50-152
+  s_fdb2bc30e71f1c::t_79e84a70282ebd 31
+  s_fdb2bc30e71f1c::t_e78ff5f26fed6a 48-49
+  s_fdb2bc30e71f1c::t_8ca1f1188f0421 153-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "c974d2d1221b49620aeb2e7a996c0e67ec8ce76e",
+  "prompts": {},
+  "sessions": {
+    "s_fdb2bc30e71f1c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21ec468f-de38-497d-8554-060ec7f1e3e8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
