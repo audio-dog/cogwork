@@ -1,0 +1,19 @@
+packages/engine/CONTEXT.md
+  s_ee325453a7b4e1::t_98d4c2fe5efd21 57-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "b0553662e429ff0416be04764de82fd9a054a031",
+  "prompts": {},
+  "sessions": {
+    "s_ee325453a7b4e1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e7843d8-5305-4481-b914-8b1e10b02077",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
