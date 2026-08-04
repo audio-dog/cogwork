@@ -1,11 +1,19 @@
 import type { OAuthAppConfig } from "@clanker-forge/contracts";
 import { LinearClient as LinearSdk } from "@linear/sdk";
+import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import type { StoredToken } from "../CredentialStore";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
+import {
+  CredentialError,
+  type StoredToken,
+  type TokenRefresh,
+  type TokenRefreshRequest,
+} from "../CredentialStore";
 
 // The GraphQL API only covers requests made with a token already in hand; getting that token is a
 // two-legged redirect + POST flow the SDK does not wrap, so these two endpoints stay hand-built.
@@ -83,17 +91,41 @@ export interface FormRequest {
   readonly body: string;
 }
 
+const formHeaders = {
+  "content-type": "application/x-www-form-urlencoded",
+  accept: "application/json",
+} as const;
+
 export const tokenExchangeRequest = (params: TokenExchangeParams) =>
   ({
     url: tokenEndpoint,
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+    headers: formHeaders,
     body: new URLSearchParams({
       grant_type: "authorization_code",
       client_id: params.clientId,
       redirect_uri: params.redirectUri,
       code: params.code,
       code_verifier: params.verifier,
+    }).toString(),
+  }) satisfies FormRequest;
+
+export interface TokenRefreshParams {
+  readonly clientId: string;
+  readonly refreshToken: string;
+}
+
+// A PKCE app has no client secret, so the refresh grant carries only the client id alongside the
+// refresh token.
+export const tokenRefreshRequest = (params: TokenRefreshParams) =>
+  ({
+    url: tokenEndpoint,
+    method: "POST",
+    headers: formHeaders,
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: params.clientId,
+      refresh_token: params.refreshToken,
     }).toString(),
   }) satisfies FormRequest;
 
@@ -120,6 +152,39 @@ export const storedTokenFrom = (response: TokenResponse, nowMillis: number) =>
     expiresAtMillis: nowMillis + response.expires_in * 1000,
     scopes: scopesOf(response.scope),
   }) satisfies StoredToken;
+
+const httpRequestOf = (form: FormRequest) =>
+  HttpClientRequest.post(form.url).pipe(
+    HttpClientRequest.setHeaders(form.headers),
+    HttpClientRequest.bodyText(form.body, form.headers["content-type"]),
+  );
+
+// Transport errors and schema issues both quote the payload that failed, and here that payload is
+// the token pair itself, so no cause may reach the reported message.
+const refreshFailed = (account: string, detail: string) =>
+  new CredentialError({ account, message: `Linear token refresh failed: ${detail}` });
+
+export const makeTokenRefresh = (client: HttpClient.HttpClient): TokenRefresh =>
+  Effect.fn("linear.oauth.tokenRefresh")(function* (request: TokenRefreshRequest) {
+    const form = tokenRefreshRequest({
+      clientId: request.clientId,
+      refreshToken: Redacted.value(request.refreshToken),
+    });
+    const response = yield* Effect.mapError(client.execute(httpRequestOf(form)), () =>
+      refreshFailed(request.account, "the token endpoint could not be reached"),
+    );
+    if (response.status !== 200) {
+      return yield* refreshFailed(request.account, `the token endpoint returned ${response.status}`);
+    }
+    const body = yield* Effect.mapError(response.json, () =>
+      refreshFailed(request.account, "the token endpoint returned an unreadable body"),
+    );
+    const decoded = yield* Effect.mapError(decodeTokenResponse(body), () =>
+      refreshFailed(request.account, "the token endpoint returned an unexpected payload"),
+    );
+    const now = yield* Clock.currentTimeMillis;
+    return storedTokenFrom(decoded, now);
+  });
 
 export class LinearOAuthError extends Schema.TaggedErrorClass<LinearOAuthError>()("LinearOAuthError", {
   message: Schema.String,
