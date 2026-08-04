@@ -1,0 +1,77 @@
+packages/engine/src/linear/client.test.ts
+  s_470507aa3a215a::t_76fe628db6095d 174,183,192
+  s_470507aa3a215a::t_178e434af78073 315,320,323,325,346,387,395
+  s_470507aa3a215a::t_e86546869f8261 343-345
+  s_470507aa3a215a::t_81ff1adc52e02b 347
+  s_470507aa3a215a::t_edded45ca4136f 384-386
+  s_470507aa3a215a::t_661398f4889888 388-390,392-394
+  s_470507aa3a215a::t_66ce98d4e5aa5a 396-398
+  s_470507aa3a215a::t_0fddec249d5bfd 2,4,7,19-51,55,58,60-62,65-66,69,73,81-83,141,158-161,197-265,305,330,332,334-336,338-342,355,360-383,391,399,404
+packages/engine/src/linear/linear.test.ts
+  s_470507aa3a215a::t_2e38cb3e6f1f3c 478
+  s_470507aa3a215a::t_f81cb9da696ef6 12,16,46,96-110,112-125,527-550
+packages/engine/src/linear/client.ts
+  s_470507aa3a215a::t_b44cbece31225b 246,323-329,332-347
+  s_470507aa3a215a::t_806df39950ea87 243-245
+  s_470507aa3a215a::t_4bbed40670bf83 247-249
+  s_470507aa3a215a::t_4f75fc115f76c9 320-322
+  s_470507aa3a215a::t_6f81c969dab44b 2,4,7,9-10,27-30,40-43,62-73,85,99,103-106,130-141,145,148-154,163-169,173-187,189,191-194,210-242,250-256,278-280,301-303,312-319,349,358-360,368-384,386-396,409-410,421,423,437-438,449,451,457
+apps/cli/src/status.test.ts
+  s_470507aa3a215a::t_9a37706a6c74e2 20,60-81,119-123,128,132-150
+apps/cli/src/status.ts
+  s_470507aa3a215a::t_7e4d1baf18b634 1-3,8-22,24,33-36,46
+packages/contracts/CONTEXT.md
+  s_470507aa3a215a::t_b545fb4f402ca8 34,83-86
+packages/contracts/src/daemon.ts
+  s_470507aa3a215a::t_a64e0c5c4611f3 23-29,37-39,42-47,59
+packages/engine/CONTEXT.md
+  s_470507aa3a215a::t_4e610613a49e10 17,20-27,61
+packages/engine/docs/adr/0002-restart-recovery-resumes-sessions.md
+  s_470507aa3a215a::t_a1a6ea8c228185 1-14
+packages/engine/src/Daemon.ts
+  s_470507aa3a215a::t_2c4c4a66b8ac75 83
+packages/engine/src/Reconcile.ts
+  s_470507aa3a215a::t_113cd49234d81e 2,5,10,20,39,62,67-73,75,78,83-108,114-179,181-194,196,198
+packages/engine/src/WorkSource.ts
+  s_470507aa3a215a::t_8e05c3b57bc58c 1-7,25,34,36,65
+packages/engine/src/classify.test.ts
+  s_470507aa3a215a::t_9c01c0d0ec424f 18,82-135
+packages/engine/src/classify.ts
+  s_470507aa3a215a::t_9ec6da585b0596 3,22,34,75,101-103,107
+packages/engine/src/engine.test.ts
+  s_470507aa3a215a::t_f3bbb478bfc9e1 5-6,8,42,148,190,235-239,243-360,412,427-451
+packages/engine/src/executor.test.ts
+  s_470507aa3a215a::t_e5b6be6f7007b6 168
+packages/engine/src/github/adapter.ts
+  s_470507aa3a215a::t_219619a60563a7 20,233,251,265
+packages/engine/src/github/client.ts
+  s_470507aa3a215a::t_e896a54d74cd75 31,68-72,78,148-160,319
+packages/engine/src/github/github-helpers.test.ts
+  s_470507aa3a215a::t_ac913a978dd146 2,4,62-98
+packages/engine/src/github/github.test.ts
+  s_470507aa3a215a::t_45e438d3c5f03a 18,31,77-83,104,109,221-247
+packages/engine/src/linear/adapter.ts
+  s_470507aa3a215a::t_6bd90255e6d728 7-14,28,53-55,123,125,135,140,159-162
+packages/engine/src/linear/markers.ts
+  s_470507aa3a215a::t_627c3c6e042fcf 68,155,171
+packages/engine/src/scheduler.test.ts
+  s_470507aa3a215a::t_0501cd266440d8 206,228,430,440,450
+packages/engine/src/workSourceRouter.ts
+  s_470507aa3a215a::t_c5cc24712b1bf8 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "6186db8a70fa4cfb52c4f2ab36b37d3a9a20d89f",
+  "prompts": {},
+  "sessions": {
+    "s_470507aa3a215a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "93b26944-7ea1-4c88-b41b-67968a620b4e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
