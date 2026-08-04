@@ -15,7 +15,7 @@ _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
 The background worker that polls every workspace's work source, classifies the results, and stores them in an in-memory reconcile snapshot. One of the daemon's two heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
-_Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (releasing stale claims).
+_Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (resuming this daemon's own interrupted runs or releasing genuinely stale claims).
 
 **Rate-limit scope**:
 The key a work source hands the reconcile worker to say *whose* request budget a poll spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. GitHub returns none: its client already fails fast inside its own cooldown, so there is nothing for reconcile to add.
