@@ -58,6 +58,18 @@ const implementWorkspace: RegisteredWorkspace = {
   }),
 };
 
+const mcpWorkspace: RegisteredWorkspace = {
+  source: workspace.source,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh",
+    checkoutPath: "/repos/gh",
+    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    harness: { preferred: "cursor" },
+    mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
+    playbook: { implement: { enabled: true } },
+  }),
+};
+
 const implementItem = {
   id: id("#15"),
   title: "Implement playbook",
@@ -532,6 +544,7 @@ describe("Executor.execute", () => {
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
         assert.isNull(request?.sessionId ?? null);
+        assert.deepStrictEqual(request?.mcpSkills, []);
 
         const log = yield* Ref.get(calls);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
@@ -548,6 +561,23 @@ describe("Executor.execute", () => {
         assert.strictEqual(run?.status, "succeeded");
         assert.strictEqual(run?.session, "sess-42");
         assert.deepStrictEqual(run?.usage, usage);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("hands the workspace's MCP skills to the harness on the run request", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(mcpWorkspace, implementItem);
+
+        const [request] = yield* Ref.get(requests);
+        assert.deepStrictEqual(request?.mcpSkills, [
+          { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" },
+        ]);
       }).pipe(Effect.provide(layer));
     }),
   );

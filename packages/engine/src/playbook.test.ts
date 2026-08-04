@@ -115,6 +115,22 @@ describe("resolveStage", () => {
   });
 });
 
+describe("MCP skills", () => {
+  it("default to an empty list when the workspace declares none", () => {
+    assert.deepStrictEqual(resolveImplement(config()).mcpSkills, []);
+  });
+
+  it("carry the workspace's MCP skills onto every resolved stage", () => {
+    const cfg = config({
+      mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
+    });
+    const expected = [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }];
+    assert.deepStrictEqual(resolveTriage(cfg).mcpSkills, expected);
+    assert.deepStrictEqual(resolveImplement(cfg).mcpSkills, expected);
+    assert.deepStrictEqual(resolveFollowUp(cfg).mcpSkills, expected);
+  });
+});
+
 describe("WorkspaceConfig.linearHistory", () => {
   it("defaults to false when the key is omitted", () => {
     assert.strictEqual(config().linearHistory, false);

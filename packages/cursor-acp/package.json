@@ -14,6 +14,7 @@
     "models:check": "node --experimental-strip-types scripts/sync-models.ts --check",
     "spike:run": "node --env-file=.env --experimental-strip-types run.ts",
     "spike:probe": "node --env-file=.env --experimental-strip-types probe-acp.ts",
+    "spike:mcp": "node --env-file-if-exists=.env --experimental-strip-types probe-mcp.ts",
     "spike:resume": "node --env-file-if-exists=.env --experimental-strip-types probe-resume.ts"
   },
   "dependencies": {

@@ -62,6 +62,7 @@ const harnessRequest = (
   model: resolved.model,
   effort: resolved.effort,
   sessionId,
+  mcpSkills: resolved.mcpSkills,
 });
 
 const defaultFollowUp: FollowUpContext = {
