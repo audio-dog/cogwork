@@ -1,0 +1,22 @@
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_59105612daaccc::t_961e2a2da0b7e5 1-24
+packages/contracts/CONTEXT.md
+  s_59105612daaccc::t_ce751864b9dcaa 102,105-107
+  s_59105612daaccc::t_dcef336bf99df5 108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "4ae9a61fdfbb774292df568ba3569612ef0a083f",
+  "prompts": {},
+  "sessions": {
+    "s_59105612daaccc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eac46ac7-3971-43a6-8ebd-a386415cdc33",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
