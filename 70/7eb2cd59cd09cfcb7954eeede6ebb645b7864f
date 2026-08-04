@@ -1,0 +1,90 @@
+packages/engine/src/WorkSource.ts
+  s_d9577f1438ad4f::t_34a43b564572ef 15
+packages/engine/src/Executor.ts
+  s_d9577f1438ad4f::t_4ea754b06cb1db 390
+  s_d9577f1438ad4f::t_b2ca96c0c729a9 72
+packages/engine/src/github/adapter.ts
+  s_d9577f1438ad4f::t_c8148d8ff775a6 8
+  s_d9577f1438ad4f::t_64385e3574d172 204
+  s_d9577f1438ad4f::t_8ff19be1c6347b 183,188
+  s_d9577f1438ad4f::t_c13bb44ec849a6 88-93
+packages/engine/src/engine.test.ts
+  s_d9577f1438ad4f::t_12624173573b32 191
+packages/engine/src/github/github.test.ts
+  s_d9577f1438ad4f::t_57f5d45112d2c2 618-620
+  s_d9577f1438ad4f::t_59bb2f44f29315 224-240,248-267,275-280
+  s_d9577f1438ad4f::t_40c327faf76913 241-247
+  s_d9577f1438ad4f::t_440ff049fa96e5 105
+  s_d9577f1438ad4f::t_3c0974dce462f2 268-274
+  s_d9577f1438ad4f::t_8292558c016d01 412-417
+  s_d9577f1438ad4f::t_2a2ef8d08f6780 832
+  s_d9577f1438ad4f::t_148bfb014073c0 879-890
+  s_d9577f1438ad4f::t_0bf3610185a722 913-918
+  s_d9577f1438ad4f::t_a85a87d4c34279 931-936
+  s_d9577f1438ad4f::t_5278a877e1b62f 58
+  s_d9577f1438ad4f::t_5e209aab9ed0d8 113
+  s_d9577f1438ad4f::t_23d6d920238474 386
+packages/engine/src/github/client.ts
+  s_d9577f1438ad4f::t_13d9c658150be6 90-93
+  s_d9577f1438ad4f::t_efeb77b03c1956 134
+  s_d9577f1438ad4f::t_0899c5e8ed441f 341-346
+packages/engine/src/github/markers.test.ts
+  s_d9577f1438ad4f::t_eeb1996628d093 88-99,107-111,136
+  s_d9577f1438ad4f::t_b65accf850ea0c 255
+  s_d9577f1438ad4f::t_d488eb6a4ba120 133-135
+  s_d9577f1438ad4f::t_0d0fc41149b529 112-113,137-140,256-260
+packages/engine/src/followUp.test.ts
+  s_d9577f1438ad4f::t_68a03f15a74874 65
+  s_d9577f1438ad4f::t_afbf4a929fd7ca 129-134
+  s_d9577f1438ad4f::t_42e4da128e7946 75-78
+  s_d9577f1438ad4f::t_0ee3ee0a3955c3 15
+  s_d9577f1438ad4f::t_83ffb03c0a6347 41-48
+  s_d9577f1438ad4f::t_a76e4c198ba3e3 90
+  s_d9577f1438ad4f::t_fc066762184e78 94-95,141-157
+  s_d9577f1438ad4f::t_9b663da25a8514 35
+  s_d9577f1438ad4f::t_c9bf304ba0254f 91-92,96-114
+  s_f4bf802721a236::t_591e70e262e63f 93
+packages/engine/src/followUp.ts
+  s_d9577f1438ad4f::t_f6c21fd5420fa9 6-7,12,22,32,42-48,53,67
+packages/engine/src/executor.test.ts
+  s_d9577f1438ad4f::t_b828702cc6b7e8 145
+packages/engine/src/linear/markers.ts
+  s_d9577f1438ad4f::t_c61fb8f46c8232 109
+packages/engine/src/github/github-helpers.test.ts
+  s_d9577f1438ad4f::t_f95e0bdd754e25 37-54
+  s_d9577f1438ad4f::t_9539988d5448ba 3
+packages/engine/src/classify.test.ts
+  s_d9577f1438ad4f::t_e76de33b89d5e1 26
+  s_d9577f1438ad4f::t_7258df6978e3ef 276-281
+  s_d9577f1438ad4f::t_b2e75dd5bb02bc 262
+  s_d9577f1438ad4f::t_ffb3fe8221653c 247
+  s_d9577f1438ad4f::t_0fd7d34995f977 201-232
+packages/engine/src/github/markers.ts
+  s_d9577f1438ad4f::t_3a351c17298ef2 118
+  s_d9577f1438ad4f::t_7034d781545f3f 119
+  s_d9577f1438ad4f::t_2ff234df01f665 86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "707eb2cd59cd09cfcb7954eeede6ebb645b7864f",
+  "prompts": {},
+  "sessions": {
+    "s_d9577f1438ad4f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "45d73478-7717-42e9-ba7e-02f675052fd0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f4bf802721a236": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e7d27d6e-5b21-4081-94df-d75f14b1dd9a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
