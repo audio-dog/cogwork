@@ -1,0 +1,26 @@
+apps/cli/src/main.ts
+  s_fdb2bc30e71f1c::t_b61c593046639a 7
+  s_fdb2bc30e71f1c::t_0b0b4c4f862fdd 5
+  s_fdb2bc30e71f1c::t_c19cff5360ecec 30
+  s_fdb2bc30e71f1c::t_dcc956d39b8c3b 28-29,31
+apps/cli/src/login.test.ts
+  s_fdb2bc30e71f1c::t_6e751fee7979e2 79-82
+apps/cli/src/loginCommands.ts
+  s_fdb2bc30e71f1c::t_f41019a71e9549 79-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "e65629862c92a63b3a5b3dda80aef9a826c309a4",
+  "prompts": {},
+  "sessions": {
+    "s_fdb2bc30e71f1c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21ec468f-de38-497d-8554-060ec7f1e3e8",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
