@@ -1,10 +1,19 @@
-import { DaemonRpcs, type RunEvent, RunId, type RunSummary } from "@clanker-forge/contracts";
+import {
+  DaemonRpcs,
+  type RunActivity,
+  type RunEvent,
+  RunId,
+  type RunSummary,
+} from "@clanker-forge/contracts";
 import { Daemon, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
@@ -59,8 +68,13 @@ const drainGraceFlag = Flag.integer("drain-grace").pipe(
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
 const watchIdFlag = Flag.string("id").pipe(
-  Flag.withDescription("Only follow a single run id"),
+  Flag.withDescription("Follow a single run id directly"),
   Flag.optional,
+);
+
+const watchWorkItemArg = Argument.string("work-item").pipe(
+  Argument.withDescription("Work item to watch; resolves to its running run, else its most recent run"),
+  Argument.optional,
 );
 
 const runDaemon = Effect.fn("commands.runDaemon")(
@@ -134,17 +148,59 @@ const runEvents = Effect.fn("commands.runEvents")(
   (effect, options) => overSocket(effect, options.socketPath),
 );
 
-const watchPayload = (id: Option.Option<string>) => {
-  const raw = Option.getOrUndefined(id);
-  if (raw === undefined) return Effect.succeed({});
-  return Effect.map(Schema.decodeUnknownEffect(RunId)(raw), (value) => ({ id: value }));
+const matchesItem = (raw: string) => (run: RunSummary) => run.workItem === raw || run.workItem === `#${raw}`;
+
+const pickRun = (runs: ReadonlyArray<RunSummary>, raw: string) => {
+  const matches = runs.filter(matchesItem(raw));
+  return matches.find((run) => run.status === "running") ?? matches[0];
 };
 
+const markSeen = (seen: Ref.Ref<ReadonlyMap<string, number>>) => (activity: RunActivity) =>
+  Ref.modify(seen, (map) => {
+    const last = map.get(activity.runId) ?? -1;
+    if (activity.seq <= last) return [false, map] as const;
+    return [true, new Map(map).set(activity.runId, activity.seq)] as const;
+  });
+
+const reconnectSchedule = Schedule.spaced("1 second");
+
+type WatchPayload = { readonly id?: RunId };
+
+const watchStream = <E>(source: Stream.Stream<RunActivity, E>, seen: Ref.Ref<ReadonlyMap<string, number>>) =>
+  source.pipe(
+    Stream.filterEffect(markSeen(seen)),
+    Stream.tapError((error) => Console.error(`watch: connection lost, reconnecting… (${String(error)})`)),
+    Stream.retry(reconnectSchedule),
+  );
+
+const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R>(
+  listRuns: Effect.Effect<ReadonlyArray<RunSummary>, E, R>,
+  id: Option.Option<string>,
+  workItem: Option.Option<string>,
+) {
+  if (Option.isSome(id)) {
+    return Option.some<WatchPayload>({ id: yield* Schema.decodeUnknownEffect(RunId)(id.value) });
+  }
+  if (Option.isNone(workItem)) return Option.some<WatchPayload>({});
+  const runs = yield* listRuns;
+  const run = pickRun(runs, workItem.value);
+  return run ? Option.some<WatchPayload>({ id: run.id }) : Option.none<WatchPayload>();
+});
+
 const runWatch = Effect.fn("commands.runWatch")(
-  function* (options: { readonly socketPath: string; readonly id: Option.Option<string> }) {
+  function* (options: {
+    readonly socketPath: string;
+    readonly id: Option.Option<string>;
+    readonly workItem: Option.Option<string>;
+  }) {
     const client = yield* RpcClient.make(DaemonRpcs);
-    const payload = yield* watchPayload(options.id);
-    yield* client.WatchActivity(payload).pipe(
+    const target = yield* resolveTarget(client.ListRuns(), options.id, options.workItem);
+    if (Option.isNone(target)) {
+      const item = Option.getOrElse(options.workItem, () => "");
+      return yield* Console.error(`watch: no runs found for ${item}`);
+    }
+    const seen = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
+    yield* watchStream(client.WatchActivity(target.value), seen).pipe(
       Stream.mapAccum(() => initialWatchState, stepWatch, { onHalt: flushWatch }),
       Stream.runForEach(Console.log),
     );
@@ -198,6 +254,8 @@ export const runEventsCommand = Command.make("run-events", { socket: socketFlag,
   Command.withHandler(({ socket, id }) => runEvents({ socketPath: socket, id })),
 );
 
-export const watchCommand = Command.make("watch", { socket: socketFlag, id: watchIdFlag }).pipe(
-  Command.withHandler(({ socket, id }) => runWatch({ socketPath: socket, id })),
-);
+export const watchCommand = Command.make("watch", {
+  socket: socketFlag,
+  id: watchIdFlag,
+  workItem: watchWorkItemArg,
+}).pipe(Command.withHandler(({ socket, id, workItem }) => runWatch({ socketPath: socket, id, workItem })));
