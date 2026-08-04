@@ -1,0 +1,139 @@
+packages/engine/src/classify.ts
+  s_c834710fb5a1bd::t_bd8f104bd5d6bc 12
+apps/cli/config/feldspar.workspace.ts
+  s_c834710fb5a1bd::t_d0a7b36adcb2d8 11
+packages/engine/src/issue-tracker-router.test.ts
+  s_c834710fb5a1bd::t_8f19d7ac66eb17 5-6
+  s_c834710fb5a1bd::t_84718e4c352d6d 12-18,49
+  s_c834710fb5a1bd::t_98c282e76d1eb1 45
+  s_c834710fb5a1bd::t_6a251b11b6a90f 19,46,50
+apps/cli/config/clanker-forge.workspace.ts
+  s_c834710fb5a1bd::t_87bb6730fbba4f 11
+packages/engine/src/credential-store.test.ts
+  s_c834710fb5a1bd::t_943e7bbdb40358 26,100,187
+packages/engine/src/linear/client.ts
+  s_c834710fb5a1bd::t_2d779ba7d910b8 127,132,150,161,225,335,343,350,360
+  s_c834710fb5a1bd::t_370d9d6519bac6 322
+  s_c834710fb5a1bd::t_90d4a7cfdb0e94 18
+packages/contracts/src/workspace.ts
+  s_c834710fb5a1bd::t_849665ec082381 86
+  s_c834710fb5a1bd::t_5549c955aa2771 27-28,38
+  s_c834710fb5a1bd::t_08553c7becd4e6 5
+packages/engine/src/github/client.ts
+  s_c834710fb5a1bd::t_02c005dddf4cd4 16
+  s_c834710fb5a1bd::t_6a6515b2fb0245 149,171,188,240,262
+packages/engine/src/engine.test.ts
+  s_c834710fb5a1bd::t_072d6c6d40d456 28,61,63
+  s_c834710fb5a1bd::t_50ba292df47183 45,68,140,230,234,266,274,349,356
+  s_c834710fb5a1bd::t_71cedac3c3f219 13-14,357-359,438,454,464,473
+packages/engine/src/github/provider.ts
+  s_c834710fb5a1bd::t_ce33b08b4c4d53 48
+packages/engine/src/scheduler.test.ts
+  s_c834710fb5a1bd::t_61a0da9c9bb527 42,238,257,267,626,650,669,688,700,718,735,755,773,791,812,837,849,874,888,918
+  s_c834710fb5a1bd::t_a7d4617c4164e3 239
+  s_c834710fb5a1bd::t_2cd393d4edc9d7 22-23
+apps/cli/src/credentials.test.ts
+  s_c834710fb5a1bd::t_919b652513d0ca 15,28,209
+packages/engine/src/scheduler.ts
+  s_c834710fb5a1bd::t_afbc60d212970e 191,193,263,267,295,309,335
+  s_c834710fb5a1bd::t_e8e1907da6fa59 310,435
+  s_c834710fb5a1bd::t_826787b4e43e30 21
+packages/engine/src/playbook.test.ts
+  s_c834710fb5a1bd::t_d8a6f5669eab06 22
+packages/engine/src/observe.ts
+  s_c834710fb5a1bd::t_9081c30d82772a 23
+  s_c834710fb5a1bd::t_10a55bfacb309a 3
+packages/engine/src/linear/linear.test.ts
+  s_c834710fb5a1bd::t_bf42754d13f8d4 192,205-206
+  s_c834710fb5a1bd::t_84718f99f790ef 98,221,326,355,407,491,512,584,589,596-597
+  s_c834710fb5a1bd::t_3659a5bef65a2b 8
+packages/engine/src/source-control.ts
+  s_c834710fb5a1bd::t_7833ee2c341e2d 26
+  s_c834710fb5a1bd::t_0029f9cd69f65b 6
+packages/engine/src/linear/oauth.ts
+  s_c834710fb5a1bd::t_36016454c69abf 231
+apps/cli/src/commands.ts
+  s_c834710fb5a1bd::t_c1f074be4e31d6 48
+packages/engine/src/classify.test.ts
+  s_c834710fb5a1bd::t_2083a652540e10 6
+packages/engine/src/github/github.test.ts
+  s_c834710fb5a1bd::t_3dcd32aea1c589 164
+  s_c834710fb5a1bd::t_c86cb5e84bccea 177,319,367,674,710,736,764,796,828,863,879,904,930,981
+  s_c834710fb5a1bd::t_b91afb7b11838d 10
+apps/cli/src/status.test.ts
+  s_c834710fb5a1bd::t_7e1c1a64c79b07 10,15
+  s_c834710fb5a1bd::t_8308dbfccd8f33 2
+packages/engine/src/linear/client-credentials.test.ts
+  s_c834710fb5a1bd::t_b4940c0fc23574 15
+apps/cli/src/login-commands.ts
+  s_c834710fb5a1bd::t_c30d0b2ddc2453 42,47-50
+  s_c834710fb5a1bd::t_71d5e25b3b6e9f 1,37
+  s_c834710fb5a1bd::t_301c43faaf0799 52,55,59,65,75-76
+packages/engine/src/daemon.ts
+  s_c834710fb5a1bd::t_39bdec2c14b0df 78
+packages/contracts/src/daemon.ts
+  s_c834710fb5a1bd::t_c3dbbfa9caa7f2 2
+  s_c834710fb5a1bd::t_fc9e8d58d2ea8b 3-8,60
+apps/cli/src/status.ts
+  s_c834710fb5a1bd::t_e6b72638201028 42
+packages/engine/src/executor.ts
+  s_c834710fb5a1bd::t_b913b58c00ab13 48
+  s_c834710fb5a1bd::t_f70d676160f7b8 137,147,166,237,244,248,276-278,298-299,338,401-402,476,482-483
+  s_c834710fb5a1bd::t_0f9445bc20d0e5 17
+packages/engine/src/issue-tracker-router.ts
+  s_c834710fb5a1bd::t_95c7f4faccb862 9,28
+  s_c834710fb5a1bd::t_ae62b2a45dd11b 11
+  s_c834710fb5a1bd::t_dfa054b21e3966 5,10,12,29
+packages/contracts/src/base-schemas.ts
+  s_c834710fb5a1bd::t_1219004a752bc1 18-19
+packages/engine/src/linear/adapter.ts
+  s_c834710fb5a1bd::t_360c2e6e9723f5 78
+  s_c834710fb5a1bd::t_c5720e49c2c7ee 95,100,159,229
+  s_c834710fb5a1bd::t_a3af99583261c9 5-10
+packages/engine/src/credential-store.ts
+  s_c834710fb5a1bd::t_f437c32917c9da 20,41,113,131,147
+packages/engine/src/executor.test.ts
+  s_c834710fb5a1bd::t_11ccbe278fa227 33,48,128,170
+  s_c834710fb5a1bd::t_999b64061df670 189,283,290
+  s_c834710fb5a1bd::t_1d0a4839192dc4 19
+packages/engine/CONTEXT.md
+  s_c834710fb5a1bd::t_cbd43e9ab1dd57 81
+  s_c834710fb5a1bd::t_21794d684b8bfe 58
+packages/engine/src/github/adapter.ts
+  s_c834710fb5a1bd::t_00f5c9ec8846fd 61
+  s_c834710fb5a1bd::t_986ff215979fa8 84
+  s_c834710fb5a1bd::t_ab965c9c0039f7 5-10,85-87,93,98,219
+packages/engine/src/reconcile.ts
+  s_c834710fb5a1bd::t_9cfe18fb8c2941 113,115,188
+  s_c834710fb5a1bd::t_202f90f7002a2c 151,169,200
+  s_c834710fb5a1bd::t_a741c86998c8bc 18
+packages/engine/src/issue-tracker.ts
+  s_c834710fb5a1bd::t_c306d5410b51d2 58
+  s_c834710fb5a1bd::t_b366ae46803c35 45-52,62-100,104
+  s_c834710fb5a1bd::t_252925899bb437 101
+apps/cli/src/rpc.ts
+  s_c834710fb5a1bd::t_b47d1ede7c413e 61-62,76
+  s_c834710fb5a1bd::t_364458a072abbf 8
+apps/cli/src/login.ts
+  s_c834710fb5a1bd::t_e0c9f06b2c2159 151
+packages/engine/src/worktree.test.ts
+  s_c834710fb5a1bd::t_c92d3c5b26198b 26
+packages/engine/src/index.ts
+  s_c834710fb5a1bd::t_cebdc70862ebaf 8-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "ffdc85ae441d7aa744359076121e5a18424925f3",
+  "prompts": {},
+  "sessions": {
+    "s_c834710fb5a1bd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ce6370c9-353d-4693-acf2-f4aff240b90f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
