@@ -1,0 +1,28 @@
+packages/engine/src/Executor.ts
+  s_999407ee7c5a03::t_2b1bf236cfed3e 451
+packages/engine/src/playbook.test.ts
+  s_999407ee7c5a03::t_57ddfa8690611a 117-126,129,134-143
+packages/contracts/src/workspace.ts
+  s_999407ee7c5a03::t_97a81bbc4908f7 77
+  s_999407ee7c5a03::t_cbd6fa053e4a74 1
+packages/engine/src/Playbook.ts
+  s_999407ee7c5a03::t_660172a8a1f569 41
+  s_999407ee7c5a03::t_5114070b250b38 117-123
+  s_999407ee7c5a03::t_983abd2828883a 214-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "259035fd4f269c0d3f598ae9fee58097f49f5409",
+  "prompts": {},
+  "sessions": {
+    "s_999407ee7c5a03": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "154e282a-d352-473c-8c0b-58c17491b8cb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
