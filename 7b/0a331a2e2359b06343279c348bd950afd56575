@@ -1,0 +1,31 @@
+packages/engine/src/daemon.ts
+  s_148c0802f33bb2::t_8d0d41304bf736 58-59,64
+  s_148c0802f33bb2::t_0579a5bf18cb41 2-3,5
+  s_148c0802f33bb2::t_299272c7821b50 37,40-41
+  s_148c0802f33bb2::t_bb16481f8f467e 49-50,61-62,65-66
+packages/engine/src/watch-activity.test.ts
+  s_148c0802f33bb2::t_20a54c686eba8d 188-194
+  s_148c0802f33bb2::t_db3045869b7300 37
+  s_148c0802f33bb2::t_4e0a35728ed802 1,23,32,34,39,41-43,47-48,50,53,62-65,97-99,131-133,163-187,195-245,250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "7b0a331a2e2359b06343279c348bd950afd56575",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_148c0802f33bb2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2651bef3-06ea-4d6f-889a-2ab35a485121",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
