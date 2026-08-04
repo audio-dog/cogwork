@@ -62,7 +62,7 @@ A workspace's binding of a lifecycle stage to a prompt template, skill, and harn
 _Avoid_: Workflow, pipeline
 
 **Work source adapter**:
-A concrete implementation of the work source port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by `workSource.type` via `workSourceRoutedLayer`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear returns `pr: null` and `openBlockers: 0` (PR follow-up and dependency blocking stay GitHub's problem for now).
+A concrete implementation of the work source port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by `workSource.type` via `workSourceRoutedLayer`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`) but returns `pr: null` (PR follow-up stays GitHub's problem for now).
 _Avoid_: Client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Credential store**:

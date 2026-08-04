@@ -34,6 +34,7 @@ interface SeedIssue {
   readonly labels: ReadonlyArray<string>;
   readonly stateName?: string;
   readonly stateType?: string;
+  readonly openBlockers?: number;
 }
 
 interface Seed {
@@ -65,6 +66,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         labels: issue.labels,
         stateName: issue.stateName ?? "Todo",
         stateType: issue.stateType ?? "unstarted",
+        openBlockers: issue.openBlockers ?? 0,
       }),
     ),
   );
@@ -211,6 +213,35 @@ const botComments = (comments: ReadonlyArray<RawComment>) =>
   comments.filter((comment) => comment.authorId === bot.id);
 
 describe("linear work source adapter", () => {
+  it.effect("holds a ready-for-agent ticket with an open blocker out of the eligible set", () =>
+    Effect.gen(function* () {
+      const source = yield* WorkSource;
+      const items = yield* source.observe(workspace);
+      assert.strictEqual(items.find((item) => item.id === "AUD-30")?.openBlockers, 1);
+      assert.strictEqual(items.find((item) => item.id === "AUD-31")?.openBlockers, 0);
+      const { eligible, blocked } = classify(items);
+      assert.deepStrictEqual(blocked, [{ id: id("AUD-30"), title: "waits on AUD-31", openBlockers: 1 }]);
+      assert.deepStrictEqual(
+        eligible.map((entry) => entry.id),
+        [id("AUD-31")],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              identifier: "AUD-30",
+              title: "waits on AUD-31",
+              labels: ["state:ready-for-agent"],
+              openBlockers: 1,
+            },
+            { identifier: "AUD-31", title: "the blocker", labels: ["state:ready-for-agent"] },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("derives the actionable set from state: labels and Canceled workflow state", () =>
     Effect.gen(function* () {
       const source = yield* WorkSource;

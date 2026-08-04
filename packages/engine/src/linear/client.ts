@@ -35,6 +35,7 @@ export interface RawIssue {
   readonly labels: ReadonlyArray<string>;
   readonly stateName: string;
   readonly stateType: string;
+  readonly openBlockers: number;
 }
 
 export interface ObservedRawIssue extends RawIssue {
@@ -71,6 +72,11 @@ const CommentNode = Schema.Struct({
   user: Schema.NullOr(Schema.Struct({ id: Schema.String })),
 });
 
+const RelationNode = Schema.Struct({
+  type: Schema.String,
+  issue: Schema.Struct({ state: Schema.Struct({ type: Schema.String }) }),
+});
+
 const IssueNode = Schema.Struct({
   id: Schema.String,
   identifier: Schema.String,
@@ -82,6 +88,7 @@ const IssueNode = Schema.Struct({
     name: Schema.String,
     type: Schema.String,
   }),
+  inverseRelations: Schema.optional(Schema.Struct({ nodes: Schema.Array(RelationNode) })),
   comments: Schema.optional(Schema.Struct({ nodes: Schema.Array(CommentNode) })),
 });
 
@@ -163,7 +170,8 @@ const millisFromIso = (value: string) => {
 const issuePageSize = 100;
 const labelPageSize = 50;
 // Linear rejects any single query above 10,000 complexity points, and a nested connection multiplies
-// its children by its page size, so these three sizes multiply out rather than add up.
+// its children by its page size, so these sizes multiply out rather than add up.
+const relationPageSize = 8;
 const coordinationPageSize = 5;
 
 const issueFields = `
@@ -171,7 +179,10 @@ const issueFields = `
       identifier
       title
       labels(first: ${labelPageSize}) { nodes { name } }
-      state { name type }`;
+      state { name type }
+      inverseRelations(first: ${relationPageSize}) {
+        nodes { type issue { state { type } } }
+      }`;
 
 const coordinationFields = `
       comments(
@@ -254,6 +265,20 @@ const coordinatedIssuesShape = teamShape(
   ", $bot: ID!, $ledger: String!",
 );
 
+const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
+
+// Linear's nested inverseRelations connection can't be filtered or ordered server-side, so a full
+// page may hide further blockers; when the page is full we can't prove the issue is unblocked, so we
+// hold it rather than dispatch it ahead of a dependency.
+const openBlockersOf = (issue: typeof IssueNode.Type) => {
+  const relations = issue.inverseRelations?.nodes ?? [];
+  const open = relations.filter(
+    (relation) => relation.type === "blocks" && !isResolvedBlocker(relation.issue.state.type),
+  ).length;
+  if (open > 0) return open;
+  return relations.length >= relationPageSize ? 1 : 0;
+};
+
 const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   id: issue.id,
   identifier: issue.identifier,
@@ -261,6 +286,7 @@ const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   labels: issue.labels.nodes.map((label) => label.name),
   stateName: issue.state.name,
   stateType: issue.state.type,
+  openBlockers: openBlockersOf(issue),
 });
 
 const toRawComment = (comment: typeof CommentNode.Type): ReadonlyArray<RawComment> =>
