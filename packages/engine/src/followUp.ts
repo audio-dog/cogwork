@@ -3,10 +3,13 @@ import type { CheckState } from "./ci";
 
 export type PrReview = "pending" | "changes-requested" | "ready";
 
+export type BaseDivergence = "conflict" | "clean" | "none";
+
 export const FollowUpMarker = Schema.Struct({
   checks: Schema.Literals(["passing", "failing", "pending"]),
   humanCommentAtMillis: Schema.Finite,
   noProgress: Schema.Finite,
+  baseDivergence: Schema.Literals(["conflict", "clean", "none"]),
 });
 
 export type FollowUpMarker = typeof FollowUpMarker.Type;
@@ -16,6 +19,7 @@ export interface ObservedPr {
   readonly checks: CheckState;
   readonly latestHumanCommentAtMillis: number | null;
   readonly fresh: boolean;
+  readonly baseDivergence: BaseDivergence;
   readonly followUp: FollowUpMarker | null;
 }
 
@@ -25,6 +29,7 @@ export interface FollowUpContext {
   readonly noProgress: number;
   readonly stalled: boolean;
   readonly fresh: boolean;
+  readonly baseDivergence: BaseDivergence;
 }
 
 export const followUpNoProgressLimit = 3;
@@ -34,12 +39,18 @@ const humanCommentAt = (pr: ObservedPr) => pr.latestHumanCommentAtMillis ?? 0;
 const hasNewHumanComment = (pr: ObservedPr) => humanCommentAt(pr) > (pr.followUp?.humanCommentAtMillis ?? 0);
 
 export const triggersFollowUp = (pr: ObservedPr) =>
-  pr.checks === "failing" || pr.review === "changes-requested" || hasNewHumanComment(pr);
+  pr.checks === "failing" ||
+  pr.review === "changes-requested" ||
+  pr.baseDivergence === "conflict" ||
+  hasNewHumanComment(pr);
+
+const conflictResolved = (marker: FollowUpMarker, pr: ObservedPr) =>
+  marker.baseDivergence === "conflict" && pr.baseDivergence !== "conflict";
 
 const progressSince = (marker: FollowUpMarker, pr: ObservedPr) => {
   const checksTurnedGreen = pr.checks === "passing" && marker.checks !== "passing";
   const newHuman = humanCommentAt(pr) > marker.humanCommentAtMillis;
-  return checksTurnedGreen || newHuman;
+  return checksTurnedGreen || newHuman || conflictResolved(marker, pr);
 };
 
 export const noProgressCount = (pr: ObservedPr) =>
@@ -53,5 +64,6 @@ export const followUpContext = (pr: ObservedPr): FollowUpContext => {
     noProgress,
     stalled: noProgress >= followUpNoProgressLimit,
     fresh: pr.fresh,
+    baseDivergence: pr.baseDivergence,
   };
 };

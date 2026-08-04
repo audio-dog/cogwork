@@ -85,13 +85,30 @@ describe("github markers", () => {
   });
 
   it("round-trips a follow-up marker and keeps the most recent one", () => {
-    const older: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 1, noProgress: 0 };
-    const newer: FollowUpMarker = { checks: "passing", humanCommentAtMillis: 2, noProgress: 1 };
+    const older: FollowUpMarker = {
+      checks: "failing",
+      humanCommentAtMillis: 1,
+      noProgress: 0,
+      baseDivergence: "conflict",
+    };
+    const newer: FollowUpMarker = {
+      checks: "passing",
+      humanCommentAtMillis: 2,
+      noProgress: 1,
+      baseDivergence: "clean",
+    };
     assert.deepStrictEqual(parseFollowUp([serializeFollowUp(older), serializeFollowUp(newer)]), newer);
   });
 
   it("returns null for a follow-up marker with an unknown check state", () => {
     assert.isNull(parseFollowUp(["<!-- clanker-forge:follow-up checks=maybe human=1 noProgress=0 -->"]));
+  });
+
+  it("reads a follow-up marker written before base divergence existed as base none", () => {
+    assert.deepStrictEqual(
+      parseFollowUp(["<!-- clanker-forge:follow-up checks=failing human=1 noProgress=0 -->"]),
+      { checks: "failing", humanCommentAtMillis: 1, noProgress: 0, baseDivergence: "none" },
+    );
   });
 
   it("parses claim and attempts from a single consolidated coordination body", () => {
@@ -113,7 +130,14 @@ describe("github markers", () => {
     assert.isTrue(hasClankerMarker(ledgerMarker));
     assert.isTrue(hasClankerMarker(serializeClaim({ by: "x", claimedAtMillis: 1 })));
     assert.isTrue(
-      hasClankerMarker(serializeFollowUp({ checks: "failing", humanCommentAtMillis: 1, noProgress: 0 })),
+      hasClankerMarker(
+        serializeFollowUp({
+          checks: "failing",
+          humanCommentAtMillis: 1,
+          noProgress: 0,
+          baseDivergence: "none",
+        }),
+      ),
     );
     assert.isFalse(hasClankerMarker("please take another look, this still fails"));
   });
@@ -228,7 +252,12 @@ describe("github markers", () => {
   });
 
   it("keeps a follow-up marker parseable from a body that also carries a detail", () => {
-    const marker: FollowUpMarker = { checks: "failing", humanCommentAtMillis: 7, noProgress: 2 };
+    const marker: FollowUpMarker = {
+      checks: "failing",
+      humanCommentAtMillis: 7,
+      noProgress: 2,
+      baseDivergence: "conflict",
+    };
     const body = formatCoordinationBody({
       status: defaultStatus,
       markers: [serializeFollowUp(marker)],

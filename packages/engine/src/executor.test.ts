@@ -142,6 +142,7 @@ const followUpItem = {
     noProgress: 0,
     stalled: false,
     fresh: false,
+    baseDivergence: "none" as const,
   },
 };
 

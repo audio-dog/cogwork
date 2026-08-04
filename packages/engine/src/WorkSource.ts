@@ -12,7 +12,7 @@ import * as Schema from "effect/Schema";
 import type { FollowUpMarker, ObservedPr } from "./followUp";
 import type { RegisteredWorkspace } from "./projector";
 
-export type { FollowUpMarker, ObservedPr, PrReview } from "./followUp";
+export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./followUp";
 
 export interface ObservedItem {
   readonly id: WorkItemId;
