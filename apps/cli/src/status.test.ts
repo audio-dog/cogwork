@@ -1,5 +1,5 @@
 import type { DaemonStatus, WorkspaceInfo } from "@clanker-forge/contracts";
-import { HarnessName, WorkItemId, WorkSourceType, WorkspaceId } from "@clanker-forge/contracts";
+import { HarnessName, IssueTrackerType, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { formatStatus } from "./status";
@@ -7,12 +7,12 @@ import { formatStatus } from "./status";
 const workItemId = Schema.decodeSync(WorkItemId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const harnessName = Schema.decodeSync(HarnessName);
-const workSourceType = Schema.decodeSync(WorkSourceType);
+const issueTrackerType = Schema.decodeSync(IssueTrackerType);
 
 const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   name: workspaceId("forge"),
   checkoutPath: "/tmp/forge",
-  workSource: workSourceType("github"),
+  issueTracker: issueTrackerType("github"),
   harness: harnessName("cursor"),
   poll: { status: "ok" },
   eligible: [],

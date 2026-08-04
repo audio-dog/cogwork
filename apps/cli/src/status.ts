@@ -39,7 +39,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     workspace.needsHuman.map((item) => `${item.reason} ${item.id} ${item.title}`),
   );
   return [
-    `  - ${workspace.name} [${workspace.workSource}/${workspace.harness}] ${workspace.checkoutPath}`,
+    `  - ${workspace.name} [${workspace.issueTracker}/${workspace.harness}] ${workspace.checkoutPath}`,
     ...poll,
     ...eligible,
     ...claimed,

@@ -2,21 +2,21 @@ import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@clanker-forge/
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import type { IssueTrackerService } from "./issue-tracker";
+import { route } from "./issue-tracker-router";
 import type { RegisteredWorkspace } from "./projector";
-import type { WorkSourceService } from "./work-source";
-import { route } from "./work-source-router";
 
 const id = Schema.decodeSync(WorkItemId);
 
 const workspaceOf = (
   name: string,
-  workSource: { readonly type: string; readonly repo?: string; readonly team?: string },
+  issueTracker: { readonly type: string; readonly repo?: string; readonly team?: string },
 ): RegisteredWorkspace => ({
   source: `${name}.workspace.ts`,
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,
-    workSource,
+    issueTracker,
     harness: { preferred: "cursor" },
   }),
 });
@@ -43,11 +43,11 @@ const fakeSource = (source: string, log: Array<Recorded>) =>
     recordFollowUp: () => Effect.void,
     note: () => Effect.void,
     setRoles: () => Effect.void,
-  }) as unknown as WorkSourceService;
+  }) as unknown as IssueTrackerService;
 
 const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1 };
 
-describe("workSourceRouter", () => {
+describe("issueTrackerRouter", () => {
   it.effect("forwards the failure reason to the adapter for the workspace's source", () =>
     Effect.gen(function* () {
       const log: Array<Recorded> = [];

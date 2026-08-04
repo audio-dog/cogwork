@@ -19,7 +19,7 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
   Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    workSource: { type: "github", repo: "owner/repo" },
+    issueTracker: { type: "github", repo: "owner/repo" },
     harness: { preferred: "cursor" },
     ...over,
   });

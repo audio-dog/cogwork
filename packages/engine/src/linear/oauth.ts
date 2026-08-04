@@ -228,7 +228,7 @@ export interface DiscoveredIdentity {
   readonly botUserId: string;
 }
 
-// The org's urlKey is what `workSource.organization` config and `StoredCredential.organization`
+// The org's urlKey is what `issueTracker.organization` config and `StoredCredential.organization`
 // carry — it's the slug operators already see in Linear's URLs, unlike the opaque org id.
 export const discoverIdentity = Effect.fn("linear.oauth.discoverIdentity")(function* (accessToken: string) {
   const sdk = new LinearSdk({ accessToken });

@@ -7,10 +7,10 @@ import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
 import type { FollowUpMarker } from "../follow-up";
+import { IssueTracker } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import { SourceControlProvider } from "../source-control";
-import { WorkSource } from "../work-source";
 import { layer as adapterLayer } from "./adapter";
 import {
   GitHubClient,
@@ -161,7 +161,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    workSource: { type: "github", repo: "owner/repo", botLogin: bot.login },
+    issueTracker: { type: "github", repo: "owner/repo", botLogin: bot.login },
     harness: { preferred: "cursor" },
   }),
 };
@@ -174,7 +174,7 @@ const withClient = (seed: Seed) =>
 // Mirrors the reconcile poll: the tracker yields items, the provider attaches PR state.
 const observeItems = (workspace: RegisteredWorkspace) =>
   Effect.gen(function* () {
-    const tracker = yield* WorkSource;
+    const tracker = yield* IssueTracker;
     const provider = yield* SourceControlProvider;
     return yield* observeWorkspace(tracker, provider)(workspace);
   });
@@ -316,7 +316,7 @@ describe("github work source adapter", () => {
 
   it.effect("round-trips a claim and an attempt through GitHub markers", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
       yield* source.claim(workspace, id("#7"), claim);
@@ -364,7 +364,7 @@ describe("github work source adapter", () => {
 
   it.effect("stops claiming after release removes the claim marker label", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       yield* source.claim(workspace, id("#7"), {
         by: "clanker-forge",
         claimedAtMillis: 1,
@@ -671,7 +671,7 @@ describe("github work source adapter", () => {
       const forbidden = /merge(?!able)|resolve/i;
       const client = yield* fakeClient({ issues: [] });
       assert.isFalse(Object.keys(client).some((method) => forbidden.test(method)));
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       assert.isFalse(Object.keys(source).some((method) => forbidden.test(method)));
       const provider = yield* SourceControlProvider;
       assert.isFalse(Object.keys(provider).some((method) => forbidden.test(method)));
@@ -707,7 +707,7 @@ describe("github work source adapter", () => {
 
   it.effect("consolidates claim and attempt markers into one visible status comment", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       const first: Claim = { by: "clanker-forge", claimedAtMillis: 10, stage: "implement" };
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 11 };
@@ -733,7 +733,7 @@ describe("github work source adapter", () => {
 
   it.effect("keeps every failed attempt across edits so the cap still escalates", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       for (const at of [1, 2, 3]) {
         yield* source.recordAttempt(workspace, id("#12"), {
@@ -761,7 +761,7 @@ describe("github work source adapter", () => {
 
   it.effect("ignores an impostor ledger comment and creates its own", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       yield* source.claim(workspace, id("#14"), {
         by: "clanker-forge",
@@ -793,7 +793,7 @@ describe("github work source adapter", () => {
 
   it.effect("leaves legacy marker comments alone and writes new markers to a coordination comment", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       const legacyAttempt: AttemptRecord = { stage: "triage", outcome: "failed", atMillis: 1 };
       const claim: Claim = { by: "clanker-forge", claimedAtMillis: 2, stage: "implement" };
@@ -825,7 +825,7 @@ describe("github work source adapter", () => {
 
   it.effect("posts each triage proposal as its own comment beside the coordination comment", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
       const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
@@ -860,7 +860,7 @@ describe("github work source adapter", () => {
 
   it.effect("keeps prior triage proposals when triage runs again", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       yield* source.note(workspace, id("#17"), "First proposal");
       yield* source.note(workspace, id("#17"), "Second proposal");
@@ -876,7 +876,7 @@ describe("github work source adapter", () => {
 
   it.effect("clears a leftover coordination detail when posting a new triage proposal", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       yield* source.recordFollowUp(
         workspace,
@@ -901,7 +901,7 @@ describe("github work source adapter", () => {
 
   it.effect("ignores marker syntax embedded in a triage proposal comment", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
       const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
@@ -927,7 +927,7 @@ describe("github work source adapter", () => {
 
   it.effect("lets the coordination comment outrank a legacy marker comment written after it", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const stale: FollowUpMarker = {
         checks: "pending",
         humanCommentAtMillis: 1,
@@ -978,7 +978,7 @@ describe("github work source adapter", () => {
 
   it.effect("records a follow-up marker with a visible status instead of a marker-only comment", () =>
     Effect.gen(function* () {
-      const source = yield* WorkSource;
+      const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       const marker: FollowUpMarker = {
         checks: "failing",

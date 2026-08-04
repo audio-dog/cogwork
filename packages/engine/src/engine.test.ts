@@ -10,14 +10,14 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./daemon";
+import type { TrackerItem } from "./issue-tracker";
+import * as IssueTracker from "./issue-tracker";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunEventBus from "./run-event-bus";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
-import type { TrackerItem } from "./work-source";
-import * as WorkSource from "./work-source";
 import { WorktreeManager } from "./worktree";
 
 const validModule: Registry.LoadedWorkspace = {
@@ -25,7 +25,7 @@ const validModule: Registry.LoadedWorkspace = {
   value: {
     name: "example",
     checkoutPath: "/repos/example",
-    workSource: { type: "linear" },
+    issueTracker: { type: "linear" },
     harness: { preferred: "cursor" },
   },
 };
@@ -42,7 +42,7 @@ const sampleResult: Registry.LoadResult = {
 
 const id = Schema.decodeSync(WorkItemId);
 
-const stub = (service: Partial<WorkSource.WorkSourceService>): WorkSource.WorkSourceService => ({
+const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.IssueTrackerService => ({
   rateLimitScope: () => null,
   observe: () => Effect.succeed([]),
   claim: () => Effect.void,
@@ -58,14 +58,14 @@ const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [])
   Layer.succeed(SourceControlProvider, { observe: () => Effect.succeed(new Map(prs)) });
 
 const sources = (
-  workSourceLayer: Layer.Layer<WorkSource.WorkSource>,
+  issueTrackerLayer: Layer.Layer<IssueTracker.IssueTracker>,
   prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [],
-) => Layer.mergeAll(workSourceLayer, providerStub(prs));
+) => Layer.mergeAll(issueTrackerLayer, providerStub(prs));
 
 const observing = (
   items: ReadonlyArray<TrackerItem>,
   prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [],
-) => sources(Layer.succeed(WorkSource.WorkSource, stub({ observe: () => Effect.succeed(items) })), prs);
+) => sources(Layer.succeed(IssueTracker.IssueTracker, stub({ observe: () => Effect.succeed(items) })), prs);
 
 describe("buildRegistry", () => {
   it("registers valid configs and isolates malformed and unreadable ones", () => {
@@ -137,7 +137,7 @@ describe("reconcile worker", () => {
   const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
 
   const workerLayer = Reconcile.layer.pipe(
-    Layer.provide(Layer.mergeAll(registryLayer, sources(WorkSource.emptyLayer))),
+    Layer.provide(Layer.mergeAll(registryLayer, sources(IssueTracker.emptyLayer))),
   );
 
   it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
@@ -227,11 +227,11 @@ describe("reconcile worker", () => {
 
   const authFailingSource = sources(
     Layer.succeed(
-      WorkSource.WorkSource,
+      IssueTracker.IssueTracker,
       stub({
         observe: () =>
           Effect.fail(
-            new WorkSource.WorkSourceError({
+            new IssueTracker.IssueTrackerError({
               reason: "auth",
               message: "GitHub authentication failed (401)",
             }),
@@ -263,7 +263,7 @@ describe("reconcile worker", () => {
   const rateLimitedSource = (observes: Ref.Ref<number>, retryAfterMillis: number | undefined) =>
     sources(
       Layer.succeed(
-        WorkSource.WorkSource,
+        IssueTracker.IssueTracker,
         stub({
           rateLimitScope: () => "linear:LINEAR_API_KEY",
           observe: () =>
@@ -271,7 +271,7 @@ describe("reconcile worker", () => {
               Ref.update(observes, (count) => count + 1),
               () =>
                 Effect.fail(
-                  new WorkSource.WorkSourceError({
+                  new IssueTracker.IssueTrackerError({
                     reason: "rate-limited",
                     message: "Linear rate limit exceeded",
                     retryAfterMillis,
@@ -346,14 +346,17 @@ describe("reconcile worker", () => {
   const scopelessSource = (observes: Ref.Ref<number>) =>
     sources(
       Layer.succeed(
-        WorkSource.WorkSource,
+        IssueTracker.IssueTracker,
         stub({
           observe: () =>
             Effect.flatMap(
               Ref.update(observes, (count) => count + 1),
               () =>
                 Effect.fail(
-                  new WorkSource.WorkSourceError({ reason: "rate-limited", message: "secondary rate limit" }),
+                  new IssueTracker.IssueTrackerError({
+                    reason: "rate-limited",
+                    message: "secondary rate limit",
+                  }),
                 ),
             ),
         }),
@@ -432,7 +435,7 @@ describe("daemon heartbeats", () => {
         Effect.provide(
           Layer.mergeAll(
             Reconcile.layer.pipe(
-              Layer.provide(Layer.mergeAll(registeredSample, sources(WorkSource.emptyLayer))),
+              Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
             ),
             registeredSample,
             schedulerStub,
@@ -448,7 +451,7 @@ describe("daemon heartbeats", () => {
 describe("daemon status over rpc", () => {
   const registryLayer = registeredSample;
   const schedulerStub = Layer.succeed(Scheduler.Scheduler, schedulerStubService);
-  const daemonLayer = (sourceLayer: Layer.Layer<WorkSource.WorkSource | SourceControlProvider>) =>
+  const daemonLayer = (sourceLayer: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
@@ -458,7 +461,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(RunEventBus.layer),
     );
 
-  const layer = daemonLayer(sources(WorkSource.emptyLayer));
+  const layer = daemonLayer(sources(IssueTracker.emptyLayer));
 
   it.effect("reports health, registered workspaces, their derived work, and failures", () =>
     Effect.gen(function* () {
@@ -467,7 +470,7 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.health, "running");
       assert.strictEqual(status.workspaces.length, 1);
       assert.strictEqual(status.workspaces[0]?.name, "example");
-      assert.strictEqual(status.workspaces[0]?.workSource, "linear");
+      assert.strictEqual(status.workspaces[0]?.issueTracker, "linear");
       assert.strictEqual(status.workspaces[0]?.poll.status, "ok");
       assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.strictEqual(status.failures.length, 2);

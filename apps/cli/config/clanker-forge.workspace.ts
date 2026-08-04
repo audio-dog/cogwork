@@ -8,7 +8,7 @@ const followUpModel = "composer-2.5" satisfies CursorModel;
 export default defineWorkspace({
   name: "clanker-forge",
   checkoutPath: "/Users/taylorsteele/sites/clanker-forge",
-  workSource: {
+  issueTracker: {
     type: "github",
     repo: "taylorfsteele/clanker-forge",
     tokenEnv: "GITHUB_TOKEN",

@@ -19,14 +19,14 @@ import * as TestClock from "effect/testing/TestClock";
 import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
 import * as Executor from "./executor";
+import type { TrackerItem } from "./issue-tracker";
+import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import * as SourceControl from "./source-control";
-import type { TrackerItem } from "./work-source";
-import { WorkSource, type WorkSourceService } from "./work-source";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -39,7 +39,7 @@ const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace =>
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,
-    workSource: { type: "github", repo: `owner/${name}`, botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: `owner/${name}`, botLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
     ...(concurrency === undefined ? {} : { concurrency }),
@@ -235,8 +235,8 @@ const workerLayer = (snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
 const registryLayer = (workspaces: ReadonlyArray<RegisteredWorkspace>) =>
   Layer.succeed(Registry.WorkspaceRegistry, { workspaces, failures: [] });
 
-const workSourceStub = (service: Partial<WorkSourceService>) =>
-  Layer.succeed(WorkSource, {
+const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
+  Layer.succeed(IssueTracker, {
     rateLimitScope: () => null,
     observe: () => Effect.succeed([]),
     claim: () => Effect.void,
@@ -254,7 +254,7 @@ const schedulerLayer = (
     readonly registry: ReadonlyArray<RegisteredWorkspace>;
     readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
     readonly execute: ExecuteFn;
-    readonly workSource?: Partial<WorkSourceService>;
+    readonly issueTracker?: Partial<IssueTrackerService>;
     readonly ledger?: RunLedger.RunLedgerService;
   },
 ) =>
@@ -264,7 +264,7 @@ const schedulerLayer = (
         registryLayer(deps.registry),
         workerLayer(deps.snapshots),
         Layer.succeed(Executor.Executor, { execute: deps.execute }),
-        workSourceStub(deps.workSource ?? {}),
+        issueTrackerStub(deps.issueTracker ?? {}),
         SourceControl.emptyLayer,
         deps.ledger ? Layer.succeed(RunLedger.RunLedger, deps.ledger) : RunLedger.layerMemory,
       ),
@@ -623,7 +623,7 @@ describe("Scheduler.recover", () => {
       const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
       const started = yield* Ref.make<ReadonlyArray<string>>([]);
       const ran = yield* Latch.make();
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs]),
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
         recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
@@ -647,7 +647,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );
@@ -666,7 +666,7 @@ describe("Scheduler.recover", () => {
           { stage: "implement", outcome: "failed", atMillis: 2 },
         ],
       };
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([nearExhausted]),
         recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
         setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
@@ -685,7 +685,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );
@@ -697,7 +697,7 @@ describe("Scheduler.recover", () => {
       const released = yield* Ref.make<ReadonlyArray<string>>([]);
       const attempts = yield* Ref.make<ReadonlyArray<{ item: string; reason?: string }>>([]);
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs, claimedByOther, unclaimed]),
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
         recordAttempt: (_workspace, itemId, _attempt, reason) =>
@@ -715,7 +715,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
+            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), issueTracker },
           ),
         ),
       );
@@ -732,7 +732,7 @@ describe("Scheduler.recover", () => {
         ],
       };
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([exhausted]),
         release: () => Effect.void,
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
@@ -752,7 +752,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
+            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), issueTracker },
           ),
         ),
       );
@@ -770,7 +770,7 @@ describe("Scheduler.recover", () => {
       };
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
       const roles = yield* Ref.make<ReadonlyArray<string>>([]);
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([exhausted]),
         release: () => Effect.void,
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
@@ -788,7 +788,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
+            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), issueTracker },
           ),
         ),
       );
@@ -809,7 +809,7 @@ describe("Scheduler.recover", () => {
       const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
       const started = yield* Ref.make<ReadonlyArray<string>>([]);
       const ran = yield* Latch.make();
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs]),
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
         recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
@@ -834,7 +834,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );
@@ -846,7 +846,7 @@ describe("Scheduler.recover", () => {
       const roles = yield* Ref.make<ReadonlyArray<string>>([]);
       const started = yield* Ref.make<ReadonlyArray<string>>([]);
       const ran = yield* Latch.make();
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs]),
         setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
       };
@@ -871,7 +871,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );
@@ -885,7 +885,7 @@ describe("Scheduler.recover", () => {
       const started = yield* Ref.make<ReadonlyArray<string>>([]);
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
       const roles = yield* Ref.make<ReadonlyArray<string>>([]);
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs]),
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
         recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
@@ -915,7 +915,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );

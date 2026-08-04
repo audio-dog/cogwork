@@ -5,12 +5,12 @@ import {
   Executor,
   GitHub,
   Harness,
+  issueTrackerRoutedLayer,
   Linear,
   Reconcile,
   Registry,
   RunEventBus,
   Scheduler,
-  workSourceRoutedLayer,
 } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
@@ -58,8 +58,8 @@ const socketServerLayer = (socketPath: string) =>
 const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
-const workSourceLayer = (credentialsPath: string) =>
-  Layer.mergeAll(workSourceRoutedLayer, GitHub.providerLayer).pipe(
+const issueTrackerLayer = (credentialsPath: string) =>
+  Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
     Layer.provide(GitHub.clientLayer),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentialsLayer(credentialsPath)),
@@ -73,7 +73,7 @@ const sharedLayer = (options: DaemonOptions) => {
   const base = Layer.mergeAll(
     registryLayer(options.configHome),
     Daemon.daemonInfoLayer,
-    workSourceLayer(options.credentialsPath),
+    issueTrackerLayer(options.credentialsPath),
     ledgerLayer(options.ledgerPath),
     harnessLayer,
     RunEventBus.layer,
