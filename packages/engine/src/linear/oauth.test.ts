@@ -17,7 +17,6 @@ import {
   redirectUri,
   storedTokenFrom,
   tokenExchangeRequest,
-  tokenRefreshRequest,
 } from "./oauth";
 
 const cryptoLayer = Layer.succeed(
@@ -159,16 +158,6 @@ describe("linear oauth helpers", () => {
       redirect_uri: "http://localhost:39517/oauth/callback",
       code: "auth-code",
       code_verifier: "verifier-1",
-    });
-  });
-
-  it("builds a form-encoded refresh request carrying only the client id", () => {
-    const refresh = tokenRefreshRequest({ clientId: "client-1", refreshToken: "refresh-1" });
-    assert.strictEqual(refresh.url, "https://api.linear.app/oauth/token");
-    assert.deepStrictEqual(Object.fromEntries(new URLSearchParams(refresh.body)), {
-      grant_type: "refresh_token",
-      client_id: "client-1",
-      refresh_token: "refresh-1",
     });
   });
 

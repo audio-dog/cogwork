@@ -317,6 +317,27 @@ describe("CredentialStore (refresh)", () => {
     }).pipe(withRefreshEnv),
   );
 
+  it.effect("refreshes once when two accounts resolve to the same stored credential", () =>
+    Effect.gen(function* () {
+      const { store, refreshes } = yield* harness({
+        initial: [stored("acme", expiredWithRefresh())],
+        onRefresh: () => Effect.succeed(rotatedToken()),
+      });
+      const credentials = yield* Effect.all(
+        [
+          store.bearerToken({ ...oauthAccount, key: "AUD-alpha" }),
+          store.bearerToken({ ...oauthAccount, key: "AUD-beta" }),
+        ],
+        { concurrency: "unbounded" },
+      );
+      assert.strictEqual(yield* refreshes, 1);
+      assert.deepStrictEqual(
+        credentials.map((credential) => Redacted.value(credential.token)),
+        ["rotated-token", "rotated-token"],
+      );
+    }).pipe(withRefreshEnv),
+  );
+
   it.effect("does not refresh again once the rotated token is stored", () =>
     Effect.gen(function* () {
       const { store, refreshes } = yield* harness({

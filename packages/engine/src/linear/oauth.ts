@@ -91,41 +91,17 @@ export interface FormRequest {
   readonly body: string;
 }
 
-const formHeaders = {
-  "content-type": "application/x-www-form-urlencoded",
-  accept: "application/json",
-} as const;
-
 export const tokenExchangeRequest = (params: TokenExchangeParams) =>
   ({
     url: tokenEndpoint,
     method: "POST",
-    headers: formHeaders,
+    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       client_id: params.clientId,
       redirect_uri: params.redirectUri,
       code: params.code,
       code_verifier: params.verifier,
-    }).toString(),
-  }) satisfies FormRequest;
-
-export interface TokenRefreshParams {
-  readonly clientId: string;
-  readonly refreshToken: string;
-}
-
-// A PKCE app has no client secret, so the refresh grant carries only the client id alongside the
-// refresh token.
-export const tokenRefreshRequest = (params: TokenRefreshParams) =>
-  ({
-    url: tokenEndpoint,
-    method: "POST",
-    headers: formHeaders,
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: params.clientId,
-      refresh_token: params.refreshToken,
     }).toString(),
   }) satisfies FormRequest;
 
@@ -153,10 +129,16 @@ export const storedTokenFrom = (response: TokenResponse, nowMillis: number) =>
     scopes: scopesOf(response.scope),
   }) satisfies StoredToken;
 
-const httpRequestOf = (form: FormRequest) =>
-  HttpClientRequest.post(form.url).pipe(
-    HttpClientRequest.setHeaders(form.headers),
-    HttpClientRequest.bodyText(form.body, form.headers["content-type"]),
+// A PKCE app has no client secret, so the refresh grant carries only the client id alongside the
+// refresh token.
+const refreshRequest = (request: TokenRefreshRequest) =>
+  HttpClientRequest.post(tokenEndpoint).pipe(
+    HttpClientRequest.setHeader("accept", "application/json"),
+    HttpClientRequest.bodyUrlParams({
+      grant_type: "refresh_token",
+      client_id: request.clientId,
+      refresh_token: Redacted.value(request.refreshToken),
+    }),
   );
 
 // Transport errors and schema issues both quote the payload that failed, and here that payload is
@@ -166,11 +148,7 @@ const refreshFailed = (account: string, detail: string) =>
 
 export const makeTokenRefresh = (client: HttpClient.HttpClient): TokenRefresh =>
   Effect.fn("linear.oauth.tokenRefresh")(function* (request: TokenRefreshRequest) {
-    const form = tokenRefreshRequest({
-      clientId: request.clientId,
-      refreshToken: Redacted.value(request.refreshToken),
-    });
-    const response = yield* Effect.mapError(client.execute(httpRequestOf(form)), () =>
+    const response = yield* Effect.mapError(client.execute(refreshRequest(request)), () =>
       refreshFailed(request.account, "the token endpoint could not be reached"),
     );
     if (response.status !== 200) {

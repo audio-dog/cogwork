@@ -69,7 +69,7 @@ export interface TokenRefreshRequest {
 
 export type TokenRefresh = (request: TokenRefreshRequest) => Effect.Effect<StoredToken, CredentialError>;
 
-export const refreshUnavailable: TokenRefresh = (request) =>
+const refreshUnavailable: TokenRefresh = (request) =>
   Effect.fail(
     new CredentialError({
       account: request.account,
@@ -108,8 +108,6 @@ const matching = (account: CredentialAccount) => (credential: StoredCredential) 
   credential.workSource === account.workSource &&
   (account.organization === null || credential.organization === account.organization);
 
-// A token that lapses mid-request comes back as an opaque 401, so the margin is what makes the
-// refresh happen before a request starts rather than after one has already failed.
 const expiryMarginMillis = 60_000;
 
 interface StoredMatch {
@@ -158,16 +156,22 @@ export const make = (
 
   const rotate = Effect.fn("CredentialStore.rotate")(function* (
     account: CredentialAccount,
-    credential: StoredCredential,
+    stale: StoredCredential,
     clientId: string,
-    refreshToken: Redacted.Redacted<string>,
+    fallbackRefreshToken: Redacted.Redacted<string>,
   ) {
-    const token = yield* refresh({ account: account.key, clientId, refreshToken });
-    // Linear leaves refresh_token out of a response when it does not rotate one, so the token being
-    // replaced has to carry its refresh token forward or the next refresh has nothing to present.
+    // Not a redundant load: whoever held the gate first rewrote the file, and reading it again is
+    // what stops the fibers queued behind them spending the same refresh token over again.
+    const match = yield* matchStored(stored, account);
+    if (match?.live) return match.credential;
+    const credential = match?.credential ?? stale;
+    const presented = credential.token.refreshToken ?? fallbackRefreshToken;
+    const token = yield* refresh({ account: account.key, clientId, refreshToken: presented });
+    // Linear leaves refresh_token out of a response when it does not rotate one, so the presented
+    // token has to carry forward or the next refresh has nothing to present.
     const rotated = {
       ...credential,
-      token: { ...token, refreshToken: token.refreshToken ?? refreshToken },
+      token: { ...token, refreshToken: token.refreshToken ?? presented },
     } satisfies StoredCredential;
     yield* stored.save(rotated);
     yield* Effect.logInfo("refreshed the stored credential", {
@@ -177,41 +181,22 @@ export const make = (
     return rotated;
   });
 
-  // Single-flight: the fiber holding the gate rewrites the credential file, so the fibers queued
-  // behind it re-read that rotated token instead of spending the refresh token a second time.
-  const refreshOnce = Effect.fn("CredentialStore.refreshOnce")(function* (
-    account: CredentialAccount,
-    stale: StoredCredential,
-    clientId: string,
-    refreshToken: Redacted.Redacted<string>,
-  ) {
-    const match = yield* matchStored(stored, account);
-    if (match?.live) return match.credential;
-    const credential = match?.credential ?? stale;
-    return yield* rotate(account, credential, clientId, credential.token.refreshToken ?? refreshToken);
-  });
-
-  const renew = Effect.fn("CredentialStore.renew")(function* (
-    account: CredentialAccount,
-    stale: StoredCredential,
-  ) {
-    const { clientId } = account;
-    const refreshToken = stale.token.refreshToken;
-    if (!clientId || !refreshToken) {
-      yield* Effect.logInfo("stored credential expired and cannot be refreshed; using the environment", {
-        account: account.key,
-        organization: stale.organization,
-      });
-      return null;
-    }
-    return yield* gateFor(account.key).withPermit(refreshOnce(account, stale, clientId, refreshToken));
-  });
-
   const resolveStored = Effect.fn("CredentialStore.resolveStored")(function* (account: CredentialAccount) {
     const match = yield* matchStored(stored, account);
     if (!match) return null;
     if (match.live) return match.credential;
-    return yield* renew(account, match.credential);
+    const { clientId } = account;
+    const refreshToken = match.credential.token.refreshToken;
+    if (!clientId || !refreshToken) {
+      yield* Effect.logInfo("stored credential expired and cannot be refreshed; using the environment", {
+        account: account.key,
+        organization: match.credential.organization,
+      });
+      return null;
+    }
+    return yield* gateFor(accountOf(match.credential)).withPermit(
+      rotate(account, match.credential, clientId, refreshToken),
+    );
   });
 
   return {
