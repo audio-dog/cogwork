@@ -1,0 +1,49 @@
+packages/engine/src/Playbook.ts
+  s_3094c694ba25a8::t_1f9067c42eaf6f 192-199
+packages/engine/src/Worktree.ts
+  s_3094c694ba25a8::t_fa2c584b6430f4 82-85
+  s_3094c694ba25a8::t_8abda1aece523e 190-194,205-209
+packages/engine/src/Executor.ts
+  s_3094c694ba25a8::t_4b14051bd792be 18
+  s_3094c694ba25a8::t_7c20b217e18503 489-503,509-513
+  s_3094c694ba25a8::t_f628909988cc4b 514-515
+packages/engine/src/Scheduler.ts
+  s_3094c694ba25a8::t_845d65f7a64cbe 393,399,411
+  s_3094c694ba25a8::t_bc82d6f6a49573 1
+  s_3094c694ba25a8::t_abfbbd4f31ffee 352,354-355
+packages/engine/src/scheduler.test.ts
+  s_3094c694ba25a8::t_5ae594a8d0e60c 652-715,895-901
+  s_3094c694ba25a8::t_e5b6efcdfe5d7f 903-926
+  s_3094c694ba25a8::t_39102f7d182db5 902
+packages/engine/src/playbook.test.ts
+  s_3094c694ba25a8::t_0889f13c6347f2 5
+  s_3094c694ba25a8::t_a48df6719763ff 148-159
+packages/engine/src/worktree.test.ts
+  s_3094c694ba25a8::t_0354f67400a223 281-322
+packages/engine/src/classify.ts
+  s_3094c694ba25a8::t_a2153fcf5ed6c3 9,15-19,23
+packages/engine/src/executor.test.ts
+  s_3094c694ba25a8::t_815ceddec27533 243-245,247-252
+  s_3094c694ba25a8::t_a2aefb5bc73625 1-5,7
+  s_3094c694ba25a8::t_7c06a07a84782c 246
+  s_3094c694ba25a8::t_6e13c1d165106b 655-661,663-688
+  s_3094c694ba25a8::t_03855f5b9f9e99 662
+  s_3094c694ba25a8::t_83555166b3ea63 33
+  s_3094c694ba25a8::t_3212761e1d9a5b 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "2c1dbe76461a1455d24af8cd287959a76c6ae969",
+  "prompts": {},
+  "sessions": {
+    "s_3094c694ba25a8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "36dd1a3d-850e-46a8-b74a-2c50f9ea3efc",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
