@@ -1,0 +1,30 @@
+packages/engine/src/Scheduler.ts
+  s_eddb26b412af68::t_500fee5cc787fb 18
+  s_eddb26b412af68::t_3cba72c6704f01 383
+  s_eddb26b412af68::t_358958656fb130 15
+  s_eddb26b412af68::t_844b2ca7dfbf78 301-315,344,347,351,360,364,370-382,384-401,408-412
+  s_eddb26b412af68::t_be784f05cf32c4 249,253,258,263,266-272
+  s_eddb26b412af68::t_a8acce8af4bfcf 273
+packages/engine/src/scheduler.test.ts
+  s_eddb26b412af68::t_a4f3a77650742a 792-893,895-896,898-907,909-918
+  s_eddb26b412af68::t_aeb9b11de7209d 739
+  s_eddb26b412af68::t_d91b99346d3083 894,897,908
+packages/engine/src/classify.ts
+  s_eddb26b412af68::t_5228b0fc0ed46e 61-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "8924cd55c55fd0c871a695ddb79b480102c478d6",
+  "prompts": {},
+  "sessions": {
+    "s_eddb26b412af68": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "30626066-5792-4b38-9aff-ce8f09116acf",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
