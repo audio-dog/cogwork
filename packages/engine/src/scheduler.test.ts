@@ -658,7 +658,7 @@ describe("Scheduler.recover", () => {
     Effect.gen(function* () {
       const resumed = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ran = yield* Latch.make();
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs]),
       };
       const execute: ExecuteFn = (_workspace, item) =>
@@ -679,7 +679,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );
@@ -690,7 +690,7 @@ describe("Scheduler.recover", () => {
     Effect.gen(function* () {
       const resumed = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ran = yield* Latch.make();
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs]),
       };
       const execute: ExecuteFn = (_workspace, item) =>
@@ -711,7 +711,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );
@@ -909,7 +909,7 @@ describe("Scheduler.recover", () => {
     Effect.gen(function* () {
       const resumed = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ran = yield* Latch.make();
-      const workSource: Partial<WorkSourceService> = {
+      const issueTracker: Partial<IssueTrackerService> = {
         observe: () => Effect.succeed([claimedByUs]),
       };
       const execute: ExecuteFn = (_workspace, item) =>
@@ -930,7 +930,7 @@ describe("Scheduler.recover", () => {
         Effect.provide(
           schedulerLayer(
             { globalLimit: 4, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute, workSource, ledger },
+            { registry: [wsA], snapshots, execute, issueTracker, ledger },
           ),
         ),
       );
