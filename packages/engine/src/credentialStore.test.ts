@@ -9,6 +9,7 @@ import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import {
   accountOf,
+  type ClientCredentialsGrant,
   CredentialError,
   CredentialStore,
   type CredentialStoreService,
@@ -25,7 +26,8 @@ const account = {
   workSource: "linear",
   organization: null,
   tokenEnv: "LINEAR_API_KEY",
-  clientId: null,
+  clientCredentials: null,
+  oauthClientId: null,
 } as const;
 
 const withEnv = (env: Record<string, string>) =>
@@ -109,7 +111,10 @@ const withStored = (
 ) =>
   Effect.provide(
     Layer.mergeAll(
-      Layer.succeed(CredentialStore, make({ load: Effect.succeed(credentials), save: () => Effect.void })),
+      Layer.succeed(
+        CredentialStore,
+        make({ stored: { load: Effect.succeed(credentials), save: () => Effect.void } }),
+      ),
       ConfigProvider.layer(ConfigProvider.fromEnv({ env })),
     ),
   );
@@ -145,8 +150,10 @@ describe("CredentialStore (stored)", () => {
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const store = make({
-        load: Effect.succeed([stored("acme", storedToken(now + millis))]),
-        save: () => Effect.void,
+        stored: {
+          load: Effect.succeed([stored("acme", storedToken(now + millis))]),
+          save: () => Effect.void,
+        },
       });
       return yield* store.bearerToken(account);
     }).pipe(
@@ -207,7 +214,7 @@ describe("CredentialStore (stored)", () => {
   );
 });
 
-const oauthAccount = { ...account, clientId: "client-1" };
+const oauthAccount = { ...account, oauthClientId: "client-1" };
 
 const expiredWithRefresh = (refreshToken = "refresh-1"): StoredToken => ({
   ...storedToken(0),
@@ -248,7 +255,7 @@ const harness = Effect.fn("harness")(function* (options: {
       ]),
   };
   return {
-    store: make(stored, refresh),
+    store: make({ stored, refresh }),
     refreshes: Ref.get(attempts),
     savedToken: Effect.map(Ref.get(credentials), (entries) => entries[0]?.token),
   } satisfies Harness;
@@ -378,11 +385,125 @@ describe("CredentialStore (refresh)", () => {
   it.effect("reports an auth error when no refresh is wired into the store", () =>
     Effect.gen(function* () {
       const store = make({
-        load: Effect.succeed([stored("acme", expiredWithRefresh())]),
-        save: () => Effect.void,
+        stored: {
+          load: Effect.succeed([stored("acme", expiredWithRefresh())]),
+          save: () => Effect.void,
+        },
       });
       const error = yield* Effect.flip(store.bearerToken(oauthAccount));
       assert.include(error.message, "no token refresh");
     }).pipe(withRefreshEnv),
+  );
+});
+
+const requesting = {
+  ...account,
+  clientCredentials: { clientId: "client-1", secretEnv: "LINEAR_CLIENT_SECRET" },
+};
+
+interface GrantCalls {
+  readonly minted: ReadonlyArray<string>;
+  readonly forgotten: ReadonlyArray<string>;
+}
+
+const recordingGrant = (secret: string | null) => {
+  const minted: Array<string> = [];
+  const forgotten: Array<string> = [];
+  const grant: ClientCredentialsGrant = {
+    token: (account) => {
+      if (!account.clientCredentials) return Effect.succeed(null);
+      if (secret === null) {
+        return Effect.fail(
+          new CredentialError({
+            account: account.key,
+            message: `client credentials for ${account.key} need ${account.clientCredentials.secretEnv}, which is unset or empty`,
+          }),
+        );
+      }
+      minted.push(account.key);
+      return Effect.succeed(Redacted.make(secret));
+    },
+    forget: (account) => Effect.sync(() => forgotten.push(account.key)),
+  };
+  return { grant, calls: { minted, forgotten } as GrantCalls };
+};
+
+const withGrant = (
+  grant: ClientCredentialsGrant,
+  credentials: ReadonlyArray<StoredCredential> = [],
+  env: Record<string, string> = { LINEAR_API_KEY: "env-key" },
+) =>
+  Effect.provide(
+    Layer.mergeAll(
+      Layer.succeed(
+        CredentialStore,
+        make({
+          stored: { load: Effect.succeed(credentials), save: () => Effect.void },
+          clientCredentials: grant,
+        }),
+      ),
+      ConfigProvider.layer(ConfigProvider.fromEnv({ env })),
+    ),
+  );
+
+describe("CredentialStore (client credentials)", () => {
+  it.effect("mints a client-credentials token when no stored token is present", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken(requesting);
+      assert.strictEqual(credential.source, "client-credentials");
+      assert.strictEqual(Redacted.value(credential.token), "app-token");
+    }).pipe(withGrant(recordingGrant("app-token").grant)),
+  );
+
+  it.effect("keeps using the env key for an account that never asked for client credentials", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken(account);
+      assert.strictEqual(credential.source, "env");
+      assert.strictEqual(Redacted.value(credential.token), "env-key");
+    }).pipe(withGrant(recordingGrant("app-token").grant)),
+  );
+
+  it.effect("lets a live stored token win over client credentials", () => {
+    const { grant, calls } = recordingGrant("app-token");
+    return Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.bearerToken(requesting);
+      assert.strictEqual(credential.source, "stored-oauth");
+      assert.deepStrictEqual(calls.minted, []);
+    }).pipe(withGrant(grant, [stored("acme", storedToken(far))]));
+  });
+
+  it.effect("surfaces the missing-secret error instead of quietly using the env key", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const error = yield* Effect.flip(store.bearerToken(requesting));
+      assert.include(error.message, "LINEAR_CLIENT_SECRET");
+    }).pipe(withGrant(recordingGrant(null).grant)),
+  );
+
+  it.effect("logs that it resolved from client credentials", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const lines = yield* capturingLogs(store.bearerToken(requesting));
+      assert.isTrue(lines.some((line) => line.includes("client-credentials")));
+    }).pipe(withGrant(recordingGrant("app-token").grant)),
+  );
+
+  it.effect("asks the grant to forget a rejected token", () => {
+    const { grant, calls } = recordingGrant("app-token");
+    return Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      yield* store.invalidate(requesting);
+      assert.deepStrictEqual(calls.forgotten, ["AUD"]);
+    }).pipe(withGrant(grant));
+  });
+
+  it.effect("has nothing to forget when no client-credentials source is wired", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      yield* store.invalidate(requesting);
+    }).pipe(withEnv({})),
   );
 });

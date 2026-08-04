@@ -1,8 +1,17 @@
-import { type LifecycleStage, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import {
+  HarnessName,
+  type LifecycleStage,
+  RunId,
+  type RunRecord,
+  SessionId,
+  WorkItemId,
+  WorkspaceConfig,
+} from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -19,6 +28,8 @@ import type { ObservedItem } from "./WorkSource";
 import { WorkSource, type WorkSourceService } from "./WorkSource";
 
 const id = Schema.decodeSync(WorkItemId);
+
+const never = Latch.makeUnsafe(false).await;
 
 type ExecuteFn = (workspace: RegisteredWorkspace, work: EligibleWork) => Effect.Effect<boolean>;
 
@@ -243,6 +254,7 @@ const schedulerLayer = (
     readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
     readonly execute: ExecuteFn;
     readonly workSource?: Partial<WorkSourceService>;
+    readonly ledger?: RunLedger.RunLedgerService;
   },
 ) =>
   Scheduler.layer(config).pipe(
@@ -252,9 +264,10 @@ const schedulerLayer = (
         workerLayer(deps.snapshots),
         Layer.succeed(Executor.Executor, { execute: deps.execute }),
         workSourceStub(deps.workSource ?? {}),
-        RunLedger.layerMemory,
+        deps.ledger ? Layer.succeed(RunLedger.RunLedger, deps.ledger) : RunLedger.layerMemory,
       ),
     ),
+    Layer.provideMerge(RunLedger.layerMemory),
   );
 
 describe("Scheduler.tick", () => {
@@ -417,8 +430,155 @@ describe("Scheduler.tick", () => {
   );
 });
 
+describe("Scheduler.drain", () => {
+  const wsA = workspaceOf("a", 2);
+  const oneHour = 3_600_000;
+  const runId = Schema.decodeSync(RunId);
+  const harness = Schema.decodeSync(HarnessName)("cursor");
+
+  const runRecord = (name: string, startedAtMillis: number): RunRecord => ({
+    id: runId(name),
+    workspace: wsA.config.name,
+    workItem: id("#1"),
+    stage: "triage",
+    harness,
+    branch: null,
+    session: null,
+    usage: null,
+    status: "running",
+    startedAtMillis,
+    endedAtMillis: null,
+  });
+
+  const statusOf = (ledger: RunLedger.RunLedgerService, name: string) =>
+    Effect.map(ledger.getRun(runId(name)), (run) => run?.status ?? null);
+
+  const neverEnds =
+    (ledger: RunLedger.RunLedgerService, name: string): ExecuteFn =>
+    () =>
+      ledger.insertRun(runRecord(name, 0)).pipe(
+        Effect.andThen(never),
+        Effect.map(() => true),
+      );
+
+  const draining = (deps: {
+    readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
+    readonly execute: ExecuteFn;
+    readonly ledger?: RunLedger.RunLedgerService;
+  }) => schedulerLayer({ globalLimit: 5, dailyBudget: 100 }, { registry: [wsA], ...deps });
+
+  it.effect("lets a run that finishes inside the grace window record its own outcome", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.makeMemory;
+      const gate = yield* Latch.make();
+      const execute: ExecuteFn = () =>
+        ledger.insertRun(runRecord("inside", 0)).pipe(
+          Effect.andThen(gate.await),
+          Effect.andThen(
+            ledger.updateRun(runId("inside"), {
+              status: "succeeded",
+              session: null,
+              usage: null,
+              endedAtMillis: 10_000,
+            }),
+          ),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.tick();
+
+        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
+        yield* TestClock.adjust("10 seconds");
+        yield* gate.open;
+
+        assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 0 });
+        assert.strictEqual(yield* statusOf(ledger, "inside"), "succeeded");
+      }).pipe(Effect.provide(draining({ snapshots, execute, ledger })));
+    }),
+  );
+
+  it.effect("interrupts a run still going when the grace window closes", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.makeMemory;
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.tick();
+
+        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
+        yield* TestClock.adjust("1 hour");
+
+        assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 1 });
+        assert.strictEqual(yield* statusOf(ledger, "outlasts"), "interrupted");
+        assert.strictEqual((yield* scheduler.stats).global, 0);
+      }).pipe(Effect.provide(draining({ snapshots, execute: neverEnds(ledger, "outlasts"), ledger })));
+    }),
+  );
+
+  it.effect("ends the wait as soon as a second stop signal arrives", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.makeMemory;
+      const abort = yield* Latch.make();
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.tick();
+
+        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: abort.await }));
+        yield* abort.open;
+
+        assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 1 });
+        assert.strictEqual(yield* statusOf(ledger, "aborted"), "interrupted");
+      }).pipe(Effect.provide(draining({ snapshots, execute: neverEnds(ledger, "aborted"), ledger })));
+    }),
+  );
+
+  it.effect("leaves a run from an earlier daemon life alone", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(runRecord("earlier-life", 0));
+      yield* TestClock.adjust("1 minute");
+      const snapshots = yield* snapshotRef([]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.drain({ graceMillis: oneHour, abort: never });
+        assert.strictEqual(yield* statusOf(ledger, "earlier-life"), "running");
+      }).pipe(Effect.provide(draining({ snapshots, execute: () => Effect.succeed(true), ledger })));
+    }),
+  );
+
+  it.effect("picks no further candidates once a drain has started", () =>
+    Effect.gen(function* () {
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.drain({ graceMillis: oneHour, abort: never });
+
+        yield* republish(snapshots);
+        assert.strictEqual((yield* scheduler.tick()).length, 0);
+      }).pipe(Effect.provide(draining({ snapshots, execute: () => Effect.succeed(true) })));
+    }),
+  );
+});
+
 describe("Scheduler.recover", () => {
   const wsA = workspaceOf("a");
+  const interruptedRun: RunRecord = {
+    id: Schema.decodeSync(RunId)("run-1"),
+    workspace: wsA.config.name,
+    workItem: id("#1"),
+    stage: "implement",
+    harness: Schema.decodeSync(HarnessName)("cursor"),
+    branch: "1-ours",
+    session: null,
+    usage: null,
+    status: "running",
+    startedAtMillis: 1,
+    endedAtMillis: null,
+  };
+  const session = Schema.decodeSync(SessionId)("sess-abc");
   const claimedByUs: ObservedItem = {
     id: id("#1"),
     title: "ours",
@@ -469,6 +629,43 @@ describe("Scheduler.recover", () => {
         assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
         assert.deepStrictEqual(yield* Ref.get(attempts), [{ item: id("#1"), reason: recoveryReason }]);
         assert.deepStrictEqual(yield* Ref.get(notes), []);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 4, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute: () => Effect.succeed(true), workSource },
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("hands an exhausted recovery the session its run persisted before the daemon died", () =>
+    Effect.gen(function* () {
+      const exhausted: ObservedItem = {
+        ...claimedByUs,
+        attempts: [
+          { stage: "implement", outcome: "failed", atMillis: 1 },
+          { stage: "implement", outcome: "failed", atMillis: 2 },
+        ],
+      };
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const workSource: Partial<WorkSourceService> = {
+        observe: () => Effect.succeed([exhausted]),
+        release: () => Effect.void,
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+        setRoles: () => Effect.void,
+      };
+      const snapshots = yield* snapshotRef([]);
+      yield* Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(interruptedRun);
+        yield* ledger.recordSession(interruptedRun.id, session);
+
+        const scheduler = yield* Scheduler.Scheduler;
+        yield* scheduler.recover();
+
+        assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'sess-abc'");
       }).pipe(
         Effect.provide(
           schedulerLayer(

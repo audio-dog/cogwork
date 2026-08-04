@@ -13,7 +13,8 @@ const ref: LinearTeamRef = {
   team: "AUD",
   tokenEnv: "LINEAR_API_KEY",
   organization: null,
-  clientId: null,
+  clientCredentials: null,
+  oauthClientId: null,
 };
 
 const linearMaxQueryComplexity = 10_000;
@@ -86,7 +87,7 @@ const authorizationOf = (fetchStub: { readonly mock: { readonly calls: ReadonlyA
   return new Headers(init?.headers).get("authorization");
 };
 
-const stubCredentials = (token: string | null, source: CredentialSource = "env") =>
+const stubCredentials = (token: string | null, source: CredentialSource, invalidated: Array<string>) =>
   Layer.succeed(CredentialStore, {
     bearerToken: (account) =>
       token === null
@@ -98,10 +99,14 @@ const stubCredentials = (token: string | null, source: CredentialSource = "env")
           )
         : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
     persist: () => Effect.void,
+    invalidate: (account) => Effect.sync(() => invalidated.push(account.key)),
   });
 
-const withToken = (token: string | null = "test-key", source: CredentialSource = "env") =>
-  Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source))));
+const withToken = (
+  token: string | null = "test-key",
+  source: CredentialSource = "env",
+  invalidated: Array<string> = [],
+) => Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source, invalidated))));
 
 const teamBundle = {
   id: "team-uuid",
@@ -179,6 +184,15 @@ describe("linear client", () => {
       yield* client.observeIssues(ref, null);
       assert.strictEqual(authorizationOf(fetchStub), "Bearer oauth-token");
     }).pipe(withToken("oauth-token", "stored-oauth")),
+  );
+
+  it.effect("sends a client-credentials token as a Bearer credential", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null);
+      assert.strictEqual(authorizationOf(fetchStub), "Bearer app-token");
+    }).pipe(withToken("app-token", "client-credentials")),
   );
 
   it.effect("reads every issue's coordination comments in the same request as the issue list", () =>
@@ -293,6 +307,26 @@ describe("linear client", () => {
       assert.strictEqual(error.reason, "auth");
     }).pipe(withToken()),
   );
+
+  it.effect("tells the store to drop the credential Linear rejected", () => {
+    const invalidated: Array<string> = [];
+    return Effect.gen(function* () {
+      stubLinear(() => ({ status: 401, body: {} }));
+      const client = yield* LinearClient;
+      yield* Effect.flip(client.observeIssues(ref, null));
+      assert.deepStrictEqual(invalidated, ["AUD"]);
+    }).pipe(withToken("app-token", "client-credentials", invalidated));
+  });
+
+  it.effect("keeps the credential when Linear throttles rather than rejects", () => {
+    const invalidated: Array<string> = [];
+    return Effect.gen(function* () {
+      stubLinear(() => ({ status: 429, body: {} }));
+      const client = yield* LinearClient;
+      yield* Effect.flip(client.observeIssues(ref, null));
+      assert.deepStrictEqual(invalidated, []);
+    }).pipe(withToken("app-token", "client-credentials", invalidated));
+  });
 
   it.effect("retries a transient failure with backoff before reporting it unavailable", () =>
     Effect.gen(function* () {

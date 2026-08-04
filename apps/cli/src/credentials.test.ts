@@ -28,7 +28,8 @@ const account: CredentialStore.CredentialAccount = {
   workSource: "linear",
   organization: "acme",
   tokenEnv: "LINEAR_API_KEY",
-  clientId: null,
+  clientCredentials: null,
+  oauthClientId: null,
 };
 
 const tokenEndpoint: typeof globalThis.fetch = () =>
@@ -81,7 +82,7 @@ describe("file-backed credential store", () => {
   it.effect("round-trips a saved credential and prefers it over the env key", () =>
     onDisk(({ filePath }) =>
       Effect.gen(function* () {
-        const store = CredentialStore.make(yield* makeFileStore(filePath));
+        const store = CredentialStore.make({ stored: yield* makeFileStore(filePath) });
         yield* store.persist(stored("oauth-token"));
         const credential = yield* store.bearerToken(account);
         assert.strictEqual(credential.source, "stored-oauth");
@@ -183,7 +184,7 @@ describe("file-backed credential store", () => {
   it.effect("falls back to the env key when the file is absent", () =>
     onDisk(({ filePath }) =>
       Effect.gen(function* () {
-        const store = CredentialStore.make(yield* makeFileStore(filePath));
+        const store = CredentialStore.make({ stored: yield* makeFileStore(filePath) });
         const credential = yield* store.bearerToken(account);
         assert.strictEqual(credential.source, "env");
         assert.strictEqual(Redacted.value(credential.token), "env-key");
@@ -195,7 +196,7 @@ describe("file-backed credential store", () => {
     onDisk(({ filePath, fs }) =>
       Effect.gen(function* () {
         yield* seed(fs, filePath, "{ not json");
-        const store = CredentialStore.make(yield* makeFileStore(filePath));
+        const store = CredentialStore.make({ stored: yield* makeFileStore(filePath) });
         const credential = yield* store.bearerToken(account);
         assert.strictEqual(credential.source, "env");
       }),
@@ -206,7 +207,7 @@ describe("file-backed credential store", () => {
     onDisk(({ filePath, fs }) =>
       Effect.gen(function* () {
         yield* seed(fs, filePath, `{"version":1,"credentials":[{"workSource":"linear"}]}`);
-        const store = CredentialStore.make(yield* makeFileStore(filePath));
+        const store = CredentialStore.make({ stored: yield* makeFileStore(filePath) });
         const credential = yield* store.bearerToken(account);
         assert.strictEqual(credential.source, "env");
       }),
@@ -219,7 +220,7 @@ describe("file-backed credential store", () => {
         const file = yield* makeFileStore(filePath);
         yield* file.save(stored("stale-token", 0));
         const store = yield* CredentialStore.CredentialStore;
-        const credential = yield* store.bearerToken({ ...account, clientId: "client-1" });
+        const credential = yield* store.bearerToken({ ...account, oauthClientId: "client-1" });
         assert.strictEqual(credential.source, "stored-oauth");
         assert.strictEqual(Redacted.value(credential.token), "rotated-token");
         const saved = (yield* file.load)[0]?.token;

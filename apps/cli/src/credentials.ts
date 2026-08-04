@@ -80,6 +80,11 @@ export const layer = (filePath: string) =>
     Effect.gen(function* () {
       const stored = yield* makeFileStore(filePath);
       const client = yield* HttpClient.HttpClient;
-      return CredentialStore.make(stored, Linear.OAuth.makeTokenRefresh(client));
+      const clientCredentials = yield* Linear.ClientCredentials.make();
+      return CredentialStore.make({
+        stored,
+        clientCredentials,
+        refresh: Linear.OAuth.makeTokenRefresh(client),
+      });
     }),
   );

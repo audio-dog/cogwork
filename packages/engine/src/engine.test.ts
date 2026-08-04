@@ -1,6 +1,8 @@
 import { DaemonRpcs, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Ref from "effect/Ref";
@@ -15,6 +17,7 @@ import * as RunLedger from "./RunLedger";
 import * as Scheduler from "./Scheduler";
 import type { ObservedItem } from "./WorkSource";
 import * as WorkSource from "./WorkSource";
+import { WorktreeManager } from "./Worktree";
 
 const validModule: Registry.LoadedWorkspace = {
   source: "example.workspace.ts",
@@ -360,20 +363,69 @@ describe("reconcile worker", () => {
   );
 });
 
-describe("daemon status over rpc", () => {
-  const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
-  const schedulerStub = Layer.succeed(Scheduler.Scheduler, {
-    tick: () => Effect.succeed([]),
-    recover: () => Effect.void,
-    config: { globalLimit: 4, dailyBudget: 50 },
-    stats: Effect.succeed({
-      ...Scheduler.initialState,
-      global: 3,
-      perWorkspace: new Map([[Schema.decodeSync(WorkspaceId)("example"), 2]]),
-      budgetDay: 0,
-      budgetUsed: 7,
-    }),
+const registeredSample = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
+
+const schedulerStubService = {
+  tick: () => Effect.succeed([]),
+  drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
+  recover: () => Effect.void,
+  config: { globalLimit: 4, dailyBudget: 50 },
+  stats: Effect.succeed({
+    ...Scheduler.initialState,
+    global: 3,
+    perWorkspace: new Map([[Schema.decodeSync(WorkspaceId)("example"), 2]]),
+    budgetDay: 0,
+    budgetUsed: 7,
+  }),
+} satisfies Scheduler.Scheduler["Service"];
+
+describe("daemon heartbeats", () => {
+  const worktreeStub = Layer.succeed(WorktreeManager, {
+    ensure: () => Effect.die("unused"),
+    list: () => Effect.succeed([]),
+    remove: () => Effect.void,
+    reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
   });
+
+  it.effect("drains the scheduler when a stop signal interrupts them", () =>
+    Effect.gen(function* () {
+      const drained = yield* Ref.make<ReadonlyArray<number>>([]);
+      const schedulerStub = Layer.succeed(Scheduler.Scheduler, {
+        ...schedulerStubService,
+        drain: (options) =>
+          Ref.update(drained, (graces) => [...graces, options.graceMillis]).pipe(
+            Effect.map(() => ({ inFlight: 0, interrupted: 0 })),
+          ),
+      });
+      yield* Effect.gen(function* () {
+        const beats = yield* Effect.forkChild(
+          Daemon.heartbeats({
+            pollIntervalMillis: 60_000,
+            drain: { graceMillis: 1234, abort: Latch.makeUnsafe(false).await },
+          }),
+        );
+        yield* TestClock.adjust("1 second");
+        yield* Fiber.interrupt(beats);
+
+        assert.deepStrictEqual(yield* Ref.get(drained), [1234]);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registeredSample, WorkSource.emptyLayer))),
+            registeredSample,
+            schedulerStub,
+            worktreeStub,
+          ),
+        ),
+        Effect.scoped,
+      );
+    }),
+  );
+});
+
+describe("daemon status over rpc", () => {
+  const registryLayer = registeredSample;
+  const schedulerStub = Layer.succeed(Scheduler.Scheduler, schedulerStubService);
   const daemonLayer = (sourceLayer: Layer.Layer<WorkSource.WorkSource>) =>
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.daemonInfoLayer),

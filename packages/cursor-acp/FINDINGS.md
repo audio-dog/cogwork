@@ -6,6 +6,9 @@ handled refusal (never a hang under the real adapter). Two gaps to design around
 engine layer — no token usage over ACP, and the human `--resume` id doesn't resolve
 ACP sessions — neither fatal, neither a reason to fall back to `@cursor/sdk`.
 
+Q1 here covers resume across two *completed* turns. For resume after a turn that was killed
+mid-flight, see [FINDINGS-RESUME.md](./FINDINGS-RESUME.md) (spike #99).
+
 ## Environment
 
 | Piece | Version |

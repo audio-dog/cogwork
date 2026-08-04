@@ -52,7 +52,8 @@ const teamRef: LinearTeamRef = {
   team: "AUD",
   tokenEnv: "LINEAR_API_KEY",
   organization: null,
-  clientId: null,
+  clientCredentials: null,
+  oauthClientId: null,
 };
 
 const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {

@@ -73,7 +73,7 @@ A live envelope broadcast while a run is in flight: run identity plus one harnes
 _Avoid_: Run event (the persisted form), notification
 
 **Session**:
-A harness's own conversation handle (`SessionId`), stored on a run so a later stage on the same branch can resume the same agent session.
+A harness's own conversation handle (`SessionId`), stored on a run so a later stage on the same branch can resume the same agent session. It is written the moment the harness first emits it, not when the run ends, so a run that never reached a terminal status still names a session to resume.
 _Avoid_: Run, connection
 
 **Exhausted / stalled / stuck**:

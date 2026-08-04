@@ -1,4 +1,4 @@
-import { type TriageRole, WorkItemId } from "@clanker-forge/contracts";
+import { type OAuthAppConfig, type TriageRole, WorkItemId } from "@clanker-forge/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -64,6 +64,9 @@ const nextDetail = (update: CoordinationUpdate, previous: string) => {
   return update.detail ?? null;
 };
 
+const clientCredentialsFor = (oauth: OAuthAppConfig | undefined) =>
+  oauth?.clientSecretEnv ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null;
+
 const targetFor = (workspace: RegisteredWorkspace) => {
   const source = workspace.config.workSource;
   if (source.type !== "linear" || !source.team) return null;
@@ -71,7 +74,8 @@ const targetFor = (workspace: RegisteredWorkspace) => {
     team: source.team,
     tokenEnv: source.tokenEnv ?? "LINEAR_API_KEY",
     organization: source.organization ?? null,
-    clientId: source.oauth?.clientId ?? null,
+    clientCredentials: clientCredentialsFor(source.oauth),
+    oauthClientId: source.oauth?.clientId ?? null,
     botUserId: source.botUserId ?? null,
     roleLabels: roleLabelsFor(source.roleLabels),
   } satisfies LinearTarget;

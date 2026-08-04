@@ -9,14 +9,20 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
-import { type Credential, CredentialStore, type CredentialStoreService } from "../CredentialStore";
+import {
+  type ClientCredentialsRef,
+  type Credential,
+  CredentialStore,
+  type CredentialStoreService,
+} from "../CredentialStore";
 import { WorkSourceError } from "../WorkSource";
 
 export interface LinearTeamRef {
   readonly team: string;
   readonly tokenEnv: string;
   readonly organization: string | null;
-  readonly clientId: string | null;
+  readonly clientCredentials: ClientCredentialsRef | null;
+  readonly oauthClientId: string | null;
 }
 
 // Linear's request budget is per user and shared across every key that user owns, so every workspace
@@ -281,22 +287,25 @@ const requireSuccess = (operation: string, payload: { readonly success: boolean 
 // A Linear API key authenticates as itself; an OAuth token is a bearer credential and has to reach
 // the SDK as `accessToken` or it is sent without the `Bearer` prefix.
 const sdkAuth = (credential: Credential) =>
-  credential.source === "stored-oauth"
-    ? { accessToken: Redacted.value(credential.token) }
-    : { apiKey: Redacted.value(credential.token) };
+  credential.source === "env"
+    ? { apiKey: Redacted.value(credential.token) }
+    : { accessToken: Redacted.value(credential.token) };
+
+const accountFor = (ref: LinearTeamRef) => ({
+  key: ref.team,
+  workSource: "linear",
+  organization: ref.organization,
+  tokenEnv: ref.tokenEnv,
+  clientCredentials: ref.clientCredentials,
+  oauthClientId: ref.oauthClientId,
+});
 
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {
   const resumeAt = yield* Ref.make(new Map<string, number>());
 
   const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
     const credential = yield* Effect.mapError(
-      credentials.bearerToken({
-        key: ref.team,
-        workSource: "linear",
-        organization: ref.organization,
-        tokenEnv: ref.tokenEnv,
-        clientId: ref.clientId,
-      }),
+      credentials.bearerToken(accountFor(ref)),
       (error) => new WorkSourceError({ reason: "auth", message: error.message }),
     );
     return new LinearSdk(sdkAuth(credential));
@@ -313,14 +322,20 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   });
 
   const noteRateLimit = (ref: LinearTeamRef, nowMillis: number, error: WorkSourceError) =>
-    error.reason === "rate-limited"
-      ? Ref.update(resumeAt, (entries) =>
-          new Map(entries).set(
-            rateLimitScopeOf(ref.tokenEnv),
-            nowMillis + (error.retryAfterMillis ?? defaultCooldownMillis),
-          ),
-        )
-      : Effect.void;
+    Ref.update(resumeAt, (entries) =>
+      new Map(entries).set(
+        rateLimitScopeOf(ref.tokenEnv),
+        nowMillis + (error.retryAfterMillis ?? defaultCooldownMillis),
+      ),
+    );
+
+  // A client-credentials token carries no refresh token, so a rejection is the only signal the
+  // store ever gets that the token it holds has to be minted again.
+  const noteFailure = (ref: LinearTeamRef, nowMillis: number, error: WorkSourceError) => {
+    if (error.reason === "rate-limited") return noteRateLimit(ref, nowMillis, error);
+    if (error.reason === "auth") return credentials.invalidate(accountFor(ref));
+    return Effect.void;
+  };
 
   const call = Effect.fn("linear.call")(function* <A>(
     ref: LinearTeamRef,
@@ -331,7 +346,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     const sdk = yield* sdkFor(ref);
     return yield* Effect.tapError(
       Effect.tryPromise({ try: () => run(sdk), catch: (cause) => fromSdkError(cause, nowMillis) }),
-      (error) => noteRateLimit(ref, nowMillis, error),
+      (error) => noteFailure(ref, nowMillis, error),
     );
   });
 
