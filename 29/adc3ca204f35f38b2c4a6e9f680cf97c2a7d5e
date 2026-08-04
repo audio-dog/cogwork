@@ -1,0 +1,35 @@
+packages/engine/src/runLedger.test.ts
+  s_ce9c17862d3dfc::t_f3792c5b0d9fa6 90-106
+packages/engine/src/scheduler.test.ts
+  s_ce9c17862d3dfc::t_51be09645ed838 613-689
+packages/engine/src/executor.test.ts
+  s_ce9c17862d3dfc::t_97c9efd8b14c42 569-592
+packages/engine/src/Scheduler.ts
+  s_ce9c17862d3dfc::t_584cc9e6ba184d 299-300,305
+  s_ce9c17862d3dfc::t_bcb018fdf08a59 335-367,373-374
+  s_ce9c17862d3dfc::t_52bf080991827e 177-182
+  s_ce9c17862d3dfc::t_db0090962fde02 19
+packages/engine/src/RunLedger.ts
+  s_ce9c17862d3dfc::t_0ec3fb4227fef6 89-93
+packages/engine/CONTEXT.md
+  s_ce9c17862d3dfc::t_116bb2496e8ac2 18
+packages/engine/src/Executor.ts
+  s_ce9c17862d3dfc::t_792c440af72538 562
+  s_ce9c17862d3dfc::t_85222182b775ef 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "29adc3ca204f35f38b2c4a6e9f680cf97c2a7d5e",
+  "prompts": {},
+  "sessions": {
+    "s_ce9c17862d3dfc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c261e06c-cd79-44d4-984e-fbdbd5d4a651",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
