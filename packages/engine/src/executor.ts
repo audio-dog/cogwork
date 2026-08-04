@@ -1,5 +1,12 @@
 import type { RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
-import { RunId, SessionId } from "@clanker-forge/contracts";
+import {
+  agUiDisplayName,
+  agUiSessionId,
+  agUiTextDelta,
+  agUiUsage,
+  RunId,
+  SessionId,
+} from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -13,7 +20,7 @@ import { type EligibleWork, handoffRoleFor, maxAttemptsPerStage } from "./classi
 import { agentFailureReason, attachCommand, handoffComment, prepareFailureReason } from "./comments";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
-import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./harness";
+import { type AgUiEvent, Harness, type HarnessError, type HarnessRequest } from "./harness";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
@@ -100,22 +107,15 @@ const warnTriageDecision = Effect.fn("Executor.warnTriageDecision")(function* (
   }
 });
 
-const mergeEvent = (acc: RunAccumulator, event: HarnessEvent, session: SessionId | null): RunAccumulator => ({
-  text: event.text ? acc.text + event.text : acc.text,
+const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, session: SessionId | null): RunAccumulator => ({
+  text: acc.text + agUiTextDelta(event),
   session,
-  usage: event.usage ?? acc.usage,
+  usage: agUiUsage(event) ?? acc.usage,
 });
 
-const failedTerminal: HarnessEvent = {
-  type: "RUN_FINISHED",
-  name: null,
-  text: null,
-  sessionId: null,
-  usage: null,
-  finishReason: "failed",
-};
+const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 
-const withFailureTerminal = (stream: Stream.Stream<HarnessEvent, HarnessError>) =>
+const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
   Stream.catchCause(stream, (cause) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
@@ -173,11 +173,17 @@ export const make = Effect.gen(function* () {
   const persistEvent = Effect.fn("Executor.persistEvent")(function* (
     record: RunRecord,
     seq: number,
-    event: HarnessEvent,
+    event: AgUiEvent,
   ) {
     const atMillis = yield* Clock.currentTimeMillis;
     const data = yield* encodeJson(event).pipe(Effect.orElseSucceed(() => "{}"));
-    yield* ledger.appendEvent(record.id, { seq, type: event.type, name: event.name, data, atMillis });
+    yield* ledger.appendEvent(record.id, {
+      seq,
+      type: event.type,
+      name: agUiDisplayName(event),
+      data,
+      atMillis,
+    });
     yield* bus.publish(activityOf(record, seq, atMillis, event));
   });
 
@@ -199,9 +205,9 @@ export const make = Effect.gen(function* () {
     record: RunRecord,
     acc: RunAccumulator,
     seq: number,
-    event: HarnessEvent,
+    event: AgUiEvent,
   ) {
-    const session = yield* nextSession(record.id, acc.session, event.sessionId);
+    const session = yield* nextSession(record.id, acc.session, agUiSessionId(event));
     yield* persistEvent(record, seq, event);
     return mergeEvent(acc, event, session);
   });
@@ -211,8 +217,7 @@ export const make = Effect.gen(function* () {
     return yield* Stream.runFoldEffect(
       Stream.zipWithIndex(withFailureTerminal(harness.run(request))),
       () => initial,
-      (acc: RunAccumulator, [event, seq]: readonly [HarnessEvent, number]) =>
-        foldEvent(record, acc, seq, event),
+      (acc: RunAccumulator, [event, seq]: readonly [AgUiEvent, number]) => foldEvent(record, acc, seq, event),
     );
   });
 
