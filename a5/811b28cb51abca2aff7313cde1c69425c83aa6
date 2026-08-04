@@ -1,0 +1,19 @@
+packages/contracts/src/run.ts
+  s_eddb26b412af68::t_d5db560dcbd8c5 18-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "a5811b28cb51abca2aff7313cde1c69425c83aa6",
+  "prompts": {},
+  "sessions": {
+    "s_eddb26b412af68": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "30626066-5792-4b38-9aff-ce8f09116acf",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
