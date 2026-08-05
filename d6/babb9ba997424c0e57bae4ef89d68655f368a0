@@ -1,0 +1,19 @@
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_2911731802ac36::t_09458f536cdf7a 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "d6babb9ba997424c0e57bae4ef89d68655f368a0",
+  "prompts": {},
+  "sessions": {
+    "s_2911731802ac36": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5df930a2-6583-4a5d-bad0-768d70c7a84e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
