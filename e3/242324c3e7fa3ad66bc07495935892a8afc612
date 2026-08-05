@@ -1,0 +1,25 @@
+packages/engine/src/classify.ts
+  s_d013f3946ecde7::t_217bbee87c6aeb 34
+  s_d013f3946ecde7::t_009b754c5e5ed0 88
+  s_d013f3946ecde7::t_2d70b29b8f62e2 97
+  s_d013f3946ecde7::t_da8c2813647aaa 82,89-92
+packages/engine/src/scheduler.ts
+  s_d013f3946ecde7::t_b6248e52615c9a 13
+  s_d013f3946ecde7::t_23a0be5ff7dfa3 352
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "e3242324c3e7fa3ad66bc07495935892a8afc612",
+  "prompts": {},
+  "sessions": {
+    "s_d013f3946ecde7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8f45cdb0-d943-4b96-a765-96ed2e0adb14",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
