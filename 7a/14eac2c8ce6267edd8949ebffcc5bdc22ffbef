@@ -1,0 +1,19 @@
+research/provider-auth-landscape.md
+  s_2c07465950a9a6::t_2ebb40ed8f8ca9 1-267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "7a14eac2c8ce6267edd8949ebffcc5bdc22ffbef",
+  "prompts": {},
+  "sessions": {
+    "s_2c07465950a9a6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0caeab7e-7496-45d3-b69d-0ae67ff9e4dd",
+        "model": "claude-fable-5-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
