@@ -1,0 +1,22 @@
+docs/adr/0007-autonomous-with-override-triage-self-halts.md
+  s_ca1539fd8341a8::t_70b75759589ba4 1-52
+docs/agents/technical-disposition.md
+  s_ca1539fd8341a8::t_e52f5c407811f4 16
+  s_ca1539fd8341a8::t_4d47a054e2fb85 50-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "38408d90664ea7d866248c0f53979f3a7bb066f4",
+  "prompts": {},
+  "sessions": {
+    "s_ca1539fd8341a8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "285498ea-4cbf-40cf-94e5-5eb20d494937",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
