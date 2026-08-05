@@ -8,10 +8,6 @@ skills-lock.json
 
 # Local generator output when targeting this repo as a project dir
 /.claude/
-# `sync` owns .cursor/, but worktrees.json is hand-authored and tracked. Ignore the
-# directory's contents (not the dir itself) so the negation below can re-include it.
-/.cursor/*
-!/.cursor/worktrees.json
 /CLAUDE.md
 /.mcp.json
 
