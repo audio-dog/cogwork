@@ -1,0 +1,36 @@
+docs/agents/technical-disposition.md
+  s_2911731802ac36::t_7c4b8e410be2d5 46-49
+  s_d41878840d2bb0::t_351bb31714f86f 68-72
+  s_d41878840d2bb0::t_74ad3a61bd0853 38
+  s_2911731802ac36::t_97ec4d5809be24 13-24
+  s_2911731802ac36::t_655841999c648f 10-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "2e92ed85cfeff1ab2c1675e1f1c2ba837439a818",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_2911731802ac36": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5df930a2-6583-4a5d-bad0-768d70c7a84e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d41878840d2bb0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d9edf09b-725b-4a9c-ae74-e0490d3f2415",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
