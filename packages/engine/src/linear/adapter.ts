@@ -2,6 +2,8 @@ import { type OAuthAppConfig, type TriageRole, WorkItemId } from "@clanker-forge
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type { CoordinationComment, CoordinationHost } from "../coordination";
+import * as Coordination from "../coordination";
 import {
   IssueTracker,
   IssueTrackerError,
@@ -18,29 +20,14 @@ import {
   rateLimitScopeOf,
 } from "./client";
 import {
-  attemptStatus,
   canceledStateName,
   claimLabel,
-  claimStatus,
-  coordinationDetail,
-  coordinationMarkers,
-  coordinationStatus,
-  defaultStatus,
-  formatCoordinationBody,
-  formatNoteBody,
   hasClaimLabel,
-  hasClankerMarker,
-  hasLedgerMarker,
   ledgerMarker,
-  parseAttempts,
-  parseClaim,
-  parseFollowUp,
   roleLabel,
   roleLabelsFor,
   rolesFrom,
-  serializeAttempt,
-  serializeClaim,
-  serializeFollowUp,
+  wireCodec,
 } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
@@ -48,28 +35,17 @@ interface LinearTarget extends LinearTeamRef {
   readonly roleLabels: ReturnType<typeof roleLabelsFor>;
 }
 
-interface CoordinationUpdate {
-  readonly status?: string;
-  readonly marker?: string;
-  readonly detail?: string | null;
-}
-
-const isBotComment = (comment: RawComment, { botUserId }: LinearTarget) =>
-  Boolean(botUserId) && comment.authorId === botUserId;
+const toCoordinationComment =
+  (botUserId: string | null) =>
+  (comment: RawComment): CoordinationComment<string> => ({
+    id: comment.id,
+    body: comment.body,
+    isBot: botUserId !== null && comment.authorId === botUserId,
+    createdAtMillis: comment.createdAtMillis,
+  });
 
 const coordinationScope = ({ botUserId }: LinearTarget) =>
   botUserId === null ? null : { botUserId, ledgerMarker };
-
-const botLedger = (comments: ReadonlyArray<RawComment>, target: LinearTarget) =>
-  comments
-    .filter((comment) => isBotComment(comment, target) && hasLedgerMarker(comment.body))
-    .toSorted((left, right) => left.createdAtMillis - right.createdAtMillis)
-    .at(0);
-
-const nextDetail = (update: CoordinationUpdate, previous: string) => {
-  if (!Object.hasOwn(update, "detail")) return coordinationDetail(previous);
-  return update.detail ?? null;
-};
 
 const clientCredentialsFor = (oauth: OAuthAppConfig | undefined) =>
   oauth?.clientSecretEnv ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null;
@@ -106,41 +82,32 @@ const make = (client: LinearClientService): IssueTrackerService => {
     return target;
   });
 
-  const upsertCoordination = Effect.fn("linear.upsertCoordination")(function* (
-    target: LinearTarget,
-    issueId: string,
-    update: CoordinationUpdate,
-  ) {
-    const comments = yield* client.listComments(target, issueId);
-    const ledger = botLedger(comments, target);
-    const previous = ledger?.body ?? "";
-    const markers = coordinationMarkers(previous);
-    const body = formatCoordinationBody({
-      status: update.status ?? coordinationStatus(previous) ?? defaultStatus,
-      markers: update.marker === undefined ? markers : [...markers, update.marker],
-      detail: nextDetail(update, previous),
-    });
-    if (ledger) {
-      yield* client.editComment(target, ledger.id, body);
-      return;
-    }
-    yield* client.createComment(target, issueId, body);
+  const coordinationHost = (target: LinearTarget, issueId: string): CoordinationHost<string> => ({
+    comments: client
+      .listComments(target, issueId)
+      .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.botUserId)))),
+    edit: (id, body) => client.editComment(target, id, body),
+    create: (body) => client.createComment(target, issueId, body),
   });
 
   const buildItem = (target: LinearTarget) =>
     Effect.fn("linear.buildItem")(function* (issue: ObservedRawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
-      const coordination = botLedger(issue.coordinationComments, target)?.body ?? "";
+      const ledger = Coordination.selectLedger(
+        wireCodec,
+        issue.coordinationComments.map(toCoordinationComment(target.botUserId)),
+      );
+      const body = ledger?.body ?? "";
       const id = yield* itemId(issue.identifier);
       return {
         id,
         title: issue.title,
         roles: rolesFrom(issue.labels, { name: issue.stateName, type: issue.stateType }, target.roleLabels),
         claimLabeled,
-        claim: claimLabeled ? parseClaim(coordination) : null,
-        attempts: parseAttempts(coordination),
-        owned: hasClankerMarker(coordination),
-        followUp: parseFollowUp(coordination),
+        claim: claimLabeled ? Coordination.parseClaim(wireCodec, body) : null,
+        attempts: Coordination.parseAttempts(wireCodec, body),
+        owned: ledger !== undefined,
+        followUp: Coordination.parseFollowUp(wireCodec, body),
         openBlockers: issue.openBlockers,
       } satisfies TrackerItem;
     });
@@ -181,8 +148,10 @@ const make = (client: LinearClientService): IssueTrackerService => {
       Effect.gen(function* () {
         const target = yield* requireTarget(workspace);
         yield* client.addLabel(target, id, claimLabel);
-        const status = claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
-        yield* upsertCoordination(target, id, { status, marker: serializeClaim(claim) });
+        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, id), {
+          status: Coordination.claimStatusFor(claim),
+          marker: Coordination.serializeClaim(wireCodec, claim),
+        });
       }),
     release: (workspace, id) =>
       Effect.gen(function* () {
@@ -192,25 +161,23 @@ const make = (client: LinearClientService): IssueTrackerService => {
     recordAttempt: (workspace, id, attempt, reason) =>
       Effect.gen(function* () {
         const target = yield* requireTarget(workspace);
-        yield* upsertCoordination(target, id, {
-          status: attemptStatus(attempt, reason),
-          marker: serializeAttempt(attempt),
+        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, id), {
+          status: Coordination.attemptStatus(attempt, reason),
+          marker: Coordination.serializeAttempt(wireCodec, attempt),
         });
       }),
     recordFollowUp: (workspace, id, marker, detail) =>
       Effect.gen(function* () {
         const target = yield* requireTarget(workspace);
-        yield* upsertCoordination(target, id, { marker: serializeFollowUp(marker), detail });
+        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, id), {
+          marker: Coordination.serializeFollowUp(wireCodec, marker),
+          detail,
+        });
       }),
     note: (workspace, id, detail) =>
       Effect.gen(function* () {
         const target = yield* requireTarget(workspace);
-        const comments = yield* client.listComments(target, id);
-        const ledger = botLedger(comments, target);
-        if (ledger && coordinationDetail(ledger.body) !== null) {
-          yield* upsertCoordination(target, id, { detail: null });
-        }
-        yield* client.createComment(target, id, formatNoteBody(detail));
+        yield* Coordination.postNote(wireCodec, coordinationHost(target, id), detail);
       }),
     setRoles: (workspace, id, changes) =>
       Effect.gen(function* () {

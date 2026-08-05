@@ -1,0 +1,248 @@
+import { AttemptRecord, Claim, type LifecycleStage } from "@clanker-forge/contracts";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import { statusReason } from "./comments";
+import { FollowUpMarker } from "./follow-up";
+import type { IssueTrackerError } from "./issue-tracker";
+
+export interface MarkerSpan {
+  readonly name: string;
+  readonly pairs: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+export interface WireCodec {
+  readonly ledgerMarker: string;
+  readonly encode: (marker: { readonly name: string; readonly pairs: string }) => string;
+  readonly scan: (body: string) => ReadonlyArray<MarkerSpan>;
+}
+
+export interface CoordinationComment<Id> {
+  readonly id: Id;
+  readonly body: string;
+  readonly isBot: boolean;
+  readonly createdAtMillis: number;
+}
+
+export interface CoordinationHost<Id> {
+  readonly comments: Effect.Effect<ReadonlyArray<CoordinationComment<Id>>, IssueTrackerError>;
+  readonly edit: (id: Id, body: string) => Effect.Effect<void, IssueTrackerError>;
+  readonly create: (body: string) => Effect.Effect<void, IssueTrackerError>;
+}
+
+export interface CoordinationUpdate {
+  readonly status?: string;
+  readonly marker?: string;
+  readonly detail?: string | null;
+}
+
+export interface CoordinationBody {
+  readonly status: string;
+  readonly markers: ReadonlyArray<string>;
+  readonly detail: string | null;
+}
+
+const attribution = "> *This was posted by clanker-forge.*";
+
+const stageGerund: Record<LifecycleStage, string> = {
+  triage: "triaging",
+  implement: "implementing",
+  "follow-up": "following up on",
+  verify: "verifying",
+};
+
+export const defaultStatus = "Working on this issue.";
+
+export const claimStatus = (stage: LifecycleStage) => `Currently ${stageGerund[stage]} this issue.`;
+
+export const claimStatusFor = (claim: Claim) =>
+  claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
+
+export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) => {
+  if (attempt.outcome === "succeeded") return `${attempt.stage} completed.`;
+  if (attempt.outcome === "abandoned") return `${attempt.stage} abandoned.`;
+  const trimmed = reason ? statusReason(reason) : "";
+  if (trimmed) return `Last ${attempt.stage} attempt failed: ${trimmed}`;
+  return `Last ${attempt.stage} attempt failed.`;
+};
+
+const okToArray = <A>(result: Result.Result<A, unknown>): ReadonlyArray<A> =>
+  Result.isSuccess(result) ? [result.success] : [];
+
+const toPair = (token: string) => {
+  const eq = token.indexOf("=");
+  return eq > 0 ? [[token.slice(0, eq), token.slice(eq + 1)] as const] : [];
+};
+
+const parsePairs = (payload: string): Record<string, string> =>
+  Object.fromEntries(payload.split(/\s+/).flatMap(toPair));
+
+const orNull = (text: string) => text.trim() || null;
+
+interface DecodedBody {
+  readonly ledgerStart: number | null;
+  readonly detailStart: number | null;
+  readonly detailEnd: number | null;
+  readonly region: ReadonlyArray<MarkerSpan>;
+}
+
+const decodeBody = (codec: WireCodec, body: string): DecodedBody => {
+  const spans = codec.scan(body);
+  const ledger = spans.find((span) => span.name === "ledger");
+  const detail = spans.find((span) => span.name === "detail");
+  const regionEnd = detail?.start ?? body.length;
+  return {
+    ledgerStart: ledger?.start ?? null,
+    detailStart: detail?.start ?? null,
+    detailEnd: detail?.end ?? null,
+    region: spans.filter((span) => span.start < regionEnd),
+  };
+};
+
+const anchor = (name: string) => name === "ledger" || name === "detail";
+
+const pairsNamed = (codec: WireCodec, body: string, name: string) =>
+  decodeBody(codec, body)
+    .region.filter((span) => span.name === name)
+    .map((span) => parsePairs(span.pairs));
+
+const decodeClaim = Schema.decodeUnknownResult(Claim);
+const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
+const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
+
+export const parseClaim = (codec: WireCodec, body: string) => {
+  const candidates = pairsNamed(codec, body, "claim").flatMap((pairs) =>
+    okToArray(
+      decodeClaim({
+        by: pairs.by,
+        claimedAtMillis: Number(pairs.at),
+        ...(pairs.stage === undefined ? {} : { stage: pairs.stage }),
+      }),
+    ),
+  );
+  return candidates.at(-1) ?? null;
+};
+
+export const parseAttempts = (codec: WireCodec, body: string) =>
+  pairsNamed(codec, body, "attempt").flatMap((pairs) =>
+    okToArray(decodeAttempt({ stage: pairs.stage, outcome: pairs.outcome, atMillis: Number(pairs.at) })),
+  );
+
+export const parseFollowUp = (codec: WireCodec, body: string) => {
+  const candidates = pairsNamed(codec, body, "follow-up").flatMap((pairs) =>
+    okToArray(
+      decodeFollowUp({
+        checks: pairs.checks,
+        humanCommentAtMillis: Number(pairs.human),
+        noProgress: Number(pairs.noProgress),
+        // Markers written before base divergence existed have no `base=`; read them as "none".
+        baseDivergence: pairs.base ?? "none",
+      }),
+    ),
+  );
+  return candidates.at(-1) ?? null;
+};
+
+export const hasLedgerMarker = (codec: WireCodec, body: string) =>
+  codec.scan(body).some((span) => span.name === "ledger");
+
+export const hasClankerMarker = (codec: WireCodec, body: string) => codec.scan(body).length > 0;
+
+export const coordinationStatus = (codec: WireCodec, body: string) => {
+  const { ledgerStart } = decodeBody(codec, body);
+  return orNull(body.slice(0, ledgerStart ?? body.length).replace(attribution, ""));
+};
+
+export const coordinationDetail = (codec: WireCodec, body: string) => {
+  const { detailEnd } = decodeBody(codec, body);
+  return detailEnd === null ? null : orNull(body.slice(detailEnd));
+};
+
+export const coordinationMarkers = (codec: WireCodec, body: string) =>
+  decodeBody(codec, body)
+    .region.filter((span) => !anchor(span.name))
+    .map((span) => body.slice(span.start, span.end));
+
+// Strip to a fixpoint: deleting one marker can splice the bytes on either side into a fresh marker
+// the first scan never saw (a nested-comment gadget), so re-scan until nothing is left to strip.
+const stripMarkers = (codec: WireCodec, text: string): string => {
+  const spans = codec.scan(text);
+  if (spans.length === 0) return text;
+  const stripped = spans.reduceRight((acc, span) => acc.slice(0, span.start) + acc.slice(span.end), text);
+  return stripMarkers(codec, stripped);
+};
+
+export const serializeClaim = (codec: WireCodec, claim: Claim) =>
+  codec.encode({
+    name: "claim",
+    pairs: `by=${claim.by} at=${claim.claimedAtMillis}${claim.stage ? ` stage=${claim.stage}` : ""}`,
+  });
+
+export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
+  codec.encode({
+    name: "attempt",
+    pairs: `stage=${attempt.stage} outcome=${attempt.outcome} at=${attempt.atMillis}`,
+  });
+
+export const serializeFollowUp = (codec: WireCodec, marker: FollowUpMarker) =>
+  codec.encode({
+    name: "follow-up",
+    pairs: `checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence}`,
+  });
+
+const detailSection = (codec: WireCodec, detail: string | null) => {
+  const visible = orNull(stripMarkers(codec, detail ?? ""));
+  return visible === null ? [] : ["", codec.encode({ name: "detail", pairs: "" }), "", visible];
+};
+
+export const formatCoordinationBody = (codec: WireCodec, { status, markers, detail }: CoordinationBody) =>
+  [attribution, "", status, "", codec.ledgerMarker, ...markers, ...detailSection(codec, detail)].join("\n");
+
+export const formatNoteBody = (codec: WireCodec, detail: string) => orNull(stripMarkers(codec, detail)) ?? "";
+
+export const selectLedger = <Id>(codec: WireCodec, comments: ReadonlyArray<CoordinationComment<Id>>) =>
+  comments
+    .filter((comment) => comment.isBot && hasLedgerMarker(codec, comment.body))
+    .toSorted((left, right) => left.createdAtMillis - right.createdAtMillis)
+    .at(0);
+
+const nextDetail = (codec: WireCodec, update: CoordinationUpdate, previous: string) => {
+  if (!Object.hasOwn(update, "detail")) return coordinationDetail(codec, previous);
+  return update.detail ?? null;
+};
+
+export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(function* <Id>(
+  codec: WireCodec,
+  host: CoordinationHost<Id>,
+  update: CoordinationUpdate,
+) {
+  const comments = yield* host.comments;
+  const ledger = selectLedger(codec, comments);
+  const previous = ledger?.body ?? "";
+  const markers = coordinationMarkers(codec, previous);
+  const body = formatCoordinationBody(codec, {
+    status: update.status ?? coordinationStatus(codec, previous) ?? defaultStatus,
+    markers: update.marker === undefined ? markers : [...markers, update.marker],
+    detail: nextDetail(codec, update, previous),
+  });
+  if (ledger) {
+    yield* host.edit(ledger.id, body);
+    return;
+  }
+  yield* host.create(body);
+});
+
+export const postNote = Effect.fn("coordination.postNote")(function* <Id>(
+  codec: WireCodec,
+  host: CoordinationHost<Id>,
+  detail: string,
+) {
+  const comments = yield* host.comments;
+  const ledger = selectLedger(codec, comments);
+  if (ledger && coordinationDetail(codec, ledger.body) !== null) {
+    yield* upsertCoordination(codec, host, { detail: null });
+  }
+  yield* host.create(formatNoteBody(codec, detail));
+});
