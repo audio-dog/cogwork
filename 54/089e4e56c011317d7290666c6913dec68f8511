@@ -1,0 +1,220 @@
+packages/engine/src/executor.ts
+  s_924005de6eb6f9::t_cc766e0fd96283 244-246,248-249
+  s_924005de6eb6f9::t_607bb60b5faea9 242-243
+  s_924005de6eb6f9::t_a7e6353f712fc5 250-252
+  s_924005de6eb6f9::t_e8f50e2f5519ed 12,22,26-27,47,55-56,61,63-64,67-73,127-130,133,146,156,161,164-181,194,253-287,310,317,321,349-351,371-372,411,426,430,433-435,438,441-444,448,452,455-456,475-476,510,525-526,529,537,541,544-545,555,561-562,577,580-586,599-603,630-631
+packages/engine/src/executor.test.ts
+  s_924005de6eb6f9::t_7e6ffb483e4f5f 140-143
+  s_924005de6eb6f9::t_302e5bc9aefb0b 144-146
+  s_924005de6eb6f9::t_26f3f0885c4201 13,17,27-28,43,75,81-120,174,209,228,318,325,330,538,559-599,699,701,705,712-714,730-813
+.cursor/agents/code-simplifier.md
+  s_924005de6eb6f9::t_98e31a995d5e37 1-43
+.cursor/agents/complexity-skeptic.md
+  s_924005de6eb6f9::t_e899e5b6e76669 1-42
+.cursor/agents/implementer.md
+  s_924005de6eb6f9::t_38df480ad82db1 1-33
+.cursor/agents/pr-manager.md
+  s_924005de6eb6f9::t_5e539b62d46c37 1-61
+.cursor/agents/rule-reviewer.md
+  s_924005de6eb6f9::t_4e19efabc0e7f7 1-44
+.cursor/agents/security-auditor.md
+  s_924005de6eb6f9::t_fc7bf47640af58 1-42
+.cursor/agents/tester.md
+  s_924005de6eb6f9::t_0aa97bd35b5d96 1-110
+.cursor/commands/review.md
+  s_924005de6eb6f9::t_8b51f118a9d72c 1-128
+.cursor/hooks.json
+  s_924005de6eb6f9::t_10572fc224edb7 1-10
+.cursor/rules/main.mdc
+  s_924005de6eb6f9::t_10fe2ffb577ed8 1-5
+.cursor/worktrees.json
+  s_924005de6eb6f9::t_83d59153575e05 1-4
+.gitignore
+  s_924005de6eb6f9::t_4d51ee4bad342e 21-23,28
+AGENTS.md
+  s_924005de6eb6f9::t_274577b10a6824 36-39
+README.md
+  s_924005de6eb6f9::t_dfb9f48c1a7a9f 48
+apps/cli/config/clanker-forge.workspace.ts
+  s_924005de6eb6f9::t_10f3bb5453d3d3 11,26-27
+apps/cli/config/feldspar.workspace.ts
+  s_924005de6eb6f9::t_d4067c55a4f819 11,33-36
+apps/cli/src/commands.ts
+  s_924005de6eb6f9::t_759f27be7fc943 57
+apps/cli/src/credentials.test.ts
+  s_924005de6eb6f9::t_e9257c30bcf949 15,28,209
+apps/cli/src/login-commands.ts
+  s_924005de6eb6f9::t_a961f23ebb9804 1,37,42,47-50,52,55,59,65,75-76
+apps/cli/src/login.ts
+  s_924005de6eb6f9::t_4e0521b924b0d4 151
+apps/cli/src/rpc.ts
+  s_924005de6eb6f9::t_2f6f63ad9ab543 4,9,11,22,64-74,77,84-85,87,91,94
+apps/cli/src/status.test.ts
+  s_924005de6eb6f9::t_c79ac3eb75caad 2,10,15
+apps/cli/src/status.ts
+  s_924005de6eb6f9::t_f648a7f78d17b4 42
+docs/adr/0001-oauth-login-for-work-sources.md
+  s_924005de6eb6f9::t_f162e55e2b67e0 1-32
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_924005de6eb6f9::t_dd4cee84b65164 1-49
+docs/adr/0003-work-source-as-coordination-substrate.md
+  s_924005de6eb6f9::t_b96a5eb31fb37b 1-36
+docs/adr/0004-tanstack-ai-as-execution-layer.md
+  s_924005de6eb6f9::t_cc06a66bfa28a6 1-32
+docs/adr/0005-trust-boundary-is-authentication-not-payload-redaction.md
+  s_924005de6eb6f9::t_4a1e6109b9d204 1-54
+docs/adr/0006-workspace-config-trends-toward-declarative-data.md
+  s_924005de6eb6f9::t_dbd7f7fcd8cf51 1-54
+docs/agents/domain.md
+  s_924005de6eb6f9::t_0318d45e66a5f5 1-42
+docs/agents/issue-tracker.md
+  s_924005de6eb6f9::t_3c7fe5c4da52e5 1-45
+docs/agents/technical-disposition.md
+  s_924005de6eb6f9::t_19f16171e63e01 1-72
+docs/agents/triage-labels.md
+  s_924005de6eb6f9::t_8f70048e67044f 1-15
+docs/research/provider-auth-landscape.md
+  s_924005de6eb6f9::t_af9368f90a2c29 1-267
+docs/research/tanstack-ai-audit.md
+  s_924005de6eb6f9::t_19b03771d1a92f 1-133
+package.json
+  s_924005de6eb6f9::t_e753ad290e867c 18-19
+packages/contracts/CONTEXT.md
+  s_924005de6eb6f9::t_f7a302c947a813 102,105-108
+packages/contracts/src/base-schemas.ts
+  s_924005de6eb6f9::t_0866cffe4e1e82 18-19
+packages/contracts/src/daemon.ts
+  s_924005de6eb6f9::t_a25607135fec71 2-8,60
+packages/contracts/src/index.ts
+  s_924005de6eb6f9::t_1a7025e43b48f4 6
+packages/contracts/src/mcp-skill.ts
+  s_924005de6eb6f9::t_87edcd8a7f2f55 1-16
+packages/contracts/src/workspace.ts
+  s_924005de6eb6f9::t_9d5d151934e906 5,10,28-29,39,78,87,90
+packages/cursor-acp/package.json
+  s_924005de6eb6f9::t_0d09d321d7bec2 17
+packages/cursor-acp/probe-mcp.ts
+  s_924005de6eb6f9::t_a7ac4274a0d5a2 1-93
+packages/cursor-acp/src/harness.test.ts
+  s_924005de6eb6f9::t_15cfd2d3aff949 1-45
+packages/engine/CONTEXT.md
+  s_924005de6eb6f9::t_7c7e386020810c 58-62,85,101-102
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_924005de6eb6f9::t_9841a74f6880e8 1-24
+packages/engine/docs/adr/0005-worktree-setup-for-harnesses-is-repo-local.md
+  s_924005de6eb6f9::t_987449f40e5826 1-24
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_924005de6eb6f9::t_2253246d62e964 1-21
+packages/engine/skills/triage-agent/SKILL.md
+  s_924005de6eb6f9::t_81f9192b9298b8 18,33-44,103
+packages/engine/src/classify.test.ts
+  s_924005de6eb6f9::t_61f8e3ba3e281f 6
+packages/engine/src/classify.ts
+  s_924005de6eb6f9::t_890ee72ac5d546 13
+packages/engine/src/credential-store.test.ts
+  s_924005de6eb6f9::t_64cd22a86788ad 26,100,187
+packages/engine/src/credential-store.ts
+  s_924005de6eb6f9::t_0a5a7b2d906060 20,41,113,131,147
+packages/engine/src/daemon.ts
+  s_924005de6eb6f9::t_2f86a5d741d1d0 83
+packages/engine/src/engine.test.ts
+  s_924005de6eb6f9::t_b17180763fee56 13-14,28,45,61,63,68,140,230,234,266,274,349,356-359,438,454,464,473
+packages/engine/src/github/adapter.ts
+  s_924005de6eb6f9::t_932a0b896caefb 5-10,61,84-87,93,98,219
+packages/engine/src/github/client.ts
+  s_924005de6eb6f9::t_b2fa7c2233ead4 16,149,171,188,240,262
+packages/engine/src/github/github.test.ts
+  s_924005de6eb6f9::t_6afe8ba230774a 10,164,177,319,367,674,710,736,764,796,828,863,879,904,930,981
+packages/engine/src/github/provider.ts
+  s_924005de6eb6f9::t_306398122fa9f1 48
+packages/engine/src/index.ts
+  s_924005de6eb6f9::t_38d55f2b5253c5 8-9,11
+packages/engine/src/issue-tracker-router.test.ts
+  s_924005de6eb6f9::t_bdc04d76bc98d5 5-6,13,19,46,50
+packages/engine/src/issue-tracker-router.ts
+  s_924005de6eb6f9::t_c769e719b26d9b 5,10,12,29
+packages/engine/src/issue-tracker.ts
+  s_924005de6eb6f9::t_cab51d935c8bc2 45,52,58,62,69,98,100-101,104
+packages/engine/src/linear/account.ts
+  s_924005de6eb6f9::t_1801394e356796 1-17
+packages/engine/src/linear/adapter.ts
+  s_924005de6eb6f9::t_f991448b02fa48 5-10,78,95,100,159,229
+packages/engine/src/linear/client-credentials.test.ts
+  s_924005de6eb6f9::t_d47d2c3f03cfc3 15
+packages/engine/src/linear/client.ts
+  s_924005de6eb6f9::t_c3aff8939b70ba 18,127,132,150,161,225,322,335,343,350,360
+packages/engine/src/linear/index.ts
+  s_924005de6eb6f9::t_06f34d19b8326d 1
+packages/engine/src/linear/linear.test.ts
+  s_924005de6eb6f9::t_2300c21e80fcf3 8,98,192,205-206,221,326,355,407,491,512,584,589,596-597
+packages/engine/src/linear/oauth.ts
+  s_924005de6eb6f9::t_d2ff592cbc88d4 231
+packages/engine/src/mcp-skill.test.ts
+  s_924005de6eb6f9::t_601ae6a19a66cf 1-92
+packages/engine/src/mcp-skill.ts
+  s_924005de6eb6f9::t_74af0511e66072 1-71
+packages/engine/src/observe.ts
+  s_924005de6eb6f9::t_f0bbf9ad1f0a38 3,23
+packages/engine/src/playbook.test.ts
+  s_924005de6eb6f9::t_6ed0558757fbbc 1,23,118-145,194-202,212
+packages/engine/src/playbook.ts
+  s_924005de6eb6f9::t_e8a068b7ab479e 4,19,66,205-206,209-210,222-224
+packages/engine/src/reconcile.ts
+  s_924005de6eb6f9::t_f8d98b841b9316 18,113,115,151,169,188,200
+packages/engine/src/scheduler.test.ts
+  s_924005de6eb6f9::t_769004e0d0ed48 22-23,42,238-239,257,267,626,650,661,682,693,714,733,752,764,782,799,819,837,855,876,901,912,933,945,970,984,1014
+packages/engine/src/scheduler.ts
+  s_924005de6eb6f9::t_4fcb6ceeaff401 21,191,193,263,267,295,309-310,335,437
+packages/engine/src/source-control.ts
+  s_924005de6eb6f9::t_3b95164327eac0 6,26
+packages/engine/src/worktree.test.ts
+  s_924005de6eb6f9::t_05c696a91d1a26 26,131,136,147,154
+packages/engine/src/worktree.ts
+  s_924005de6eb6f9::t_59fabd5a9c8307 27,70
+packages/sync/CONTEXT.md
+  s_924005de6eb6f9::t_e28ee8c635f2b1 11,30-33
+packages/sync/assets/subagents/rule-reviewer.md
+  s_924005de6eb6f9::t_316c433cbfb3fe 15
+packages/sync/assets/toolkit-servers/servers.json
+  s_924005de6eb6f9::t_2e7d954794a77d 1-14
+packages/sync/skills/sync/triage-agent/SKILL.md
+  s_924005de6eb6f9::t_709385fc8015ba 18,33-44,103
+packages/sync/src/lib/assets.ts
+  s_924005de6eb6f9::t_ca136207ea3def 4,13,75,78-79
+packages/sync/src/lib/toml.ts
+  s_924005de6eb6f9::t_8c77c3ad485f2e 1,4,10
+packages/sync/src/lib/types.ts
+  s_924005de6eb6f9::t_bc93cf4c0c78f8 35-36,52
+packages/sync/src/targets/claude.ts
+  s_924005de6eb6f9::t_f53ff7c38f8f67 10,42-43,47,59
+packages/sync/src/targets/codex.ts
+  s_924005de6eb6f9::t_80682f2733a4c0 4,30,34
+packages/sync/src/targets/cursor.ts
+  s_924005de6eb6f9::t_a7439d8d127a79 50-54
+scripts/setup-worktree.mjs
+  s_924005de6eb6f9::t_ce8de82194fde6 1-83
+scripts/worktree-manifest.json
+  s_924005de6eb6f9::t_9c2464930a8f9f 1
+turbo.json
+  s_924005de6eb6f9::t_48352c64503727 3
+packages/cursor-acp/src/harness.ts
+  s_924005de6eb6f9::t_a5494f8d2318a5 12-20,24,42-62,179,183-187
+packages/engine/src/harness.ts
+  s_924005de6eb6f9::t_33aebba945adcf 6,9,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "54089e4e56c011317d7290666c6913dec68f8511",
+  "prompts": {},
+  "sessions": {
+    "s_924005de6eb6f9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "120eb0ae-79a5-4701-bdd6-da76762cfa7f",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
