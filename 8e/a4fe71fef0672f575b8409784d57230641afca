@@ -1,0 +1,47 @@
+packages/engine/src/linear/adapter.ts
+  s_3c354ce0a58b21::t_e2fe9283013f29 5-6,30,38-45,85-90,96-100,107-110,151-154,164-166,172-175,180
+packages/engine/src/linear/markers.ts
+  s_b5fa44cfac341b::t_f5a8b0caacbf60 1-3,55-67,70,72
+packages/engine/CONTEXT.md
+  s_3c354ce0a58b21::t_abff9af47c835c 92-95,97,101
+packages/engine/src/coordination.test.ts
+  s_3c354ce0a58b21::t_40d9b4278fc678 1-468
+packages/engine/src/coordination.ts
+  s_3c354ce0a58b21::t_3a9f345dcc36e2 1-248
+packages/engine/src/github/adapter.ts
+  s_3c354ce0a58b21::t_049bd99ddd6a3a 5-6,21,27-34,82-87,94-98,105-108,130,138-141,151-153,159-162,167
+packages/engine/src/github/github.test.ts
+  s_3c354ce0a58b21::t_123bfff4928a55 9,25,30-37,236-238,267-269,295-297,434-441,490-492,534-536,574-576,607-609,638-640,683-685,725-735,827,839-840
+packages/engine/src/github/markers.test.ts
+  s_3c354ce0a58b21::t_0a6129cddb107a 2
+packages/engine/src/github/markers.ts
+  s_3c354ce0a58b21::t_0af5a1e66fd3f3 1-11,21,23,36-61
+packages/engine/src/linear/linear.test.ts
+  s_3c354ce0a58b21::t_a846b1e1a6780d 8,24,28-33,339,344,434
+packages/engine/src/linear/markers.test.ts
+  s_3c354ce0a58b21::t_37e8db3c0ec2be 2,5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "8ea4fe71fef0672f575b8409784d57230641afca",
+  "prompts": {},
+  "sessions": {
+    "s_3c354ce0a58b21": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "04ea41d4-6f17-45f8-a108-81f085322299",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b5fa44cfac341b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e935fba1-e112-4129-b9fc-13fafa728739",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
