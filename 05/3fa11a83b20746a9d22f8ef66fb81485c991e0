@@ -1,0 +1,21 @@
+.cursor/worktrees.json
+  s_0221d16c3d5293::t_fc5b145dd275ea 1-4
+.gitignore
+  s_0221d16c3d5293::t_96d535ece49d57 11-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "053fa11a83b20746a9d22f8ef66fb81485c991e0",
+  "prompts": {},
+  "sessions": {
+    "s_0221d16c3d5293": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "27868c11-0005-458e-8d9c-f67aa0b9bec5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
