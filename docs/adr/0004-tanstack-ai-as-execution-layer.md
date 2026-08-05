@@ -1,6 +1,6 @@
 # 0004 — TanStack AI is the unified AI execution layer
 
-- **Status:** accepted
+- **Status:** accepted — extended by engine ADR 0006 (`packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md`): the `HarnessRunner` port does not disappear; a first-party TanStack runner and the CLI harness adapters both live behind it, and only the owned provider layer serves direct model calls.
 - **Date:** 2026-07-28
 
 ## Context
