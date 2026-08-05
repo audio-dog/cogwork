@@ -23,8 +23,8 @@ export default defineWorkspace({
     verify: { enabled: true },
   },
   worktrees: {
-    linkEnvFiles: [".env"],
-    setup: ["pnpm install"],
+    linkPaths: [".env"],
+    setup: ["pnpm install", "pnpm setup-worktree"],
     reapAfterMillis: 604_800_000,
   },
 });

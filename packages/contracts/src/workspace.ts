@@ -75,7 +75,7 @@ export const WorktreeConfig = Schema.Struct({
   root: Schema.optional(TrimmedNonEmptyString),
   remote: Schema.optional(TrimmedNonEmptyString),
   baseBranch: Schema.optional(TrimmedNonEmptyString),
-  linkEnvFiles: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  linkPaths: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   setup: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   reapAfterMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
 });
