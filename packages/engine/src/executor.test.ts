@@ -10,6 +10,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -24,6 +25,7 @@ import {
   layer as harnessLayer,
 } from "./harness";
 import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
+import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunEventBus from "./run-event-bus";
 import * as RunLedger from "./run-ledger";
@@ -70,6 +72,34 @@ const mcpWorkspace: RegisteredWorkspace = {
     playbook: { implement: { enabled: true } },
   }),
 };
+
+const mcpAuthWorkspace: RegisteredWorkspace = {
+  source: workspace.source,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh",
+    checkoutPath: "/repos/gh",
+    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    harness: { preferred: "cursor" },
+    mcpSkills: [
+      { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
+    ],
+    playbook: { implement: { enabled: true } },
+  }),
+};
+
+// A stand-in for the real credential-store-backed assembler: it hands back a redacted bearer for any
+// skill that declares auth, so the executor tests can prove the token reaches the request without
+// wiring a live credential store.
+const assemblerStub = Layer.succeed(McpSkillAssembler, {
+  assemble: (config) =>
+    Effect.succeed(
+      (config.mcpSkills ?? []).map((skill) => ({
+        name: skill.name,
+        endpoint: skill.endpoint,
+        bearer: skill.auth ? Redacted.make(`token-for-${skill.name}`) : null,
+      })),
+    ),
+});
 
 const implementItem = {
   id: id("#15"),
@@ -336,6 +366,7 @@ const provide = (
         RunLedger.layerMemory,
         RunEventBus.layer,
         Layer.succeed(WorktreeManager, worktree),
+        assemblerStub,
       ),
     ),
   );
@@ -559,7 +590,7 @@ describe("Executor.execute", () => {
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
         assert.isNull(request?.sessionId ?? null);
-        assert.deepStrictEqual(request?.mcpSkills, []);
+        assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
 
         const log = yield* Ref.get(calls);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
@@ -590,9 +621,33 @@ describe("Executor.execute", () => {
         yield* executor.execute(mcpWorkspace, implementItem);
 
         const [request] = yield* Ref.get(requests);
-        assert.deepStrictEqual(request?.mcpSkills, [
-          { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" },
-        ]);
+        assert.deepStrictEqual(
+          [...(request?.mcpSkills ?? [])],
+          [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: null }],
+        );
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("resolves a credential-store bearer for an authed skill without leaking it to the ledger", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(mcpAuthWorkspace, implementItem);
+
+        const [request] = yield* Ref.get(requests);
+        const [skill] = request?.mcpSkills ?? [];
+        assert.strictEqual(skill?.name, "linear");
+        assert.isNotNull(skill?.bearer ?? null);
+        assert.strictEqual(skill?.bearer ? Redacted.value(skill.bearer) : null, "token-for-linear");
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        const events = run ? yield* ledger.events(run.id) : [];
+        assert.isFalse(events.some((event) => event.data.includes("token-for-linear")));
       }).pipe(Effect.provide(layer));
     }),
   );

@@ -1,4 +1,4 @@
-import { WorkspaceConfig } from "@clanker-forge/contracts";
+import { type McpSkill, WorkspaceConfig } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
@@ -120,11 +120,23 @@ describe("MCP skills", () => {
     assert.deepStrictEqual(resolveImplement(config()).mcpSkills, []);
   });
 
-  it("carry the workspace's MCP skills onto every resolved stage", () => {
+  it("carry the workspace's MCP skills, auth reference and all, onto every resolved stage", () => {
     const cfg = config({
-      mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
+      mcpSkills: [
+        {
+          name: "linear",
+          endpoint: "https://mcp.linear.app/mcp/readonly",
+          auth: { type: "credential-store" },
+        },
+      ],
     });
-    const expected = [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }];
+    const expected: ReadonlyArray<McpSkill> = [
+      {
+        name: "linear",
+        endpoint: "https://mcp.linear.app/mcp/readonly",
+        auth: { type: "credential-store" },
+      },
+    ];
     assert.deepStrictEqual(resolveTriage(cfg).mcpSkills, expected);
     assert.deepStrictEqual(resolveImplement(cfg).mcpSkills, expected);
     assert.deepStrictEqual(resolveFollowUp(cfg).mcpSkills, expected);

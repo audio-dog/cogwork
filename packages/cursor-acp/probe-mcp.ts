@@ -2,8 +2,10 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HarnessName, type McpSkill } from "@clanker-forge/contracts";
+import { HarnessName } from "@clanker-forge/contracts";
+import type { Harness } from "@clanker-forge/engine";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { cursorRunner } from "./src/index";
@@ -12,6 +14,8 @@ const MODEL = process.env.PROBE_MODEL ?? "auto";
 const AGENT_BIN = process.env.PROBE_AGENT_BIN ?? "agent";
 const MCP_NAME = process.env.PROBE_MCP_NAME ?? "deepwiki";
 const MCP_URL = process.env.PROBE_MCP_URL ?? "https://mcp.deepwiki.com/mcp";
+// Set to a Linear app-actor token to probe the authed readonly endpoint end to end.
+const MCP_BEARER = process.env.PROBE_MCP_BEARER;
 
 const scratch = () => {
   const dir = mkdtempSync(join(tmpdir(), "probe-mcp-"));
@@ -29,7 +33,11 @@ const cursor = Schema.decodeSync(HarnessName)("cursor");
 
 const main = async () => {
   const dir = scratch();
-  const skill: McpSkill = { name: MCP_NAME, endpoint: MCP_URL };
+  const skill: Harness.ResolvedMcpSkill = {
+    name: MCP_NAME,
+    endpoint: MCP_URL,
+    bearer: MCP_BEARER ? Redacted.make(MCP_BEARER) : null,
+  };
   const runner = cursorRunner({ name: cursor, agentBin: AGENT_BIN });
 
   console.log(`scratch checkout: ${dir}`);

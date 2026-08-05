@@ -1,0 +1,71 @@
+import type { McpSkill, WorkspaceConfig } from "@clanker-forge/contracts";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import type * as Redacted from "effect/Redacted";
+import {
+  type CredentialAccount,
+  CredentialError,
+  CredentialStore,
+  type CredentialStoreService,
+} from "./credential-store";
+import { credentialAccountFor } from "./linear/account";
+
+// The bearer rides a `Redacted` so a stray log of the request cannot leak it; the harness runner is
+// the only place that unwraps it.
+export interface ResolvedMcpSkill {
+  readonly name: string;
+  readonly endpoint: string;
+  readonly bearer: Redacted.Redacted<string> | null;
+}
+
+// Injected so the assembler stays free of any one issue tracker's config shape.
+export type CredentialAccountFor = (config: WorkspaceConfig) => CredentialAccount | null;
+
+export interface McpSkillAssemblerService {
+  readonly assemble: (
+    config: WorkspaceConfig,
+  ) => Effect.Effect<ReadonlyArray<ResolvedMcpSkill>, CredentialError>;
+}
+
+export class McpSkillAssembler extends Context.Service<McpSkillAssembler, McpSkillAssemblerService>()(
+  "@clanker-forge/engine/mcp-skill/McpSkillAssembler",
+) {}
+
+export const make = (
+  store: CredentialStoreService,
+  accountFor: CredentialAccountFor,
+): McpSkillAssemblerService => {
+  const resolveBearer = Effect.fn("McpSkillAssembler.resolveBearer")(function* (
+    config: WorkspaceConfig,
+    skill: McpSkill,
+  ) {
+    if (!skill.auth) return null;
+    const account = accountFor(config);
+    if (!account) {
+      return yield* new CredentialError({
+        account: config.name,
+        message: `MCP skill "${skill.name}" needs a credential-store bearer, but workspace ${config.name} has no credential account to source it from`,
+      });
+    }
+    const credential = yield* store.bearerToken(account);
+    return credential.token;
+  });
+
+  return {
+    assemble: Effect.fn("McpSkillAssembler.assemble")(function* (config: WorkspaceConfig) {
+      const skills = config.mcpSkills ?? [];
+      return yield* Effect.forEach(skills, (skill) =>
+        Effect.map(
+          resolveBearer(config, skill),
+          (bearer): ResolvedMcpSkill => ({ name: skill.name, endpoint: skill.endpoint, bearer }),
+        ),
+      );
+    }),
+  };
+};
+
+export const layer = Layer.effect(
+  McpSkillAssembler,
+  Effect.map(CredentialStore, (store) => make(store, credentialAccountFor)),
+);
