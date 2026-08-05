@@ -4,6 +4,7 @@ import {
   type RunEvent,
   RunId,
   type RunSummary,
+  WorkItemId,
 } from "@clanker-forge/contracts";
 import { Daemon, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
@@ -148,13 +149,6 @@ const runEvents = Effect.fn("commands.runEvents")(
   (effect, options) => overSocket(effect, options.socketPath),
 );
 
-const matchesItem = (raw: string) => (run: RunSummary) => run.workItem === raw || run.workItem === `#${raw}`;
-
-const pickRun = (runs: ReadonlyArray<RunSummary>, raw: string) => {
-  const matches = runs.filter(matchesItem(raw));
-  return matches.find((run) => run.status === "running") ?? matches[0];
-};
-
 const markSeen = (seen: Ref.Ref<ReadonlyMap<string, number>>) => (activity: RunActivity) =>
   Ref.modify(seen, (map) => {
     const last = map.get(activity.runId) ?? -1;
@@ -173,8 +167,8 @@ const watchStream = <E>(source: Stream.Stream<RunActivity, E>, seen: Ref.Ref<Rea
     Stream.retry(reconnectSchedule),
   );
 
-const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R>(
-  listRuns: Effect.Effect<ReadonlyArray<RunSummary>, E, R>,
+export const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R>(
+  resolve: (workItem: WorkItemId) => Effect.Effect<RunId | null, E, R>,
   id: Option.Option<string>,
   workItem: Option.Option<string>,
 ) {
@@ -182,9 +176,9 @@ const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R>(
     return Option.some<WatchPayload>({ id: yield* Schema.decodeUnknownEffect(RunId)(id.value) });
   }
   if (Option.isNone(workItem)) return Option.some<WatchPayload>({});
-  const runs = yield* listRuns;
-  const run = pickRun(runs, workItem.value);
-  return run ? Option.some<WatchPayload>({ id: run.id }) : Option.none<WatchPayload>();
+  const item = yield* Schema.decodeUnknownEffect(WorkItemId)(workItem.value);
+  const runId = yield* resolve(item);
+  return runId === null ? Option.none<WatchPayload>() : Option.some<WatchPayload>({ id: runId });
 });
 
 const runWatch = Effect.fn("commands.runWatch")(
@@ -194,7 +188,11 @@ const runWatch = Effect.fn("commands.runWatch")(
     readonly workItem: Option.Option<string>;
   }) {
     const client = yield* RpcClient.make(DaemonRpcs);
-    const target = yield* resolveTarget(client.ListRuns(), options.id, options.workItem);
+    const target = yield* resolveTarget(
+      (workItem) => client.ResolveWatchTarget({ workItem }),
+      options.id,
+      options.workItem,
+    );
     if (Option.isNone(target)) {
       const item = Option.getOrElse(options.workItem, () => "");
       return yield* Console.error(`watch: no runs found for ${item}`);

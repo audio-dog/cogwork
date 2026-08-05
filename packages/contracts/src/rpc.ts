@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
+import { WorkItemId } from "./base-schemas";
 import { DaemonStatus } from "./daemon";
 import { RunActivity, RunEvent, RunId, RunSummary } from "./run";
 
@@ -13,10 +14,15 @@ export const GetRunEvents = Rpc.make("GetRunEvents", {
   success: Schema.Array(RunEvent),
 });
 
+export const ResolveWatchTarget = Rpc.make("ResolveWatchTarget", {
+  payload: { workItem: WorkItemId },
+  success: Schema.NullOr(RunId),
+});
+
 export const WatchActivity = Rpc.make("WatchActivity", {
   payload: { id: Schema.optional(RunId) },
   success: RunActivity,
   stream: true,
 });
 
-export const DaemonRpcs = RpcGroup.make(GetStatus, ListRuns, GetRunEvents, WatchActivity);
+export const DaemonRpcs = RpcGroup.make(GetStatus, ListRuns, GetRunEvents, ResolveWatchTarget, WatchActivity);
