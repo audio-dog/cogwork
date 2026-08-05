@@ -3,8 +3,10 @@ import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import type { ResolvedMcpSkill } from "./mcp-skill";
 
 export type { AgUiEvent } from "@clanker-forge/contracts";
+export type { ResolvedMcpSkill } from "./mcp-skill";
 
 export interface HarnessRequest {
   readonly harness: HarnessName;
@@ -13,6 +15,7 @@ export interface HarnessRequest {
   readonly model: string | null;
   readonly effort: string | null;
   readonly sessionId: string | null;
+  readonly mcpSkills: ReadonlyArray<ResolvedMcpSkill>;
 }
 
 export class HarnessError extends Schema.TaggedErrorClass<HarnessError>()("HarnessError", {

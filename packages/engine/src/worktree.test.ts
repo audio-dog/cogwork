@@ -23,7 +23,7 @@ const workspaceWith = (worktrees?: Worktree.WorktreeSettings) => ({
   config: decodeConfig({
     name: "demo",
     checkoutPath: "/repo",
-    workSource: { type: "github" },
+    issueTracker: { type: "github" },
     harness: { preferred: "cursor" },
     worktrees,
   }),
@@ -128,12 +128,12 @@ describe("Worktree.ensure", () => {
     }),
   );
 
-  it.effect("symlinks configured env files that exist in the checkout", () =>
+  it.effect("symlinks configured link paths that exist in the checkout", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
       const fs = fakeFs(recorder, { "/repo/.env": { mtimeMillis: 1 } });
       const manager = yield* Effect.provide(Worktree.make, provide(fakeGit(recorder, {}), fs));
-      yield* manager.ensure(workspaceWith({ linkEnvFiles: [".env", ".env.missing"] }), {
+      yield* manager.ensure(workspaceWith({ linkPaths: [".env", ".env.missing"] }), {
         id: "#13",
         title: "Worktree lifecycle",
       });
@@ -144,16 +144,14 @@ describe("Worktree.ensure", () => {
     }),
   );
 
-  it.effect("symlinks .repos from the checkout when it exists", () =>
+  it.effect("links nothing when no link paths are configured", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();
       const fs = fakeFs(recorder, { "/repo/.repos": { mtimeMillis: 1 } });
       const manager = yield* Effect.provide(Worktree.make, provide(fakeGit(recorder, {}), fs));
       yield* manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" });
       const linked = yield* Ref.get(recorder.linked);
-      assert.deepStrictEqual(linked, [
-        { target: "/repo/.repos", linkPath: "/repo.worktrees/13-worktree-lifecycle/.repos" },
-      ]);
+      assert.deepStrictEqual(linked, []);
     }),
   );
 

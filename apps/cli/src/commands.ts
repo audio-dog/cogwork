@@ -54,7 +54,7 @@ const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
 );
 
 const pollIntervalFlag = Flag.integer("poll-interval").pipe(
-  Flag.withDescription("Seconds between work-source polls (higher values conserve GitHub API quota)"),
+  Flag.withDescription("Seconds between issue-tracker polls (higher values conserve GitHub API quota)"),
   Flag.withDefault(60),
 );
 

@@ -3,8 +3,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type { ObservedPr } from "./follow-up";
+import type { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import type { WorkSourceError } from "./work-source";
 
 // Everything the provider can learn about a pull request by reading it. The follow-up marker is the
 // tracker's coordination state, not the PR's, so it is attached during composition rather than here.
@@ -23,7 +23,7 @@ export interface SourceControlProviderService {
   readonly observe: (
     workspace: RegisteredWorkspace,
     owned: ReadonlyArray<OwnedItem>,
-  ) => Effect.Effect<ReadonlyMap<WorkItemId, PrSignals>, WorkSourceError>;
+  ) => Effect.Effect<ReadonlyMap<WorkItemId, PrSignals>, IssueTrackerError>;
 }
 
 export class SourceControlProvider extends Context.Service<

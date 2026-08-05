@@ -3,7 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
 import { followUpNoProgressLimit, type ObservedPr } from "./follow-up";
-import type { ObservedItem, PrReview } from "./work-source";
+import type { ObservedItem, PrReview } from "./issue-tracker";
 
 const id = Schema.decodeSync(WorkItemId);
 

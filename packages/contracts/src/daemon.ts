@@ -1,5 +1,11 @@
 import * as Schema from "effect/Schema";
-import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkSourceType, WorkspaceId } from "./base-schemas";
+import {
+  HarnessName,
+  IssueTrackerType,
+  TrimmedNonEmptyString,
+  WorkItemId,
+  WorkspaceId,
+} from "./base-schemas";
 import { Claim } from "./coordination";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
 
@@ -51,7 +57,7 @@ export type PollState = typeof PollState.Type;
 export const WorkspaceInfo = Schema.Struct({
   name: WorkspaceId,
   checkoutPath: TrimmedNonEmptyString,
-  workSource: WorkSourceType,
+  issueTracker: IssueTrackerType,
   harness: HarnessName,
   poll: PollState,
   eligible: Schema.Array(ActionableItem),

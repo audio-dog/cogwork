@@ -80,7 +80,7 @@ const schedulerStats = (config: SchedulerConfig, state: SchedulerState) => ({
 const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => ({
   name: workspace.config.name,
   checkoutPath: workspace.config.checkoutPath,
-  workSource: workspace.config.workSource.type,
+  issueTracker: workspace.config.issueTracker.type,
   harness: workspace.config.harness.preferred,
   poll: state?.poll ?? okPoll,
   eligible: (state?.eligible ?? []).map((work) => ({ id: work.id, title: work.title, stage: work.stage })),

@@ -1,6 +1,7 @@
 import type {
   HarnessName,
   LifecycleStage,
+  McpSkill,
   PlaybookStageConfig,
   TriageRole,
   WorkspaceConfig,
@@ -15,6 +16,7 @@ export interface ResolvedStage {
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
+  readonly mcpSkills: ReadonlyArray<McpSkill>;
 }
 
 const dayMillis = 86_400_000;
@@ -61,6 +63,7 @@ const resolveStageConfig = (
   promptTemplate: stage?.prompt ?? defaults.promptTemplate,
   resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
   resumeMaxTokens: stage?.resumeMaxTokens ?? defaults.resumeMaxTokens,
+  mcpSkills: config.mcpSkills ?? [],
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
@@ -199,9 +202,12 @@ const implementResults: ReadonlyArray<ImplementResult> = ["opened-pr", "stuck"];
 
 const implementFooter = [
   "",
+  "Only one pull request should ever exist for this branch. Before opening one, check whether a pull",
+  "request for this branch is already open; if it is, push your work to that one instead of opening another.",
   "End your final message with exactly one line, and nothing after it:",
   "IMPLEMENT-RESULT: <opened-pr | stuck>",
-  "Use `opened-pr` only when you opened a pull request that references {id}; otherwise use `stuck`.",
+  "Use `opened-pr` when a pull request that references {id} is open for this branch — whether you opened it",
+  "or pushed to one that already existed; otherwise use `stuck`.",
 ].join("\n");
 
 const implementResultPattern = /IMPLEMENT-RESULT:\s*([a-z-]+)/gi;
@@ -213,8 +219,9 @@ export const buildContinuationNudge = (worktreePath: string) =>
   [
     "You were interrupted part-way through the task above and this session has just been resumed.",
     `Nothing has changed except that time passed. Inspect ${worktreePath} to see how far you got, then`,
-    "continue from exactly where you stopped. Do not start over and do not redo completed work. If the",
-    "task is already complete, say COMPLETE and stop.",
+    "continue from exactly where you stopped. Do not start over and do not redo completed work. If a pull",
+    "request for this branch already exists, keep using it and never open a second one. If the task is",
+    "already complete, say COMPLETE and stop.",
   ].join("\n");
 
 export const parseImplementResult = (text: string) =>

@@ -148,7 +148,7 @@ export const loginLinear = Effect.fn("cli.login.linear")(function* (config: Line
   const identity = yield* Linear.OAuth.discoverIdentity(tokenResponse.access_token);
   const store = yield* CredentialStore.CredentialStore;
   yield* store.persist({
-    workSource: "linear",
+    issueTracker: "linear",
     organization: identity.organization,
     botUserId: identity.botUserId,
     token,

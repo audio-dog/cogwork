@@ -2,8 +2,13 @@ import { type OAuthAppConfig, type TriageRole, WorkItemId } from "@clanker-forge
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import {
+  IssueTracker,
+  IssueTrackerError,
+  type IssueTrackerService,
+  type TrackerItem,
+} from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
-import { type TrackerItem, WorkSource, WorkSourceError, type WorkSourceService } from "../work-source";
 import {
   LinearClient,
   type LinearClientService,
@@ -70,7 +75,7 @@ const clientCredentialsFor = (oauth: OAuthAppConfig | undefined) =>
   oauth?.clientSecretEnv ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null;
 
 const targetFor = (workspace: RegisteredWorkspace) => {
-  const source = workspace.config.workSource;
+  const source = workspace.config.issueTracker;
   if (source.type !== "linear" || !source.team) return null;
   return {
     team: source.team,
@@ -87,12 +92,12 @@ const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
 const itemId = (identifier: string) => decodeItemId(identifier).pipe(Effect.orDie);
 
 const notLinear = (workspace: RegisteredWorkspace) =>
-  new WorkSourceError({
+  new IssueTrackerError({
     reason: "unavailable",
     message: `workspace ${workspace.config.name} is not a linear work source`,
   });
 
-const make = (client: LinearClientService): WorkSourceService => {
+const make = (client: LinearClientService): IssueTrackerService => {
   const requireTarget = Effect.fn("linear.requireTarget")(function* (workspace: RegisteredWorkspace) {
     const target = targetFor(workspace);
     if (!target) {
@@ -151,7 +156,7 @@ const make = (client: LinearClientService): WorkSourceService => {
       states.find((state) => state.name === canceledStateName) ??
       states.find((state) => state.type === "canceled");
     if (!canceled) {
-      return yield* new WorkSourceError({
+      return yield* new IssueTrackerError({
         reason: "unavailable",
         message: `Linear team ${target.team} has no Canceled workflow state`,
       });
@@ -221,7 +226,7 @@ const make = (client: LinearClientService): WorkSourceService => {
 };
 
 export const layer = Layer.effect(
-  WorkSource,
+  IssueTracker,
   Effect.gen(function* () {
     const client = yield* LinearClient;
     return make(client);

@@ -2,8 +2,13 @@ import { WorkItemId } from "@clanker-forge/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import {
+  IssueTracker,
+  IssueTrackerError,
+  type IssueTrackerService,
+  type TrackerItem,
+} from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
-import { type TrackerItem, WorkSource, WorkSourceError, type WorkSourceService } from "../work-source";
 import {
   GitHubClient,
   type GitHubClientService,
@@ -53,7 +58,7 @@ const nextDetail = (update: CoordinationUpdate, previous: string) => {
 };
 
 const targetFor = (workspace: RegisteredWorkspace) => {
-  const source = workspace.config.workSource;
+  const source = workspace.config.issueTracker;
   if (source.type !== "github" || !source.repo) return null;
   const [owner, name] = source.repo.split("/");
   if (!owner || !name) return null;
@@ -76,18 +81,21 @@ const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Eff
 const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
   const parsed = Number.parseInt(id.replace(/^#/, ""), 10);
   if (Number.isNaN(parsed)) {
-    return yield* new WorkSourceError({ reason: "unavailable", message: `unrecognized work item id ${id}` });
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: `unrecognized work item id ${id}`,
+    });
   }
   return parsed;
 });
 
 const notGitHub = (workspace: RegisteredWorkspace) =>
-  new WorkSourceError({
+  new IssueTrackerError({
     reason: "unavailable",
     message: `workspace ${workspace.config.name} is not a github work source`,
   });
 
-const make = (client: GitHubClientService): WorkSourceService => {
+const make = (client: GitHubClientService): IssueTrackerService => {
   const resolveIssue = Effect.fn("github.resolveIssue")(function* (
     workspace: RegisteredWorkspace,
     id: string,
@@ -208,7 +216,7 @@ const make = (client: GitHubClientService): WorkSourceService => {
 };
 
 export const layer = Layer.effect(
-  WorkSource,
+  IssueTracker,
   Effect.gen(function* () {
     const client = yield* GitHubClient;
     return make(client);

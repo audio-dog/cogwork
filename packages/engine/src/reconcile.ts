@@ -15,11 +15,11 @@ import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import { type Classification, classify, type EligibleWork } from "./classify";
+import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
-import { type ObservedItem, WorkSource, type WorkSourceError } from "./work-source";
 
 export interface ObservedRef {
   readonly id: WorkItemId;
@@ -110,9 +110,9 @@ const withoutScope = (cooldowns: Map<string, Cooldown>, scope: string) => {
 
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
-  const workSource = yield* WorkSource;
+  const issueTracker = yield* IssueTracker;
   const provider = yield* SourceControlProvider;
-  const observe = observeWorkspace(workSource, provider);
+  const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
   const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ generation: 0, workspaces: [] });
   const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
@@ -148,7 +148,7 @@ export const make = Effect.gen(function* () {
   const pauseForRateLimit = Effect.fn("ReconcileWorker.pauseForRateLimit")(function* (
     workspace: RegisteredWorkspace,
     scope: string | null,
-    error: WorkSourceError,
+    error: IssueTrackerError,
   ) {
     const nowMillis = yield* Clock.currentTimeMillis;
     const { entered, retryAtMillis } = yield* enterCooldown(scope, nowMillis, error.retryAfterMillis);
@@ -166,7 +166,7 @@ export const make = Effect.gen(function* () {
   const pauseFor = Effect.fn("ReconcileWorker.pauseFor")(function* (
     workspace: RegisteredWorkspace,
     scope: string | null,
-    error: WorkSourceError,
+    error: IssueTrackerError,
   ) {
     if (error.reason === "rate-limited") {
       return yield* pauseForRateLimit(workspace, scope, error);
@@ -185,7 +185,7 @@ export const make = Effect.gen(function* () {
   const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
     workspace: RegisteredWorkspace,
   ) {
-    const scope = workSource.rateLimitScope(workspace);
+    const scope = issueTracker.rateLimitScope(workspace);
     const held = yield* heldCooldown(scope);
     if (held) {
       return pausedState(workspace, {
@@ -197,7 +197,7 @@ export const make = Effect.gen(function* () {
     return yield* observe(workspace).pipe(
       Effect.tap(() => clearCooldown(scope)),
       Effect.map((items) => okState(workspace, items, classify(items))),
-      Effect.catchTag("WorkSourceError", (error) => pauseFor(workspace, scope, error)),
+      Effect.catchTag("IssueTrackerError", (error) => pauseFor(workspace, scope, error)),
     );
   });
 

@@ -3,6 +3,7 @@ export * from "./base-schemas";
 export * from "./coordination";
 export * from "./daemon";
 export * from "./events";
+export * from "./mcp-skill";
 export * from "./rpc";
 export * from "./run";
 export * from "./triage";

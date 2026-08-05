@@ -45,7 +45,7 @@ into a project directory (default: cwd). Run `pnpm sync --help` for all flags.
 | Slash commands | `packages/sync/assets/commands/*.md` | `.claude/commands/*.md` | `.cursor/commands/*.md` | `~/.codex/prompts/*.md` |
 | Subagents | `packages/sync/assets/subagents/*.md` | `.claude/agents/*.md` | `.cursor/agents/*.md` | `.codex/agents/*.toml` |
 | Skills | `packages/sync/skills/sync/<name>/` | `~/.claude/skills/<name>/`, or `.claude/skills/<name>/` with `--project` | `~/.agents/skills/<name>/` (`--global` only) | skipped |
-| MCP servers | `packages/sync/assets/mcp/servers.json` | `mcpServers` (`.mcp.json` / `~/.claude.json`) | `.cursor/mcp.json` | `~/.codex/clanker-forge.mcp.toml` snippet |
+| Toolkit servers | `packages/sync/assets/toolkit-servers/servers.json` | `mcpServers` (`.mcp.json` / `~/.claude.json`) | `.cursor/mcp.json` | `~/.codex/clanker-forge.mcp.toml` snippet |
 | Per-repo skill config (`--global`) | `repo-config/<slug>/` | `~/.agents/repo-config/<slug>/` — one shared home, all tools | ← same | ← same |
 
 > Tool conventions change often. Each target lives in `packages/sync/src/targets/<tool>.ts` — that's the one

@@ -55,7 +55,11 @@ _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
 A pluggable implementation of one agent backend: a `name` plus a `run` that returns a stream of harness events. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
-_Avoid_: Harness service, adapter (adapter is the work-source term)
+_Avoid_: Harness service, adapter (adapter is the issue-tracker term)
+
+**MCP skill assembler**:
+Turns a workspace's configured MCP skills into the resolved set a run gets, filling in auth just before dispatch. A skill that asks for `credential-store` auth borrows the workspace's own credential account (Linear today) so its bearer is minted and rotated alongside the token the engine already uses; the token comes back wrapped in a `Redacted` and travels on the harness request only, never into the ledger or the event log. Public skills pass straight through with no token and never touch the credential store.
+_Avoid_: MCP server, credential store (it delegates to that, it is not that)
 
 **Playbook**:
 A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model/effort choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Model and effort are harness-native strings (e.g. Cursor CLI model ids and `effort=` bracket values); stages can be disabled per workspace; only `triage`, `implement`, and `follow-up` are wired today.
@@ -78,7 +82,7 @@ The exchange that trades a stored refresh token for a rotated pair at the issue 
 _Avoid_: Token renewal loop, background refresh (there are no timers), re-authentication (that is a fresh grant, not a refresh)
 
 **Client-credentials grant**:
-The store's non-interactive source: it trades an OAuth app's `client_id` and a `client_secret` read from an env var for an `app`-actor token, which is how a headless or CI daemon authenticates with no browser. Naming the secret's env var in `workSource.oauth.clientSecretEnv` is what asks for the source at all — an app configured for browser login alone leaves it unset and keeps the env-key floor, while naming a var whose value is missing is an error rather than a silent fall-through. The minted token is held until its lifetime runs out or the store is told it was rejected; this grant has no refresh token, so a rejection means minting a new one.
+The store's non-interactive source: it trades an OAuth app's `client_id` and a `client_secret` read from an env var for an `app`-actor token, which is how a headless or CI daemon authenticates with no browser. Naming the secret's env var in `issueTracker.oauth.clientSecretEnv` is what asks for the source at all — an app configured for browser login alone leaves it unset and keeps the env-key floor, while naming a var whose value is missing is an error rather than a silent fall-through. The minted token is held until its lifetime runs out or the store is told it was rejected; this grant has no refresh token, so a rejection means minting a new one.
 _Avoid_: Service account, machine token, app token (that is what it mints, not the source)
 
 **Stored credential**:
@@ -94,8 +98,8 @@ The single bot-owned comment an adapter keeps on an issue for control-plane stat
 _Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
 
 **Worktree manager**:
-The git worktree lifecycle: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker.
-_Avoid_: Checkout, clone
+The git worktree lifecycle for the repos clanker-forge *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on clanker-forge itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
+_Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)
 
 **Branch divergence**:
 A worktree branch holding commits its remote branch lacks while the remote holds commits the branch lacks, so no fast-forward can bring them together. The worktree manager resolves it by rebasing the local commits onto the remote; when that rebase will not apply, the divergence is a non-retryable prepare failure that hands the item to a human with its commits untouched (see ADR 0002).

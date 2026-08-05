@@ -8,7 +8,7 @@ const followUpModel = "composer-2.5" satisfies CursorModel;
 export default defineWorkspace({
   name: "feldspar",
   checkoutPath: "/Users/taylorsteele/sites/feldspar",
-  workSource: {
+  issueTracker: {
     type: "linear",
     team: "FEL",
     tokenEnv: "LINEAR_API_KEY",
@@ -30,9 +30,9 @@ export default defineWorkspace({
   harness: { preferred: "cursor" },
   concurrency: 3,
   playbook: {
-    triage: { enabled: true, model: triageModel },
-    implement: { enabled: true, model: implementModel },
-    "follow-up": { enabled: true, model: followUpModel },
-    verify: { enabled: true },
+    triage: { enabled: false, model: triageModel },
+    implement: { enabled: false, model: implementModel },
+    "follow-up": { enabled: false, model: followUpModel },
+    verify: { enabled: false },
   },
 });
