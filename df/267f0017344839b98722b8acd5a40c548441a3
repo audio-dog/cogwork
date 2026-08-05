@@ -1,0 +1,19 @@
+docs/adr/0004-tanstack-ai-as-execution-layer.md
+  s_2911731802ac36::t_7d875a2cb76963 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "df267f0017344839b98722b8acd5a40c548441a3",
+  "prompts": {},
+  "sessions": {
+    "s_2911731802ac36": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5df930a2-6583-4a5d-bad0-768d70c7a84e",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
