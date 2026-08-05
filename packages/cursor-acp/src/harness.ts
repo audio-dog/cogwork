@@ -1,5 +1,5 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
-import type { HarnessName, McpSkill, TokenUsage } from "@clanker-forge/contracts";
+import type { HarnessName, TokenUsage } from "@clanker-forge/contracts";
 import { Harness } from "@clanker-forge/engine";
 import { chat, EventType, type StreamChunk } from "@tanstack/ai";
 import {
@@ -9,9 +9,18 @@ import {
   acpCompatible,
   spawnHandleToAcpTransport,
 } from "@tanstack/ai-acp";
-import { defineSandbox, defineWorkspace, mcpSkill, withSandbox } from "@tanstack/ai-sandbox";
+import {
+  bearer,
+  createSecrets,
+  defineSandbox,
+  defineWorkspace,
+  mcpSkill,
+  type Secrets,
+  withSandbox,
+} from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import { cursorModelFlag } from "./model";
 
@@ -28,8 +37,26 @@ type CursorModelOptions = {
   readonly effort?: string;
 };
 
-export const mcpWorkspaceSkills = (skills: ReadonlyArray<McpSkill>) =>
-  skills.map((skill) => mcpSkill(skill.name, { url: skill.endpoint }));
+const secretName = (name: string) => `MCP_${name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_BEARER`;
+
+const skillConfig = (secrets: Secrets, skill: Harness.ResolvedMcpSkill) => {
+  const ref = skill.bearer === null ? undefined : secrets[secretName(skill.name)];
+  if (!ref) return { url: skill.endpoint };
+  return { url: skill.endpoint, headers: { Authorization: bearer(ref) } };
+};
+
+// A skill's bearer travels behind a TanStack `SecretRef`, not as a header string, so the token lands
+// in the sandbox env at projection time and never in a snapshot, the sandbox store, or the event log.
+export const mcpWorkspaceProjection = (skills: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
+  const secretValues = Object.fromEntries(
+    skills.flatMap((skill) =>
+      skill.bearer === null ? [] : [[secretName(skill.name), Redacted.value(skill.bearer)] as const],
+    ),
+  );
+  const secrets = createSecrets(secretValues);
+  const projected = skills.map((skill) => mcpSkill(skill.name, skillConfig(secrets, skill)));
+  return { skills: projected, secrets, hasSecrets: Object.keys(secretValues).length > 0 };
+};
 
 const sessionIdOf = (chunk: StreamChunk) =>
   chunk.type === EventType.CUSTOM && chunk.name.endsWith(".session-id")
@@ -169,13 +196,14 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             planEventName: `${options.name}.plan`,
             authMethodId,
           });
-          const skills = mcpWorkspaceSkills(request.mcpSkills);
+          const projection = mcpWorkspaceProjection(request.mcpSkills);
           const sandbox = defineSandbox({
             id: `clanker-forge-${options.name}`,
             provider: localProcessSandbox({ dir: request.checkoutPath, scrubEnv }),
             workspace: defineWorkspace({
               source: { type: "none" },
-              ...(skills.length > 0 ? { skills: [...skills] } : {}),
+              ...(projection.skills.length > 0 ? { skills: [...projection.skills] } : {}),
+              ...(projection.hasSecrets ? { secrets: projection.secrets } : {}),
             }),
           });
           const modelOptions: CursorModelOptions = {

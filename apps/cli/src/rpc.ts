@@ -1,12 +1,14 @@
 import { DaemonRpcs, HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
 import {
+  CredentialStore,
   Daemon,
   Executor,
   GitHub,
   Harness,
   issueTrackerRoutedLayer,
   Linear,
+  McpSkill,
   Reconcile,
   Registry,
   RunEventBus,
@@ -17,6 +19,7 @@ import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
@@ -58,24 +61,37 @@ const socketServerLayer = (socketPath: string) =>
 const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
-const issueTrackerLayer = (credentialsPath: string) =>
+// The credential store is stateful — its refresh gate and its minted-token cache only coordinate
+// within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
+// one, or they would mint and rotate the app-actor token independently.
+type CredentialStoreLayer = Layer.Layer<
+  CredentialStore.CredentialStore,
+  never,
+  FileSystem.FileSystem | Path.Path
+>;
+
+const issueTrackerLayer = (credentials: CredentialStoreLayer) =>
   Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
     Layer.provide(GitHub.clientLayer),
     Layer.provide(Linear.clientLayer),
-    Layer.provide(credentialsLayer(credentialsPath)),
+    Layer.provide(credentials),
     Layer.provide(FetchHttpClient.layer),
   );
 
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
 const harnessLayer = Harness.layer([cursorRunner({ name: cursorName })]);
 
+const mcpSkillLayer = (credentials: CredentialStoreLayer) => McpSkill.layer.pipe(Layer.provide(credentials));
+
 const sharedLayer = (options: DaemonOptions) => {
+  const credentials = credentialsLayer(options.credentialsPath).pipe(Layer.provide(FetchHttpClient.layer));
   const base = Layer.mergeAll(
     registryLayer(options.configHome),
     Daemon.daemonInfoLayer,
-    issueTrackerLayer(options.credentialsPath),
+    issueTrackerLayer(credentials),
     ledgerLayer(options.ledgerPath),
     harnessLayer,
+    mcpSkillLayer(credentials),
     RunEventBus.layer,
   );
   const services = Layer.mergeAll(Reconcile.layer, Executor.layer).pipe(

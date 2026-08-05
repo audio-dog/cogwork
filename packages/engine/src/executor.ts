@@ -12,10 +12,12 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, handoffRoleFor, maxAttemptsPerStage } from "./classify";
 import { agentFailureReason, attachCommand, handoffComment, prepareFailureReason } from "./comments";
+import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
 import { Harness, type HarnessError, type HarnessEvent, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError } from "./issue-tracker";
+import { McpSkillAssembler } from "./mcp-skill";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
@@ -35,7 +37,7 @@ import { RunLedger } from "./run-ledger";
 import { branchName, checkoutPathFor, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
-type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError;
+type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError;
 
 interface RunAccumulator {
   readonly text: string;
@@ -59,21 +61,6 @@ class SessionRestarted extends Data.TaggedError("SessionRestarted")<{
   readonly session: SessionId;
   readonly nextSeq: number;
 }> {}
-
-const harnessRequest = (
-  resolved: ResolvedStage,
-  checkoutPath: string,
-  prompt: string,
-  sessionId: string | null,
-) => ({
-  harness: resolved.harness,
-  checkoutPath,
-  prompt,
-  model: resolved.model,
-  effort: resolved.effort,
-  sessionId,
-  mcpSkills: resolved.mcpSkills,
-});
 
 const withPrompt = (request: HarnessRequest, prompt: string, sessionId: SessionId): HarnessRequest => ({
   ...request,
@@ -137,9 +124,13 @@ const withFailureTerminal = (stream: Stream.Stream<HarnessEvent, HarnessError>) 
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
 
+// A credential error is a configuration problem (no account, missing secret env) that retrying
+// cannot fix, so it goes straight to a human like a diverged worktree does.
+const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError"]);
+
 const retryableOf = (error: PrepareError | HarnessError) => {
   if (error._tag === "HarnessError") return error.retryable;
-  return error._tag !== "WorktreeDivergedError";
+  return !nonRetryablePrepare.has(error._tag);
 };
 
 const checkoutFor = (workspace: RegisteredWorkspace, item: EligibleWork) =>
@@ -167,7 +158,26 @@ export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
   const bus = yield* RunEventBus;
   const worktrees = yield* WorktreeManager;
+  const assembler = yield* McpSkillAssembler;
   const runCounter = yield* Ref.make(0);
+
+  const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
+    workspace: RegisteredWorkspace,
+    resolved: ResolvedStage,
+    checkoutPath: string,
+    prompt: string,
+    sessionId: string | null,
+  ) {
+    return {
+      harness: resolved.harness,
+      checkoutPath,
+      prompt,
+      model: resolved.model,
+      effort: resolved.effort,
+      sessionId,
+      mcpSkills: yield* assembler.assemble(workspace.config),
+    } satisfies HarnessRequest;
+  });
 
   const nextRunId = (startedAtMillis: number) =>
     Ref.getAndUpdate(runCounter, (n) => n + 1).pipe(
@@ -411,7 +421,7 @@ export const make = Effect.gen(function* () {
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
-    return harnessRequest(resolved, worktree.path, prompt, last?.session ?? null);
+    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, last?.session ?? null);
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
@@ -419,7 +429,7 @@ export const make = Effect.gen(function* () {
     return {
       resolved,
       branch: null,
-      prepare: Effect.succeed(harnessRequest(resolved, workspace.config.checkoutPath, fullPrompt, null)),
+      prepare: harnessRequest(workspace, resolved, workspace.config.checkoutPath, fullPrompt, null),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
       handoffRole: handoffRoleFor("triage"),
       fullPrompt,
@@ -506,7 +516,8 @@ export const make = Effect.gen(function* () {
       maxAgeMillis: resolved.resumeMaxAgeMillis,
       maxTokens: resolved.resumeMaxTokens,
     });
-    return harnessRequest(
+    return yield* harnessRequest(
+      workspace,
       resolved,
       worktree.path,
       prompt,
@@ -557,10 +568,16 @@ export const make = Effect.gen(function* () {
   ) {
     if (item.stage === "triage") {
       const path = workspace.config.checkoutPath;
-      return harnessRequest(resolved, path, buildContinuationNudge(path), session);
+      return yield* harnessRequest(workspace, resolved, path, buildContinuationNudge(path), session);
     }
     const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
-    return harnessRequest(resolved, worktree.path, buildContinuationNudge(worktree.path), session);
+    return yield* harnessRequest(
+      workspace,
+      resolved,
+      worktree.path,
+      buildContinuationNudge(worktree.path),
+      session,
+    );
   });
 
   const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {

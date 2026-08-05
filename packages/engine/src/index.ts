@@ -8,6 +8,7 @@ export * as Harness from "./harness";
 export * as IssueTracker from "./issue-tracker";
 export { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 export * as Linear from "./linear";
+export * as McpSkill from "./mcp-skill";
 export * as Playbook from "./playbook";
 export * as Reconcile from "./reconcile";
 export * as Registry from "./registry";
