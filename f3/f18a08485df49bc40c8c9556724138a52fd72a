@@ -1,0 +1,44 @@
+apps/cli/config/feldspar.workspace.ts
+  h_46518a29d4dd91 33-36
+packages/sync/skills/sync/triage-agent/SKILL.md
+  s_d41878840d2bb0::t_d67b31588a7af4 18,33-44,103
+packages/sync/assets/subagents/rule-reviewer.md
+  s_65ff51ce884847::t_57155318fddc59 15
+packages/engine/skills/triage-agent/SKILL.md
+  s_d41878840d2bb0::t_2f1a1b5c7c1c0b 18
+  s_d41878840d2bb0::t_14f0209a346fac 103
+  s_d41878840d2bb0::t_8878a1981773b8 33-44
+AGENTS.md
+  s_d41878840d2bb0::t_1582d4e05ffed4 36-39
+.cursor/hooks.json
+  h_46518a29d4dd91 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "f3f18a08485df49bc40c8c9556724138a52fd72a",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_65ff51ce884847": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "94243591-7623-4f9f-bdd5-d8574446c098",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d41878840d2bb0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d9edf09b-725b-4a9c-ae74-e0490d3f2415",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
