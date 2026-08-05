@@ -224,3 +224,65 @@ describe("RunLedger (memory)", () => {
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 });
+
+describe("RunLedger resolveWatchTarget (memory)", () => {
+  const otherItem = Schema.decodeSync(WorkItemId)("#999");
+  const targetId = (workItem: string) =>
+    Effect.flatMap(RunLedger, (ledger) => ledger.resolveWatchTarget(workItem)).pipe(
+      Effect.map((run) => run?.id ?? null),
+    );
+
+  it.effect("prefers a running run over a more recent completed run", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("running", 1000, { status: "running" }));
+      yield* ledger.insertRun(record("newer-done", 5000, { status: "succeeded", endedAtMillis: 5500 }));
+      assert.strictEqual(yield* targetId("#7"), "running");
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("falls back to the most recent run when nothing is running", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("old-done", 1000, { status: "failed", endedAtMillis: 1500 }));
+      yield* ledger.insertRun(record("new-done", 5000, { status: "succeeded", endedAtMillis: 5500 }));
+      assert.strictEqual(yield* targetId("#7"), "new-done");
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("finds the item's run even when 50+ other items have started more recently", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("target", 1000, { status: "succeeded", endedAtMillis: 1500 }));
+      yield* Effect.forEach(
+        Array.from({ length: 60 }, (_, index) => index),
+        (index) =>
+          ledger.insertRun(
+            record(`other-${index}`, 2000 + index, {
+              workItem: otherItem,
+              status: "succeeded",
+              endedAtMillis: 2001 + index,
+            }),
+          ),
+      );
+      assert.strictEqual(yield* targetId("#7"), "target");
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("resolves the same run for the #-prefixed and bare forms", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("only", 1000, { status: "running" }));
+      assert.strictEqual(yield* targetId("#7"), "only");
+      assert.strictEqual(yield* targetId("7"), "only");
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("returns null when the item has never run", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("other", 1000, { workItem: otherItem }));
+      assert.isNull(yield* targetId("#7"));
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+});

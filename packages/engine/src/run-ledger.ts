@@ -1,4 +1,5 @@
 import type { RunEvent, RunId, RunRecord, RunSummary, SessionId, TokenUsage } from "@clanker-forge/contracts";
+import { workItemCandidates } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -61,6 +62,14 @@ const latestRunWhere = (runs: ReadonlyArray<RunRecord>, match: (run: RunRecord) 
     .sort((a, b) => b.startedAtMillis - a.startedAtMillis)
     .at(0) ?? null;
 
+const resolveWatchTargetFrom = (runs: ReadonlyArray<RunRecord>, workItem: string) => {
+  const candidates = workItemCandidates(workItem);
+  const matches = [...runs]
+    .filter((run) => candidates.includes(run.workItem))
+    .sort((a, b) => b.startedAtMillis - a.startedAtMillis);
+  return matches.find((run) => run.status === "running") ?? matches.at(0) ?? null;
+};
+
 const summarize = (
   runs: ReadonlyArray<RunRecord>,
   events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
@@ -120,6 +129,8 @@ export const makeMemory = Effect.gen(function* () {
       ),
     latestRunForItem: (workspace: string, workItem: string) =>
       Effect.map(Ref.get(runsRef), (runs) => latestRunWhere(runs, forItem(workspace, workItem))),
+    resolveWatchTarget: (workItem: string) =>
+      Effect.map(Ref.get(runsRef), (runs) => resolveWatchTargetFrom(runs, workItem)),
     listRuns: (limit: number) =>
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
         Effect.map(([runs, events]) => summarize(runs, events, limit)),

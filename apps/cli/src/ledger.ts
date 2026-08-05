@@ -4,9 +4,10 @@ import {
   RunEvent as RunEventSchema,
   RunRecord as RunRecordSchema,
   RunSummary as RunSummarySchema,
+  workItemCandidates,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
-import { and, desc, eq, gt, gte, isNotNull, notInArray, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, notInArray, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -295,6 +296,17 @@ const make = (ledgerPath: string) =>
 
       latestRunForItem: (workspace: string, workItem: string) =>
         latestRunWhere("latestRunForItem", and(eq(runs.workspace, workspace), eq(runs.workItem, workItem))),
+
+      resolveWatchTarget: (workItem: string) =>
+        readRun("resolveWatchTarget", () =>
+          db
+            .select(runRecordSelection)
+            .from(runs)
+            .where(inArray(runs.workItem, [...workItemCandidates(workItem)]))
+            .orderBy(desc(sql<boolean>`${runs.status} = 'running'`), desc(runs.startedAt))
+            .limit(1)
+            .get(),
+        ),
 
       listRuns: (limit: number) =>
         readRows("listRuns", () =>

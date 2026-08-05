@@ -21,6 +21,8 @@ const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
 const crashItem = Schema.decodeSync(WorkItemId)("#101");
+const resolveItem = Schema.decodeSync(WorkItemId)("#202");
+const resolveOther = Schema.decodeSync(WorkItemId)("#303");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
@@ -241,6 +243,43 @@ describe("sqlite RunLedger", () => {
         const summary = summaries.find((row) => row.id === id);
         assert.isDefined(summary);
         assert.deepStrictEqual(summary?.usage, { inputTokens: 5 });
+      }),
+    );
+
+    it.effect("resolves a watch target by work item, running-first, past the recent-runs window", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(
+          record("resolve-old-done", 1000, {
+            workItem: resolveItem,
+            status: "succeeded",
+            endedAtMillis: 1500,
+          }),
+        );
+        yield* ledger.insertRun(record("resolve-running", 2000, { workItem: resolveItem }));
+        yield* Effect.forEach(
+          Array.from({ length: 60 }, (_, index) => index),
+          (index) =>
+            ledger.insertRun(
+              record(`resolve-other-${index}`, 3000 + index, {
+                workItem: resolveOther,
+                status: "succeeded",
+                endedAtMillis: 3001 + index,
+              }),
+            ),
+        );
+
+        const byHash = yield* ledger.resolveWatchTarget("#202");
+        const byBare = yield* ledger.resolveWatchTarget("202");
+        assert.strictEqual(byHash?.id, "resolve-running");
+        assert.strictEqual(byBare?.id, "resolve-running");
+      }),
+    );
+
+    it.effect("resolves nothing for a work item that has never run", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        assert.isNull(yield* ledger.resolveWatchTarget("#404"));
       }),
     );
   });
