@@ -1,0 +1,47 @@
+apps/cli/src/commands.test.ts
+  s_0b033481647ebe::t_0fa53d8593f931 44
+  s_0b033481647ebe::t_646b3234d88c89 1-6,15
+  s_0b033481647ebe::t_4dda941dd11352 7-14,16-43,45-54
+packages/contracts/src/rpc.ts
+  s_0b033481647ebe::t_c876315ecd21db 4,17-21,28
+packages/engine/src/run-ledger.test.ts
+  s_0b033481647ebe::t_daacaf6e459f56 227-230,232-286
+  s_0b033481647ebe::t_0235cd76fb2fb0 231
+  s_0b033481647ebe::t_b03dc579e4e2a4 287-288
+packages/contracts/src/work-item.ts
+  s_0b033481647ebe::t_30b8adb645d71a 10
+  s_0b033481647ebe::t_79aa000fb9b2b0 9,11-13
+packages/engine/src/run-ledger.ts
+  s_0b033481647ebe::t_ced200ccbd82d9 132-133
+  s_0b033481647ebe::t_ef92322ae64828 2
+  s_0b033481647ebe::t_d7ab3dbd882ce0 65-72
+apps/cli/src/commands.ts
+  s_0b033481647ebe::t_92d754a0fc52de 191-195
+  s_0b033481647ebe::t_963ed19a6087d1 170-171,179-181
+  s_0b033481647ebe::t_e362434a163d2d 7
+packages/engine/src/daemon.ts
+  s_0b033481647ebe::t_b3cf7830da1463 119-123
+apps/cli/src/ledger.ts
+  s_0b033481647ebe::t_a7d6cc8a6a423e 7,10
+  s_0b033481647ebe::t_14c2294c82db01 300-310
+apps/cli/src/ledger.test.ts
+  s_0b033481647ebe::t_e88db700d9c586 24-25
+  s_0b033481647ebe::t_5d696f6b52e922 248-282
+  s_0b033481647ebe::t_024c6cbdcbb84b 283-284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b6f93adf6f32d000cc7e015103d528baf2427876",
+  "prompts": {},
+  "sessions": {
+    "s_0b033481647ebe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3cb2a9d7-1683-4572-9425-6d97bbbfdbb1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
