@@ -7,7 +7,7 @@ import type { Assets, SyncContext, Target } from "../lib/types.js";
 
 /**
  * Claude Code is the only target that supports every asset type natively:
- * CLAUDE.md memory, `commands/`, `agents/` (subagents), and `mcpServers`.
+ * CLAUDE.md memory, `commands/`, `agents/` (subagents), and toolkit servers.
  */
 export const claude: Target = {
   name: "claude",
@@ -39,12 +39,12 @@ export const claude: Target = {
       writer.write(join(base, "agents", `${agent.name}.md`), serializeFrontmatter(fm, agent.body));
     }
 
-    // MCP servers
-    if (Object.keys(assets.mcpServers).length > 0) {
+    // Toolkit servers
+    if (Object.keys(assets.toolkitServers).length > 0) {
       if (ctx.mode === "project") {
         writer.write(
           join(ctx.projectDir, ".mcp.json"),
-          `${JSON.stringify({ mcpServers: assets.mcpServers }, null, 2)}\n`,
+          `${JSON.stringify({ mcpServers: assets.toolkitServers }, null, 2)}\n`,
         );
       } else {
         // Merge into the existing ~/.claude.json without clobbering other state.
@@ -56,7 +56,7 @@ export const claude: Target = {
           ...current,
           mcpServers: {
             ...(current.mcpServers as object | undefined),
-            ...assets.mcpServers,
+            ...assets.toolkitServers,
           },
         };
         writer.write(file, `${JSON.stringify(merged, null, 2)}\n`);

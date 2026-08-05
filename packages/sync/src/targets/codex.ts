@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { parseFrontmatter } from "../lib/frontmatter.js";
 import { resolveModel } from "../lib/models.js";
-import { renderCodexAgent, renderCodexMcp } from "../lib/toml.js";
+import { renderCodexAgent, renderCodexToolkitServers } from "../lib/toml.js";
 import type { Assets, SyncContext, Target } from "../lib/types.js";
 
 /**
@@ -27,11 +27,11 @@ export const codex: Target = {
       for (const cmd of assets.commands) {
         writer.write(join(ctx.home, ".codex", "prompts", `${cmd.name}.md`), ensureNewline(cmd.body));
       }
-      if (Object.keys(assets.mcpServers).length > 0) {
+      if (Object.keys(assets.toolkitServers).length > 0) {
         // Emit a standalone snippet rather than rewriting the user's whole config.toml.
         writer.write(
           join(ctx.home, ".codex", "clanker-forge.mcp.toml"),
-          headerComment() + renderCodexMcp(assets.mcpServers),
+          headerComment() + renderCodexToolkitServers(assets.toolkitServers),
         );
       }
     } else {
