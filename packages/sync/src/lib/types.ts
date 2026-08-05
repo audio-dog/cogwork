@@ -32,8 +32,8 @@ export interface RepoConfig {
   files: string[];
 }
 
-/** A single MCP server definition (stdio or remote). */
-export interface McpServer {
+/** A single toolkit server definition (stdio or remote). */
+export interface ToolkitServer {
   command?: string;
   args?: string[];
   env?: Record<string, string>;
@@ -49,7 +49,7 @@ export interface Assets {
   projectRules: string;
   commands: MarkdownAsset[];
   subagents: MarkdownAsset[];
-  mcpServers: Record<string, McpServer>;
+  toolkitServers: Record<string, ToolkitServer>;
   /** Portable skills loaded from `skills/sync/` (synced in --global mode). */
   skills: Skill[];
   /** Per-repo skill config loaded from `repo-config/` (synced in --global mode). */

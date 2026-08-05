@@ -1,5 +1,5 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
-import type { HarnessName, TokenUsage } from "@clanker-forge/contracts";
+import type { HarnessName, McpSkill, TokenUsage } from "@clanker-forge/contracts";
 import { Harness } from "@clanker-forge/engine";
 import { chat, EventType, type StreamChunk } from "@tanstack/ai";
 import {
@@ -9,7 +9,7 @@ import {
   acpCompatible,
   spawnHandleToAcpTransport,
 } from "@tanstack/ai-acp";
-import { defineSandbox, defineWorkspace, withSandbox } from "@tanstack/ai-sandbox";
+import { defineSandbox, defineWorkspace, mcpSkill, withSandbox } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
@@ -27,6 +27,9 @@ type CursorModelOptions = {
   readonly sessionId?: string;
   readonly effort?: string;
 };
+
+export const mcpWorkspaceSkills = (skills: ReadonlyArray<McpSkill>) =>
+  skills.map((skill) => mcpSkill(skill.name, { url: skill.endpoint }));
 
 const sessionIdOf = (chunk: StreamChunk) =>
   chunk.type === EventType.CUSTOM && chunk.name.endsWith(".session-id")
@@ -166,10 +169,14 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             planEventName: `${options.name}.plan`,
             authMethodId,
           });
+          const skills = mcpWorkspaceSkills(request.mcpSkills);
           const sandbox = defineSandbox({
             id: `clanker-forge-${options.name}`,
             provider: localProcessSandbox({ dir: request.checkoutPath, scrubEnv }),
-            workspace: defineWorkspace({ source: { type: "none" } }),
+            workspace: defineWorkspace({
+              source: { type: "none" },
+              ...(skills.length > 0 ? { skills: [...skills] } : {}),
+            }),
           });
           const modelOptions: CursorModelOptions = {
             ...(request.sessionId ? { sessionId: request.sessionId } : {}),

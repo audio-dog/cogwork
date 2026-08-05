@@ -33,3 +33,7 @@ The five canonical triage roles map 1:1 to labels of the same name (`needs-triag
 
 Multi-context: a root `CONTEXT-MAP.md` points to per-package `CONTEXT.md` files. See `docs/agents/domain.md`.
 
+### Technical disposition
+
+The product direction and the maintainer's decision principles for answering finely-tuned technical open questions during triage — instead of reflexively blocking on the maintainer. See `docs/agents/technical-disposition.md`.
+

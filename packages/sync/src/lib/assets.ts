@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parseFrontmatter } from "./frontmatter.js";
-import type { Assets, MarkdownAsset, McpServer, RepoConfig, Skill } from "./types.js";
+import type { Assets, MarkdownAsset, RepoConfig, Skill, ToolkitServer } from "./types.js";
 
 export function loadAssets(packageRoot: string, repoRoot: string): Assets {
   const assetsDir = join(packageRoot, "assets");
@@ -10,7 +10,7 @@ export function loadAssets(packageRoot: string, repoRoot: string): Assets {
     projectRules: readIfExists(join(assetsDir, "rules", "project.md")) ?? "",
     commands: loadMarkdownDir(join(assetsDir, "commands")),
     subagents: loadMarkdownDir(join(assetsDir, "subagents")),
-    mcpServers: loadMcp(join(assetsDir, "mcp", "servers.json")),
+    toolkitServers: loadToolkitServers(join(assetsDir, "toolkit-servers", "servers.json")),
     skills: loadSkills(join(packageRoot, "skills", "sync")),
     repoConfigs: loadRepoConfigs(join(repoRoot, "repo-config")),
   };
@@ -72,11 +72,11 @@ function listFiles(dir: string, prefix = ""): string[] {
   });
 }
 
-function loadMcp(file: string): Record<string, McpServer> {
+function loadToolkitServers(file: string): Record<string, ToolkitServer> {
   const raw = readIfExists(file);
   if (!raw) return {};
-  const parsed = JSON.parse(raw) as { mcpServers?: Record<string, McpServer> };
-  return parsed.mcpServers ?? {};
+  const parsed = JSON.parse(raw) as { toolkitServers?: Record<string, ToolkitServer> };
+  return parsed.toolkitServers ?? {};
 }
 
 function readIfExists(file: string): string | undefined {

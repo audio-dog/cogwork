@@ -115,6 +115,22 @@ describe("resolveStage", () => {
   });
 });
 
+describe("MCP skills", () => {
+  it("default to an empty list when the workspace declares none", () => {
+    assert.deepStrictEqual(resolveImplement(config()).mcpSkills, []);
+  });
+
+  it("carry the workspace's MCP skills onto every resolved stage", () => {
+    const cfg = config({
+      mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
+    });
+    const expected = [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }];
+    assert.deepStrictEqual(resolveTriage(cfg).mcpSkills, expected);
+    assert.deepStrictEqual(resolveImplement(cfg).mcpSkills, expected);
+    assert.deepStrictEqual(resolveFollowUp(cfg).mcpSkills, expected);
+  });
+});
+
 describe("WorkspaceConfig.linearHistory", () => {
   it("defaults to false when the key is omitted", () => {
     assert.strictEqual(config().linearHistory, false);
@@ -163,6 +179,15 @@ describe("buildImplementPrompt", () => {
     assert.include(prompt, "`implement-agent`");
     assert.notInclude(prompt, "TRIAGE-DECISION");
   });
+
+  it("tells the agent to reuse an existing pull request for the branch instead of opening a second", () => {
+    const prompt = buildImplementPrompt(resolveImplement(config()), {
+      id: "#15",
+      title: "Implement playbook",
+    });
+    assert.include(prompt, "Only one pull request should ever exist for this branch");
+    assert.include(prompt, "push your work to that one instead of opening another");
+  });
 });
 
 describe("buildContinuationNudge", () => {
@@ -172,6 +197,7 @@ describe("buildContinuationNudge", () => {
     assert.include(nudge, "Inspect /wt/15-implement-playbook to see how far you got");
     assert.include(nudge, "Do not start over and do not redo completed work");
     assert.include(nudge, "say COMPLETE and stop");
+    assert.include(nudge, "keep using it and never open a second one");
     assert.notInclude(nudge, "implement-agent");
     assert.notInclude(nudge, "IMPLEMENT-RESULT");
   });

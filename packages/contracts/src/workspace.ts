@@ -7,6 +7,7 @@ import {
   TrimmedNonEmptyString,
   WorkspaceId,
 } from "./base-schemas";
+import { McpSkill } from "./mcp-skill";
 
 export const TriageRoleLabels = Schema.Struct({
   "needs-triage": Schema.optional(TrimmedNonEmptyString),
@@ -74,7 +75,7 @@ export const WorktreeConfig = Schema.Struct({
   root: Schema.optional(TrimmedNonEmptyString),
   remote: Schema.optional(TrimmedNonEmptyString),
   baseBranch: Schema.optional(TrimmedNonEmptyString),
-  linkEnvFiles: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  linkPaths: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   setup: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   reapAfterMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
 });
@@ -86,6 +87,7 @@ export const WorkspaceConfig = Schema.Struct({
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   harness: HarnessPreferences,
+  mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),
   concurrency: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),

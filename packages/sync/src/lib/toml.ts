@@ -1,13 +1,13 @@
-import type { McpServer } from "./types.js";
+import type { ToolkitServer } from "./types.js";
 
 /**
- * Render MCP servers as Codex `config.toml` tables. Codex namespaces servers under
+ * Render toolkit servers as Codex `config.toml` tables. Codex namespaces them under
  * `[mcp_servers.<name>]` rather than the JSON `mcpServers` object the other tools use.
  *
  * This emits only the keys our `servers.json` schema uses (command/args/env/url/type),
  * which is all Codex needs — it is not a general-purpose TOML serializer.
  */
-export function renderCodexMcp(servers: Record<string, McpServer>): string {
+export function renderCodexToolkitServers(servers: Record<string, ToolkitServer>): string {
   const blocks: string[] = [];
   for (const [name, server] of Object.entries(servers)) {
     const lines = [`[mcp_servers.${tomlKey(name)}]`];

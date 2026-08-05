@@ -1,4 +1,4 @@
-import type { HarnessEvent, HarnessName } from "@clanker-forge/contracts";
+import type { HarnessEvent, HarnessName, McpSkill } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -13,6 +13,7 @@ export interface HarnessRequest {
   readonly model: string | null;
   readonly effort: string | null;
   readonly sessionId: string | null;
+  readonly mcpSkills: ReadonlyArray<McpSkill>;
 }
 
 export class HarnessError extends Schema.TaggedErrorClass<HarnessError>()("HarnessError", {

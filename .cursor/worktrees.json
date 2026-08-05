@@ -1,0 +1,4 @@
+{
+  "setup-worktree-unix": ["node scripts/setup-worktree.mjs"],
+  "setup-worktree": ["node scripts/setup-worktree.mjs"]
+}

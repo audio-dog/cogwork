@@ -13,6 +13,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import type { EligibleWork } from "./classify";
 import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
@@ -58,6 +59,18 @@ const implementWorkspace: RegisteredWorkspace = {
   }),
 };
 
+const mcpWorkspace: RegisteredWorkspace = {
+  source: workspace.source,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh",
+    checkoutPath: "/repos/gh",
+    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    harness: { preferred: "cursor" },
+    mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
+    playbook: { implement: { enabled: true } },
+  }),
+};
+
 const implementItem = {
   id: id("#15"),
   title: "Implement playbook",
@@ -90,6 +103,20 @@ const implementFinished: HarnessEvent = {
 };
 
 const implementEvents: ReadonlyArray<HarnessEvent> = [...implementStreamEvents, implementFinished];
+
+const resumedImplementEvents: ReadonlyArray<HarnessEvent> = [
+  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
+  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-prev", usage: null, finishReason: null },
+  {
+    type: "TEXT_MESSAGE_CONTENT",
+    name: null,
+    text: "Picked up where I left off.\nIMPLEMENT-RESULT: opened-pr",
+    sessionId: null,
+    usage: null,
+    finishReason: null,
+  },
+  implementFinished,
+];
 
 const stuckImplementEvents: ReadonlyArray<HarnessEvent> = [
   { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
@@ -532,6 +559,7 @@ describe("Executor.execute", () => {
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
         assert.isNull(request?.sessionId ?? null);
+        assert.deepStrictEqual(request?.mcpSkills, []);
 
         const log = yield* Ref.get(calls);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
@@ -548,6 +576,23 @@ describe("Executor.execute", () => {
         assert.strictEqual(run?.status, "succeeded");
         assert.strictEqual(run?.session, "sess-42");
         assert.deepStrictEqual(run?.usage, usage);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("hands the workspace's MCP skills to the harness on the run request", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(mcpWorkspace, implementItem);
+
+        const [request] = yield* Ref.get(requests);
+        assert.deepStrictEqual(request?.mcpSkills, [
+          { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" },
+        ]);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -658,20 +703,22 @@ describe("Executor.execute", () => {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
       const ensured = yield* Ref.make<ReadonlyArray<boolean>>([]);
-      const resumeItem = {
+      const resumeItem: EligibleWork = {
         ...implementItem,
-        resume: { session: previousSession, reason: "interrupted" as const },
+        resume: { session: previousSession, reason: "interrupted" },
       };
       const layer = provide(
         recorder(calls),
-        [capturingRunner(requests, implementEvents)],
+        [capturingRunner(requests, resumedImplementEvents)],
         resumeRecordingWorktree(ensured),
       );
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
         yield* executor.execute(implementWorkspace, resumeItem);
 
-        const [request] = yield* Ref.get(requests);
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 1);
+        const [request] = captured;
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
         assert.strictEqual(request?.sessionId, "sess-prev");
         assert.include(request?.prompt ?? "", "You were interrupted part-way through");
@@ -683,6 +730,90 @@ describe("Executor.execute", () => {
 
         const log = yield* Ref.get(calls);
         assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("delivers the full stage prompt when a resumed run silently starts a fresh session", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const resumeItem: EligibleWork = {
+        ...implementItem,
+        resume: { session: previousSession, reason: "interrupted" },
+      };
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, resumeItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 2);
+
+        const [nudge, full] = captured;
+        assert.strictEqual(nudge?.sessionId, "sess-prev");
+        assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
+
+        assert.strictEqual(full?.sessionId, "sess-42");
+        assert.strictEqual(full?.checkoutPath, `/wt/${implementBranch}`);
+        assert.include(full?.prompt ?? "", "implement-agent");
+        assert.include(full?.prompt ?? "", "IMPLEMENT-RESULT");
+        assert.notInclude(full?.prompt ?? "", "You were interrupted part-way through");
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.session, "sess-42");
+        assert.strictEqual(run?.status, "succeeded");
+
+        const events = run ? yield* ledger.events(run.id) : [];
+        assert.deepStrictEqual(
+          events.map((e) => e.seq),
+          events.map((_, i) => i),
+        );
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("delivers the full triage prompt when a resumed triage run starts a fresh session", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const resumeItem: EligibleWork = {
+        ...triageItem,
+        resume: { session: previousSession, reason: "interrupted" },
+      };
+      const layer = provide(recorder(calls), [capturingRunner(requests, successEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(workspace, resumeItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 2);
+
+        const [nudge, full] = captured;
+        assert.strictEqual(nudge?.sessionId, "sess-prev");
+        assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
+
+        assert.strictEqual(full?.sessionId, "sess-42");
+        assert.strictEqual(full?.checkoutPath, "/repos/gh");
+        assert.include(full?.prompt ?? "", "triage-agent");
+        assert.include(full?.prompt ?? "", "TRIAGE-DECISION");
+        assert.notInclude(full?.prompt ?? "", "You were interrupted part-way through");
+
+        const log = yield* Ref.get(calls);
+        assert.strictEqual(log.find((c) => c.method === "recordAttempt")?.outcome, "succeeded");
+        assert.strictEqual(log.find((c) => c.method === "setRoles")?.add?.[0], "ready-for-agent");
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        const events = run ? yield* ledger.events(run.id) : [];
+        assert.deepStrictEqual(
+          events.map((e) => e.seq),
+          events.map((_, i) => i),
+        );
       }).pipe(Effect.provide(layer));
     }),
   );

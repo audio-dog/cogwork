@@ -24,7 +24,7 @@ export interface WorktreeSettings {
   readonly root?: string;
   readonly remote?: string;
   readonly baseBranch?: string;
-  readonly linkEnvFiles?: ReadonlyArray<string>;
+  readonly linkPaths?: ReadonlyArray<string>;
   readonly setup?: ReadonlyArray<string>;
   readonly reapAfterMillis?: number;
 }
@@ -67,11 +67,7 @@ const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
 const remoteOf = (config?: WorktreeSettings) => config?.remote ?? "origin";
 const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main";
 
-const defaultLinkPaths = [".repos"] as const;
-
-const linkPathsFor = (config?: WorktreeSettings) => [
-  ...new Set([...defaultLinkPaths, ...(config?.linkEnvFiles ?? [])]),
-];
+const linkPathsFor = (config?: WorktreeSettings) => [...new Set(config?.linkPaths ?? [])];
 
 export interface EnsuredWorktree {
   readonly branch: string;
