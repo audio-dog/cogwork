@@ -8,7 +8,6 @@ skills-lock.json
 
 # Local generator output when targeting this repo as a project dir
 /.claude/
-/.cursor/
 /CLAUDE.md
 /.mcp.json
 
