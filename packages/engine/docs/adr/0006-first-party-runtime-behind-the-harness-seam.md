@@ -1,0 +1,21 @@
+# The first-party agent runtime lives behind the harness seam
+
+The engine has always been one tier above the agent: it resolves a playbook into a prompt and hands it to an external CLI over the `HarnessRunner` contract (`prompt in → Stream<HarnessEvent> out`), and that process owns the model loop, the tools, and the context discovery. [Issue #117](https://github.com/taylorfsteele/clanker-forge/issues/117) asked whether clanker-forge should instead *become* the agent. The wayfinder charting session ([map #146](https://github.com/taylorfsteele/clanker-forge/issues/146)) answered yes, for three product reasons the wrapped-CLI shape cannot deliver: **bring-your-own-provider** for an audience that trends toward non-coders (log in with your OpenAI or Anthropic account — no CLI installs), **cheap direct model calls** for the utility work the roadmap depends on (triage routing, ranking, drafting, summaries), and **engine-owned context assembly** (the concern ADR 0005 already placed on the engine's side of the seam).
+
+The decision is *where* the owned loop lives: clanker-forge builds a **first-party runner** — a TanStack AI `chat()` loop with provider adapters, tool calling, and the approval flow — and registers it **behind the existing `HarnessRunner` seam**, beside the external CLI harnesses rather than in place of them. The first-party runner becomes the default path and the only one casual users ever see; cursor-acp and future CLI adapters remain pluggable runners for users whose paid plan lives in a CLI (Cursor has no API — the CLI *is* the access). One hard rule keeps the split coherent: **utility model calls go only through the owned provider layer.** Harnesses exist solely to run coding sessions; nothing else in the app may depend on one being installed.
+
+## Considered Options
+
+- **Own the loop and retire the harness layer** (opencode's shape). Rejected: it deletes the only access path for Cursor-subscription users, throws away a working adapter, and turns an incremental migration into a big bang where nothing ships until the runtime, tools, and permissions all exist.
+- **Stay a pure orchestrator and wrap more CLIs** (t3code's shape — Claude Code, Codex, opencode adapters beside cursor-acp). Rejected: "install this CLI and log into it" is developer UX and the long-term audience is not developers; the proactive layer starves without direct model calls; permissions become a facade over five divergent native policies (t3code's own documented pain); and it is a dead end for ever offering our own provider — you never own the loop you would someday sell.
+- **First-party runner behind the seam** (chosen). Everything the first option buys — provider login, direct calls, owned context — while cursor-acp keeps working and the daemon keeps running throughout the migration. The seam is already the right width: cursor-acp streams TanStack chunk events today, which is why `HarnessEvent` is AG-UI-shaped.
+
+## Consequences
+
+Two execution paths, deliberately unequal. Harness-run sessions are second-class: owned permissions, context assembly, and per-tool-call events do not reach inside an external CLI's loop, and that asterisk is accepted rather than papered over. The `HarnessRequest`/`HarnessEvent` contract widens (tool calls, permission asks, richer activity for clients) and both paths must honor the one contract — the first-party runner natively, the CLI adapters as best they can.
+
+This confirms and extends ADR 0005's split: the engine assembles a run's capabilities (context, MCP skills, credentials); the runner renders them. The first-party runner is simply the first renderer we own end to end.
+
+Per the map's standing preference, the runtime is architected hosted-ready — multi-user, network-capable contracts, no single-user assumptions — while everything built now runs local-first and single-user.
+
+This ADR records the decision; the runner is not yet built. A reader who finds only `cursorRunner` registered is early, not looking at a reversal.
