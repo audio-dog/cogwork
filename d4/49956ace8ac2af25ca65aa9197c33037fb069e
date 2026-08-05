@@ -1,0 +1,37 @@
+.cursor/agents/code-simplifier.md
+  s_0221d16c3d5293::t_6da3db2c33fe21 1-43
+.cursor/agents/complexity-skeptic.md
+  s_0221d16c3d5293::t_5774dd2cc12bfb 1-42
+.cursor/agents/implementer.md
+  s_0221d16c3d5293::t_50c8804ba55695 1-33
+.cursor/agents/pr-manager.md
+  s_0221d16c3d5293::t_ad69a6f90dae62 1-61
+.cursor/agents/rule-reviewer.md
+  s_0221d16c3d5293::t_e4630a447d33d5 1-44
+.cursor/agents/security-auditor.md
+  s_0221d16c3d5293::t_30e0e59405b090 1-42
+.cursor/agents/tester.md
+  s_0221d16c3d5293::t_0e37305494665c 1-110
+.cursor/commands/review.md
+  s_0221d16c3d5293::t_45d59cbfc03609 1-128
+.cursor/mcp.json
+  s_0221d16c3d5293::t_f13e158fe87114 1-14
+.cursor/rules/main.mdc
+  s_0221d16c3d5293::t_5159b440500cba 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "d449956ace8ac2af25ca65aa9197c33037fb069e",
+  "prompts": {},
+  "sessions": {
+    "s_0221d16c3d5293": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "27868c11-0005-458e-8d9c-f67aa0b9bec5",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
