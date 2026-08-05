@@ -18,8 +18,8 @@ import type { EligibleWork } from "./classify";
 import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
+  type AgUiEvent,
   HarnessError,
-  type HarnessEvent,
   type HarnessRequest,
   type HarnessRunner,
   layer as harnessLayer,
@@ -49,6 +49,23 @@ const workspace: RegisteredWorkspace = {
 const triageItem = { id: id("#7"), title: "broken export", stage: "triage" as const, priorFailures: 0 };
 
 const usage: TokenUsage = { inputTokens: 12, outputTokens: 34, totalTokens: 46 };
+
+const text = (delta: string) => ({ type: "TEXT_MESSAGE_CONTENT", delta }) satisfies AgUiEvent;
+
+const sessionEvent = (sessionId: string) =>
+  ({
+    type: "CUSTOM",
+    name: "cursor.session-id",
+    value: { sessionId },
+  }) satisfies AgUiEvent;
+
+const runStarted: AgUiEvent = { type: "RUN_STARTED" };
+
+const finished: AgUiEvent = {
+  type: "RUN_FINISHED",
+  finishReason: "stop",
+  usage: { promptTokens: 12, completionTokens: 34, totalTokens: 46 },
+};
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
@@ -110,55 +127,27 @@ const implementItem = {
 
 const implementBranch = branchName(implementItem);
 
-const implementStreamEvents: ReadonlyArray<HarnessEvent> = [
-  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
-  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    name: null,
-    text: "Opened PR #99, Closes #15.\nIMPLEMENT-RESULT: opened-pr",
-    sessionId: null,
-    usage: null,
-    finishReason: null,
-  },
+const implementStreamEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-42"),
+  text("Opened PR #99, Closes #15.\nIMPLEMENT-RESULT: opened-pr"),
 ];
 
-const implementFinished: HarnessEvent = {
-  type: "RUN_FINISHED",
-  name: null,
-  text: null,
-  sessionId: null,
-  usage,
-  finishReason: "stop",
-};
+const implementFinished: AgUiEvent = finished;
 
-const implementEvents: ReadonlyArray<HarnessEvent> = [...implementStreamEvents, implementFinished];
+const implementEvents: ReadonlyArray<AgUiEvent> = [...implementStreamEvents, implementFinished];
 
-const resumedImplementEvents: ReadonlyArray<HarnessEvent> = [
-  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
-  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-prev", usage: null, finishReason: null },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    name: null,
-    text: "Picked up where I left off.\nIMPLEMENT-RESULT: opened-pr",
-    sessionId: null,
-    usage: null,
-    finishReason: null,
-  },
+const resumedImplementEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-prev"),
+  text("Picked up where I left off.\nIMPLEMENT-RESULT: opened-pr"),
   implementFinished,
 ];
 
-const stuckImplementEvents: ReadonlyArray<HarnessEvent> = [
-  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    name: null,
-    text: "The brief contradicts itself; leaving for a human.\nIMPLEMENT-RESULT: stuck",
-    sessionId: null,
-    usage: null,
-    finishReason: null,
-  },
-  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+const stuckImplementEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  text("The brief contradicts itself; leaving for a human.\nIMPLEMENT-RESULT: stuck"),
+  finished,
 ];
 
 const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
@@ -170,18 +159,11 @@ const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
     ),
 });
 
-const noSentinelImplementEvents: ReadonlyArray<HarnessEvent> = [
-  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
-  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    name: null,
-    text: "Made progress but ran out of turn before opening a PR.",
-    sessionId: null,
-    usage: null,
-    finishReason: null,
-  },
-  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+const noSentinelImplementEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-42"),
+  text("Made progress but ran out of turn before opening a PR."),
+  finished,
 ];
 
 const followUpWorkspace: RegisteredWorkspace = {
@@ -212,18 +194,11 @@ const followUpItem = {
 
 const followUpBranch = branchName(followUpItem);
 
-const followUpEvents: ReadonlyArray<HarnessEvent> = [
-  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
-  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    name: null,
-    text: "Fixed the failing check and pushed.\nFOLLOWUP-RESULT: pushed",
-    sessionId: null,
-    usage: null,
-    finishReason: null,
-  },
-  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+const followUpEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-42"),
+  text("Fixed the failing check and pushed.\nFOLLOWUP-RESULT: pushed"),
+  finished,
 ];
 
 const disabledWorkspace: RegisteredWorkspace = {
@@ -269,15 +244,15 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => (
     record(calls, { method: "setRoles", item: itemId, add: changes.add, remove: changes.remove }),
 });
 
-const runner = (events: ReadonlyArray<HarnessEvent>): HarnessRunner => ({
+const runner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
   run: () => Stream.fromArray(events),
 });
 
 const capturingRunner = (
   requests: Ref.Ref<ReadonlyArray<HarnessRequest>>,
-  events: ReadonlyArray<HarnessEvent>,
-  tail: Stream.Stream<HarnessEvent, HarnessError> = Stream.empty,
+  events: ReadonlyArray<AgUiEvent>,
+  tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
 ): HarnessRunner => ({
   name: cursor,
   run: (request) =>
@@ -331,26 +306,12 @@ const failingRunner = (error: HarnessError): HarnessRunner => ({
   run: () => Stream.fail(error),
 });
 
-const successEvents: ReadonlyArray<HarnessEvent> = [
-  { type: "RUN_STARTED", name: null, text: null, sessionId: null, usage: null, finishReason: null },
-  { type: "CUSTOM", name: "session", text: null, sessionId: "sess-42", usage: null, finishReason: null },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    name: null,
-    text: "This is a genuine bug in the exporter. ",
-    sessionId: null,
-    usage: null,
-    finishReason: null,
-  },
-  {
-    type: "TEXT_MESSAGE_CONTENT",
-    name: null,
-    text: "\n\nTRIAGE-DECISION: ready-for-agent",
-    sessionId: null,
-    usage: null,
-    finishReason: null,
-  },
-  { type: "RUN_FINISHED", name: null, text: null, sessionId: null, usage, finishReason: "stop" },
+const successEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-42"),
+  text("This is a genuine bug in the exporter. "),
+  text("\n\nTRIAGE-DECISION: ready-for-agent"),
+  finished,
 ];
 
 const provide = (
@@ -418,16 +379,7 @@ describe("Executor.execute", () => {
   it.effect("defaults an unparseable decision to ready-for-human but still posts the proposal", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
-      const noDecision: ReadonlyArray<HarnessEvent> = [
-        {
-          type: "TEXT_MESSAGE_CONTENT",
-          name: null,
-          text: "I could not tell what to do.",
-          sessionId: null,
-          usage: null,
-          finishReason: null,
-        },
-      ];
+      const noDecision: ReadonlyArray<AgUiEvent> = [text("I could not tell what to do.")];
       const layer = provide(recorder(calls), [runner(noDecision)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
@@ -442,15 +394,8 @@ describe("Executor.execute", () => {
   it.effect("backstops a missing sentinel with the proposal disposition", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
-      const dispositionOnly: ReadonlyArray<HarnessEvent> = [
-        {
-          type: "TEXT_MESSAGE_CONTENT",
-          name: null,
-          text: "## Triage proposal\n\n**Disposition:** ready-for-agent\n\n### Open questions\n\n- none",
-          sessionId: null,
-          usage: null,
-          finishReason: null,
-        },
+      const dispositionOnly: ReadonlyArray<AgUiEvent> = [
+        text("## Triage proposal\n\n**Disposition:** ready-for-agent\n\n### Open questions\n\n- none"),
       ];
       const layer = provide(recorder(calls), [runner(dispositionOnly)]);
       yield* Effect.gen(function* () {
@@ -665,7 +610,7 @@ describe("Executor.execute", () => {
         const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
 
         yield* Stream.fromSubscription(subscription).pipe(
-          Stream.filter((item) => item.event.text !== null),
+          Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
           Stream.runHead,
         );
 
@@ -696,7 +641,7 @@ describe("Executor.execute", () => {
         const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
 
         yield* Stream.fromSubscription(subscription).pipe(
-          Stream.filter((item) => item.event.text !== null),
+          Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
           Stream.runHead,
         );
         yield* Fiber.interrupt(running);
@@ -711,16 +656,9 @@ describe("Executor.execute", () => {
   it.effect("ledgers the newest session when the harness starts a fresh one mid-run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
-      const restarted: ReadonlyArray<HarnessEvent> = [
+      const restarted: ReadonlyArray<AgUiEvent> = [
         ...implementStreamEvents,
-        {
-          type: "CUSTOM",
-          name: "session",
-          text: null,
-          sessionId: "sess-99",
-          usage: null,
-          finishReason: null,
-        },
+        sessionEvent("sess-99"),
         implementFinished,
       ];
       const layer = provide(recorder(calls), [runner(restarted)]);

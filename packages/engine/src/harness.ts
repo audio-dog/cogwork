@@ -1,11 +1,11 @@
-import type { HarnessEvent, HarnessName } from "@clanker-forge/contracts";
+import type { AgUiEvent, HarnessName } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { ResolvedMcpSkill } from "./mcp-skill";
 
-export type { HarnessEvent } from "@clanker-forge/contracts";
+export type { AgUiEvent } from "@clanker-forge/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
 
 export interface HarnessRequest {
@@ -26,11 +26,11 @@ export class HarnessError extends Schema.TaggedErrorClass<HarnessError>()("Harne
 
 export interface HarnessRunner {
   readonly name: HarnessName;
-  readonly run: (request: HarnessRequest) => Stream.Stream<HarnessEvent, HarnessError>;
+  readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
 }
 
 export interface HarnessService {
-  readonly run: (request: HarnessRequest) => Stream.Stream<HarnessEvent, HarnessError>;
+  readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
 }
 
 export class Harness extends Context.Service<Harness, HarnessService>()("@clanker-forge/engine/harness") {}

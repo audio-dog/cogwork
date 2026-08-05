@@ -1,6 +1,8 @@
 import {
+  AgUiEvent,
+  agUiIsTerminal,
   DaemonRpcs,
-  HarnessEvent,
+  type RunActivity,
   type RunEvent,
   type RunId,
   type RunRecord,
@@ -32,17 +34,19 @@ export const daemonInfoLayer = Layer.effect(
 
 const okPoll = { status: "ok" as const };
 
-const decodeHarnessEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(HarnessEvent));
+const decodeAgUiEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
 
 const activityFromEvent = (run: RunRecord, event: RunEvent) =>
-  decodeHarnessEvent(event.data).pipe(
-    Effect.map((harnessEvent) => activityOf(run, event.seq, event.atMillis, harnessEvent)),
+  decodeAgUiEvent(event.data).pipe(
+    Effect.map((agUiEvent) => activityOf(run, event.seq, event.atMillis, agUiEvent)),
   );
 
 const activitiesFromLedger = (run: RunRecord, events: ReadonlyArray<RunEvent>) =>
   Effect.forEach(events, (event) => activityFromEvent(run, event).pipe(Effect.option)).pipe(
     Effect.map(Arr.getSomes),
   );
+
+const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
   const bus = yield* RunEventBus;
@@ -51,14 +55,15 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   const ledger = yield* RunLedger;
   const subscription = yield* bus.subscribe();
   const run = yield* ledger.getRun(id);
-  const history = run === null ? [] : yield* activitiesFromLedger(run, yield* ledger.events(id));
+  if (run === null) return Stream.empty;
+  const history = yield* activitiesFromLedger(run, yield* ledger.events(id));
   const lastSeq = history.at(-1)?.seq ?? -1;
-  return Stream.concat(
-    Stream.fromIterable(history),
-    Stream.fromSubscription(subscription).pipe(
-      Stream.filter((item) => item.runId === id && item.seq > lastSeq),
-    ),
+  const live = Stream.fromSubscription(subscription).pipe(
+    Stream.filter((item) => item.runId === id && item.seq > lastSeq),
   );
+  const settled = run.status !== "running";
+  const base = settled ? Stream.fromIterable(history) : Stream.concat(Stream.fromIterable(history), live);
+  return base.pipe(Stream.takeUntil(isTerminalActivity));
 });
 
 const statesByName = (snapshot: ReconcileSnapshot) =>

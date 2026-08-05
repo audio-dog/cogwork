@@ -1,4 +1,4 @@
-import type { HarnessEvent, RunActivity, RunRecord } from "@clanker-forge/contracts";
+import type { AgUiEvent, RunActivity, RunRecord } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -9,7 +9,7 @@ export const activityOf = (
   record: Pick<RunRecord, "id" | "workspace" | "workItem" | "stage">,
   seq: number,
   atMillis: number,
-  event: HarnessEvent,
+  event: AgUiEvent,
 ) => ({
   runId: record.id,
   workspace: record.workspace,
