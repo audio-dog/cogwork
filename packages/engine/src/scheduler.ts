@@ -10,6 +10,7 @@ import * as Ref from "effect/Ref";
 import {
   consecutiveFailures,
   type EligibleWork,
+  eligibleWork,
   handoffRoleFor,
   maxAttemptsPerStage,
   maxCrashesPerItem,
@@ -17,7 +18,6 @@ import {
 } from "./classify";
 import { attachCommand, type HandoffCause, handoffComment, recoveryReason } from "./comments";
 import { claimant, Executor } from "./executor";
-import { followUpContext } from "./follow-up";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import { runnable } from "./playbook";
@@ -176,12 +176,6 @@ const candidatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot, conf
 
 const checkoutForStage = (workspace: RegisteredWorkspace, item: ObservedItem, stage: LifecycleStage) =>
   checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
-
-const eligibleFromObserved = (item: ObservedItem, stage: LifecycleStage): EligibleWork => {
-  const priorFailures = consecutiveFailures(item, stage);
-  const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
-  return { id: item.id, title: item.title, stage, priorFailures, ...(followUp ? { followUp } : {}) };
-};
 
 export const make = (config: SchedulerConfig) =>
   Effect.gen(function* () {
@@ -355,7 +349,7 @@ export const make = (config: SchedulerConfig) =>
       reason: "interrupted" | "crashed",
       session: SessionId | null,
     ) {
-      const observed = eligibleFromObserved(item, stage);
+      const observed = eligibleWork(item, stage);
       const work: EligibleWork = session ? { ...observed, resume: { session, reason } } : observed;
       const candidate: Candidate = {
         workspace,
