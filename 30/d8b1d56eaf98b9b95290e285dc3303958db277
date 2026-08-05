@@ -1,0 +1,26 @@
+packages/engine/src/worktree.ts
+  s_0776f979bff648::t_31e92e8d577b2a 27
+  s_0776f979bff648::t_cc0866f81f5e8c 70
+packages/contracts/src/workspace.ts
+  s_0776f979bff648::t_18ea4c134bebcd 77
+apps/cli/config/clanker-forge.workspace.ts
+  s_0776f979bff648::t_0ea99134f68cdf 26-27
+packages/engine/src/worktree.test.ts
+  s_0776f979bff648::t_4211db5f72c5cc 131,136,147,154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "30d8b1d56eaf98b9b95290e285dc3303958db277",
+  "prompts": {},
+  "sessions": {
+    "s_0776f979bff648": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "98d30065-130f-490e-a255-3ea4da26ca1d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
