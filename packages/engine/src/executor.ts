@@ -72,6 +72,7 @@ const harnessRequest = (
   model: resolved.model,
   effort: resolved.effort,
   sessionId,
+  mcpSkills: resolved.mcpSkills,
 });
 
 const withPrompt = (request: HarnessRequest, prompt: string, sessionId: SessionId): HarnessRequest => ({

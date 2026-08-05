@@ -1,6 +1,7 @@
 import type {
   HarnessName,
   LifecycleStage,
+  McpSkill,
   PlaybookStageConfig,
   TriageRole,
   WorkspaceConfig,
@@ -15,6 +16,7 @@ export interface ResolvedStage {
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
+  readonly mcpSkills: ReadonlyArray<McpSkill>;
 }
 
 const dayMillis = 86_400_000;
@@ -61,6 +63,7 @@ const resolveStageConfig = (
   promptTemplate: stage?.prompt ?? defaults.promptTemplate,
   resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
   resumeMaxTokens: stage?.resumeMaxTokens ?? defaults.resumeMaxTokens,
+  mcpSkills: config.mcpSkills ?? [],
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
