@@ -1,0 +1,19 @@
+research/tanstack-ai-audit.md
+  s_3666656d93e0c9::t_d30775477cb523 1-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "2807bb2e2619dc1dc2397cb1210e384d860fe3d3",
+  "prompts": {},
+  "sessions": {
+    "s_3666656d93e0c9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4a6fcafc-b2be-4fa3-92a0-780fc3c5be14",
+        "model": "claude-fable-5-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
