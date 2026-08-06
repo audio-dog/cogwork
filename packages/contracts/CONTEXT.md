@@ -119,3 +119,13 @@ _Avoid_: State, health check
 **Actionable / claimed / blocked / needs-human item**:
 The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, and parked for a person. Narrowed views of a work item, not new entities.
 _Avoid_: Reusing "work item" for these narrowed views
+
+### Client RPC
+
+**Query RPC / command RPC**:
+The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* is an imperative that changes daemon state or behavior — cancel a run, reclassify a work item, pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries.
+_Avoid_: Write RPC (too narrow — a command may change behavior, like pausing the scheduler, not only write data), mutation, getter
+
+**Daemon event**:
+The unit a client watches on the daemon's live feed — a tagged envelope over everything a client view must react to: a harness event on a run (run activity), a work item's classification change, a run summary change, and a scheduler change. One subscription per client; the client fans out its own views.
+_Avoid_: Run activity (now one kind of daemon event), notification, log line

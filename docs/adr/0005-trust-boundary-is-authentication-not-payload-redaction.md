@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-08-05
+- **Amended:** 2026-08-06 — the auth seam, see [Amendment](#amendment-2026-08-06--the-auth-seam)
 
 ## Context
 
@@ -52,3 +53,32 @@ the detail server-side. This is a robustness and UX practice, not secrecy.
   story to design before the daemon is exposed remotely.
 - Introducing typed domain errors for expected failures is a small, ongoing hygiene task,
   distinct from any "hide detail from clients" work — which is explicitly not a goal.
+
+## Amendment (2026-08-06) — the auth seam
+
+The original decision named *where* the trust boundary sits (the channel) but not *the
+seam* auth drops into. [Client contract and transport (#148)](https://github.com/taylorfsteele/clanker-forge/issues/148)
+resolved that seam. This amendment records it, so "add auth when remote" has a concrete
+insertion point rather than a reopened design.
+
+The rule that makes the daemon hosted-ready without building any hosting: **no handler may
+assume there is no caller.** The single seam that enforces it:
+
+- **A `Principal` in every handler's context.** One `RpcMiddleware` provides a `Principal`
+  (the current user) into the handler context. Today it is a fixed local owner; a remote
+  daemon swaps in a middleware that authenticates the request and provides the real
+  principal. Handlers read the caller now, so per-user scope is a later filter, not a
+  reshape. This is the one shape that is expensive to reopen — hence recording it here.
+- **The token rides as a request header.** Effect RPC carries headers over any transport,
+  so a bearer token survives the socket → WebSocket / HTTP+SSE swap unchanged. The
+  middleware ignores it today.
+- **Read models already key by `WorkspaceId`.** So authorizing a caller to a subset of
+  workspaces is a handler-level filter over existing shapes, not a contract change.
+- **Commands and queries are separate RPC groups.** The split gives the middleware one
+  place to guard state-changing commands more strictly than reads, when auth arrives.
+
+Built now: the middleware seam (fixed local owner) and the socket move to `~/.clanker-forge`
+at `0600` — the original decision named this location, but the code had drifted to
+`$TMPDIR` with no permission set, so this closes that gap. Explicitly **not** built now:
+the login flow, TLS, and the scope filter. Each drops into the seams above when the daemon
+goes remote.
