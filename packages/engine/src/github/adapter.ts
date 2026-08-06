@@ -2,6 +2,8 @@ import { WorkItemId } from "@clanker-forge/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import type { CoordinationComment, CoordinationHost } from "../coordination";
+import * as Coordination from "../coordination";
 import {
   IssueTracker,
   IssueTrackerError,
@@ -16,46 +18,20 @@ import {
   type RawComment,
   type RawIssue,
 } from "./client";
-import {
-  attemptStatus,
-  claimLabel,
-  claimStatus,
-  coordinationDetail,
-  coordinationMarkers,
-  coordinationStatus,
-  defaultStatus,
-  formatCoordinationBody,
-  formatNoteBody,
-  hasClaimLabel,
-  hasClankerMarker,
-  hasLedgerMarker,
-  parseAttempts,
-  parseClaim,
-  parseFollowUp,
-  roleLabel,
-  rolesFromLabels,
-  serializeAttempt,
-  serializeClaim,
-  serializeFollowUp,
-} from "./markers";
+import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
   readonly botLogin: string | null;
 }
 
-interface CoordinationUpdate {
-  readonly status?: string;
-  readonly marker?: string;
-  readonly detail?: string | null;
-}
-
-const botLedger = (comments: ReadonlyArray<RawComment>, botLogin: string | null) =>
-  comments.find((comment) => comment.authorLogin === botLogin && hasLedgerMarker(comment.body));
-
-const nextDetail = (update: CoordinationUpdate, previous: string) => {
-  if (!Object.hasOwn(update, "detail")) return coordinationDetail(previous);
-  return update.detail ?? null;
-};
+const toCoordinationComment =
+  (botLogin: string | null) =>
+  (comment: RawComment): CoordinationComment<number> => ({
+    id: comment.id,
+    body: comment.body,
+    isBot: comment.authorLogin === botLogin,
+    createdAtMillis: comment.createdAtMillis,
+  });
 
 const targetFor = (workspace: RegisteredWorkspace) => {
   const source = workspace.config.issueTracker;
@@ -69,11 +45,6 @@ const targetFor = (workspace: RegisteredWorkspace) => {
     botLogin: source.botLogin ?? null,
   } satisfies GitHubTarget;
 };
-
-const coordinationLast = (comments: ReadonlyArray<RawComment>) => [
-  ...comments.filter((comment) => !hasLedgerMarker(comment.body)),
-  ...comments.filter((comment) => hasLedgerMarker(comment.body)),
-];
 
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
@@ -108,44 +79,33 @@ const make = (client: GitHubClientService): IssueTrackerService => {
     return { target, number };
   });
 
-  const upsertCoordination = Effect.fn("github.upsertCoordination")(function* (
-    target: GitHubTarget,
-    number: number,
-    update: CoordinationUpdate,
-  ) {
-    const comments = yield* client.listComments(target, number);
-    const ledger = botLedger(comments, target.botLogin);
-    const previous = ledger?.body ?? "";
-    const markers = coordinationMarkers(previous);
-    const body = formatCoordinationBody({
-      status: update.status ?? coordinationStatus(previous) ?? defaultStatus,
-      markers: update.marker === undefined ? markers : [...markers, update.marker],
-      detail: nextDetail(update, previous),
-    });
-    if (ledger) {
-      yield* client.editComment(target, ledger.id, body);
-      return;
-    }
-    yield* client.createComment(target, number, body);
+  const coordinationHost = (target: GitHubTarget, number: number): CoordinationHost<number> => ({
+    comments: client
+      .listComments(target, number)
+      .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.botLogin)))),
+    edit: (id, body) => client.editComment(target, id, body),
+    create: (body) => client.createComment(target, number, body),
   });
 
   const buildItem = (target: GitHubTarget) =>
     Effect.fn("github.buildItem")(function* (issue: RawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
       const comments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
-      const trusted = coordinationLast(
-        comments.filter((comment) => comment.authorLogin === target.botLogin),
-      ).map((comment) => comment.body);
+      const ledger = Coordination.selectLedger(
+        wireCodec,
+        comments.map(toCoordinationComment(target.botLogin)),
+      );
+      const body = ledger?.body ?? "";
       const id = yield* itemId(issue.number);
       return {
         id,
         title: issue.title,
         roles: rolesFromLabels(issue.labels),
         claimLabeled,
-        claim: claimLabeled ? parseClaim(trusted) : null,
-        attempts: parseAttempts(trusted),
-        owned: trusted.some(hasClankerMarker),
-        followUp: parseFollowUp(trusted),
+        claim: claimLabeled ? Coordination.parseClaim(wireCodec, body) : null,
+        attempts: Coordination.parseAttempts(wireCodec, body),
+        owned: ledger !== undefined,
+        followUp: Coordination.parseFollowUp(wireCodec, body),
         openBlockers: issue.openBlockers,
       } satisfies TrackerItem;
     });
@@ -167,7 +127,7 @@ const make = (client: GitHubClientService): IssueTrackerService => {
       Effect.gen(function* () {
         const target = targetFor(workspace);
         if (!target) {
-          return [] as ReadonlyArray<TrackerItem>;
+          return [];
         }
         return yield* observeTarget(target);
       }),
@@ -175,8 +135,10 @@ const make = (client: GitHubClientService): IssueTrackerService => {
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
         yield* client.addLabel(target, number, claimLabel);
-        const status = claim.stage ? claimStatus(claim.stage) : `In progress — claimed by ${claim.by}.`;
-        yield* upsertCoordination(target, number, { status, marker: serializeClaim(claim) });
+        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
+          status: Coordination.claimStatusFor(claim),
+          marker: Coordination.serializeClaim(wireCodec, claim),
+        });
       }),
     release: (workspace, id) =>
       Effect.gen(function* () {
@@ -186,25 +148,23 @@ const make = (client: GitHubClientService): IssueTrackerService => {
     recordAttempt: (workspace, id, attempt, reason) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* upsertCoordination(target, number, {
-          status: attemptStatus(attempt, reason),
-          marker: serializeAttempt(attempt),
+        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
+          status: Coordination.attemptStatus(attempt, reason),
+          marker: Coordination.serializeAttempt(wireCodec, attempt),
         });
       }),
     recordFollowUp: (workspace, id, marker, detail) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        yield* upsertCoordination(target, number, { marker: serializeFollowUp(marker), detail });
+        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
+          marker: Coordination.serializeFollowUp(wireCodec, marker),
+          detail,
+        });
       }),
     note: (workspace, id, detail) =>
       Effect.gen(function* () {
         const { target, number } = yield* resolveIssue(workspace, id);
-        const comments = yield* client.listComments(target, number);
-        const ledger = botLedger(comments, target.botLogin);
-        if (ledger && coordinationDetail(ledger.body) !== null) {
-          yield* upsertCoordination(target, number, { detail: null });
-        }
-        yield* client.createComment(target, number, formatNoteBody(detail));
+        yield* Coordination.postNote(wireCodec, coordinationHost(target, number), detail);
       }),
     setRoles: (workspace, id, changes) =>
       Effect.gen(function* () {

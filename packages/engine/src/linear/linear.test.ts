@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "../classify";
+import * as Coordination from "../coordination";
 import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
@@ -20,15 +21,15 @@ import {
   type RawIssue,
   type RawWorkflowState,
 } from "./client";
-import {
-  claimLabel,
-  formatCoordinationBody,
-  hasLedgerMarker,
-  serializeAttempt,
-  serializeClaim,
-} from "./markers";
+import { claimLabel, wireCodec } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
+
+const serializeClaim = (claim: Claim) => Coordination.serializeClaim(wireCodec, claim);
+const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
+const formatCoordinationBody = (body: Coordination.CoordinationBody) =>
+  Coordination.formatCoordinationBody(wireCodec, body);
+const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
 
 interface SeedIssue {
   readonly identifier: string;
@@ -335,12 +336,12 @@ describe("linear work source adapter", () => {
       assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
       const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "AUD-7");
-      assert.deepStrictEqual(observed?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+      assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       assert.isTrue(observed?.claimLabeled);
       const { eligible, claimed } = classify(items);
       assert.strictEqual(eligible.length, 0);
-      assert.deepStrictEqual(claimed[0]?.claim, { by: claim.by, claimedAtMillis: claim.claimedAtMillis });
+      assert.deepStrictEqual(claimed[0]?.claim, claim);
     }).pipe(
       Effect.provide(
         withClient({
@@ -430,7 +431,7 @@ describe("linear work source adapter", () => {
       assert.include(proposal?.body ?? "", "> *This was posted by clanker-forge.*");
       assert.isTrue(hasLedgerMarker(coordination?.body ?? ""));
       const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-11");
-      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5 });
+      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5, stage: "triage" });
     }).pipe(
       Effect.provide(
         withClient({
