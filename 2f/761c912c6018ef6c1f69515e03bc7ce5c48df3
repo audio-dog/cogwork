@@ -1,0 +1,22 @@
+docs/adr/0005-trust-boundary-is-authentication-not-payload-redaction.md
+  s_351c01dd73c8f1::t_8e6862dc916671 5
+  s_351c01dd73c8f1::t_b135a158d634b9 56-84
+packages/contracts/CONTEXT.md
+  s_351c01dd73c8f1::t_1fc770b412ce80 122-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "2f761c912c6018ef6c1f69515e03bc7ce5c48df3",
+  "prompts": {},
+  "sessions": {
+    "s_351c01dd73c8f1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b9b2e2f3-6130-4448-b96b-d16b3f11cfee",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
