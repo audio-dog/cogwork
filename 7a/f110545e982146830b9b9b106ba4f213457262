@@ -1,0 +1,49 @@
+docs/adr/0005-trust-boundary-is-authentication-not-payload-redaction.md
+  s_afdfe44b889bc1::t_85a0c91ed90430 5,56-84
+packages/contracts/CONTEXT.md
+  s_afdfe44b889bc1::t_1b66f48a796bed 122-131
+packages/engine/CONTEXT.md
+  s_afdfe44b889bc1::t_44f1bff2fa71a1 92-95,97,101
+packages/engine/src/classify.ts
+  s_afdfe44b889bc1::t_abfd126067203d 34,76,82-86,91
+packages/engine/src/coordination.test.ts
+  s_afdfe44b889bc1::t_76762706aa2959 1-468
+packages/engine/src/coordination.ts
+  s_afdfe44b889bc1::t_56ae9f3dc84227 1-248
+packages/engine/src/github/adapter.ts
+  s_afdfe44b889bc1::t_21eddc379bda35 5-6,21,27-34,82-87,94-98,105-108,130,138-141,151-153,159-162,167
+packages/engine/src/github/github.test.ts
+  s_afdfe44b889bc1::t_4a348d727ef213 9,25,30-37,236-238,267-269,295-297,434-441,490-492,534-536,574-576,607-609,638-640,683-685,725-735,827,839-840
+packages/engine/src/github/markers.test.ts
+  s_afdfe44b889bc1::t_260ac5bfa59b7a 2
+packages/engine/src/github/markers.ts
+  s_afdfe44b889bc1::t_74c193e6097d02 1-11,21,23,36-61
+packages/engine/src/linear/adapter.ts
+  s_afdfe44b889bc1::t_9f7d4458b04695 5-6,30,38-45,85-90,96-100,107-110,151-154,164-166,172-175,180
+packages/engine/src/linear/linear.test.ts
+  s_afdfe44b889bc1::t_bc74e0d3fdf20a 8,24,28-33,339,344,434
+packages/engine/src/linear/markers.test.ts
+  s_afdfe44b889bc1::t_0be9ceefe5c784 2,5
+packages/engine/src/linear/markers.ts
+  s_afdfe44b889bc1::t_8d9a66ed51725b 1-3,55-67,70,72
+packages/engine/src/run-ledger.test.ts
+  s_afdfe44b889bc1::t_f89a81fbacb915 17,145-177,260-279
+packages/engine/src/scheduler.ts
+  s_afdfe44b889bc1::t_9da1aabba7f2f5 13,323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "7af110545e982146830b9b9b106ba4f213457262",
+  "prompts": {},
+  "sessions": {
+    "s_afdfe44b889bc1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "220506f3-2028-4a8d-a4e1-de4601df88d1",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
