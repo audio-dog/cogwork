@@ -1,0 +1,31 @@
+packages/engine/src/github/adapter.ts
+  s_95ff75e4b0e033::t_ac11c374403583 1,12
+  s_95ff75e4b0e033::t_93ae6977f1ff95 128-191
+  s_95ff75e4b0e033::t_02b3b225f16946 8
+packages/engine/src/daemon.ts
+  s_95ff75e4b0e033::t_ded48096d2971e 188
+  s_95ff75e4b0e033::t_729883e37a8787 183-187
+  s_95ff75e4b0e033::t_3e0d125ca778cb 166-172,174
+packages/engine/src/github/client.ts
+  s_95ff75e4b0e033::t_4de8d89bb0a0b5 320
+  s_95ff75e4b0e033::t_198f9e7ddfe1f6 321-323,325-337
+  s_95ff75e4b0e033::t_bd429bc7803488 345-348
+  s_95ff75e4b0e033::t_c0fdbb211034f2 324
+  s_95ff75e4b0e033::t_158eaee6b353a4 344
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "beca234bbda74cfc07734f3c15d0791a6d8d73d7",
+  "prompts": {},
+  "sessions": {
+    "s_95ff75e4b0e033": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "efea2b86-c2ac-4333-bbdb-b8ede3a808f2",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
