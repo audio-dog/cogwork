@@ -15,7 +15,13 @@
     "@clanker-forge/contracts": "workspace:*",
     "@clanker-forge/cursor-acp": "workspace:*",
     "@clanker-forge/engine": "workspace:*",
+    "@effect/opentelemetry": "catalog:effect",
     "@effect/platform-node": "catalog:effect",
+    "@opentelemetry/api": "~1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/sdk-trace-node": "^2.10.0",
     "drizzle-orm": "1.0.0-rc.2",
     "effect": "catalog:effect"
   },
