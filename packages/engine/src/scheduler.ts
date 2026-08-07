@@ -11,13 +11,13 @@ import {
   consecutiveFailures,
   type EligibleWork,
   eligibleWork,
-  handoffRoleFor,
   maxAttemptsPerStage,
   maxCrashesPerItem,
   observedStage,
 } from "./classify";
-import { attachCommand, type HandoffCause, handoffComment, recoveryReason } from "./comments";
+import { recoveryReason } from "./comments";
 import { claimant, Executor } from "./executor";
+import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import { runnable } from "./playbook";
@@ -26,7 +26,7 @@ import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { SourceControlProvider } from "./source-control";
-import { branchName, checkoutPathFor, ticketSlug } from "./worktree";
+import { branchName, ticketSlug } from "./worktree";
 
 export interface SchedulerConfig {
   readonly globalLimit: number;
@@ -174,9 +174,6 @@ const candidatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot, conf
   });
 };
 
-const checkoutForStage = (workspace: RegisteredWorkspace, item: ObservedItem, stage: LifecycleStage) =>
-  checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
-
 export const make = (config: SchedulerConfig) =>
   Effect.gen(function* () {
     const registry = yield* WorkspaceRegistry;
@@ -185,6 +182,8 @@ export const make = (config: SchedulerConfig) =>
     const issueTracker = yield* IssueTracker;
     const provider = yield* SourceControlProvider;
     const observe = observeWorkspace(issueTracker, provider);
+    const handoff = handToHuman(issueTracker);
+    const releaseClaim = makeReleaseClaim(issueTracker);
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(initialState);
@@ -244,32 +243,28 @@ export const make = (config: SchedulerConfig) =>
       return { inFlight, interrupted } satisfies DrainOutcome;
     });
 
-    const escalateToHuman = Effect.fn("Scheduler.escalateToHuman")(function* (
+    const noteStaleRecovery = Effect.fn("Scheduler.noteStaleRecovery")(function* (
       workspace: RegisteredWorkspace,
       item: ObservedItem,
-      stage: LifecycleStage,
-      cause: HandoffCause,
-      session: string | null | undefined,
     ) {
-      const role = handoffRoleFor(stage);
-      const checkout = checkoutForStage(workspace, item, stage);
-      const resume = session ? attachCommand(checkout, session) : undefined;
-      yield* issueTracker.setRoles(workspace, item.id, {
-        remove: role ? [role] : [],
-        add: ["ready-for-human"],
+      yield* Effect.logInfo("recovered stale claim", {
+        workspace: workspace.config.name,
+        item: item.id,
       });
-      yield* issueTracker.note(workspace, item.id, handoffComment(stage, cause, recoveryReason, resume));
+      yield* issueTracker.note(
+        workspace,
+        item.id,
+        [
+          "> *This was posted by clanker-forge.*",
+          "",
+          "**Recovered a stale claim after a daemon restart.**",
+          "",
+          `Last failure: ${recoveryReason}`,
+        ].join("\n"),
+      );
     });
 
-    const handoffRecovery = (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-      stage: LifecycleStage,
-      attempts: number,
-      session: string | null | undefined,
-    ) => escalateToHuman(workspace, item, stage, { kind: "max-attempts", attempts }, session);
-
-    const recordRecovery = Effect.fn("Scheduler.recordRecovery")(function* (
+    const recordStaleFailure = Effect.fn("Scheduler.recordStaleFailure")(function* (
       workspace: RegisteredWorkspace,
       item: ObservedItem,
       stage: LifecycleStage,
@@ -293,22 +288,14 @@ export const make = (config: SchedulerConfig) =>
         recoveryReason,
       );
       if (!exhausted) return;
-      yield* handoffRecovery(workspace, item, stage, attempts, session);
-    });
-
-    const releaseClaim = Effect.fn("Scheduler.releaseClaim")(function* (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-    ) {
-      yield* issueTracker.release(workspace, item.id).pipe(
-        Effect.catchTag("IssueTrackerError", (error) =>
-          Effect.logWarning("claim release failed", {
-            workspace: workspace.config.name,
-            item: item.id,
-            message: error.message,
-          }),
-        ),
-      );
+      yield* handoff({
+        workspace,
+        item,
+        stage,
+        cause: { kind: "max-attempts", attempts },
+        reason: recoveryReason,
+        session,
+      });
     });
 
     const recoverStale = Effect.fn("Scheduler.recoverStale")(function* (
@@ -320,26 +307,10 @@ export const make = (config: SchedulerConfig) =>
       const endedAtMillis = yield* Clock.currentTimeMillis;
       yield* ledger.closeRunning(workspace.config.name, item.id, endedAtMillis);
       const recover = stage
-        ? recordRecovery(workspace, item, stage, endedAtMillis, session)
-        : Effect.gen(function* () {
-            yield* Effect.logInfo("recovered stale claim", {
-              workspace: workspace.config.name,
-              item: item.id,
-            });
-            yield* issueTracker.note(
-              workspace,
-              item.id,
-              [
-                "> *This was posted by clanker-forge.*",
-                "",
-                "**Recovered a stale claim after a daemon restart.**",
-                "",
-                `Last failure: ${recoveryReason}`,
-              ].join("\n"),
-            );
-          });
+        ? recordStaleFailure(workspace, item, stage, endedAtMillis, session)
+        : noteStaleRecovery(workspace, item);
       yield* recover;
-      yield* releaseClaim(workspace, item);
+      yield* releaseClaim(workspace, item.id);
     });
 
     const reschedule = Effect.fn("Scheduler.reschedule")(function* (
@@ -380,8 +351,15 @@ export const make = (config: SchedulerConfig) =>
         stage,
         crashes,
       });
-      yield* escalateToHuman(workspace, item, stage, { kind: "crash-loop", crashes }, session);
-      yield* releaseClaim(workspace, item);
+      yield* handoff({
+        workspace,
+        item,
+        stage,
+        cause: { kind: "crash-loop", crashes },
+        reason: recoveryReason,
+        session,
+      });
+      yield* releaseClaim(workspace, item.id);
     });
 
     const recoverCrashed = Effect.fn("Scheduler.recoverCrashed")(function* (

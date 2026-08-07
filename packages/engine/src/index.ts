@@ -4,6 +4,7 @@ export { defineWorkspace } from "./define-workspace";
 export * as Executor from "./executor";
 export * as Git from "./git";
 export * as GitHub from "./github";
+export * as HandToHuman from "./hand-to-human";
 export * as Harness from "./harness";
 export * as IssueTracker from "./issue-tracker";
 export { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
