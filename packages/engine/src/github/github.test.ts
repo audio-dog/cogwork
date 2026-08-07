@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
+import * as Coordination from "../coordination";
 import type { FollowUpMarker } from "../follow-up";
 import { IssueTracker } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
@@ -21,10 +22,18 @@ import {
   type RawPull,
   type RawReview,
 } from "./client";
-import { defaultStatus, hasLedgerMarker, serializeAttempt, serializeFollowUp } from "./markers";
+import { wireCodec } from "./markers";
 import { layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
+
+const defaultStatus = Coordination.defaultStatus;
+const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
+const serializeFollowUp = (marker: FollowUpMarker) => Coordination.serializeFollowUp(wireCodec, marker);
+const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
+
+const coordinationBody = (markers: ReadonlyArray<string>) =>
+  Coordination.formatCoordinationBody(wireCodec, { status: defaultStatus, markers, detail: null });
 
 interface SeedIssue {
   readonly number: number;
@@ -224,7 +233,9 @@ describe("github work source adapter", () => {
             {
               issue: 5,
               authorLogin: bot.login,
-              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
             },
           ],
           reviews: [{ pull: 100, state: "CHANGES_REQUESTED" }],
@@ -253,7 +264,9 @@ describe("github work source adapter", () => {
             {
               issue: 6,
               authorLogin: bot.login,
-              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
             },
           ],
           mergeable: [{ pull: 103, state: "dirty" }],
@@ -279,7 +292,9 @@ describe("github work source adapter", () => {
             {
               issue: 9,
               authorLogin: bot.login,
-              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
             },
           ],
           mergeable: [{ pull: 104, state: "behind" }],
@@ -416,12 +431,14 @@ describe("github work source adapter", () => {
               issue: 5,
               authorLogin: bot.login,
               authorAssociation: "NONE",
-              body: serializeFollowUp({
-                checks: "failing",
-                humanCommentAtMillis: 100,
-                noProgress: 1,
-                baseDivergence: "none",
-              }),
+              body: coordinationBody([
+                serializeFollowUp({
+                  checks: "failing",
+                  humanCommentAtMillis: 100,
+                  noProgress: 1,
+                  baseDivergence: "none",
+                }),
+              ]),
               createdAtMillis: 150,
             },
           ],
@@ -470,7 +487,9 @@ describe("github work source adapter", () => {
             {
               issue: 20,
               authorLogin: bot.login,
-              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
             },
           ],
           reviews: [{ pull: 200, state: "CHANGES_REQUESTED" }],
@@ -512,7 +531,9 @@ describe("github work source adapter", () => {
           comments: [40, 41, 42].map((issue) => ({
             issue,
             authorLogin: bot.login,
-            body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            body: coordinationBody([
+              serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            ]),
           })),
           reviews: [
             { pull: 300, state: "APPROVED" },
@@ -550,7 +571,9 @@ describe("github work source adapter", () => {
             {
               issue: 25,
               authorLogin: bot.login,
-              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
             },
           ],
           reviews: [
@@ -581,7 +604,9 @@ describe("github work source adapter", () => {
             {
               issue: 26,
               authorLogin: bot.login,
-              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
             },
           ],
           reviews: [
@@ -610,7 +635,9 @@ describe("github work source adapter", () => {
             {
               issue: 22,
               authorLogin: bot.login,
-              body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
             },
           ],
           reviewComments: [
@@ -653,7 +680,9 @@ describe("github work source adapter", () => {
           comments: [23, 24].map((issue) => ({
             issue,
             authorLogin: bot.login,
-            body: serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            body: coordinationBody([
+              serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+            ]),
           })),
           reviews: [
             { pull: 203, state: "COMMENTED", body: "please adjust", submittedAtMillis: 400 },
@@ -693,13 +722,17 @@ describe("github work source adapter", () => {
       Effect.provide(
         withClient({
           issues: [{ number: 9, title: "keeps failing", labels: ["needs-triage"] }],
-          comments: [1, 2, 3].map((at) => ({
-            issue: 9,
-            authorLogin: bot.login,
-            authorAssociation: "NONE",
-            body: serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
-            createdAtMillis: at,
-          })),
+          comments: [
+            {
+              issue: 9,
+              authorLogin: bot.login,
+              authorAssociation: "NONE",
+              body: coordinationBody(
+                [1, 2, 3].map((at) => serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at })),
+              ),
+              createdAtMillis: 1,
+            },
+          ],
         }),
       ),
     ),
@@ -791,11 +824,10 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("leaves legacy marker comments alone and writes new markers to a coordination comment", () =>
+  it.effect("leaves a legacy non-ledger marker comment alone and reads only the coordination comment", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* GitHubClient;
-      const legacyAttempt: AttemptRecord = { stage: "triage", outcome: "failed", atMillis: 1 };
       const claim: Claim = { by: "clanker-forge", claimedAtMillis: 2, stage: "implement" };
       yield* source.claim(workspace, id("#15"), claim);
       const comments = botComments(yield* client.listComments(repo, 15));
@@ -804,7 +836,8 @@ describe("github work source adapter", () => {
       const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#15");
       assert.deepStrictEqual(observed?.claim, claim);
-      assert.deepStrictEqual(observed?.attempts, [legacyAttempt]);
+      // The legacy attempt sits in a comment that carries no ledger marker, so strict reads skip it.
+      assert.deepStrictEqual(observed?.attempts, []);
     }).pipe(
       Effect.provide(
         withClient({

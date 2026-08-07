@@ -14,6 +14,7 @@ import { layerMemory, RunLedger } from "./run-ledger";
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
+const otherWorkItem = Schema.decodeSync(WorkItemId)("#8");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
@@ -141,6 +142,39 @@ describe("RunLedger (memory)", () => {
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 
+  it.effect(
+    "closes only the item's running run as failed, stamping the end time and keeping the session",
+    () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertRun(record("running", 4000, { session, usage: { inputTokens: 9 } }));
+        yield* ledger.insertRun(record("other-running", 4050, { workItem: otherWorkItem }));
+        yield* ledger.insertRun(record("done", 4100));
+        yield* ledger.updateRun(runId("done"), {
+          status: "succeeded",
+          session,
+          usage: null,
+          endedAtMillis: 4200,
+        });
+
+        yield* ledger.closeRunning("gh", "#7", 5000);
+
+        const state = yield* Effect.forEach(["running", "other-running", "done"], (id) =>
+          Effect.map(ledger.getRun(runId(id)), (run) => [
+            run?.status,
+            run?.endedAtMillis,
+            run?.session,
+            run?.usage,
+          ]),
+        );
+        assert.deepStrictEqual(state, [
+          ["failed", 5000, session, null],
+          ["running", null, null, null],
+          ["succeeded", 4200, session, null],
+        ]);
+      }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
   it.effect("counts consecutive crashes and resets the count after a success", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger;
@@ -221,6 +255,26 @@ describe("RunLedger (memory)", () => {
         summaries.map((summary) => summary.id),
         ["newer", "older"],
       );
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("resolves the latest run for an item by recency, whatever its status", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("running-older", 1000, { status: "running" }));
+      yield* ledger.insertRun(record("failed-latest", 5000, { status: "failed", endedAtMillis: 5500 }));
+      yield* ledger.insertRun(record("other-newest", 6000, { workItem: otherWorkItem, status: "running" }));
+
+      const latest = yield* ledger.latestRunForItem("gh", "#7");
+      assert.strictEqual(latest?.id, "failed-latest");
+    }).pipe(Effect.provide(layerMemory), Effect.scoped),
+  );
+
+  it.effect("returns null when the item has never run", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun(record("other", 1000, { workItem: otherWorkItem }));
+      assert.isNull(yield* ledger.latestRunForItem("gh", "#7"));
     }).pipe(Effect.provide(layerMemory), Effect.scoped),
   );
 });

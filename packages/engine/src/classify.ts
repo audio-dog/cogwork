@@ -31,12 +31,7 @@ export interface Classification {
 }
 
 type Outcome =
-  | {
-      readonly kind: "eligible";
-      readonly stage: LifecycleStage;
-      readonly priorFailures: number;
-      readonly followUp?: FollowUpContext;
-    }
+  | { readonly kind: "eligible"; readonly stage: LifecycleStage }
   | { readonly kind: "claimed"; readonly claim: Claim }
   | { readonly kind: "blocked" }
   | { readonly kind: "needs-human"; readonly reason: NeedsHumanReason }
@@ -78,25 +73,22 @@ const classifyOne = (item: ObservedItem): Outcome => {
   if (stage === "implement" && item.openBlockers > 0) return { kind: "blocked" };
   const failures = consecutiveFailures(item, stage);
   if (failures >= maxAttemptsPerStage) return { kind: "needs-human", reason: "ready-for-human" };
-  const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
-  return { kind: "eligible", stage, priorFailures: failures, followUp };
+  return { kind: "eligible", stage };
 };
 
 const byStagePriority = (a: EligibleWork, b: EligibleWork) =>
   stagePriority.indexOf(a.stage) - stagePriority.indexOf(b.stage);
 
-const toEligible = (item: ObservedItem, outcome: Extract<Outcome, { readonly kind: "eligible" }>) => ({
-  id: item.id,
-  title: item.title,
-  stage: outcome.stage,
-  priorFailures: outcome.priorFailures,
-  ...(outcome.followUp ? { followUp: outcome.followUp } : {}),
-});
+export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
+  const priorFailures = consecutiveFailures(item, stage);
+  const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
+  return { id: item.id, title: item.title, stage, priorFailures, ...(followUp ? { followUp } : {}) };
+};
 
 export const classify = (items: ReadonlyArray<ObservedItem>) => {
   const outcomes = items.map((item) => ({ item, outcome: classifyOne(item) }));
   const eligible = outcomes
-    .flatMap(({ item, outcome }) => (outcome.kind === "eligible" ? [toEligible(item, outcome)] : []))
+    .flatMap(({ item, outcome }) => (outcome.kind === "eligible" ? [eligibleWork(item, outcome.stage)] : []))
     .sort(byStagePriority);
   const claimed = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "claimed" ? [{ id: item.id, title: item.title, claim: outcome.claim }] : [],
