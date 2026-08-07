@@ -317,38 +317,35 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   });
 
   return {
-    listIssues: (repo: GitHubRepoRef) =>
-      Effect.gen(function* () {
-        const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
-        return yield* parseIssues(json);
-      }),
-    listPulls: (repo: GitHubRepoRef) =>
-      Effect.gen(function* () {
-        const json = yield* fetchJson(repo, repoPath(repo, "/pulls?state=open&per_page=100"));
-        const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
-        return pulls.map(
-          (pull): RawPull => ({
-            number: pull.number,
-            authorLogin: pull.user.login,
-            authorAssociation: pull.author_association ?? "NONE",
-            draft: pull.draft ?? false,
-            headSha: pull.head.sha,
-            headRef: pull.head.ref,
-          }),
-        );
-      }),
+    listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
+      const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
+      return yield* parseIssues(json);
+    }),
+    listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
+      const json = yield* fetchJson(repo, repoPath(repo, "/pulls?state=open&per_page=100"));
+      const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
+      return pulls.map(
+        (pull): RawPull => ({
+          number: pull.number,
+          authorLogin: pull.user.login,
+          authorAssociation: pull.author_association ?? "NONE",
+          draft: pull.draft ?? false,
+          headSha: pull.head.sha,
+          headRef: pull.head.ref,
+        }),
+      );
+    }),
     pullMergeableState: (repo: GitHubRepoRef, pullNumber: number) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/pulls/${pullNumber}`));
         const detail = yield* Effect.mapError(decodePullDetail(json), toUnavailable);
         return detail.mergeable_state ?? null;
       }),
-    listComments: (repo: GitHubRepoRef, issueNumber: number) =>
-      Effect.gen(function* () {
-        const json = yield* fetchJson(repo, repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`));
-        const comments = yield* Effect.mapError(decodeComments(json), toUnavailable);
-        return comments.flatMap(toRawComment);
-      }),
+    listComments: Effect.fn("github.listComments")(function* (repo: GitHubRepoRef, issueNumber: number) {
+      const json = yield* fetchJson(repo, repoPath(repo, `/issues/${issueNumber}/comments?per_page=100`));
+      const comments = yield* Effect.mapError(decodeComments(json), toUnavailable);
+      return comments.flatMap(toRawComment);
+    }),
     listReviewComments,
     listReviews,
     listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
