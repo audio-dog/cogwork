@@ -1,0 +1,27 @@
+packages/engine/src/executor.ts
+  s_0374de0e58d567::t_0f6ba11846de46 1
+  s_0374de0e58d567::t_0ac05215e43b77 156-157
+  s_0374de0e58d567::t_1506e4b51279ab 25
+  s_0374de0e58d567::t_4ca04c68a96d20 312,314-319
+  s_0374de0e58d567::t_a6d91bf4482345 466
+  s_0374de0e58d567::t_30e75bca4da547 385
+  s_0374de0e58d567::t_a4c61f8e73669a 638
+  s_0374de0e58d567::t_c82b6eca77e2d9 21
+  s_0374de0e58d567::t_c58e453f47134f 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "724c753d250417f08aa121088a487a11c3f0122d",
+  "prompts": {},
+  "sessions": {
+    "s_0374de0e58d567": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "db42cde4-67b9-482c-ab9c-686726bd3cc0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
