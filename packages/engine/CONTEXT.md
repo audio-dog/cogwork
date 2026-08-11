@@ -77,6 +77,22 @@ _Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP ski
 One slice of the context assembler's output: global (`~/.clanker-forge/AGENTS.md`), repo (every `AGENTS.md` from worktree cwd up to project root), or playbook (the stage's playbook skill body). Distinct from the user-message playbook prompt template.
 _Avoid_: Context source (opencode's term), rules file
 
+**Owned tool set**:
+The first-party tools the engine hands a run instead of leaning on the harness's built-ins: `read`, `write`, `edit`, `bash`, `glob`, `grep`, and `webfetch`. Each is a TanStack `toolDefinition` with an Effect handler, and each runs through the run's worktree sandbox rather than touching the host directly. There is no tracker or PR tool — `git` and `gh` ride in on `bash`. File-touching tools go through path confinement first; failures surface as a typed `ToolError`.
+_Avoid_: Built-in tools (those are the harness's), MCP skill (that is an external capability, this set is native)
+
+**Worktree sandbox**:
+An `ai-sandbox` `localProcessSandbox` opened onto a run's worktree, so the owned tools read, write, and exec against that checkout and nothing else. Opened as an Effect resource (acquire the handle, release on scope close); the release only tears down the sandbox handle, never the checkout itself. The base SHA it reports is `git rev-parse HEAD`, or `""` when the checkout is not a git repo.
+_Avoid_: Worktree manager (that owns the git lifecycle; this is the process boundary a run's tools execute inside), container
+
+**Path confinement**:
+The rule that keeps a file-touching tool inside the worktree root: a requested path is normalized (drop leading `/` and any `/workspace` prefix, resolve `.` and `..`) and any path that would climb above the root is rejected as an `out-of-bounds` `ToolError` before the sandbox is asked to do anything. The typed refusal at the tool layer is the point — it fails clearly instead of leaning on the sandbox's more generic error.
+_Avoid_: Sandboxing (that's the process boundary), chroot, jail
+
+**File-diff feed**:
+The stream of file-change events the owned tools produce for the live run view's diff panel. It watches the worktree, computes a unified diff per change against the run's base SHA (synthesizing an add-patch for a brand-new file), and emits each as an `AgUiEvent` — a `CUSTOM` event named `sandbox.file.diff`. This is how a run's edits show up in the diff feed without the tools having to know the UI exists.
+_Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
+
 **Playbook skill**:
 The `SKILL.md` (and its directory) named by a playbook for a lifecycle stage, authored under `packages/engine/skills/`. Distinct from an MCP skill.
 _Avoid_: Skill (alone — ambiguous), MCP skill, sync skill

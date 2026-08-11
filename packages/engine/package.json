@@ -13,6 +13,8 @@
     "@clanker-forge/contracts": "workspace:*",
     "@linear/sdk": "^89.0.0",
     "@tanstack/ai": "^0.42.0",
+    "@tanstack/ai-sandbox": "0.2.4",
+    "@tanstack/ai-sandbox-local-process": "0.2.0",
     "effect": "catalog:effect"
   },
   "devDependencies": {
