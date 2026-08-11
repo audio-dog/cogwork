@@ -5,10 +5,12 @@ import {
   localOwner,
   Principal,
   PrincipalMiddleware,
+  type PrSummary,
   type RunActivity,
   type RunEvent,
   type RunId,
   type RunRecord,
+  type WorkItemId,
 } from "@clanker-forge/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
@@ -24,6 +26,7 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import type { CredentialStore } from "./credential-store";
 import * as Executor from "./executor";
+import type { ObservedPr } from "./follow-up";
 import * as GitHub from "./github";
 import * as Harness from "./harness";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
@@ -103,17 +106,43 @@ const schedulerStats = (config: SchedulerConfig, state: SchedulerState) => ({
   perWorkspace: [...state.perWorkspace].map(([name, inFlight]) => ({ name, inFlight })),
 });
 
-const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => ({
-  name: workspace.config.name,
-  checkoutPath: workspace.config.checkoutPath,
-  issueTracker: workspace.config.issueTracker.type,
-  harness: workspace.config.harness.preferred,
-  poll: state?.poll ?? okPoll,
-  eligible: (state?.eligible ?? []).map((work) => ({ id: work.id, title: work.title, stage: work.stage })),
-  claimed: state?.claimed ?? [],
-  blocked: state?.blocked ?? [],
-  needsHuman: state?.needsHuman ?? [],
+const prSummaryOf = (pr: ObservedPr) => ({
+  number: pr.number,
+  url: pr.url,
+  checks: pr.checks,
+  review: pr.review,
+  baseDivergence: pr.baseDivergence,
+  waitingSinceMillis: pr.waitingSinceMillis,
 });
+
+const prByItem = (state: WorkspaceReconcileState | undefined) =>
+  new Map<WorkItemId, PrSummary>(
+    (state?.observed ?? []).flatMap((item) => (item.pr ? [[item.id, prSummaryOf(item.pr)] as const] : [])),
+  );
+
+const withPr =
+  (prs: ReadonlyMap<WorkItemId, PrSummary>) =>
+  <T extends { readonly id: WorkItemId }>(item: T) => {
+    const pr = prs.get(item.id);
+    return pr === undefined ? item : { ...item, pr };
+  };
+
+const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => {
+  const attach = withPr(prByItem(state));
+  return {
+    name: workspace.config.name,
+    checkoutPath: workspace.config.checkoutPath,
+    issueTracker: workspace.config.issueTracker.type,
+    harness: workspace.config.harness.preferred,
+    poll: state?.poll ?? okPoll,
+    eligible: (state?.eligible ?? []).map((work) =>
+      attach({ id: work.id, title: work.title, stage: work.stage }),
+    ),
+    claimed: (state?.claimed ?? []).map(attach),
+    blocked: (state?.blocked ?? []).map(attach),
+    needsHuman: (state?.needsHuman ?? []).map(attach),
+  };
+};
 
 export const handlersLayer = DaemonRpcs.toLayer({
   GetStatus: Effect.fn("Daemon.GetStatus")(function* () {

@@ -20,11 +20,14 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
 });
 
 const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"] => ({
+  number: 1,
+  url: "https://github.com/owner/repo/pull/1",
   review,
   checks: "passing",
   latestHumanCommentAtMillis: null,
   fresh: false,
   baseDivergence: "none",
+  waitingSinceMillis: 0,
   followUp: null,
   ...over,
 });

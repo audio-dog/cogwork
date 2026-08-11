@@ -204,10 +204,12 @@ const observeItems = (workspace: RegisteredWorkspace) =>
   });
 
 const pull = (over: Partial<RawPull> & { readonly number: number; readonly headRef: string }): RawPull => ({
+  url: `https://github.com/owner/repo/pull/${over.number}`,
   authorLogin: "clanker-forge[bot]",
   authorAssociation: "MEMBER",
   draft: false,
   headSha: `sha-${over.number}`,
+  updatedAtMillis: 0,
   ...over,
 });
 
@@ -500,6 +502,43 @@ describe("github work source adapter", () => {
           checks: [
             { sha: "sha-100", name: "ci", status: "completed", conclusion: "failure", startedAtMillis: 1 },
           ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("carries the PR number, deep-link URL, and last-activity instant onto the observed item", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#50");
+      assert.strictEqual(observed?.pr?.number, 500);
+      assert.strictEqual(observed?.pr?.url, "https://github.com/owner/repo/pull/500");
+      assert.strictEqual(observed?.pr?.waitingSinceMillis, 1_786_000_000_000);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 50, title: "in review", labels: ["ready-for-agent"] },
+            { number: 500, title: "bot pr", labels: [], isPullRequest: true },
+          ],
+          pulls: [
+            pull({
+              number: 500,
+              headRef: "50-in-review",
+              url: "https://github.com/owner/repo/pull/500",
+              updatedAtMillis: 1_786_000_000_000,
+            }),
+          ],
+          comments: [
+            {
+              issue: 50,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
+            },
+          ],
+          reviews: [{ pull: 500, state: "APPROVED" }],
         }),
       ),
     ),
