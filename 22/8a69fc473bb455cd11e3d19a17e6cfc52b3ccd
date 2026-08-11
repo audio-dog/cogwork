@@ -1,0 +1,46 @@
+apps/cli/src/status.ts
+  s_a50862b4890f0a::t_7b79100766bf43 63
+apps/cli/src/watch.test.ts
+  s_a50862b4890f0a::t_dbf4c1be33e82b 2-12,15
+  s_a50862b4890f0a::t_473d57833b4d62 185-187,189-267,278-287
+  s_a50862b4890f0a::t_bbf31d69acd948 268-277
+  s_a50862b4890f0a::t_393e8088d757ac 188
+apps/cli/src/watch.ts
+  s_a50862b4890f0a::t_a73d590ddb1a71 181,184-197,202-203,205-213,215-221
+  s_a50862b4890f0a::t_8d1017db90ec74 182-183,198-201,204,214
+  s_a50862b4890f0a::t_99578e6a4b6a1f 1-10
+apps/cli/src/commands.ts
+  s_a50862b4890f0a::t_1136e7841cf76a 31
+  s_a50862b4890f0a::t_8dad2371251ff0 172-173,178-179,184
+  s_a50862b4890f0a::t_e5c8809187ea5c 209-211
+  s_a50862b4890f0a::t_c4762f6870a230 168,170-171,180-183,185
+  s_a50862b4890f0a::t_64c9813ef7b7b7 196
+  s_a50862b4890f0a::t_3c311a7c6a2a1c 2-4,6
+  s_7ffb86cc44e55f::t_7c08c5c6ff931e 186-187
+apps/cli/src/commands.test.ts
+  s_a50862b4890f0a::t_93d3cffbc2cb4d 30,33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "228a69fc473bb455cd11e3d19a17e6cfc52b3ccd",
+  "prompts": {},
+  "sessions": {
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a50862b4890f0a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ffcb2bb9-ca6f-4002-ba76-d18d8d979b4e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
