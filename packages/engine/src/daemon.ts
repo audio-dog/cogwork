@@ -17,6 +17,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
+import { Recovery } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
 import { activityOf, RunEventBus } from "./run-event-bus";
 import { RunLedger } from "./run-ledger";
@@ -175,9 +176,9 @@ const reconcileHeartbeat = (pollIntervalMillis: number) =>
 
 export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
-  const scheduler = yield* Scheduler;
+  const recovery = yield* Recovery;
   yield* worker.submit();
-  yield* scheduler.recover();
+  yield* recovery.recover();
 });
 
 const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {

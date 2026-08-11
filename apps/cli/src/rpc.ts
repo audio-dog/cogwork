@@ -10,6 +10,7 @@ import {
   Linear,
   McpSkill,
   Reconcile,
+  Recovery,
   Registry,
   RunEventBus,
   Scheduler,
@@ -97,10 +98,11 @@ const sharedLayer = (options: DaemonOptions) => {
   const services = Layer.mergeAll(Reconcile.layer, Executor.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(base, worktreeManagerLayer)),
   );
-  return Scheduler.layer({
+  const scheduler = Scheduler.layer({
     globalLimit: options.maxConcurrency,
     dailyBudget: options.dailyBudget,
   }).pipe(Layer.provideMerge(services));
+  return Recovery.layer.pipe(Layer.provideMerge(scheduler));
 };
 
 export const serverLayer = (options: DaemonOptions) =>

@@ -12,6 +12,7 @@ export * as Linear from "./linear";
 export * as McpSkill from "./mcp-skill";
 export * as Playbook from "./playbook";
 export * as Reconcile from "./reconcile";
+export * as Recovery from "./recovery";
 export * as Registry from "./registry";
 export * as RunEventBus from "./run-event-bus";
 export * as RunLedger from "./run-ledger";

@@ -37,6 +37,14 @@ _Avoid_: Queue, dispatcher, runner
 The scheduler's graceful stop: it picks no further candidates and gives the runs already in flight a **grace window** to finish on their own and record their normal outcome. Whatever is still running when the window closes — or when a second stop signal ends the wait early — is recorded `interrupted` and its agent torn down.
 _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
 
+**Claim recovery**:
+The startup pass that makes this daemon's claims consistent again after it stopped or died. It runs once at bootstrap, reading the reconcile snapshot instead of re-polling, and looks only at items this daemon still holds a claim on. For each one it checks the last run: an `interrupted` run reschedules on its saved session, a run still marked `running` is counted as a crash and either resumed (under the crash-loop cap) or handed to a human, and anything else closes the stale run, records a failed attempt, and releases the claim. It never touches the scheduler's counts or fibers directly — resumes go through the scheduler's **admit** capability, which is the only thing it borrows. Its own module (`src/recovery.ts`), and it owns the crash-loop cap as the sole consumer. Preserves ADR 0002.
+_Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
+
+**Admit**:
+The one narrow capability the scheduler hands claim recovery: reserve capacity for a resumed run and start it. It keeps in-flight counts and reservations inside the scheduler even when recovery is the one asking, and it always launches — a resume is picking up work this daemon already claimed, so it skips the fit checks a fresh candidate goes through.
+_Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue
+
 **Snapshot generation**:
 The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the issue tracker from the next, so it can act on each work item at most once per observation.
 _Avoid_: Version, revision, epoch

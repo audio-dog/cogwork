@@ -1,4 +1,4 @@
-import type { LifecycleStage, SessionId, WorkspaceId } from "@clanker-forge/contracts";
+import type { WorkspaceId } from "@clanker-forge/contracts";
 import { stagePriority } from "@clanker-forge/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -7,25 +7,13 @@ import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import {
-  consecutiveFailures,
-  type EligibleWork,
-  eligibleWork,
-  maxAttemptsPerStage,
-  maxCrashesPerItem,
-  observedStage,
-} from "./classify";
-import { recoveryReason } from "./comments";
-import { claimant, Executor } from "./executor";
-import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
-import { IssueTracker, type ObservedItem } from "./issue-tracker";
-import { observeWorkspace } from "./observe";
+import type { EligibleWork } from "./classify";
+import { Executor } from "./executor";
 import { runnable } from "./playbook";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
-import { SourceControlProvider } from "./source-control";
 import { branchName, ticketSlug } from "./worktree";
 
 export interface SchedulerConfig {
@@ -162,15 +150,25 @@ const keysFor = (workspace: RegisteredWorkspace, work: EligibleWork) => {
   return [`${name}:ticket:${ticketSlug(work.id)}`, `${name}:branch:${branch}`];
 };
 
+const candidateOf = (
+  workspace: RegisteredWorkspace,
+  work: EligibleWork,
+  config: SchedulerConfig,
+): Candidate => ({
+  workspace,
+  work,
+  workspaceLimit: workspace.config.concurrency ?? config.globalLimit,
+  keys: keysFor(workspace, work),
+});
+
 const candidatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot, config: SchedulerConfig) => {
   const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
   return snapshot.workspaces.flatMap((state): ReadonlyArray<Candidate> => {
     const workspace = state.poll.status === "ok" ? byName.get(state.name) : undefined;
     if (!workspace) return [];
-    const workspaceLimit = workspace.config.concurrency ?? config.globalLimit;
     return state.eligible
       .filter((work) => runnable(workspace.config, work.stage))
-      .map((work) => ({ workspace, work, workspaceLimit, keys: keysFor(workspace, work) }));
+      .map((work) => candidateOf(workspace, work, config));
   });
 };
 
@@ -179,11 +177,6 @@ export const make = (config: SchedulerConfig) =>
     const registry = yield* WorkspaceRegistry;
     const worker = yield* ReconcileWorker;
     const executor = yield* Executor;
-    const issueTracker = yield* IssueTracker;
-    const provider = yield* SourceControlProvider;
-    const observe = observeWorkspace(issueTracker, provider);
-    const handoff = handToHuman(issueTracker);
-    const releaseClaim = makeReleaseClaim(issueTracker);
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(initialState);
@@ -243,181 +236,17 @@ export const make = (config: SchedulerConfig) =>
       return { inFlight, interrupted } satisfies DrainOutcome;
     });
 
-    const noteStaleRecovery = Effect.fn("Scheduler.noteStaleRecovery")(function* (
+    // admit must not gate on fits(): a resume reclaims work already in flight and must always start.
+    const admit = Effect.fn("Scheduler.admit")(function* (
       workspace: RegisteredWorkspace,
-      item: ObservedItem,
+      work: EligibleWork,
     ) {
-      yield* Effect.logInfo("recovered stale claim", {
-        workspace: workspace.config.name,
-        item: item.id,
-      });
-      yield* issueTracker.note(
-        workspace,
-        item.id,
-        [
-          "> *This was posted by clanker-forge.*",
-          "",
-          "**Recovered a stale claim after a daemon restart.**",
-          "",
-          `Last failure: ${recoveryReason}`,
-        ].join("\n"),
-      );
-    });
-
-    const recordStaleFailure = Effect.fn("Scheduler.recordStaleFailure")(function* (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-      stage: LifecycleStage,
-      endedAtMillis: number,
-      session: string | null | undefined,
-    ) {
-      const attempts = consecutiveFailures(item, stage) + 1;
-      const exhausted = attempts >= maxAttemptsPerStage;
-      yield* Effect.logWarning("recovered stale claim", {
-        workspace: workspace.config.name,
-        item: item.id,
-        stage,
-        reason: recoveryReason,
-        attempts,
-        exhausted,
-      });
-      yield* issueTracker.recordAttempt(
-        workspace,
-        item.id,
-        { stage, outcome: "failed", atMillis: endedAtMillis },
-        recoveryReason,
-      );
-      if (!exhausted) return;
-      yield* handoff({
-        workspace,
-        item,
-        stage,
-        cause: { kind: "max-attempts", attempts },
-        reason: recoveryReason,
-        session,
-      });
-    });
-
-    const recoverStale = Effect.fn("Scheduler.recoverStale")(function* (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-      stage: LifecycleStage | null,
-      session: string | null | undefined,
-    ) {
-      const endedAtMillis = yield* Clock.currentTimeMillis;
-      yield* ledger.closeRunning(workspace.config.name, item.id, endedAtMillis);
-      const recover = stage
-        ? recordStaleFailure(workspace, item, stage, endedAtMillis, session)
-        : noteStaleRecovery(workspace, item);
-      yield* recover;
-      yield* releaseClaim(workspace, item.id);
-    });
-
-    const reschedule = Effect.fn("Scheduler.reschedule")(function* (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-      stage: LifecycleStage,
-      reason: "interrupted" | "crashed",
-      session: SessionId | null,
-    ) {
-      const observed = eligibleWork(item, stage);
-      const work: EligibleWork = session ? { ...observed, resume: { session, reason } } : observed;
-      const candidate: Candidate = {
-        workspace,
-        work,
-        workspaceLimit: workspace.config.concurrency ?? config.globalLimit,
-        keys: keysFor(workspace, work),
-      };
-      yield* Effect.logInfo("rescheduled resumable run", {
-        workspace: workspace.config.name,
-        item: item.id,
-        stage,
-        reason,
-      });
+      const candidate = candidateOf(workspace, work, config);
       yield* Ref.update(stateRef, (state) => reserve(state, candidate));
       yield* FiberSet.run(jobs, runJob(candidate));
     });
 
-    const handoffCrashLoop = Effect.fn("Scheduler.handoffCrashLoop")(function* (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-      stage: LifecycleStage,
-      crashes: number,
-      session: string | null | undefined,
-    ) {
-      yield* Effect.logWarning("crash loop capped", {
-        workspace: workspace.config.name,
-        item: item.id,
-        stage,
-        crashes,
-      });
-      yield* handoff({
-        workspace,
-        item,
-        stage,
-        cause: { kind: "crash-loop", crashes },
-        reason: recoveryReason,
-        session,
-      });
-      yield* releaseClaim(workspace, item.id);
-    });
-
-    const recoverCrashed = Effect.fn("Scheduler.recoverCrashed")(function* (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-      stage: LifecycleStage,
-      session: SessionId | null,
-    ) {
-      const endedAtMillis = yield* Clock.currentTimeMillis;
-      yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
-      const crashes = yield* ledger.consecutiveCrashes(workspace.config.name, item.id);
-      if (crashes < maxCrashesPerItem) {
-        return yield* reschedule(workspace, item, stage, "crashed", session);
-      }
-      yield* handoffCrashLoop(workspace, item, stage, crashes, session);
-    });
-
-    const recoverItem = Effect.fn("Scheduler.recoverItem")(function* (
-      workspace: RegisteredWorkspace,
-      item: ObservedItem,
-    ) {
-      const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
-      const stage = observedStage(item);
-      if (stage && last?.status === "interrupted") {
-        return yield* reschedule(workspace, item, stage, "interrupted", last.session);
-      }
-      if (stage && last?.status === "running") {
-        return yield* recoverCrashed(workspace, item, stage, last.session);
-      }
-      yield* recoverStale(workspace, item, stage, last?.session);
-    });
-
-    const recoverWorkspace = Effect.fn("Scheduler.recoverWorkspace")(function* (
-      workspace: RegisteredWorkspace,
-    ) {
-      const observed = yield* observe(workspace);
-      const owner = claimant(workspace);
-      const claimedByUs = observed.filter((item) => item.claim?.by === owner);
-      yield* Effect.forEach(claimedByUs, (item) => recoverItem(workspace, item), { discard: true });
-    });
-
-    const recover = Effect.fn("Scheduler.recover")(function* () {
-      yield* Effect.forEach(
-        registry.workspaces,
-        (workspace) =>
-          recoverWorkspace(workspace).pipe(
-            Effect.catchTag("IssueTrackerError", (error) =>
-              Effect.logWarning("claim recovery skipped", {
-                workspace: workspace.config.name,
-                message: error.message,
-              }),
-            ),
-          ),
-        { discard: true },
-      );
-    });
-
-    return { tick, drain, recover, stats: Ref.get(stateRef), config } as const;
+    return { tick, drain, admit, stats: Ref.get(stateRef), config } as const;
   });
 
 export class Scheduler extends Context.Service<Scheduler, Effect.Success<ReturnType<typeof make>>>()(
