@@ -1,5 +1,6 @@
 import type { ActionableItem, ClassifiedItem, SchedulerStats } from "@clanker-forge/contracts";
-import type { EligibleWork } from "./classify";
+import { classifiedItemOf, type EligibleWork } from "./classify";
+import type { ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import type { WorkspaceReconcileState } from "./reconcile";
 import type { SchedulerConfig, SchedulerState } from "./scheduler";
@@ -20,6 +21,8 @@ export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray
   ...state.needsHuman.map((item) => ({ _tag: "NeedsHuman" as const, ...item })),
 ];
 
+export const classifiedItemWithPr = (item: ObservedItem): ClassifiedItem | null => classifiedItemOf(item);
+
 export const workspaceInfoOf = (
   workspace: RegisteredWorkspace,
   state: WorkspaceReconcileState | undefined,
@@ -36,6 +39,7 @@ export const workspaceInfoOf = (
 });
 
 export const schedulerStatsOf = (config: SchedulerConfig, state: SchedulerState): SchedulerStats => ({
+  scheduling: state.paused ? "paused" : "running",
   globalInFlight: state.global,
   globalLimit: config.globalLimit,
   dailyBudgetUsed: state.budgetUsed,

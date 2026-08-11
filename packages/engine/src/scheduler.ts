@@ -30,6 +30,7 @@ export interface SchedulerState {
   readonly budgetDay: number;
   readonly budgetUsed: number;
   readonly stopping: boolean;
+  readonly paused: boolean;
 }
 
 export const initialState: SchedulerState = {
@@ -41,6 +42,7 @@ export const initialState: SchedulerState = {
   budgetDay: -1,
   budgetUsed: 0,
   stopping: false,
+  paused: false,
 };
 
 export interface DrainOptions {
@@ -69,6 +71,7 @@ const byPriority = (a: Candidate, b: Candidate) =>
 
 const fits = (candidate: Candidate, state: SchedulerState, config: SchedulerConfig) =>
   !state.stopping &&
+  !state.paused &&
   state.global < config.globalLimit &&
   (state.perWorkspace.get(candidate.workspace.config.name) ?? 0) < candidate.workspaceLimit &&
   state.budgetUsed < config.dailyBudget &&
@@ -246,7 +249,12 @@ export const make = (config: SchedulerConfig) =>
       yield* FiberSet.run(jobs, runJob(candidate));
     });
 
-    return { tick, drain, admit, stats: Ref.get(stateRef), config } as const;
+    const setScheduling = Effect.fn("Scheduler.setScheduling")(function* (desired: "running" | "paused") {
+      yield* Ref.update(stateRef, (state) => ({ ...state, paused: desired === "paused" }));
+      return yield* Ref.get(stateRef);
+    });
+
+    return { tick, drain, admit, setScheduling, stats: Ref.get(stateRef), config } as const;
   });
 
 export class Scheduler extends Context.Service<Scheduler, Effect.Success<ReturnType<typeof make>>>()(

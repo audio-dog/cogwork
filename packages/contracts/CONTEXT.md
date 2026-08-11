@@ -147,5 +147,9 @@ The caller behind an RPC, injected into every handler's context by one `RpcMiddl
 _Avoid_: User, account, session (the harness's conversation handle), token (the credential, not the caller)
 
 **Daemon event**:
-The unit a client watches on the daemon's live feed — a tagged envelope over everything a client view must react to: a harness event on a run (run activity), a work item's classification change, a run summary change, and a scheduler change. One subscription per client; the client fans out its own views.
+The unit a client watches on the daemon's live feed — a tagged envelope over everything a client view must react to: a harness event on a run (run activity), a work item's classification change or removal, a run summary change, a workspace's state change, and a scheduler change. The subscription self-seeds — it opens by replaying the current state as ordinary events — so one subscription per client is the whole story; the client fans out its own views.
 _Avoid_: Run activity (now one kind of daemon event), notification, log line
+
+**Board**:
+The view a client folds from the daemon event stream — the current items, running runs, and workspace and scheduler state. The fold is authored once, beside the daemon event; each client runs it locally, and folding the stream from its seed yields the same picture the status query reports.
+_Avoid_: Dashboard, mission control (the product surface, not this view), status (the query is `GetStatus`; the board is the folded, live form)

@@ -3,12 +3,19 @@ packages:
   - 'apps/*'
 
 allowBuilds:
+  electron: true
+  electron-winstaller: true
   esbuild: true
   msgpackr-extract: true
 
 catalog:
   '@effect/tsgo': '0.24.3'
+  '@tailwindcss/vite': '^4.3.3'
   '@types/node': '^24.13.3'
+  '@types/react': '^19.2.7'
+  '@types/react-dom': '^19.2.3'
+  react: '^19.2.6'
+  react-dom: '^19.2.6'
   typescript: ^7.0.2
   vitest: '^4.1.10'
 

@@ -21,6 +21,7 @@ import { IssueTracker, type IssueTrackerService, type TrackerItem } from "./issu
 import { classifiedItemsOf } from "./read-model";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
+import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { SourceControlProvider } from "./source-control";
@@ -83,6 +84,7 @@ const schedulerStub = (statsRef: Ref.Ref<Scheduler.SchedulerState>) =>
     tick: () => Effect.succeed([]),
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: () => Effect.void,
+    setScheduling: () => Ref.get(statsRef),
     config: { globalLimit: 4, dailyBudget: 50 },
     stats: Ref.get(statsRef),
   });
@@ -104,6 +106,7 @@ const eligibleItem = (title: string): TrackerItem => ({
 const schedulerSentinel = {
   _tag: "SchedulerChanged",
   scheduler: stats({
+    scheduling: "running",
     globalInFlight: 99,
     globalLimit: 4,
     dailyBudgetUsed: 0,
@@ -202,6 +205,8 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(schedulerStub(statsRef)),
       Layer.provideMerge(RunLedger.layerMemory),
       Layer.provideMerge(DaemonEventBus.layer),
+      Layer.provideMerge(RunControl.layer),
+      Layer.provideMerge(observing(itemsRef)),
     );
 
   it.effect("lets a client track the board live from WatchEvents, matching GetStatus", () =>

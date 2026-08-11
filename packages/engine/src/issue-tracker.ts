@@ -1,18 +1,18 @@
 import {
   type AttemptRecord,
   type Claim,
-  PollPauseReason,
+  IssueTrackerError,
   type TriageRole,
   type WorkItemId,
 } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 import type { FollowUpMarker, ObservedPr } from "./follow-up";
 import type { RegisteredWorkspace } from "./projector";
 
 export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
+export { IssueTrackerError };
 
 export type ClaimRequest = Omit<Claim, "by">;
 
@@ -45,12 +45,6 @@ export interface RoleChanges {
   readonly add: ReadonlyArray<TriageRole>;
   readonly remove: ReadonlyArray<TriageRole>;
 }
-
-export class IssueTrackerError extends Schema.TaggedErrorClass<IssueTrackerError>()("IssueTrackerError", {
-  reason: PollPauseReason,
-  message: Schema.String,
-  retryAfterMillis: Schema.optional(Schema.Finite),
-}) {}
 
 const noAdapter = (workspace: RegisteredWorkspace) =>
   new IssueTrackerError({

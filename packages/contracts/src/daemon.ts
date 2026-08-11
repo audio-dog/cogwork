@@ -103,7 +103,11 @@ export const WorkspaceLoad = Schema.Struct({
 });
 export type WorkspaceLoad = typeof WorkspaceLoad.Type;
 
+export const SchedulingState = Schema.Literals(["running", "paused"]);
+export type SchedulingState = typeof SchedulingState.Type;
+
 export const SchedulerStats = Schema.Struct({
+  scheduling: SchedulingState,
   globalInFlight: Schema.Natural,
   globalLimit: Schema.Natural,
   dailyBudgetUsed: Schema.Natural,

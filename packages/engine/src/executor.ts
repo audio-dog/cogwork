@@ -41,6 +41,7 @@ import {
 } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
+import { RunControl } from "./run-control";
 import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
@@ -145,6 +146,7 @@ export const make = Effect.gen(function* () {
   const bus = yield* DaemonEventBus;
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
+  const runControl = yield* RunControl;
   const handoff = handToHuman(issueTracker);
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
@@ -598,6 +600,34 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
+  const settleOutcome = Effect.fn("Executor.settleOutcome")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    ops: StageOps,
+    record: RunRecord,
+    runId: RunId,
+  ) {
+    const outcome = yield* Effect.result(
+      ops.prepare.pipe(
+        Effect.flatMap(
+          (request): Effect.Effect<RunAccumulator, PrepareError | HarnessError> =>
+            foldOutcome(record, ops, request),
+        ),
+      ),
+    );
+    if (Result.isSuccess(outcome)) {
+      return yield* ops.complete(runId, outcome.success);
+    }
+    return yield* applyFailure(
+      workspace,
+      item,
+      runId,
+      retryableOf(outcome.failure),
+      prepareFailureReason(outcome.failure),
+      yield* handleOf(ledger, record.session),
+    );
+  });
+
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -620,25 +650,10 @@ export const make = Effect.gen(function* () {
       endedAtMillis: null,
     };
     yield* ledger.insertRun(record);
+    yield* Effect.withFiber((self) => runControl.register(runId, self));
     yield* publishRunChanged(runId);
-    const outcome = yield* Effect.result(
-      ops.prepare.pipe(
-        Effect.flatMap(
-          (request): Effect.Effect<RunAccumulator, PrepareError | HarnessError> =>
-            foldOutcome(record, ops, request),
-        ),
-      ),
-    );
-    if (Result.isSuccess(outcome)) {
-      return yield* ops.complete(runId, outcome.success);
-    }
-    return yield* applyFailure(
-      workspace,
-      item,
-      runId,
-      retryableOf(outcome.failure),
-      prepareFailureReason(outcome.failure),
-      yield* handleOf(ledger, record.session),
+    return yield* settleOutcome(workspace, item, ops, record, runId).pipe(
+      Effect.ensuring(runControl.unregister(runId)),
     );
   });
 

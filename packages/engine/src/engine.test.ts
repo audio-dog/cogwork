@@ -16,6 +16,7 @@ import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
+import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
@@ -400,6 +401,7 @@ const schedulerStubService = {
   tick: () => Effect.succeed([]),
   drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
   admit: () => Effect.void,
+  setScheduling: () => Effect.succeed(Scheduler.initialState),
   config: { globalLimit: 4, dailyBudget: 50 },
   stats: Effect.succeed({
     ...Scheduler.initialState,
@@ -473,6 +475,8 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(schedulerStub),
       Layer.provideMerge(RunLedger.layerMemory),
       Layer.provideMerge(DaemonEventBus.layer),
+      Layer.provideMerge(RunControl.layer),
+      Layer.provideMerge(sourceLayer),
     );
 
   const layer = daemonLayer(sources(IssueTracker.emptyLayer));

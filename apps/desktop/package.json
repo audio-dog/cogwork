@@ -1,0 +1,59 @@
+{
+  "name": "@clanker-forge/desktop",
+  "version": "0.0.0",
+  "description": "An Electron application with React and TypeScript",
+  "main": "./out/main/index.js",
+  "author": "Taylor Steele",
+  "imports": {
+    "#components/*": "./src/components/*.tsx",
+    "#hooks/*": "./src/hooks/*.ts",
+    "#lib/*": "./src/lib/*.ts",
+    "#renderer/*": "./src/renderer/*.tsx"
+  },
+  "scripts": {
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:unpack": "pnpm run build && electron-builder --dir",
+    "build:win": "pnpm run build && electron-builder --win",
+    "build": "electron-vite build",
+    "dev": "electron-vite dev",
+    "postinstall": "electron-builder install-app-deps",
+    "start": "electron-vite preview",
+    "test": "vitest run",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "pnpm run typecheck:node && npm run typecheck:web"
+  },
+  "dependencies": {
+    "@clanker-forge/contracts": "workspace:*",
+    "@clanker-forge/ui": "workspace:*",
+    "@effect/platform-node": "catalog:effect",
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "effect": "catalog:effect",
+    "electron-log": "^5.2.0",
+    "electron-updater": "^6.8.9",
+    "electron-window-state": "^5.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@rolldown/plugin-babel": "^0.2.3",
+    "@tailwindcss/vite": "catalog:",
+    "@types/babel__core": "^7.20.5",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "^6.0.5",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tsx": "^4.19.2",
+    "typescript": "catalog:",
+    "vite": "^8.2.1",
+    "vitest": "catalog:"
+  }
+}

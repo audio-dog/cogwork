@@ -3,6 +3,7 @@ import type {
   BlockedItem,
   Claim,
   ClaimedItem,
+  ClassifiedItem,
   LifecycleStage,
   NeedsHumanItem,
   NeedsHumanReason,
@@ -84,6 +85,36 @@ const classifyOne = (item: ObservedItem): Outcome => {
   const failures = consecutiveFailures(item, stage);
   if (failures >= maxAttemptsPerStage) return { kind: "needs-human", reason: "ready-for-human" };
   return { kind: "eligible", stage };
+};
+
+export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
+  const outcome = classifyOne(item);
+  if (outcome.kind === "eligible") {
+    return { _tag: "Eligible", id: item.id, title: item.title, stage: outcome.stage, ...prFields(item) };
+  }
+  if (outcome.kind === "claimed") {
+    return { _tag: "Claimed", id: item.id, title: item.title, claim: outcome.claim, ...prFields(item) };
+  }
+  if (outcome.kind === "blocked") {
+    return {
+      _tag: "Blocked",
+      id: item.id,
+      title: item.title,
+      openBlockers: item.openBlockers,
+      ...prFields(item),
+    };
+  }
+  if (outcome.kind === "needs-human") {
+    return {
+      _tag: "NeedsHuman",
+      id: item.id,
+      title: item.title,
+      reason: outcome.reason,
+      proposal: item.proposal,
+      ...prFields(item),
+    };
+  }
+  return null;
 };
 
 const byStagePriority = (a: EligibleWork, b: EligibleWork) =>

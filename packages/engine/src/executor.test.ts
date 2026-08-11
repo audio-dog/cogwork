@@ -30,6 +30,7 @@ import {
 import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
+import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import * as SessionStore from "./session-store";
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
@@ -346,6 +347,7 @@ const provide = (
         harnessLayer(runners).pipe(Layer.provide(sessionStore)),
         runLedger,
         DaemonEventBus.layer,
+        RunControl.layer,
         Layer.succeed(WorktreeManager, worktree),
         assemblerStub,
       ),
