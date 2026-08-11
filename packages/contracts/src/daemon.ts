@@ -59,6 +59,7 @@ export const NeedsHumanItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
   reason: NeedsHumanReason,
+  proposal: Schema.NullOr(TrimmedNonEmptyString),
   pr: Schema.optionalKey(PrSummary),
 });
 export type NeedsHumanItem = typeof NeedsHumanItem.Type;

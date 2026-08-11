@@ -25,6 +25,7 @@ interface ObservedItemBase {
   readonly claimedByUs: boolean;
   readonly attempts: ReadonlyArray<AttemptRecord>;
   readonly openBlockers: number;
+  readonly proposal: string | null;
 }
 
 // What an issue tracker observes on its own: backlog state plus the coordination it owns. It no

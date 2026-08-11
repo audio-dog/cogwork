@@ -162,6 +162,7 @@ describe("reconcile worker", () => {
     owned: false,
     followUp: null,
     openBlockers: 0,
+    proposal: null,
   };
   const workerWithWork = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
@@ -200,6 +201,7 @@ describe("reconcile worker", () => {
     owned: true,
     followUp: null,
     openBlockers: 0,
+    proposal: null,
   };
   const inReviewPr: PrSignals = {
     number: 42,
@@ -494,18 +496,26 @@ describe("daemon status over rpc", () => {
     owned: false,
     followUp: null,
     openBlockers: 0,
+    proposal: "Which auth provider should this target — Clerk or Auth0?",
   };
 
-  it.effect("carries needs-human items and their reason across the status boundary", () =>
-    Effect.gen(function* () {
-      const worker = yield* Reconcile.ReconcileWorker;
-      yield* worker.submit();
-      const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const status = yield* client.GetStatus();
-      assert.deepStrictEqual(status.workspaces[0]?.needsHuman, [
-        { id: id("AUD-7"), title: "waiting on details", reason: "needs-info" },
-      ]);
-    }).pipe(Effect.provide(daemonLayer(observing([needsInfoItem]))), Effect.scoped),
+  it.effect(
+    "carries needs-human items, their reason, and the triage proposal across the status boundary",
+    () =>
+      Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        yield* worker.submit();
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const status = yield* client.GetStatus();
+        assert.deepStrictEqual(status.workspaces[0]?.needsHuman, [
+          {
+            id: id("AUD-7"),
+            title: "waiting on details",
+            reason: "needs-info",
+            proposal: "Which auth provider should this target — Clerk or Auth0?",
+          },
+        ]);
+      }).pipe(Effect.provide(daemonLayer(observing([needsInfoItem]))), Effect.scoped),
   );
 
   const blockedItem: TrackerItem = {
@@ -519,6 +529,7 @@ describe("daemon status over rpc", () => {
     owned: false,
     followUp: null,
     openBlockers: 2,
+    proposal: null,
   };
 
   it.effect("carries blocked items and their open-blocker count across the status boundary", () =>
@@ -546,6 +557,7 @@ describe("daemon status over rpc", () => {
     owned: true,
     followUp: null,
     openBlockers: 0,
+    proposal: null,
   };
   const readyPr: PrSignals = {
     number: 77,

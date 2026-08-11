@@ -72,6 +72,7 @@ const claimedByUs: ObservedItem = {
   claimedByUs: true,
   attempts: [],
   openBlockers: 0,
+  proposal: null,
   pr: null,
 };
 
@@ -84,6 +85,7 @@ const claimedByOther: ObservedItem = {
   claimedByUs: false,
   attempts: [],
   openBlockers: 0,
+  proposal: null,
   pr: null,
 };
 
@@ -96,6 +98,7 @@ const unclaimed: ObservedItem = {
   claimedByUs: false,
   attempts: [],
   openBlockers: 0,
+  proposal: null,
   pr: null,
 };
 

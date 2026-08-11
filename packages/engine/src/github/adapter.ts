@@ -95,11 +95,9 @@ const make = (client: GitHubClientService): IssueTrackerService => {
   const buildItem = (target: GitHubTarget) =>
     Effect.fn("github.buildItem")(function* (issue: RawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
-      const comments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
-      const ledger = Coordination.selectLedger(
-        wireCodec,
-        comments.map(toCoordinationComment(target.botLogin)),
-      );
+      const rawComments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
+      const comments = rawComments.map(toCoordinationComment(target.botLogin));
+      const ledger = Coordination.selectLedger(wireCodec, comments);
       const body = ledger?.body ?? "";
       const id = yield* itemId(issue.number);
       const claim = claimLabeled ? Coordination.parseClaim(wireCodec, body) : null;
@@ -114,6 +112,7 @@ const make = (client: GitHubClientService): IssueTrackerService => {
         owned: ledger !== undefined,
         followUp: Coordination.parseFollowUp(wireCodec, body),
         openBlockers: issue.openBlockers,
+        proposal: Coordination.selectTriageProposal(comments),
       } satisfies TrackerItem;
     });
 

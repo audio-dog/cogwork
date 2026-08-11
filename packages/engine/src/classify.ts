@@ -95,7 +95,9 @@ export const classify = (items: ReadonlyArray<ObservedItem>) => {
     outcome.kind === "blocked" ? [{ id: item.id, title: item.title, openBlockers: item.openBlockers }] : [],
   );
   const needsHuman = outcomes.flatMap(({ item, outcome }) =>
-    outcome.kind === "needs-human" ? [{ id: item.id, title: item.title, reason: outcome.reason }] : [],
+    outcome.kind === "needs-human"
+      ? [{ id: item.id, title: item.title, reason: outcome.reason, proposal: item.proposal }]
+      : [],
   );
   return { eligible, claimed, blocked, needsHuman };
 };
