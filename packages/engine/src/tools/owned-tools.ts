@@ -1,11 +1,19 @@
 import { toolDefinition } from "@tanstack/ai";
-import type { SandboxHandle } from "@tanstack/ai-sandbox";
+import type { SandboxHandle, SandboxPolicy } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { confine } from "./confinement";
 import { type ToolError, toolError } from "./errors";
+import {
+  denyReason,
+  gateDecision,
+  type OwnedToolName,
+  type PolicyDenied,
+  policyDenied,
+  readOnlyProfile,
+} from "./policy";
 import type { WorktreeSandbox } from "./sandbox";
 
 const IGNORED_DIRS = new Set([".git", "node_modules"]);
@@ -240,7 +248,13 @@ export const webFetch = Effect.fn("Tools.webfetch")(function* (
 });
 
 const bindServer =
-  <S extends Schema.Codec<unknown, unknown, never, never>>(sandbox: WorktreeSandbox, schema: S) =>
+  <S extends Schema.Codec<unknown, unknown, never, never>>(
+    sandbox: WorktreeSandbox,
+    profile: SandboxPolicy,
+    tool: OwnedToolName,
+    schema: S,
+    extractCommand?: (args: S["Type"]) => string,
+  ) =>
   <A>(
     handler: (
       sandbox: WorktreeSandbox,
@@ -248,53 +262,58 @@ const bindServer =
     ) => Effect.Effect<A, ToolError, HttpClient.HttpClient>,
   ) => {
     const decode = Schema.decodeUnknownEffect(schema);
-    return (args: unknown): Promise<A> =>
+    return (args: unknown): Promise<A | PolicyDenied> =>
       Effect.runPromise(
         decode(args).pipe(
           Effect.mapError((issue) => toolError("invalid-args", String(issue))),
-          Effect.flatMap((decoded) => handler(sandbox, decoded)),
+          Effect.flatMap(
+            (decoded): Effect.Effect<A | PolicyDenied, ToolError, HttpClient.HttpClient> =>
+              gateDecision(profile, tool, extractCommand?.(decoded)) === "deny"
+                ? Effect.succeed(policyDenied(tool, denyReason(tool)))
+                : handler(sandbox, decoded),
+          ),
           Effect.provide(FetchHttpClient.layer),
         ),
       );
   };
 
-export const makeOwnedToolSet = (sandbox: WorktreeSandbox) => ({
+export const makeOwnedToolSet = (sandbox: WorktreeSandbox, profile: SandboxPolicy = readOnlyProfile) => ({
   read: toolDefinition({
     name: "read",
     description: "Read a file from the worktree. Optionally slice by line offset and limit.",
     inputSchema: standardSchema(ReadArgs),
-  }).server(bindServer(sandbox, ReadArgs)(readFile)),
+  }).server(bindServer(sandbox, profile, "read", ReadArgs)(readFile)),
   write: toolDefinition({
     name: "write",
     description: "Write a file in the worktree, creating parent directories as needed.",
     inputSchema: standardSchema(WriteArgs),
-  }).server(bindServer(sandbox, WriteArgs)(writeFile)),
+  }).server(bindServer(sandbox, profile, "write", WriteArgs)(writeFile)),
   edit: toolDefinition({
     name: "edit",
     description:
       "Replace an exact string in a worktree file. Fails when the string is missing or ambiguous unless replaceAll is set.",
     inputSchema: standardSchema(EditArgs),
-  }).server(bindServer(sandbox, EditArgs)(editFile)),
+  }).server(bindServer(sandbox, profile, "edit", EditArgs)(editFile)),
   bash: toolDefinition({
     name: "bash",
     description: "Run a shell command in the worktree and capture stdout, stderr, and exit code.",
     inputSchema: standardSchema(BashArgs),
-  }).server(bindServer(sandbox, BashArgs)(runBash)),
+  }).server(bindServer(sandbox, profile, "bash", BashArgs, (args) => args.command)(runBash)),
   glob: toolDefinition({
     name: "glob",
     description: "List worktree files matching a glob pattern.",
     inputSchema: standardSchema(GlobArgs),
-  }).server(bindServer(sandbox, GlobArgs)(runGlob)),
+  }).server(bindServer(sandbox, profile, "glob", GlobArgs)(runGlob)),
   grep: toolDefinition({
     name: "grep",
     description: "Search worktree file contents for a regular expression, line by line.",
     inputSchema: standardSchema(GrepArgs),
-  }).server(bindServer(sandbox, GrepArgs)(runGrep)),
+  }).server(bindServer(sandbox, profile, "grep", GrepArgs)(runGrep)),
   webfetch: toolDefinition({
     name: "webfetch",
     description: "Fetch a URL over the network and return its text body.",
     inputSchema: standardSchema(WebFetchArgs),
-  }).server(bindServer(sandbox, WebFetchArgs)(webFetch)),
+  }).server(bindServer(sandbox, profile, "webfetch", WebFetchArgs)(webFetch)),
 });
 
 export type OwnedToolSet = ReturnType<typeof makeOwnedToolSet>;

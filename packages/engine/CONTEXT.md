@@ -97,6 +97,18 @@ _Avoid_: Sandboxing (that's the process boundary), chroot, jail
 The stream of file-change events the owned tools produce for the live run view's diff panel. It watches the worktree, computes a unified diff per change against the run's base SHA (synthesizing an add-patch for a brand-new file), and emits each as an `AgUiEvent` — a `CUSTOM` event named `sandbox.file.diff`. This is how a run's edits show up in the diff feed without the tools having to know the UI exists.
 _Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
 
+**Policy profile**:
+The allow/ask/deny rules a run's owned tools are gated by, chosen from the playbook's resolved stage. Two engine-owned defaults over one shared tool set: **read-only** for `triage` and `verify` (read/glob/grep/webfetch; writes and shell refused), and **full** for `implement` and `follow-up` (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. Per-workspace overrides wait for settings-as-data.
+_Avoid_: Sandbox isolation (that's the process boundary; this is the decision layer above it), per-tool allowlist (bash is command-matched, not all-or-nothing)
+
+**Ask-compiles-to-deny**:
+The AFK keystone. The full allow/ask/deny vocabulary is authored in the profiles, but with no human in the session there is nothing to answer an `ask`, so `ask` compiles to `deny` before the tool runs. A denied call is not an error or a park — it returns a `denied` result the model reads and adapts to, adding no approval RPC and never handing the item to a person. The loop budget, not a human, bounds any thrashing.
+_Avoid_: Approval flow / interrupt (that's the interactive phase this defers), tool error (a denial is a normal result, not a failure)
+
+**Hard-deny rule**:
+A command-glob rule refused in every profile, in every stage — the small floor under even the full profile. Three destructive shapes: force-pushing to `main`/`master`, piping a download straight into a shell (`curl … | sh`), and recursively deleting an absolute or home path. The model is treated as fallible, not adversarial, so the globs are coarse and a hard-deny just returns `denied` like any other refusal.
+_Avoid_: Confinement (that keeps writes inside the worktree root; this bounds shell commands), sandbox isolation
+
 **Playbook skill**:
 The `SKILL.md` (and its directory) named by a playbook for a lifecycle stage, authored under `packages/engine/skills/`. Distinct from an MCP skill.
 _Avoid_: Skill (alone — ambiguous), MCP skill, sync skill
