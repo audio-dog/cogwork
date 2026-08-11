@@ -25,8 +25,7 @@ Multi-context repo (presence of `CONTEXT-MAP.md` at the root). Each package/app 
 └── packages/
     ├── contracts/CONTEXT.md           ← shared kernel
     ├── engine/CONTEXT.md
-    ├── cursor-acp/CONTEXT.md
-    └── sync/CONTEXT.md                ← separate language (agent toolkit)
+    └── cursor-acp/CONTEXT.md
 ```
 
 ## Use the glossary's vocabulary

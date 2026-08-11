@@ -65,7 +65,7 @@ If any fails, fix and re-run. Do not open a PR on a red gate. If it will not go 
 Once done, run the code-simplifier agent in a subagent to refine the implementation.
 
  Then, in parallel separate subagents run: 
-- rule-reviewer agent. Explicitly instruct it to load and enforce `~/sites/clanker-forge/packages/sync/assets/rules/*` alongside the repo rules, so my personal rules are checked as blocking violations.
+- rule-reviewer agent. Explicitly instruct it to load and enforce `~/sites/sync/packages/sync/assets/rules/*` alongside the repo rules, so my personal rules are checked as blocking violations.
 - /adversarial-review skill
 - /review-bugbot skill
 - /code-review skill
