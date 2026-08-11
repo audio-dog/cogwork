@@ -20,5 +20,6 @@ export * as RunEventBus from "./run-event-bus";
 export * as RunLedger from "./run-ledger";
 export * as Scheduler from "./scheduler";
 export * as SourceControl from "./source-control";
+export * as Tools from "./tools";
 export * as Worktree from "./worktree";
 export * as WorktreeFs from "./worktree-fs";
