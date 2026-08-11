@@ -3,6 +3,7 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { WorkItemId } from "./base-schemas";
 import { DaemonStatus } from "./daemon";
+import { PrincipalMiddleware } from "./principal";
 import { RunActivity, RunEvent, RunId, RunSummary } from "./run";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
@@ -25,4 +26,14 @@ export const WatchActivity = Rpc.make("WatchActivity", {
   stream: true,
 });
 
-export const DaemonRpcs = RpcGroup.make(GetStatus, ListRuns, GetRunEvents, ResolveWatchTarget, WatchActivity);
+export const DaemonQueries = RpcGroup.make(
+  GetStatus,
+  ListRuns,
+  GetRunEvents,
+  ResolveWatchTarget,
+  WatchActivity,
+).middleware(PrincipalMiddleware);
+
+export const DaemonCommands = RpcGroup.make();
+
+export const DaemonRpcs = DaemonQueries.merge(DaemonCommands);
