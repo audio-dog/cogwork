@@ -1,0 +1,25 @@
+apps/cli/src/login.ts
+  s_7ffb86cc44e55f::t_6679186caf2dd4 3,10-11
+  s_7ffb86cc44e55f::t_b36f0f6436318b 137-164
+  s_7ffb86cc44e55f::t_f7a362153ba638 165
+apps/cli/src/login.test.ts
+  s_7ffb86cc44e55f::t_303f22131d1c0e 103-158
+  s_7ffb86cc44e55f::t_23ea98aca5d351 12
+  s_7ffb86cc44e55f::t_9e64c28d5b84e8 159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fd0f1200c0c02e2476c0f20dfffa4ba6f64c3aab",
+  "prompts": {},
+  "sessions": {
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
