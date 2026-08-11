@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/nav-rail.tsx
+  s_1c726636ddd104::t_39212e8e73c814 1-12,33,38-44,49-54,65-91,96-97,99-130
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_1c726636ddd104::t_132cfdad64ce44 3,5,51-52,54-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5df2693c2edc705663967927db9c4a12b0cc7d99",
+  "prompts": {},
+  "sessions": {
+    "s_1c726636ddd104": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46f2982d-b1ca-44ac-8b17-9a451a98a9c3",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
