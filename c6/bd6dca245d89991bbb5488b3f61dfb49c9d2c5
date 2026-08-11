@@ -1,0 +1,75 @@
+packages/engine/src/session-store.test.ts
+  s_142b8b1743ffd9::t_3e69497c053c13 32-35
+  s_142b8b1743ffd9::t_aadedb34793b2e 14
+packages/engine/src/watch-activity.test.ts
+  s_142b8b1743ffd9::t_fb901537964617 21
+packages/engine/src/run-ledger.test.ts
+  s_142b8b1743ffd9::t_a9994f5d64333d 13,15-18
+packages/engine/src/scheduler.test.ts
+  s_142b8b1743ffd9::t_4861f0b9296796 17
+  s_142b8b1743ffd9::t_dfbb4db1394b22 522-550
+  s_142b8b1743ffd9::t_d178ce8e41f899 256-260,266,269-270,272
+  s_142b8b1743ffd9::t_ee0431e6d17006 20
+  s_142b8b1743ffd9::t_c5542962c9c639 520-521
+packages/engine/src/daemon-composition.test.ts
+  s_142b8b1743ffd9::t_b4980d1e455226 66
+packages/engine/src/executor.ts
+  s_142b8b1743ffd9::t_d0df4de3733e2e 243
+packages/engine/src/event-publisher.test.ts
+  s_142b8b1743ffd9::t_5f3df0799ccf16 206
+apps/cli/src/ledger.ts
+  s_142b8b1743ffd9::t_18d044ca9a1cf9 157
+  s_142b8b1743ffd9::t_403e1bf8fc0a19 224-226,229
+  s_142b8b1743ffd9::t_617141652f850d 271-273,276-278
+  s_142b8b1743ffd9::t_1f2cf68e700948 495
+  s_142b8b1743ffd9::t_9589209310e578 348-350,355-357,360-362,367-369
+  s_142b8b1743ffd9::t_533c58111b4688 222-223
+  s_142b8b1743ffd9::t_3268924eb9638b 5
+  s_142b8b1743ffd9::t_e3e2ad84cf82d6 227-228
+  s_142b8b1743ffd9::t_b251273375f972 230-231
+packages/engine/src/executor.test.ts
+  s_142b8b1743ffd9::t_612e6a9c86f358 341-342,350
+packages/engine/src/daemon.ts
+  s_142b8b1743ffd9::t_79048b9c452efd 189-193,198
+  s_142b8b1743ffd9::t_49dcc94d9af33d 172
+  s_142b8b1743ffd9::t_c4a92b6f7f6dfa 51
+apps/cli/src/ledger.test.ts
+  s_142b8b1743ffd9::t_70b8864f158e29 60,66,88,137,150,169,195,210,228,250,280,298,328
+packages/engine/src/commands.test.ts
+  s_142b8b1743ffd9::t_f65ad8c7fa0298 112
+packages/engine/src/run-ledger.ts
+  s_142b8b1743ffd9::t_523603dbd81aae 169-173
+  s_142b8b1743ffd9::t_e70c08cb35012b 132-137,140-144
+  s_142b8b1743ffd9::t_41c7c66c86e406 213-216,224-250
+  s_142b8b1743ffd9::t_0f149408be1694 38
+  s_142b8b1743ffd9::t_8c08ef715a5c0b 217
+  s_142b8b1743ffd9::t_0d6cf726efd07e 218-223
+  s_142b8b1743ffd9::t_e7f3aa0c8b26db 37,39-40
+  s_142b8b1743ffd9::t_5d39d248980458 33-36,41-42
+  s_142b8b1743ffd9::t_72a22e7ebeca1a 15
+packages/engine/src/recovery.test.ts
+  s_142b8b1743ffd9::t_89fe81e983df3d 17
+  s_142b8b1743ffd9::t_77d8d1ef6cd194 500-520,529-531,534-539,541-545,547
+  s_142b8b1743ffd9::t_7185cf23268c5e 20
+  s_142b8b1743ffd9::t_cac88e19ebe316 31
+  s_142b8b1743ffd9::t_b52e15e81ce554 178-184,191,194,196,526
+  s_142b8b1743ffd9::t_a36bed85c0e908 521-525,527-528,532-533,540,546,548
+packages/engine/src/engine.test.ts
+  s_142b8b1743ffd9::t_37aa1296911224 476
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c6bd6dca245d89991bbb5488b3f61dfb49c9d2c5",
+  "prompts": {},
+  "sessions": {
+    "s_142b8b1743ffd9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f2a1f513-0cb0-4600-b1ae-95f33ca6e1a8",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
