@@ -19,7 +19,7 @@ context.
 
 ### Sync (the agent toolkit)
 
-- [sync](./packages/sync/CONTEXT.md) — the single-source generator: renders `packages/sync/assets/` and the `packages/sync/skills/sync/` bucket into each tool's native config. Shares no vocabulary with orchestration.
+- [sync](./packages/sync/CONTEXT.md) — the single-source generator: renders `packages/sync/assets/` and the `packages/sync/skills/sync/` bucket into each tool's native config. Shares no vocabulary with orchestration. **Pending removal** from this repo (wayfinder task under map #146); do not add new assembler or runtime dependencies on it.
 
 ## Relationships
 

@@ -59,10 +59,26 @@ _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **MCP skill assembler**:
 Turns a workspace's configured MCP skills into the resolved set a run gets, filling in auth just before dispatch. A skill that asks for `credential-store` auth borrows the workspace's own credential account (Linear today) so its bearer is minted and rotated alongside the token the engine already uses; the token comes back wrapped in a `Redacted` and travels on the harness request only, never into the ledger or the event log. Public skills pass straight through with no token and never touch the credential store.
-_Avoid_: MCP server, credential store (it delegates to that, it is not that)
+_Avoid_: MCP server, credential store (it delegates to that, it is not that), context assembler (that builds instruction layers, not MCP capabilities)
+
+**Context assembler**:
+Builds the layered instruction set for one turn of the first-party harness runner — global, then repo, then playbook. Returns structured layers the runner renders into model system prompts; does not run for CLI harnesses.
+_Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP skill assembler
+
+**Instruction layer**:
+One slice of the context assembler's output: global (`~/.clanker-forge/AGENTS.md`), repo (every `AGENTS.md` from worktree cwd up to project root), or playbook (the stage's playbook skill body). Distinct from the user-message playbook prompt template.
+_Avoid_: Context source (opencode's term), rules file
+
+**Playbook skill**:
+The `SKILL.md` (and its directory) named by a playbook for a lifecycle stage, authored under `packages/engine/skills/`. Distinct from an MCP skill.
+_Avoid_: Skill (alone — ambiguous), MCP skill, sync skill
+
+**Skill provision**:
+A copy or link of a playbook skill directory onto a host path under `~/.clanker-forge/` that the run's tools can read, without writing into the driven worktree.
+_Avoid_: Sync, install, gitSkill (TanStack sandbox's clone-into-workspace form — same idea, different path)
 
 **Playbook**:
-A workspace's binding of a lifecycle stage to a prompt template, skill, and harness/model/effort choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Model and effort are harness-native strings (e.g. Cursor CLI model ids and `effort=` bracket values); stages can be disabled per workspace; only `triage`, `implement`, and `follow-up` are wired today.
+A workspace's binding of a lifecycle stage to a prompt template, playbook skill, and harness/model/effort choice. The engine resolves a stage's playbook into a `ResolvedStage` before executing. Model and effort are harness-native strings (e.g. Cursor CLI model ids and `effort=` bracket values); stages can be disabled per workspace; only `triage`, `implement`, and `follow-up` are wired today.
 _Avoid_: Workflow, pipeline
 
 **Issue tracker adapter**:
