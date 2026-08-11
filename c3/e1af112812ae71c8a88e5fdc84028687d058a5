@@ -1,0 +1,36 @@
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_975a296681dfb3::t_d4dc640b529681 1-6
+apps/desktop/src/renderer/src/router.tsx
+  s_975a296681dfb3::t_389b2764811c8c 1-2
+apps/desktop/electron.vite.config.ts
+  s_975a296681dfb3::t_63e79078c21b0a 3,15-24
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_975a296681dfb3::t_866826d4e1a51c 1-6
+apps/desktop/src/renderer/src/routes/activity.tsx
+  s_975a296681dfb3::t_d9a8b3be166107 1-6
+biome.json
+  s_975a296681dfb3::t_ef1721a0f4f990 9-10
+  s_975a296681dfb3::t_5587c1a51e1ebe 71-83
+apps/desktop/package.json
+  s_975a296681dfb3::t_58123d30e556b1 47
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_975a296681dfb3::t_b8efc41d7d2473 1-77
+pnpm-lock.yaml
+  s_975a296681dfb3::t_205a04a5cc32cc 185-187,263,266,269,1646-1674,1678-1681,1993-1996,2040-2042,2153-2156,3781-3785,3864-3867,4267-4299,4419-4421,4521-4523,5339-5360,5638,5642,5654-5657,5667-5675,5715-5764,5767-5768,6017-6018,6093-6101,6231-6234,7601-7602,7688-7689,8139-8148,8228-8229,8302-8305,8308-8309
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c3e1af112812ae71c8a88e5fdc84028687d058a5",
+  "prompts": {},
+  "sessions": {
+    "s_975a296681dfb3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9854d002-05c9-4083-8ff3-1c9e4b9a89fd",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
