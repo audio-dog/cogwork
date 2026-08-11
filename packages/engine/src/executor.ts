@@ -20,6 +20,7 @@ import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { agentFailureReason, prepareFailureReason, triageProposalBody } from "./comments";
 import type { CredentialError } from "./credential-store";
+import { activityOf, DaemonEventBus } from "./daemon-event-bus";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
 import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
@@ -40,8 +41,7 @@ import {
 } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
-import { activityOf, RunEventBus } from "./run-event-bus";
-import { handleOf, RunLedger } from "./run-ledger";
+import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
@@ -144,7 +144,7 @@ export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const harness = yield* Harness;
   const ledger = yield* RunLedger;
-  const bus = yield* RunEventBus;
+  const bus = yield* DaemonEventBus;
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
   const handoff = handToHuman(issueTracker);
@@ -237,8 +237,18 @@ export const make = Effect.gen(function* () {
       data,
       atMillis,
     });
-    yield* bus.publish(activityOf(record, seq, atMillis, event));
+    yield* bus.publishActivity(activityOf(record, seq, atMillis, event));
   });
+
+  const publishRunChanged = Effect.fn("Executor.publishRunChanged")(function* (runId: RunId) {
+    const run = yield* ledger.getRun(runId);
+    if (run === null) return;
+    const events = yield* ledger.events(runId);
+    yield* bus.publishRun({ ...run, eventCount: events.length });
+  });
+
+  const settleRun = (runId: RunId, update: RunUpdate) =>
+    ledger.updateRun(runId, update).pipe(Effect.andThen(publishRunChanged(runId)));
 
   const nextHandle = Effect.fn("Executor.nextHandle")(function* (
     record: RunRecord,
@@ -345,7 +355,7 @@ export const make = Effect.gen(function* () {
         session: handle,
       });
     }
-    yield* ledger.updateRun(runId, {
+    yield* settleRun(runId, {
       status: exhausted ? "exhausted" : "failed",
       usage: null,
       endedAtMillis,
@@ -368,7 +378,7 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       atMillis: endedAtMillis,
     });
-    yield* ledger.updateRun(runId, {
+    yield* settleRun(runId, {
       status: "succeeded",
       usage: acc.usage,
       endedAtMillis,
@@ -388,7 +398,7 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       atMillis: endedAtMillis,
     });
-    yield* ledger.updateRun(runId, {
+    yield* settleRun(runId, {
       status: "succeeded",
       usage: acc.usage,
       endedAtMillis,
@@ -473,7 +483,7 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       atMillis: endedAtMillis,
     });
-    yield* ledger.updateRun(runId, {
+    yield* settleRun(runId, {
       status: "succeeded",
       usage: acc.usage,
       endedAtMillis,
@@ -619,6 +629,7 @@ export const make = Effect.gen(function* () {
       endedAtMillis: null,
     };
     yield* ledger.insertRun(record);
+    yield* publishRunChanged(runId);
     const outcome = yield* Effect.result(
       ops.prepare.pipe(
         Effect.flatMap(

@@ -8,8 +8,8 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Daemon from "./daemon";
-import * as RunEventBus from "./run-event-bus";
-import { activityOf } from "./run-event-bus";
+import * as DaemonEventBus from "./daemon-event-bus";
+import { activityOf } from "./daemon-event-bus";
 import * as RunLedger from "./run-ledger";
 
 const runId = Schema.decodeSync(RunId);
@@ -18,7 +18,7 @@ const workItem = Schema.decodeSync(WorkItemId)("#49");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 const encodeJson = Schema.encodeSync(Schema.UnknownFromJsonString);
 
-const layer = Layer.mergeAll(RunLedger.layerMemory, RunEventBus.layer);
+const layer = Layer.mergeAll(RunLedger.layerMemory, DaemonEventBus.layer);
 
 const record = (id: string, status: "running" | "succeeded" = "running") => ({
   id: runId(id),
@@ -57,7 +57,7 @@ describe("watchActivity", () => {
   it.effect("seeds scoped watchers from ledger history before live events", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
-      const bus = yield* RunEventBus.RunEventBus;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
       const id = runId("run-1");
       const started = event({ type: "RUN_STARTED" });
       const hello = event({ type: "TEXT_MESSAGE_CONTENT", delta: "Hel" });
@@ -78,7 +78,7 @@ describe("watchActivity", () => {
       );
 
       yield* Deferred.await(ready);
-      yield* bus.publish(activity("run-1", 3, bang, 1003));
+      yield* bus.publishActivity(activity("run-1", 3, bang, 1003));
 
       const seen = yield* Fiber.join(fiber);
       assert.deepStrictEqual(
@@ -92,7 +92,7 @@ describe("watchActivity", () => {
   it.effect("dedupes overlapping seq values at the history/live seam", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
-      const bus = yield* RunEventBus.RunEventBus;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
       const id = runId("run-1");
       const started = event({ type: "RUN_STARTED" });
       const mid = event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" });
@@ -111,8 +111,8 @@ describe("watchActivity", () => {
       );
 
       yield* Deferred.await(ready);
-      yield* bus.publish(activity("run-1", 1, mid, 1001));
-      yield* bus.publish(activity("run-1", 2, next, 1002));
+      yield* bus.publishActivity(activity("run-1", 1, mid, 1001));
+      yield* bus.publishActivity(activity("run-1", 2, next, 1002));
 
       const seen = yield* Fiber.join(fiber);
       assert.deepStrictEqual(
@@ -126,7 +126,7 @@ describe("watchActivity", () => {
   it.effect("delivers exactly once an event published between subscribe and history read", () =>
     Effect.gen(function* () {
       const inner = yield* RunLedger.RunLedger;
-      const bus = yield* RunEventBus.RunEventBus;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
       const id = runId("run-1");
       const started = event({ type: "RUN_STARTED" });
       const mid = event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" });
@@ -141,7 +141,7 @@ describe("watchActivity", () => {
         events: (runId: typeof id) =>
           Effect.gen(function* () {
             const snapshot = yield* inner.events(runId);
-            yield* bus.publish(activity("run-1", 2, late, 1002));
+            yield* bus.publishActivity(activity("run-1", 2, late, 1002));
             return snapshot;
           }),
       };
@@ -243,7 +243,7 @@ describe("watchActivity", () => {
   it.effect("terminates a live watcher once the run finishes", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
-      const bus = yield* RunEventBus.RunEventBus;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
       const id = runId("run-1");
       yield* ledger.insertRun(record("run-1"));
       yield* ledger.appendEvent(id, ledgerEvent(0, event({ type: "RUN_STARTED" }), 1000));
@@ -251,8 +251,8 @@ describe("watchActivity", () => {
       const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(Stream.runCollect, Effect.forkChild);
 
       yield* Effect.yieldNow;
-      yield* bus.publish(activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })));
-      yield* bus.publish(activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })));
+      yield* bus.publishActivity(activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })));
+      yield* bus.publishActivity(activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })));
 
       const seen = yield* Fiber.join(fiber);
       assert.deepStrictEqual(
@@ -265,7 +265,7 @@ describe("watchActivity", () => {
   it.effect("serves two concurrent scoped watchers the same full stream", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
-      const bus = yield* RunEventBus.RunEventBus;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
       const id = runId("run-1");
       yield* ledger.insertRun(record("run-1"));
       yield* ledger.appendEvent(id, ledgerEvent(0, event({ type: "RUN_STARTED" }), 1000));
@@ -275,8 +275,8 @@ describe("watchActivity", () => {
       const second = yield* collect();
 
       yield* Effect.yieldNow;
-      yield* bus.publish(activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })));
-      yield* bus.publish(activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })));
+      yield* bus.publishActivity(activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })));
+      yield* bus.publishActivity(activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })));
 
       const seenFirst = yield* Fiber.join(first);
       const seenSecond = yield* Fiber.join(second);
@@ -294,7 +294,7 @@ describe("watchActivity", () => {
   it.effect("keeps unscoped watch live-only", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
-      const bus = yield* RunEventBus.RunEventBus;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
       const started = event({ type: "RUN_STARTED" });
 
       yield* ledger.insertRun(record("run-1"));
@@ -307,7 +307,7 @@ describe("watchActivity", () => {
       );
 
       yield* Effect.yieldNow;
-      yield* bus.publish(activity("run-2", 0, started, 2000));
+      yield* bus.publishActivity(activity("run-2", 0, started, 2000));
 
       const seen = yield* Fiber.join(fiber);
       assert.deepStrictEqual(

@@ -17,6 +17,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
+import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
@@ -29,7 +30,6 @@ import {
 import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
-import * as RunEventBus from "./run-event-bus";
 import * as RunLedger from "./run-ledger";
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
@@ -342,7 +342,7 @@ const provide = (
         Layer.succeed(IssueTracker, ws),
         harnessLayer(runners),
         RunLedger.layerMemory,
-        RunEventBus.layer,
+        DaemonEventBus.layer,
         Layer.succeed(WorktreeManager, worktree),
         assemblerStub,
       ),
@@ -622,11 +622,11 @@ describe("Executor.execute", () => {
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
         const ledger = yield* RunLedger.RunLedger;
-        const bus = yield* RunEventBus.RunEventBus;
+        const bus = yield* DaemonEventBus.DaemonEventBus;
         const subscription = yield* bus.subscribe();
         const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
 
-        yield* Stream.fromSubscription(subscription).pipe(
+        yield* DaemonEventBus.runActivityStream(Stream.fromSubscription(subscription)).pipe(
           Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
           Stream.runHead,
         );
@@ -653,11 +653,11 @@ describe("Executor.execute", () => {
       const layer = provide(recorder(calls), [gatedRunner(release)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        const bus = yield* RunEventBus.RunEventBus;
+        const bus = yield* DaemonEventBus.DaemonEventBus;
         const subscription = yield* bus.subscribe();
         const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
 
-        yield* Stream.fromSubscription(subscription).pipe(
+        yield* DaemonEventBus.runActivityStream(Stream.fromSubscription(subscription)).pipe(
           Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
           Stream.runHead,
         );
@@ -1083,6 +1083,30 @@ describe("Executor.execute", () => {
         const captured = yield* Ref.get(requests);
         assert.strictEqual(captured[1]?.sessionId, "sess-42");
       }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("announces the run summary on the bus when it starts and again when it settles", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(recorder(calls), [runner(successEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const subscription = yield* bus.subscribe();
+        yield* executor.execute(workspace, triageItem);
+
+        const events = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "succeeded"),
+          Stream.runCollect,
+        );
+        const runChanges = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        assert.deepStrictEqual(
+          runChanges.map((run) => run.status),
+          ["running", "succeeded"],
+        );
+        assert.strictEqual(runChanges.at(-1)?.eventCount, successEvents.length);
+      }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
 });
