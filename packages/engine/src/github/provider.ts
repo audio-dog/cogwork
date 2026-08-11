@@ -132,11 +132,14 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
       target.botLogin,
     );
     return {
+      number: pull.number,
+      url: pull.url,
       review: prReview(pull, decision),
       checks: checkState(checks),
       latestHumanCommentAtMillis: human.latestAtMillis,
       fresh: human.fresh,
       baseDivergence: baseDivergenceOf(mergeableState),
+      waitingSinceMillis: pull.updatedAtMillis,
     } satisfies PrSignals;
   });
 

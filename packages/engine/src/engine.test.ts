@@ -204,11 +204,14 @@ describe("reconcile worker", () => {
     proposal: null,
   };
   const inReviewPr: PrSignals = {
+    number: 42,
+    url: "https://github.com/owner/repo/pull/42",
     review: "pending",
     checks: "passing",
     latestHumanCommentAtMillis: null,
     fresh: false,
     baseDivergence: "none",
+    waitingSinceMillis: 1_700_000_000_000,
   };
   const workerWithInReview = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem], [[id("AUD-2"), inReviewPr]]))),
@@ -540,6 +543,68 @@ describe("daemon status over rpc", () => {
       assert.deepStrictEqual(status.workspaces[0]?.blocked, [
         { id: id("AUD-8"), title: "waiting on a dependency", openBlockers: 2 },
       ]);
+    }).pipe(Effect.provide(daemonLayer(observing([blockedItem]))), Effect.scoped),
+  );
+
+  const inReviewOwnedItem: TrackerItem = {
+    id: id("AUD-9"),
+    title: "pr in review",
+    roles: ["ready-for-agent"],
+    claimLabeled: false,
+    claim: null,
+    claimedByUs: false,
+    attempts: [],
+    owned: true,
+    followUp: null,
+    openBlockers: 0,
+    proposal: null,
+  };
+  const readyPr: PrSignals = {
+    number: 77,
+    url: "https://github.com/owner/repo/pull/77",
+    review: "ready",
+    checks: "passing",
+    latestHumanCommentAtMillis: null,
+    fresh: false,
+    baseDivergence: "none",
+    waitingSinceMillis: 1_786_000_000_000,
+  };
+
+  it.effect("carries a PR summary on every classified item that has a linked pull request", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const status = yield* client.GetStatus();
+      const eligible = status.workspaces[0]?.eligible[0];
+      assert.strictEqual(eligible?.stage, "verify");
+      assert.deepStrictEqual(eligible?.pr, {
+        number: 77,
+        url: "https://github.com/owner/repo/pull/77",
+        checks: "passing",
+        review: "ready",
+        baseDivergence: "none",
+        waitingSinceMillis: 1_786_000_000_000,
+      });
+    }).pipe(
+      Effect.provide(daemonLayer(observing([inReviewOwnedItem], [[id("AUD-9"), readyPr]]))),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("leaves an item without a pull request free of a PR summary", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const status = yield* client.GetStatus();
+      const blocked = status.workspaces[0]?.blocked[0];
+      assert.deepStrictEqual(blocked, {
+        id: id("AUD-8"),
+        title: "waiting on a dependency",
+        openBlockers: 2,
+      });
+      assert.notProperty(blocked, "pr");
     }).pipe(Effect.provide(daemonLayer(observing([blockedItem]))), Effect.scoped),
   );
 

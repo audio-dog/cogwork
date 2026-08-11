@@ -12,10 +12,30 @@ import { LifecycleStage, NeedsHumanReason } from "./triage";
 export const DaemonHealth = Schema.Literals(["running"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
 
+export const PrChecks = Schema.Literals(["passing", "failing", "pending"]);
+export type PrChecks = typeof PrChecks.Type;
+
+export const PrReviewStatus = Schema.Literals(["pending", "changes-requested", "ready"]);
+export type PrReviewStatus = typeof PrReviewStatus.Type;
+
+export const PrBaseDivergence = Schema.Literals(["conflict", "clean", "none"]);
+export type PrBaseDivergence = typeof PrBaseDivergence.Type;
+
+export const PrSummary = Schema.Struct({
+  number: Schema.Int,
+  url: TrimmedNonEmptyString,
+  checks: PrChecks,
+  review: PrReviewStatus,
+  baseDivergence: PrBaseDivergence,
+  waitingSinceMillis: Schema.Finite,
+});
+export type PrSummary = typeof PrSummary.Type;
+
 export const ActionableItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
   stage: LifecycleStage,
+  pr: Schema.optionalKey(PrSummary),
 });
 export type ActionableItem = typeof ActionableItem.Type;
 
@@ -23,6 +43,7 @@ export const ClaimedItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
   claim: Claim,
+  pr: Schema.optionalKey(PrSummary),
 });
 export type ClaimedItem = typeof ClaimedItem.Type;
 
@@ -30,6 +51,7 @@ export const BlockedItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
   openBlockers: Schema.Natural,
+  pr: Schema.optionalKey(PrSummary),
 });
 export type BlockedItem = typeof BlockedItem.Type;
 
@@ -38,6 +60,7 @@ export const NeedsHumanItem = Schema.Struct({
   title: TrimmedNonEmptyString,
   reason: NeedsHumanReason,
   proposal: Schema.NullOr(TrimmedNonEmptyString),
+  pr: Schema.optionalKey(PrSummary),
 });
 export type NeedsHumanItem = typeof NeedsHumanItem.Type;
 

@@ -32,11 +32,13 @@ const rawReview = (over: Partial<RawReview>): RawReview => ({
 
 const pull = (over: Partial<RawPull>): RawPull => ({
   number: 1,
+  url: "https://github.com/owner/repo/pull/1",
   authorLogin: "clanker-forge[bot]",
   authorAssociation: "MEMBER",
   draft: false,
   headSha: "sha",
   headRef: "1-x",
+  updatedAtMillis: 0,
   ...over,
 });
 
