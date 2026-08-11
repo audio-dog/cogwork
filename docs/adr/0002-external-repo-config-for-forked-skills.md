@@ -1,6 +1,6 @@
 # 0002 — External per-repo config for forked engineering skills
 
-- **Status:** accepted
+- **Status:** accepted (historical — the sync toolkit that owned this config moved out of clanker-forge; see [#178](https://github.com/taylorfsteele/clanker-forge/issues/178))
 - **Date:** 2026-07-22
 
 ## Context
