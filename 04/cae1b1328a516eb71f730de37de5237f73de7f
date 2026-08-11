@@ -1,0 +1,25 @@
+packages/engine/CONTEXT.md
+  s_cf3e966178f0c2::t_18690c6b5f6f68 62-78,81
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_cf3e966178f0c2::t_2b3523b5ed42b4 1-16
+packages/contracts/CONTEXT.md
+  s_cf3e966178f0c2::t_da4ba36263a702 105-108,111
+CONTEXT-MAP.md
+  s_cf3e966178f0c2::t_530790ba656d64 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "04cae1b1328a516eb71f730de37de5237f73de7f",
+  "prompts": {},
+  "sessions": {
+    "s_cf3e966178f0c2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6f242ddf-0724-4333-b407-6d23d79c5d66",
+        "model": "grok-4.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
