@@ -1,4 +1,4 @@
-import { Git } from "@clanker-forge/engine";
+import { ContextFs, Git } from "@clanker-forge/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { gitLayer } from "./platform";
+import { contextFsLayer, gitLayer } from "./platform";
 
 const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
@@ -107,5 +107,47 @@ describe("gitLayer against a real repository", () => {
         behind: 1,
       });
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+});
+
+const contextTestLayer = contextFsLayer.pipe(Layer.provideMerge(NodeServices.layer));
+
+describe("contextFsLayer against a real filesystem", () => {
+  it.effect("reads a present file and returns null for an absent one", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-context-" });
+      const agents = path.join(root, "AGENTS.md");
+      yield* fs.writeFileString(agents, "repo rules");
+
+      assert.strictEqual(yield* context.readFile(agents), "repo rules");
+      assert.isNull(yield* context.readFile(path.join(root, "missing.md")));
+    }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
+  );
+
+  it.effect("copies a skill directory with its siblings and replaces any stale destination", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-context-" });
+
+      const source = path.join(root, "skills", "implement-agent");
+      yield* fs.makeDirectory(path.join(source, "reference"), { recursive: true });
+      yield* fs.writeFileString(path.join(source, "SKILL.md"), "skill body");
+      yield* fs.writeFileString(path.join(source, "reference", "notes.md"), "sibling notes");
+
+      const dest = path.join(root, "home", "skills", "implement-agent");
+      yield* fs.makeDirectory(dest, { recursive: true });
+      yield* fs.writeFileString(path.join(dest, "stale.md"), "left over from a prior run");
+
+      yield* context.copyDirectory(source, dest);
+
+      assert.strictEqual(yield* fs.readFileString(path.join(dest, "SKILL.md")), "skill body");
+      assert.strictEqual(yield* fs.readFileString(path.join(dest, "reference", "notes.md")), "sibling notes");
+      assert.isFalse(yield* fs.exists(path.join(dest, "stale.md")));
+    }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 });

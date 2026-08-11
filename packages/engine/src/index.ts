@@ -1,3 +1,5 @@
+export * as ContextAssembler from "./context-assembler";
+export * as ContextFs from "./context-fs";
 export * as CredentialStore from "./credential-store";
 export * as Daemon from "./daemon";
 export { defineWorkspace } from "./define-workspace";
