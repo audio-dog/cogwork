@@ -1,0 +1,21 @@
+apps/cli/src/login-commands.ts
+  s_7ffb86cc44e55f::t_f756320ed08bec 12
+  s_7ffb86cc44e55f::t_8bdcf5d34a777a 102-109
+  s_7ffb86cc44e55f::t_c42e47bc502cbf 95-101,110-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6ca5bcb2c5c9af0644518588486e8be6511d5b23",
+  "prompts": {},
+  "sessions": {
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
