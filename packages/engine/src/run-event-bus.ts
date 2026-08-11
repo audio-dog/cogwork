@@ -1,4 +1,5 @@
 import type { AgUiEvent, RunActivity, RunRecord } from "@clanker-forge/contracts";
+import { agUiCorrelation } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -10,13 +11,14 @@ export const activityOf = (
   seq: number,
   atMillis: number,
   event: AgUiEvent,
-) => ({
+): RunActivity => ({
   runId: record.id,
   workspace: record.workspace,
   workItem: record.workItem,
   stage: record.stage,
   seq,
   atMillis,
+  correlation: agUiCorrelation(event),
   event,
 });
 

@@ -15,11 +15,14 @@ export const FollowUpMarker = Schema.Struct({
 export type FollowUpMarker = typeof FollowUpMarker.Type;
 
 export interface ObservedPr {
+  readonly number: number;
+  readonly url: string;
   readonly review: PrReview;
   readonly checks: CheckState;
   readonly latestHumanCommentAtMillis: number | null;
   readonly fresh: boolean;
   readonly baseDivergence: BaseDivergence;
+  readonly waitingSinceMillis: number;
   readonly followUp: FollowUpMarker | null;
 }
 

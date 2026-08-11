@@ -10,7 +10,7 @@ Role in the flow: **reconcile → schedule → execute → dispatch to a harness
 ## Language
 
 **Daemon**:
-The long-lived host process that runs the engine on one machine: it serves the RPC group and drives two heartbeats (reconcile and execute). Not a class — a set of modules composed at startup.
+The long-lived host process that runs the engine on one machine: it serves the RPC group and drives two heartbeats (reconcile and execute). Not a class — a set of modules composed at startup. The composition itself is the **seam** `Daemon.serverLayer(hostAdapters)`: it assembles the RPC server, its handlers, and the NDJSON framing on top of the engine's own services, taking a host's adapters (credential store, run ledger, workspace registry, worktree platform, harness runners, scheduler config, RPC transport) as its one argument. The one-credential-store rule lives here — the issue-tracker reads and the MCP-skill bearer must share one store instance. `Daemon.serializationLayer` is exported so a client frames its end of the wire the same way. Any host (the CLI today, desktop next) builds those adapters and calls this.
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
@@ -81,6 +81,22 @@ _Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP ski
 One slice of the context assembler's output: global (`~/.clanker-forge/AGENTS.md`), repo (every `AGENTS.md` from worktree cwd up to project root), or playbook (the stage's playbook skill body). Distinct from the user-message playbook prompt template.
 _Avoid_: Context source (opencode's term), rules file
 
+**Owned tool set**:
+The first-party tools the engine hands a run instead of leaning on the harness's built-ins: `read`, `write`, `edit`, `bash`, `glob`, `grep`, and `webfetch`. Each is a TanStack `toolDefinition` with an Effect handler, and each runs through the run's worktree sandbox rather than touching the host directly. There is no tracker or PR tool — `git` and `gh` ride in on `bash`. File-touching tools go through path confinement first; failures surface as a typed `ToolError`.
+_Avoid_: Built-in tools (those are the harness's), MCP skill (that is an external capability, this set is native)
+
+**Worktree sandbox**:
+An `ai-sandbox` `localProcessSandbox` opened onto a run's worktree, so the owned tools read, write, and exec against that checkout and nothing else. Opened as an Effect resource (acquire the handle, release on scope close); the release only tears down the sandbox handle, never the checkout itself. The base SHA it reports is `git rev-parse HEAD`, or `""` when the checkout is not a git repo.
+_Avoid_: Worktree manager (that owns the git lifecycle; this is the process boundary a run's tools execute inside), container
+
+**Path confinement**:
+The rule that keeps a file-touching tool inside the worktree root: a requested path is normalized (drop leading `/` and any `/workspace` prefix, resolve `.` and `..`) and any path that would climb above the root is rejected as an `out-of-bounds` `ToolError` before the sandbox is asked to do anything. The typed refusal at the tool layer is the point — it fails clearly instead of leaning on the sandbox's more generic error.
+_Avoid_: Sandboxing (that's the process boundary), chroot, jail
+
+**File-diff feed**:
+The stream of file-change events the owned tools produce for the live run view's diff panel. It watches the worktree, computes a unified diff per change against the run's base SHA (synthesizing an add-patch for a brand-new file), and emits each as an `AgUiEvent` — a `CUSTOM` event named `sandbox.file.diff`. This is how a run's edits show up in the diff feed without the tools having to know the UI exists.
+_Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
+
 **Playbook skill**:
 The `SKILL.md` (and its directory) named by a playbook for a lifecycle stage, authored under `packages/engine/skills/`. Distinct from an MCP skill.
 _Avoid_: Skill (alone — ambiguous), MCP skill, sync skill
@@ -94,7 +110,7 @@ A workspace's binding of a lifecycle stage to a prompt template, playbook skill,
 _Avoid_: Workflow, pipeline
 
 **Issue tracker adapter**:
-A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
+A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`, and each adapter stamps its own — GitHub its configured `botLogin` or the `clanker-forge` fallback, Linear always `clanker-forge` — then reports on each observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
 _Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Source control provider adapter**:
@@ -122,7 +138,7 @@ The single home of the coordination-comment policy (`src/coordination.ts`), shar
 _Avoid_: Markers file (each adapter's `markers.ts` now holds only its wire codec and role-label mapping, not the policy).
 
 **Coordination markers**:
-Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. The coordination module owns the shared payload format; each adapter's wire codec only dresses it for the host. GitHub embeds markers as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments), and a Linear marker is only real at the start of a line. Claim markers carry `stage=` on both hosts; older stage-less markers still decode.
+Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. The coordination module owns the shared payload format; each adapter's wire codec only dresses it for the host. GitHub embeds markers as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments), and a Linear marker is only real at the start of a line. Claim markers carry `stage=` on both hosts; older stage-less markers still decode. A claim marker's `by=` value is each adapter's own wire detail — filled on write and matched on read to decide ownership — never a value handed down from above the seam.
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.
 
 **Coordination comment**:

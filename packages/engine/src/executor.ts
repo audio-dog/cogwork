@@ -141,9 +141,6 @@ const handoffCause = (retryable: boolean, attempts: number) =>
 // fence, so a handle carrying either is refused rather than stored.
 const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : null);
 
-export const claimant = (workspace: RegisteredWorkspace) =>
-  workspace.config.issueTracker.botLogin ?? "clanker-forge";
-
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
 const decodeSessionId = Schema.decodeUnknownEffect(SessionIdSchema);
 const encodeJson = Schema.encodeEffect(Schema.UnknownFromJsonString);
@@ -223,8 +220,9 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     at: number,
   ) {
-    const claim = { by: claimant(workspace), claimedAtMillis: at, stage: item.stage };
-    const result = yield* Effect.result(issueTracker.claim(workspace, item.id, claim));
+    const result = yield* Effect.result(
+      issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }),
+    );
     if (Result.isSuccess(result)) return true;
     yield* Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error: result.failure });
     return false;

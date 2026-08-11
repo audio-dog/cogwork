@@ -1,4 +1,4 @@
-import { Git, Worktree, WorktreeFs } from "@clanker-forge/engine";
+import { ContextFs, Git, Worktree, WorktreeFs } from "@clanker-forge/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -152,6 +152,29 @@ export const worktreeFsLayer = Layer.effect(
           Effect.orElseSucceed(() => null),
         ),
     } satisfies WorktreeFs.WorktreeFsService;
+  }),
+);
+
+export const contextFsLayer = Layer.effect(
+  ContextFs.ContextFs,
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+
+    const fail = (operation: string) => (cause: unknown) =>
+      new ContextFs.ContextFsError({ operation, message: describe(cause) });
+
+    return {
+      readFile: (target) => fs.readFileString(target).pipe(Effect.orElseSucceed(() => null)),
+      copyDirectory: (source, dest) =>
+        fs
+          .remove(dest, { recursive: true, force: true })
+          .pipe(
+            Effect.andThen(fs.makeDirectory(path.dirname(dest), { recursive: true })),
+            Effect.andThen(fs.copy(source, dest, { overwrite: true })),
+            Effect.mapError(fail(`copy ${source} to ${dest}`)),
+          ),
+    } satisfies ContextFs.ContextFsService;
   }),
 );
 

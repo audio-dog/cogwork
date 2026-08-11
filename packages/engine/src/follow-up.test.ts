@@ -8,11 +8,14 @@ import {
 } from "./follow-up";
 
 const pr = (over: Partial<ObservedPr> = {}): ObservedPr => ({
+  number: 1,
+  url: "https://github.com/owner/repo/pull/1",
   review: "pending",
   checks: "passing",
   latestHumanCommentAtMillis: null,
   fresh: false,
   baseDivergence: "none",
+  waitingSinceMillis: 0,
   followUp: null,
   ...over,
 });

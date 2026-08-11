@@ -9,7 +9,7 @@ import {
   CredentialStore,
   type CredentialStoreService,
 } from "./credential-store";
-import { credentialAccountFor } from "./linear/account";
+import { credentialAccountFor as linearCredentialAccountFor } from "./linear/account";
 
 // The bearer rides a `Redacted` so a stray log of the request cannot leak it; the harness runner is
 // the only place that unwraps it.
@@ -65,7 +65,10 @@ export const make = (
   };
 };
 
+const routedCredentialAccountFor: CredentialAccountFor = (config) =>
+  config.issueTracker.type === "linear" ? linearCredentialAccountFor(config) : null;
+
 export const layer = Layer.effect(
   McpSkillAssembler,
-  Effect.map(CredentialStore, (store) => make(store, credentialAccountFor)),
+  Effect.map(CredentialStore, (store) => make(store, routedCredentialAccountFor)),
 );

@@ -185,6 +185,54 @@ describe("watchActivity", () => {
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 
+  it.effect("replays the whole harness event and lifts its correlation ids onto the envelope", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      const id = runId("run-1");
+      const reasoning = event({
+        type: "REASONING_MESSAGE_CONTENT",
+        messageId: "msg-0",
+        delta: "weighing the two approaches",
+      });
+      const toolResult = event({
+        type: "TOOL_CALL_RESULT",
+        toolCallId: "call-1",
+        messageId: "msg-1",
+        content: "diff applied",
+        role: "tool",
+        input: { path: "src/x.ts" },
+      });
+
+      yield* ledger.insertRun(record("run-1", "succeeded"));
+      yield* ledger.appendEvent(id, ledgerEvent(0, event({ type: "RUN_STARTED" }), 1000));
+      yield* ledger.appendEvent(id, ledgerEvent(1, reasoning, 1001));
+      yield* ledger.appendEvent(id, ledgerEvent(2, toolResult, 1002));
+      yield* ledger.appendEvent(
+        id,
+        ledgerEvent(3, event({ type: "RUN_FINISHED", finishReason: "stop" }), 1003),
+      );
+
+      const seen = [...(yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(Stream.runCollect))];
+      const replayedReasoning = seen.find((item) => item.event.type === "REASONING_MESSAGE_CONTENT");
+      const replayedResult = seen.find((item) => item.event.type === "TOOL_CALL_RESULT");
+
+      assert.strictEqual(replayedReasoning?.event.delta, "weighing the two approaches");
+      assert.strictEqual(replayedResult?.event.content, "diff applied");
+      assert.deepStrictEqual(replayedResult?.event.input, { path: "src/x.ts" });
+      assert.strictEqual(replayedResult?.event.role, "tool");
+      assert.deepStrictEqual(replayedResult?.correlation, {
+        threadId: null,
+        messageId: "msg-1",
+        toolCallId: "call-1",
+      });
+      assert.deepStrictEqual(replayedReasoning?.correlation, {
+        threadId: null,
+        messageId: "msg-0",
+        toolCallId: null,
+      });
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
   it.effect("completes immediately for an unknown run id", () =>
     Effect.gen(function* () {
       const seen = yield* Stream.unwrap(Daemon.watchActivity(runId("missing"))).pipe(Stream.runCollect);

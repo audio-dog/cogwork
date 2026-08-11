@@ -13,17 +13,21 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   roles: over.roles ?? [],
   claimLabeled: over.claimLabeled ?? false,
   claim: over.claim ?? null,
+  claimedByUs: over.claimedByUs ?? false,
   attempts: over.attempts ?? [],
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
 });
 
 const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"] => ({
+  number: 1,
+  url: "https://github.com/owner/repo/pull/1",
   review,
   checks: "passing",
   latestHumanCommentAtMillis: null,
   fresh: false,
   baseDivergence: "none",
+  waitingSinceMillis: 0,
   followUp: null,
   ...over,
 });

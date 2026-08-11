@@ -1,5 +1,5 @@
 import type { AgUiEvent, LifecycleStage, RunActivity } from "@clanker-forge/contracts";
-import { RunId, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import { agUiCorrelation, RunId, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { flushWatch, initialWatchState, stepWatch, type WatchState } from "./watch";
@@ -22,6 +22,7 @@ const activity = (overrides: ActivityOverrides): RunActivity => ({
   stage: overrides.stage ?? "triage",
   seq: 0,
   atMillis: 0,
+  correlation: agUiCorrelation(overrides.event),
   event: overrides.event,
 });
 

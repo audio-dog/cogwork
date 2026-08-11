@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import type { CoordinationComment, CoordinationHost } from "../coordination";
 import * as Coordination from "../coordination";
 import {
+  type ClaimRequest,
   type FollowUpMarker,
   IssueTracker,
   IssueTrackerError,
@@ -25,6 +26,8 @@ import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from
 interface GitHubTarget extends GitHubRepoRef {
   readonly botLogin: string | null;
 }
+
+const claimIdentity = (target: GitHubTarget) => target.botLogin ?? Coordination.defaultClaimant;
 
 const toCoordinationComment =
   (botLogin: string | null) =>
@@ -99,12 +102,14 @@ const make = (client: GitHubClientService): IssueTrackerService => {
       );
       const body = ledger?.body ?? "";
       const id = yield* itemId(issue.number);
+      const claim = claimLabeled ? Coordination.parseClaim(wireCodec, body) : null;
       return {
         id,
         title: issue.title,
         roles: rolesFromLabels(issue.labels),
         claimLabeled,
-        claim: claimLabeled ? Coordination.parseClaim(wireCodec, body) : null,
+        claim,
+        claimedByUs: claim?.by === claimIdentity(target),
         attempts: Coordination.parseAttempts(wireCodec, body),
         owned: ledger !== undefined,
         followUp: Coordination.parseFollowUp(wireCodec, body),
@@ -135,9 +140,10 @@ const make = (client: GitHubClientService): IssueTrackerService => {
     claim: Effect.fn("github.claim")(function* (
       workspace: RegisteredWorkspace,
       id: WorkItemId,
-      claim: Claim,
+      request: ClaimRequest,
     ) {
       const { target, number } = yield* resolveIssue(workspace, id);
+      const claim: Claim = { ...request, by: claimIdentity(target) };
       yield* client.addLabel(target, number, claimLabel);
       yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
         status: Coordination.claimStatusFor(claim),
