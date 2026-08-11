@@ -32,6 +32,16 @@ const account: CredentialStore.CredentialAccount = {
   oauthClientId: null,
 };
 
+const providerAccount: CredentialStore.ProviderAccount = {
+  provider: "anthropic",
+  envVars: ["ANTHROPIC_API_KEY"],
+};
+
+const providerKey = (provider: string, key: string): CredentialStore.StoredProviderKey => ({
+  provider,
+  key: Redacted.make(key),
+});
+
 const tokenEndpoint: typeof globalThis.fetch = () =>
   Promise.resolve(
     new Response(
@@ -210,6 +220,78 @@ describe("file-backed credential store", () => {
         const store = CredentialStore.make({ stored: yield* makeFileStore(filePath) });
         const credential = yield* store.bearerToken(account);
         assert.strictEqual(credential.source, "env");
+      }),
+    ),
+  );
+
+  it.effect("round-trips a saved provider key and resolves it over the env var", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const store = CredentialStore.make({ stored: yield* makeFileStore(filePath) });
+        yield* store.persistProviderKey(providerKey("anthropic", "sk-ant-stored"));
+        const credential = yield* store.providerKey(providerAccount);
+        assert.strictEqual(credential.source, "stored-key");
+        assert.strictEqual(Redacted.value(credential.key), "sk-ant-stored");
+      }),
+    ),
+  );
+
+  it.effect("keeps issue-tracker credentials when saving a provider key", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        yield* file.save(stored("oauth-token"));
+        yield* file.saveProviderKey?.(providerKey("openai", "sk-openai"));
+        const credentials = yield* file.load;
+        const keys = yield* file.loadProviderKeys ?? Effect.succeed([]);
+        assert.strictEqual(credentials.length, 1);
+        assert.deepStrictEqual(
+          keys.map((entry) => entry.provider),
+          ["openai"],
+        );
+      }),
+    ),
+  );
+
+  it.effect("upgrades a v1 file in place when the first provider key is saved", () =>
+    onDisk(({ filePath, fs }) =>
+      Effect.gen(function* () {
+        yield* seed(fs, filePath, `{"version":1,"credentials":[]}`);
+        const file = yield* makeFileStore(filePath);
+        yield* file.saveProviderKey?.(providerKey("google", "sk-gem"));
+        const keys = yield* file.loadProviderKeys ?? Effect.succeed([]);
+        assert.deepStrictEqual(
+          keys.map((entry) => Redacted.value(entry.key)),
+          ["sk-gem"],
+        );
+      }),
+    ),
+  );
+
+  it.effect("replaces the key for a provider instead of appending a duplicate", () =>
+    onDisk(({ filePath }) =>
+      Effect.gen(function* () {
+        const file = yield* makeFileStore(filePath);
+        yield* file.saveProviderKey?.(providerKey("anthropic", "sk-first"));
+        yield* file.saveProviderKey?.(providerKey("anthropic", "sk-second"));
+        const keys = yield* file.loadProviderKeys ?? Effect.succeed([]);
+        assert.deepStrictEqual(
+          keys.map((entry) => Redacted.value(entry.key)),
+          ["sk-second"],
+        );
+      }),
+    ),
+  );
+
+  it.effect("keeps a provider key out of the error when the file cannot be read", () =>
+    onDisk(({ filePath, fs }) =>
+      Effect.gen(function* () {
+        yield* seed(fs, filePath, "{ not json");
+        const file = yield* makeFileStore(filePath);
+        const error = yield* Effect.flip(
+          file.saveProviderKey?.(providerKey("anthropic", "super-secret-key")) ?? Effect.void,
+        );
+        assert.notInclude(`${error.account} ${error.message}`, "super-secret-key");
       }),
     ),
   );
