@@ -133,6 +133,19 @@ describe("Scheduler.plan", () => {
     assert.strictEqual(result.state.budgetUsed, 2);
   });
 
+  it("picks nothing while paused and resumes once unpaused", () => {
+    const candidates = [candidate(wsA, work(1), 10)];
+    const paused = Scheduler.plan(candidates, { ...Scheduler.initialState, paused: true }, config, stamp(0));
+    assert.strictEqual(paused.picks.length, 0);
+    const resumed = Scheduler.plan(
+      candidates,
+      { ...Scheduler.initialState, paused: false },
+      config,
+      stamp(0),
+    );
+    assert.strictEqual(resumed.picks.length, 1);
+  });
+
   it("resets a spent budget when the UTC day rolls over", () => {
     const spent: Scheduler.SchedulerState = {
       ...Scheduler.initialState,

@@ -1,5 +1,7 @@
 import type { ClassifiedItem, PrSummary, SchedulerStats, WorkItemId } from "@clanker-forge/contracts";
+import { classifiedItemOf } from "./classify";
 import type { ObservedPr } from "./follow-up";
+import type { ObservedItem } from "./issue-tracker";
 import type { WorkspaceReconcileState } from "./reconcile";
 import type { SchedulerConfig, SchedulerState } from "./scheduler";
 
@@ -23,6 +25,12 @@ export const withPr =
     const pr = prs.get(item.id);
     return pr === undefined ? item : { ...item, pr };
   };
+
+export const classifiedItemWithPr = (item: ObservedItem): ClassifiedItem | null => {
+  const classified = classifiedItemOf(item);
+  if (classified === null) return null;
+  return item.pr ? { ...classified, pr: prSummaryOf(item.pr) } : classified;
+};
 
 export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray<ClassifiedItem> => {
   const attach = withPr(prByItem(state));
@@ -49,6 +57,7 @@ export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray
 };
 
 export const schedulerStatsOf = (config: SchedulerConfig, state: SchedulerState): SchedulerStats => ({
+  scheduling: state.paused ? "paused" : "running",
   globalInFlight: state.global,
   globalLimit: config.globalLimit,
   dailyBudgetUsed: state.budgetUsed,

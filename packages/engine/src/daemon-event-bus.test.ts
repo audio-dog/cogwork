@@ -15,6 +15,7 @@ const schedulerEvent = (globalInFlight: number) =>
   ({
     _tag: "SchedulerChanged",
     scheduler: stats({
+      scheduling: "running",
       globalInFlight,
       globalLimit: 4,
       dailyBudgetUsed: 0,
