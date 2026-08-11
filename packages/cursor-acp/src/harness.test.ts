@@ -3,7 +3,7 @@ import { EventType, type StreamChunk } from "@tanstack/ai";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import * as Redacted from "effect/Redacted";
 import { assert, describe, it } from "vitest";
-import { mcpWorkspaceProjection, toEvent } from "./harness";
+import { cursorModelOptions, mcpWorkspaceProjection, toEvent } from "./harness";
 
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
@@ -42,6 +42,20 @@ describe("mcpWorkspaceProjection", () => {
 
     assert.isTrue(projection.hasSecrets);
     assert.deepStrictEqual(resolveAllSecrets(projection.secrets), { MCP_LINEAR_BEARER: "tok_123" });
+  });
+});
+
+describe("cursorModelOptions", () => {
+  it("turns a resolved handle into Cursor's resume sessionId", () => {
+    assert.deepStrictEqual(cursorModelOptions("cursor-abc", null), { sessionId: "cursor-abc" });
+  });
+
+  it("omits sessionId when there is no handle to resume from", () => {
+    assert.deepStrictEqual(cursorModelOptions(null, "high"), { effort: "high" });
+  });
+
+  it("is empty when the run neither resumes nor sets an effort", () => {
+    assert.deepStrictEqual(cursorModelOptions(null, null), {});
   });
 });
 

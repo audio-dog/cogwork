@@ -65,14 +65,12 @@ interface StageOps {
 }
 
 class SessionRestarted extends Data.TaggedError("SessionRestarted")<{
-  readonly handle: string;
   readonly nextSeq: number;
 }> {}
 
-const withPrompt = (request: HarnessRequest, prompt: string, handle: string): HarnessRequest => ({
+const withFullPrompt = (request: HarnessRequest, prompt: string): HarnessRequest => ({
   ...request,
   prompt,
-  sessionId: handle,
 });
 
 const defaultFollowUp: FollowUpContext = {
@@ -157,15 +155,15 @@ export const make = Effect.gen(function* () {
     resolved: ResolvedStage,
     checkoutPath: string,
     prompt: string,
-    sessionId: string | null,
+    session: SessionId | null,
   ) {
     return {
       harness: resolved.harness,
       checkoutPath,
+      session,
       prompt,
       model: resolved.model,
       effort: resolved.effort,
-      sessionId,
       mcpSkills: yield* assembler.assemble(workspace.config),
     } satisfies HarnessRequest;
   });
@@ -282,7 +280,7 @@ export const make = Effect.gen(function* () {
 
   const guardResume = (prev: RunAccumulator, next: RunAccumulator, index: number, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
-      ? Effect.fail(new SessionRestarted({ handle: next.handle, nextSeq: index + 1 }))
+      ? Effect.fail(new SessionRestarted({ nextSeq: index + 1 }))
       : Effect.succeed(next);
 
   const foldResume = Effect.fn("Executor.foldResume")(function* (
@@ -302,11 +300,11 @@ export const make = Effect.gen(function* () {
     ops: StageOps,
     request: HarnessRequest,
   ) {
-    const expected = ops.resume ? request.sessionId : null;
+    const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
     if (!expected) return yield* foldRun(record, request, 0);
     return yield* foldResume(record, request, expected).pipe(
       Effect.catchTag("SessionRestarted", (restart) =>
-        foldRun(record, withPrompt(request, ops.fullPrompt, restart.handle), restart.nextSeq),
+        foldRun(record, withFullPrompt(request, ops.fullPrompt), restart.nextSeq),
       ),
     );
   });
@@ -418,13 +416,7 @@ export const make = Effect.gen(function* () {
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
-    return yield* harnessRequest(
-      workspace,
-      resolved,
-      worktree.path,
-      prompt,
-      yield* handleOf(ledger, last?.session ?? null),
-    );
+    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, last?.session ?? null);
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
@@ -521,7 +513,7 @@ export const make = Effect.gen(function* () {
       resolved,
       worktree.path,
       prompt,
-      decision.kind === "resume" ? decision.handle : null,
+      decision.kind === "resume" ? (last?.session ?? null) : null,
     );
   });
 
@@ -565,10 +557,9 @@ export const make = Effect.gen(function* () {
     resolved: ResolvedStage,
     session: SessionId,
   ) {
-    const handle = yield* handleOf(ledger, session);
     if (item.stage === "triage") {
       const path = workspace.config.checkoutPath;
-      return yield* harnessRequest(workspace, resolved, path, buildContinuationNudge(path), handle);
+      return yield* harnessRequest(workspace, resolved, path, buildContinuationNudge(path), session);
     }
     const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
     return yield* harnessRequest(
@@ -576,7 +567,7 @@ export const make = Effect.gen(function* () {
       resolved,
       worktree.path,
       buildContinuationNudge(worktree.path),
-      handle,
+      session,
     );
   });
 

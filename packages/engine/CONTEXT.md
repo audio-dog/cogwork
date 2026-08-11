@@ -58,15 +58,19 @@ The unit that runs one candidate end to end: claim, worktree, resolve playbook, 
 _Avoid_: Runner, worker, harness
 
 **Session store**:
-The read model that folds a session's transcript out of the run ledger — given a `SessionId`, it walks every event across the runs that share the session (oldest run first) and projects them into ordered messages. Its `loadThread` mirrors the shape a `@tanstack/ai-persistence` message store returns, so when the first-party runner lands we swap this projection for that adapter with the ledger still the one source of truth. An empty transcript is `[]`, never a failure. There is no second store: the run ledger is the only place a conversation lives.
+The read model a runner pulls a session's history from, given a `SessionId`. `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first) projected into ordered messages, mirroring the shape a `@tanstack/ai-persistence` message store returns, so when the first-party runner lands we swap this projection for that adapter with the ledger still the one source of truth. `resumeHandle` hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second store: the run ledger is the only place a conversation lives.
 _Avoid_: Message store (that's the persistence library's term we're mirroring), transcript database, second store
 
+**Harness request**:
+The envelope the executor hands the harness for one run: the checkout path, the turn's prompt, model/effort, MCP skills, and a `session` reference — the `SessionId` this run continues, or null for a fresh start. It references a session rather than shipping one; no frozen transcript ever crosses the seam, so compaction can live inside the runner's loop where context actually grows. The prompt is only this run's instruction, never accumulated history.
+_Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
+
 **Harness service**:
-The engine's dispatcher — given a harness request, it routes to the registered harness runner by name. Knows nothing about any specific agent.
+The engine's dispatcher — given a harness request, it routes to the registered harness runner by name, and provides the `SessionStore` a runner pulls history through. Knows nothing about any specific agent.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
-A pluggable implementation of one agent backend: a `name` plus a `run` that returns a stream of harness events. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
+A pluggable implementation of one agent backend: a `name` plus a `run` that returns a stream of harness events. It pulls the session's history in-process from the request's reference — a CLI runner its opaque resume handle, the owned runner (later) the folded transcript. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **MCP skill assembler**:

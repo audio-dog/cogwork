@@ -1,6 +1,6 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
 import { AgUiEvent, type HarnessName } from "@clanker-forge/contracts";
-import { Harness } from "@clanker-forge/engine";
+import { Harness, SessionStore } from "@clanker-forge/engine";
 import { chat, EventType, type StreamChunk } from "@tanstack/ai";
 import {
   type AcpHarnessContext,
@@ -38,6 +38,12 @@ type CursorModelOptions = {
   readonly sessionId?: string;
   readonly effort?: string;
 };
+
+// Cursor keeps conversation history server-side; the opaque handle is how you resume it.
+export const cursorModelOptions = (handle: string | null, effort: string | null) => ({
+  ...(handle ? { sessionId: handle } : {}),
+  ...(effort ? { effort } : {}),
+});
 
 const secretName = (name: string) => `MCP_${name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_BEARER`;
 
@@ -165,7 +171,9 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     name: options.name,
     run: (request) =>
       Stream.unwrap(
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          const store = yield* SessionStore.SessionStore;
+          const handle = request.session ? yield* store.resumeHandle(request.session) : null;
           const model = request.model ?? defaultModel;
           const emptyModelOptions: CursorModelOptions = {};
           const adapter = acpCompatible({
@@ -186,15 +194,12 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
               ...(projection.hasSecrets ? { secrets: projection.secrets } : {}),
             }),
           });
-          const modelOptions: CursorModelOptions = {
-            ...(request.sessionId ? { sessionId: request.sessionId } : {}),
-            ...(request.effort ? { effort: request.effort } : {}),
-          };
+          const modelOptions = cursorModelOptions(handle, request.effort);
           const stream = chat({
             adapter: adapter(model),
             messages: [{ role: "user", content: request.prompt }],
             middleware: [withSandbox(sandbox)],
-            ...(request.sessionId || request.effort ? { modelOptions } : {}),
+            ...(handle || request.effort ? { modelOptions } : {}),
           });
           return bridge(stream);
         }),
