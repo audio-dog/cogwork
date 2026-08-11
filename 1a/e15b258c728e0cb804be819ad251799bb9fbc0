@@ -1,0 +1,90 @@
+apps/cli/src/login-commands.ts
+  s_7ffb86cc44e55f::t_8bdcf5d34a777a 102-109
+  s_7ffb86cc44e55f::t_f756320ed08bec 12
+  s_7ffb86cc44e55f::t_c42e47bc502cbf 95-101,110-122
+packages/engine/src/model-catalog.test.ts
+  s_7ffb86cc44e55f::t_70c3e8f2376a39 1-135
+apps/cli/src/main.ts
+  s_7ffb86cc44e55f::t_df6cb28627faff 10
+  s_7ffb86cc44e55f::t_3063aea8be919c 22
+apps/cli/src/credentials.ts
+  s_7ffb86cc44e55f::t_e807c5efc05832 43-50
+  s_7ffb86cc44e55f::t_65bf2c024fdea7 66-68,74-75
+  s_7ffb86cc44e55f::t_ed9da64cb48fc4 12-15,17,27,30,36,41,51,53,79-89,93,95-96
+  s_7ffb86cc44e55f::t_9dd526e9b6d2e5 76-78
+apps/cli/src/login.ts
+  s_7ffb86cc44e55f::t_b36f0f6436318b 137-165
+  s_7ffb86cc44e55f::t_6679186caf2dd4 3,10-11
+packages/engine/CONTEXT.md
+  s_7ffb86cc44e55f::t_50895b6a461e3a 137,140-150
+  s_7ffb86cc44e55f::t_cd1711e23c79ad 151
+packages/engine/src/credential-store.ts
+  s_7ffb86cc44e55f::t_a270f683944842 48-54,58-63,66-73
+  s_7ffb86cc44e55f::t_0dd305865cc95a 156-157,160
+  s_7ffb86cc44e55f::t_9fb5ae54906df9 285-287,295-313,325-333
+  s_7ffb86cc44e55f::t_fa31aa8afac05f 145-146
+  s_7ffb86cc44e55f::t_0244525e7118c2 288-294
+  s_7ffb86cc44e55f::t_a205c2a361a147 95-108
+  s_6fd5f3c75f2f5b::t_2d27693ea233d4 208-212
+  s_6fd5f3c75f2f5b::t_d53ce1b942322c 74-77
+  s_6fd5f3c75f2f5b::t_0a6884d3a0cf9d 78
+apps/cli/CONTEXT.md
+  s_7ffb86cc44e55f::t_48ae2be81edbee 35,38-44
+  s_7ffb86cc44e55f::t_0c58fb900f76bc 45
+apps/cli/src/models-commands.ts
+  s_7ffb86cc44e55f::t_096b7e739fd93b 1-40,42-50
+  s_7ffb86cc44e55f::t_ae3ab76bcc42c2 41
+packages/engine/src/linear/client.test.ts
+  s_7ffb86cc44e55f::t_10f6a5fd110fdf 108-111
+packages/engine/src/providers.ts
+  s_7ffb86cc44e55f::t_6838f97cc96f6b 1-10,15-40
+  s_7ffb86cc44e55f::t_aed7a01bc5d01b 11-14
+packages/engine/src/model-catalog.ts
+  s_7ffb86cc44e55f::t_b423b25389d07b 122-125
+  s_7ffb86cc44e55f::t_26587eba2b2f15 54-55
+  s_7ffb86cc44e55f::t_a51a53642a763d 90-95
+  s_7ffb86cc44e55f::t_1c71bcec2b765b 84
+  s_7ffb86cc44e55f::t_fa9d371107a03e 1-53,56-83,85-89,96-101,103-105,108-113,115-116,118,120-121
+  s_7ffb86cc44e55f::t_470cdd29cf7ce6 102,106-107,114,117,119
+apps/cli/src/login.test.ts
+  s_7ffb86cc44e55f::t_303f22131d1c0e 103-159
+  s_7ffb86cc44e55f::t_23ea98aca5d351 12
+packages/engine/src/mcp-skill.test.ts
+  s_7ffb86cc44e55f::t_609e153ab8fb90 40-43
+  s_7ffb86cc44e55f::t_627f0f1aca5836 7
+packages/engine/src/index.ts
+  s_7ffb86cc44e55f::t_838c6cbf9ddfbf 17,19
+packages/engine/src/credential-store.test.ts
+  s_7ffb86cc44e55f::t_e92c036ceda5cb 511-617
+  s_7ffb86cc44e55f::t_a7a193b6641c85 20
+packages/engine/src/providers.test.ts
+  s_7ffb86cc44e55f::t_63c7f61abdcc8e 1-66
+apps/cli/src/credentials.test.ts
+  s_7ffb86cc44e55f::t_ed7578b2b69cea 224-225,227-295
+  s_7ffb86cc44e55f::t_76eb61afead210 35-44
+  s_7ffb86cc44e55f::t_0ccb8636f87ce8 226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1ae15b258c728e0cb804be819ad251799bb9fbc0",
+  "prompts": {},
+  "sessions": {
+    "s_6fd5f3c75f2f5b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8b0f3630-704a-4e50-84d0-f71e6991d5e5",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
