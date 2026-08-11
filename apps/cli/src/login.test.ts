@@ -9,7 +9,7 @@ import * as Redacted from "effect/Redacted";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { afterEach, vi } from "vitest";
 import { makeFileStore } from "./credentials";
-import { BrowserOpener, type LinearLoginConfig, loginLinear } from "./login";
+import { BrowserOpener, type LinearLoginConfig, loginKey, loginLinear } from "./login";
 
 const redirectPort = 39_642;
 
@@ -98,5 +98,62 @@ describe("login linear", () => {
       assert.strictEqual(stored[0] && Redacted.value(stored[0].token.accessToken), "linear-access-token");
       assert.deepStrictEqual(stored[0]?.token.scopes, ["read", "write"]);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+});
+
+const onDiskStore = <A, E>(
+  use: (
+    filePath: string,
+  ) => Effect.Effect<A, E, CredentialStore.CredentialStore | FileSystem.FileSystem | Path.Path>,
+) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-login-key-" });
+    const filePath = path.join(dir, "credentials.json");
+    return yield* use(filePath).pipe(
+      Effect.provide(
+        Layer.effect(
+          CredentialStore.CredentialStore,
+          Effect.map(makeFileStore(filePath), (stored) => CredentialStore.make({ stored })),
+        ),
+      ),
+    );
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
+
+describe("login key", () => {
+  it.effect("stores a pasted key and resolves it back through the seam", () =>
+    onDiskStore((filePath) =>
+      Effect.gen(function* () {
+        const result = yield* loginKey({ provider: "anthropic", key: "  sk-ant-123  " });
+        assert.deepStrictEqual(result, { provider: "anthropic", displayName: "Anthropic" });
+        const store = yield* CredentialStore.CredentialStore;
+        const credential = yield* store.providerKey({
+          provider: "anthropic",
+          envVars: ["ANTHROPIC_API_KEY"],
+        });
+        assert.strictEqual(credential.source, "stored-key");
+        assert.strictEqual(Redacted.value(credential.key), "sk-ant-123");
+        return filePath;
+      }),
+    ),
+  );
+
+  it.effect("rejects an unknown provider", () =>
+    onDiskStore(() =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(loginKey({ provider: "nope", key: "sk-x" }));
+        assert.include(error.message, `unknown provider "nope"`);
+      }),
+    ),
+  );
+
+  it.effect("rejects a blank key", () =>
+    onDiskStore(() =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(loginKey({ provider: "openai", key: "   " }));
+        assert.include(error.message, "no api key provided");
+      }),
+    ),
   );
 });
