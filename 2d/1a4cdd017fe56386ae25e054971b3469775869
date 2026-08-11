@@ -1,0 +1,193 @@
+packages/engine/src/read-model.ts
+  s_8e09cabd6f8b8c::t_fc49a1e033d184 2-3,24-25
+  s_8e09cabd6f8b8c::t_5894ea9e3ca703 42
+packages/engine/src/classify.ts
+  s_8e09cabd6f8b8c::t_f5b82f14f87986 93-115
+  s_8e09cabd6f8b8c::t_c09325933e5955 90-92
+  s_8e09cabd6f8b8c::t_1419b997c9bd35 116-118
+  s_8e09cabd6f8b8c::t_70dd1417e25516 6,119
+.agents/skills/shadcn/SKILL.md
+  s_8e09cabd6f8b8c::t_96ca6d0555ae51 1-277
+.agents/skills/shadcn/agents/openai.yml
+  s_8e09cabd6f8b8c::t_7e922bdf397246 1-5
+.agents/skills/shadcn/cli.md
+  s_8e09cabd6f8b8c::t_0e1233ecea3399 1-290
+.agents/skills/shadcn/customization.md
+  s_8e09cabd6f8b8c::t_f3b87f27665ca0 1-209
+.agents/skills/shadcn/evals/evals.json
+  s_8e09cabd6f8b8c::t_d023372888809c 1-77
+.agents/skills/shadcn/mcp.md
+  s_8e09cabd6f8b8c::t_163767daa428df 1-105
+.agents/skills/shadcn/registry.md
+  s_8e09cabd6f8b8c::t_cb06b2a31e8987 1-277
+.agents/skills/shadcn/rules/base-vs-radix.md
+  s_8e09cabd6f8b8c::t_4a0b04fcde216a 1-306
+.agents/skills/shadcn/rules/chat.md
+  s_8e09cabd6f8b8c::t_3cf9b2142f24bf 1-224
+.agents/skills/shadcn/rules/composition.md
+  s_8e09cabd6f8b8c::t_8dd4987874b3a0 1-213
+.agents/skills/shadcn/rules/forms.md
+  s_8e09cabd6f8b8c::t_b91ff66c04ca38 1-192
+.agents/skills/shadcn/rules/icons.md
+  s_8e09cabd6f8b8c::t_959c4e5f213fce 1-101
+.agents/skills/shadcn/rules/styling.md
+  s_8e09cabd6f8b8c::t_ecb1a9332d15e1 1-185
+.gitignore
+  s_8e09cabd6f8b8c::t_80d82749b4ee8c 3
+CONTEXT-MAP.md
+  s_8e09cabd6f8b8c::t_2d8c948beb437d 20
+apps/cli/src/board.test.ts
+  s_8e09cabd6f8b8c::t_4192c42aa1c2ec 69
+apps/cli/src/status.test.ts
+  s_8e09cabd6f8b8c::t_6364672feb5ef0 30,139,154
+apps/cli/src/status.ts
+  s_8e09cabd6f8b8c::t_17f1989f805aea 66-67
+apps/desktop/AGENTS.md
+  s_8e09cabd6f8b8c::t_ed265b4da20ff4 1-35
+apps/desktop/CONTEXT.md
+  s_8e09cabd6f8b8c::t_025ae4c15da5d1 1-66
+apps/desktop/README.md
+  s_8e09cabd6f8b8c::t_ffe0a06bf2d477 1-34
+apps/desktop/build/entitlements.mac.plist
+  s_8e09cabd6f8b8c::t_504cf76bf6e3f1 1-12
+apps/desktop/components.json
+  s_8e09cabd6f8b8c::t_caa50634dba36d 1-23
+apps/desktop/dev-app-update.yml
+  s_8e09cabd6f8b8c::t_ad570fcc3b0180 1-3
+apps/desktop/electron-builder.yml
+  s_8e09cabd6f8b8c::t_a31616e5d8514c 1-43
+apps/desktop/electron.vite.config.ts
+  s_8e09cabd6f8b8c::t_67e7dd42277ba0 1-16
+apps/desktop/package.json
+  s_8e09cabd6f8b8c::t_4fdccc72976979 1-59
+apps/desktop/src/main/daemon-paths.ts
+  s_8e09cabd6f8b8c::t_1831ac7a39cfb6 1-4
+apps/desktop/src/main/daemon-rpc.ts
+  s_8e09cabd6f8b8c::t_b09baaa674db99 1-29
+apps/desktop/src/main/engine-command.test.ts
+  s_8e09cabd6f8b8c::t_c151039ee90516 1-58
+apps/desktop/src/main/engine-command.ts
+  s_8e09cabd6f8b8c::t_555480856bcffa 1-39
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_8e09cabd6f8b8c::t_db46a9042c7588 1-108
+apps/desktop/src/main/engine-supervisor.ts
+  s_8e09cabd6f8b8c::t_63ffa69bb440af 1-118
+apps/desktop/src/main/index.ts
+  s_8e09cabd6f8b8c::t_3f2676dc0905d9 1-99
+apps/desktop/src/main/ipc.ts
+  s_8e09cabd6f8b8c::t_c5bf4968fe24f9 1-22
+apps/desktop/src/main/logger.ts
+  s_8e09cabd6f8b8c::t_4a6d2c83128879 1-12
+apps/desktop/src/main/socket-probe.test.ts
+  s_8e09cabd6f8b8c::t_e8fcc6a222c51f 1-35
+apps/desktop/src/main/socket-probe.ts
+  s_8e09cabd6f8b8c::t_eca4ca7870eebb 1-16
+apps/desktop/src/main/tray.ts
+  s_8e09cabd6f8b8c::t_192e298e1e12aa 1-22
+apps/desktop/src/main/window.ts
+  s_8e09cabd6f8b8c::t_a506bde688ad29 1-50
+apps/desktop/src/preload/index.d.ts
+  s_8e09cabd6f8b8c::t_84c79966d4dd6d 1-9
+apps/desktop/src/preload/index.ts
+  s_8e09cabd6f8b8c::t_c9bd1bcf7e4bab 1-30
+apps/desktop/src/renderer/index.html
+  s_8e09cabd6f8b8c::t_5c7c8bc13cc095 1-17
+apps/desktop/src/renderer/src/app.tsx
+  s_8e09cabd6f8b8c::t_53a35d13e82c37 1-110
+apps/desktop/src/renderer/src/components/theme-provider.tsx
+  s_8e09cabd6f8b8c::t_d29d85a6997b78 1-223
+apps/desktop/src/renderer/src/env.d.ts
+  s_8e09cabd6f8b8c::t_363ab802aaa40d 1
+apps/desktop/src/renderer/src/main.tsx
+  s_8e09cabd6f8b8c::t_2101b7ec0bebfd 1-15
+apps/desktop/src/shared/ipc.ts
+  s_8e09cabd6f8b8c::t_be473535a37489 1-21
+apps/desktop/tsconfig.json
+  s_8e09cabd6f8b8c::t_e7d4941393ac67 1-5
+apps/desktop/tsconfig.node.json
+  s_8e09cabd6f8b8c::t_13d52c4ba82046 1-20
+apps/desktop/tsconfig.web.json
+  s_8e09cabd6f8b8c::t_767871002fd021 1-26
+biome.json
+  s_8e09cabd6f8b8c::t_173ea4fb5d82a4 58-62
+packages/contracts/CONTEXT.md
+  s_8e09cabd6f8b8c::t_80491c94cd3181 150,152-155
+packages/contracts/src/daemon.ts
+  s_8e09cabd6f8b8c::t_1e41ff1db380e6 106-108,110
+packages/contracts/src/index.ts
+  s_8e09cabd6f8b8c::t_432aae07d72e19 7
+packages/contracts/src/issue-tracker.ts
+  s_8e09cabd6f8b8c::t_cfbacb3403245e 1-8
+packages/contracts/src/rpc.ts
+  s_8e09cabd6f8b8c::t_73bf2bf2b2b985 4-7,9-10,46-84
+packages/engine/src/commands.test.ts
+  s_8e09cabd6f8b8c::t_97d9284b122fc1 1-319
+packages/engine/src/commands.ts
+  s_8e09cabd6f8b8c::t_224a2f8a7e45c2 1-153
+packages/engine/src/daemon-event-bus.test.ts
+  s_8e09cabd6f8b8c::t_751e570b45bb56 18
+packages/engine/src/daemon.ts
+  s_8e09cabd6f8b8c::t_9c745e60c8548c 25,50,139-141,179
+packages/engine/src/engine.test.ts
+  s_8e09cabd6f8b8c::t_50bd78c36632f8 19,404,478-479
+packages/engine/src/event-publisher.test.ts
+  s_8e09cabd6f8b8c::t_8547885d2c48c3 24,87,109,208-209
+packages/engine/src/executor.test.ts
+  s_8e09cabd6f8b8c::t_cdad6a0369d5f2 33,350
+packages/engine/src/executor.ts
+  s_8e09cabd6f8b8c::t_76727f92dbdb8a 44,149,603-630,653,655-656
+packages/engine/src/index.ts
+  s_8e09cabd6f8b8c::t_527ad676469d7b 22
+packages/engine/src/issue-tracker.ts
+  s_8e09cabd6f8b8c::t_a2e65913cda486 4,15
+packages/engine/src/recovery.test.ts
+  s_8e09cabd6f8b8c::t_6ec52dde1f8a9a 162
+packages/engine/src/run-control.ts
+  s_8e09cabd6f8b8c::t_312f287d038219 1-40
+packages/engine/src/scheduler.test.ts
+  s_8e09cabd6f8b8c::t_70e994d266976e 136-148
+packages/engine/src/scheduler.ts
+  s_8e09cabd6f8b8c::t_080e5fcbb99ae0 33,45,74,252-257
+packages/ui/components.json
+  s_8e09cabd6f8b8c::t_0cc97472926297 1-23
+packages/ui/package.json
+  s_8e09cabd6f8b8c::t_0921056fb59e8e 1-38
+packages/ui/src/components/alert.tsx
+  s_8e09cabd6f8b8c::t_fc767010218b93 1-62
+packages/ui/src/components/badge.tsx
+  s_8e09cabd6f8b8c::t_e1b99a45190bfd 1-49
+packages/ui/src/components/button.tsx
+  s_8e09cabd6f8b8c::t_bb929ce6cdd3ba 1-55
+packages/ui/src/components/card.tsx
+  s_8e09cabd6f8b8c::t_36f8205f11687d 1-79
+packages/ui/src/components/empty.tsx
+  s_8e09cabd6f8b8c::t_e093488d06c3e3 1-95
+packages/ui/src/components/switch.tsx
+  s_8e09cabd6f8b8c::t_6778bfaf977ba3 1-30
+packages/ui/src/lib/utils.ts
+  s_8e09cabd6f8b8c::t_2cbbc86a6a714f 1-6
+packages/ui/src/styles/globals.css
+  s_8e09cabd6f8b8c::t_0a3de71255c931 1-134
+packages/ui/tsconfig.json
+  s_8e09cabd6f8b8c::t_27fc242861afd5 1-19
+pnpm-lock.yaml
+  s_8e09cabd6f8b8c::t_1f3baa2626bc4d 12-14,18-29,114,126-214,261,289,295-350,362-584,646-652,743-791,793-795,797-806,814-819,826-831,838-843,850-855,862-867,874-879,886-891,898-903,910-915,922-927,934-939,946-951,958-963,970-975,982-987,994-999,1006-1011,1018-1023,1030-1035,1042-1047,1054-1059,1066-1071,1078-1083,1090-1095,1102-1107,1114-1131,1146-1159,1163-1165,1170-1177,1218-1220,1222-1240,1316-1336,1338-1339,1344-1345,1350-1351,1356-1357,1362-1363,1368-1369,1375-1376,1382-1383,1389-1390,1396-1397,1403-1404,1410-1411,1416-1417,1422-1423,1428-1444,1448-1458,1462-1559,1600-1602,1633-1646,1651-1653,1660-1677,1681-1694,1818-1830,1860-1867,1872-1883,1895-1924,1929-1974,1979-2016,2021-2036,2045-2051,2056-2100,2105-2145,2169-2171,2176-2187,2192-2203,2213-2260,2273-2301,2422-2424,2431-2434,2436-2437,2439-2442,2444-2446,2448-2545,2552-2555,2559-2567,2583-2590,2595-2597,2615-2618,2622-2624,2634-2644,2652-2659,2668-2694,2703-2717,2722-2725,2730-2761,2766-2772,2777-2783,2788-2791,2800-2806,2811-2830,2835-2849,2869-2922,2926-2964,2968-2984,2988-3008,3012-3014,3018-3042,3046-3054,3061-3066,3073-3078,3085-3090,3097-3102,3109-3115,3123-3129,3137-3143,3151-3157,3165-3170,3177-3182,3189-3192,3197-3232,3236-3239,3252-3266,3271-3274,3279-3283,3289-3291,3293-3342,3352-3353,3361-3367,3372-3383,3505-3521,3530-3537,3549-3600,3608-3618,3623-3626,3633-3636,3640-3643,3652-3669,3672-3706,3711-3713,3717-3723,3728-3734,3743-3762,3771-3774,3779-3818,3826-3835,3839-3869,3874-3877,3885-3889,3917-3930,3935-3944,3951-3954,3962-4044,4060-4070,4079-4088,4101-4107,4120-4127,4132-4143,4148-4167,4172-4175,4180-4181,4186,4264-4562,4564-4567,4569-4572,4574-4580,4582-4591,4593-4602,4604,4606-4610,4612,4614-4616,4618,4620-4671,4712-4732,4797,4800,4802-4804,4806,4808,4810,4812,4814-4908,4914-4916,4920-4922,4926-4928,4932-4934,4938-4940,4944-4946,4950-4952,4956-4958,4962-4964,4968-4970,4974-4976,4980-4982,4986-4988,4992-4994,4998-5000,5004-5006,5010-5012,5016-5018,5022-5024,5028-5030,5034-5036,5040-5042,5046-5048,5052-5054,5058-5060,5064-5082,5093-5108,5111-5115,5122-5134,5175-5179,5181-5189,5273-5332,5334,5337,5340,5343-5376,5379,5382,5385,5388,5391,5394,5397,5400,5403,5406,5409,5412-5432,5473-5478,5497,5499-5523,5530-5533,5538-5553,5558-5571,5636-5643,5653,5659,5685-5688,5694-5699,5711-5776,5779-5808,5823-5882,5885-5900,5911-5914,5917-5953,5956-5993,6006-6007,6013-6024,6031-6038,6043-6079,6086-6117,6124-6254,6256,6258-6261,6263,6265-6266,6268-6276,6288-6326,6356-6357,6360-6364,6377-6403,6406-6407,6455-6462,6465-6468,6473-6484,6498-6509,6514-6552,6558-6565,6579-6580,6586-6627,6630-6645,6648-6654,6657-6660,6667-6672,6681-6703,6708-6721,6742-6771,6774-6797,6800-6811,6814-6827,6830-6831,6834-6856,6859-6863,6867-6869,6873-6875,6879-6881,6885-6887,6891-6893,6897-6899,6903-6905,6909-6911,6915-6917,6921-6923,6927-6942,6959-7039,7041,7043-7045,7047-7049,7051-7053,7055,7057-7059,7061,7063-7065,7087,7091-7098,7104-7120,7123-7137,7142-7146,7157-7220,7225-7230,7233-7234,7239-7240,7243-7244,7249-7273,7275,7279-7311,7317-7321,7324-7329,7335-7338,7348-7378,7385-7386,7389-7416,7418-7428,7431-7444,7456-7463,7466-7484,7501-7505,7517-7556,7593-7602,7605-7614,7619-7620,7625-7706,7718-7727,7732-7747,7764-7768,7800-7803,7806-7811,7814-7835,7838-7839,7842,7846-7847,7853,7857,7860,7877,7885-7892,7897-7908,7914-7919,7924-7938,7941-7960
+pnpm-workspace.yaml
+  s_8e09cabd6f8b8c::t_2ced7923827440 6-7,13,15-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "2d1a4cdd017fe56386ae25e054971b3469775869",
+  "prompts": {},
+  "sessions": {
+    "s_8e09cabd6f8b8c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "660bb08e-79d0-43a3-bd33-44b0b0949f14",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
