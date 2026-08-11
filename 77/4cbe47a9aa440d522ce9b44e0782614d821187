@@ -1,0 +1,35 @@
+docs/agents/domain.md
+  s_72e20e699f6ea6::t_9586e8f3a3c0e4 28
+README.md
+  s_72e20e699f6ea6::t_5cfafd9fd5c5a5 3-5,7,9-14,16,18-21,25-27
+CONTEXT-MAP.md
+  s_72e20e699f6ea6::t_35074172f05608 3-4
+  s_72e20e699f6ea6::t_ed2510beaeb77d 10-12
+packages/engine/skills/implement-agent/SKILL.md
+  s_72e20e699f6ea6::t_67b7f83c21facd 68
+package.json
+  s_72e20e699f6ea6::t_da3095dcd982ea 5
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_72e20e699f6ea6::t_cdead0b45bfa89 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "774cbe47a9aa440d522ce9b44e0782614d821187",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_72e20e699f6ea6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2ff4e16f-a771-4565-89eb-14276b36403a",
+        "model": "grok-4.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
