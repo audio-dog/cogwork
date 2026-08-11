@@ -1,8 +1,18 @@
 import type { AgUiEvent, LifecycleStage, RunActivity } from "@clanker-forge/contracts";
-import { agUiCorrelation, RunId, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import {
+  agUiCorrelation,
+  applyDaemonEvent,
+  DaemonEvent,
+  initialBoard,
+  RunId,
+  RunSummary,
+  SchedulerStats,
+  WorkItemId,
+  WorkspaceId,
+} from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { flushWatch, initialWatchState, stepWatch, type WatchState } from "./watch";
+import { flushWatch, initialWatchState, renderBoard, stepWatch, type WatchState } from "./watch";
 
 const runId = Schema.decodeSync(RunId);
 const workItemId = Schema.decodeSync(WorkItemId);
@@ -170,5 +180,108 @@ describe("stepWatch", () => {
       activity({ event: { type: "TOOL_CALL_END", toolCallId: "unknown" } }),
     ]);
     assert.deepStrictEqual(lines, []);
+  });
+});
+
+const daemonEvent = Schema.decodeSync(DaemonEvent);
+
+const foldBoard = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
+
+const eligibleEvent = (workspace: string, id: string, stage: LifecycleStage, title: string) =>
+  daemonEvent({ _tag: "ItemChanged", workspace, item: { _tag: "Eligible", id, title, stage } });
+
+const runningRun = Schema.decodeSync(RunSummary)({
+  id: "run-1",
+  workspace: "acme",
+  workItem: "#1",
+  stage: "implement",
+  harness: "cursor",
+  branch: null,
+  session: null,
+  usage: null,
+  status: "running",
+  startedAtMillis: 0,
+  endedAtMillis: null,
+  eventCount: 3,
+});
+
+const schedulerStats = Schema.decodeSync(SchedulerStats)({
+  scheduling: "running",
+  globalInFlight: 1,
+  globalLimit: 4,
+  dailyBudgetUsed: 2,
+  dailyBudgetLimit: 10,
+  perWorkspace: [{ name: "acme", inFlight: 1 }],
+});
+
+describe("renderBoard", () => {
+  it("renders scheduler, items grouped by workspace, and running runs", () => {
+    const board = foldBoard([
+      daemonEvent({ _tag: "SchedulerChanged", scheduler: schedulerStats }),
+      eligibleEvent("acme", "#1", "triage", "First"),
+      eligibleEvent("acme", "#2", "implement", "Second"),
+      eligibleEvent("beta", "#3", "verify", "Third"),
+      daemonEvent({ _tag: "RunChanged", run: runningRun }),
+    ]);
+
+    assert.deepStrictEqual(renderBoard(board), [
+      "scheduler: 1/4 in-flight · budget 2/10 (acme=1)",
+      "workspaces:",
+      "  acme",
+      "    triage #1 First",
+      "    implement #2 Second",
+      "  beta",
+      "    verify #3 Third",
+      "running:",
+      "  implement #1 [cursor] run-1",
+    ]);
+  });
+
+  it("drops an item removed from the reconcile snapshot", () => {
+    const board = foldBoard([
+      eligibleEvent("acme", "#1", "triage", "First"),
+      eligibleEvent("acme", "#2", "implement", "Second"),
+      daemonEvent({ _tag: "ItemRemoved", workspace: "acme", id: "#1" }),
+    ]);
+
+    const lines = renderBoard(board);
+    assert.notInclude(lines, "    triage #1 First");
+    assert.include(lines, "    implement #2 Second");
+  });
+
+  it("stops showing a run as running once a drain interrupts it", () => {
+    const interrupted = Schema.decodeSync(RunSummary)({
+      ...runningRun,
+      status: "interrupted",
+      endedAtMillis: 1,
+    });
+    const board = foldBoard([
+      daemonEvent({ _tag: "RunChanged", run: runningRun }),
+      daemonEvent({ _tag: "RunChanged", run: interrupted }),
+    ]);
+
+    const lines = renderBoard(board);
+    assert.notInclude(lines, "  implement #1 [cursor] run-1");
+    assert.include(lines, "  (no running runs)");
+  });
+
+  it("sanitizes control sequences and newlines in item titles", () => {
+    const board = foldBoard([eligibleEvent("acme", "#1", "triage", "safe\u001b[2Jtitle\nINJECTED")]);
+    const lines = renderBoard(board);
+    const itemRow = lines.find((entry) => entry.includes("#1")) ?? "";
+
+    assert.isFalse(hasControlChar(itemRow));
+    assert.notInclude(lines, "INJECTED");
+    assert.include(itemRow, "safe");
+  });
+
+  it("renders placeholders for an empty board", () => {
+    assert.deepStrictEqual(renderBoard(initialBoard), [
+      "scheduler: (pending)",
+      "workspaces:",
+      "  (no items)",
+      "running:",
+      "  (no running runs)",
+    ]);
   });
 });

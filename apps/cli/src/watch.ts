@@ -1,4 +1,13 @@
-import type { AgUiEvent, RunActivity } from "@clanker-forge/contracts";
+import {
+  type AgUiEvent,
+  type Board,
+  type BoardItem,
+  ClassifiedItem,
+  type RunActivity,
+  type RunSummary,
+  type SchedulerStats,
+} from "@clanker-forge/contracts";
+import { formatScheduler } from "./status";
 
 interface TextBuffer {
   readonly label: string;
@@ -169,3 +178,44 @@ export const stepWatch = (
 
 export const flushWatch = (state: WatchState) =>
   [...state.text.values()].flatMap((buffer) => textLines(buffer));
+
+const cell = (value: string) => sanitize(value).replace(/[\t\n]+/g, " ");
+
+const itemLine = (item: ClassifiedItem) =>
+  ClassifiedItem.match(item, {
+    Eligible: ({ stage, id, title }) => `${stage} ${id} ${title}`,
+    Claimed: ({ id, title, claim }) => `claimed ${id} ${title} (by ${claim.by})`,
+    Blocked: ({ id, title, openBlockers }) =>
+      `blocked ${id} ${title} (${openBlockers} open blocker${openBlockers === 1 ? "" : "s"})`,
+    NeedsHuman: ({ reason, id, title }) => `needs-human ${reason} ${id} ${title}`,
+  });
+
+const workspaceNames = (items: ReadonlyArray<BoardItem>) =>
+  [...new Set(items.map((entry) => entry.workspace))].sort();
+
+const workspaceLines = (items: ReadonlyArray<BoardItem>) =>
+  workspaceNames(items).flatMap((name) => [
+    `  ${cell(name)}`,
+    ...items.filter((entry) => entry.workspace === name).map((entry) => `    ${cell(itemLine(entry.item))}`),
+  ]);
+
+const runningLine = (run: RunSummary) =>
+  `  ${cell(`${run.stage} ${run.workItem} [${run.harness}] ${run.id}`)}`;
+
+const schedulerLine = (scheduler: SchedulerStats | null) =>
+  scheduler ? formatScheduler(scheduler) : "scheduler: (pending)";
+
+const group = (label: string, lines: ReadonlyArray<string>, empty: string) => [
+  `${label}:`,
+  ...(lines.length === 0 ? [`  ${empty}`] : lines),
+];
+
+export const renderBoard = (board: Board) => {
+  const items = [...board.items.values()];
+  const running = [...board.runs.values()].filter((run) => run.status === "running");
+  return [
+    schedulerLine(board.scheduler),
+    ...group("workspaces", workspaceLines(items), "(no items)"),
+    ...group("running", running.map(runningLine), "(no running runs)"),
+  ];
+};
