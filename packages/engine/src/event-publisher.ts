@@ -1,4 +1,4 @@
-import { ClassifiedItem, SchedulerStats, type WorkspaceId } from "@clanker-forge/contracts";
+import { ClassifiedItem, itemKey, SchedulerStats } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -8,8 +8,6 @@ import { DaemonEventBus } from "./daemon-event-bus";
 import { classifiedItemsOf, schedulerStatsOf } from "./read-model";
 import { ReconcileWorker } from "./reconcile";
 import { Scheduler } from "./scheduler";
-
-const itemKey = (workspace: WorkspaceId, id: string) => `${workspace}::${id}`;
 
 const encodeItem = Schema.encodeSync(Schema.fromJsonString(ClassifiedItem));
 const encodeStats = Schema.encodeSync(Schema.fromJsonString(SchedulerStats));

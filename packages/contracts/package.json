@@ -6,13 +6,16 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "effect": "catalog:effect"
   },
   "devDependencies": {
     "@catenarycloud/linteffect": "^0.0.7",
-    "typescript": "catalog:"
+    "@effect/vitest": "catalog:effect",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

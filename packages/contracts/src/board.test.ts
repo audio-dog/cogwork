@@ -1,13 +1,10 @@
-import {
-  ClassifiedItem,
-  DaemonEvent,
-  RunSummary,
-  SchedulerStats,
-  WorkspaceId,
-} from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+import { WorkspaceId } from "./base-schemas";
 import { applyDaemonEvent, initialBoard } from "./board";
+import { SchedulerStats } from "./daemon";
+import { ClassifiedItem, DaemonEvent } from "./daemon-event";
+import { RunSummary } from "./run";
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
@@ -48,6 +45,20 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(board.items.size, 2);
     assert.strictEqual(stageOf(board.items.get("acme::1")?.item), "triage");
     assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "verify");
+  });
+
+  it("is idempotent: applying the same event twice is harmless", () => {
+    const changed = event({
+      _tag: "ItemChanged",
+      workspace: "acme",
+      item: eligible("1", "implement"),
+    });
+
+    const once = applyDaemonEvent(initialBoard, changed);
+    const twice = applyDaemonEvent(once, changed);
+
+    assert.strictEqual(twice.items.size, 1);
+    assert.strictEqual(stageOf(twice.items.get("acme::1")?.item), "implement");
   });
 
   it("tracks the latest run summary and scheduler stats", () => {

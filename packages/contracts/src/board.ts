@@ -1,10 +1,7 @@
-import {
-  type ClassifiedItem,
-  DaemonEvent,
-  type RunSummary,
-  type SchedulerStats,
-  type WorkspaceId,
-} from "@clanker-forge/contracts";
+import type { WorkspaceId } from "./base-schemas";
+import type { SchedulerStats } from "./daemon";
+import { type ClassifiedItem, DaemonEvent } from "./daemon-event";
+import type { RunSummary } from "./run";
 
 export interface BoardItem {
   readonly workspace: WorkspaceId;
@@ -19,7 +16,7 @@ export interface Board {
 
 export const initialBoard: Board = { items: new Map(), runs: new Map(), scheduler: null };
 
-const itemKey = (workspace: WorkspaceId, id: string) => `${workspace}::${id}`;
+export const itemKey = (workspace: WorkspaceId, id: string) => `${workspace}::${id}`;
 
 export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
   DaemonEvent.match(event, {
