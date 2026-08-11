@@ -1,0 +1,21 @@
+apps/desktop/AGENTS.md
+  s_1c726636ddd104::t_28b44e5147d0f8 36-42
+apps/desktop/src/renderer/src/features/use-board.ts
+  s_1c726636ddd104::t_0a4fe1dce98475 13-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b4bb9c8e92612fd94ffea61f8555db345288c1e7",
+  "prompts": {},
+  "sessions": {
+    "s_1c726636ddd104": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46f2982d-b1ca-44ac-8b17-9a451a98a9c3",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
