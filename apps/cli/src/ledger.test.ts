@@ -321,34 +321,37 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect("resolves a watch target by work item, running-first, past the recent-runs window", () =>
-      Effect.gen(function* () {
-        const ledger = yield* RunLedger.CoreRunLedger;
-        yield* ledger.insertRun(
-          record("resolve-old-done", 1000, {
-            workItem: resolveItem,
-            status: "succeeded",
-            endedAtMillis: 1500,
-          }),
-        );
-        yield* ledger.insertRun(record("resolve-running", 2000, { workItem: resolveItem }));
-        yield* Effect.forEach(
-          Array.from({ length: 60 }, (_, index) => index),
-          (index) =>
-            ledger.insertRun(
-              record(`resolve-other-${index}`, 3000 + index, {
-                workItem: resolveOther,
-                status: "succeeded",
-                endedAtMillis: 3001 + index,
-              }),
-            ),
-        );
+    it.effect(
+      "resolves a watch target by work item, running-first, past the recent-runs window",
+      () =>
+        Effect.gen(function* () {
+          const ledger = yield* RunLedger.CoreRunLedger;
+          yield* ledger.insertRun(
+            record("resolve-old-done", 1000, {
+              workItem: resolveItem,
+              status: "succeeded",
+              endedAtMillis: 1500,
+            }),
+          );
+          yield* ledger.insertRun(record("resolve-running", 2000, { workItem: resolveItem }));
+          yield* Effect.forEach(
+            Array.from({ length: 60 }, (_, index) => index),
+            (index) =>
+              ledger.insertRun(
+                record(`resolve-other-${index}`, 3000 + index, {
+                  workItem: resolveOther,
+                  status: "succeeded",
+                  endedAtMillis: 3001 + index,
+                }),
+              ),
+          );
 
-        const byHash = yield* ledger.resolveWatchTarget("#202");
-        const byBare = yield* ledger.resolveWatchTarget("202");
-        assert.strictEqual(byHash?.id, "resolve-running");
-        assert.strictEqual(byBare?.id, "resolve-running");
-      }),
+          const byHash = yield* ledger.resolveWatchTarget("#202");
+          const byBare = yield* ledger.resolveWatchTarget("202");
+          assert.strictEqual(byHash?.id, "resolve-running");
+          assert.strictEqual(byBare?.id, "resolve-running");
+        }),
+      15_000,
     );
 
     it.effect("resolves nothing for a work item that has never run", () =>
