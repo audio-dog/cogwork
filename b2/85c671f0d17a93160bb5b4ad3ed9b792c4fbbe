@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_975a296681dfb3::t_281d94e4dc1c52 1-5,7-70,73
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_975a296681dfb3::t_bcc3596c6b4533 1-85
+apps/desktop/src/renderer/src/routes/activity.tsx
+  s_975a296681dfb3::t_ed2adfde71297c 1-5,7-74,77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b285c671f0d17a93160bb5b4ad3ed9b792c4fbbe",
+  "prompts": {},
+  "sessions": {
+    "s_975a296681dfb3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9854d002-05c9-4083-8ff3-1c9e4b9a89fd",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
