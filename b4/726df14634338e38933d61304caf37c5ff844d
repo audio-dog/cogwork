@@ -1,0 +1,34 @@
+packages/contracts/src/daemon-event.ts
+  s_0ea6a6274db916::t_1cd9ca90c8298a 2-16,27-41,47
+packages/contracts/src/board.test.ts
+  s_0ea6a6274db916::t_d6747f257e9c24 6,13,16-24
+  s_0ea6a6274db916::t_2e25cb47958d15 137-173,177
+  s_7ffb86cc44e55f::t_c4e0211ee67b54 25
+packages/contracts/src/board.ts
+  s_0ea6a6274db916::t_8e9ca28c60b258 2-3,14,18-23,28-32,35-41,44-47,63-66
+  s_0ea6a6274db916::t_67de8c2fd4d737 27,33-34,42-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b4726df14634338e38933d61304caf37c5ff844d",
+  "prompts": {},
+  "sessions": {
+    "s_0ea6a6274db916": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7fe4cdf2-e8ae-4b97-94fc-cfc5c70292b3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
