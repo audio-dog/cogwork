@@ -1,0 +1,24 @@
+docs/adr/0008-desktop-shell-is-electron-primary-daemon-host.md
+  s_ffbbb84926feb7::t_5a63c8124294a6 1-3
+apps/cli/CONTEXT.md
+  s_ffbbb84926feb7::t_9489194c5bcb39 1,3-6,9-10,15,18-21,23
+CONTEXT-MAP.md
+  s_ffbbb84926feb7::t_b806a703f8f48f 17
+  s_ffbbb84926feb7::t_24a59f10cf5567 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "1463bf6f706920e096ab812ab80b5bd70b087d17",
+  "prompts": {},
+  "sessions": {
+    "s_ffbbb84926feb7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "517ddb64-ced1-46db-b9ff-3b522eb0eef4",
+        "model": "grok-4.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
