@@ -3,14 +3,25 @@ import * as Schema from "effect/Schema";
 import { WorkspaceId } from "./base-schemas";
 import { applyDaemonEvent, initialBoard } from "./board";
 import { SchedulerStats } from "./daemon";
-import { ClassifiedItem, DaemonEvent } from "./daemon-event";
+import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
 const runSummary = Schema.decodeSync(RunSummary);
 const schedulerStats = Schema.decodeSync(SchedulerStats);
+const workspaceState = Schema.decodeSync(WorkspaceState);
 const event = Schema.decodeSync(DaemonEvent);
+
+const registered = (name: string) =>
+  workspaceState({
+    _tag: "Registered",
+    name,
+    checkoutPath: `/repos/${name}`,
+    issueTracker: "github",
+    harness: "cursor",
+    poll: { status: "ok" },
+  });
 
 type Stage = "triage" | "implement" | "follow-up" | "verify";
 
@@ -123,9 +134,47 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(board.scheduler?.globalInFlight, 1);
   });
 
+  it("records the latest workspace state per key, registered by name", () => {
+    const board = fold([
+      event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
+      event({
+        _tag: "WorkspaceChanged",
+        workspace: workspaceState({
+          _tag: "Registered",
+          name: "acme",
+          checkoutPath: "/repos/acme",
+          issueTracker: "linear",
+          harness: "cursor",
+          poll: { status: "ok" },
+        }),
+      }),
+    ]);
+
+    assert.strictEqual(board.workspaces.size, 1);
+    const acme = board.workspaces.get("acme");
+    assert.strictEqual(acme?._tag, "Registered");
+    assert.strictEqual(acme?._tag === "Registered" ? acme.issueTracker : null, "linear");
+  });
+
+  it("folds a failed workspace onto the board keyed by its source", () => {
+    const board = fold([
+      event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
+      event({
+        _tag: "WorkspaceChanged",
+        workspace: workspaceState({ _tag: "Failed", source: "broken.workspace.ts", message: "boom" }),
+      }),
+    ]);
+
+    assert.strictEqual(board.workspaces.size, 2);
+    const failed = board.workspaces.get("broken.workspace.ts");
+    assert.strictEqual(failed?._tag, "Failed");
+    assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "boom");
+  });
+
   it("starts empty", () => {
     assert.strictEqual(initialBoard.items.size, 0);
     assert.strictEqual(initialBoard.runs.size, 0);
+    assert.strictEqual(initialBoard.workspaces.size, 0);
     assert.strictEqual(initialBoard.scheduler, null);
   });
 });
