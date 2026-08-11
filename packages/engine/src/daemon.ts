@@ -15,13 +15,35 @@ import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
+import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
+import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import type { CredentialStore } from "./credential-store";
+import * as Executor from "./executor";
+import * as GitHub from "./github";
+import * as Harness from "./harness";
+import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
+import * as Linear from "./linear";
+import * as McpSkill from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
-import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
-import { Recovery } from "./recovery";
+import {
+  type ReconcileSnapshot,
+  ReconcileWorker,
+  layer as reconcileLayer,
+  type WorkspaceReconcileState,
+} from "./reconcile";
+import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
-import { activityOf, RunEventBus } from "./run-event-bus";
+import { activityOf, RunEventBus, layer as runEventBusLayer } from "./run-event-bus";
 import { RunLedger } from "./run-ledger";
-import { type DrainOptions, Scheduler, type SchedulerConfig, type SchedulerState } from "./scheduler";
+import {
+  type DrainOptions,
+  Scheduler,
+  type SchedulerConfig,
+  type SchedulerState,
+  layer as schedulerLayer,
+} from "./scheduler";
 import { ticketSlug, WorktreeManager } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -124,6 +146,53 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
 });
+
+export const serializationLayer = RpcSerialization.layerNdjson;
+
+export interface HostAdapters<E = never, R = never> {
+  readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
+  readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
+  readonly runLedger: Layer.Layer<RunLedger, E, R>;
+  readonly registry: Layer.Layer<WorkspaceRegistry, E, R>;
+  readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
+  readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
+  readonly scheduler: SchedulerConfig;
+}
+
+const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
+  // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
+  // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
+  // one, or they would mint and rotate the app-actor token independently.
+  const credentials = adapters.credentials;
+  const issueTracker = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
+    Layer.provide(GitHub.clientLayer),
+    Layer.provide(Linear.clientLayer),
+    Layer.provide(credentials),
+  );
+  const base = Layer.mergeAll(
+    adapters.registry,
+    daemonInfoLayer,
+    issueTracker,
+    adapters.runLedger,
+    Harness.layer(adapters.harnessRunners),
+    McpSkill.layer.pipe(Layer.provide(credentials)),
+    runEventBusLayer,
+  );
+  const services = Layer.mergeAll(reconcileLayer, Executor.layer).pipe(
+    Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),
+  );
+  const scheduler = schedulerLayer(adapters.scheduler).pipe(Layer.provideMerge(services));
+  return recoveryLayer.pipe(Layer.provideMerge(scheduler));
+};
+
+export const serverLayer = <E, R>(adapters: HostAdapters<E, R>) =>
+  RpcServer.layer(DaemonRpcs).pipe(
+    Layer.provide(handlersLayer),
+    Layer.provide(adapters.transport),
+    Layer.provide(serializationLayer),
+    Layer.provideMerge(engineLayer(adapters)),
+    Layer.provide(FetchHttpClient.layer),
+  );
 
 interface ReconcilableWorkspace {
   readonly workspace: RegisteredWorkspace;

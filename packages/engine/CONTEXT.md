@@ -10,7 +10,7 @@ Role in the flow: **reconcile → schedule → execute → dispatch to a harness
 ## Language
 
 **Daemon**:
-The long-lived host process that runs the engine on one machine: it serves the RPC group and drives two heartbeats (reconcile and execute). Not a class — a set of modules composed at startup.
+The long-lived host process that runs the engine on one machine: it serves the RPC group and drives two heartbeats (reconcile and execute). Not a class — a set of modules composed at startup. The composition itself is the **seam** `Daemon.serverLayer(hostAdapters)`: it assembles the RPC server, its handlers, and the NDJSON framing on top of the engine's own services, taking a host's adapters (credential store, run ledger, workspace registry, worktree platform, harness runners, scheduler config, RPC transport) as its one argument. The one-credential-store rule lives here — the issue-tracker reads and the MCP-skill bearer must share one store instance. `Daemon.serializationLayer` is exported so a client frames its end of the wire the same way. Any host (the CLI today, desktop next) builds those adapters and calls this.
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
