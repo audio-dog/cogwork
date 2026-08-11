@@ -1,6 +1,8 @@
 import { Badge } from "@clanker-forge/ui/components/badge";
 import { Button } from "@clanker-forge/ui/components/button";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@clanker-forge/ui/components/sidebar";
 import { Switch } from "@clanker-forge/ui/components/switch";
+import { TooltipProvider } from "@clanker-forge/ui/components/tooltip";
 import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "@remixicon/react";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
@@ -46,30 +48,37 @@ function RootLayout() {
   const toggleAttention = useChromeStore((state) => state.toggleAttention);
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-3">
-        <h1 className="text-lg font-semibold">clanker-forge</h1>
-        <div className="flex items-center gap-4">
-          <EngineControl />
-          <Button
-            aria-label={attentionCollapsed ? "Show attention" : "Hide attention"}
-            size="icon-sm"
-            variant="ghost"
-            onClick={toggleAttention}
-          >
-            {attentionCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
-          </Button>
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
+    <TooltipProvider>
+      <SidebarProvider>
         <NavRail />
-        <main className="min-w-0 flex-1">
-          <Outlet />
-        </main>
-        {!attentionCollapsed && <AttentionRail />}
-      </div>
-    </div>
+        <SidebarInset className="h-svh overflow-hidden">
+          <header className="flex items-center justify-between border-b px-6 py-3">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger />
+              <h1 className="text-lg font-semibold">clanker-forge</h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <EngineControl />
+              <Button
+                aria-label={attentionCollapsed ? "Show attention" : "Hide attention"}
+                size="icon-sm"
+                variant="ghost"
+                onClick={toggleAttention}
+              >
+                {attentionCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
+              </Button>
+            </div>
+          </header>
+
+          <div className="flex min-h-0 flex-1">
+            <div className="min-w-0 flex-1">
+              <Outlet />
+            </div>
+            {!attentionCollapsed && <AttentionRail />}
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
 

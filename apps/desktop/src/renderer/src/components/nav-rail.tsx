@@ -1,6 +1,15 @@
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Button } from "@clanker-forge/ui/components/button";
-import { Separator } from "@clanker-forge/ui/components/separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+} from "@clanker-forge/ui/components/sidebar";
 import { RiInboxLine, RiLayoutGridLine, RiPulseLine, RiStackLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
@@ -21,31 +30,28 @@ const views: ReadonlyArray<View> = [
   { label: "Lanes", icon: RiStackLine },
 ];
 
-function ViewLink({ view }: { view: View }) {
+function ViewItem({ view }: { view: View }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   if (!view.to) {
     return (
-      <Button className="justify-start" disabled size="sm" variant="ghost">
-        <view.icon data-icon="inline-start" />
-        {view.label}
-        <Badge className="ms-auto" variant="outline">
-          Soon
-        </Badge>
-      </Button>
+      <SidebarMenuItem>
+        <SidebarMenuButton disabled tooltip={view.label}>
+          <view.icon />
+          <span>{view.label}</span>
+        </SidebarMenuButton>
+        <SidebarMenuBadge>Soon</SidebarMenuBadge>
+      </SidebarMenuItem>
     );
   }
 
   return (
-    <Button
-      className="justify-start"
-      size="sm"
-      variant={pathname === view.to ? "secondary" : "ghost"}
-      render={<Link to={view.to} />}
-    >
-      <view.icon data-icon="inline-start" />
-      {view.label}
-    </Button>
+    <SidebarMenuItem>
+      <SidebarMenuButton isActive={pathname === view.to} render={<Link to={view.to} />} tooltip={view.label}>
+        <view.icon />
+        <span>{view.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
@@ -56,51 +62,71 @@ function WorkspaceFilter() {
   const workspaces = board._tag === "Success" ? registeredWorkspaces(board.board) : [];
 
   return (
-    <div className="flex flex-col gap-1">
-      <span className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase">Workspace</span>
-      <Button
-        className="justify-start"
-        size="sm"
-        variant={filter === null ? "secondary" : "ghost"}
-        onClick={() => setFilter(null)}
-      >
-        All workspaces
-      </Button>
-      {workspaces.map((workspace) => (
-        <Button
-          key={workspace}
-          className="justify-start"
-          size="sm"
-          variant={filter === workspace ? "secondary" : "ghost"}
-          onClick={() => setFilter(workspace)}
-        >
-          <span className="truncate">{workspace}</span>
-        </Button>
-      ))}
-    </div>
+    <SidebarGroup>
+      <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={filter === null}
+              onClick={() => setFilter(null)}
+              tooltip="All workspaces"
+            >
+              <span>All workspaces</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {workspaces.map((workspace) => (
+            <SidebarMenuItem key={workspace}>
+              <SidebarMenuButton
+                isActive={filter === workspace}
+                onClick={() => setFilter(workspace)}
+                tooltip={workspace}
+              >
+                <span>{workspace}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
 
 export function NavRail() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
   return (
-    <nav className="flex w-52 flex-col gap-3 border-r p-3">
-      <div className="flex flex-col gap-1">
-        {views.map((view) => (
-          <ViewLink key={view.label} view={view} />
-        ))}
-      </div>
-      <Separator />
-      <WorkspaceFilter />
-      <Separator />
-      <Button
-        className="justify-start text-muted-foreground"
-        size="sm"
-        variant="ghost"
-        render={<Link to="/activity" />}
-      >
-        <RiPulseLine data-icon="inline-start" />
-        Raw activity
-      </Button>
-    </nav>
+    <Sidebar collapsible="icon">
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Views</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {views.map((view) => (
+                <ViewItem key={view.label} view={view} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <WorkspaceFilter />
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={pathname === "/activity"}
+                  render={<Link to="/activity" />}
+                  tooltip="Raw activity"
+                >
+                  <RiPulseLine />
+                  <span>Raw activity</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarRail />
+    </Sidebar>
   );
 }
