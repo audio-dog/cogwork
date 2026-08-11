@@ -1,0 +1,65 @@
+packages/engine/src/classify.test.ts
+  s_ce8a83423f3ecb::t_1d2c19a2026c84 16
+packages/engine/src/engine.test.ts
+  s_ce8a83423f3ecb::t_f3ab745d1fecf2 160,198,489,514
+packages/engine/src/recovery.test.ts
+  s_ce8a83423f3ecb::t_0c18fec210c2c3 72
+  s_ce8a83423f3ecb::t_6571f550330b51 84
+  s_ce8a83423f3ecb::t_a440bbf7c71b5f 96
+packages/engine/src/github/github.test.ts
+  s_ce8a83423f3ecb::t_051035fd97aac0 11
+  s_ce8a83423f3ecb::t_abc4f868b1d917 31,179-192,350-351,353,358,371-412,442,800,802,813,854,882-883,889,915,918,930,981,983,997
+packages/engine/src/linear/adapter.ts
+  s_ce8a83423f3ecb::t_a94cd026dfa544 1
+  s_ce8a83423f3ecb::t_41ef6953f5e242 8
+  s_ce8a83423f3ecb::t_e1c655a175e854 150,153
+  s_ce8a83423f3ecb::t_5ccfe36c6cd501 103,109-110
+packages/engine/src/github/adapter.ts
+  s_ce8a83423f3ecb::t_8e98f0db8add2a 105,111-112
+  s_ce8a83423f3ecb::t_c14b3237531d9d 30-31
+  s_ce8a83423f3ecb::t_61305660311bcb 8
+  s_ce8a83423f3ecb::t_ed60b9327e03d5 143,146
+packages/engine/src/coordination.ts
+  s_ce8a83423f3ecb::t_23efe9124c46a2 49-50
+packages/engine/src/executor.ts
+  s_ce8a83423f3ecb::t_a12d4b41f02ac5 186-188
+packages/engine/src/observe.ts
+  s_ce8a83423f3ecb::t_ff36642ea75da9 15
+packages/engine/src/mcp-skill.ts
+  s_ce8a83423f3ecb::t_fef52f63446d71 68-70,73
+  s_ce8a83423f3ecb::t_b369c92e934743 12
+packages/engine/src/recovery.ts
+  s_ce8a83423f3ecb::t_b323256dcfef87 179-180
+packages/engine/CONTEXT.md
+  s_ce8a83423f3ecb::t_f270cebc515764 93
+  s_ce8a83423f3ecb::t_33dab00af861d5 121
+packages/engine/src/issue-tracker.ts
+  s_ce8a83423f3ecb::t_688d8b311dd92e 17-18,25
+  s_ce8a83423f3ecb::t_d16762d623939f 82-83
+packages/engine/src/linear/linear.test.ts
+  s_54ae1956cf9b03::t_1a5d6eb7882682 329-330,332,343,423,491
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "c63f8f276c0eb70d4fa8d6f0333158b66d072570",
+  "prompts": {},
+  "sessions": {
+    "s_54ae1956cf9b03": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c0de3bb0-2715-45de-aaa8-92680e2b0ef6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ce8a83423f3ecb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b6fb333b-0d61-4796-8d19-72820dd1f0de",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
