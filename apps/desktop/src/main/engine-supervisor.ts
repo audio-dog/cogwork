@@ -1,5 +1,6 @@
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
+import { waitForDaemonListening } from "./wait-for-socket";
 
 export interface EngineChild {
   readonly pid?: number;
@@ -24,6 +25,7 @@ export interface EngineSupervisorOptions {
   readonly onStatus: (status: EngineStatus) => void;
   readonly logger: EngineLogger;
   readonly maxRestarts?: number;
+  readonly awaitReachable?: (socketPath: string, signal: AbortSignal) => Promise<boolean>;
 }
 
 export class EngineSupervisor {
@@ -32,10 +34,13 @@ export class EngineSupervisor {
   #owned = false;
   #shuttingDown = false;
   #restarts = 0;
+  #readyController: AbortController | null = null;
   readonly #maxRestarts: number;
+  readonly #awaitReachable: (socketPath: string, signal: AbortSignal) => Promise<boolean>;
 
   constructor(private readonly options: EngineSupervisorOptions) {
     this.#maxRestarts = options.maxRestarts ?? 3;
+    this.#awaitReachable = options.awaitReachable ?? waitForDaemonListening;
   }
 
   get status(): EngineStatus {
@@ -59,6 +64,7 @@ export class EngineSupervisor {
 
   async stop(): Promise<void> {
     this.#shuttingDown = true;
+    this.#readyController?.abort();
     const child = this.#child;
 
     if (!this.#owned || child === null) {
@@ -78,13 +84,23 @@ export class EngineSupervisor {
     const child = this.options.spawn(this.options.command);
     this.#child = child;
     this.#owned = true;
+    const controller = new AbortController();
+    this.#readyController = controller;
     this.#pipe(child);
     child.once("exit", (code, signal) => this.#handleExit(code, signal));
     this.options.logger.info(`Engine started (pid ${child.pid ?? "?"})`);
+    void this.#promoteWhenReachable(child, controller.signal);
+  }
+
+  async #promoteWhenReachable(child: EngineChild, signal: AbortSignal): Promise<void> {
+    const reachable = await this.#awaitReachable(this.options.socketPath, signal);
+    if (!reachable || this.#child !== child || this.#shuttingDown) return;
+    this.options.logger.info("Engine is listening on the socket");
     this.#setStatus("running");
   }
 
   #handleExit(code: number | null, signal: NodeJS.Signals | null): void {
+    this.#readyController?.abort();
     this.#child = null;
 
     if (this.#shuttingDown) {

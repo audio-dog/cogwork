@@ -8,6 +8,8 @@ import * as Cause from "effect/Cause";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { daemonStatusAtom } from "../daemon/atoms";
+import { EngineOfflineMessage } from "../features/engine-offline";
+import { type EnginePhase, enginePhase, useEngineStatus } from "../features/use-engine-status";
 
 type StatusResult = AsyncResult.AsyncResult<DaemonStatus, RpcClientError>;
 
@@ -48,7 +50,7 @@ function StatusBody({ result }: { result: StatusResult }) {
   );
 }
 
-function OverviewPage() {
+function DaemonStatusCard() {
   const result = useAtomValue(daemonStatusAtom);
   const refresh = useAtomRefresh(daemonStatusAtom);
 
@@ -67,6 +69,29 @@ function OverviewPage() {
       </CardContent>
     </Card>
   );
+}
+
+function EngineOfflineCard({ phase }: { phase: Exclude<EnginePhase, "up"> }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Daemon status</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          <EngineOfflineMessage phase={phase} />
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OverviewPage() {
+  const { status } = useEngineStatus();
+  const phase = enginePhase(status);
+
+  if (phase === "up") return <DaemonStatusCard />;
+  return <EngineOfflineCard phase={phase} />;
 }
 
 export const Route = createFileRoute("/")({

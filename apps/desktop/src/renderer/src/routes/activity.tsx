@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@clan
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
 import { createFileRoute } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
+import { EngineOfflineMessage } from "../features/engine-offline";
+import { type EnginePhase, enginePhase, useEngineStatus } from "../features/use-engine-status";
 import { useLiveEvents } from "../features/use-live-events";
 
 const describeEvent = (event: DaemonEvent) => {
@@ -29,7 +31,20 @@ function EventRow({ event }: { event: DaemonEvent }) {
   );
 }
 
-function ActivityPage() {
+function EngineOfflineEmpty({ phase }: { phase: Exclude<EnginePhase, "up"> }) {
+  return (
+    <Empty>
+      <EmptyHeader>
+        <EmptyTitle>Engine is off</EmptyTitle>
+        <EmptyDescription>
+          <EngineOfflineMessage phase={phase} />
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function LiveActivity() {
   const result = useLiveEvents();
 
   if (result._tag === "Failure") {
@@ -71,6 +86,14 @@ function ActivityPage() {
       </CardContent>
     </Card>
   );
+}
+
+function ActivityPage() {
+  const { status } = useEngineStatus();
+  const phase = enginePhase(status);
+
+  if (phase === "up") return <LiveActivity />;
+  return <EngineOfflineEmpty phase={phase} />;
 }
 
 export const Route = createFileRoute("/activity")({

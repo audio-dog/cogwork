@@ -4,7 +4,7 @@ import { Switch } from "@clanker-forge/ui/components/switch";
 import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "@remixicon/react";
 import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
-import { type EngineStatusValue, useEngineStatus } from "../features/use-engine-status";
+import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
 import { useChromeStore } from "../store/chrome";
 
 type BadgeVariant = ComponentProps<typeof Badge>["variant"];
@@ -17,9 +17,6 @@ const engineBadge: Record<EngineStatusValue, { label: string; variant: BadgeVari
   stopped: { label: "Stopped", variant: "outline" },
   failed: { label: "Failed", variant: "destructive" },
 };
-
-const engineIsOn = (status: EngineStatusValue) =>
-  status === "running" || status === "starting" || status === "adopted";
 
 function EngineControl() {
   const { status, setEnabled } = useEngineStatus();

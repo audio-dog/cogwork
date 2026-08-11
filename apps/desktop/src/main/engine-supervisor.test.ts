@@ -21,6 +21,16 @@ const command: EngineCommand = { command: "tsx", args: ["daemon"], cwd: "/repo" 
 
 const silentLogger = { info: () => {}, warn: () => {} };
 
+const flush = (): Promise<void> => new Promise<void>((resolve) => queueMicrotask(resolve));
+
+const deferred = <T>() => {
+  const box: { resolve: (value: T) => void } = { resolve: () => {} };
+  const promise = new Promise<T>((resolve) => {
+    box.resolve = resolve;
+  });
+  return { promise, resolve: (value: T) => box.resolve(value) };
+};
+
 const makeSupervisor = (
   overrides: Partial<EngineSupervisorOptions> & Pick<EngineSupervisorOptions, "probe" | "spawn">,
 ) => {
@@ -30,6 +40,7 @@ const makeSupervisor = (
     socketPath: "/tmp/test.sock",
     onStatus: (status) => statuses.push(status),
     logger: silentLogger,
+    awaitReachable: () => Promise.resolve(true),
     ...overrides,
   });
   return { supervisor, statuses };
@@ -52,10 +63,54 @@ describe("EngineSupervisor", () => {
     const { supervisor, statuses } = makeSupervisor({ probe: () => Promise.resolve(false), spawn });
 
     await supervisor.start();
+    await flush();
 
     expect(spawn).toHaveBeenCalledOnce();
     expect(supervisor.status).toBe("running");
     expect(statuses).toEqual(["starting", "running"]);
+  });
+
+  it("stays in starting until the socket is reachable, then reports running", async () => {
+    const gate = deferred<boolean>();
+    const { supervisor, statuses } = makeSupervisor({
+      probe: () => Promise.resolve(false),
+      spawn: () => new FakeChild(),
+      awaitReachable: () => gate.promise,
+    });
+
+    await supervisor.start();
+    await flush();
+    expect(supervisor.status).toBe("starting");
+    expect(statuses).toEqual(["starting"]);
+
+    gate.resolve(true);
+    await flush();
+    expect(supervisor.status).toBe("running");
+    expect(statuses).toEqual(["starting", "running"]);
+  });
+
+  it("never reports running when the child exits before the socket is reachable", async () => {
+    const gate = deferred<boolean>();
+    const child = new FakeChild();
+    const { supervisor, statuses } = makeSupervisor({
+      probe: () => Promise.resolve(false),
+      spawn: () => child,
+      maxRestarts: 0,
+      awaitReachable: (_socketPath, signal) => {
+        signal.addEventListener("abort", () => gate.resolve(false), { once: true });
+        return gate.promise;
+      },
+    });
+
+    await supervisor.start();
+    await flush();
+    expect(supervisor.status).toBe("starting");
+
+    child.emit("exit", 1, null);
+    await flush();
+
+    expect(supervisor.status).toBe("failed");
+    expect(statuses).not.toContain("running");
   });
 
   it("restarts on unexpected exit up to the limit, then fails", async () => {
