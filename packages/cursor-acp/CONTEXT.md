@@ -10,7 +10,7 @@ events.
 ## Language
 
 **cursorRunner**:
-The factory that produces the engine's harness runner for Cursor. Maps harness-request `model` / `effort` onto Cursor CLI `--model` (including bracket `effort=` overrides) via TanStack `acpCompatible` `modelOptions`. The package also exports `cursorModels` / `cursorEfforts` for typed playbook config.
+The factory that produces the engine's harness runner for Cursor. Maps harness-request `model` / `effort` onto Cursor CLI `--model` (including bracket `effort=` overrides) via TanStack `acpCompatible` `modelOptions`. When the request references a session, it pulls that session's opaque handle from the engine's `SessionStore` and hands it to Cursor as the resume `sessionId` — Cursor keeps its own history, so the handle is all it needs. The package also exports `cursorModels` / `cursorEfforts` for typed playbook config.
 _Avoid_: Harness, driver
 
 **Cursor model / effort**:

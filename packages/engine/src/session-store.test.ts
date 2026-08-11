@@ -106,3 +106,40 @@ describe("SessionStore.loadThread", () => {
     }).pipe(Effect.provide(layer)),
   );
 });
+
+describe("SessionStore.resumeHandle", () => {
+  const insertSession = (handle: string | null) =>
+    Effect.flatMap(RunLedger, (ledger) =>
+      ledger.insertSession({
+        kind: "opaque-handle",
+        id: session,
+        workspace,
+        harness,
+        createdAtMillis: 0,
+        handle,
+      }),
+    );
+
+  it.effect("hands back the opaque handle a CLI runner resumes from", () =>
+    Effect.gen(function* () {
+      yield* insertSession("cursor-abc");
+      const store = yield* SessionStore;
+      assert.strictEqual(yield* store.resumeHandle(session), "cursor-abc");
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("is null for a session that has no handle yet", () =>
+    Effect.gen(function* () {
+      yield* insertSession(null);
+      const store = yield* SessionStore;
+      assert.isNull(yield* store.resumeHandle(session));
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("is null for a session that was never recorded", () =>
+    Effect.gen(function* () {
+      const store = yield* SessionStore;
+      assert.isNull(yield* store.resumeHandle(session));
+    }).pipe(Effect.provide(layer)),
+  );
+});
