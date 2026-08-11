@@ -1,0 +1,77 @@
+packages/contracts/CONTEXT.md
+  s_df7cdfb01bd367::t_3629d58bed2e80 128
+  s_96d7765b352683::t_a955682968978d 135-138
+packages/engine/src/engine.test.ts
+  s_df7cdfb01bd367::t_c2c9501b413f97 560
+  s_df7cdfb01bd367::t_f43090676b0edd 557-559
+  s_df7cdfb01bd367::t_6730bfe6bead27 561-563
+  s_df7cdfb01bd367::t_b1d4b26643fb13 207-208,214,549-556,564-610
+packages/contracts/src/daemon.ts
+  s_96d7765b352683::t_56c4f89ba62581 15-33,38,46,54,63
+packages/engine/CONTEXT.md
+  s_df7cdfb01bd367::t_f379f1abd5f833 80-95
+packages/engine/package.json
+  s_df7cdfb01bd367::t_bcdbc8424b5153 16-17
+packages/engine/src/classify.test.ts
+  s_df7cdfb01bd367::t_230f1e1c60370b 24-25,31
+packages/engine/src/daemon.ts
+  s_df7cdfb01bd367::t_733c0c41492c7d 5,10,26,106-112,115-143
+packages/engine/src/follow-up.test.ts
+  s_df7cdfb01bd367::t_3e1534fa03c6c1 11-12,18
+packages/engine/src/follow-up.ts
+  s_df7cdfb01bd367::t_ba450f0ef13a43 18-19,25
+packages/engine/src/github/client.ts
+  s_df7cdfb01bd367::t_0fd4a94a524183 36,42,85,90,334,340
+packages/engine/src/github/github-helpers.test.ts
+  s_df7cdfb01bd367::t_0c72719678bc5e 35,41
+packages/engine/src/github/github.test.ts
+  s_df7cdfb01bd367::t_ee2b6fb6115053 208,213,511-547
+packages/engine/src/github/provider.ts
+  s_df7cdfb01bd367::t_6ce17cc6915628 135-136,142
+packages/engine/src/index.ts
+  s_df7cdfb01bd367::t_b95dce8e3d5a37 23
+packages/engine/src/tools/confinement.test.ts
+  s_df7cdfb01bd367::t_ecb14fe64734f5 1-36
+packages/engine/src/tools/confinement.ts
+  s_df7cdfb01bd367::t_78b357456a7dfd 1-29
+packages/engine/src/tools/errors.ts
+  s_df7cdfb01bd367::t_d4d341cada933b 1-20
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_df7cdfb01bd367::t_277c79342db4ec 1-102
+packages/engine/src/tools/file-diff-feed.ts
+  s_df7cdfb01bd367::t_0719390bef30a7 1-100
+packages/engine/src/tools/index.ts
+  s_df7cdfb01bd367::t_780496455d7e11 1-28
+packages/engine/src/tools/owned-tools.test.ts
+  s_df7cdfb01bd367::t_3a2c1013cb0384 1-174
+packages/engine/src/tools/owned-tools.ts
+  s_df7cdfb01bd367::t_09739a51596437 1-300
+packages/engine/src/tools/sandbox.ts
+  s_df7cdfb01bd367::t_66703503d10334 1-26
+pnpm-lock.yaml
+  s_df7cdfb01bd367::t_3a195134eefeaf 171-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "064bddad5880235002b6a9a3ad303140a6a7401b",
+  "prompts": {},
+  "sessions": {
+    "s_96d7765b352683": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4cd67a00-7797-41ed-af19-8a0f7a8e0bd7",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_df7cdfb01bd367": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3241e472-d4f0-4486-aa81-c100fd4f0e75",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
