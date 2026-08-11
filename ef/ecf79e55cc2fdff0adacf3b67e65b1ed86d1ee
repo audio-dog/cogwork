@@ -1,0 +1,62 @@
+packages/engine/src/event-publisher.test.ts
+  s_d5a8a684f38486::t_63c3284057a613 2,5-8
+  s_d5a8a684f38486::t_b0c4bccb59cbd0 218-250
+  s_d5a8a684f38486::t_bf62099a3d2858 39
+  s_d5a8a684f38486::t_f3ceadcbad70e8 300-332
+  s_d5a8a684f38486::t_e740ac3e2648f6 114-128
+  s_d5a8a684f38486::t_7c95668aa6dea7 9,27,40,129,251
+packages/contracts/src/board.ts
+  s_d5a8a684f38486::t_06527664e1d35d 21-22
+  s_d5a8a684f38486::t_c4d3b38aee35db 23,31-33
+  s_d5a8a684f38486::t_0d276d40c573d7 34
+apps/cli/src/ledger.ts
+  s_d5a8a684f38486::t_0a8f70f25221f0 441-459
+packages/engine/src/run-ledger.ts
+  s_d5a8a684f38486::t_10ad409892132d 195-196
+  s_d5a8a684f38486::t_148e5597f56890 95
+  s_d5a8a684f38486::t_fa2cf9528e6158 80
+  s_d5a8a684f38486::t_ac90a92a134eac 78-79,81-82,91-94,96-99
+  s_d5a8a684f38486::t_836854b8ebe109 100,197
+packages/contracts/src/daemon-event.ts
+  s_d5a8a684f38486::t_a2e82bf6294436 2
+  s_d5a8a684f38486::t_0294f5486b74f4 17
+packages/engine/src/daemon.ts
+  s_d5a8a684f38486::t_b2278ab554df6c 41
+  s_d5a8a684f38486::t_108d34d442bada 97-109,111-114,118-120
+  s_d5a8a684f38486::t_bbe987806dd667 115
+  s_d5a8a684f38486::t_5c9bd0fd0a9627 110
+apps/cli/src/ledger.test.ts
+  s_d5a8a684f38486::t_7ac38769d5b8a6 148-175
+packages/contracts/src/board.test.ts
+  s_d5a8a684f38486::t_fe507c27d6e43a 39-67
+packages/engine/src/event-publisher.ts
+  s_d5a8a684f38486::t_3273741d7bda89 21-26,31,48-50,56-68
+  s_d5a8a684f38486::t_e04ae8aaad770d 1-7
+packages/engine/src/run-ledger.test.ts
+  s_d5a8a684f38486::t_e00888fe01b195 92-120
+  s_0acfb9937c3810::t_35b1452752b74c 91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "efecf79e55cc2fdff0adacf3b67e65b1ed86d1ee",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d5a8a684f38486": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "007a8fcd-13da-400b-9d5a-d942f8d28100",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
