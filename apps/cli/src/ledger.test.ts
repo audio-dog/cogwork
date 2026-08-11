@@ -147,7 +147,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("reports only running runs, newest first, with their event counts", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertRun(record("run-older", 1000));
         yield* ledger.insertRun(record("run-newer", 3000));
         yield* ledger.insertRun(record("run-done", 2000));
