@@ -163,13 +163,15 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   );
 });
 
+const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
+  const worker = yield* ReconcileWorker;
+  const receipt = yield* worker.submit();
+  yield* Effect.logInfo("reconcile tick", receipt);
+  yield* maintainWorktrees();
+});
+
 const reconcileHeartbeat = (pollIntervalMillis: number) =>
-  Effect.gen(function* () {
-    const worker = yield* ReconcileWorker;
-    const receipt = yield* worker.submit();
-    yield* Effect.logInfo("reconcile tick", receipt);
-    yield* maintainWorktrees();
-  }).pipe(Effect.repeat(Schedule.spaced(pollIntervalMillis)));
+  reconcileTick().pipe(Effect.repeat(Schedule.spaced(pollIntervalMillis)));
 
 export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
@@ -178,10 +180,12 @@ export const bootstrap = Effect.gen(function* () {
   yield* scheduler.recover();
 });
 
-const executeHeartbeat = () =>
-  Effect.flatMap(Scheduler, (scheduler) => scheduler.tick()).pipe(
-    Effect.repeat(Schedule.spaced("5 seconds")),
-  );
+const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
+  const scheduler = yield* Scheduler;
+  yield* scheduler.tick();
+});
+
+const executeHeartbeat = () => executeTick().pipe(Effect.repeat(Schedule.spaced("5 seconds")));
 
 export interface HeartbeatOptions {
   readonly pollIntervalMillis: number;

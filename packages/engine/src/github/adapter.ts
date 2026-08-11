@@ -1,13 +1,15 @@
-import { WorkItemId } from "@clanker-forge/contracts";
+import { type AttemptRecord, type Claim, WorkItemId } from "@clanker-forge/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type { CoordinationComment, CoordinationHost } from "../coordination";
 import * as Coordination from "../coordination";
 import {
+  type FollowUpMarker,
   IssueTracker,
   IssueTrackerError,
   type IssueTrackerService,
+  type RoleChanges,
   type TrackerItem,
 } from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
@@ -123,55 +125,70 @@ const make = (client: GitHubClientService): IssueTrackerService => {
 
   return {
     rateLimitScope: () => null,
-    observe: (workspace) =>
-      Effect.gen(function* () {
-        const target = targetFor(workspace);
-        if (!target) {
-          return [];
-        }
-        return yield* observeTarget(target);
-      }),
-    claim: (workspace, id, claim) =>
-      Effect.gen(function* () {
-        const { target, number } = yield* resolveIssue(workspace, id);
-        yield* client.addLabel(target, number, claimLabel);
-        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
-          status: Coordination.claimStatusFor(claim),
-          marker: Coordination.serializeClaim(wireCodec, claim),
-        });
-      }),
-    release: (workspace, id) =>
-      Effect.gen(function* () {
-        const { target, number } = yield* resolveIssue(workspace, id);
-        yield* client.removeLabel(target, number, claimLabel);
-      }),
-    recordAttempt: (workspace, id, attempt, reason) =>
-      Effect.gen(function* () {
-        const { target, number } = yield* resolveIssue(workspace, id);
-        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
-          status: Coordination.attemptStatus(attempt, reason),
-          marker: Coordination.serializeAttempt(wireCodec, attempt),
-        });
-      }),
-    recordFollowUp: (workspace, id, marker, detail) =>
-      Effect.gen(function* () {
-        const { target, number } = yield* resolveIssue(workspace, id);
-        yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
-          marker: Coordination.serializeFollowUp(wireCodec, marker),
-          detail,
-        });
-      }),
-    note: (workspace, id, detail) =>
-      Effect.gen(function* () {
-        const { target, number } = yield* resolveIssue(workspace, id);
-        yield* Coordination.postNote(wireCodec, coordinationHost(target, number), detail);
-      }),
-    setRoles: (workspace, id, changes) =>
-      Effect.gen(function* () {
-        const { target, number } = yield* resolveIssue(workspace, id);
-        yield* Effect.forEach(changes.remove, (role) => client.removeLabel(target, number, roleLabel(role)));
-        yield* Effect.forEach(changes.add, (role) => client.addLabel(target, number, roleLabel(role)));
-      }),
+    observe: Effect.fn("github.observe")(function* (workspace: RegisteredWorkspace) {
+      const target = targetFor(workspace);
+      if (!target) {
+        return [];
+      }
+      return yield* observeTarget(target);
+    }),
+    claim: Effect.fn("github.claim")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      claim: Claim,
+    ) {
+      const { target, number } = yield* resolveIssue(workspace, id);
+      yield* client.addLabel(target, number, claimLabel);
+      yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
+        status: Coordination.claimStatusFor(claim),
+        marker: Coordination.serializeClaim(wireCodec, claim),
+      });
+    }),
+    release: Effect.fn("github.release")(function* (workspace: RegisteredWorkspace, id: WorkItemId) {
+      const { target, number } = yield* resolveIssue(workspace, id);
+      yield* client.removeLabel(target, number, claimLabel);
+    }),
+    recordAttempt: Effect.fn("github.recordAttempt")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      attempt: AttemptRecord,
+      reason?: string,
+    ) {
+      const { target, number } = yield* resolveIssue(workspace, id);
+      yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
+        status: Coordination.attemptStatus(attempt, reason),
+        marker: Coordination.serializeAttempt(wireCodec, attempt),
+      });
+    }),
+    recordFollowUp: Effect.fn("github.recordFollowUp")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      marker: FollowUpMarker,
+      detail?: string,
+    ) {
+      const { target, number } = yield* resolveIssue(workspace, id);
+      yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, number), {
+        marker: Coordination.serializeFollowUp(wireCodec, marker),
+        detail,
+      });
+    }),
+    note: Effect.fn("github.note")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      detail: string,
+    ) {
+      const { target, number } = yield* resolveIssue(workspace, id);
+      yield* Coordination.postNote(wireCodec, coordinationHost(target, number), detail);
+    }),
+    setRoles: Effect.fn("github.setRoles")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      changes: RoleChanges,
+    ) {
+      const { target, number } = yield* resolveIssue(workspace, id);
+      yield* Effect.forEach(changes.remove, (role) => client.removeLabel(target, number, roleLabel(role)));
+      yield* Effect.forEach(changes.add, (role) => client.addLabel(target, number, roleLabel(role)));
+    }),
   };
 };
 
