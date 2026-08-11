@@ -1,0 +1,21 @@
+packages/ui/src/components/separator.tsx
+  s_0acfb9937c3810::t_78e4459ef050e8 1-19
+packages/ui/src/components/skeleton.tsx
+  s_0acfb9937c3810::t_78e4459ef050e8 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "eb0630b9d10898fdf692c85e6c4555a3558c6602",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
