@@ -14,12 +14,15 @@ import type { RegisteredWorkspace } from "./projector";
 
 export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
 
+export type ClaimRequest = Omit<Claim, "by">;
+
 interface ObservedItemBase {
   readonly id: WorkItemId;
   readonly title: string;
   readonly roles: ReadonlyArray<TriageRole>;
   readonly claimLabeled: boolean;
   readonly claim: Claim | null;
+  readonly claimedByUs: boolean;
   readonly attempts: ReadonlyArray<AttemptRecord>;
   readonly openBlockers: number;
 }
@@ -76,7 +79,8 @@ const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: Reg
 export const makeEmpty = Effect.succeed({
   rateLimitScope: (_workspace: RegisteredWorkspace): string | null => null,
   observe: observeEmpty,
-  claim: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: Claim) => failWhenRemote(workspace),
+  claim: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: ClaimRequest) =>
+    failWhenRemote(workspace),
   release: (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace),
   recordAttempt: (
     workspace: RegisteredWorkspace,

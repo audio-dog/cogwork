@@ -46,6 +46,8 @@ export interface CoordinationBody {
 
 const attribution = "> *This was posted by clanker-forge.*";
 
+export const defaultClaimant = "clanker-forge";
+
 const stageGerund: Record<LifecycleStage, string> = {
   triage: "triaging",
   implement: "implementing",

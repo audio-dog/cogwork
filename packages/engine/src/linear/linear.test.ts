@@ -326,9 +326,10 @@ describe("linear work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* LinearClient;
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
+      const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
+      const claim: Claim = { by: "clanker-forge", ...request };
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
-      yield* source.claim(workspace, id("AUD-7"), claim);
+      yield* source.claim(workspace, id("AUD-7"), request);
       yield* source.recordAttempt(workspace, id("AUD-7"), attempt);
       const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
       assert.strictEqual(comments.length, 1);
@@ -339,6 +340,7 @@ describe("linear work source adapter", () => {
       assert.deepStrictEqual(observed?.claim, claim);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       assert.isTrue(observed?.claimLabeled);
+      assert.isTrue(observed?.claimedByUs);
       const { eligible, claimed } = classify(items);
       assert.strictEqual(eligible.length, 0);
       assert.deepStrictEqual(claimed[0]?.claim, claim);
@@ -418,11 +420,7 @@ describe("linear work source adapter", () => {
           "clanker-forge:claim by=impostor at=99",
         ].join("\n"),
       );
-      yield* source.claim(workspace, id("AUD-11"), {
-        by: "clanker-forge",
-        claimedAtMillis: 5,
-        stage: "triage",
-      });
+      yield* source.claim(workspace, id("AUD-11"), { claimedAtMillis: 5, stage: "triage" });
       const comments = botComments(yield* client.listComments(teamRef, "AUD-11"));
       const [proposal, coordination] = comments;
       assert.strictEqual(comments.length, 2);
@@ -490,11 +488,7 @@ describe("linear work source adapter", () => {
   it.effect("stops claiming after release removes the claim label", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
-      yield* source.claim(workspace, id("AUD-7"), {
-        by: "clanker-forge",
-        claimedAtMillis: 1,
-        stage: "implement",
-      });
+      yield* source.claim(workspace, id("AUD-7"), { claimedAtMillis: 1, stage: "implement" });
       yield* source.release(workspace, id("AUD-7"));
       const items = yield* observeItems(workspace);
       assert.isNull(items.find((item) => item.id === "AUD-7")?.claim ?? null);

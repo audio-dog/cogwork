@@ -13,6 +13,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   roles: over.roles ?? [],
   claimLabeled: over.claimLabeled ?? false,
   claim: over.claim ?? null,
+  claimedByUs: over.claimedByUs ?? false,
   attempts: over.attempts ?? [],
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
