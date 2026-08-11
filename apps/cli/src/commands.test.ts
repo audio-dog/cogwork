@@ -27,10 +27,10 @@ describe("resolveTarget", () => {
     }),
   );
 
-  it.effect("watches everything when neither id nor work item is given", () =>
+  it.effect("resolves to none when neither id nor work item is given", () =>
     Effect.gen(function* () {
       const target = yield* resolveTarget(constResolver(null), Option.none(), Option.none());
-      assert.deepStrictEqual(Option.getOrNull(target), {});
+      assert.isTrue(Option.isNone(target));
     }),
   );
 

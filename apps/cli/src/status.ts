@@ -60,7 +60,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
   ].join("\n");
 };
 
-const formatScheduler = (scheduler: SchedulerStats) => {
+export const formatScheduler = (scheduler: SchedulerStats) => {
   const loads = scheduler.perWorkspace.map((load) => `${load.name}=${load.inFlight}`).join(" ");
   const suffix = loads.length === 0 ? "" : ` (${loads})`;
   const paused = scheduler.scheduling === "paused" ? " · paused" : "";

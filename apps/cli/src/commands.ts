@@ -1,5 +1,9 @@
 import {
+  applyDaemonEvent,
+  type Board,
+  type DaemonEvent,
   DaemonRpcs,
+  initialBoard,
   type RunActivity,
   type RunEvent,
   RunId,
@@ -24,7 +28,7 @@ import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatStatus } from "./status";
 import { secondStopSignal } from "./stop-signal";
 import { telemetryLayer } from "./telemetry";
-import { flushWatch, initialWatchState, stepWatch } from "./watch";
+import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
 
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
@@ -161,13 +165,24 @@ const markSeen = (seen: Ref.Ref<ReadonlyMap<string, number>>) => (activity: RunA
 
 const reconnectSchedule = Schedule.spaced("1 second");
 
-type WatchPayload = { readonly id?: RunId };
+const clearScreen = "\u001b[2J\u001b[H";
 
-const watchStream = <E>(source: Stream.Stream<RunActivity, E>, seen: Ref.Ref<ReadonlyMap<string, number>>) =>
-  source.pipe(
-    Stream.filterEffect(markSeen(seen)),
+type WatchPayload = { readonly id: RunId };
+
+const reconnecting = <A, E, R>(stream: Stream.Stream<A, E, R>) =>
+  stream.pipe(
     Stream.tapError((error) => Console.error(`watch: connection lost, reconnecting… (${String(error)})`)),
     Stream.retry(reconnectSchedule),
+  );
+
+const watchStream = <E>(source: Stream.Stream<RunActivity, E>, seen: Ref.Ref<ReadonlyMap<string, number>>) =>
+  reconnecting(source.pipe(Stream.filterEffect(markSeen(seen))));
+
+const overviewScreen = (board: Board) => `${clearScreen}${renderBoard(board).join("\n")}`;
+
+const watchOverview = <E>(source: Stream.Stream<DaemonEvent, E>) =>
+  reconnecting(source.pipe(Stream.scan(initialBoard, applyDaemonEvent))).pipe(
+    Stream.runForEach((board) => Console.log(overviewScreen(board))),
   );
 
 export const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R>(
@@ -178,7 +193,7 @@ export const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R
   if (Option.isSome(id)) {
     return Option.some<WatchPayload>({ id: yield* Schema.decodeUnknownEffect(RunId)(id.value) });
   }
-  if (Option.isNone(workItem)) return Option.some<WatchPayload>({});
+  if (Option.isNone(workItem)) return Option.none<WatchPayload>();
   const item = yield* Schema.decodeUnknownEffect(WorkItemId)(workItem.value);
   const runId = yield* resolve(item);
   return runId === null ? Option.none<WatchPayload>() : Option.some<WatchPayload>({ id: runId });
@@ -191,6 +206,9 @@ const runWatch = Effect.fn("commands.runWatch")(
     readonly workItem: Option.Option<string>;
   }) {
     const client = yield* RpcClient.make(DaemonRpcs);
+    if (Option.isNone(options.id) && Option.isNone(options.workItem)) {
+      return yield* watchOverview(client.WatchEvents());
+    }
     const target = yield* resolveTarget(
       (workItem) => client.ResolveWatchTarget({ workItem }),
       options.id,
