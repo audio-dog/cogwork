@@ -12,6 +12,7 @@ import {
   webFetch,
   writeFile,
 } from "./owned-tools";
+import { fullProfile } from "./policy";
 import type { WorktreeSandbox } from "./sandbox";
 
 const openSandbox = Effect.fn("owned-tools.test.openSandbox")(function* () {
@@ -155,7 +156,7 @@ describe("owned tools", () => {
   it.effect("exposes the seven tools as server tool definitions", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
-      const tools = makeOwnedToolSet(sandbox);
+      const tools = makeOwnedToolSet(sandbox, fullProfile);
       assert.deepStrictEqual(Object.keys(tools).sort(), [
         "bash",
         "edit",
