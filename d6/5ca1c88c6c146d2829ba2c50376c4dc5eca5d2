@@ -1,0 +1,80 @@
+packages/engine/src/daemon.ts
+  s_eafd1176b04802::t_dd621c8d4fac54 158-160
+  s_eafd1176b04802::t_7a0871e1342505 198
+  s_eafd1176b04802::t_4a0282f1ee7560 25
+  s_eafd1176b04802::t_3565fccceef44c 50
+packages/engine/src/executor.ts
+  s_eafd1176b04802::t_2842955d05bfcd 149
+  s_eafd1176b04802::t_7e67b966d8eeb1 603-630,653,655-656
+  s_eafd1176b04802::t_63ca42f3e82d37 44
+packages/engine/src/read-model.ts
+  s_eafd1176b04802::t_71e4d0eedec219 60
+  s_eafd1176b04802::t_d2925dfa72ef0e 29-34
+  s_eafd1176b04802::t_82826c37c2167a 2,4
+packages/engine/src/issue-tracker.ts
+  s_eafd1176b04802::t_8312b722de64bc 4
+  s_eafd1176b04802::t_0d2e16bc1bf92f 15
+packages/engine/src/commands.test.ts
+  s_eafd1176b04802::t_06498625596f9d 190-193,210-211
+  s_eafd1176b04802::t_7463f12be89072 270,274,276
+  s_eafd1176b04802::t_c7142247ad04af 1-10,12,14-144,148-165,168-189,194-209,212-265,284-300
+  s_eafd1176b04802::t_f45196590adb7c 145-147,166-167
+  s_eafd1176b04802::t_4e8b9a9979ca45 11,13
+  s_eafd1176b04802::t_e4b713fe937fbc 266-269,271-273,275,277-283,301
+  s_eafd1176b04802::t_58a2ce4236b796 302-319
+packages/engine/src/event-publisher.test.ts
+  s_eafd1176b04802::t_23706094e36779 109
+  s_eafd1176b04802::t_1122bd49a8d86b 24
+  s_eafd1176b04802::t_e16c647d95a328 87
+  s_eafd1176b04802::t_77a929307e238f 208-209
+packages/engine/src/classify.ts
+  s_eafd1176b04802::t_7e4eee45f2ef68 78-98
+  s_eafd1176b04802::t_193ba6baa7aca4 6
+  s_eafd1176b04802::t_9b49234837e4d7 99-100
+packages/engine/src/scheduler.ts
+  s_eafd1176b04802::t_c12f8436bb2807 33,45
+  s_eafd1176b04802::t_a1737ca806d978 74
+  s_eafd1176b04802::t_f996e01ce13964 252-257
+packages/engine/src/commands.ts
+  s_eafd1176b04802::t_c74665b9f11bee 39-54
+  s_eafd1176b04802::t_89efe34575924f 64
+  s_eafd1176b04802::t_9d1352ca9accdc 1-3,5-14,16-22,24-38,55-63,65-76,80-153
+  s_eafd1176b04802::t_590e28834f7585 77-79
+  s_eafd1176b04802::t_2d1d7505761df8 4
+  s_eafd1176b04802::t_8033a3544148e5 23
+  s_eafd1176b04802::t_7109903011ddc3 15
+packages/engine/src/executor.test.ts
+  s_eafd1176b04802::t_0c158d15d79ce9 33
+  s_eafd1176b04802::t_b0dec18d9a7c51 350
+packages/engine/src/daemon-event-bus.test.ts
+  s_eafd1176b04802::t_94c6dd41ed830e 18
+packages/engine/src/engine.test.ts
+  s_eafd1176b04802::t_0e77c2242d7a8c 478-479
+  s_eafd1176b04802::t_0142da5ae7214d 404
+  s_eafd1176b04802::t_86069fe86d2d16 19
+packages/engine/src/index.ts
+  s_eafd1176b04802::t_eaa342310bae03 22
+packages/engine/src/recovery.test.ts
+  s_eafd1176b04802::t_c5b541750d89ab 162
+packages/engine/src/scheduler.test.ts
+  s_eafd1176b04802::t_0748aed632d31e 136-143
+  s_eafd1176b04802::t_f5c50e3575d0c9 144-148
+packages/engine/src/run-control.ts
+  s_eafd1176b04802::t_428a21d572351a 1-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d65ca1c88c6c146d2829ba2c50376c4dc5eca5d2",
+  "prompts": {},
+  "sessions": {
+    "s_eafd1176b04802": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c1f2ebf8-0876-4445-b204-ffdaf5160c08",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
