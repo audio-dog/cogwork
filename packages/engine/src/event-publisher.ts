@@ -4,6 +4,8 @@ import {
   SchedulerStats,
   type WorkItemId,
   type WorkspaceId,
+  WorkspaceState,
+  workspaceKey,
 } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -11,12 +13,14 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { DaemonEventBus } from "./daemon-event-bus";
-import { classifiedItemsOf, schedulerStatsOf } from "./read-model";
+import { classifiedItemsOf, schedulerStatsOf, workspaceStatesOf } from "./read-model";
 import { ReconcileWorker } from "./reconcile";
+import { WorkspaceRegistry } from "./registry";
 import { Scheduler } from "./scheduler";
 
 const encodeItem = Schema.encodeSync(Schema.fromJsonString(ClassifiedItem));
 const encodeStats = Schema.encodeSync(Schema.fromJsonString(SchedulerStats));
+const encodeWorkspace = Schema.encodeSync(Schema.fromJsonString(WorkspaceState));
 
 interface PublishedItem {
   readonly signature: string;
@@ -27,8 +31,10 @@ interface PublishedItem {
 export const make = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
+  const registry = yield* WorkspaceRegistry;
   const bus = yield* DaemonEventBus;
   const lastItems = yield* Ref.make<ReadonlyMap<string, PublishedItem>>(new Map());
+  const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
   const lastScheduler = yield* Ref.make<string | null>(null);
 
   const publishItems = Effect.fn("DaemonEventPublisher.publishItems")(function* () {
@@ -68,6 +74,24 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const publishWorkspaces = Effect.fn("DaemonEventPublisher.publishWorkspaces")(function* () {
+    const snapshot = yield* worker.snapshot;
+    const states = workspaceStatesOf(registry, snapshot);
+    const previous = yield* Ref.get(lastWorkspaces);
+    const signed = states.map((state) => ({
+      key: workspaceKey(state),
+      signature: encodeWorkspace(state),
+      state,
+    }));
+    const changed = signed.filter(({ key, signature }) => previous.get(key) !== signature);
+    yield* Effect.forEach(
+      changed,
+      ({ state }) => bus.publish({ _tag: "WorkspaceChanged", workspace: state }),
+      { discard: true },
+    );
+    yield* Ref.set(lastWorkspaces, new Map(signed.map(({ key, signature }) => [key, signature] as const)));
+  });
+
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
     const stats = schedulerStatsOf(scheduler.config, yield* scheduler.stats);
     const signature = encodeStats(stats);
@@ -76,7 +100,7 @@ export const make = Effect.gen(function* () {
     yield* bus.publish({ _tag: "SchedulerChanged", scheduler: stats });
   });
 
-  return { publishItems, publishScheduler } as const;
+  return { publishItems, publishWorkspaces, publishScheduler } as const;
 });
 
 export type DaemonEventPublisherService = Effect.Success<typeof make>;

@@ -1,8 +1,9 @@
 import type { ActionableItem, ClassifiedItem, SchedulerStats } from "@clanker-forge/contracts";
+import { workspaceFailureState, workspaceStateFromInfo } from "@clanker-forge/contracts";
 import { classifiedItemOf, type EligibleWork } from "./classify";
 import type { ObservedItem } from "./issue-tracker";
-import type { RegisteredWorkspace } from "./projector";
-import type { WorkspaceReconcileState } from "./reconcile";
+import type { RegisteredWorkspace, RegistryState } from "./projector";
+import type { ReconcileSnapshot, WorkspaceReconcileState } from "./reconcile";
 import type { SchedulerConfig, SchedulerState } from "./scheduler";
 
 const okPoll = { status: "ok" as const };
@@ -37,6 +38,16 @@ export const workspaceInfoOf = (
   blocked: state?.blocked ?? [],
   needsHuman: state?.needsHuman ?? [],
 });
+
+export const workspaceStatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot) => {
+  const stateByName = new Map(snapshot.workspaces.map((state) => [state.name, state] as const));
+  return [
+    ...registry.workspaces.map((workspace) =>
+      workspaceStateFromInfo(workspaceInfoOf(workspace, stateByName.get(workspace.config.name))),
+    ),
+    ...registry.failures.map(workspaceFailureState),
+  ];
+};
 
 export const schedulerStatsOf = (config: SchedulerConfig, state: SchedulerState): SchedulerStats => ({
   scheduling: state.paused ? "paused" : "running",

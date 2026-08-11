@@ -10,6 +10,9 @@ import {
   SchedulerStats,
   WorkItemId,
   WorkspaceId,
+  workspaceFailureState,
+  workspaceKey,
+  workspaceStateFromInfo,
 } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -153,6 +156,7 @@ const publisherLayer = (
     Layer.provideMerge(
       Layer.mergeAll(
         Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, observing(itemsRef)))),
+        registryLayer,
         schedulerStub(statsRef),
         DaemonEventBus.layer,
       ),
@@ -310,7 +314,7 @@ describe("DaemonEventPublisher", () => {
         yield* worker.submit();
         yield* ledger.insertRun(runningRun);
 
-        const seed = [...(yield* client.WatchEvents().pipe(Stream.take(3), Stream.runCollect))];
+        const seed = [...(yield* client.WatchEvents().pipe(Stream.take(4), Stream.runCollect))];
         const board = seed.reduce(applyDaemonEvent, initialBoard);
 
         const state = (yield* worker.snapshot).workspaces[0];
@@ -323,10 +327,69 @@ describe("DaemonEventPublisher", () => {
         const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
         const expectedScheduler = schedulerStatsOf(scheduler.config, yield* scheduler.stats);
 
+        const status = yield* client.GetStatus();
+        const expectedWorkspaces = new Map(
+          [
+            ...status.workspaces.map(workspaceStateFromInfo),
+            ...status.failures.map(workspaceFailureState),
+          ].map((workspace) => [workspaceKey(workspace), workspace] as const),
+        );
+
         assert.deepStrictEqual(board.items, expectedItems);
         assert.deepStrictEqual(board.runs, expectedRuns);
+        assert.deepStrictEqual(board.workspaces, expectedWorkspaces);
         assert.deepStrictEqual(board.scheduler, expectedScheduler);
       }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
+    }),
+  );
+
+  const failingRegistryLayer = Layer.succeed(
+    Registry.WorkspaceRegistry,
+    Registry.buildRegistry({
+      loaded: [],
+      failures: [{ source: "broken.workspace.ts", message: "config threw at import" }],
+    }),
+  );
+
+  const failedLoadDaemonLayer = (
+    itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
+    statsRef: Ref.Ref<Scheduler.SchedulerState>,
+  ) =>
+    Daemon.handlersLayer.pipe(
+      Layer.provideMerge(Daemon.principalMiddlewareLayer),
+      Layer.provideMerge(Daemon.daemonInfoLayer),
+      Layer.provideMerge(
+        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(failingRegistryLayer, observing(itemsRef)))),
+      ),
+      Layer.provideMerge(failingRegistryLayer),
+      Layer.provideMerge(schedulerStub(statsRef)),
+      Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
+      Layer.provideMerge(RunControl.layer),
+      Layer.provideMerge(observing(itemsRef)),
+    );
+
+  it.effect("seeds a failed-to-load workspace onto the board with its failure", () =>
+    Effect.gen(function* () {
+      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([]);
+      const statsRef = yield* Ref.make(schedulerState(0));
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+        const seed = [
+          ...(yield* client.WatchEvents().pipe(
+            Stream.takeUntil((event) => event._tag === "SchedulerChanged"),
+            Stream.runCollect,
+          )),
+        ];
+        const board = seed.reduce(applyDaemonEvent, initialBoard);
+
+        const failed = board.workspaces.get("broken.workspace.ts");
+        assert.strictEqual(failed?._tag, "Failed");
+        assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "config threw at import");
+
+        const status = yield* client.GetStatus();
+        assert.strictEqual(status.failures[0]?.source, "broken.workspace.ts");
+      }).pipe(Effect.provide(failedLoadDaemonLayer(itemsRef, statsRef)), Effect.scoped);
     }),
   );
 });
