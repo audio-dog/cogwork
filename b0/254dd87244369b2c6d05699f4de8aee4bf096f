@@ -1,0 +1,35 @@
+packages/engine/src/daemon.ts
+  s_0ea6a6274db916::t_10420834fc4a99 98,116
+  s_0ea6a6274db916::t_ad01dfd45d14e5 273
+  s_0ea6a6274db916::t_a8ac46522a25a9 41
+  s_0ea6a6274db916::t_70f91d8a0338b8 108-109
+  s_0ea6a6274db916::t_c2f3d15f30d400 110
+packages/engine/src/event-publisher.ts
+  s_0ea6a6274db916::t_33871f9f851d3d 103
+  s_0ea6a6274db916::t_fde23dba2509be 34,37
+  s_0ea6a6274db916::t_c34047fa28d6f0 8,18,23
+  s_0ea6a6274db916::t_00de89bd8ea37f 16
+  s_0ea6a6274db916::t_871891d638604f 79
+  s_0ea6a6274db916::t_c5faffbb6616e2 77-78,80-94
+  s_0ea6a6274db916::t_bcaf2f78737abd 7
+packages/engine/src/event-publisher.test.ts
+  s_0ea6a6274db916::t_51dcc3b7ae6e6d 317,330-337,340,345-394
+  s_0ea6a6274db916::t_b642b04dad96c6 159
+  s_0ea6a6274db916::t_6350c65eb38feb 13-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b0254dd87244369b2c6d05699f4de8aee4bf096f",
+  "prompts": {},
+  "sessions": {
+    "s_0ea6a6274db916": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7fe4cdf2-e8ae-4b97-94fc-cfc5c70292b3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
