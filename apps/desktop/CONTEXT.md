@@ -6,8 +6,9 @@ the renderer a typed seam to the daemon without ever handing it the socket. It s
 kernel ([contracts](../../packages/contracts/CONTEXT.md)) over the same RPC transport the
 [cli](../cli/CONTEXT.md) uses.
 
-Built with electron-vite + electron-builder. The renderer stack (React, TanStack Router, AtomRpc,
-zustand, shadcn) lands in a later slice (product ADR 0009); this slice is the shell only.
+Built with electron-vite + electron-builder. The renderer stack is React + TanStack Router with
+Effect AtomRpc (`@effect/atom-react`) for daemon read-model state and zustand for local chrome; UI
+primitives come from [ui](../../packages/ui/CONTEXT.md) (shadcn + Tailwind v4). See product ADR 0009.
 
 ## Language
 
@@ -42,11 +43,21 @@ in-flight runs via `SIGTERM`, then exits.
 _Avoid_: Minimize to tray (hiding is not minimizing), background mode
 
 **Typed IPC seam**:
-The single `main`↔`renderer` boundary. The renderer calls typed methods exposed through the preload
-`contextBridge` (`window.clankerForge`); `main` answers them by driving the Effect RPC client over
-the Unix socket. The renderer never opens the socket and never imports Effect RPC — the seam is the
-only way it reaches the daemon.
+The single `main`↔`renderer` boundary, exposed through the preload `contextBridge`
+(`window.clankerForge`). It carries two kinds of traffic: typed engine-control methods
+(`getEngineStatus` / `setEngineEnabled` / `onEngineStatus`), and the daemon **RPC relay**. The
+renderer never opens the socket — the seam is the only way it reaches the daemon.
 _Avoid_: Direct socket access from the renderer, ad-hoc `ipcRenderer` channels outside the bridge
+
+**RPC relay**:
+How the renderer's Effect RPC / AtomRpc client reaches the daemon without touching the socket (product
+ADR 0009). The renderer runs a custom `RpcClient.Protocol` that speaks the ndjson wire and hands each
+frame to `main` (`rpc:send`); `main` holds one Unix-socket connection per renderer and relays frames
+back (`rpc:data` / `rpc:closed`). `main` is a dumb pipe — it never decodes the RPC; all client logic
+(request routing, stream pulls, reconnect, retry) lives in the renderer protocol. A per-attempt
+connection gate makes the first request wait for the first connect, fail fast if it fails, and park
+later requests until a reconnect lands.
+_Avoid_: Decoding or interpreting RPC in `main`, a second transport for read-model state (use AtomRpc)
 
 **Engine toggle**:
 Runtime start/stop of the engine from the renderer, through the seam (`setEngineEnabled`) and shown
@@ -61,6 +72,7 @@ _Avoid_: A separate "enabled" preference that can drift from the supervisor's ac
 - **desktop → cli.** In development the supervisor spawns the CLI `daemon` command as the engine
   child; the CLI remains the one place that composes the engine's host adapters. A packaged build
   ships its own bundled engine entry (signing/distribution is human-paired and not built here).
-- **desktop → contracts.** `main` builds the RPC client from `DaemonRpcs` and returns
-  contracts read models (`DaemonStatus`) across the IPC seam. Contracts is bundled into the `main`
-  build so its schemas are available without a separate build step.
+- **desktop → contracts.** The renderer builds its AtomRpc client from `DaemonRpcs` and decodes the
+  contracts read models (`DaemonStatus`, `DaemonEvent`) itself; `main` only relays the wire frames
+  (see the **RPC relay** concept above). Contracts is bundled into the renderer build so its schemas
+  are available without a separate build step.

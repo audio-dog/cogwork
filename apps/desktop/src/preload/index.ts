@@ -1,17 +1,24 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
-import { type ClankerForgeBridge, type EngineStatus, IpcChannel } from "../shared/ipc";
+import { type ClankerForgeBridge, IpcChannel } from "../shared/ipc";
+
+const subscribe = <T>(channel: string, listener: (value: T) => void) => {
+  const handler = (_event: Electron.IpcRendererEvent, value: T) => listener(value);
+  ipcRenderer.on(channel, handler);
+  return () => {
+    ipcRenderer.removeListener(channel, handler);
+  };
+};
 
 const bridge: ClankerForgeBridge = {
-  getDaemonStatus: () => ipcRenderer.invoke(IpcChannel.getDaemonStatus),
   getEngineStatus: () => ipcRenderer.invoke(IpcChannel.getEngineStatus),
   setEngineEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.setEngineEnabled, enabled),
-  onEngineStatus: (listener) => {
-    const handler = (_event: Electron.IpcRendererEvent, status: EngineStatus): void => listener(status);
-    ipcRenderer.on(IpcChannel.engineStatusChanged, handler);
-    return () => {
-      ipcRenderer.removeListener(IpcChannel.engineStatusChanged, handler);
-    };
+  onEngineStatus: (listener) => subscribe(IpcChannel.engineStatusChanged, listener),
+  rpc: {
+    connect: () => ipcRenderer.invoke(IpcChannel.rpcConnect),
+    send: (frame) => ipcRenderer.send(IpcChannel.rpcSend, frame),
+    onData: (listener) => subscribe(IpcChannel.rpcData, listener),
+    onClosed: (listener) => subscribe(IpcChannel.rpcClosed, listener),
   },
 };
 

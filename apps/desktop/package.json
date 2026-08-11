@@ -27,19 +27,24 @@
   "dependencies": {
     "@clanker-forge/contracts": "workspace:*",
     "@clanker-forge/ui": "workspace:*",
+    "@effect/atom-react": "catalog:effect",
     "@effect/platform-node": "catalog:effect",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@remixicon/react": "^4.9.0",
+    "@tanstack/react-router": "^1.170.25",
     "effect": "catalog:effect",
     "electron-log": "^5.2.0",
     "electron-updater": "^6.8.9",
-    "electron-window-state": "^5.0.3"
+    "electron-window-state": "^5.0.3",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@babel/core": "^8.0.1",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-plugin": "^1.168.29",
     "@types/babel__core": "^7.20.5",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
