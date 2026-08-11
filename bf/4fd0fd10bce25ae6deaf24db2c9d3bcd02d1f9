@@ -1,0 +1,31 @@
+apps/cli/src/paths.ts
+  s_6e78a3a1972f4d::t_34291d991a99eb 5,7,9
+apps/cli/src/rpc.ts
+  s_6e78a3a1972f4d::t_d8f44dc966062f 9,13
+  s_6e78a3a1972f4d::t_d9e7137b222702 30-33,37-38,50-52,54-59,61-65,69
+  s_6e78a3a1972f4d::t_fc15a6fa69d696 67
+  s_6e78a3a1972f4d::t_40bb3b7c0a0a69 60
+  s_6e78a3a1972f4d::t_b4b4d631d9a935 53
+  s_6e78a3a1972f4d::t_d31ad2c3a91738 34-36
+  s_6e78a3a1972f4d::t_e614a527a85ad2 66
+apps/cli/src/rpc.test.ts
+  s_6e78a3a1972f4d::t_8f73b1e945f30c 20,25-26,29-48
+  s_6e78a3a1972f4d::t_7947c917673d13 24
+  s_6e78a3a1972f4d::t_6752fd7c20df2b 1-19,21-23,27-28,49-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bf4fd0fd10bce25ae6deaf24db2c9d3bcd02d1f9",
+  "prompts": {},
+  "sessions": {
+    "s_6e78a3a1972f4d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba29b26d-be48-46a7-97aa-75b6b5a18c59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
