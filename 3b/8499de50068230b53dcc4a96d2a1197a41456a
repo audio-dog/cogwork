@@ -1,0 +1,19 @@
+apps/cli/src/ledger.test.ts
+  s_d5a8a684f38486::t_8f6889af73c460 150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "3b8499de50068230b53dcc4a96d2a1197a41456a",
+  "prompts": {},
+  "sessions": {
+    "s_d5a8a684f38486": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "007a8fcd-13da-400b-9d5a-d942f8d28100",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
