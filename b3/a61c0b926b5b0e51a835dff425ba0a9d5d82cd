@@ -1,0 +1,35 @@
+apps/desktop/src/renderer/src/screens/daemon-status.tsx
+  s_0acfb9937c3810::t_b19f5d22f848f4 1-20,22-35,37-52,54-65,67-117
+  s_0acfb9937c3810::t_cdb9a639f53a0d 21
+  s_0acfb9937c3810::t_59e34f92ae981f 53
+  s_0acfb9937c3810::t_e845417b43a39c 66
+  s_0acfb9937c3810::t_6dc54d19d89cda 36
+apps/desktop/src/renderer/src/router.tsx
+  s_0acfb9937c3810::t_3c6912392ab72a 1-24
+apps/desktop/src/renderer/src/main.tsx
+  s_0acfb9937c3810::t_c46596cf3ce498 10
+  s_0acfb9937c3810::t_3d11732bd7165b 3-4,8,14-16
+apps/desktop/src/renderer/src/stores/chrome.ts
+  s_0acfb9937c3810::t_ba60b736e7d9c5 1-11
+apps/desktop/src/renderer/src/app.tsx
+  s_0acfb9937c3810::t_188f6a933abeb8 25
+  s_0acfb9937c3810::t_dbc97ff8ca1841 42
+  s_0acfb9937c3810::t_b987acace770eb 65
+  s_0acfb9937c3810::t_aa3a1e11e177cc 3,5-9,13,22-23,26-27,29-38,43-63,67-68,70,72-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b3a61c0b926b5b0e51a835dff425ba0a9d5d82cd",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
