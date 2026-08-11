@@ -1,4 +1,4 @@
-import type { RunRecord, TokenUsage, TriageRole } from "@clanker-forge/contracts";
+import type { RunRecord, TokenUsage } from "@clanker-forge/contracts";
 import {
   agUiDisplayName,
   agUiSessionId,
@@ -18,11 +18,11 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
-import { agentFailureReason, attachCommand, handoffComment, prepareFailureReason } from "./comments";
+import { agentFailureReason, prepareFailureReason } from "./comments";
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
-import { handoffRoleFor } from "./hand-to-human";
+import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
 import { type AgUiEvent, Harness, type HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
@@ -42,7 +42,7 @@ import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
 import { activityOf, RunEventBus } from "./run-event-bus";
 import { RunLedger } from "./run-ledger";
-import { branchName, checkoutPathFor, type WorktreeDivergedError, WorktreeManager } from "./worktree";
+import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError;
@@ -60,7 +60,6 @@ interface StageOps {
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
   readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
-  readonly handoffRole: TriageRole | null;
   readonly fullPrompt: string;
   readonly resumeSession: SessionId | null;
 }
@@ -134,14 +133,8 @@ const retryableOf = (error: PrepareError | HarnessError) => {
   return !nonRetryablePrepare.has(error._tag);
 };
 
-const checkoutFor = (workspace: RegisteredWorkspace, item: EligibleWork) =>
-  checkoutPathFor(workspace.config.checkoutPath, item, item.stage, workspace.config.worktrees);
-
 const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
-
-const resumeFor = (workspace: RegisteredWorkspace, item: EligibleWork, session: SessionId | null) =>
-  session ? attachCommand(checkoutFor(workspace, item), session) : undefined;
 
 export const claimant = (workspace: RegisteredWorkspace) =>
   workspace.config.issueTracker.botLogin ?? "clanker-forge";
@@ -160,6 +153,8 @@ export const make = Effect.gen(function* () {
   const bus = yield* RunEventBus;
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
+  const handoff = handToHuman(issueTracker);
+  const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
   const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
@@ -292,7 +287,6 @@ export const make = Effect.gen(function* () {
   const applyFailure = Effect.fn("Executor.applyFailure")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    handoffRole: TriageRole | null,
     runId: RunId,
     retryable: boolean,
     reason: string,
@@ -315,20 +309,14 @@ export const make = Effect.gen(function* () {
       reason,
     );
     if (exhausted) {
-      yield* issueTracker.setRoles(workspace, item.id, {
-        remove: handoffRole ? [handoffRole] : [],
-        add: ["ready-for-human"],
-      });
-      yield* issueTracker.note(
+      yield* handoff({
         workspace,
-        item.id,
-        handoffComment(
-          item.stage,
-          handoffCause(retryable, attempts),
-          reason,
-          resumeFor(workspace, item, session),
-        ),
-      );
+        item,
+        stage: item.stage,
+        cause: handoffCause(retryable, attempts),
+        reason,
+        session,
+      });
     }
     yield* ledger.updateRun(runId, {
       status: exhausted ? "exhausted" : "failed",
@@ -394,29 +382,7 @@ export const make = Effect.gen(function* () {
       return yield* applyImplementSuccess(workspace, item, runId, acc);
     }
     const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
-    return yield* applyFailure(
-      workspace,
-      item,
-      "ready-for-agent",
-      runId,
-      result !== "stuck",
-      reason,
-      acc.session,
-    );
-  });
-
-  const releaseClaim = Effect.fn("Executor.releaseClaim")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-  ) {
-    const result = yield* Effect.result(issueTracker.release(workspace, item.id));
-    if (Result.isFailure(result)) {
-      yield* Effect.logWarning("claim release failed", {
-        stage: item.stage,
-        item: item.id,
-        error: result.failure,
-      });
-    }
+    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.session);
   });
 
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
@@ -438,7 +404,6 @@ export const make = Effect.gen(function* () {
       branch: null,
       prepare: harnessRequest(workspace, resolved, workspace.config.checkoutPath, fullPrompt, null),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
-      handoffRole: handoffRoleFor("triage"),
       fullPrompt,
       resumeSession: null,
     } satisfies StageOps;
@@ -452,7 +417,6 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareImplement(workspace, item, resolved, branch, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
-      handoffRole: handoffRoleFor("implement"),
       fullPrompt,
       resumeSession: null,
     } satisfies StageOps;
@@ -499,7 +463,7 @@ export const make = Effect.gen(function* () {
       return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
     }
     const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
-    return yield* applyFailure(workspace, item, null, runId, result !== "stuck", reason, acc.session);
+    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.session);
   });
 
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
@@ -541,7 +505,6 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
-      handoffRole: handoffRoleFor("follow-up"),
       fullPrompt,
       resumeSession: null,
     } satisfies StageOps;
@@ -639,7 +602,6 @@ export const make = Effect.gen(function* () {
     return yield* applyFailure(
       workspace,
       item,
-      ops.handoffRole,
       runId,
       retryableOf(outcome.failure),
       prepareFailureReason(outcome.failure),
@@ -673,7 +635,7 @@ export const make = Effect.gen(function* () {
       return false;
     }
     yield* runOrHandoff(workspace, item, resolved, startedAtMillis).pipe(
-      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item))),
+      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
     );
     return true;
   });
