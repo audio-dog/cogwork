@@ -1,0 +1,27 @@
+packages/contracts/src/index.ts
+  s_eafd1176b04802::t_133d09596410bb 7
+packages/contracts/src/rpc.ts
+  s_eafd1176b04802::t_c65f601d54e981 4-7,9-10,46-52,54-72,74-84
+  s_eafd1176b04802::t_3fccaafb82326c 73
+  s_eafd1176b04802::t_b16aedd04060d7 53
+packages/contracts/src/daemon.ts
+  s_eafd1176b04802::t_bbeb6ff81dc918 106-108,110
+packages/contracts/src/issue-tracker.ts
+  s_eafd1176b04802::t_b973d4161091e1 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "70717107351626452fd15d56ea5d3a79b25cf386",
+  "prompts": {},
+  "sessions": {
+    "s_eafd1176b04802": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c1f2ebf8-0876-4445-b204-ffdaf5160c08",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
