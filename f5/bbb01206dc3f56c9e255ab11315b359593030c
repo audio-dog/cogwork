@@ -1,0 +1,23 @@
+apps/desktop/package.json
+  s_0acfb9937c3810::t_369f438ba734dc 30,34,38-39
+pnpm-workspace.yaml
+  s_0acfb9937c3810::t_9586d86e31faf9 25
+pnpm-lock.yaml
+  s_0acfb9937c3810::t_4c06e4106cf349 37-39,139-141,151-153,166-168,665-671,1619-1642,2204-2206,3011-3014,3928-3937,4426-4443,4811-4816,5557-5583,6113-6114,6911-6912,7621-7626,8087-8092
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f5bbb01206dc3f56c9e255ab11315b359593030c",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
