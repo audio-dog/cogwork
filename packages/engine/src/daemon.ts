@@ -2,6 +2,9 @@ import {
   AgUiEvent,
   agUiIsTerminal,
   DaemonRpcs,
+  localOwner,
+  Principal,
+  PrincipalMiddleware,
   type RunActivity,
   type RunEvent,
   type RunId,
@@ -149,6 +152,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
 
 export const serializationLayer = RpcSerialization.layerNdjson;
 
+export const principalMiddlewareLayer = Layer.succeed(PrincipalMiddleware)(
+  PrincipalMiddleware.of((effect) => Effect.provideService(effect, Principal, localOwner)),
+);
+
 export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
@@ -188,6 +195,7 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
 export const serverLayer = <E, R>(adapters: HostAdapters<E, R>) =>
   RpcServer.layer(DaemonRpcs).pipe(
     Layer.provide(handlersLayer),
+    Layer.provide(principalMiddlewareLayer),
     Layer.provide(adapters.transport),
     Layer.provide(serializationLayer),
     Layer.provideMerge(engineLayer(adapters)),

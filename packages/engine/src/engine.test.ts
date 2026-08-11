@@ -455,6 +455,7 @@ describe("daemon status over rpc", () => {
   const schedulerStub = Layer.succeed(Scheduler.Scheduler, schedulerStubService);
   const daemonLayer = (sourceLayer: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
     Daemon.handlersLayer.pipe(
+      Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
