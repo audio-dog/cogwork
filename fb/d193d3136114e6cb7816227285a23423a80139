@@ -1,0 +1,48 @@
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_bc69ce0ed79b49::t_a76594ad713dcb 1-61
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_bc69ce0ed79b49::t_9ebdeb68e87175 53,74-80,87-95
+  s_bc69ce0ed79b49::t_633ba542914aa8 81-83
+  s_bc69ce0ed79b49::t_38ad0bd8ce2ef8 11-12
+  s_bc69ce0ed79b49::t_9c6ec3d5c170f8 84-86
+  s_bc69ce0ed79b49::t_ae5e3d2b94862c 96
+apps/desktop/src/renderer/src/features/engine-offline.tsx
+  s_bc69ce0ed79b49::t_2693e06fdb7092 1-11
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_bc69ce0ed79b49::t_2ce047fcbadaf5 20-35
+apps/desktop/src/main/engine-supervisor.ts
+  s_bc69ce0ed79b49::t_b83505eda9f8b5 87-88,92-98,103
+  s_bc69ce0ed79b49::t_e3eaa914f145ea 3
+  s_bc69ce0ed79b49::t_d9bc803b1cfb73 67
+  s_bc69ce0ed79b49::t_ad44322cfddd3c 28
+  s_bc69ce0ed79b49::t_a9db6a6a211600 37,39,43
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_bc69ce0ed79b49::t_85ba05247409b0 7
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_bc69ce0ed79b49::t_2512cca9c19c14 24-33,43
+  s_bc69ce0ed79b49::t_280ea30cee1089 66,73-114
+  s_bc69ce0ed79b49::t_6f91053817a91c 115
+apps/desktop/src/main/wait-for-socket.ts
+  s_bc69ce0ed79b49::t_5a60b575823ec7 1-39
+apps/desktop/src/renderer/src/routes/activity.tsx
+  s_bc69ce0ed79b49::t_20031f1e35a2b0 8-9
+  s_bc69ce0ed79b49::t_6b24ffab2cd3aa 91-98
+  s_bc69ce0ed79b49::t_9bc559b1e945f5 34-38,42-47
+  s_bc69ce0ed79b49::t_4b0c1426237921 39-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fbd193d3136114e6cb7816227285a23423a80139",
+  "prompts": {},
+  "sessions": {
+    "s_bc69ce0ed79b49": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a36d11c4-01bb-4525-8d4f-18a248a370bd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
