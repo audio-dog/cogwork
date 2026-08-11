@@ -1,0 +1,25 @@
+apps/cli/src/ledger.test.ts
+  s_a50862b4890f0a::t_8178f2168eb8a5 126
+  s_a50862b4890f0a::t_e260e76ad25ea2 23,25
+  s_a50862b4890f0a::t_3042db7fcba27c 24
+  s_a50862b4890f0a::t_9fa716eb6fe9d1 367-383,385,387-394
+  s_a50862b4890f0a::t_fd1a9915ba6911 15
+  s_a50862b4890f0a::t_db1a0c267f22fa 26-63
+  s_a50862b4890f0a::t_f1218a60ddc920 125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5ccfbf02f90ab9f40eace02117bfa3cfac4ba6ea",
+  "prompts": {},
+  "sessions": {
+    "s_a50862b4890f0a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ffcb2bb9-ca6f-4002-ba76-d18d8d979b4e",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
