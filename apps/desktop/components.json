@@ -1,0 +1,23 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "../../packages/ui/src/styles/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true
+  },
+  "iconLibrary": "remixicon",
+  "aliases": {
+    "components": "#components",
+    "ui": "@clanker-forge/ui/components",
+    "lib": "#lib",
+    "hooks": "#hooks",
+    "utils": "@clanker-forge/ui/lib/utils"
+  },
+  "rtl": true,
+  "menuColor": "inverted-translucent",
+  "menuAccent": "subtle"
+}
