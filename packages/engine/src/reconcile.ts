@@ -4,7 +4,6 @@ import type {
   NeedsHumanItem,
   PollPauseReason,
   PollState,
-  WorkItemId,
   WorkspaceId,
 } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
@@ -21,11 +20,6 @@ import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
 
-export interface ObservedRef {
-  readonly id: WorkItemId;
-  readonly title: string;
-}
-
 export interface ReconcileReceipt {
   readonly workspaces: number;
   readonly failures: number;
@@ -40,7 +34,7 @@ export interface WorkspaceReconcileState {
   readonly claimed: ReadonlyArray<ClaimedItem>;
   readonly blocked: ReadonlyArray<BlockedItem>;
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
-  readonly observed: ReadonlyArray<ObservedRef>;
+  readonly observed: ReadonlyArray<ObservedItem>;
 }
 
 export interface ReconcileSnapshot {
@@ -63,7 +57,7 @@ const okState = (
   claimed: classified.claimed,
   blocked: classified.blocked,
   needsHuman: classified.needsHuman,
-  observed: observed.map((item) => ({ id: item.id, title: item.title })),
+  observed,
 });
 
 interface Pause {

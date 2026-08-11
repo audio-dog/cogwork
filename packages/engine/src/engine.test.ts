@@ -391,7 +391,7 @@ const registeredSample = Layer.succeed(Registry.WorkspaceRegistry, Registry.buil
 const schedulerStubService = {
   tick: () => Effect.succeed([]),
   drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
-  recover: () => Effect.void,
+  admit: () => Effect.void,
   config: { globalLimit: 4, dailyBudget: 50 },
   stats: Effect.succeed({
     ...Scheduler.initialState,

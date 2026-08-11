@@ -1,0 +1,476 @@
+import {
+  type AttemptRecord,
+  HarnessName,
+  type PollState,
+  RunId,
+  type RunRecord,
+  SessionId,
+  WorkItemId,
+  WorkspaceConfig,
+} from "@clanker-forge/contracts";
+import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import type { EligibleWork } from "./classify";
+import { recoveryReason } from "./comments";
+import type { ObservedItem } from "./issue-tracker";
+import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
+import * as Reconcile from "./reconcile";
+import * as Recovery from "./recovery";
+import * as Registry from "./registry";
+import * as RunLedger from "./run-ledger";
+import * as Scheduler from "./scheduler";
+
+const id = Schema.decodeSync(WorkItemId);
+const session = Schema.decodeSync(SessionId)("sess-abc");
+
+const wsA: RegisteredWorkspace = {
+  source: "a.workspace.ts",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "a",
+    checkoutPath: "/repos/a",
+    issueTracker: { type: "github", repo: "owner/a", botLogin: "clanker-bot" },
+    harness: { preferred: "cursor" },
+    playbook: { triage: { enabled: true } },
+  }),
+};
+
+const interruptedRun: RunRecord = {
+  id: Schema.decodeSync(RunId)("run-1"),
+  workspace: wsA.config.name,
+  workItem: id("#1"),
+  stage: "implement",
+  harness: Schema.decodeSync(HarnessName)("cursor"),
+  branch: "1-ours",
+  session: null,
+  usage: null,
+  status: "running",
+  startedAtMillis: 1,
+  endedAtMillis: null,
+};
+
+const interrupted: RunRecord = { ...interruptedRun, status: "interrupted", endedAtMillis: 2 };
+
+const crashedRun = (idStr: string, startedAtMillis: number, status: RunRecord["status"]): RunRecord => ({
+  ...interruptedRun,
+  id: Schema.decodeSync(RunId)(idStr),
+  status,
+  startedAtMillis,
+  endedAtMillis: status === "running" ? null : startedAtMillis + 1,
+});
+
+const claimedByUs: ObservedItem = {
+  id: id("#1"),
+  title: "ours",
+  roles: ["ready-for-agent"],
+  claimLabeled: true,
+  claim: { by: "clanker-bot", claimedAtMillis: 1, stage: "implement" },
+  attempts: [],
+  openBlockers: 0,
+  pr: null,
+};
+
+const claimedByOther: ObservedItem = {
+  id: id("#2"),
+  title: "theirs",
+  roles: [],
+  claimLabeled: true,
+  claim: { by: "someone-else", claimedAtMillis: 1 },
+  attempts: [],
+  openBlockers: 0,
+  pr: null,
+};
+
+const unclaimed: ObservedItem = {
+  id: id("#3"),
+  title: "free",
+  roles: ["needs-triage"],
+  claimLabeled: false,
+  claim: null,
+  attempts: [],
+  openBlockers: 0,
+  pr: null,
+};
+
+const failedAttempt = (atMillis: number): AttemptRecord => ({
+  stage: "implement",
+  outcome: "failed",
+  atMillis,
+});
+
+const withAttempts = (item: ObservedItem, count: number): ObservedItem => ({
+  ...item,
+  attempts: Array.from({ length: count }, (_, index) => failedAttempt(index + 1)),
+});
+
+const okPoll: PollState = { status: "ok" };
+
+const snapshotOf = (
+  observed: ReadonlyArray<ObservedItem>,
+  poll: PollState = okPoll,
+): Reconcile.ReconcileSnapshot => ({
+  generation: 1,
+  workspaces: [
+    {
+      name: wsA.config.name,
+      poll,
+      eligible: [],
+      claimed: [],
+      blocked: [],
+      needsHuman: [],
+      observed,
+    },
+  ],
+});
+
+const workerLayer = (observed: ReadonlyArray<ObservedItem>, poll: PollState = okPoll) =>
+  Layer.succeed(Reconcile.ReconcileWorker, {
+    submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    snapshot: Effect.succeed(snapshotOf(observed, poll)),
+  });
+
+const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, { workspaces: [wsA], failures: [] });
+
+const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
+  Layer.succeed(IssueTracker, {
+    rateLimitScope: () => null,
+    observe: () => Effect.succeed([]),
+    claim: () => Effect.void,
+    release: () => Effect.void,
+    recordAttempt: () => Effect.void,
+    recordFollowUp: () => Effect.void,
+    note: () => Effect.void,
+    setRoles: () => Effect.void,
+    ...service,
+  });
+
+const schedulerStub = (admitted: Ref.Ref<ReadonlyArray<EligibleWork>>) =>
+  Layer.succeed(Scheduler.Scheduler, {
+    tick: () => Effect.succeed([]),
+    drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
+    admit: (_workspace, work) => Ref.update(admitted, (xs) => [...xs, work]),
+    stats: Effect.succeed(Scheduler.initialState),
+    config: { globalLimit: 4, dailyBudget: 100 },
+  });
+
+interface RecoveryDeps {
+  readonly observed: ReadonlyArray<ObservedItem>;
+  readonly issueTracker?: Partial<IssueTrackerService>;
+  readonly ledger: RunLedger.RunLedgerService;
+  readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
+  readonly poll?: PollState;
+}
+
+const recoveryLayer = (deps: RecoveryDeps) =>
+  Recovery.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        registryLayer,
+        workerLayer(deps.observed, deps.poll ?? okPoll),
+        schedulerStub(deps.admitted),
+        issueTrackerStub(deps.issueTracker ?? {}),
+        Layer.succeed(RunLedger.RunLedger, deps.ledger),
+      ),
+    ),
+  );
+
+describe("Recovery.recover", () => {
+  it.effect("reschedules an interrupted run while holding its claim and recording no attempt", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.deepStrictEqual(
+          (yield* Ref.get(admitted)).map((work) => work.id),
+          [id("#1")],
+        );
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+    }),
+  );
+
+  it.effect("hands the rescheduled run its persisted session and a continuation reason", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun({ ...interrupted, session });
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const [work] = yield* Ref.get(admitted);
+        assert.deepStrictEqual(work?.resume, { session, reason: "interrupted" });
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })));
+    }),
+  );
+
+  it.effect("reschedules without a resume context when the interrupted run left no session", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const [work] = yield* Ref.get(admitted);
+        assert.isUndefined(work?.resume);
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })));
+    }),
+  );
+
+  it.effect("never escalates an interrupted item to a human, even one attempt from exhaustion", () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      const issueTracker: Partial<IssueTrackerService> = {
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.deepStrictEqual(yield* Ref.get(roles), []);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
+        ),
+      );
+    }),
+  );
+
+  it.effect("releases only stale claims left by this daemon and records a recovery attempt", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<{ item: string; reason?: string }>>([]);
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId, _attempt, reason) =>
+          Ref.update(attempts, (xs) => [...xs, { item: itemId, reason }]),
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(attempts), [{ item: id("#1"), reason: recoveryReason }]);
+        assert.deepStrictEqual(yield* Ref.get(notes), []);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({
+            observed: [claimedByUs, claimedByOther, unclaimed],
+            issueTracker,
+            ledger,
+            admitted,
+          }),
+        ),
+      );
+    }),
+  );
+
+  it.effect("hands an exhausted recovery the session its run persisted before the daemon died", () =>
+    Effect.gen(function* () {
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun({ ...interruptedRun, status: "failed", endedAtMillis: 2 });
+      yield* ledger.recordSession(interruptedRun.id, session);
+      const issueTracker: Partial<IssueTrackerService> = {
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'sess-abc'");
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
+        ),
+      );
+    }),
+  );
+
+  it.effect("hands an exhausted recovery to a human with a handoff note", () =>
+    Effect.gen(function* () {
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const issueTracker: Partial<IssueTrackerService> = {
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const note = (yield* Ref.get(notes))[0] ?? "";
+        assert.include(note, "Exhausted after 3 failed implement attempts");
+        assert.include(note, recoveryReason);
+        assert.deepStrictEqual(yield* Ref.get(roles), ["ready-for-human"]);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
+        ),
+      );
+    }),
+  );
+
+  it.effect("marks a run still running at startup as crashed and reschedules it, recording no attempt", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interruptedRun);
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(
+          (yield* Ref.get(admitted)).map((work) => work.id),
+          [id("#1")],
+        );
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.strictEqual((yield* ledger.getRun(interruptedRun.id))?.status, "crashed");
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+    }),
+  );
+
+  it.effect("hands a rescheduled crash its persisted session and a crashed reason", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun({ ...crashedRun("crash-live", 1, "running"), session });
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const [work] = yield* Ref.get(admitted);
+        assert.deepStrictEqual(work?.resume, { session, reason: "crashed" });
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })));
+    }),
+  );
+
+  it.effect("resumes a fresh crash when an earlier success reset the crash count", () =>
+    Effect.gen(function* () {
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* ledger.insertRun(crashedRun("ok", 3, "succeeded"));
+      yield* ledger.insertRun(crashedRun("crash-c", 4, "running"));
+      const issueTracker: Partial<IssueTrackerService> = {
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(
+          (yield* Ref.get(admitted)).map((work) => work.id),
+          [id("#1")],
+        );
+        assert.deepStrictEqual(yield* Ref.get(roles), []);
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+    }),
+  );
+
+  it.effect("caps a crash loop, escalating to a human without an attempt and releasing the claim", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const running = crashedRun("crash-c", 3, "running");
+      yield* ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* ledger.insertRun(running);
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const note = (yield* Ref.get(notes))[0] ?? "";
+        assert.include(note, "Exhausted after 3 consecutive implement crashes");
+        assert.include(note, recoveryReason);
+        assert.deepStrictEqual(yield* Ref.get(roles), ["ready-for-human"]);
+        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.deepStrictEqual(yield* Ref.get(admitted), []);
+        assert.strictEqual((yield* ledger.getRun(running.id))?.status, "crashed");
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+    }),
+  );
+
+  it.effect("defers recovery for a workspace whose bootstrap poll is paused", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      const logged: Array<string> = [];
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(yield* Ref.get(admitted), []);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({
+            observed: [],
+            ledger,
+            admitted,
+            poll: { status: "paused", reason: "rate-limited", message: "backing off", retryAtMillis: null },
+          }),
+        ),
+        Effect.withLogger(Logger.make(({ message }) => void logged.push(String(message)))),
+      );
+      assert.isTrue(logged.some((line) => line.includes("claim recovery deferred")));
+    }),
+  );
+
+  it.effect("skips a workspace whose claim recovery hits an issue-tracker error", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const issueTracker: Partial<IssueTrackerService> = {
+        recordAttempt: () => Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "boom" })),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(yield* Ref.get(admitted), []);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({ observed: [withAttempts(claimedByUs, 0)], issueTracker, ledger, admitted }),
+        ),
+      );
+    }),
+  );
+});
