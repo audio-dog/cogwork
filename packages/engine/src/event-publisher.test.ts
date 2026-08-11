@@ -1,6 +1,12 @@
 import {
+  applyDaemonEvent,
   ClassifiedItem,
   DaemonRpcs,
+  HarnessName,
+  initialBoard,
+  itemKey,
+  RunId,
+  type RunRecord,
   SchedulerStats,
   WorkItemId,
   WorkspaceId,
@@ -18,7 +24,7 @@ import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import { IssueTracker, type IssueTrackerService, type TrackerItem } from "./issue-tracker";
-import { classifiedItemsOf } from "./read-model";
+import { classifiedItemsOf, schedulerStatsOf } from "./read-model";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
@@ -30,6 +36,8 @@ const id = Schema.decodeSync(WorkItemId);
 const stats = Schema.decodeSync(SchedulerStats);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
+const runId = Schema.decodeSync(RunId);
+const harnessName = Schema.decodeSync(HarnessName);
 
 const registryLayer = Layer.succeed(
   Registry.WorkspaceRegistry,
@@ -102,6 +110,22 @@ const eligibleItem = (title: string): TrackerItem => ({
   openBlockers: 0,
   proposal: null,
 });
+
+const parkedItem = (title: string): TrackerItem => ({ ...eligibleItem(title), roles: ["needs-info"] });
+
+const runningRun: RunRecord = {
+  id: runId("run-seed"),
+  workspace: workspaceId("example"),
+  workItem: id("AUD-1"),
+  stage: "implement",
+  harness: harnessName("cursor"),
+  branch: null,
+  session: null,
+  usage: null,
+  status: "running",
+  startedAtMillis: 0,
+  endedAtMillis: null,
+};
 
 const schedulerSentinel = {
   _tag: "SchedulerChanged",
@@ -191,6 +215,40 @@ describe("DaemonEventPublisher", () => {
     }),
   );
 
+  it.effect("emits ItemRemoved so a board folded through churn drops the closed item", () =>
+    Effect.gen(function* () {
+      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
+      const statsRef = yield* Ref.make(schedulerState(0));
+      yield* Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const worker = yield* Reconcile.ReconcileWorker;
+        const publisher = yield* DaemonEventPublisher;
+        const subscription = yield* bus.subscribe();
+
+        yield* worker.submit();
+        yield* publisher.publishItems();
+
+        yield* Ref.set(itemsRef, [parkedItem("first")]);
+        yield* worker.submit();
+        yield* publisher.publishItems();
+
+        yield* Ref.set(itemsRef, []);
+        yield* worker.submit();
+        yield* publisher.publishItems();
+
+        const events = [
+          ...(yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect)),
+        ];
+        assert.deepStrictEqual(
+          events.map((event) => event._tag),
+          ["ItemChanged", "ItemChanged", "ItemRemoved"],
+        );
+        const board = events.reduce(applyDaemonEvent, initialBoard);
+        assert.strictEqual(board.items.size, 0);
+      }).pipe(Effect.provide(publisherLayer(itemsRef, statsRef)), Effect.scoped);
+    }),
+  );
+
   const daemonLayer = (
     itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
     statsRef: Ref.Ref<Scheduler.SchedulerState>,
@@ -236,6 +294,39 @@ describe("DaemonEventPublisher", () => {
 
         const status = yield* client.GetStatus();
         assert.strictEqual(status.workspaces[0]?.eligible[0]?.id, id("AUD-1"));
+      }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
+    }),
+  );
+
+  it.effect("self-seeds WatchEvents so folding the seed equals the daemon's read models", () =>
+    Effect.gen(function* () {
+      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
+      const statsRef = yield* Ref.make(schedulerState(1));
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const worker = yield* Reconcile.ReconcileWorker;
+        const ledger = yield* RunLedger.RunLedger;
+        const scheduler = yield* Scheduler.Scheduler;
+
+        yield* worker.submit();
+        yield* ledger.insertRun(runningRun);
+
+        const seed = [...(yield* client.WatchEvents().pipe(Stream.take(3), Stream.runCollect))];
+        const board = seed.reduce(applyDaemonEvent, initialBoard);
+
+        const state = (yield* worker.snapshot).workspaces[0];
+        if (state === undefined) return assert.fail("expected a reconciled workspace");
+        const expectedItems = new Map(
+          classifiedItemsOf(state).map(
+            (item) => [itemKey(state.name, item.id), { workspace: state.name, item }] as const,
+          ),
+        );
+        const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
+        const expectedScheduler = schedulerStatsOf(scheduler.config, yield* scheduler.stats);
+
+        assert.deepStrictEqual(board.items, expectedItems);
+        assert.deepStrictEqual(board.runs, expectedRuns);
+        assert.deepStrictEqual(board.scheduler, expectedScheduler);
       }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
     }),
   );

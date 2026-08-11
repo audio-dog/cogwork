@@ -38,7 +38,7 @@ import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
-import { schedulerStatsOf, workspaceInfoOf } from "./read-model";
+import { classifiedItemsOf, schedulerStatsOf, workspaceInfoOf } from "./read-model";
 import {
   type ReconcileSnapshot,
   ReconcileWorker,
@@ -94,9 +94,30 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   return base.pipe(Stream.takeUntil(isTerminalActivity));
 });
 
+const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
+  const worker = yield* ReconcileWorker;
+  const scheduler = yield* Scheduler;
+  const ledger = yield* RunLedger;
+  const snapshot = yield* worker.snapshot;
+  const stats = yield* scheduler.stats;
+  const running = yield* ledger.runningRuns;
+  const items = snapshot.workspaces.flatMap((state) =>
+    classifiedItemsOf(state).map((item) => ({ _tag: "ItemChanged", workspace: state.name, item }) as const),
+  );
+  const runs = running.map((run) => ({ _tag: "RunChanged", run }) as const);
+  const scheduling = {
+    _tag: "SchedulerChanged",
+    scheduler: schedulerStatsOf(scheduler.config, stats),
+  } as const;
+  return [...items, ...runs, scheduling];
+});
+
+// Subscribe before reading the seed so an event published between the two is not lost.
 export const watchEvents = Effect.fn("Daemon.watchEvents")(function* () {
   const bus = yield* DaemonEventBus;
-  return bus.events;
+  const subscription = yield* bus.subscribe();
+  const seed = yield* seedEvents();
+  return Stream.concat(Stream.fromIterable(seed), Stream.fromSubscription(subscription));
 });
 
 const statesByName = (snapshot: ReconcileSnapshot) =>

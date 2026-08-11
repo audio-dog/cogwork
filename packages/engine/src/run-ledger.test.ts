@@ -89,6 +89,36 @@ describe("RunLedger (memory)", () => {
   });
 
   it.layer(layerMemory)((it) => {
+    it.effect("reports only running runs, newest first, with their event counts", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertRun(record("older-running", 1000));
+        yield* ledger.insertRun(record("newer-running", 3000));
+        yield* ledger.insertRun(record("done", 2000));
+        yield* ledger.updateRun(runId("done"), {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 2500,
+        });
+        yield* ledger.appendEvent(runId("newer-running"), {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 3001,
+        });
+
+        const running = yield* ledger.runningRuns;
+        assert.deepStrictEqual(
+          running.map((run) => run.id),
+          [runId("newer-running"), runId("older-running")],
+        );
+        assert.strictEqual(running[0]?.eventCount, 1);
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
     it.effect("returns the most recent resumable run's session for a branch", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;

@@ -438,6 +438,25 @@ const make = (ledgerPath: string) =>
           ),
         ),
 
+      runningRuns: readRows("runningRuns", () =>
+        db
+          .select({
+            ...runRecordSelection,
+            eventCount: sql<number>`(select count(*) from ${runEvents} where ${runEvents.runId} = ${runs.id})`,
+          })
+          .from(runs)
+          .where(eq(runs.status, "running"))
+          .orderBy(desc(runs.startedAt))
+          .all(),
+      ).pipe(
+        Effect.flatMap((rows) =>
+          decodeAll(
+            decodeSummary,
+            rows.map((row) => ({ ...runRecordFromRow(row), eventCount: Number(row.eventCount) })),
+          ),
+        ),
+      ),
+
       getRun: (runId: RunId) =>
         readRun("getRun", () => db.select(runRecordSelection).from(runs).where(eq(runs.id, runId)).get()),
 

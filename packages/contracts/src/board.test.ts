@@ -36,6 +36,35 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(first?.workspace, workspace("acme"));
   });
 
+  it("removes an item and leaves the rest of the board alone", () => {
+    const board = fold([
+      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("2", "triage") }),
+      event({ _tag: "ItemRemoved", workspace: "acme", id: "1" }),
+    ]);
+
+    assert.strictEqual(board.items.size, 1);
+    assert.isUndefined(board.items.get("acme::1"));
+    assert.strictEqual(stageOf(board.items.get("acme::2")?.item), "triage");
+  });
+
+  it("removes an item only in its own workspace", () => {
+    const board = fold([
+      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
+      event({ _tag: "ItemChanged", workspace: "beta", item: eligible("1", "verify") }),
+      event({ _tag: "ItemRemoved", workspace: "acme", id: "1" }),
+    ]);
+
+    assert.strictEqual(board.items.size, 1);
+    assert.isUndefined(board.items.get("acme::1"));
+    assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "verify");
+  });
+
+  it("tolerates removing an item the board never had", () => {
+    const board = fold([event({ _tag: "ItemRemoved", workspace: "acme", id: "1" })]);
+    assert.strictEqual(board.items.size, 0);
+  });
+
   it("keeps items with the same id apart across workspaces", () => {
     const board = fold([
       event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
