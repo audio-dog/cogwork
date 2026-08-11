@@ -62,7 +62,7 @@ export const mcpWorkspaceProjection = (skills: ReadonlyArray<Harness.ResolvedMcp
 
 const decodeEvent = Schema.decodeUnknownOption(AgUiEvent);
 
-const toEvent = (chunk: StreamChunk): AgUiEvent =>
+export const toEvent = (chunk: StreamChunk): AgUiEvent =>
   Option.getOrElse(decodeEvent(chunk), () => ({ type: chunk.type }));
 
 const launchPattern = /ENOENT|EACCES|spawn|not found|command not found/i;

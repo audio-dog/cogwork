@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { AgUiEvent } from "./ag-ui";
+import { AgUiCorrelation, AgUiEvent } from "./ag-ui";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { LifecycleStage } from "./triage";
 
@@ -63,6 +63,7 @@ export const RunActivity = Schema.Struct({
   stage: LifecycleStage,
   seq: Schema.Natural,
   atMillis: Schema.Natural,
+  correlation: AgUiCorrelation,
   event: AgUiEvent,
 });
 export type RunActivity = typeof RunActivity.Type;
