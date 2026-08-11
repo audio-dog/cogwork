@@ -1,0 +1,89 @@
+apps/cli/src/platform.test.ts
+  s_6e78a3a1972f4d::t_a14025742ad8f4 1,10,112-153
+apps/cli/src/platform.ts
+  s_6e78a3a1972f4d::t_663a042b967df0 1,158-180
+apps/cli/src/watch.test.ts
+  s_6e78a3a1972f4d::t_5047b5814ac20d 2,25
+packages/contracts/CONTEXT.md
+  s_6e78a3a1972f4d::t_4e076628fdc1ec 80,114-119,128,131-134
+packages/contracts/src/ag-ui.ts
+  s_6e78a3a1972f4d::t_5ebdd146e8f450 5-41,43,45-48
+packages/contracts/src/daemon.ts
+  s_6e78a3a1972f4d::t_4643670a54f510 15-33,38,46,54,62
+packages/contracts/src/run.ts
+  s_6e78a3a1972f4d::t_0fdccf0af4f5c5 2,66
+packages/cursor-acp/src/harness.test.ts
+  s_6e78a3a1972f4d::t_dd10a46e8f912c 2,6,47-94
+packages/cursor-acp/src/harness.ts
+  s_6e78a3a1972f4d::t_20874988600294 65
+packages/engine/CONTEXT.md
+  s_6e78a3a1972f4d::t_3d74ddd39babd1 80-95
+packages/engine/package.json
+  s_6e78a3a1972f4d::t_ebf59789a71ccd 16-17
+packages/engine/src/classify.test.ts
+  s_6e78a3a1972f4d::t_be1ac2d7a8ccf1 23-24,30
+packages/engine/src/context-assembler.test.ts
+  s_6e78a3a1972f4d::t_bc7d4e537808f2 1-201
+packages/engine/src/context-assembler.ts
+  s_6e78a3a1972f4d::t_3a6203df059410 1-134
+packages/engine/src/context-fs.ts
+  s_6e78a3a1972f4d::t_e1da25954fa433 1-24
+packages/engine/src/engine.test.ts
+  s_6e78a3a1972f4d::t_ee5bce8be16269 205-206,212,539-599
+packages/engine/src/follow-up.test.ts
+  s_6e78a3a1972f4d::t_3c666c3e57caef 11-12,18
+packages/engine/src/follow-up.ts
+  s_6e78a3a1972f4d::t_03da970b308e84 18-19,25
+packages/engine/src/github/client.ts
+  s_6e78a3a1972f4d::t_a9eac0056aec8c 36,42,85,90,334,340
+packages/engine/src/github/github-helpers.test.ts
+  s_6e78a3a1972f4d::t_f3846fe6f35be9 35,41
+packages/engine/src/github/github.test.ts
+  s_6e78a3a1972f4d::t_7d4126e60ba954 207,212,510-546
+packages/engine/src/github/provider.ts
+  s_6e78a3a1972f4d::t_e2bad02e3cf161 135-136,142
+packages/engine/src/index.ts
+  s_6e78a3a1972f4d::t_847e28ad34049e 1-2,23
+packages/engine/src/run-event-bus.ts
+  s_6e78a3a1972f4d::t_c3018a6a3417d2 2,14,21
+packages/engine/src/tools/confinement.test.ts
+  s_6e78a3a1972f4d::t_60bfdf73689652 1-36
+packages/engine/src/tools/confinement.ts
+  s_6e78a3a1972f4d::t_3de0e650b966d8 1-29
+packages/engine/src/tools/errors.ts
+  s_6e78a3a1972f4d::t_7fd8491f07449e 1-20
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_6e78a3a1972f4d::t_8176a9f9b3abd4 1-102
+packages/engine/src/tools/file-diff-feed.ts
+  s_6e78a3a1972f4d::t_4b4c518f33265c 1-100
+packages/engine/src/tools/index.ts
+  s_6e78a3a1972f4d::t_7effc679880e13 1-28
+packages/engine/src/tools/owned-tools.test.ts
+  s_6e78a3a1972f4d::t_b6ce55654ffe73 1-174
+packages/engine/src/tools/owned-tools.ts
+  s_6e78a3a1972f4d::t_87e739b3133593 1-300
+packages/engine/src/tools/sandbox.ts
+  s_6e78a3a1972f4d::t_de7a61ad14d5b2 1-26
+packages/engine/src/watch-activity.test.ts
+  s_6e78a3a1972f4d::t_d4816795afa1c8 188-235
+pnpm-lock.yaml
+  s_6e78a3a1972f4d::t_29f1619203342a 171-176
+packages/engine/src/daemon.ts
+  s_6e78a3a1972f4d::t_b65a56899f4b7f 8,13,29,109-115,118-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "43ab6b8547b1d15f305eb2483da543d2bac77a67",
+  "prompts": {},
+  "sessions": {
+    "s_6e78a3a1972f4d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba29b26d-be48-46a7-97aa-75b6b5a18c59",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
