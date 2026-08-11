@@ -9,6 +9,7 @@ import {
 import { Daemon, Registry } from "@clanker-forge/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
@@ -22,6 +23,7 @@ import { defaultConfigHome, defaultCredentialsPath, defaultLedgerPath, defaultSo
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatStatus } from "./status";
 import { secondStopSignal } from "./stop-signal";
+import { telemetryLayer } from "./telemetry";
 import { flushWatch, initialWatchState, stepWatch } from "./watch";
 
 const socketFlag = Flag.string("socket").pipe(
@@ -103,7 +105,8 @@ const runDaemon = Effect.fn("commands.runDaemon")(
       drain: { graceMillis: options.drainGraceMillis, abort },
     });
   },
-  (effect, options) => effect.pipe(Effect.scoped, Effect.provide(serverLayer(options))),
+  (effect, options) =>
+    effect.pipe(Effect.scoped, Effect.provide(Layer.merge(serverLayer(options), telemetryLayer))),
 );
 
 const formatRun = (run: RunSummary) => {
