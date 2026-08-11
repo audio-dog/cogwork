@@ -1,0 +1,20 @@
+packages/contracts/src/rpc.ts
+  s_6e78a3a1972f4d::t_705081104e1a01 37
+  s_6e78a3a1972f4d::t_b0d19ff3ffac90 6,29-36,38-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fd9ba8ffea0880d9121c4a72fc790932ce51b974",
+  "prompts": {},
+  "sessions": {
+    "s_6e78a3a1972f4d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba29b26d-be48-46a7-97aa-75b6b5a18c59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
