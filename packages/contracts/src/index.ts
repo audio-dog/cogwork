@@ -4,6 +4,7 @@ export * from "./coordination";
 export * from "./daemon";
 export * from "./events";
 export * from "./mcp-skill";
+export * from "./principal";
 export * from "./rpc";
 export * from "./run";
 export * from "./triage";
