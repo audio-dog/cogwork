@@ -1,0 +1,36 @@
+packages/engine/src/classify.ts
+  s_8e09cabd6f8b8c::t_2be064b3fc7a19 41-51
+  s_8e09cabd6f8b8c::t_34de7d0a3b30fa 111-113,116-118,122-123
+  s_8e09cabd6f8b8c::t_37a2c3fddfae59 9
+  s_8e09cabd6f8b8c::t_bc660561ce6296 95-102
+  s_8e09cabd6f8b8c::t_25a50660f69872 124-130
+packages/engine/src/read-model.ts
+  s_8e09cabd6f8b8c::t_cce660cd00aed2 26
+  s_8e09cabd6f8b8c::t_9f241248ef5869 2-3,7,9-14,16-21,23-25,27-36
+  s_8e09cabd6f8b8c::t_d0f2bb71ca1f54 1
+packages/engine/src/daemon.ts
+  s_8e09cabd6f8b8c::t_3638ae762e4050 118
+  s_8e09cabd6f8b8c::t_10813c99f01c78 40
+packages/engine/src/classify.test.ts
+  s_8e09cabd6f8b8c::t_b248c569ed9013 305-321,323-326
+  s_8e09cabd6f8b8c::t_4f78a0dc6c599a 322
+packages/engine/src/read-model.test.ts
+  s_8e09cabd6f8b8c::t_31ac19108a933b 1-151
+  s_8e09cabd6f8b8c::t_e6e27241433f82 152-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a52ce59afa2aafd2c192d93660422f482895cd88",
+  "prompts": {},
+  "sessions": {
+    "s_8e09cabd6f8b8c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "660bb08e-79d0-43a3-bd33-44b0b0949f14",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
