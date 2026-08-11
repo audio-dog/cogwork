@@ -38,7 +38,7 @@ import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
-import { classifiedItemsOf, schedulerStatsOf, workspaceInfoOf } from "./read-model";
+import { classifiedItemsOf, schedulerStatsOf, workspaceInfoOf, workspaceStatesOf } from "./read-model";
 import {
   type ReconcileSnapshot,
   ReconcileWorker,
@@ -95,6 +95,7 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
 });
 
 const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
+  const registry = yield* WorkspaceRegistry;
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const ledger = yield* RunLedger;
@@ -104,12 +105,15 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const items = snapshot.workspaces.flatMap((state) =>
     classifiedItemsOf(state).map((item) => ({ _tag: "ItemChanged", workspace: state.name, item }) as const),
   );
+  const workspaces = workspaceStatesOf(registry, snapshot).map(
+    (workspace) => ({ _tag: "WorkspaceChanged", workspace }) as const,
+  );
   const runs = running.map((run) => ({ _tag: "RunChanged", run }) as const);
   const scheduling = {
     _tag: "SchedulerChanged",
     scheduler: schedulerStatsOf(scheduler.config, stats),
   } as const;
-  return [...items, ...runs, scheduling];
+  return [...items, ...workspaces, ...runs, scheduling];
 });
 
 // Subscribe before reading the seed so an event published between the two is not lost.
@@ -266,6 +270,7 @@ const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
   const receipt = yield* worker.submit();
   yield* Effect.logInfo("reconcile tick", receipt);
   yield* publisher.publishItems();
+  yield* publisher.publishWorkspaces();
   yield* maintainWorktrees();
 });
 
