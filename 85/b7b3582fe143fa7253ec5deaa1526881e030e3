@@ -1,0 +1,25 @@
+packages/engine/src/principal.test.ts
+  s_6e78a3a1972f4d::t_0efc999fc56858 1-29
+packages/engine/src/daemon.ts
+  s_6e78a3a1972f4d::t_3061c95edaeee1 155-158
+  s_6e78a3a1972f4d::t_a2880452717f01 198
+  s_6e78a3a1972f4d::t_833ba1a54d7817 5-7
+packages/engine/src/engine.test.ts
+  s_6e78a3a1972f4d::t_8ce818a49f02b8 458
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "85b7b3582fe143fa7253ec5deaa1526881e030e3",
+  "prompts": {},
+  "sessions": {
+    "s_6e78a3a1972f4d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba29b26d-be48-46a7-97aa-75b6b5a18c59",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
