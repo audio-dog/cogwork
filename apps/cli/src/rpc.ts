@@ -6,9 +6,11 @@ import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
 import { layer as ledgerLayer } from "./ledger";
 import { loadFromDisk } from "./loader";
@@ -25,6 +27,15 @@ export interface DaemonOptions {
   readonly drainGraceMillis: number;
 }
 
+const prepareSocketDir = (socketPath: string) =>
+  Effect.gen(function* () {
+    const path = yield* Path.Path;
+    const fs = yield* FileSystem.FileSystem;
+    const dir = path.dirname(socketPath);
+    yield* fs.makeDirectory(dir, { recursive: true, mode: 0o700 });
+    yield* fs.chmod(dir, 0o700);
+  });
+
 const clearStaleSocket = (socketPath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -36,14 +47,26 @@ const clearStaleSocket = (socketPath: string) =>
     yield* fs.remove(socketPath, { force: true });
   });
 
-const transportLayer = (socketPath: string) =>
+const boundSocketServer = (socketPath: string) =>
+  prepareSocketDir(socketPath).pipe(
+    Effect.andThen(clearStaleSocket(socketPath)),
+    Effect.map(() => NodeSocketServer.layer({ path: socketPath })),
+    Layer.unwrap,
+  );
+
+const restrictSocket = (socketPath: string) =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      // Depend on SocketServer so this chmod runs after the bind creates the socket, never before.
+      yield* SocketServer.SocketServer;
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.chmod(socketPath, 0o600);
+    }),
+  );
+
+export const transportLayer = (socketPath: string) =>
   RpcServer.layerProtocolSocketServer.pipe(
-    Layer.provide(
-      clearStaleSocket(socketPath).pipe(
-        Effect.map(() => NodeSocketServer.layer({ path: socketPath })),
-        Layer.unwrap,
-      ),
-    ),
+    Layer.provide(restrictSocket(socketPath).pipe(Layer.provideMerge(boundSocketServer(socketPath)))),
   );
 
 const registryLayer = (configHome: string) =>

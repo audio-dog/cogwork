@@ -4,7 +4,8 @@ export const TrimmedString = Schema.Trim;
 
 export const TrimmedNonEmptyString = TrimmedString.check(Schema.isNonEmpty());
 
-const makeBrand = <Brand extends string>(brand: Brand) => TrimmedNonEmptyString.pipe(Schema.brand(brand));
+export const makeBrand = <Brand extends string>(brand: Brand) =>
+  TrimmedNonEmptyString.pipe(Schema.brand(brand));
 
 export const WorkspaceId = makeBrand("WorkspaceId");
 export type WorkspaceId = typeof WorkspaceId.Type;
