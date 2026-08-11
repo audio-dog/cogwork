@@ -17,7 +17,7 @@ import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
-import { RunLedger } from "./run-ledger";
+import { handleOf, RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
 
 const maxCrashesPerItem = 3;
@@ -57,7 +57,7 @@ export const make = Effect.gen(function* () {
     item: ObservedItem,
     stage: LifecycleStage,
     endedAtMillis: number,
-    session: string | null | undefined,
+    session: SessionId | null,
   ) {
     const attempts = consecutiveFailures(item, stage) + 1;
     const exhausted = attempts >= maxAttemptsPerStage;
@@ -82,7 +82,7 @@ export const make = Effect.gen(function* () {
       stage,
       cause: { kind: "max-attempts", attempts },
       reason: recoveryReason,
-      session,
+      session: yield* handleOf(ledger, session),
     });
   });
 
@@ -90,7 +90,7 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: ObservedItem,
     stage: LifecycleStage | null,
-    session: string | null | undefined,
+    session: SessionId | null,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* ledger.closeRunning(workspace.config.name, item.id, endedAtMillis);
@@ -124,7 +124,7 @@ export const make = Effect.gen(function* () {
     item: ObservedItem,
     stage: LifecycleStage,
     crashes: number,
-    session: string | null | undefined,
+    session: SessionId | null,
   ) {
     yield* Effect.logWarning("crash loop capped", {
       workspace: workspace.config.name,
@@ -138,7 +138,7 @@ export const make = Effect.gen(function* () {
       stage,
       cause: { kind: "crash-loop", crashes },
       reason: recoveryReason,
-      session,
+      session: yield* handleOf(ledger, session),
     });
     yield* releaseClaim(workspace, item.id);
   });
@@ -170,7 +170,7 @@ export const make = Effect.gen(function* () {
     if (stage && last?.status === "running") {
       return yield* recoverCrashed(workspace, item, stage, last.session);
     }
-    yield* recoverStale(workspace, item, stage, last?.session);
+    yield* recoverStale(workspace, item, stage, last?.session ?? null);
   });
 
   const recoverWorkspace = Effect.fn("Recovery.recoverWorkspace")(function* (

@@ -1,11 +1,11 @@
-import type { RunRecord, TokenUsage } from "@clanker-forge/contracts";
+import type { RunRecord, Session, SessionId, TokenUsage } from "@clanker-forge/contracts";
 import {
   agUiDisplayName,
   agUiSessionId,
   agUiTextDelta,
   agUiUsage,
   RunId,
-  SessionId,
+  SessionId as SessionIdSchema,
 } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -41,7 +41,7 @@ import {
 import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
 import { activityOf, RunEventBus } from "./run-event-bus";
-import { RunLedger } from "./run-ledger";
+import { handleOf, RunLedger } from "./run-ledger";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
@@ -49,11 +49,11 @@ type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | Credent
 
 interface RunAccumulator {
   readonly text: string;
-  readonly session: SessionId | null;
+  readonly handle: string | null;
   readonly usage: TokenUsage | null;
 }
 
-const emptyAccumulator: RunAccumulator = { text: "", session: null, usage: null };
+const emptyAccumulator: RunAccumulator = { text: "", handle: null, usage: null };
 
 interface StageOps {
   readonly resolved: ResolvedStage;
@@ -61,18 +61,18 @@ interface StageOps {
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
   readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
   readonly fullPrompt: string;
-  readonly resumeSession: SessionId | null;
+  readonly resume: boolean;
 }
 
 class SessionRestarted extends Data.TaggedError("SessionRestarted")<{
-  readonly session: SessionId;
+  readonly handle: string;
   readonly nextSeq: number;
 }> {}
 
-const withPrompt = (request: HarnessRequest, prompt: string, sessionId: SessionId): HarnessRequest => ({
+const withPrompt = (request: HarnessRequest, prompt: string, handle: string): HarnessRequest => ({
   ...request,
   prompt,
-  sessionId,
+  sessionId: handle,
 });
 
 const defaultFollowUp: FollowUpContext = {
@@ -111,9 +111,9 @@ const warnTriageDecision = Effect.fn("Executor.warnTriageDecision")(function* (
   }
 });
 
-const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, session: SessionId | null): RunAccumulator => ({
+const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator => ({
   text: acc.text + agUiTextDelta(event),
-  session,
+  handle,
   usage: agUiUsage(event) ?? acc.usage,
 });
 
@@ -136,15 +136,17 @@ const retryableOf = (error: PrepareError | HarnessError) => {
 const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
+// The harness hands back this handle as untrusted output, and it is later echoed verbatim into a
+// fenced shell block in the human handoff comment. Whitespace or a backtick would break out of that
+// fence, so a handle carrying either is refused rather than stored.
+const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : null);
+
 export const claimant = (workspace: RegisteredWorkspace) =>
   workspace.config.issueTracker.botLogin ?? "clanker-forge";
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
-const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
+const decodeSessionId = Schema.decodeUnknownEffect(SessionIdSchema);
 const encodeJson = Schema.encodeEffect(Schema.UnknownFromJsonString);
-
-const sessionOf = (raw: string | null) =>
-  raw === null ? Effect.succeed(null) : decodeSessionId(raw).pipe(Effect.orElseSucceed(() => null));
 
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
@@ -156,6 +158,7 @@ export const make = Effect.gen(function* () {
   const handoff = handToHuman(issueTracker);
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
+  const sessionCounter = yield* Ref.make(0);
 
   const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
     workspace: RegisteredWorkspace,
@@ -180,6 +183,40 @@ export const make = Effect.gen(function* () {
       Effect.flatMap((n) => decodeRunId(`run-${startedAtMillis}-${n}`)),
       Effect.orDie,
     );
+
+  const nextSessionId = (startedAtMillis: number) =>
+    Ref.getAndUpdate(sessionCounter, (n) => n + 1).pipe(
+      Effect.flatMap((n) => decodeSessionId(`sess-${startedAtMillis}-${n}`)),
+      Effect.orDie,
+    );
+
+  const mintSession = Effect.fn("Executor.mintSession")(function* (
+    workspace: RegisteredWorkspace,
+    harness: Session["harness"],
+    createdAtMillis: number,
+  ) {
+    const id = yield* nextSessionId(createdAtMillis);
+    yield* ledger.insertSession({
+      kind: "opaque-handle",
+      id,
+      workspace: workspace.config.name,
+      harness,
+      createdAtMillis,
+      handle: null,
+    });
+    return id;
+  });
+
+  const resolveSession = Effect.fn("Executor.resolveSession")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    ops: StageOps,
+    startedAtMillis: number,
+  ) {
+    if (item.resume) return item.resume.session;
+    const existing = ops.branch ? yield* ledger.sessionForBranch(workspace.config.name, ops.branch) : null;
+    return existing ?? (yield* mintSession(workspace, ops.resolved.harness, startedAtMillis));
+  });
 
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
     workspace: RegisteredWorkspace,
@@ -210,19 +247,16 @@ export const make = Effect.gen(function* () {
     yield* bus.publish(activityOf(record, seq, atMillis, event));
   });
 
-  const nextSession = Effect.fn("Executor.nextSession")(function* (
-    runId: RunId,
-    current: SessionId | null,
+  const nextHandle = Effect.fn("Executor.nextHandle")(function* (
+    record: RunRecord,
+    current: string | null,
     raw: string | null,
   ) {
-    if (raw === null || raw === current) return current;
-    const session = yield* sessionOf(raw);
-    if (session === null) return current;
-    yield* ledger.recordSession(runId, session);
-    return session;
+    const handle = cleanHandle(raw);
+    if (handle === null || handle === current || record.session === null) return current;
+    yield* ledger.recordSessionHandle(record.session, handle);
+    return handle;
   });
-
-  const ledgeredSession = (runId: RunId) => Effect.map(ledger.getRun(runId), (run) => run?.session ?? null);
 
   const foldEvent = Effect.fn("Executor.foldEvent")(function* (
     record: RunRecord,
@@ -230,9 +264,9 @@ export const make = Effect.gen(function* () {
     seq: number,
     event: AgUiEvent,
   ) {
-    const session = yield* nextSession(record.id, acc.session, agUiSessionId(event));
+    const handle = yield* nextHandle(record, acc.handle, agUiSessionId(event));
     yield* persistEvent(record, seq, event);
-    return mergeEvent(acc, event, session);
+    return mergeEvent(acc, event, handle);
   });
 
   const foldStream = <E, R>(
@@ -253,15 +287,15 @@ export const make = Effect.gen(function* () {
     return yield* foldStream(request, (acc, event, index) => foldEvent(record, acc, index + startSeq, event));
   });
 
-  const guardResume = (prev: RunAccumulator, next: RunAccumulator, index: number, expected: SessionId) =>
-    prev.session === null && next.session !== null && next.session !== expected
-      ? Effect.fail(new SessionRestarted({ session: next.session, nextSeq: index + 1 }))
+  const guardResume = (prev: RunAccumulator, next: RunAccumulator, index: number, expected: string) =>
+    prev.handle === null && next.handle !== null && next.handle !== expected
+      ? Effect.fail(new SessionRestarted({ handle: next.handle, nextSeq: index + 1 }))
       : Effect.succeed(next);
 
   const foldResume = Effect.fn("Executor.foldResume")(function* (
     record: RunRecord,
     request: HarnessRequest,
-    expected: SessionId,
+    expected: string,
   ) {
     return yield* foldStream(request, (acc, event, index) =>
       foldEvent(record, acc, index, event).pipe(
@@ -275,11 +309,11 @@ export const make = Effect.gen(function* () {
     ops: StageOps,
     request: HarnessRequest,
   ) {
-    const expected = ops.resumeSession;
+    const expected = ops.resume ? request.sessionId : null;
     if (!expected) return yield* foldRun(record, request, 0);
     return yield* foldResume(record, request, expected).pipe(
       Effect.catchTag("SessionRestarted", (restart) =>
-        foldRun(record, withPrompt(request, ops.fullPrompt, restart.session), restart.nextSeq),
+        foldRun(record, withPrompt(request, ops.fullPrompt, restart.handle), restart.nextSeq),
       ),
     );
   });
@@ -290,7 +324,7 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     retryable: boolean,
     reason: string,
-    session: SessionId | null,
+    handle: string | null,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     const attempts = item.priorFailures + 1;
@@ -315,12 +349,11 @@ export const make = Effect.gen(function* () {
         stage: item.stage,
         cause: handoffCause(retryable, attempts),
         reason,
-        session,
+        session: handle,
       });
     }
     yield* ledger.updateRun(runId, {
       status: exhausted ? "exhausted" : "failed",
-      session: exhausted ? null : session,
       usage: null,
       endedAtMillis,
     });
@@ -344,7 +377,6 @@ export const make = Effect.gen(function* () {
     });
     yield* ledger.updateRun(runId, {
       status: "succeeded",
-      session: acc.session,
       usage: acc.usage,
       endedAtMillis,
     });
@@ -365,7 +397,6 @@ export const make = Effect.gen(function* () {
     });
     yield* ledger.updateRun(runId, {
       status: "succeeded",
-      session: acc.session,
       usage: acc.usage,
       endedAtMillis,
     });
@@ -382,7 +413,7 @@ export const make = Effect.gen(function* () {
       return yield* applyImplementSuccess(workspace, item, runId, acc);
     }
     const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
-    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.session);
+    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.handle);
   });
 
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
@@ -394,7 +425,13 @@ export const make = Effect.gen(function* () {
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
-    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, last?.session ?? null);
+    return yield* harnessRequest(
+      workspace,
+      resolved,
+      worktree.path,
+      prompt,
+      yield* handleOf(ledger, last?.session ?? null),
+    );
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
@@ -405,7 +442,7 @@ export const make = Effect.gen(function* () {
       prepare: harnessRequest(workspace, resolved, workspace.config.checkoutPath, fullPrompt, null),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
       fullPrompt,
-      resumeSession: null,
+      resume: false,
     } satisfies StageOps;
   };
 
@@ -418,7 +455,7 @@ export const make = Effect.gen(function* () {
       prepare: prepareImplement(workspace, item, resolved, branch, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
       fullPrompt,
-      resumeSession: null,
+      resume: false,
     } satisfies StageOps;
   };
 
@@ -445,7 +482,6 @@ export const make = Effect.gen(function* () {
     });
     yield* ledger.updateRun(runId, {
       status: "succeeded",
-      session: acc.session,
       usage: acc.usage,
       endedAtMillis,
     });
@@ -463,7 +499,7 @@ export const make = Effect.gen(function* () {
       return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
     }
     const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
-    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.session);
+    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.handle);
   });
 
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
@@ -478,7 +514,7 @@ export const make = Effect.gen(function* () {
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
     const now = yield* Clock.currentTimeMillis;
     const decision = decideResume({
-      sessionId: last?.session ?? null,
+      handle: yield* handleOf(ledger, last?.session ?? null),
       lastRunStartedAtMillis: last?.startedAtMillis ?? null,
       lastRunTotalTokens: last?.usage?.totalTokens ?? null,
       now,
@@ -492,7 +528,7 @@ export const make = Effect.gen(function* () {
       resolved,
       worktree.path,
       prompt,
-      decision.kind === "resume" ? decision.sessionId : null,
+      decision.kind === "resume" ? decision.handle : null,
     );
   });
 
@@ -506,7 +542,7 @@ export const make = Effect.gen(function* () {
       prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
       fullPrompt,
-      resumeSession: null,
+      resume: false,
     } satisfies StageOps;
   };
 
@@ -536,9 +572,10 @@ export const make = Effect.gen(function* () {
     resolved: ResolvedStage,
     session: SessionId,
   ) {
+    const handle = yield* handleOf(ledger, session);
     if (item.stage === "triage") {
       const path = workspace.config.checkoutPath;
-      return yield* harnessRequest(workspace, resolved, path, buildContinuationNudge(path), session);
+      return yield* harnessRequest(workspace, resolved, path, buildContinuationNudge(path), handle);
     }
     const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
     return yield* harnessRequest(
@@ -546,7 +583,7 @@ export const make = Effect.gen(function* () {
       resolved,
       worktree.path,
       buildContinuationNudge(worktree.path),
-      session,
+      handle,
     );
   });
 
@@ -563,7 +600,7 @@ export const make = Effect.gen(function* () {
     return {
       ...ops,
       prepare: resumePrepare(workspace, item, resolved, session),
-      resumeSession: session,
+      resume: true,
     } satisfies StageOps;
   };
 
@@ -574,6 +611,7 @@ export const make = Effect.gen(function* () {
     startedAtMillis: number,
   ) {
     const runId = yield* nextRunId(startedAtMillis);
+    const session = yield* resolveSession(workspace, item, ops, startedAtMillis);
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,
@@ -581,7 +619,7 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       harness: ops.resolved.harness,
       branch: ops.branch,
-      session: null,
+      session,
       usage: null,
       status: "running",
       startedAtMillis,
@@ -605,7 +643,7 @@ export const make = Effect.gen(function* () {
       runId,
       retryableOf(outcome.failure),
       prepareFailureReason(outcome.failure),
-      yield* ledgeredSession(runId),
+      yield* handleOf(ledger, record.session),
     );
   });
 

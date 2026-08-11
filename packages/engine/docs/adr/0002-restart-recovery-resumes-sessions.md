@@ -12,3 +12,11 @@ When the daemon stops with a run in flight, claim recovery today marks the run `
 ## Consequences
 
 `RunStatus` gains `interrupted` and `crashed`; claim recovery splits into a resumable path (hold the claim, reschedule, resume) and the existing stale/handoff path (release, hand off). A resumed run sends a short continuation nudge rather than the full stage prompt. Because resume is machine-local, moving a workspace to a new machine loses any in-flight session — acceptable, since the run ledger is already disposable and the work source stays authoritative for coordination.
+
+## Amendment (#195): the session is its own entity, written at insert
+
+Session is now a first-class entity with its own id, and `RunRecord.session` is a foreign key to it rather than a loose handle string. That shifts the eager write this ADR promised. Before, we wrote the harness's session id onto the run "the moment the harness emits it" — the first `session-id` event. Now the engine **mints the session when it inserts the run**, before the harness has said anything, and the run points at it from the start. Runs on the same branch (and a resumed run) share one session, so their transcript reads as one conversation.
+
+The harness handle is a separate thing. Cursor keeps its own history and hands back an opaque id we store to resume it; that lands on the session's `handle` the moment the harness emits it, exactly as before. So "resume needs a handle" still holds — a branch run only offers itself for resume once its session has a handle — but the *engine session identity* no longer waits on the harness. Recovery threads the engine session id (the FK) so a rescheduled run continues the same session, and resolves the handle from that session when it needs to tell the harness (or a human) how to pick the conversation back up.
+
+Sessions come in two kinds. Every session today is `opaque-handle`, because the only runner is a CLI harness. The `owned-transcript` kind is reserved for the first-party runner, whose whole conversation lives in our own run ledger — at which point `loadThread` folds the transcript straight from the events (see `SessionStore`) instead of leaning on a handle at all.

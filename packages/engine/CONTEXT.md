@@ -57,6 +57,10 @@ _Avoid_: Job, task
 The unit that runs one candidate end to end: claim, worktree, resolve playbook, dispatch to the harness, stream events into the ledger, record the attempt.
 _Avoid_: Runner, worker, harness
 
+**Session store**:
+The read model that folds a session's transcript out of the run ledger — given a `SessionId`, it walks every event across the runs that share the session (oldest run first) and projects them into ordered messages. Its `loadThread` mirrors the shape a `@tanstack/ai-persistence` message store returns, so when the first-party runner lands we swap this projection for that adapter with the ledger still the one source of truth. An empty transcript is `[]`, never a failure. There is no second store: the run ledger is the only place a conversation lives.
+_Avoid_: Message store (that's the persistence library's term we're mirroring), transcript database, second store
+
 **Harness service**:
 The engine's dispatcher — given a harness request, it routes to the registered harness runner by name. Knows nothing about any specific agent.
 _Avoid_: Harness (the concept, defined in contracts), model

@@ -9,6 +9,32 @@ export type RunId = typeof RunId.Type;
 export const SessionId = TrimmedNonEmptyString.pipe(Schema.brand("SessionId"));
 export type SessionId = typeof SessionId.Type;
 
+const SessionFields = {
+  id: SessionId,
+  workspace: WorkspaceId,
+  harness: HarnessName,
+  createdAtMillis: Schema.Natural,
+};
+
+export const OwnedTranscriptSession = Schema.Struct({
+  kind: Schema.Literal("owned-transcript"),
+  ...SessionFields,
+});
+export type OwnedTranscriptSession = typeof OwnedTranscriptSession.Type;
+
+export const OpaqueHandleSession = Schema.Struct({
+  kind: Schema.Literal("opaque-handle"),
+  ...SessionFields,
+  handle: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type OpaqueHandleSession = typeof OpaqueHandleSession.Type;
+
+export const Session = Schema.Union([OwnedTranscriptSession, OpaqueHandleSession]);
+export type Session = typeof Session.Type;
+
+export const sessionHandle = (session: Session | null) =>
+  session?.kind === "opaque-handle" ? session.handle : null;
+
 export const TokenUsage = Schema.Struct({
   inputTokens: Schema.optional(Schema.Natural),
   outputTokens: Schema.optional(Schema.Natural),

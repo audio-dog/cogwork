@@ -1,9 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
-import type { RunEvent, RunId, RunRecord, SessionId, TokenUsage } from "@clanker-forge/contracts";
+import type { RunEvent, RunId, RunRecord, Session, TokenUsage } from "@clanker-forge/contracts";
 import {
   RunEvent as RunEventSchema,
   RunRecord as RunRecordSchema,
   RunSummary as RunSummarySchema,
+  SessionId,
+  Session as SessionSchema,
   workItemCandidates,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
@@ -14,7 +16,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { runEvents, runs } from "./schema";
+import { runEvents, runs, sessions } from "./schema";
 
 const bootstrapSql = `
 CREATE TABLE IF NOT EXISTS runs (
@@ -32,6 +34,14 @@ CREATE TABLE IF NOT EXISTS runs (
   started_at INTEGER NOT NULL,
   ended_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  workspace TEXT NOT NULL,
+  harness TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  handle TEXT,
+  created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS run_events (
   run_id TEXT NOT NULL,
   seq INTEGER NOT NULL,
@@ -44,19 +54,46 @@ CREATE TABLE IF NOT EXISTS run_events (
 CREATE INDEX IF NOT EXISTS runs_started_at ON runs (started_at DESC);
 `;
 
+const unresumableStatuses = ["interrupted", "crashed", "exhausted"];
+
 const runColumns = (record: {
-  readonly session: string | null;
   readonly usage: TokenUsage | null;
   readonly status: string;
   readonly endedAtMillis: number | null;
 }) => ({
-  session: record.session,
   inputTokens: record.usage?.inputTokens ?? null,
   outputTokens: record.usage?.outputTokens ?? null,
   totalTokens: record.usage?.totalTokens ?? null,
   status: record.status,
   endedAt: record.endedAtMillis,
 });
+
+const sessionValues = (session: Session) => ({
+  id: session.id,
+  workspace: session.workspace,
+  harness: session.harness,
+  kind: session.kind,
+  handle: session.kind === "opaque-handle" ? session.handle : null,
+  createdAt: session.createdAtMillis,
+});
+
+const sessionFromRow = (row: {
+  readonly id: string;
+  readonly workspace: string;
+  readonly harness: string;
+  readonly kind: string;
+  readonly handle: string | null;
+  readonly createdAt: number;
+}) => {
+  const base = {
+    kind: row.kind,
+    id: row.id,
+    workspace: row.workspace,
+    harness: row.harness,
+    createdAtMillis: row.createdAt,
+  };
+  return row.kind === "opaque-handle" ? { ...base, handle: row.handle } : base;
+};
 
 const usageOf = (row: {
   readonly inputTokens: number | null;
@@ -118,6 +155,8 @@ const runRecordFromRow = (row: {
 const decodeSummary = Schema.decodeUnknownEffect(RunSummarySchema);
 const decodeEvent = Schema.decodeUnknownEffect(RunEventSchema);
 const decodeRun = Schema.decodeUnknownEffect(RunRecordSchema);
+const decodeSession = Schema.decodeUnknownEffect(SessionSchema);
+const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
 
 const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows: ReadonlyArray<unknown>) =>
   Effect.forEach(rows, (row) =>
@@ -204,6 +243,7 @@ const make = (ledgerPath: string) =>
             stage: record.stage,
             harness: record.harness,
             branch: record.branch,
+            session: record.session,
             startedAt: record.startedAtMillis,
             ...runColumns(record),
           };
@@ -223,10 +263,72 @@ const make = (ledgerPath: string) =>
             .run();
         }),
 
-      recordSession: (runId: RunId, session: SessionId) =>
-        write("recordSession", () => {
-          db.update(runs).set({ session }).where(eq(runs.id, runId)).run();
+      insertSession: (session: Session) =>
+        write("insertSession", () => {
+          db.insert(sessions).values(sessionValues(session)).onConflictDoNothing().run();
         }),
+
+      getSession: (id) =>
+        Effect.try(() => db.select().from(sessions).where(eq(sessions.id, id)).get()).pipe(
+          Effect.tapError((cause) => warn("getSession", cause)),
+          Effect.orElseSucceed(() => undefined),
+          Effect.flatMap((row) =>
+            row
+              ? decodeSession(sessionFromRow(row)).pipe(Effect.orElseSucceed(() => null))
+              : Effect.succeed(null),
+          ),
+        ),
+
+      recordSessionHandle: (id, handle: string) =>
+        write("recordSessionHandle", () => {
+          db.update(sessions).set({ handle }).where(eq(sessions.id, id)).run();
+        }),
+
+      sessionForBranch: (workspace: string, branch: string) =>
+        readRows("sessionForBranch", () =>
+          db
+            .select({ session: runs.session })
+            .from(runs)
+            .where(and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)))
+            .orderBy(desc(runs.startedAt))
+            .limit(1)
+            .all(),
+        ).pipe(
+          Effect.flatMap((rows) => {
+            const raw = rows[0]?.session;
+            return raw ? decodeSessionId(raw).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null);
+          }),
+        ),
+
+      sessionEvents: (session) =>
+        readRows("sessionEvents", () =>
+          db
+            .select({
+              seq: runEvents.seq,
+              type: runEvents.type,
+              name: runEvents.name,
+              data: runEvents.data,
+              at: runEvents.at,
+            })
+            .from(runEvents)
+            .innerJoin(runs, eq(runs.id, runEvents.runId))
+            .where(eq(runs.session, session))
+            .orderBy(runs.startedAt, runEvents.seq)
+            .all(),
+        ).pipe(
+          Effect.flatMap((rows) =>
+            decodeAll(
+              decodeEvent,
+              rows.map((row) => ({
+                seq: row.seq,
+                type: row.type,
+                name: row.name,
+                data: row.data,
+                atMillis: row.at,
+              })),
+            ),
+          ),
+        ),
 
       closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
         write("closeRunning", () => {
@@ -284,14 +386,22 @@ const make = (ledgerPath: string) =>
         }),
 
       latestRunByBranch: (workspace: string, branch: string) =>
-        latestRunWhere(
-          "latestRunByBranch",
-          and(
-            eq(runs.workspace, workspace),
-            eq(runs.branch, branch),
-            isNotNull(runs.session),
-            notInArray(runs.status, ["interrupted", "crashed"]),
-          ),
+        readRun("latestRunByBranch", () =>
+          db
+            .select(runRecordSelection)
+            .from(runs)
+            .innerJoin(sessions, eq(sessions.id, runs.session))
+            .where(
+              and(
+                eq(runs.workspace, workspace),
+                eq(runs.branch, branch),
+                notInArray(runs.status, unresumableStatuses),
+                isNotNull(sessions.handle),
+              ),
+            )
+            .orderBy(desc(runs.startedAt))
+            .limit(1)
+            .get(),
         ),
 
       latestRunForItem: (workspace: string, workItem: string) =>

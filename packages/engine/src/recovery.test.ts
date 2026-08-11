@@ -287,20 +287,27 @@ describe("Recovery.recover", () => {
     }),
   );
 
-  it.effect("hands an exhausted recovery the session its run persisted before the daemon died", () =>
+  it.effect("hands an exhausted recovery the resume handle its session kept before the daemon died", () =>
     Effect.gen(function* () {
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
-      yield* ledger.insertRun({ ...interruptedRun, status: "failed", endedAtMillis: 2 });
-      yield* ledger.recordSession(interruptedRun.id, session);
+      yield* ledger.insertSession({
+        kind: "opaque-handle",
+        id: session,
+        workspace: wsA.config.name,
+        harness: interruptedRun.harness,
+        createdAtMillis: 1,
+        handle: "cursor-abc",
+      });
+      yield* ledger.insertRun({ ...interruptedRun, status: "failed", endedAtMillis: 2, session });
       const issueTracker: Partial<IssueTrackerService> = {
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
-        assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'sess-abc'");
+        assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'cursor-abc'");
       }).pipe(
         Effect.provide(
           recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
