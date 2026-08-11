@@ -7,6 +7,16 @@ const section = (label: string, lines: ReadonlyArray<string>) =>
 
 const blockersLabel = (count: number) => `${count} open blocker${count === 1 ? "" : "s"}`;
 
+const proposalPreviewMax = 100;
+
+const proposalPreview = (proposal: string | null) => {
+  if (proposal === null) return "";
+  const oneLine = proposal.replace(/\s+/g, " ").trim();
+  const preview =
+    oneLine.length <= proposalPreviewMax ? oneLine : `${oneLine.slice(0, proposalPreviewMax - 1).trimEnd()}…`;
+  return ` — ${preview}`;
+};
+
 const isoOrMillis = (millis: number) =>
   Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
 
@@ -36,7 +46,9 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
   );
   const needsHuman = section(
     "needs-human",
-    workspace.needsHuman.map((item) => `${item.reason} ${item.id} ${item.title}`),
+    workspace.needsHuman.map(
+      (item) => `${item.reason} ${item.id} ${item.title}${proposalPreview(item.proposal)}`,
+    ),
   );
   return [
     `  - ${workspace.name} [${workspace.issueTracker}/${workspace.harness}] ${workspace.checkoutPath}`,

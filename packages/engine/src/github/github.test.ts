@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { CheckRun } from "../ci";
 import { classify } from "../classify";
+import { triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
 import type { FollowUpMarker } from "../follow-up";
 import { type ClaimRequest, IssueTracker } from "../issue-tracker";
@@ -930,6 +931,62 @@ describe("github work source adapter", () => {
       assert.deepStrictEqual(observed?.claim, observedClaim({ claimedAtMillis: 3, stage: "implement" }));
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] })),
+    ),
+  );
+
+  it.effect("re-derives a self-halted item's triage proposal from the tracker on observe", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#28");
+      assert.strictEqual(observed?.proposal, "The spec conflicts with how routing works today.");
+      const needsHuman = classify(items).needsHuman.find((entry) => entry.id === "#28");
+      assert.strictEqual(needsHuman?.reason, "ready-for-human");
+      assert.strictEqual(needsHuman?.proposal, "The spec conflicts with how routing works today.");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 28, title: "self-halted", labels: ["ready-for-human"] }],
+          comments: [
+            {
+              issue: 28,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeAttempt({ stage: "triage", outcome: "succeeded", atMillis: 1 }),
+              ]),
+              createdAtMillis: 1,
+            },
+            {
+              issue: 28,
+              authorLogin: bot.login,
+              body: triageProposalBody("The spec conflicts with how routing works today."),
+              createdAtMillis: 2,
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reads no proposal for an item handed to a human by exhaustion", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#29");
+      assert.isNull(observed?.proposal ?? null);
+      assert.isNull(classify(items).needsHuman.find((entry) => entry.id === "#29")?.proposal ?? null);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 29, title: "exhausted", labels: ["ready-for-human"] }],
+          comments: [
+            {
+              issue: 29,
+              authorLogin: bot.login,
+              body: "> *This was posted by clanker-forge.*\n\n**Exhausted after 3 failed triage attempts.**",
+              createdAtMillis: 1,
+            },
+          ],
+        }),
+      ),
     ),
   );
 

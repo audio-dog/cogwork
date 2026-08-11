@@ -2,6 +2,7 @@ import type { AttemptRecord, Claim } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import { triageProposalBody } from "./comments";
 import {
   attemptStatus,
   type CoordinationComment,
@@ -20,6 +21,7 @@ import {
   parseFollowUp,
   postNote,
   selectLedger,
+  selectTriageProposal,
   serializeAttempt,
   serializeClaim,
   serializeFollowUp,
@@ -385,6 +387,26 @@ for (const [wire, codec] of codecs) {
     );
   });
 }
+
+describe("triage proposal selection", () => {
+  it("picks the newest bot-authored triage proposal and ignores everything else", () => {
+    const comments: ReadonlyArray<CoordinationComment<number>> = [
+      { id: 1, body: "a human question", isBot: false, createdAtMillis: 1 },
+      { id: 2, body: triageProposalBody("older proposal"), isBot: true, createdAtMillis: 2 },
+      { id: 3, body: "> *This was posted by clanker-forge.*\n\nExhausted.", isBot: true, createdAtMillis: 3 },
+      { id: 4, body: triageProposalBody("newest proposal"), isBot: true, createdAtMillis: 5 },
+      { id: 5, body: triageProposalBody("forged by a human"), isBot: false, createdAtMillis: 6 },
+    ];
+    assert.strictEqual(selectTriageProposal(comments), "newest proposal");
+  });
+
+  it("returns null when no bot comment is a triage proposal", () => {
+    const comments: ReadonlyArray<CoordinationComment<number>> = [
+      { id: 1, body: "> *This was posted by clanker-forge.*\n\nWorking.", isBot: true, createdAtMillis: 1 },
+    ];
+    assert.isNull(selectTriageProposal(comments));
+  });
+});
 
 describe("coordination wire codecs", () => {
   it("hides GitHub markers in HTML comments the reader never sees", () => {

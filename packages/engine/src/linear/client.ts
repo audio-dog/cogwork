@@ -64,6 +64,7 @@ export interface RawLabel {
 export interface CoordinationScope {
   readonly botUserId: string;
   readonly ledgerMarker: string;
+  readonly proposalMarker: string;
 }
 
 const CommentNode = Schema.Struct({
@@ -91,6 +92,7 @@ const IssueNode = Schema.Struct({
   }),
   inverseRelations: Schema.optional(Schema.Struct({ nodes: Schema.Array(RelationNode) })),
   comments: Schema.optional(Schema.Struct({ nodes: Schema.Array(CommentNode) })),
+  proposalComments: Schema.optional(Schema.Struct({ nodes: Schema.Array(CommentNode) })),
 });
 
 const StateNode = Schema.Struct({
@@ -192,6 +194,15 @@ const coordinationFields = `
         first: ${coordinationPageSize}
       ) {
         nodes { id body createdAt user { id } }
+      }
+      # last: 1 is deliberate — the proposal attribution is unique to proposal notes, so the
+      # newest match is the current proposal, and fetching more would break the per-query complexity cap.
+      proposalComments: comments(
+        filter: { user: { id: { eq: $bot } }, body: { contains: $proposal } }
+        orderBy: createdAt
+        last: 1
+      ) {
+        nodes { id body createdAt user { id } }
       }`;
 
 const issuesSelection = (coordination: string) => `
@@ -263,7 +274,7 @@ const issuesShape = teamShape(IssuesTeamNode, issuesSelection(""));
 const coordinatedIssuesShape = teamShape(
   IssuesTeamNode,
   issuesSelection(coordinationFields),
-  ", $bot: ID!, $ledger: String!",
+  ", $bot: ID!, $ledger: String!, $proposal: String!",
 );
 
 const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
@@ -304,7 +315,9 @@ const toRawComment = (comment: typeof CommentNode.Type): ReadonlyArray<RawCommen
 
 const toObservedIssue = (issue: typeof IssueNode.Type): ObservedRawIssue => ({
   ...toRawIssue(issue),
-  coordinationComments: (issue.comments?.nodes ?? []).flatMap(toRawComment),
+  coordinationComments: [...(issue.comments?.nodes ?? []), ...(issue.proposalComments?.nodes ?? [])].flatMap(
+    toRawComment,
+  ),
 });
 
 const requireSuccess = (operation: string, payload: { readonly success: boolean }) =>
@@ -419,6 +432,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       ? yield* loadTeam(ref, coordinatedIssuesShape, {
           bot: coordination.botUserId,
           ledger: coordination.ledgerMarker,
+          proposal: coordination.proposalMarker,
         })
       : yield* loadTeam(ref, issuesShape);
     return team.issues.nodes.map(toObservedIssue);

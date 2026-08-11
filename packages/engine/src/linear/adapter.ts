@@ -2,6 +2,7 @@ import { type Claim, type OAuthAppConfig, type TriageRole, WorkItemId } from "@c
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { triageProposalAttribution } from "../comments";
 import type { CoordinationComment, CoordinationHost } from "../coordination";
 import * as Coordination from "../coordination";
 import {
@@ -46,7 +47,7 @@ const toCoordinationComment =
   });
 
 const coordinationScope = ({ botUserId }: LinearTarget) =>
-  botUserId === null ? null : { botUserId, ledgerMarker };
+  botUserId === null ? null : { botUserId, ledgerMarker, proposalMarker: triageProposalAttribution };
 
 const clientCredentialsFor = (oauth: OAuthAppConfig | undefined) =>
   oauth?.clientSecretEnv ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null;
@@ -94,10 +95,8 @@ const make = (client: LinearClientService): IssueTrackerService => {
   const buildItem = (target: LinearTarget) =>
     Effect.fn("linear.buildItem")(function* (issue: ObservedRawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
-      const ledger = Coordination.selectLedger(
-        wireCodec,
-        issue.coordinationComments.map(toCoordinationComment(target.botUserId)),
-      );
+      const comments = issue.coordinationComments.map(toCoordinationComment(target.botUserId));
+      const ledger = Coordination.selectLedger(wireCodec, comments);
       const body = ledger?.body ?? "";
       const id = yield* itemId(issue.identifier);
       const claim = claimLabeled ? Coordination.parseClaim(wireCodec, body) : null;
@@ -112,6 +111,7 @@ const make = (client: LinearClientService): IssueTrackerService => {
         owned: ledger !== undefined,
         followUp: Coordination.parseFollowUp(wireCodec, body),
         openBlockers: issue.openBlockers,
+        proposal: Coordination.selectTriageProposal(comments),
       } satisfies TrackerItem;
     });
 

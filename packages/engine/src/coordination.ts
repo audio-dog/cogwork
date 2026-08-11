@@ -2,7 +2,7 @@ import { AttemptRecord, Claim, type LifecycleStage } from "@clanker-forge/contra
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import { statusReason } from "./comments";
+import { parseTriageProposal, statusReason } from "./comments";
 import { FollowUpMarker } from "./follow-up";
 import type { IssueTrackerError } from "./issue-tracker";
 
@@ -209,6 +209,18 @@ export const selectLedger = <Id>(codec: WireCodec, comments: ReadonlyArray<Coord
     .filter((comment) => comment.isBot && hasLedgerMarker(codec, comment.body))
     .toSorted((left, right) => left.createdAtMillis - right.createdAtMillis)
     .at(0);
+
+// The triage proposal lives in its own bot note (not the ledger), so a self-halt's question can
+// be re-derived from the tracker on every reconcile. The newest one wins when triage runs again.
+export const selectTriageProposal = <Id>(comments: ReadonlyArray<CoordinationComment<Id>>) =>
+  comments
+    .filter((comment) => comment.isBot)
+    .toSorted((left, right) => left.createdAtMillis - right.createdAtMillis)
+    .flatMap((comment) => {
+      const text = parseTriageProposal(comment.body);
+      return text === null ? [] : [text];
+    })
+    .at(-1) ?? null;
 
 const nextDetail = (codec: WireCodec, update: CoordinationUpdate, previous: string) => {
   if (!Object.hasOwn(update, "detail")) return coordinationDetail(codec, previous);

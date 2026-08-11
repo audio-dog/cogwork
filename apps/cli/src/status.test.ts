@@ -39,22 +39,47 @@ const status = (over: Partial<DaemonStatus> = {}): DaemonStatus => ({
 });
 
 describe("formatStatus", () => {
-  it("renders a needs-human section with each item's reason", () => {
+  it("renders a needs-human section with each item's reason and inline triage proposal", () => {
     const output = formatStatus(
       status({
         workspaces: [
           workspace({
             needsHuman: [
-              { id: workItemId("#3"), title: "waiting on details", reason: "needs-info" },
-              { id: workItemId("#9"), title: "keeps failing", reason: "ready-for-human" },
+              {
+                id: workItemId("#3"),
+                title: "waiting on details",
+                reason: "needs-info",
+                proposal: "Which auth provider should this target?",
+              },
+              { id: workItemId("#9"), title: "keeps failing", reason: "ready-for-human", proposal: null },
             ],
           }),
         ],
       }),
     );
     assert.include(output, "      needs-human:");
-    assert.include(output, "        · needs-info #3 waiting on details");
+    assert.include(
+      output,
+      "        · needs-info #3 waiting on details — Which auth provider should this target?",
+    );
     assert.include(output, "        · ready-for-human #9 keeps failing");
+  });
+
+  it("collapses and truncates a long triage proposal preview to one line", () => {
+    const proposal = `${"a".repeat(200)}\nsecond line`;
+    const output = formatStatus(
+      status({
+        workspaces: [
+          workspace({
+            needsHuman: [{ id: workItemId("#3"), title: "big proposal", reason: "needs-info", proposal }],
+          }),
+        ],
+      }),
+    );
+    const line = output.split("\n").find((entry) => entry.includes("#3 big proposal")) ?? "";
+    assert.isTrue(line.endsWith("…"));
+    assert.isBelow(line.length, 160);
+    assert.notInclude(line, "second line");
   });
 
   it("renders a blocked section with each item's open-blocker count", () => {

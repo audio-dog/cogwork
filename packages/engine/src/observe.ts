@@ -15,6 +15,7 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
     claimedByUs: item.claimedByUs,
     attempts: item.attempts,
     openBlockers: item.openBlockers,
+    proposal: item.proposal,
     pr: pr ? { ...pr, followUp: item.followUp } : null,
   };
 };

@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { classify } from "../classify";
+import { triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
 import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
@@ -110,8 +111,10 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
   ) =>
     coordination === null
       ? []
-      : (comments.get(identifier) ?? []).filter((comment) =>
-          comment.body.includes(coordination.ledgerMarker),
+      : (comments.get(identifier) ?? []).filter(
+          (comment) =>
+            comment.body.includes(coordination.ledgerMarker) ||
+            comment.body.includes(coordination.proposalMarker),
         );
 
   return {
@@ -434,6 +437,41 @@ describe("linear work source adapter", () => {
       Effect.provide(
         withClient({
           issues: [{ identifier: "AUD-11", title: "propose", labels: ["state:needs-triage"] }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("re-derives a self-halted item's triage proposal from the tracker on observe", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "AUD-13");
+      assert.strictEqual(observed?.proposal, "This needs a product call on scope before I proceed.");
+      const needsHuman = classify(items).needsHuman.find((entry) => entry.id === "AUD-13");
+      assert.strictEqual(needsHuman?.reason, "ready-for-human");
+      assert.strictEqual(needsHuman?.proposal, "This needs a product call on scope before I proceed.");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-13", title: "self-halted", labels: ["state:ready-for-human"] }],
+          comments: [
+            {
+              issue: "AUD-13",
+              authorId: bot.id,
+              body: formatCoordinationBody({
+                status: "triage completed.",
+                markers: [serializeAttempt({ stage: "triage", outcome: "succeeded", atMillis: 1 })],
+                detail: null,
+              }),
+              createdAtMillis: 1,
+            },
+            {
+              issue: "AUD-13",
+              authorId: bot.id,
+              body: triageProposalBody("This needs a product call on scope before I proceed."),
+              createdAtMillis: 2,
+            },
+          ],
         }),
       ),
     ),

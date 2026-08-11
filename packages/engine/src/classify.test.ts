@@ -17,6 +17,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   attempts: over.attempts ?? [],
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
+  proposal: over.proposal ?? null,
 });
 
 const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"] => ({
@@ -143,6 +144,16 @@ describe("classify", () => {
     const reasons = Object.fromEntries(needsHuman.map((entry) => [entry.id, entry.reason]));
     assert.strictEqual(reasons["1"], "needs-info");
     assert.strictEqual(reasons["2"], "ready-for-human");
+  });
+
+  it("carries the triage proposal onto a self-halted item and null when there is none", () => {
+    const { needsHuman } = classify([
+      item({ id: "1", roles: ["needs-info"], proposal: "Which database should this use?" }),
+      item({ id: "2", roles: ["ready-for-human"] }),
+    ]);
+    const proposals = Object.fromEntries(needsHuman.map((entry) => [entry.id, entry.proposal]));
+    assert.strictEqual(proposals["1"], "Which database should this use?");
+    assert.isNull(proposals["2"]);
   });
 
   it("hands an item to a human as ready-for-human once its stage exhausts the failed-attempt cap", () => {
