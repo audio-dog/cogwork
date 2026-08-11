@@ -1,0 +1,26 @@
+apps/cli/src/credentials.ts
+  s_7ffb86cc44e55f::t_ed9da64cb48fc4 12-15,17,27,30,36,41,51,53,79-89,93,95-96
+  s_7ffb86cc44e55f::t_9dd526e9b6d2e5 76-78
+  s_7ffb86cc44e55f::t_65bf2c024fdea7 66-68,74-75
+  s_7ffb86cc44e55f::t_e807c5efc05832 43-50
+apps/cli/src/credentials.test.ts
+  s_7ffb86cc44e55f::t_76eb61afead210 35-44
+  s_7ffb86cc44e55f::t_0ccb8636f87ce8 226
+  s_7ffb86cc44e55f::t_ed7578b2b69cea 224-225,227-295
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "7045856d4fda852423697a15d6a4a1f70de1bef2",
+  "prompts": {},
+  "sessions": {
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
