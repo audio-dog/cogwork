@@ -1,0 +1,31 @@
+packages/contracts/src/board.ts
+  s_11d855827cebc4::t_6744e505e7353a 1-4,19
+packages/contracts/src/board.test.ts
+  s_11d855827cebc4::t_7a0033fe67f2fa 3,5-7,50-63
+packages/engine/src/event-publisher.ts
+  s_11d855827cebc4::t_c275686e5d9570 1
+packages/contracts/package.json
+  s_11d855827cebc4::t_085235b2a2466b 9-10,17-19
+packages/contracts/vitest.config.ts
+  s_11d855827cebc4::t_efdc6dfcb10e4d 1-7
+packages/contracts/src/index.ts
+  s_11d855827cebc4::t_e3f1c20c3e87b0 3
+pnpm-lock.yaml
+  s_11d855827cebc4::t_bb09a129c69cac 225-227,231-233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9e6291c75b53b96b165e039232f03be61cb604c1",
+  "prompts": {},
+  "sessions": {
+    "s_11d855827cebc4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f246d620-a9ba-4989-a567-8da01a8e0a7e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
