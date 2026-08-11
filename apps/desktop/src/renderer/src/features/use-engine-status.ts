@@ -17,3 +17,19 @@ export function useEngineStatus() {
 
   return { status, setEnabled };
 }
+
+export type EnginePhase = "off" | "starting" | "up" | "failed";
+
+export const engineIsOn = (status: EngineStatusValue) =>
+  status === "running" || status === "starting" || status === "adopted";
+
+const enginePhaseByStatus: Record<EngineStatusValue, EnginePhase> = {
+  unknown: "off",
+  stopped: "off",
+  starting: "starting",
+  running: "up",
+  adopted: "up",
+  failed: "failed",
+};
+
+export const enginePhase = (status: EngineStatusValue): EnginePhase => enginePhaseByStatus[status];

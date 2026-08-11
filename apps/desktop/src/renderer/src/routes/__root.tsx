@@ -8,7 +8,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
 import { AttentionRail } from "../components/attention-rail";
 import { NavRail } from "../components/nav-rail";
-import { type EngineStatusValue, useEngineStatus } from "../features/use-engine-status";
+import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
 import { useChromeStore } from "../store/chrome";
 
 type BadgeVariant = ComponentProps<typeof Badge>["variant"];
@@ -21,9 +21,6 @@ const engineBadge: Record<EngineStatusValue, { label: string; variant: BadgeVari
   stopped: { label: "Stopped", variant: "outline" },
   failed: { label: "Failed", variant: "destructive" },
 };
-
-const engineIsOn = (status: EngineStatusValue) =>
-  status === "running" || status === "starting" || status === "adopted";
 
 function EngineControl() {
   const { status, setEnabled } = useEngineStatus();
