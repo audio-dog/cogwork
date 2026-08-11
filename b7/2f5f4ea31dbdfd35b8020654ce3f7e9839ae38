@@ -1,0 +1,43 @@
+packages/engine/src/credential-store.test.ts
+  s_7ffb86cc44e55f::t_a7a193b6641c85 20
+  s_7ffb86cc44e55f::t_e92c036ceda5cb 511-617
+packages/engine/src/mcp-skill.test.ts
+  s_7ffb86cc44e55f::t_627f0f1aca5836 7
+  s_7ffb86cc44e55f::t_609e153ab8fb90 40-43
+packages/engine/src/linear/client.test.ts
+  s_7ffb86cc44e55f::t_10f6a5fd110fdf 108-111
+packages/engine/src/credential-store.ts
+  s_7ffb86cc44e55f::t_0dd305865cc95a 156-157,160
+  s_7ffb86cc44e55f::t_0244525e7118c2 288-294
+  s_7ffb86cc44e55f::t_a270f683944842 48-54,58-63,66-73
+  s_6fd5f3c75f2f5b::t_d53ce1b942322c 74-77
+  s_7ffb86cc44e55f::t_fa31aa8afac05f 145-146
+  s_7ffb86cc44e55f::t_a205c2a361a147 95-108
+  s_7ffb86cc44e55f::t_9fb5ae54906df9 285-287,295-313,325-333
+  s_6fd5f3c75f2f5b::t_0a6884d3a0cf9d 78
+  s_6fd5f3c75f2f5b::t_2d27693ea233d4 208-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b72f5f4ea31dbdfd35b8020654ce3f7e9839ae38",
+  "prompts": {},
+  "sessions": {
+    "s_6fd5f3c75f2f5b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8b0f3630-704a-4e50-84d0-f71e6991d5e5",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
