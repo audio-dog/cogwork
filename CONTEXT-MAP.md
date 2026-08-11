@@ -14,7 +14,7 @@ context.
 
 - [contracts](./packages/contracts/CONTEXT.md) — shared kernel: the schemas and vocabulary every other orchestration context speaks (`WorkItem`, `Run`, `Claim`, harness terms, lifecycle stages).
 - [engine](./packages/engine/CONTEXT.md) — the runtime machinery: daemon, reconcile, scheduler, executor, harness dispatch, worktrees, and the issue-tracker and source-control-provider adapters.
-- [cli](./apps/cli/CONTEXT.md) — `clanker-forge`, the client and daemon host: subcommands, RPC transport, workspace loading, live watch.
+- [cli](./apps/cli/CONTEXT.md) — `clanker-forge`, the client and headless daemon host: subcommands, RPC transport, workspace loading, live watch. On a laptop the desktop app is the primary daemon host (see product ADR 0008).
 - [cursor-acp](./packages/cursor-acp/CONTEXT.md) — the Cursor harness adapter: bridges the engine's harness contract to the Cursor agent over ACP.
 
 ### Sync (the agent toolkit)
@@ -42,7 +42,7 @@ Each executor run then:
 ### Cross-context edges
 
 - **engine → contracts.** Every engine service consumes and produces contracts schemas. Contracts owns the nouns; engine owns the verbs.
-- **cli → engine.** The `daemon` command composes the engine's layers into a running server. `status` / `runs` / `watch` talk to it over the RPC group. `worktree` embeds the engine's worktree manager directly, with no RPC.
+- **cli → engine.** The `daemon` command is the headless host: it composes the engine's layers into a running server. `status` / `runs` / `watch` are clients over the RPC group. `worktree` embeds the engine's worktree manager directly, with no RPC. The desktop app is the primary daemon host on a laptop and talks over the same RPC contract; it does not live in this package yet.
 - **cursor-acp → engine.** `cursorRunner` implements the engine's harness runner interface. The engine knows nothing about ACP or Cursor; cursor-acp knows nothing about scheduling.
 - **engine ↔ issue tracker.** Claims, attempts, and other coordination markers live in one coordination comment on the issue tracker, so any daemon can rebuild its coordination view from the tracker alone. Human-facing triage proposals are separate comments (one per round) so the thread stays conversational. The "ledger" marker anchoring the coordination comment is not the run ledger — see contracts.
 - **engine ↔ source control provider.** A separate, read-only port that resolves a work item's pull request by its **link key** (the `ticketSlug(item.id)` branch prefix) and reports the PR's checks, reviews, mergeable state, and human comments. It never writes: coordination stays on the issue tracker, PR writes stay with the agent. A GitHub issue tracker is its own provider by default; a Linear tracker pairs with a GitHub provider via an explicit `sourceControl` config block. This is what lets a Linear-tracked, GitHub-hosted repo get follow-up on its PRs (see engine ADR 0004).

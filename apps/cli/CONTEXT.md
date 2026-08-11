@@ -1,21 +1,26 @@
-# CLI (client & daemon host)
+# CLI (client & headless daemon host)
 
-`clanker-forge`, the command-line tool. It is both the **host** that composes the engine into a
-running daemon and the **client** that talks to a running daemon over RPC. It speaks the shared
-kernel ([contracts](../../packages/contracts/CONTEXT.md)) and drives the
+`clanker-forge`, the command-line tool. It is a **client** that talks to a running daemon over RPC,
+and a **headless daemon host** for CI/SSH. On a laptop the desktop app is the primary daemon host;
+the CLI does not own that role. It speaks the shared kernel
+([contracts](../../packages/contracts/CONTEXT.md)) and drives the
 [engine](../../packages/engine/CONTEXT.md).
 
-Role in the flow: start the daemon, then observe it — status, runs, live watch — or reach into the
-engine directly for worktree upkeep.
+Role in the flow: start a headless daemon when no desktop host is present, then observe a running
+daemon — status, runs, live watch — or reach into the engine directly for worktree upkeep.
 
 ## Language
 
 **Client**:
-Anything that talks to a running daemon over the RPC transport (a Unix socket): the CLI's `status` / `runs` / `watch` subcommands today, a GUI later.
+Anything that talks to a running daemon over the RPC transport (a Unix socket): the CLI's `status` / `runs` / `watch` subcommands, and the desktop mission-control UI.
 _Avoid_: Frontend. Note: the `worktree` subcommand embeds the engine directly rather than going through a daemon, so "clients never embed the engine" is not a rule here.
 
+**Daemon host**:
+The process responsible for booting the server layer and keeping the daemon alive. On a laptop the desktop app is primary; the CLI `daemon` command remains the headless host for CI/SSH.
+_Avoid_: Treating the CLI as the product's always-on host; embedding the long-lived engine inside a UI renderer
+
 **Server layer**:
-The full composition of engine layers — registry, work source, ledger, harness, reconcile, executor, scheduler, RPC handlers — that the `daemon` command boots.
+The full composition of engine layers — registry, work source, ledger, harness, reconcile, executor, scheduler, RPC handlers — that a daemon host boots.
 _Avoid_: Daemon (the running process is the daemon; this is how it's assembled)
 
 **Stop signal**:
