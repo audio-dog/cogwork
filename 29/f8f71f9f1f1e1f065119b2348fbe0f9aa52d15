@@ -1,0 +1,24 @@
+apps/desktop/src/shared/ipc.ts
+  s_0acfb9937c3810::t_538a03307f6b12 1,5-14,20-21,28-29
+apps/desktop/src/preload/index.ts
+  s_0acfb9937c3810::t_0e2275ff06ae05 17
+  s_0acfb9937c3810::t_9bdbcd3095c3dd 9
+  s_0acfb9937c3810::t_00023513e5a80b 3,15-16,18-20
+  s_0acfb9937c3810::t_008054c187a737 21-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "29f8f71f9f1f1e1f065119b2348fbe0f9aa52d15",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
