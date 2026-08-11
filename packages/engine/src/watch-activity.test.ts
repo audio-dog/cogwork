@@ -18,7 +18,7 @@ const workItem = Schema.decodeSync(WorkItemId)("#49");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 const encodeJson = Schema.encodeSync(Schema.UnknownFromJsonString);
 
-const layer = Layer.mergeAll(RunLedger.layerMemory, DaemonEventBus.layer);
+const layer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
 
 const record = (id: string, status: "running" | "succeeded" = "running") => ({
   id: runId(id),

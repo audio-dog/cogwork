@@ -48,7 +48,7 @@ import {
 import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
 import { layer as runControlLayer } from "./run-control";
-import { RunLedger } from "./run-ledger";
+import { type CoreRunLedger, RunLedger, publishingLayer as runLedgerPublishingLayer } from "./run-ledger";
 import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
 import { ticketSlug, WorktreeManager } from "./worktree";
@@ -150,7 +150,7 @@ export const principalMiddlewareLayer = Layer.succeed(PrincipalMiddleware)(
 export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
-  readonly runLedger: Layer.Layer<RunLedger, E, R>;
+  readonly runLedger: Layer.Layer<CoreRunLedger, E, R>;
   readonly registry: Layer.Layer<WorkspaceRegistry, E, R>;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
@@ -167,12 +167,16 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
-  const sessionStore = SessionStore.layer.pipe(Layer.provide(adapters.runLedger));
+  const runLedger = runLedgerPublishingLayer.pipe(
+    Layer.provide(adapters.runLedger),
+    Layer.provide(daemonEventBusLayer),
+  );
+  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
   const base = Layer.mergeAll(
     adapters.registry,
     daemonInfoLayer,
     issueTracker,
-    adapters.runLedger,
+    runLedger,
     Harness.layer(adapters.harnessRunners).pipe(Layer.provide(sessionStore)),
     McpSkill.layer.pipe(Layer.provide(credentials)),
     daemonEventBusLayer,

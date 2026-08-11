@@ -14,8 +14,10 @@ import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import type { EligibleWork } from "./classify";
+import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
 import type { RegisteredWorkspace } from "./projector";
 import * as Reconcile from "./reconcile";
@@ -251,18 +253,23 @@ const schedulerLayer = (
     readonly execute: ExecuteFn;
     readonly ledger?: RunLedger.RunLedgerService;
   },
-) =>
-  Scheduler.layer(config).pipe(
+) => {
+  const bus = DaemonEventBus.layer;
+  const core = deps.ledger ? Layer.succeed(RunLedger.CoreRunLedger, deps.ledger) : RunLedger.layerMemoryCore;
+  const runLedger = RunLedger.publishingLayer.pipe(Layer.provide(core), Layer.provide(bus));
+  return Scheduler.layer(config).pipe(
     Layer.provide(
       Layer.mergeAll(
         registryLayer(deps.registry),
         workerLayer(deps.snapshots),
         Layer.succeed(Executor.Executor, { execute: deps.execute }),
-        deps.ledger ? Layer.succeed(RunLedger.RunLedger, deps.ledger) : RunLedger.layerMemory,
+        runLedger,
       ),
     ),
-    Layer.provideMerge(RunLedger.layerMemory),
+    Layer.provideMerge(runLedger),
+    Layer.provideMerge(bus),
   );
+};
 
 describe("Scheduler.tick", () => {
   const wsA = workspaceOf("a", 2);
@@ -507,6 +514,37 @@ describe("Scheduler.drain", () => {
         assert.strictEqual(yield* statusOf(ledger, "outlasts"), "interrupted");
         assert.strictEqual((yield* scheduler.stats).global, 0);
       }).pipe(Effect.provide(draining({ snapshots, execute: neverEnds(ledger, "outlasts"), ledger })));
+    }),
+  );
+
+  it.effect("announces each interrupted run on the bus as the grace window closes", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.makeMemory;
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const subscription = yield* bus.subscribe();
+        yield* scheduler.tick();
+
+        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
+        yield* TestClock.adjust("1 hour");
+        yield* Fiber.join(drain);
+
+        const events = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "interrupted"),
+          Stream.runCollect,
+        );
+        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        assert.deepStrictEqual(
+          changed.map((run) => run.status),
+          ["interrupted"],
+        );
+        assert.strictEqual(changed.at(0)?.id, runId("outlasts"));
+      }).pipe(
+        Effect.provide(draining({ snapshots, execute: neverEnds(ledger, "outlasts"), ledger })),
+        Effect.scoped,
+      );
     }),
   );
 

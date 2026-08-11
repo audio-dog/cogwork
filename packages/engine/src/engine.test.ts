@@ -473,8 +473,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
-      Layer.provideMerge(RunLedger.layerMemory),
-      Layer.provideMerge(DaemonEventBus.layer),
+      Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(sourceLayer),
     );

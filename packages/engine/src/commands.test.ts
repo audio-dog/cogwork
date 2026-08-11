@@ -109,8 +109,7 @@ const daemonLayer = (
     Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)))),
     Layer.provideMerge(registryLayer),
     Layer.provideMerge(scheduler),
-    Layer.provideMerge(RunLedger.layerMemory),
-    Layer.provideMerge(DaemonEventBus.layer),
+    Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
     Layer.provideMerge(RunControl.layer),
     Layer.provideMerge(source),
   );
