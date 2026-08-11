@@ -9,11 +9,13 @@ export type DaemonStatusResult =
 export const IpcChannel = {
   getDaemonStatus: "clanker-forge:get-daemon-status",
   getEngineStatus: "clanker-forge:get-engine-status",
+  setEngineEnabled: "clanker-forge:set-engine-enabled",
   engineStatusChanged: "clanker-forge:engine-status-changed",
 } as const;
 
 export interface ClankerForgeBridge {
   readonly getDaemonStatus: () => Promise<DaemonStatusResult>;
   readonly getEngineStatus: () => Promise<EngineStatus>;
+  readonly setEngineEnabled: (enabled: boolean) => Promise<EngineStatus>;
   readonly onEngineStatus: (listener: (status: EngineStatus) => void) => () => void;
 }

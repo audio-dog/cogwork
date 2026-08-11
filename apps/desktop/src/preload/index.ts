@@ -5,6 +5,7 @@ import { type ClankerForgeBridge, type EngineStatus, IpcChannel } from "../share
 const bridge: ClankerForgeBridge = {
   getDaemonStatus: () => ipcRenderer.invoke(IpcChannel.getDaemonStatus),
   getEngineStatus: () => ipcRenderer.invoke(IpcChannel.getEngineStatus),
+  setEngineEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.setEngineEnabled, enabled),
   onEngineStatus: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, status: EngineStatus): void => listener(status);
     ipcRenderer.on(IpcChannel.engineStatusChanged, handler);

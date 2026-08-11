@@ -18,7 +18,8 @@ it is the primary daemon host; the CLI stays the headless host for CI/SSH.
 _Avoid_: App (ambiguous with the whole product), frontend (the renderer is only one third)
 
 **Engine supervisor**:
-The `main`-side owner of the engine's lifecycle. On launch it probes the socket and either
+The `main`-side owner of the engine's lifecycle. It stays idle at launch by default (set
+`CLANKER_FORGE_ENGINE_AUTOSTART=1` to start on boot); once started it probes the socket and either
 **adopts** a daemon already listening or **spawns** one; it pipes the child's output to the log,
 restarts it a bounded number of times on unexpected exit, and stops it on Quit. The child is a real
 Node process (`electron-vite` dev runs the CLI `daemon` through tsx; a packaged build runs a bundled
@@ -46,6 +47,14 @@ The single `main`↔`renderer` boundary. The renderer calls typed methods expose
 the Unix socket. The renderer never opens the socket and never imports Effect RPC — the seam is the
 only way it reaches the daemon.
 _Avoid_: Direct socket access from the renderer, ad-hoc `ipcRenderer` channels outside the bridge
+
+**Engine toggle**:
+Runtime start/stop of the engine from the renderer, through the seam (`setEngineEnabled`) and shown
+as a switch in the header. On drives the supervisor's adopt-or-spawn; off stops a spawned engine.
+Because the engine is idle at launch (unless `CLANKER_FORGE_ENGINE_AUTOSTART=1`), debugging the app
+never accidentally starts a daemon. The switch reflects real engine status, not a local guess — it
+follows the same status broadcasts as the rest of the UI.
+_Avoid_: A separate "enabled" preference that can drift from the supervisor's actual state
 
 ## Cross-context edges
 

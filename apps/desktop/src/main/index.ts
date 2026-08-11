@@ -82,7 +82,13 @@ const bootstrap = (): void => {
       });
     });
 
-    await supervisor.start();
+    if (process.env.CLANKER_FORGE_ENGINE_AUTOSTART === "1") {
+      await supervisor.start();
+    } else {
+      engineLogger.info(
+        "Engine idle at launch; toggle it on from the app or set CLANKER_FORGE_ENGINE_AUTOSTART=1",
+      );
+    }
   });
 };
 

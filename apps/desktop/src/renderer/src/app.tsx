@@ -1,18 +1,31 @@
+import { Alert, AlertDescription, AlertTitle } from "@clanker-forge/ui/components/alert";
+import { Badge } from "@clanker-forge/ui/components/badge";
 import { Button } from "@clanker-forge/ui/components/button";
-import { useEffect, useState } from "react";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
+import { Switch } from "@clanker-forge/ui/components/switch";
+import { type ComponentProps, useEffect, useState } from "react";
 import type { DaemonStatusResult, EngineStatus } from "../../shared/ipc";
 
-const engineStatusLabel: Record<EngineStatus, string> = {
-  starting: "Starting",
-  running: "Running",
-  adopted: "Adopted",
-  stopped: "Stopped",
-  failed: "Failed",
+type BadgeVariant = ComponentProps<typeof Badge>["variant"];
+
+const engineBadge: Record<EngineStatus | "unknown", { label: string; variant: BadgeVariant }> = {
+  unknown: { label: "…", variant: "outline" },
+  starting: { label: "Starting", variant: "secondary" },
+  running: { label: "Running", variant: "default" },
+  adopted: { label: "Adopted", variant: "default" },
+  stopped: { label: "Stopped", variant: "outline" },
+  failed: { label: "Failed", variant: "destructive" },
 };
 
 function DaemonStatusView({ result }: { result: DaemonStatusResult }): React.JSX.Element {
   if (!result.ok) {
-    return <p className="text-sm text-destructive">Could not reach the daemon: {result.message}</p>;
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Could not reach the daemon</AlertTitle>
+        <AlertDescription>{result.message}</AlertDescription>
+      </Alert>
+    );
   }
 
   const { status } = result;
@@ -45,28 +58,51 @@ function App(): React.JSX.Element {
     window.clankerForge.getDaemonStatus().then(setDaemon);
   };
 
+  const toggleEngine = (enabled: boolean): void => {
+    window.clankerForge.setEngineEnabled(enabled).then(setEngineStatus);
+  };
+
+  const engine = engineBadge[engineStatus];
+  const engineOn = engineStatus === "running" || engineStatus === "starting" || engineStatus === "adopted";
+
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-10">
       <header className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">clanker-forge</h1>
-        <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-          Engine: {engineStatus === "unknown" ? "…" : engineStatusLabel[engineStatus]}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Engine</span>
+          <Badge variant={engine.variant}>{engine.label}</Badge>
+          <Switch
+            aria-label="Toggle engine"
+            checked={engineOn}
+            disabled={engineStatus === "starting"}
+            onCheckedChange={toggleEngine}
+          />
+        </div>
       </header>
 
-      <section className="flex flex-col gap-4 rounded-xl border border-border p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">Daemon status</h2>
-          <Button size="sm" variant="outline" onClick={refresh}>
-            Refresh
-          </Button>
-        </div>
-        {daemon ? (
-          <DaemonStatusView result={daemon} />
-        ) : (
-          <p className="text-sm text-muted-foreground">Refresh to query the daemon through the IPC seam.</p>
-        )}
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Daemon status</CardTitle>
+          <CardAction>
+            <Button size="sm" variant="outline" onClick={refresh}>
+              Refresh
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {daemon ? (
+            <DaemonStatusView result={daemon} />
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No daemon data yet</EmptyTitle>
+                <EmptyDescription>Refresh to query the daemon through the IPC seam.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </CardContent>
+      </Card>
     </main>
   );
 }
