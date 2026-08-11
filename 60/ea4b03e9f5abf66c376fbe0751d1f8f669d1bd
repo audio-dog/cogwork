@@ -1,0 +1,24 @@
+packages/contracts/src/daemon-event.ts
+  s_034c36b2835297::t_f8769aae9a7314 1-20
+packages/contracts/src/index.ts
+  s_034c36b2835297::t_566b569f7873ad 5
+packages/contracts/src/rpc.ts
+  s_034c36b2835297::t_8b041a9cbe4e1c 30-34,41
+  s_034c36b2835297::t_117495184e03f1 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "60ea4b03e9f5abf66c376fbe0751d1f8f669d1bd",
+  "prompts": {},
+  "sessions": {
+    "s_034c36b2835297": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3d12337c-742f-440b-b0da-1c965297fe1b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
