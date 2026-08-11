@@ -6,7 +6,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge
 import * as Cause from "effect/Cause";
 import { useLiveEvents } from "./use-live-events";
 
-const describeEvent = (event: DaemonEvent): string => {
+const describeEvent = (event: DaemonEvent) => {
   switch (event._tag) {
     case "RunActivity":
       return `run ${event.activity.runId} · #${event.activity.seq}`;
