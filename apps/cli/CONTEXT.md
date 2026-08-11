@@ -20,8 +20,8 @@ The process responsible for booting the server layer and keeping the daemon aliv
 _Avoid_: Treating the CLI as the product's always-on host; embedding the long-lived engine inside a UI renderer
 
 **Server layer**:
-The full composition of engine layers — registry, work source, ledger, harness, reconcile, executor, scheduler, RPC handlers — that a daemon host boots.
-_Avoid_: Daemon (the running process is the daemon; this is how it's assembled)
+The full composition of engine layers a daemon host boots. It now lives in the engine (`Daemon.serverLayer`), not here — the CLI is one **host adapter**: it builds the file credential store, the SQLite ledger, the disk workspace loader, the git/worktree platform, the cursor harness runner, and the socket-server transport, then hands them to the engine. The disk loader and credential file stay CLI concerns behind the registry- and credential-store parameters. The desktop app will be the second host.
+_Avoid_: Daemon (the running process is the daemon; this is how it's assembled), owning the composition here (it moved to the engine)
 
 **Stop signal**:
 A `SIGINT` or `SIGTERM` to the daemon process. The first one starts the engine's **drain** — the runtime interrupts the heartbeats and the drain runs as their shutdown finalizer, giving in-flight runs `--drain-grace` seconds to finish. A second stop signal ends that wait.
