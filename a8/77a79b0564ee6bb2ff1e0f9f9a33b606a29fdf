@@ -1,0 +1,87 @@
+apps/desktop/src/main/ipc.ts
+  s_975a296681dfb3::t_569133271b6f03 43
+  s_975a296681dfb3::t_d472129114bfa6 1,3,17-40
+  s_975a296681dfb3::t_a158ceb4771293 11
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_975a296681dfb3::t_6f177dac9451d3 11,13
+  s_975a296681dfb3::t_435dcfc27009d5 1-10,12
+apps/desktop/src/renderer/src/router.tsx
+  s_975a296681dfb3::t_8c78020385e0a3 1-33
+apps/desktop/package.json
+  s_975a296681dfb3::t_2be6d2801bbb25 34
+  s_975a296681dfb3::t_e08b4458d8c163 30,35,39-40
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_975a296681dfb3::t_5a676d34ac01c8 77-88
+  s_975a296681dfb3::t_3733087e0ab6b5 1-4,7-9,11,13-17,19-32,36-60,62-76,89-95
+apps/desktop/src/shared/ipc.ts
+  s_975a296681dfb3::t_7819c126794a25 7-10,14-20,25
+  s_975a296681dfb3::t_8dd80631bec0dc 13
+apps/desktop/src/renderer/src/daemon/electron-bridge.ts
+  s_975a296681dfb3::t_e17276a18aed1e 1-8
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_975a296681dfb3::t_f62cfc213de10e 93
+  s_975a296681dfb3::t_cb564dbee68a41 1-76,78-86,88-92,94-118
+  s_975a296681dfb3::t_bcc4359ccdf435 77,87
+apps/desktop/src/renderer/src/features/activity-screen.tsx
+  s_975a296681dfb3::t_f65d4dc4faad6e 31
+  s_975a296681dfb3::t_3637a3b877a04d 57-58,68-70
+  s_975a296681dfb3::t_a136d147051364 22
+  s_975a296681dfb3::t_f9b308ef056654 1-21,23-30,32-56,59-67,71-73
+pnpm-workspace.yaml
+  s_975a296681dfb3::t_cbb0fbf15a1342 25
+apps/desktop/src/main/daemon-bridge.ts
+  s_975a296681dfb3::t_3a1e8c9a0aca9d 17,36,43,63
+  s_975a296681dfb3::t_05eea0f9d8eaac 1-16,18-35,37-42,44-62,64-68
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_975a296681dfb3::t_3f34ce91061c96 1-19
+apps/desktop/CONTEXT.md
+  s_975a296681dfb3::t_6bf79be3ac1d90 46-49,52-60
+  s_975a296681dfb3::t_e1986f75b4f90d 75-76
+  s_975a296681dfb3::t_ff82bc9ed817f7 77-78
+  s_975a296681dfb3::t_fc6f7c29cc97e4 9-11
+  s_975a296681dfb3::t_91111ffe65d6ef 61
+apps/desktop/src/preload/index.ts
+  s_975a296681dfb3::t_faf6e9ecf3bae8 17-19
+  s_975a296681dfb3::t_22c202211c1e3e 5
+  s_975a296681dfb3::t_78494fa3eb79e7 3,7-11,16,20-21
+  s_975a296681dfb3::t_90236e6bece2fe 6
+  s_975a296681dfb3::t_c737519b6367eb 4
+apps/desktop/src/renderer/src/features/overview-screen.tsx
+  s_975a296681dfb3::t_05b27ec907d519 2-12,14-21,23-49,51-69
+  s_975a296681dfb3::t_7e640d18dcc569 22
+  s_975a296681dfb3::t_73cbfa5e328ee8 50
+  s_975a296681dfb3::t_d29d308b35e9a8 13
+  s_975a296681dfb3::t_1f375db491d159 1
+apps/desktop/src/renderer/src/store/chrome.ts
+  s_975a296681dfb3::t_4b79847400f515 1-11
+apps/desktop/src/renderer/src/features/use-live-events.ts
+  s_975a296681dfb3::t_2c2138dc7fa7ce 2,6
+  s_975a296681dfb3::t_0121538994f904 3,7,12-13,16,18-19
+  s_975a296681dfb3::t_b07a9ae5a47a71 1,4-5,8-11,14-15,17,20-22
+apps/desktop/src/renderer/src/app.tsx
+  s_975a296681dfb3::t_97ed88dca1936b 4
+  s_975a296681dfb3::t_c58d0ac87d3934 1-2,5
+apps/desktop/src/renderer/src/features/root-layout.tsx
+  s_975a296681dfb3::t_a68539eb2f670b 42
+  s_975a296681dfb3::t_f173a177923f24 21,24
+  s_975a296681dfb3::t_0c204aba713eeb 1-20,22-23,25-41,43-50,52-85
+  s_975a296681dfb3::t_658e4e413c31bd 51
+pnpm-lock.yaml
+  s_975a296681dfb3::t_44f02870873104 37-39,139-141,151-156,169-171,668-674,1622-1645,2207-2209,3014-3017,3931-3940,4429-4446,4814-4819,5560-5586,6116-6117,6914-6915,7624-7629,8090-8095
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a877a79b0564ee6bb2ff1e0f9f9a33b606a29fdf",
+  "prompts": {},
+  "sessions": {
+    "s_975a296681dfb3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9854d002-05c9-4083-8ff3-1c9e4b9a89fd",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
