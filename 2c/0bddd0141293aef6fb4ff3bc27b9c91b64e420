@@ -1,0 +1,27 @@
+apps/desktop/electron.vite.config.ts
+  s_0acfb9937c3810::t_819504eddd1d14 16
+  s_0acfb9937c3810::t_1c54c36d181f24 3,15,17-20
+apps/desktop/package.json
+  s_0acfb9937c3810::t_33fa15962e815a 46
+biome.json
+  s_0acfb9937c3810::t_c87b9111b103cd 9-10
+  s_0acfb9937c3810::t_5cac05f74b5411 71-83
+pnpm-lock.yaml
+  s_0acfb9937c3810::t_2269cd1586da42 182-184,260,263,266,1643-1671,1675-1678,1990-1993,2037-2039,2150-2153,3778-3782,3861-3864,4264-4296,4416-4418,4518-4520,5336-5357,5635,5639,5651-5654,5664-5672,5712-5761,5764-5765,6014-6015,6090-6098,6228-6231,7598-7599,7685-7686,8136-8145,8225-8226,8299-8302,8305-8306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "2c0bddd0141293aef6fb4ff3bc27b9c91b64e420",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
