@@ -1,0 +1,22 @@
+packages/engine/src/providers.ts
+  s_7ffb86cc44e55f::t_aed7a01bc5d01b 11-14
+  s_7ffb86cc44e55f::t_6838f97cc96f6b 1-10,15-40
+packages/engine/src/providers.test.ts
+  s_7ffb86cc44e55f::t_63c7f61abdcc8e 1-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "01561194109241eacfab227649fbeb483a530e0b",
+  "prompts": {},
+  "sessions": {
+    "s_7ffb86cc44e55f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ed6cf275-9b79-405c-a7a3-b9576a0912ed",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
