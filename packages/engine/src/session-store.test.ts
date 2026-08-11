@@ -11,6 +11,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as DaemonEventBus from "./daemon-event-bus";
 import { layerMemory, RunLedger } from "./run-ledger";
 import { foldThread, make, SessionStore } from "./session-store";
 
@@ -28,7 +29,10 @@ const event = (seq: number, value: AgUiEvent): RunEvent => ({
   atMillis: 1000 + seq,
 });
 
-const layer = Layer.provideMerge(Layer.effect(SessionStore, make), layerMemory);
+const layer = Layer.provideMerge(
+  Layer.effect(SessionStore, make),
+  layerMemory.pipe(Layer.provide(DaemonEventBus.layer)),
+);
 
 describe("foldThread", () => {
   it("splits assistant text on a tool call and keeps the tool's name and args", () => {

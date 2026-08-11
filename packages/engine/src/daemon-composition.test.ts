@@ -63,7 +63,7 @@ describe("daemon server composition", () => {
       const serverLayer = Daemon.serverLayer({
         transport,
         credentials: CredentialStore.layerEnv,
-        runLedger: RunLedger.layerMemory,
+        runLedger: RunLedger.layerMemoryCore,
         registry: registryLayer,
         worktrees: worktreeLayer,
         harnessRunners: [stubRunner],

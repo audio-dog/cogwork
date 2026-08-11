@@ -57,13 +57,13 @@ const sessionRecord = (over: Partial<Session> = {}): Session => ({
 
 const insertRunAt = (ledgerPath: string, run: RunRecord) =>
   Effect.provide(
-    Effect.flatMap(RunLedger.RunLedger, (ledger) => ledger.insertRun(run)),
+    Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.insertRun(run)),
     ledgerLayer(ledgerPath),
   );
 
 const listRunsAt = (ledgerPath: string) =>
   Effect.provide(
-    Effect.flatMap(RunLedger.RunLedger, (ledger) => ledger.listRuns(10)),
+    Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.listRuns(10)),
     ledgerLayer(ledgerPath),
   );
 
@@ -85,7 +85,7 @@ describe("sqlite RunLedger", () => {
   )((it) => {
     it.effect("persists a run, its events, and reports a summary with event count", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         const id = runId("happy-1");
         yield* ledger.insertRun(record("happy-1", 1000, { session }));
         yield* ledger.appendEvent(id, {
@@ -134,7 +134,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("orders runs newest first", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertRun(record("order-older", 1000));
         yield* ledger.insertRun(record("order-newer", 5000));
         const summaries = yield* ledger.listRuns(10);
@@ -147,7 +147,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("returns the most recent resumable run's session for a branch", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         const sessionByBranch = (workspace: string, branch: string) =>
           Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
@@ -166,7 +166,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("interrupts runs this daemon started and leaves older or finished ones alone", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertRun(record("interrupt-stale", 3900));
         yield* ledger.insertRun(record("interrupt-running", 4000));
         yield* ledger.insertRun(record("interrupt-done", 4100));
@@ -192,7 +192,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("crashes the item's running runs and counts crashes until a success resets them", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertRun(record("crash-c1", 1000, { workItem: crashItem, status: "crashed" }));
         yield* ledger.insertRun(record("crash-running", 2000, { workItem: crashItem }));
         yield* ledger.crashRunning("gh", "#101", 2500);
@@ -207,7 +207,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("does not offer a crashed run's session for resume", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         const sessionByBranch = (branch: string) =>
           Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
@@ -225,7 +225,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("offers a still-running run for resume once its session has a handle", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         const id = runId("in-flight");
         yield* ledger.insertSession(sessionRecord({ id: midSession, handle: null }));
         yield* ledger.insertRun(record("in-flight", 7000, { branch: "11-mid-run", session: midSession }));
@@ -247,7 +247,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("folds a session's events across every run that shares it", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertSession(sessionRecord({ id: foldSession }));
         yield* ledger.insertRun(record("sess-first", 8000, { branch: "22-two-runs", session: foldSession }));
         yield* ledger.insertRun(record("sess-second", 9000, { branch: "22-two-runs", session: foldSession }));
@@ -277,7 +277,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("collapses absent token usage fields to omitted keys", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         const id = runId("usage-partial");
         yield* ledger.insertRun(record("usage-partial", 9000));
         yield* ledger.updateRun(id, {
@@ -295,7 +295,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("resolves a watch target by work item, running-first, past the recent-runs window", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertRun(
           record("resolve-old-done", 1000, {
             workItem: resolveItem,
@@ -325,7 +325,7 @@ describe("sqlite RunLedger", () => {
 
     it.effect("resolves nothing for a work item that has never run", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
+        const ledger = yield* RunLedger.CoreRunLedger;
         assert.isNull(yield* ledger.resolveWatchTarget("#404"));
       }),
     );

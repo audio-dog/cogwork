@@ -240,15 +240,7 @@ export const make = Effect.gen(function* () {
     yield* bus.publishActivity(activityOf(record, seq, atMillis, event));
   });
 
-  const publishRunChanged = Effect.fn("Executor.publishRunChanged")(function* (runId: RunId) {
-    const run = yield* ledger.getRun(runId);
-    if (run === null) return;
-    const events = yield* ledger.events(runId);
-    yield* bus.publishRun({ ...run, eventCount: events.length });
-  });
-
-  const settleRun = (runId: RunId, update: RunUpdate) =>
-    ledger.updateRun(runId, update).pipe(Effect.andThen(publishRunChanged(runId)));
+  const settleRun = (runId: RunId, update: RunUpdate) => ledger.updateRun(runId, update);
 
   const nextHandle = Effect.fn("Executor.nextHandle")(function* (
     record: RunRecord,
@@ -651,7 +643,6 @@ export const make = Effect.gen(function* () {
     };
     yield* ledger.insertRun(record);
     yield* Effect.withFiber((self) => runControl.register(runId, self));
-    yield* publishRunChanged(runId);
     return yield* settleOutcome(workspace, item, ops, record, runId).pipe(
       Effect.ensuring(runControl.unregister(runId)),
     );

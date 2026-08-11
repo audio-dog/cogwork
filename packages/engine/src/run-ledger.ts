@@ -12,6 +12,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import { DaemonEventBus, type DaemonEventBusService } from "./daemon-event-bus";
 
 export interface RunUpdate {
   readonly status: RunSummary["status"];
@@ -28,6 +29,16 @@ const applyUpdate = (record: RunRecord, update: RunUpdate): RunRecord => ({
 
 const patchRun = (runs: ReadonlyArray<RunRecord>, runId: RunId, patch: (run: RunRecord) => RunRecord) =>
   runs.map((run) => (run.id === runId ? patch(run) : run));
+
+const transition = (
+  runs: ReadonlyArray<RunRecord>,
+  match: (run: RunRecord) => boolean,
+  apply: (run: RunRecord) => RunRecord,
+) => {
+  const affected = runs.filter(match).map((run) => run.id);
+  const next = affected.length === 0 ? runs : runs.map((run) => (match(run) ? apply(run) : run));
+  return [affected, next] as const;
+};
 
 const closeRunningUpdate = (endedAtMillis: number): RunUpdate => ({
   status: "failed",
@@ -118,13 +129,19 @@ export const makeMemory = Effect.gen(function* () {
     updateRun: (runId: RunId, update: RunUpdate) =>
       Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
     interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
-      Ref.update(runsRef, (runs) =>
-        runs.map((run) => (stillRunning(run, startedFromMillis) ? interrupted(run, endedAtMillis) : run)),
+      Ref.modify(runsRef, (runs) =>
+        transition(
+          runs,
+          (run) => stillRunning(run, startedFromMillis),
+          (run) => interrupted(run, endedAtMillis),
+        ),
       ),
     crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
-      Ref.update(runsRef, (runs) =>
-        runs.map((run) =>
-          forItem(workspace, workItem)(run) && run.status === "running" ? crashed(run, endedAtMillis) : run,
+      Ref.modify(runsRef, (runs) =>
+        transition(
+          runs,
+          (run) => forItem(workspace, workItem)(run) && run.status === "running",
+          (run) => crashed(run, endedAtMillis),
         ),
       ),
     consecutiveCrashes: (workspace: string, workItem: string) =>
@@ -149,11 +166,11 @@ export const makeMemory = Effect.gen(function* () {
         Effect.map(([runs, events]) => eventsForSession(runs, events, session)),
       ),
     closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
-      Ref.update(runsRef, (runs) =>
-        runs.map((run) =>
-          forItem(workspace, workItem)(run) && run.status === "running"
-            ? applyUpdate(run, closeRunningUpdate(endedAtMillis))
-            : run,
+      Ref.modify(runsRef, (runs) =>
+        transition(
+          runs,
+          (run) => forItem(workspace, workItem)(run) && run.status === "running",
+          (run) => applyUpdate(run, closeRunningUpdate(endedAtMillis)),
         ),
       ),
     latestRunByBranch: (workspace: string, branch: string) =>
@@ -193,4 +210,41 @@ export class RunLedger extends Context.Service<RunLedger, RunLedgerService>()(
   "@clanker-forge/engine/run-ledger/RunLedger",
 ) {}
 
-export const layerMemory = Layer.effect(RunLedger, makeMemory);
+export class CoreRunLedger extends Context.Service<CoreRunLedger, RunLedgerService>()(
+  "@clanker-forge/engine/run-ledger/CoreRunLedger",
+) {}
+
+const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusService) => {
+  const publish = Effect.fn("RunLedger.publishRunChanged")(function* (runId: RunId) {
+    const run = yield* core.getRun(runId);
+    if (run === null) return;
+    const events = yield* core.events(runId);
+    yield* bus.publishRun({ ...run, eventCount: events.length });
+  });
+  const publishAll = (runIds: ReadonlyArray<RunId>) => Effect.forEach(runIds, publish, { discard: true });
+  return {
+    ...core,
+    insertRun: (record: RunRecord) => Effect.andThen(core.insertRun(record), publish(record.id)),
+    updateRun: (runId: RunId, update: RunUpdate) =>
+      Effect.andThen(core.updateRun(runId, update), publish(runId)),
+    interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
+      Effect.tap(core.interruptRunning(startedFromMillis, endedAtMillis), publishAll),
+    crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+      Effect.tap(core.crashRunning(workspace, workItem, endedAtMillis), publishAll),
+    closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+      Effect.tap(core.closeRunning(workspace, workItem, endedAtMillis), publishAll),
+  } satisfies RunLedgerService;
+};
+
+export const layerMemoryCore = Layer.effect(CoreRunLedger, makeMemory);
+
+export const publishingLayer = Layer.effect(
+  RunLedger,
+  Effect.gen(function* () {
+    const core = yield* CoreRunLedger;
+    const bus = yield* DaemonEventBus;
+    return withRunChangedPublishing(core, bus);
+  }),
+);
+
+export const layerMemory = publishingLayer.pipe(Layer.provide(layerMemoryCore));
