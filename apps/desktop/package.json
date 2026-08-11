@@ -19,15 +19,21 @@
     "dev": "electron-vite dev",
     "postinstall": "electron-builder install-app-deps",
     "start": "electron-vite preview",
+    "test": "vitest run",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && npm run typecheck:web"
   },
   "dependencies": {
+    "@clanker-forge/contracts": "workspace:*",
     "@clanker-forge/ui": "workspace:*",
+    "@effect/platform-node": "catalog:effect",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.8.9"
+    "effect": "catalog:effect",
+    "electron-log": "^5.2.0",
+    "electron-updater": "^6.8.9",
+    "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
@@ -41,7 +47,9 @@
     "electron-vite": "^5.0.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
+    "tsx": "^4.19.2",
     "typescript": "catalog:",
-    "vite": "^8.2.1"
+    "vite": "^8.2.1",
+    "vitest": "catalog:"
   }
 }

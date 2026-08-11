@@ -1,16 +1,23 @@
 import { electronAPI } from "@electron-toolkit/preload";
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
+import { type ClankerForgeBridge, type EngineStatus, IpcChannel } from "../shared/ipc";
 
-// Custom APIs for renderer
-const api = {};
+const bridge: ClankerForgeBridge = {
+  getDaemonStatus: () => ipcRenderer.invoke(IpcChannel.getDaemonStatus),
+  getEngineStatus: () => ipcRenderer.invoke(IpcChannel.getEngineStatus),
+  onEngineStatus: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: EngineStatus): void => listener(status);
+    ipcRenderer.on(IpcChannel.engineStatusChanged, handler);
+    return () => {
+      ipcRenderer.removeListener(IpcChannel.engineStatusChanged, handler);
+    };
+  },
+};
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("electron", electronAPI);
-    contextBridge.exposeInMainWorld("api", api);
+    contextBridge.exposeInMainWorld("clankerForge", bridge);
   } catch (error) {
     console.error(error);
   }
@@ -18,5 +25,5 @@ if (process.contextIsolated) {
   // @ts-expect-error (define in dts)
   window.electron = electronAPI;
   // @ts-expect-error (define in dts)
-  window.api = api;
+  window.clankerForge = bridge;
 }

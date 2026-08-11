@@ -112,18 +112,33 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@clanker-forge/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@clanker-forge/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@effect/platform-node':
+        specifier: catalog:effect
+        version: 4.0.0-beta.102(effect@4.0.0-beta.102)(ioredis@5.11.1)
       '@electron-toolkit/preload':
         specifier: ^3.0.2
         version: 3.0.2(electron@43.3.0)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@43.3.0)
+      effect:
+        specifier: catalog:effect
+        version: 4.0.0-beta.102
+      electron-log:
+        specifier: ^5.2.0
+        version: 5.4.4
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
+      electron-window-state:
+        specifier: ^5.0.3
+        version: 5.0.3
     devDependencies:
       '@electron-toolkit/tsconfig':
         specifier: ^2.0.0
@@ -158,12 +173,18 @@ importers:
       react-dom:
         specifier: ^19.2.1
         version: 19.2.8(react@19.2.8)
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vite:
         specifier: ^8.2.1
         version: 8.2.1(@types/node@24.13.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/contracts:
     dependencies:
@@ -2298,6 +2319,10 @@ packages:
     engines: {node: '>=14.0.0'}
     hasBin: true
 
+  electron-log@5.4.4:
+    resolution: {integrity: sha512-istWgaXjBfURBSS8LWVW9C3jsc6+ac+tY1lXrQEOTp0lVj+a4OlO1Tmqb36GgnEUDv92DGC9VI1HNXwJinWpgA==}
+    engines: {node: '>= 14'}
+
   electron-publish@26.15.3:
     resolution: {integrity: sha512-g/2bn8YTavY4cuS5F+jOS7zmZbXXBV8KZ8yHKfJjFPoKtzBqrpCdNPxBd3tqdBwP7BVd0lGzf7Bk2s0KesWZ4Q==}
 
@@ -2317,6 +2342,10 @@ packages:
     peerDependenciesMeta:
       '@swc/core':
         optional: true
+
+  electron-window-state@5.0.3:
+    resolution: {integrity: sha512-1mNTwCfkolXl3kMf50yW3vE2lZj0y92P/HYWFBrb+v2S/pCka5mdwN3cagKm458A7NjndSwijynXgcLWRodsVg==}
+    engines: {node: '>=8.0.0'}
 
   electron-winstaller@5.4.0:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
@@ -5888,6 +5917,8 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
+  electron-log@5.4.4: {}
+
   electron-publish@26.15.3:
     dependencies:
       '@types/fs-extra': 9.0.13
@@ -5928,6 +5959,11 @@ snapshots:
       vite: 8.2.1(@types/node@24.13.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
     transitivePeerDependencies:
       - supports-color
+
+  electron-window-state@5.0.3:
+    dependencies:
+      jsonfile: 4.0.0
+      mkdirp: 0.5.6
 
   electron-winstaller@5.4.0:
     dependencies:

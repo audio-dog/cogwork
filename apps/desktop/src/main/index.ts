@@ -1,74 +1,93 @@
+import { spawn } from "node:child_process";
 import { join } from "node:path";
-import { electronApp, is, optimizer } from "@electron-toolkit/utils";
-import { app, BrowserWindow, ipcMain, shell } from "electron";
-import icon from "../../resources/icon.png?asset";
+import { electronApp, optimizer } from "@electron-toolkit/utils";
+import { app, BrowserWindow } from "electron";
+import { defaultSocketPath } from "./daemon-paths";
+import { resolveEngineCommand } from "./engine-command";
+import { EngineSupervisor } from "./engine-supervisor";
+import { broadcastEngineStatus, registerIpc } from "./ipc";
+import { engineLogger } from "./logger";
+import { isDaemonListening } from "./socket-probe";
+import { createTray } from "./tray";
+import { createMainWindow } from "./window";
 
-function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
-    show: false,
-    autoHideMenuBar: true,
-    ...(process.platform === "linux" ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
-      sandbox: false,
+const control = { quitting: false, engineStopped: false };
+
+const showMainWindow = (): void => {
+  const [window] = BrowserWindow.getAllWindows();
+  if (!window) {
+    createMainWindow({ shouldQuit: () => control.quitting });
+    return;
+  }
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+};
+
+const makeSupervisor = (): EngineSupervisor => {
+  const socketPath = defaultSocketPath;
+  const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
+  const command = resolveEngineCommand({
+    socketPath,
+    packaged: app.isPackaged,
+    baseDir,
+    nodeBinary: process.env.CLANKER_FORGE_NODE,
+    engineEntry: process.env.CLANKER_FORGE_ENGINE_ENTRY,
+  });
+
+  const supervisor = new EngineSupervisor({
+    command,
+    socketPath,
+    spawn: (engine) =>
+      spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),
+    probe: isDaemonListening,
+    logger: engineLogger,
+    onStatus: (status) => {
+      engineLogger.info(`Engine status: ${status}`);
+      broadcastEngineStatus(BrowserWindow.getAllWindows(), status);
     },
   });
 
-  mainWindow.on("ready-to-show", () => {
-    mainWindow.show();
-  });
+  registerIpc({ socketPath, supervisor });
+  return supervisor;
+};
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
-    return { action: "deny" };
-  });
+const bootstrap = (): void => {
+  app.whenReady().then(async () => {
+    electronApp.setAppUserModelId("com.clanker-forge");
+    app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
-  } else {
-    mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
-  }
+    const supervisor = makeSupervisor();
+
+    createMainWindow({ shouldQuit: () => control.quitting });
+    createTray({
+      onShow: showMainWindow,
+      onQuit: () => {
+        control.quitting = true;
+        app.quit();
+      },
+    });
+
+    app.on("activate", showMainWindow);
+    app.on("second-instance", showMainWindow);
+    app.on("before-quit", () => {
+      control.quitting = true;
+    });
+    app.on("will-quit", (event) => {
+      if (control.engineStopped) return;
+      event.preventDefault();
+      supervisor.stop().finally(() => {
+        control.engineStopped = true;
+        app.quit();
+      });
+    });
+
+    await supervisor.start();
+  });
+};
+
+if (app.requestSingleInstanceLock()) {
+  bootstrap();
+} else {
+  app.quit();
 }
-
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId("com.electron");
-
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on("browser-window-created", (_, window) => {
-    optimizer.watchWindowShortcuts(window);
-  });
-
-  // IPC test
-  ipcMain.on("ping", () => console.log("pong"));
-
-  createWindow();
-
-  app.on("activate", () => {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
