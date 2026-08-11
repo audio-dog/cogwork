@@ -12,12 +12,54 @@ import {
 import { RunLedger } from "@clanker-forge/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { layer as ledgerLayer } from "./ledger";
+
+class TestLedgerPath extends Context.Service<TestLedgerPath, string>()(
+  "@clanker-forge/cli/ledger.test/TestLedgerPath",
+) {}
+
+const runRow = (run: RunRecord) =>
+  [
+    run.id,
+    run.workspace,
+    run.workItem,
+    run.stage,
+    run.harness,
+    run.branch,
+    run.session,
+    run.usage?.inputTokens ?? null,
+    run.usage?.outputTokens ?? null,
+    run.usage?.totalTokens ?? null,
+    run.status,
+    run.startedAtMillis,
+    run.endedAtMillis,
+  ] as const;
+
+const insertRunsBulk = (ledgerPath: string, records: ReadonlyArray<RunRecord>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => new DatabaseSync(ledgerPath)),
+    (sqlite) =>
+      Effect.sync(() => {
+        sqlite.exec("BEGIN");
+        const insert = sqlite.prepare(`
+          INSERT INTO runs (
+            id, workspace, work_item, stage, harness, branch, session,
+            input_tokens, output_tokens, total_tokens, status, started_at, ended_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const run of records) {
+          insert.run(...runRow(run));
+        }
+        sqlite.exec("COMMIT");
+      }),
+    (sqlite) => Effect.sync(() => sqlite.close()),
+  );
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
@@ -80,7 +122,8 @@ describe("sqlite RunLedger", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-ledger-" });
-      return ledgerLayer(path.join(dir, "runs.db"));
+      const ledgerPath = path.join(dir, "runs.db");
+      return Layer.merge(ledgerLayer(ledgerPath), Layer.succeed(TestLedgerPath, ledgerPath));
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
     it.effect("persists a run, its events, and reports a summary with event count", () =>
@@ -321,37 +364,34 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect(
-      "resolves a watch target by work item, running-first, past the recent-runs window",
-      () =>
-        Effect.gen(function* () {
-          const ledger = yield* RunLedger.CoreRunLedger;
-          yield* ledger.insertRun(
-            record("resolve-old-done", 1000, {
-              workItem: resolveItem,
+    it.effect("resolves a watch target by work item, running-first, past the recent-runs window", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const ledgerPath = yield* TestLedgerPath;
+        yield* ledger.insertRun(
+          record("resolve-old-done", 1000, {
+            workItem: resolveItem,
+            status: "succeeded",
+            endedAtMillis: 1500,
+          }),
+        );
+        yield* ledger.insertRun(record("resolve-running", 2000, { workItem: resolveItem }));
+        yield* insertRunsBulk(
+          ledgerPath,
+          Array.from({ length: 60 }, (_, index) =>
+            record(`resolve-other-${index}`, 3000 + index, {
+              workItem: resolveOther,
               status: "succeeded",
-              endedAtMillis: 1500,
+              endedAtMillis: 3001 + index,
             }),
-          );
-          yield* ledger.insertRun(record("resolve-running", 2000, { workItem: resolveItem }));
-          yield* Effect.forEach(
-            Array.from({ length: 60 }, (_, index) => index),
-            (index) =>
-              ledger.insertRun(
-                record(`resolve-other-${index}`, 3000 + index, {
-                  workItem: resolveOther,
-                  status: "succeeded",
-                  endedAtMillis: 3001 + index,
-                }),
-              ),
-          );
+          ),
+        );
 
-          const byHash = yield* ledger.resolveWatchTarget("#202");
-          const byBare = yield* ledger.resolveWatchTarget("202");
-          assert.strictEqual(byHash?.id, "resolve-running");
-          assert.strictEqual(byBare?.id, "resolve-running");
-        }),
-      15_000,
+        const byHash = yield* ledger.resolveWatchTarget("#202");
+        const byBare = yield* ledger.resolveWatchTarget("202");
+        assert.strictEqual(byHash?.id, "resolve-running");
+        assert.strictEqual(byBare?.id, "resolve-running");
+      }),
     );
 
     it.effect("resolves nothing for a work item that has never run", () =>
