@@ -121,8 +121,12 @@ The snapshot the daemon reports over RPC: health, uptime, scheduler stats, per-w
 _Avoid_: State, health check
 
 **Actionable / claimed / blocked / needs-human item**:
-The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, and parked for a person. Narrowed views of a work item, not new entities.
+The status-facing shapes of a classified work item — eligible-to-run, currently-claimed, blocked on open dependencies, and parked for a person. Narrowed views of a work item, not new entities. Each carries an optional **PR summary** when the source control provider resolved a pull request for it; an item with no PR simply omits it.
 _Avoid_: Reusing "work item" for these narrowed views
+
+**PR summary**:
+The read-model view of a classified item's pull request, resolved by the source control provider from the item's link key: the PR number, a deep-link URL, its checks and review status, its mergeable / base-divergence signal, and a wait-time signal (the PR's last-activity instant, from which a consumer reads how long it has been waiting). Present only on items that have a PR. Shaped richly enough to host a later in-app review panel; the review and merge actions themselves stay on GitHub, reachable through the URL.
+_Avoid_: Observed PR (the engine-internal form the provider reads, which also carries follow-up coordination state), PR state (too vague)
 
 ### Client RPC
 
