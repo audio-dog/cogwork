@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import type { Credential, CredentialStoreService } from "./credential-store";
+import { type Credential, CredentialError, type CredentialStoreService } from "./credential-store";
 import { credentialAccountFor } from "./linear/account";
 import { make } from "./mcp-skill";
 
@@ -37,6 +37,10 @@ const storeStub = (calls: Ref.Ref<ReadonlyArray<string>>): CredentialStoreServic
   bearerToken: (account) => Ref.update(calls, (xs) => [...xs, account.key]).pipe(Effect.map(() => minted)),
   persist: () => Effect.void,
   invalidate: () => Effect.void,
+  providerKey: (account) =>
+    Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
+  persistProviderKey: (key) =>
+    Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
 });
 
 describe("credentialAccountFor", () => {

@@ -45,11 +45,36 @@ export const StoredCredential = Schema.Struct({
 });
 export type StoredCredential = typeof StoredCredential.Type;
 
-export const CredentialFile = Schema.Struct({
+export const StoredProviderKey = Schema.Struct({
+  provider: TrimmedNonEmptyString,
+  key: Schema.RedactedFromValue(TrimmedNonEmptyString),
+});
+export type StoredProviderKey = typeof StoredProviderKey.Type;
+
+const CredentialFileV1 = Schema.Struct({
   version: Schema.Literal(1),
   credentials: Schema.Array(StoredCredential),
 });
+
+export const CredentialFile = Schema.Struct({
+  version: Schema.Literal(2),
+  credentials: Schema.Array(StoredCredential),
+  providerKeys: Schema.Array(StoredProviderKey),
+});
 export type CredentialFile = typeof CredentialFile.Type;
+
+export const CredentialFileWire = Schema.Union([CredentialFile, CredentialFileV1]);
+export type CredentialFileWire = typeof CredentialFileWire.Type;
+
+export interface CredentialFileContents {
+  readonly credentials: ReadonlyArray<StoredCredential>;
+  readonly providerKeys: ReadonlyArray<StoredProviderKey>;
+}
+
+export const contentsOf = (file: CredentialFileWire): CredentialFileContents => ({
+  credentials: file.credentials,
+  providerKeys: file.version === 2 ? file.providerKeys : [],
+});
 
 export interface CredentialIdentity {
   readonly organization: string;
@@ -67,6 +92,20 @@ export interface Credential {
 export interface StoredCredentials {
   readonly load: Effect.Effect<ReadonlyArray<StoredCredential>>;
   readonly save: (credential: StoredCredential) => Effect.Effect<void, CredentialError>;
+  readonly loadProviderKeys?: Effect.Effect<ReadonlyArray<StoredProviderKey>>;
+  readonly saveProviderKey?: (key: StoredProviderKey) => Effect.Effect<void, CredentialError>;
+}
+
+export interface ProviderAccount {
+  readonly provider: string;
+  readonly envVars: ReadonlyArray<string>;
+}
+
+export type ProviderKeySource = "stored-key" | "env";
+
+export interface ProviderCredential {
+  readonly source: ProviderKeySource;
+  readonly key: Redacted.Redacted<string>;
 }
 
 export interface TokenRefreshRequest {
@@ -103,6 +142,8 @@ export interface CredentialStoreService {
   readonly bearerToken: (account: CredentialAccount) => Effect.Effect<Credential, CredentialError>;
   readonly persist: (credential: StoredCredential) => Effect.Effect<void, CredentialError>;
   readonly invalidate: (account: CredentialAccount) => Effect.Effect<void>;
+  readonly providerKey: (account: ProviderAccount) => Effect.Effect<ProviderCredential, CredentialError>;
+  readonly persistProviderKey: (key: StoredProviderKey) => Effect.Effect<void, CredentialError>;
 }
 
 export class CredentialStore extends Context.Service<CredentialStore, CredentialStoreService>()(
@@ -112,11 +153,11 @@ export class CredentialStore extends Context.Service<CredentialStore, Credential
 export const accountOf = (credential: StoredCredential) =>
   `${credential.issueTracker}/${credential.organization}`;
 
-const envToken = (account: CredentialAccount) =>
-  Config.redacted(account.tokenEnv).pipe(Effect.orElseSucceed(() => Redacted.make("")));
+const redactedEnv = (name: string) =>
+  Config.redacted(name).pipe(Effect.orElseSucceed(() => Redacted.make("")));
 
 const envCredential = Effect.fn("CredentialStore.env")(function* (account: CredentialAccount) {
-  const configured = yield* envToken(account);
+  const configured = yield* redactedEnv(account.tokenEnv);
   const token = Redacted.value(configured).trim();
   if (token === "") {
     return yield* new CredentialError({
@@ -163,6 +204,11 @@ const storedCredential = (credential: StoredCredential) =>
     token: credential.token.accessToken,
     identity: { organization: credential.organization, botUserId: credential.botUserId },
   }) satisfies Credential;
+
+const missingProviderKeyMessage = (account: ProviderAccount) =>
+  account.envVars.length > 0
+    ? `no api key for ${account.provider}: log in or set ${account.envVars.join(" or ")}`
+    : `no api key for ${account.provider}: log in to store one`;
 
 export const make = (sources: CredentialSources): CredentialStoreService => {
   const refresh = sources.refresh ?? refreshUnavailable;
@@ -236,6 +282,35 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     return granted ?? (yield* envCredential(account));
   });
 
+  const loadProviderKeys = sources.stored.loadProviderKeys ?? Effect.succeed([]);
+
+  const firstEnvKey = (envVars: ReadonlyArray<string>) =>
+    Effect.reduce(
+      envVars,
+      () => "",
+      (found, name) =>
+        found !== ""
+          ? Effect.succeed(found)
+          : Effect.map(redactedEnv(name), (value) => Redacted.value(value).trim()),
+    );
+
+  const providerKey = Effect.fn("CredentialStore.providerKey")(function* (account: ProviderAccount) {
+    const stored = (yield* loadProviderKeys).find((entry) => entry.provider === account.provider);
+    if (stored) {
+      yield* Effect.logDebug("provider key resolved", { provider: account.provider, source: "stored-key" });
+      return { source: "stored-key", key: stored.key } satisfies ProviderCredential;
+    }
+    const fromEnv = yield* firstEnvKey(account.envVars);
+    if (fromEnv !== "") {
+      yield* Effect.logDebug("provider key resolved", { provider: account.provider, source: "env" });
+      return { source: "env", key: Redacted.make(fromEnv) } satisfies ProviderCredential;
+    }
+    return yield* new CredentialError({
+      account: account.provider,
+      message: missingProviderKeyMessage(account),
+    });
+  });
+
   return {
     bearerToken: Effect.fn("CredentialStore.bearerToken")(function* (account: CredentialAccount) {
       const credential = yield* resolve(account);
@@ -247,6 +322,15 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     }),
     persist: sources.stored.save,
     invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,
+    providerKey,
+    persistProviderKey: (key) =>
+      sources.stored.saveProviderKey?.(key) ??
+      Effect.fail(
+        new CredentialError({
+          account: key.provider,
+          message: "this credential store cannot persist provider keys",
+        }),
+      ),
   };
 };
 

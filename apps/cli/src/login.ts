@@ -1,12 +1,14 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
-import { CredentialStore, Linear } from "@clanker-forge/engine";
+import { CredentialStore, Linear, Providers } from "@clanker-forge/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import * as HttpServer from "effect/unstable/http/HttpServer";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
@@ -131,6 +133,35 @@ const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
       ),
     ),
 );
+
+export class ProviderKeyError extends Schema.TaggedErrorClass<ProviderKeyError>()("ProviderKeyError", {
+  message: Schema.String,
+}) {}
+
+export interface KeyLoginResult {
+  readonly provider: string;
+  readonly displayName: string;
+}
+
+export const loginKey = Effect.fn("cli.login.key")(function* (input: {
+  readonly provider: string;
+  readonly key: string;
+}) {
+  const provider = Providers.findProvider(input.provider);
+  if (!provider) {
+    return yield* new ProviderKeyError({
+      message: `unknown provider "${input.provider}"; known providers: ${Providers.supportedProviders.map((entry) => entry.id).join(", ")}`,
+    });
+  }
+  const trimmed = input.key.trim();
+  if (trimmed === "") {
+    return yield* new ProviderKeyError({ message: `no api key provided for ${provider.displayName}` });
+  }
+  const store = yield* CredentialStore.CredentialStore;
+  yield* store.persistProviderKey({ provider: provider.id, key: Redacted.make(trimmed) });
+  yield* Effect.logInfo("stored provider key", { provider: provider.id });
+  return { provider: provider.id, displayName: provider.displayName } satisfies KeyLoginResult;
+});
 
 export const loginLinear = Effect.fn("cli.login.linear")(function* (config: LinearLoginConfig) {
   const pkce = yield* Linear.OAuth.makePkce();
