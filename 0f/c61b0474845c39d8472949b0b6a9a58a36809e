@@ -1,0 +1,51 @@
+CONTEXT-MAP.md
+  s_8c7941ab9fc598::t_f1843b6a58f8e8 44
+packages/cursor-acp/CONTEXT.md
+  s_8c7941ab9fc598::t_5df9452a21df31 13
+packages/cursor-acp/src/harness.test.ts
+  s_8c7941ab9fc598::t_be10a9c7bb55a4 6,48-61
+packages/cursor-acp/src/harness.ts
+  s_8c7941ab9fc598::t_40dd72838b333a 3,42-47,174-176,197,202
+packages/engine/CONTEXT.md
+  s_8c7941ab9fc598::t_8620ee353147f4 61,64-67,69,73,104-115
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_8c7941ab9fc598::t_bff9ce71ff971a 22-29
+packages/engine/src/executor.ts
+  s_8c7941ab9fc598::t_aeeef6fa2e646d 71,158,163,293,313,317,429,526,572,580
+packages/engine/src/harness.ts
+  s_8c7941ab9fc598::t_f60cd8d664d672 1,3,8,16,31,47-50,55-56,61-65
+packages/engine/src/session-store.test.ts
+  s_8c7941ab9fc598::t_8efc2b47980261 109-145
+packages/engine/src/session-store.ts
+  s_8c7941ab9fc598::t_f99693558e56bf 13,23,81-83
+packages/engine/src/tools/index.ts
+  s_8c7941ab9fc598::t_05beee3a33598c 28-35
+packages/engine/src/tools/owned-tools.test.ts
+  s_8c7941ab9fc598::t_c5d5fa09181a21 15,159
+packages/engine/src/tools/owned-tools.ts
+  s_8c7941ab9fc598::t_cecd79a0d647f8 2,9-16,251-257,265,269-274,280,285,290,296,301,306,311,316
+packages/engine/src/tools/policy.test.ts
+  s_8c7941ab9fc598::t_2f6dd22963d843 1-146
+packages/engine/src/tools/policy.ts
+  s_8c7941ab9fc598::t_7af02812b8b2db 1-103
+packages/engine/src/daemon.ts
+  s_8c7941ab9fc598::t_e6707b1215bd93 51,184,190
+packages/engine/src/executor.test.ts
+  s_8c7941ab9fc598::t_fe6283c9eeecc5 34,339-342,346-347,354,558,709-713,741,773,776,817,820,860-861,1012-1016,1036,1095-1096
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0fc61b0474845c39d8472949b0b6a9a58a36809e",
+  "prompts": {},
+  "sessions": {
+    "s_8c7941ab9fc598": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fd571101-f528-485e-8b6e-d60f500d080f",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
