@@ -1,6 +1,8 @@
 import {
   HarnessName,
-  SessionId,
+  type SessionId,
+  SessionId as SessionIdSchema,
+  sessionHandle,
   type TokenUsage,
   WorkItemId,
   WorkspaceConfig,
@@ -33,7 +35,22 @@ import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManage
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const id = Schema.decodeSync(WorkItemId);
-const previousSession = Schema.decodeSync(SessionId)("sess-prev");
+const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
+
+const handleOf = (ledger: RunLedger.RunLedgerService, session: SessionId | null | undefined) =>
+  session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
+
+const seedResumeSession = (handle: string | null = "sess-prev") =>
+  Effect.flatMap(RunLedger.RunLedger, (ledger) =>
+    ledger.insertSession({
+      kind: "opaque-handle",
+      id: previousSession,
+      workspace: workspace.config.name,
+      harness: cursor,
+      createdAtMillis: 0,
+      handle,
+    }),
+  );
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
@@ -362,7 +379,7 @@ describe("Executor.execute", () => {
         const [firstRun] = runs;
         assert.isDefined(firstRun);
         assert.strictEqual(firstRun?.status, "succeeded");
-        assert.strictEqual(firstRun?.session, "sess-42");
+        assert.strictEqual(yield* handleOf(ledger, firstRun?.session), "sess-42");
         assert.deepStrictEqual(firstRun?.usage, usage);
         assert.strictEqual(firstRun?.eventCount, successEvents.length);
 
@@ -550,7 +567,7 @@ describe("Executor.execute", () => {
         assert.strictEqual(run?.stage, "implement");
         assert.strictEqual(run?.branch, implementBranch);
         assert.strictEqual(run?.status, "succeeded");
-        assert.strictEqual(run?.session, "sess-42");
+        assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
         assert.deepStrictEqual(run?.usage, usage);
       }).pipe(Effect.provide(layer));
     }),
@@ -616,7 +633,7 @@ describe("Executor.execute", () => {
 
         const [inFlight] = yield* ledger.listRuns(10);
         assert.strictEqual(inFlight?.status, "running");
-        assert.strictEqual(inFlight?.session, "sess-42");
+        assert.strictEqual(yield* handleOf(ledger, inFlight?.session), "sess-42");
         assert.isNull(inFlight?.endedAtMillis);
 
         yield* Deferred.succeed(release, undefined);
@@ -624,7 +641,7 @@ describe("Executor.execute", () => {
 
         const [finished] = yield* ledger.listRuns(10);
         assert.strictEqual(finished?.status, "succeeded");
-        assert.strictEqual(finished?.session, "sess-42");
+        assert.strictEqual(yield* handleOf(ledger, finished?.session), "sess-42");
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
@@ -668,7 +685,7 @@ describe("Executor.execute", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        assert.strictEqual(run?.session, "sess-99");
+        assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-99");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -707,6 +724,7 @@ describe("Executor.execute", () => {
       );
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
+        yield* seedResumeSession();
         yield* executor.execute(implementWorkspace, resumeItem);
 
         const captured = yield* Ref.get(requests);
@@ -738,6 +756,7 @@ describe("Executor.execute", () => {
       const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
+        yield* seedResumeSession();
         yield* executor.execute(implementWorkspace, resumeItem);
 
         const captured = yield* Ref.get(requests);
@@ -758,7 +777,7 @@ describe("Executor.execute", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        assert.strictEqual(run?.session, "sess-42");
+        assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
         assert.strictEqual(run?.status, "succeeded");
 
         const events = run ? yield* ledger.events(run.id) : [];
@@ -781,6 +800,7 @@ describe("Executor.execute", () => {
       const layer = provide(recorder(calls), [capturingRunner(requests, successEvents)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
+        yield* seedResumeSession();
         yield* executor.execute(workspace, resumeItem);
 
         const captured = yield* Ref.get(requests);
@@ -826,7 +846,7 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.status, "failed");
-        assert.strictEqual(run?.session, "sess-42");
+        assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
 
         yield* executor.execute(implementWorkspace, implementItem);
         const captured = yield* Ref.get(requests);
@@ -1057,7 +1077,7 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [firstRun] = yield* ledger.listRuns(10);
         assert.strictEqual(firstRun?.status, "failed");
-        assert.strictEqual(firstRun?.session, "sess-42");
+        assert.strictEqual(yield* handleOf(ledger, firstRun?.session), "sess-42");
 
         yield* executor.execute(implementWorkspace, implementItem);
         const captured = yield* Ref.get(requests);

@@ -1,13 +1,11 @@
-import type { SessionId } from "@clanker-forge/contracts";
-
 export type ResumeReason = "no-session" | "fresh-requested" | "worktree-recreated" | "stale" | "token-limit";
 
 export type ResumeDecision =
-  | { readonly kind: "resume"; readonly sessionId: SessionId }
+  | { readonly kind: "resume"; readonly handle: string }
   | { readonly kind: "fresh"; readonly reason: ResumeReason };
 
 export interface ResumeInputs {
-  readonly sessionId: SessionId | null;
+  readonly handle: string | null;
   readonly lastRunStartedAtMillis: number | null;
   readonly lastRunTotalTokens: number | null;
   readonly now: number;
@@ -28,10 +26,10 @@ const overTokenLimit = (inputs: ResumeInputs) =>
   inputs.lastRunTotalTokens > inputs.maxTokens;
 
 export const decideResume = (inputs: ResumeInputs): ResumeDecision => {
-  if (!inputs.sessionId) return { kind: "fresh", reason: "no-session" };
+  if (!inputs.handle) return { kind: "fresh", reason: "no-session" };
   if (inputs.fresh) return { kind: "fresh", reason: "fresh-requested" };
   if (inputs.worktreeRecreated) return { kind: "fresh", reason: "worktree-recreated" };
   if (agedOut(inputs)) return { kind: "fresh", reason: "stale" };
   if (overTokenLimit(inputs)) return { kind: "fresh", reason: "token-limit" };
-  return { kind: "resume", sessionId: inputs.sessionId };
+  return { kind: "resume", handle: inputs.handle };
 };

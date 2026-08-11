@@ -16,6 +16,15 @@ export const runs = sqliteTable("runs", {
   endedAt: integer("ended_at"),
 });
 
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  workspace: text("workspace").notNull(),
+  harness: text("harness").notNull(),
+  kind: text("kind").notNull(),
+  handle: text("handle"),
+  createdAt: integer("created_at").notNull(),
+});
+
 export const runEvents = sqliteTable(
   "run_events",
   {

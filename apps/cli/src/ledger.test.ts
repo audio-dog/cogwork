@@ -3,7 +3,9 @@ import {
   HarnessName,
   RunId,
   type RunRecord,
+  type Session,
   SessionId,
+  sessionHandle,
   WorkItemId,
   WorkspaceId,
 } from "@clanker-forge/contracts";
@@ -24,6 +26,8 @@ const crashItem = Schema.decodeSync(WorkItemId)("#101");
 const resolveItem = Schema.decodeSync(WorkItemId)("#202");
 const resolveOther = Schema.decodeSync(WorkItemId)("#303");
 const session = Schema.decodeSync(SessionId)("sess-abc");
+const midSession = Schema.decodeSync(SessionId)("sess-mid");
+const foldSession = Schema.decodeSync(SessionId)("sess-fold");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
 const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecord> = {}): RunRecord => ({
@@ -39,6 +43,16 @@ const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecor
   startedAtMillis,
   endedAtMillis: null,
   ...overrides,
+});
+
+const sessionRecord = (over: Partial<Session> = {}): Session => ({
+  kind: "opaque-handle",
+  id: session,
+  workspace,
+  harness,
+  createdAtMillis: 0,
+  handle: "cursor-abc",
+  ...over,
 });
 
 const insertRunAt = (ledgerPath: string, run: RunRecord) =>
@@ -73,7 +87,7 @@ describe("sqlite RunLedger", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger.RunLedger;
         const id = runId("happy-1");
-        yield* ledger.insertRun(record("happy-1", 1000));
+        yield* ledger.insertRun(record("happy-1", 1000, { session }));
         yield* ledger.appendEvent(id, {
           seq: 1,
           type: "TEXT_MESSAGE_CONTENT",
@@ -90,7 +104,6 @@ describe("sqlite RunLedger", () => {
         });
         yield* ledger.updateRun(id, {
           status: "succeeded",
-          session,
           usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
           endedAtMillis: 2000,
         });
@@ -132,16 +145,16 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect("returns the most recent session handle for a branch", () =>
+    it.effect("returns the most recent resumable run's session for a branch", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.RunLedger;
         const sessionByBranch = (workspace: string, branch: string) =>
           Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
-        yield* ledger.insertRun(record("branch-1", 1000, { branch: "7-fix-export" }));
+        yield* ledger.insertSession(sessionRecord());
+        yield* ledger.insertRun(record("branch-1", 1000, { branch: "7-fix-export", session }));
         yield* ledger.insertRun(record("branch-2", 3000, { branch: "9-other" }));
         yield* ledger.updateRun(runId("branch-1"), {
           status: "succeeded",
-          session,
           usage: null,
           endedAtMillis: 1500,
         });
@@ -159,7 +172,6 @@ describe("sqlite RunLedger", () => {
         yield* ledger.insertRun(record("interrupt-done", 4100));
         yield* ledger.updateRun(runId("interrupt-done"), {
           status: "succeeded",
-          session,
           usage: null,
           endedAtMillis: 4200,
         });
@@ -198,6 +210,7 @@ describe("sqlite RunLedger", () => {
         const ledger = yield* RunLedger.RunLedger;
         const sessionByBranch = (branch: string) =>
           Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
+        yield* ledger.insertSession(sessionRecord());
         yield* ledger.insertRun(
           record("crashed-branch", 5000, { branch: "13-crash", session, status: "crashed" }),
         );
@@ -210,20 +223,55 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect("records a session on a run that has not reached a terminal status", () =>
+    it.effect("offers a still-running run for resume once its session has a handle", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.RunLedger;
         const id = runId("in-flight");
-        yield* ledger.insertRun(record("in-flight", 7000, { branch: "11-mid-run" }));
-        yield* ledger.recordSession(id, session);
+        yield* ledger.insertSession(sessionRecord({ id: midSession, handle: null }));
+        yield* ledger.insertRun(record("in-flight", 7000, { branch: "11-mid-run", session: midSession }));
+
+        assert.isNull(yield* ledger.latestRunByBranch("gh", "11-mid-run"));
+
+        yield* ledger.recordSessionHandle(midSession, "cursor-mid");
+        assert.strictEqual(sessionHandle(yield* ledger.getSession(midSession)), "cursor-mid");
 
         const inFlight = yield* ledger.getRun(id);
-        assert.strictEqual(inFlight?.session, "sess-abc");
+        assert.strictEqual(inFlight?.session, "sess-mid");
         assert.strictEqual(inFlight?.status, "running");
         assert.isNull(inFlight?.endedAtMillis);
 
         const byBranch = yield* ledger.latestRunByBranch("gh", "11-mid-run");
         assert.strictEqual(byBranch?.id, id);
+      }),
+    );
+
+    it.effect("folds a session's events across every run that shares it", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertSession(sessionRecord({ id: foldSession }));
+        yield* ledger.insertRun(record("sess-first", 8000, { branch: "22-two-runs", session: foldSession }));
+        yield* ledger.insertRun(record("sess-second", 9000, { branch: "22-two-runs", session: foldSession }));
+        yield* ledger.appendEvent(runId("sess-second"), {
+          seq: 0,
+          type: "TEXT_MESSAGE_CONTENT",
+          name: null,
+          data: '{"delta":"world"}',
+          atMillis: 9100,
+        });
+        yield* ledger.appendEvent(runId("sess-first"), {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 8100,
+        });
+
+        assert.strictEqual(yield* ledger.sessionForBranch("gh", "22-two-runs"), foldSession);
+        const events = yield* ledger.sessionEvents(foldSession);
+        assert.deepStrictEqual(
+          events.map((event) => event.type),
+          ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
+        );
       }),
     );
 
@@ -234,7 +282,6 @@ describe("sqlite RunLedger", () => {
         yield* ledger.insertRun(record("usage-partial", 9000));
         yield* ledger.updateRun(id, {
           status: "succeeded",
-          session,
           usage: { inputTokens: 5 },
           endedAtMillis: 9100,
         });

@@ -81,8 +81,8 @@ A live envelope broadcast while a run is in flight: run identity (run id / seque
 _Avoid_: Run event (the persisted form), notification
 
 **Session**:
-A harness's own conversation handle (`SessionId`), stored on a run so a later stage on the same branch can resume the same agent session. It is written the moment the harness first emits it, not when the run ends, so a run that never reached a terminal status still names a session to resume.
-_Avoid_: Run, connection
+A first-class entity with its own `SessionId`, grouping the runs that make up one conversation — a run points at it by foreign key (`RunRecord.session`), and runs on the same branch (or a resumed run) share one. It comes in two kinds. An **owned-transcript** session is the first-party runner's: the whole conversation lives in our run ledger, so its transcript folds straight from the events and no handle is kept. An **opaque-handle** session is a CLI harness's: the harness keeps its own history and hands back an opaque `handle` (e.g. Cursor's session id) we store to resume it — `null` until the harness emits one. Every session is opaque-handle today; owned-transcript arrives with the first-party runner. The session is minted when the run is inserted, before the harness has said anything (see engine ADR 0002), so a run always names a session even before it can be resumed.
+_Avoid_: Run, connection, handle (that's one field of the opaque-handle kind, not the session itself)
 
 **Exhausted / stalled / stuck**:
 The three failure outcomes — how the control plane stops spending tokens on an item after it has already tried. A run is *exhausted* when it gives up after too many failed attempts or a non-retryable error: the terminal `RunStatus`, which escalates the item to `ready-for-human`. A follow-up is *stalled* when it hits the no-progress limit without the checks going green or a human replying. An agent is *stuck* when its own output reports it cannot proceed — a non-retryable cause that feeds exhaustion. All three are distinct from *blocked*, which is about unresolved dependencies before any attempt.

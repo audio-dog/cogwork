@@ -1,12 +1,10 @@
-import { SessionId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import * as Schema from "effect/Schema";
 import { decideResume, type ResumeInputs } from "./resume-policy";
 
-const session = Schema.decodeSync(SessionId)("sess-1");
+const handle = "cursor-session-1";
 
 const inputs = (over: Partial<ResumeInputs> = {}): ResumeInputs => ({
-  sessionId: session,
+  handle,
   lastRunStartedAtMillis: 1_000,
   lastRunTotalTokens: 100,
   now: 2_000,
@@ -19,11 +17,11 @@ const inputs = (over: Partial<ResumeInputs> = {}): ResumeInputs => ({
 
 describe("decideResume", () => {
   it("resumes when the session is fresh enough on every axis", () => {
-    assert.deepStrictEqual(decideResume(inputs()), { kind: "resume", sessionId: session });
+    assert.deepStrictEqual(decideResume(inputs()), { kind: "resume", handle });
   });
 
-  it("starts fresh when there is no stored session", () => {
-    assert.deepStrictEqual(decideResume(inputs({ sessionId: null })), {
+  it("starts fresh when there is no stored handle", () => {
+    assert.deepStrictEqual(decideResume(inputs({ handle: null })), {
       kind: "fresh",
       reason: "no-session",
     });

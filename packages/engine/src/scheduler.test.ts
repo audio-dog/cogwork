@@ -458,7 +458,6 @@ describe("Scheduler.drain", () => {
           Effect.andThen(
             ledger.updateRun(runId("inside"), {
               status: "succeeded",
-              session: null,
               usage: null,
               endedAtMillis: 10_000,
             }),
