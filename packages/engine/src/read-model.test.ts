@@ -1,0 +1,153 @@
+import {
+  type BlockedItem,
+  type Claim,
+  type ClaimedItem,
+  type NeedsHumanItem,
+  PrSummary,
+  SessionId,
+  WorkItemId,
+  WorkspaceConfig,
+  WorkspaceId,
+} from "@clanker-forge/contracts";
+import { assert, describe, it } from "@effect/vitest";
+import * as Schema from "effect/Schema";
+import type { EligibleWork } from "./classify";
+import type { RegisteredWorkspace } from "./projector";
+import { classifiedItemsOf, workspaceInfoOf } from "./read-model";
+import type { WorkspaceReconcileState } from "./reconcile";
+
+const id = Schema.decodeSync(WorkItemId);
+const workspaceId = Schema.decodeSync(WorkspaceId);
+const session = Schema.decodeSync(SessionId)("sess-1");
+
+const prSummary = Schema.decodeSync(PrSummary)({
+  number: 7,
+  url: "https://github.com/owner/repo/pull/7",
+  checks: "passing",
+  review: "ready",
+  baseDivergence: "none",
+  waitingSinceMillis: 0,
+});
+
+const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1000 };
+
+const eligibleWithPr: EligibleWork = {
+  id: id("e-pr"),
+  title: "eligible with pr",
+  stage: "follow-up",
+  priorFailures: 2,
+  followUp: {
+    checks: "failing",
+    humanCommentAtMillis: 0,
+    noProgress: 1,
+    stalled: false,
+    fresh: false,
+    baseDivergence: "none",
+  },
+  resume: { session, reason: "interrupted" },
+  pr: prSummary,
+};
+const eligibleNoPr: EligibleWork = {
+  id: id("e"),
+  title: "eligible",
+  stage: "implement",
+  priorFailures: 0,
+};
+
+const claimedWithPr: ClaimedItem = { id: id("c-pr"), title: "claimed with pr", claim, pr: prSummary };
+const claimedNoPr: ClaimedItem = { id: id("c"), title: "claimed", claim };
+
+const blockedWithPr: BlockedItem = {
+  id: id("b-pr"),
+  title: "blocked with pr",
+  openBlockers: 2,
+  pr: prSummary,
+};
+const blockedNoPr: BlockedItem = { id: id("b"), title: "blocked", openBlockers: 1 };
+
+const needsHumanWithPr: NeedsHumanItem = {
+  id: id("h-pr"),
+  title: "needs-human with pr",
+  reason: "ready-for-human",
+  proposal: null,
+  pr: prSummary,
+};
+const needsHumanNoPr: NeedsHumanItem = {
+  id: id("h"),
+  title: "needs-human",
+  reason: "needs-info",
+  proposal: null,
+};
+
+const state: WorkspaceReconcileState = {
+  name: workspaceId("example"),
+  poll: { status: "ok" },
+  eligible: [eligibleWithPr, eligibleNoPr],
+  claimed: [claimedWithPr, claimedNoPr],
+  blocked: [blockedWithPr, blockedNoPr],
+  needsHuman: [needsHumanWithPr, needsHumanNoPr],
+  observed: [],
+};
+
+const workspace: RegisteredWorkspace = {
+  source: "example.workspace.ts",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "example",
+    checkoutPath: "/repos/example",
+    issueTracker: { type: "github", repo: "owner/example", botLogin: "clanker-bot" },
+    harness: { preferred: "cursor" },
+    playbook: { triage: { enabled: true } },
+  }),
+};
+
+describe("classifiedItemsOf", () => {
+  it("tags every bucket and carries the PR summary the classification attached", () => {
+    const byId = new Map(classifiedItemsOf(state).map((item) => [item.id, item]));
+
+    assert.deepStrictEqual(byId.get(id("e-pr")), {
+      _tag: "Eligible",
+      id: id("e-pr"),
+      title: "eligible with pr",
+      stage: "follow-up",
+      pr: prSummary,
+    });
+    assert.deepStrictEqual(byId.get(id("c-pr")), { _tag: "Claimed", ...claimedWithPr });
+    assert.deepStrictEqual(byId.get(id("b-pr")), { _tag: "Blocked", ...blockedWithPr });
+    assert.deepStrictEqual(byId.get(id("h-pr")), { _tag: "NeedsHuman", ...needsHumanWithPr });
+  });
+
+  it("omits the PR key on every bucket without one, and never leaks scheduling-only fields", () => {
+    const byId = new Map(classifiedItemsOf(state).map((item) => [item.id, item]));
+
+    assert.deepStrictEqual(byId.get(id("e")), {
+      _tag: "Eligible",
+      id: id("e"),
+      title: "eligible",
+      stage: "implement",
+    });
+    assert.deepStrictEqual(byId.get(id("c")), { _tag: "Claimed", ...claimedNoPr });
+    assert.deepStrictEqual(byId.get(id("b")), { _tag: "Blocked", ...blockedNoPr });
+    assert.deepStrictEqual(byId.get(id("h")), { _tag: "NeedsHuman", ...needsHumanNoPr });
+  });
+});
+
+describe("workspaceInfoOf", () => {
+  it("projects the same four buckets and PR summaries as the event stream", () => {
+    const info = workspaceInfoOf(workspace, state);
+
+    assert.deepStrictEqual(info.eligible, [
+      { id: id("e-pr"), title: "eligible with pr", stage: "follow-up", pr: prSummary },
+      { id: id("e"), title: "eligible", stage: "implement" },
+    ]);
+    assert.deepStrictEqual(info.claimed, [claimedWithPr, claimedNoPr]);
+    assert.deepStrictEqual(info.blocked, [blockedWithPr, blockedNoPr]);
+    assert.deepStrictEqual(info.needsHuman, [needsHumanWithPr, needsHumanNoPr]);
+  });
+
+  it("reports an empty, ok-polling workspace when it has no reconcile state yet", () => {
+    const info = workspaceInfoOf(workspace, undefined);
+
+    assert.deepStrictEqual(info.poll, { status: "ok" });
+    assert.deepStrictEqual([info.eligible, info.claimed, info.blocked, info.needsHuman], [[], [], [], []]);
+  });
+});

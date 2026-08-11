@@ -302,6 +302,28 @@ describe("classify", () => {
     assert.isTrue(eligible[0]?.followUp?.stalled);
   });
 
+  it("attaches the PR summary to every bucket that observed one, and leaves the rest bare", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1 };
+    const summary = {
+      number: 1,
+      url: "https://github.com/owner/repo/pull/1",
+      checks: "passing",
+      review: "changes-requested",
+      baseDivergence: "none",
+      waitingSinceMillis: 0,
+    };
+    const { eligible, claimed, needsHuman } = classify([
+      item({ id: "e", roles: ["ready-for-agent"], pr: pr("changes-requested") }),
+      item({ id: "c", roles: ["ready-for-agent"], claim, pr: pr("changes-requested") }),
+      item({ id: "h", roles: ["ready-for-human"], pr: pr("changes-requested") }),
+      item({ id: "bare", roles: ["ready-for-agent"] }),
+    ]);
+    assert.deepStrictEqual(eligible.find((e) => e.id === id("e"))?.pr, summary);
+    assert.deepStrictEqual(claimed[0]?.pr, summary);
+    assert.deepStrictEqual(needsHuman[0]?.pr, summary);
+    assert.isUndefined(eligible.find((e) => e.id === id("bare"))?.pr);
+  });
+
   it("orders eligible work follow-up > triage > implement > verify", () => {
     const { eligible } = classify([
       item({ id: "verify", roles: ["ready-for-agent"], pr: pr("ready") }),
