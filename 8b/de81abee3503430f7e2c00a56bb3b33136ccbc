@@ -1,0 +1,29 @@
+packages/ui/src/components/input.tsx
+  s_1c726636ddd104::t_842ff3b26c5ca4 1-20
+packages/ui/src/components/sheet.tsx
+  s_1c726636ddd104::t_249d7c886130fa 1-112
+packages/ui/src/components/sidebar.tsx
+  s_1c726636ddd104::t_0b22df2609ac9a 1-680
+packages/ui/src/components/skeleton.tsx
+  s_1c726636ddd104::t_602f2beb33f795 1-9
+packages/ui/src/components/tooltip.tsx
+  s_1c726636ddd104::t_aac05ff6175859 1-52
+packages/ui/src/hooks/use-mobile.ts
+  s_1c726636ddd104::t_8262e1f4fecd81 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "8bde81abee3503430f7e2c00a56bb3b33136ccbc",
+  "prompts": {},
+  "sessions": {
+    "s_1c726636ddd104": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46f2982d-b1ca-44ac-8b17-9a451a98a9c3",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
