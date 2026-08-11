@@ -44,6 +44,7 @@
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-plugin": "^1.168.29",
     "@types/babel__core": "^7.20.5",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
