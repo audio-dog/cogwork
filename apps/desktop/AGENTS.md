@@ -33,3 +33,10 @@ When you create or change any UI element:
 
 Both `components.json` files are already wired for this: `apps/desktop` points its `ui` alias at
 `@clanker-forge/ui`, and `packages/ui` keeps primitives local.
+
+## React Compiler
+
+The renderer runs with the React Compiler. Do not add manual memoization the compiler already handles
+for you — no `useMemo`, `useCallback`, or `React.memo` unless you have a concrete reason the
+compiler cannot (document that reason in the PR). Derive values inline during render; write event
+handlers as plain functions inside the component.
