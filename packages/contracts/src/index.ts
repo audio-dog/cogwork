@@ -2,6 +2,7 @@ export * from "./ag-ui";
 export * from "./base-schemas";
 export * from "./coordination";
 export * from "./daemon";
+export * from "./daemon-event";
 export * from "./events";
 export * from "./mcp-skill";
 export * from "./principal";

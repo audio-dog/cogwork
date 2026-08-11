@@ -10,11 +10,12 @@ import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./daemon";
+import * as DaemonEventBus from "./daemon-event-bus";
+import * as EventPublisher from "./event-publisher";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
-import * as RunEventBus from "./run-event-bus";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
@@ -440,13 +441,18 @@ describe("daemon heartbeats", () => {
         assert.deepStrictEqual(yield* Ref.get(drained), [1234]);
       }).pipe(
         Effect.provide(
-          Layer.mergeAll(
-            Reconcile.layer.pipe(
-              Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
+          EventPublisher.layer.pipe(
+            Layer.provideMerge(
+              Layer.mergeAll(
+                Reconcile.layer.pipe(
+                  Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
+                ),
+                registeredSample,
+                schedulerStub,
+                worktreeStub,
+                DaemonEventBus.layer,
+              ),
             ),
-            registeredSample,
-            schedulerStub,
-            worktreeStub,
           ),
         ),
         Effect.scoped,
@@ -466,7 +472,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
       Layer.provideMerge(RunLedger.layerMemory),
-      Layer.provideMerge(RunEventBus.layer),
+      Layer.provideMerge(DaemonEventBus.layer),
     );
 
   const layer = daemonLayer(sources(IssueTracker.emptyLayer));

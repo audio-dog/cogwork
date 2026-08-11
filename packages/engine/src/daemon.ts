@@ -5,12 +5,10 @@ import {
   localOwner,
   Principal,
   PrincipalMiddleware,
-  type PrSummary,
   type RunActivity,
   type RunEvent,
   type RunId,
   type RunRecord,
-  type WorkItemId,
 } from "@clanker-forge/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
@@ -25,14 +23,21 @@ import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import type { CredentialStore } from "./credential-store";
+import {
+  activityOf,
+  DaemonEventBus,
+  layer as daemonEventBusLayer,
+  runActivityStream,
+} from "./daemon-event-bus";
+import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import * as Executor from "./executor";
-import type { ObservedPr } from "./follow-up";
 import * as GitHub from "./github";
 import * as Harness from "./harness";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
+import { prByItem, schedulerStatsOf, withPr } from "./read-model";
 import {
   type ReconcileSnapshot,
   ReconcileWorker,
@@ -41,15 +46,8 @@ import {
 } from "./reconcile";
 import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
-import { activityOf, RunEventBus, layer as runEventBusLayer } from "./run-event-bus";
 import { RunLedger } from "./run-ledger";
-import {
-  type DrainOptions,
-  Scheduler,
-  type SchedulerConfig,
-  type SchedulerState,
-  layer as schedulerLayer,
-} from "./scheduler";
+import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
 import { ticketSlug, WorktreeManager } from "./worktree";
 
@@ -79,7 +77,7 @@ const activitiesFromLedger = (run: RunRecord, events: ReadonlyArray<RunEvent>) =
 const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
-  const bus = yield* RunEventBus;
+  const bus = yield* DaemonEventBus;
   if (id === undefined) return bus.activity;
 
   const ledger = yield* RunLedger;
@@ -88,7 +86,7 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   if (run === null) return Stream.empty;
   const history = yield* activitiesFromLedger(run, yield* ledger.events(id));
   const lastSeq = history.at(-1)?.seq ?? -1;
-  const live = Stream.fromSubscription(subscription).pipe(
+  const live = runActivityStream(Stream.fromSubscription(subscription)).pipe(
     Stream.filter((item) => item.runId === id && item.seq > lastSeq),
   );
   const settled = run.status !== "running";
@@ -96,37 +94,13 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   return base.pipe(Stream.takeUntil(isTerminalActivity));
 });
 
+export const watchEvents = Effect.fn("Daemon.watchEvents")(function* () {
+  const bus = yield* DaemonEventBus;
+  return bus.events;
+});
+
 const statesByName = (snapshot: ReconcileSnapshot) =>
   new Map(snapshot.workspaces.map((state) => [state.name, state]));
-
-const schedulerStats = (config: SchedulerConfig, state: SchedulerState) => ({
-  globalInFlight: state.global,
-  globalLimit: config.globalLimit,
-  dailyBudgetUsed: state.budgetUsed,
-  dailyBudgetLimit: config.dailyBudget,
-  perWorkspace: [...state.perWorkspace].map(([name, inFlight]) => ({ name, inFlight })),
-});
-
-const prSummaryOf = (pr: ObservedPr) => ({
-  number: pr.number,
-  url: pr.url,
-  checks: pr.checks,
-  review: pr.review,
-  baseDivergence: pr.baseDivergence,
-  waitingSinceMillis: pr.waitingSinceMillis,
-});
-
-const prByItem = (state: WorkspaceReconcileState | undefined) =>
-  new Map<WorkItemId, PrSummary>(
-    (state?.observed ?? []).flatMap((item) => (item.pr ? [[item.id, prSummaryOf(item.pr)] as const] : [])),
-  );
-
-const withPr =
-  (prs: ReadonlyMap<WorkItemId, PrSummary>) =>
-  <T extends { readonly id: WorkItemId }>(item: T) => {
-    const pr = prs.get(item.id);
-    return pr === undefined ? item : { ...item, pr };
-  };
 
 const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => {
   const attach = withPr(prByItem(state));
@@ -159,7 +133,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       health: "running" as const,
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
-      scheduler: schedulerStats(scheduler.config, stats),
+      scheduler: schedulerStatsOf(scheduler.config, stats),
       workspaces: registry.workspaces.map((w) => workspaceInfo(w, stateByName.get(w.config.name))),
       failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
     };
@@ -178,6 +152,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     return run?.id ?? null;
   }),
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
+  WatchEvents: () => Stream.unwrap(watchEvents()),
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;
@@ -214,13 +189,14 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     adapters.runLedger,
     Harness.layer(adapters.harnessRunners).pipe(Layer.provide(sessionStore)),
     McpSkill.layer.pipe(Layer.provide(credentials)),
-    runEventBusLayer,
+    daemonEventBusLayer,
   );
   const services = Layer.mergeAll(reconcileLayer, Executor.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),
   );
   const scheduler = schedulerLayer(adapters.scheduler).pipe(Layer.provideMerge(services));
-  return recoveryLayer.pipe(Layer.provideMerge(scheduler));
+  const withRecovery = recoveryLayer.pipe(Layer.provideMerge(scheduler));
+  return eventPublisherLayer.pipe(Layer.provideMerge(withRecovery));
 };
 
 export const serverLayer = <E, R>(adapters: HostAdapters<E, R>) =>
@@ -274,8 +250,10 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
 
 const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
   const worker = yield* ReconcileWorker;
+  const publisher = yield* DaemonEventPublisher;
   const receipt = yield* worker.submit();
   yield* Effect.logInfo("reconcile tick", receipt);
+  yield* publisher.publishItems();
   yield* maintainWorktrees();
 });
 
@@ -291,7 +269,9 @@ export const bootstrap = Effect.gen(function* () {
 
 const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
   const scheduler = yield* Scheduler;
+  const publisher = yield* DaemonEventPublisher;
   yield* scheduler.tick();
+  yield* publisher.publishScheduler();
 });
 
 const executeHeartbeat = () => executeTick().pipe(Effect.repeat(Schedule.spaced("5 seconds")));
