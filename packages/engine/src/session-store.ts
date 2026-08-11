@@ -10,7 +10,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { RunLedger } from "./run-ledger";
+import { handleOf, RunLedger } from "./run-ledger";
 
 export interface ThreadMessage {
   readonly role: "assistant" | "tool";
@@ -20,6 +20,7 @@ export interface ThreadMessage {
 
 export interface SessionStoreService {
   readonly loadThread: (session: SessionId) => Effect.Effect<ReadonlyArray<ThreadMessage>>;
+  readonly resumeHandle: (session: SessionId) => Effect.Effect<string | null>;
 }
 
 export class SessionStore extends Context.Service<SessionStore, SessionStoreService>()(
@@ -76,6 +77,9 @@ export const make = Effect.gen(function* () {
   return {
     loadThread: Effect.fn("SessionStore.loadThread")(function* (session: SessionId) {
       return foldThread(yield* ledger.sessionEvents(session));
+    }),
+    resumeHandle: Effect.fn("SessionStore.resumeHandle")(function* (session: SessionId) {
+      return yield* handleOf(ledger, session);
     }),
   } satisfies SessionStoreService;
 });

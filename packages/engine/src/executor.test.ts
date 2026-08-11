@@ -31,6 +31,7 @@ import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunLedger from "./run-ledger";
+import * as SessionStore from "./session-store";
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
@@ -335,19 +336,22 @@ const provide = (
   ws: IssueTrackerService,
   runners: ReadonlyArray<HarnessRunner>,
   worktree: WorktreeManagerService = worktreeStub,
-) =>
-  Executor.layer.pipe(
+) => {
+  const runLedger = RunLedger.layerMemory;
+  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
+  return Executor.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(IssueTracker, ws),
-        harnessLayer(runners),
-        RunLedger.layerMemory,
+        harnessLayer(runners).pipe(Layer.provide(sessionStore)),
+        runLedger,
         DaemonEventBus.layer,
         Layer.succeed(WorktreeManager, worktree),
         assemblerStub,
       ),
     ),
   );
+};
 
 describe("Executor.execute", () => {
   it.effect("triages an eligible item into a proposal note, label advance, and ledgered run", () =>
@@ -551,7 +555,7 @@ describe("Executor.execute", () => {
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
-        assert.isNull(request?.sessionId ?? null);
+        assert.isNull(request?.session ?? null);
         assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
 
         const log = yield* Ref.get(calls);
@@ -702,8 +706,11 @@ describe("Executor.execute", () => {
 
         const captured = yield* Ref.get(requests);
         assert.strictEqual(captured.length, 2);
-        assert.isNull(captured[0]?.sessionId ?? null);
-        assert.strictEqual(captured[1]?.sessionId, "sess-42");
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.isNull(captured[0]?.session ?? null);
+        assert.strictEqual(captured[1]?.session, run?.session);
+        assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -731,7 +738,7 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured.length, 1);
         const [request] = captured;
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
-        assert.strictEqual(request?.sessionId, "sess-prev");
+        assert.strictEqual(request?.session, previousSession);
         assert.include(request?.prompt ?? "", "You were interrupted part-way through");
         assert.include(request?.prompt ?? "", `Inspect /wt/${implementBranch}`);
         assert.notInclude(request?.prompt ?? "", "implement-agent");
@@ -763,10 +770,10 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured.length, 2);
 
         const [nudge, full] = captured;
-        assert.strictEqual(nudge?.sessionId, "sess-prev");
+        assert.strictEqual(nudge?.session, previousSession);
         assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
 
-        assert.strictEqual(full?.sessionId, "sess-42");
+        assert.strictEqual(full?.session, previousSession);
         assert.strictEqual(full?.checkoutPath, `/wt/${implementBranch}`);
         assert.include(full?.prompt ?? "", "implement-agent");
         assert.include(full?.prompt ?? "", "IMPLEMENT-RESULT");
@@ -807,10 +814,10 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured.length, 2);
 
         const [nudge, full] = captured;
-        assert.strictEqual(nudge?.sessionId, "sess-prev");
+        assert.strictEqual(nudge?.session, previousSession);
         assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
 
-        assert.strictEqual(full?.sessionId, "sess-42");
+        assert.strictEqual(full?.session, previousSession);
         assert.strictEqual(full?.checkoutPath, "/repos/gh");
         assert.include(full?.prompt ?? "", "triage-agent");
         assert.include(full?.prompt ?? "", "TRIAGE-DECISION");
@@ -850,7 +857,8 @@ describe("Executor.execute", () => {
 
         yield* executor.execute(implementWorkspace, implementItem);
         const captured = yield* Ref.get(requests);
-        assert.strictEqual(captured[1]?.sessionId, "sess-42");
+        assert.strictEqual(captured[1]?.session, run?.session);
+        assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1001,8 +1009,11 @@ describe("Executor.execute", () => {
         yield* executor.execute(followUpWorkspace, followUpItem);
 
         const captured = yield* Ref.get(requests);
-        assert.isNull(captured[0]?.sessionId ?? null);
-        assert.strictEqual(captured[1]?.sessionId, "sess-42");
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.isNull(captured[0]?.session ?? null);
+        assert.strictEqual(captured[1]?.session, run?.session);
+        assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1022,7 +1033,7 @@ describe("Executor.execute", () => {
         yield* executor.execute(followUpWorkspace, followUpItem);
 
         const captured = yield* Ref.get(requests);
-        assert.isNull(captured[1]?.sessionId ?? null);
+        assert.isNull(captured[1]?.session ?? null);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1081,7 +1092,8 @@ describe("Executor.execute", () => {
 
         yield* executor.execute(implementWorkspace, implementItem);
         const captured = yield* Ref.get(requests);
-        assert.strictEqual(captured[1]?.sessionId, "sess-42");
+        assert.strictEqual(captured[1]?.session, firstRun?.session);
+        assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
       }).pipe(Effect.provide(layer));
     }),
   );

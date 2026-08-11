@@ -58,15 +58,19 @@ The unit that runs one candidate end to end: claim, worktree, resolve playbook, 
 _Avoid_: Runner, worker, harness
 
 **Session store**:
-The read model that folds a session's transcript out of the run ledger — given a `SessionId`, it walks every event across the runs that share the session (oldest run first) and projects them into ordered messages. Its `loadThread` mirrors the shape a `@tanstack/ai-persistence` message store returns, so when the first-party runner lands we swap this projection for that adapter with the ledger still the one source of truth. An empty transcript is `[]`, never a failure. There is no second store: the run ledger is the only place a conversation lives.
+The read model a runner pulls a session's history from, given a `SessionId`. `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first) projected into ordered messages, mirroring the shape a `@tanstack/ai-persistence` message store returns, so when the first-party runner lands we swap this projection for that adapter with the ledger still the one source of truth. `resumeHandle` hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second store: the run ledger is the only place a conversation lives.
 _Avoid_: Message store (that's the persistence library's term we're mirroring), transcript database, second store
 
+**Harness request**:
+The envelope the executor hands the harness for one run: the checkout path, the turn's prompt, model/effort, MCP skills, and a `session` reference — the `SessionId` this run continues, or null for a fresh start. It references a session rather than shipping one; no frozen transcript ever crosses the seam, so compaction can live inside the runner's loop where context actually grows. The prompt is only this run's instruction, never accumulated history.
+_Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
+
 **Harness service**:
-The engine's dispatcher — given a harness request, it routes to the registered harness runner by name. Knows nothing about any specific agent.
+The engine's dispatcher — given a harness request, it routes to the registered harness runner by name, and provides the `SessionStore` a runner pulls history through. Knows nothing about any specific agent.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
-A pluggable implementation of one agent backend: a `name` plus a `run` that returns a stream of harness events. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
+A pluggable implementation of one agent backend: a `name` plus a `run` that returns a stream of harness events. It pulls the session's history in-process from the request's reference — a CLI runner its opaque resume handle, the owned runner (later) the folded transcript. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **MCP skill assembler**:
@@ -96,6 +100,18 @@ _Avoid_: Sandboxing (that's the process boundary), chroot, jail
 **File-diff feed**:
 The stream of file-change events the owned tools produce for the live run view's diff panel. It watches the worktree, computes a unified diff per change against the run's base SHA (synthesizing an add-patch for a brand-new file), and emits each as an `AgUiEvent` — a `CUSTOM` event named `sandbox.file.diff`. This is how a run's edits show up in the diff feed without the tools having to know the UI exists.
 _Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
+
+**Policy profile**:
+The allow/ask/deny rules a run's owned tools are gated by, chosen from the playbook's resolved stage. Two engine-owned defaults over one shared tool set: **read-only** for `triage` and `verify` (read/glob/grep/webfetch; writes and shell refused), and **full** for `implement` and `follow-up` (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. Per-workspace overrides wait for settings-as-data.
+_Avoid_: Sandbox isolation (that's the process boundary; this is the decision layer above it), per-tool allowlist (bash is command-matched, not all-or-nothing)
+
+**Ask-compiles-to-deny**:
+The AFK keystone. The full allow/ask/deny vocabulary is authored in the profiles, but with no human in the session there is nothing to answer an `ask`, so `ask` compiles to `deny` before the tool runs. A denied call is not an error or a park — it returns a `denied` result the model reads and adapts to, adding no approval RPC and never handing the item to a person. The loop budget, not a human, bounds any thrashing.
+_Avoid_: Approval flow / interrupt (that's the interactive phase this defers), tool error (a denial is a normal result, not a failure)
+
+**Hard-deny rule**:
+A command-glob rule refused in every profile, in every stage — the small floor under even the full profile. Three destructive shapes: force-pushing to `main`/`master`, piping a download straight into a shell (`curl … | sh`), and recursively deleting an absolute or home path. The model is treated as fallible, not adversarial, so the globs are coarse and a hard-deny just returns `denied` like any other refusal.
+_Avoid_: Confinement (that keeps writes inside the worktree root; this bounds shell commands), sandbox isolation
 
 **Playbook skill**:
 The `SKILL.md` (and its directory) named by a playbook for a lifecycle stage, authored under `packages/engine/skills/`. Distinct from an MCP skill.

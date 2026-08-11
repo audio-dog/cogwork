@@ -48,6 +48,7 @@ import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
+import * as SessionStore from "./session-store";
 import { ticketSlug, WorktreeManager } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -180,12 +181,13 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
+  const sessionStore = SessionStore.layer.pipe(Layer.provide(adapters.runLedger));
   const base = Layer.mergeAll(
     adapters.registry,
     daemonInfoLayer,
     issueTracker,
     adapters.runLedger,
-    Harness.layer(adapters.harnessRunners),
+    Harness.layer(adapters.harnessRunners).pipe(Layer.provide(sessionStore)),
     McpSkill.layer.pipe(Layer.provide(credentials)),
     daemonEventBusLayer,
   );
