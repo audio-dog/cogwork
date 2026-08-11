@@ -1,0 +1,36 @@
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_1c726636ddd104::t_0fd423dbba59de 1,4-30,33
+apps/desktop/src/renderer/src/routes/activity.tsx
+  s_1c726636ddd104::t_9a57c9f36496cb 92-94
+  s_1c726636ddd104::t_0cc9999a7c1288 8-9,34-47,96
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_1c726636ddd104::t_90a6c09bc9d901 24-33,43,66,73-115
+apps/desktop/src/main/engine-supervisor.ts
+  s_1c726636ddd104::t_5715ad5097fe15 3,28,37,39,43,67,87-88,92-98,103
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_1c726636ddd104::t_d07a7e0060a8f2 1-61
+apps/desktop/src/main/wait-for-socket.ts
+  s_1c726636ddd104::t_1bf6a9e6e6e8f2 1-39
+apps/desktop/src/renderer/src/features/engine-offline.tsx
+  s_1c726636ddd104::t_2a6b8a7c1c1dbd 1-11
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_1c726636ddd104::t_abc2d726cd0d6c 20-35
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_1c726636ddd104::t_09e55fb3499083 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "2c8f043e7b9776c376824e7584d337c693cb1b3f",
+  "prompts": {},
+  "sessions": {
+    "s_1c726636ddd104": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46f2982d-b1ca-44ac-8b17-9a451a98a9c3",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
