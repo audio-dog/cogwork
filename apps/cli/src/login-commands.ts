@@ -9,7 +9,7 @@ import * as Flag from "effect/unstable/cli/Flag";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { layer as credentialsLayer } from "./credentials";
 import { loadFromDisk } from "./loader";
-import { browserOpenerLayer, type LinearLoginConfig, loginLinear } from "./login";
+import { browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear, ProviderKeyError } from "./login";
 import { defaultConfigHome, defaultCredentialsPath } from "./paths";
 
 class LoginConfigError extends Schema.TaggedErrorClass<LoginConfigError>()("LoginConfigError", {
@@ -92,4 +92,31 @@ const linearCommand = Command.make("linear", {
   credentials: credentialsFlag,
 }).pipe(Command.withHandler(runLogin));
 
-export const loginCommand = Command.make("login").pipe(Command.withSubcommands([linearCommand]));
+const providerFlag = Flag.string("provider").pipe(
+  Flag.withDescription("Provider id to store a key for (anthropic, openai, google, openrouter)"),
+);
+
+const runKeyLogin = (options: { readonly provider: string; readonly credentials: string }) =>
+  Effect.gen(function* () {
+    yield* Console.error(`Paste your ${options.provider} API key, then press Enter and Ctrl-D:`);
+    // Read from stdin, never an argv flag, so the key stays out of shell history and the process table.
+    const key = yield* Effect.tryPromise({
+      try: () => Array.fromAsync(process.stdin).then((chunks) => Buffer.concat(chunks).toString("utf8")),
+      catch: (cause) =>
+        new ProviderKeyError({
+          message: `could not read the api key from stdin: ${cause instanceof Error ? cause.message : String(cause)}`,
+        }),
+    });
+    const result = yield* loginKey({ provider: options.provider, key });
+    yield* Console.log(`Stored an API key for ${result.displayName}.`);
+  }).pipe(
+    Effect.provide(credentialsLayer(options.credentials).pipe(Layer.provide(FetchHttpClient.layer))),
+    Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
+  );
+
+const keyCommand = Command.make("key", {
+  provider: providerFlag,
+  credentials: credentialsFlag,
+}).pipe(Command.withHandler(runKeyLogin));
+
+export const loginCommand = Command.make("login").pipe(Command.withSubcommands([linearCommand, keyCommand]));
