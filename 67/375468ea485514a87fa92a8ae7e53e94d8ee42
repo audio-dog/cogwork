@@ -1,0 +1,20 @@
+packages/engine/src/tools/policy.ts
+  s_96d7765b352683::t_1f844ae2fa6ed4 11-14,22,27-28,31,37,50-62,64,66-74,78-79,81-82,99-103
+  s_96d7765b352683::t_8b1148c4eeaeb9 1-10,15-21,23-26,29-30,32-36,38-49,63,65,75-77,80,83-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "67375468ea485514a87fa92a8ae7e53e94d8ee42",
+  "prompts": {},
+  "sessions": {
+    "s_96d7765b352683": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4cd67a00-7797-41ed-af19-8a0f7a8e0bd7",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
