@@ -1,9 +1,13 @@
 import { Badge } from "@clanker-forge/ui/components/badge";
 import { Button } from "@clanker-forge/ui/components/button";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@clanker-forge/ui/components/sidebar";
 import { Switch } from "@clanker-forge/ui/components/switch";
+import { TooltipProvider } from "@clanker-forge/ui/components/tooltip";
 import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "@remixicon/react";
-import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
+import { AttentionRail } from "../components/attention-rail";
+import { NavRail } from "../components/nav-rail";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
 import { useChromeStore } from "../store/chrome";
 
@@ -36,48 +40,42 @@ function EngineControl() {
   );
 }
 
-function NavLink({ to, label }: { to: string; label: string }) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  return (
-    <Button size="sm" variant={pathname === to ? "secondary" : "ghost"} render={<Link to={to} />}>
-      {label}
-    </Button>
-  );
-}
-
 function RootLayout() {
-  const railCollapsed = useChromeStore((state) => state.railCollapsed);
-  const toggleRail = useChromeStore((state) => state.toggleRail);
+  const attentionCollapsed = useChromeStore((state) => state.attentionCollapsed);
+  const toggleAttention = useChromeStore((state) => state.toggleAttention);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-3">
-        <div className="flex items-center gap-2">
-          <Button
-            aria-label={railCollapsed ? "Expand rail" : "Collapse rail"}
-            size="icon-sm"
-            variant="ghost"
-            onClick={toggleRail}
-          >
-            {railCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
-          </Button>
-          <h1 className="text-lg font-semibold">clanker-forge</h1>
-        </div>
-        <EngineControl />
-      </header>
+    <TooltipProvider>
+      <SidebarProvider>
+        <NavRail />
+        <SidebarInset className="h-svh overflow-hidden">
+          <header className="flex items-center justify-between border-b px-6 py-3">
+            <div className="flex items-center gap-2">
+              <SidebarTrigger />
+              <h1 className="text-lg font-semibold">clanker-forge</h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <EngineControl />
+              <Button
+                aria-label={attentionCollapsed ? "Show attention" : "Hide attention"}
+                size="icon-sm"
+                variant="ghost"
+                onClick={toggleAttention}
+              >
+                {attentionCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
+              </Button>
+            </div>
+          </header>
 
-      <div className="flex flex-1">
-        {!railCollapsed && (
-          <nav className="flex w-44 flex-col gap-1 border-r p-3">
-            <NavLink to="/" label="Overview" />
-            <NavLink to="/activity" label="Activity" />
-          </nav>
-        )}
-        <main className="flex-1 p-6">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+          <div className="flex min-h-0 flex-1">
+            <div className="min-w-0 flex-1">
+              <Outlet />
+            </div>
+            {!attentionCollapsed && <AttentionRail />}
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
 

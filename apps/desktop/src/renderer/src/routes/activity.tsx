@@ -92,8 +92,9 @@ function ActivityPage() {
   const { status } = useEngineStatus();
   const phase = enginePhase(status);
 
-  if (phase === "up") return <LiveActivity />;
-  return <EngineOfflineEmpty phase={phase} />;
+  return (
+    <div className="p-6">{phase === "up" ? <LiveActivity /> : <EngineOfflineEmpty phase={phase} />}</div>
+  );
 }
 
 export const Route = createFileRoute("/activity")({
