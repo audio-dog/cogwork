@@ -33,11 +33,13 @@ export interface RawIssue {
 
 export interface RawPull {
   readonly number: number;
+  readonly url: string;
   readonly authorLogin: string;
   readonly authorAssociation: string;
   readonly draft: boolean;
   readonly headSha: string;
   readonly headRef: string;
+  readonly updatedAtMillis: number;
 }
 
 export interface RawComment {
@@ -80,10 +82,12 @@ const IssueSchema = Schema.Struct({
 
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
+  html_url: Schema.optional(Schema.NullOr(Schema.String)),
   user: Schema.Struct({ login: Schema.String }),
   draft: Schema.optional(Schema.Boolean),
   head: Schema.Struct({ sha: Schema.String, ref: Schema.String }),
   author_association: Schema.optional(Schema.String),
+  updated_at: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
 const PullDetailSchema = Schema.Struct({
@@ -327,11 +331,13 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       return pulls.map(
         (pull): RawPull => ({
           number: pull.number,
+          url: pull.html_url || `https://github.com/${repo.owner}/${repo.name}/pull/${pull.number}`,
           authorLogin: pull.user.login,
           authorAssociation: pull.author_association ?? "NONE",
           draft: pull.draft ?? false,
           headSha: pull.head.sha,
           headRef: pull.head.ref,
+          updatedAtMillis: millisFromIso(pull.updated_at ?? null),
         }),
       );
     }),
