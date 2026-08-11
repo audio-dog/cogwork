@@ -1,0 +1,66 @@
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_4ef52fd35de8da::t_13a9245e02703d 22-29
+packages/cursor-acp/src/harness.ts
+  s_4ef52fd35de8da::t_7bba13144e052e 3
+  s_4ef52fd35de8da::t_ce43ffa71c7855 44-47
+  s_4ef52fd35de8da::t_719ac9f2b52101 42-43
+  s_4ef52fd35de8da::t_220c8e20c26fd0 174-176,197,202
+packages/engine/src/executor.test.ts
+  s_4ef52fd35de8da::t_3b42212f8803ca 558
+  s_4ef52fd35de8da::t_2b897ea18f15a5 34
+  s_4ef52fd35de8da::t_b5401b83b126b5 709-713
+  s_4ef52fd35de8da::t_0339a5f9ddc6b3 860-861
+  s_4ef52fd35de8da::t_e4ac20c97ae3dd 1036
+  s_4ef52fd35de8da::t_cfb99660c43200 773,776
+  s_4ef52fd35de8da::t_ffa0225cd83319 1012-1016
+  s_4ef52fd35de8da::t_bb0e8695f81eea 817,820
+  s_4ef52fd35de8da::t_df978c3ff5168c 339-342,346-347,354
+  s_4ef52fd35de8da::t_fd379557d3429d 741
+  s_4ef52fd35de8da::t_27b1a23bcc30f3 1095-1096
+packages/engine/src/daemon.ts
+  s_4ef52fd35de8da::t_ccccfc42caac57 50
+  s_4ef52fd35de8da::t_496abeb6014ed9 202,208
+packages/cursor-acp/CONTEXT.md
+  s_4ef52fd35de8da::t_8ff96c0e9a2d20 13
+packages/engine/CONTEXT.md
+  s_4ef52fd35de8da::t_1ebecaa2e275bd 61
+  s_4ef52fd35de8da::t_c06d22e45197c1 64-67,69,73
+CONTEXT-MAP.md
+  s_4ef52fd35de8da::t_e129c8bf93abd2 44
+packages/engine/src/executor.ts
+  s_4ef52fd35de8da::t_35d3034b047a89 516
+  s_4ef52fd35de8da::t_d229ad1d826bce 71
+  s_4ef52fd35de8da::t_5d9b5226d2274b 562,570
+  s_4ef52fd35de8da::t_6a508290e4b06e 303,307
+  s_4ef52fd35de8da::t_0772a31823df8a 158,163
+  s_4ef52fd35de8da::t_acc09568aa97e7 283
+  s_4ef52fd35de8da::t_7f6211a1f32e01 419
+packages/cursor-acp/src/harness.test.ts
+  s_4ef52fd35de8da::t_f7894fe0033e1e 6
+  s_4ef52fd35de8da::t_17da030b286ad9 48-61
+packages/engine/src/session-store.test.ts
+  s_4ef52fd35de8da::t_42799ee6ac31bd 109-145
+packages/engine/src/session-store.ts
+  s_4ef52fd35de8da::t_e66509ee4559b2 81-83
+  s_4ef52fd35de8da::t_2a01b825a03942 13,23
+packages/engine/src/harness.ts
+  s_4ef52fd35de8da::t_b2f86633d5f914 31,47-50,55-56,61-63,65
+  s_4ef52fd35de8da::t_7532c7e7b988cb 1,3,8,16
+  s_4ef52fd35de8da::t_c6c02d61a092d3 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "af124b86a5fb5f26722f86d683f153edb440d24d",
+  "prompts": {},
+  "sessions": {
+    "s_4ef52fd35de8da": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "54bdd1be-0766-4570-96a6-7d380a0985ef",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
