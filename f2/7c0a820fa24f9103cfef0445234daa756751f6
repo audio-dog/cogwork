@@ -1,0 +1,115 @@
+apps/cli/CONTEXT.md
+  s_2470657004a773::t_9d4d8fd0f7cc17 23-24
+apps/cli/src/platform.test.ts
+  s_2470657004a773::t_33ed13022f55a8 1,10,112-153
+apps/cli/src/platform.ts
+  s_2470657004a773::t_7bfe50557f4d23 1,158-180
+apps/cli/src/rpc.ts
+  s_2470657004a773::t_d7c92f3e16033c 1,3,39-46,55-63,68
+apps/cli/src/watch.test.ts
+  s_2470657004a773::t_f2f1f436346823 2,25
+packages/contracts/CONTEXT.md
+  s_2470657004a773::t_1ac9fc0f7a220c 80,114-119,128,131-134
+packages/contracts/src/ag-ui.ts
+  s_2470657004a773::t_47b1ee753132c8 5-41,43,45-48
+packages/contracts/src/daemon.ts
+  s_2470657004a773::t_d6f1b6609ae09f 15-33,38,46,54,62
+packages/contracts/src/run.ts
+  s_2470657004a773::t_92d9a254204178 2,92
+packages/cursor-acp/src/harness.test.ts
+  s_2470657004a773::t_b46483ac471032 2,6,47-94
+packages/cursor-acp/src/harness.ts
+  s_2470657004a773::t_cb7029cb10e286 65
+packages/engine/CONTEXT.md
+  s_2470657004a773::t_5dd2ccc1fc8a47 13,84-99,113,141
+packages/engine/package.json
+  s_2470657004a773::t_16a46e26d0a390 16-17
+packages/engine/src/classify.test.ts
+  s_2470657004a773::t_31df44ca15b6bc 16,23-24,30
+packages/engine/src/context-assembler.test.ts
+  s_2470657004a773::t_18233c11df97eb 1-201
+packages/engine/src/context-assembler.ts
+  s_2470657004a773::t_667b8461ce251d 1-134
+packages/engine/src/context-fs.ts
+  s_2470657004a773::t_60861b13d4a2d1 1-24
+packages/engine/src/coordination.ts
+  s_2470657004a773::t_abb1efa43bd2c3 49-50
+packages/engine/src/daemon-composition.test.ts
+  s_2470657004a773::t_531af66fc228dd 1-92
+packages/engine/src/daemon.ts
+  s_2470657004a773::t_c56227287a3315 5,10,20-31,33-39,41,43-49,106-112,115-143,179-225
+packages/engine/src/engine.test.ts
+  s_2470657004a773::t_d1e2302219984a 160,198,205-206,212,492,517,538-598
+packages/engine/src/follow-up.test.ts
+  s_2470657004a773::t_ce5ef985127206 11-12,18
+packages/engine/src/follow-up.ts
+  s_2470657004a773::t_fb6b9f4bed29e8 18-19,25
+packages/engine/src/github/adapter.ts
+  s_2470657004a773::t_14fb253af325fa 8,30-31,105,111-112,143,146
+packages/engine/src/github/client.ts
+  s_2470657004a773::t_35fce545a428b7 36,42,85,90,334,340
+packages/engine/src/github/github-helpers.test.ts
+  s_2470657004a773::t_e6789582781620 35,41
+packages/engine/src/github/github.test.ts
+  s_2470657004a773::t_1137e26e7955e1 11,31,179-192,207,212,352-353,355,360,373-414,444,510-546,839,841,852,893,921-922,928,954,957,969,1020,1022,1036
+packages/engine/src/github/provider.ts
+  s_2470657004a773::t_b8f550f795d4b4 135-136,142
+packages/engine/src/index.ts
+  s_2470657004a773::t_fa1dd7ecf3f7e3 1-2,24
+packages/engine/src/issue-tracker.ts
+  s_2470657004a773::t_e1f98d610dbf56 17-18,25,82-83
+packages/engine/src/linear/adapter.ts
+  s_2470657004a773::t_856f1f49b1db97 1,8,103,109-110,150,153
+packages/engine/src/linear/linear.test.ts
+  s_2470657004a773::t_5d266d4e5f56b4 329-330,332,343,423,491
+packages/engine/src/mcp-skill.ts
+  s_2470657004a773::t_f5e80fbb23d8a1 12,68-70,73
+packages/engine/src/observe.ts
+  s_2470657004a773::t_a25c68414c6e8c 15
+packages/engine/src/recovery.test.ts
+  s_2470657004a773::t_5378b9de861932 72,84,96
+packages/engine/src/recovery.ts
+  s_2470657004a773::t_d9686f545b9408 179-180
+packages/engine/src/run-event-bus.ts
+  s_2470657004a773::t_32638257d41d46 2,14,21
+packages/engine/src/tools/confinement.test.ts
+  s_2470657004a773::t_e80fb9a23c328d 1-36
+packages/engine/src/tools/confinement.ts
+  s_2470657004a773::t_057ed0514f5eb8 1-29
+packages/engine/src/tools/errors.ts
+  s_2470657004a773::t_1c7364a4930a54 1-20
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_2470657004a773::t_28c2c257b1697d 1-102
+packages/engine/src/tools/file-diff-feed.ts
+  s_2470657004a773::t_1c77cf3273384c 1-100
+packages/engine/src/tools/index.ts
+  s_2470657004a773::t_eec9af1ec49c74 1-28
+packages/engine/src/tools/owned-tools.test.ts
+  s_2470657004a773::t_2ec51488729c9f 1-174
+packages/engine/src/tools/owned-tools.ts
+  s_2470657004a773::t_82c0238601f564 1-300
+packages/engine/src/tools/sandbox.ts
+  s_2470657004a773::t_a79914209badee 1-26
+packages/engine/src/watch-activity.test.ts
+  s_2470657004a773::t_96ad76f1afa9b0 188-235
+pnpm-lock.yaml
+  s_2470657004a773::t_75a21f0d1cd473 171-176
+packages/engine/src/executor.ts
+  s_2470657004a773::t_8cb4b546189115 223-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f27c0a820fa24f9103cfef0445234daa756751f6",
+  "prompts": {},
+  "sessions": {
+    "s_2470657004a773": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e6a6fd11-cfbc-468a-8c90-3606a3ca3752",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
