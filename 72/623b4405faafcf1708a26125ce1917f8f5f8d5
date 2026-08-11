@@ -1,0 +1,19 @@
+packages/engine/src/tools/index.ts
+  s_96d7765b352683::t_ecf3407ec26840 28-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "72623b4405faafcf1708a26125ce1917f8f5f8d5",
+  "prompts": {},
+  "sessions": {
+    "s_96d7765b352683": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4cd67a00-7797-41ed-af19-8a0f7a8e0bd7",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
