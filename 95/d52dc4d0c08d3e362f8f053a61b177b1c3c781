@@ -1,0 +1,39 @@
+packages/contracts/src/run.ts
+  s_4f59d3253a1e44::t_8956a1f62a05fe 2
+  s_4f59d3253a1e44::t_a366e7ed5805f5 66
+packages/cursor-acp/src/harness.ts
+  s_4f59d3253a1e44::t_3ce26a9b00b190 65
+packages/cursor-acp/src/harness.test.ts
+  s_4f59d3253a1e44::t_78bf0ebf70f046 47-94
+  s_4f59d3253a1e44::t_f7afe7c1e3dd22 2,6
+packages/engine/src/run-event-bus.ts
+  s_4f59d3253a1e44::t_6a36d5b59cc6cf 2,14,21
+packages/contracts/src/ag-ui.ts
+  s_4f59d3253a1e44::t_5ae6ceef339c69 45
+  s_4f59d3253a1e44::t_8a31f2aca78b0a 5-41,43,46-48
+packages/contracts/CONTEXT.md
+  s_4f59d3253a1e44::t_be1029f24f4b84 114-119
+  s_4f59d3253a1e44::t_2d2af485026624 80
+apps/cli/src/watch.test.ts
+  s_4f59d3253a1e44::t_0847133badd9c9 2
+  s_4f59d3253a1e44::t_b8e37578789949 25
+packages/engine/src/watch-activity.test.ts
+  s_4f59d3253a1e44::t_3d0ee38d38e824 188-211,213-235
+  s_4f59d3253a1e44::t_0acb56f60ee9c1 212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "95d52dc4d0c08d3e362f8f053a61b177b1c3c781",
+  "prompts": {},
+  "sessions": {
+    "s_4f59d3253a1e44": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7f7410b0-efce-43f3-b327-a3d7c4138e67",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
