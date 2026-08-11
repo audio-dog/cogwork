@@ -6,6 +6,7 @@ import type {
   LifecycleStage,
   NeedsHumanItem,
   NeedsHumanReason,
+  PrSummary,
   SessionId,
 } from "@clanker-forge/contracts";
 import { stagePriority } from "@clanker-forge/contracts";
@@ -36,6 +37,17 @@ type Outcome =
   | { readonly kind: "blocked" }
   | { readonly kind: "needs-human"; readonly reason: NeedsHumanReason }
   | { readonly kind: "drop" };
+
+const prSummaryOf = (pr: ObservedPr): PrSummary => ({
+  number: pr.number,
+  url: pr.url,
+  checks: pr.checks,
+  review: pr.review,
+  baseDivergence: pr.baseDivergence,
+  waitingSinceMillis: pr.waitingSinceMillis,
+});
+
+const prFields = (item: ObservedItem) => (item.pr ? { pr: prSummaryOf(item.pr) } : {});
 
 const prStage = (pr: ObservedPr) => {
   if (triggersFollowUp(pr)) return "follow-up";
@@ -80,7 +92,14 @@ const byStagePriority = (a: EligibleWork, b: EligibleWork) =>
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   const priorFailures = consecutiveFailures(item, stage);
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
-  return { id: item.id, title: item.title, stage, priorFailures, ...(followUp ? { followUp } : {}) };
+  return {
+    id: item.id,
+    title: item.title,
+    stage,
+    priorFailures,
+    ...(followUp ? { followUp } : {}),
+    ...prFields(item),
+  };
 };
 
 export const classify = (items: ReadonlyArray<ObservedItem>) => {
@@ -89,14 +108,26 @@ export const classify = (items: ReadonlyArray<ObservedItem>) => {
     .flatMap(({ item, outcome }) => (outcome.kind === "eligible" ? [eligibleWork(item, outcome.stage)] : []))
     .sort(byStagePriority);
   const claimed = outcomes.flatMap(({ item, outcome }) =>
-    outcome.kind === "claimed" ? [{ id: item.id, title: item.title, claim: outcome.claim }] : [],
+    outcome.kind === "claimed"
+      ? [{ id: item.id, title: item.title, claim: outcome.claim, ...prFields(item) }]
+      : [],
   );
   const blocked = outcomes.flatMap(({ item, outcome }) =>
-    outcome.kind === "blocked" ? [{ id: item.id, title: item.title, openBlockers: item.openBlockers }] : [],
+    outcome.kind === "blocked"
+      ? [{ id: item.id, title: item.title, openBlockers: item.openBlockers, ...prFields(item) }]
+      : [],
   );
   const needsHuman = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "needs-human"
-      ? [{ id: item.id, title: item.title, reason: outcome.reason, proposal: item.proposal }]
+      ? [
+          {
+            id: item.id,
+            title: item.title,
+            reason: outcome.reason,
+            proposal: item.proposal,
+            ...prFields(item),
+          },
+        ]
       : [],
   );
   return { eligible, claimed, blocked, needsHuman };

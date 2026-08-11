@@ -37,7 +37,7 @@ import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
-import { prByItem, schedulerStatsOf, withPr } from "./read-model";
+import { schedulerStatsOf, workspaceInfoOf } from "./read-model";
 import {
   type ReconcileSnapshot,
   ReconcileWorker,
@@ -59,8 +59,6 @@ export const daemonInfoLayer = Layer.effect(
   DaemonInfo,
   Effect.map(Clock.currentTimeMillis, (startedAtMillis) => ({ startedAtMillis })),
 );
-
-const okPoll = { status: "ok" as const };
 
 const decodeAgUiEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
 
@@ -102,23 +100,6 @@ export const watchEvents = Effect.fn("Daemon.watchEvents")(function* () {
 const statesByName = (snapshot: ReconcileSnapshot) =>
   new Map(snapshot.workspaces.map((state) => [state.name, state]));
 
-const workspaceInfo = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState | undefined) => {
-  const attach = withPr(prByItem(state));
-  return {
-    name: workspace.config.name,
-    checkoutPath: workspace.config.checkoutPath,
-    issueTracker: workspace.config.issueTracker.type,
-    harness: workspace.config.harness.preferred,
-    poll: state?.poll ?? okPoll,
-    eligible: (state?.eligible ?? []).map((work) =>
-      attach({ id: work.id, title: work.title, stage: work.stage }),
-    ),
-    claimed: (state?.claimed ?? []).map(attach),
-    blocked: (state?.blocked ?? []).map(attach),
-    needsHuman: (state?.needsHuman ?? []).map(attach),
-  };
-};
-
 export const handlersLayer = DaemonRpcs.toLayer({
   GetStatus: Effect.fn("Daemon.GetStatus")(function* () {
     const registry = yield* WorkspaceRegistry;
@@ -134,7 +115,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
       scheduler: schedulerStatsOf(scheduler.config, stats),
-      workspaces: registry.workspaces.map((w) => workspaceInfo(w, stateByName.get(w.config.name))),
+      workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
       failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
     };
   }),
