@@ -1,11 +1,13 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import { WorkItemId } from "./base-schemas";
-import { DaemonStatus } from "./daemon";
-import { DaemonEvent } from "./daemon-event";
+import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
+import { DaemonStatus, SchedulerStats, SchedulingState } from "./daemon";
+import { ClassifiedItem, DaemonEvent } from "./daemon-event";
+import { IssueTrackerError } from "./issue-tracker";
 import { PrincipalMiddleware } from "./principal";
-import { RunActivity, RunEvent, RunId, RunSummary } from "./run";
+import { RunActivity, RunEvent, RunId, RunStatus, RunSummary } from "./run";
+import { TriageRole } from "./triage";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
 
@@ -41,6 +43,44 @@ export const DaemonQueries = RpcGroup.make(
   WatchEvents,
 ).middleware(PrincipalMiddleware);
 
-export const DaemonCommands = RpcGroup.make();
+export class RunNotFound extends Schema.TaggedErrorClass<RunNotFound>()("RunNotFound", {
+  runId: RunId,
+}) {}
+
+export class RunAlreadyFinished extends Schema.TaggedErrorClass<RunAlreadyFinished>()("RunAlreadyFinished", {
+  runId: RunId,
+  status: RunStatus,
+}) {}
+
+export class WorkItemNotFound extends Schema.TaggedErrorClass<WorkItemNotFound>()("WorkItemNotFound", {
+  workspace: WorkspaceId,
+  workItem: WorkItemId,
+}) {}
+
+export const CancelRun = Rpc.make("CancelRun", {
+  payload: { runId: RunId, note: Schema.optional(TrimmedNonEmptyString) },
+  success: ClassifiedItem,
+  error: Schema.Union([RunNotFound, RunAlreadyFinished]),
+});
+
+export const Reclassify = Rpc.make("Reclassify", {
+  payload: {
+    workspace: WorkspaceId,
+    workItem: WorkItemId,
+    role: TriageRole,
+    note: Schema.optional(TrimmedNonEmptyString),
+  },
+  success: Schema.NullOr(ClassifiedItem),
+  error: Schema.Union([WorkItemNotFound, IssueTrackerError]),
+});
+
+export const SetScheduling = Rpc.make("SetScheduling", {
+  payload: { desired: SchedulingState },
+  success: SchedulerStats,
+});
+
+export const DaemonCommands = RpcGroup.make(CancelRun, Reclassify, SetScheduling).middleware(
+  PrincipalMiddleware,
+);
 
 export const DaemonRpcs = DaemonQueries.merge(DaemonCommands);

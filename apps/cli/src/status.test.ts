@@ -27,6 +27,7 @@ const status = (over: Partial<DaemonStatus> = {}): DaemonStatus => ({
   startedAtMillis: 0,
   uptimeMillis: 1000,
   scheduler: {
+    scheduling: "running",
     globalInFlight: 0,
     globalLimit: 4,
     dailyBudgetUsed: 0,
@@ -135,6 +136,7 @@ describe("formatStatus", () => {
     const output = formatStatus(
       status({
         scheduler: {
+          scheduling: "paused",
           globalInFlight: 1,
           globalLimit: 4,
           dailyBudgetUsed: 7,
@@ -149,7 +151,7 @@ describe("formatStatus", () => {
         failures: [{ source: "broken.workspace.ts", message: "boom" }],
       }),
     );
-    assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 (forge=1)");
+    assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 · paused (forge=1)");
     assert.include(output, "      paused: auth (needs attention) — auth failed");
     assert.include(output, "  ! broken.workspace.ts: boom");
   });

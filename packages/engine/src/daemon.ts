@@ -22,6 +22,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import { cancelRun, reclassify, setScheduling } from "./commands";
 import type { CredentialStore } from "./credential-store";
 import {
   activityOf,
@@ -46,6 +47,7 @@ import {
 } from "./reconcile";
 import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
+import { layer as runControlLayer } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
@@ -153,6 +155,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
   WatchEvents: () => Stream.unwrap(watchEvents()),
+  CancelRun: cancelRun,
+  Reclassify: reclassify,
+  SetScheduling: setScheduling,
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;
@@ -190,6 +195,7 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     Harness.layer(adapters.harnessRunners).pipe(Layer.provide(sessionStore)),
     McpSkill.layer.pipe(Layer.provide(credentials)),
     daemonEventBusLayer,
+    runControlLayer,
   );
   const services = Layer.mergeAll(reconcileLayer, Executor.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),

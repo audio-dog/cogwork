@@ -66,6 +66,7 @@ describe("applyDaemonEvent", () => {
       eventCount: 3,
     });
     const stats = schedulerStats({
+      scheduling: "running",
       globalInFlight: 1,
       globalLimit: 4,
       dailyBudgetUsed: 2,
