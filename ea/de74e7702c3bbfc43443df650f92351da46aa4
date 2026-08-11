@@ -1,0 +1,40 @@
+packages/engine/src/context-fs.ts
+  s_b47e9a9ce4edfb::t_d6f80642fcbc65 17
+  s_b47e9a9ce4edfb::t_6cb9b7e8ca637c 15
+  s_b47e9a9ce4edfb::t_a3e765eb804883 1-14,16,18-24
+packages/engine/src/index.ts
+  s_b47e9a9ce4edfb::t_0d933caafbd5ad 1-2
+packages/engine/src/context-assembler.ts
+  s_b47e9a9ce4edfb::t_b70774825d7d8e 113-118
+  s_b47e9a9ce4edfb::t_715a9e804c20d8 55-57,63-69
+  s_b47e9a9ce4edfb::t_624a0d64c91b0a 9-10
+  s_b47e9a9ce4edfb::t_bf481599d757c5 1-8,11-54,58-62,70-112,119-133
+  s_b47e9a9ce4edfb::t_19df4541b1006d 134
+apps/cli/src/platform.ts
+  s_b47e9a9ce4edfb::t_dfdb97b5646a0f 1
+  s_b47e9a9ce4edfb::t_718f192891e20f 158-167,169-180
+  s_b47e9a9ce4edfb::t_fbda301a2a3710 168
+packages/engine/src/context-assembler.test.ts
+  s_b47e9a9ce4edfb::t_ef629e7461eb6d 175-200
+  s_b47e9a9ce4edfb::t_aaa3d862919dad 1-21,23-174,201
+  s_b47e9a9ce4edfb::t_15aed870d5671d 22
+apps/cli/src/platform.test.ts
+  s_b47e9a9ce4edfb::t_15dc145fedbff5 1,10
+  s_b47e9a9ce4edfb::t_ca525309323870 112-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "eade74e7702c3bbfc43443df650f92351da46aa4",
+  "prompts": {},
+  "sessions": {
+    "s_b47e9a9ce4edfb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4d3cadbd-de4a-4d56-869b-abf1796c5c39",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
