@@ -25,4 +25,12 @@ export {
   webFetch,
   writeFile,
 } from "./owned-tools";
+export {
+  fullProfile,
+  isPolicyDenied,
+  type OwnedToolName,
+  type PolicyDenied,
+  profileForStage,
+  readOnlyProfile,
+} from "./policy";
 export { openWorktreeSandbox, resolveBaseSha, type WorktreeSandbox } from "./sandbox";
