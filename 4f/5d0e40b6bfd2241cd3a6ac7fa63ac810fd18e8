@@ -1,0 +1,98 @@
+apps/cli/src/status.ts
+  s_df7cdfb01bd367::t_1b697f02b51da2 10-19
+  s_df7cdfb01bd367::t_36a15f37960c51 49-51
+apps/cli/src/status.test.ts
+  s_df7cdfb01bd367::t_77bf59e4422fec 42,48-54,61-64,68-82
+  s_4b3bdb99d5e48f::t_1f757141179acf 83-84
+packages/engine/src/github/github.test.ts
+  s_df7cdfb01bd367::t_46467c637f688a 937-992
+  s_df7cdfb01bd367::t_49985d2bb487f6 9
+packages/engine/src/linear/client.test.ts
+  s_df7cdfb01bd367::t_bfcf062e76dca3 227,237,242
+  s_df7cdfb01bd367::t_03679b373e13cb 52
+  s_df7cdfb01bd367::t_854a8cb3543b49 251-255,262
+  s_df7cdfb01bd367::t_386fff463ae862 29,32-34
+packages/engine/src/coordination.ts
+  s_df7cdfb01bd367::t_0513431b458eb9 5
+  s_df7cdfb01bd367::t_3a95fb469fa6ed 213-224
+packages/engine/src/observe.ts
+  s_df7cdfb01bd367::t_511d467542af6f 18
+packages/engine/src/classify.ts
+  s_df7cdfb01bd367::t_a151a610ca8400 98-100
+packages/engine/src/engine.test.ts
+  s_df7cdfb01bd367::t_7d583bbb0e7fdd 165
+  s_df7cdfb01bd367::t_04e86ab7f621d0 204
+  s_df7cdfb01bd367::t_3f1179bd646349 496,499-511
+  s_df7cdfb01bd367::t_333671c5ed2a03 512-515,529
+packages/contracts/CONTEXT.md
+  s_df7cdfb01bd367::t_633a46fd8b4a38 128,131-133
+  s_df7cdfb01bd367::t_76bc06c0c95630 134
+packages/engine/src/linear/client.ts
+  s_df7cdfb01bd367::t_7b2b949ff18399 318-320
+  s_df7cdfb01bd367::t_575a6e4351279c 197,200-202,204-205
+  s_df7cdfb01bd367::t_1398bf6e019d04 95
+  s_df7cdfb01bd367::t_1f5c47c8a7078e 277
+  s_df7cdfb01bd367::t_b72481e2cacfb0 435
+  s_df7cdfb01bd367::t_6d5a1787a25c5c 67
+  s_df7cdfb01bd367::t_e985992adb7b73 198-199
+  s_df7cdfb01bd367::t_005a82abe6f2e6 203
+packages/engine/src/recovery.test.ts
+  s_df7cdfb01bd367::t_57c52ed8baade7 88
+  s_df7cdfb01bd367::t_d5899d7f128c33 101
+  s_df7cdfb01bd367::t_2b9e0857e393df 75
+packages/engine/src/github/adapter.ts
+  s_df7cdfb01bd367::t_5b242cc8516281 98-100,115
+packages/engine/src/comments.test.ts
+  s_df7cdfb01bd367::t_a34f117eb2f4dc 125-137
+  s_df7cdfb01bd367::t_0048449b5060d2 7,13
+  s_df7cdfb01bd367::t_57287ee5d38103 138-139
+packages/engine/src/classify.test.ts
+  s_df7cdfb01bd367::t_e42babb69d578c 20
+  s_df7cdfb01bd367::t_6971dad318cddd 149-158
+packages/engine/src/linear/adapter.ts
+  s_df7cdfb01bd367::t_2e96a487a742a1 5
+  s_df7cdfb01bd367::t_d7150740b36f69 98-99,114
+  s_df7cdfb01bd367::t_4a8f45ebd3f046 50
+packages/engine/src/linear/linear.test.ts
+  s_df7cdfb01bd367::t_27fedcd808e8ae 114-117
+  s_df7cdfb01bd367::t_73568dde2cb2e1 445-479
+  s_df7cdfb01bd367::t_c6fe0d689d6be9 8
+packages/engine/src/coordination.test.ts
+  s_df7cdfb01bd367::t_e31d5f4cdfac5a 24
+  s_df7cdfb01bd367::t_2f595b356ebe9d 391-410
+  s_df7cdfb01bd367::t_503da8ff1a8dcb 5
+packages/engine/src/issue-tracker.ts
+  s_df7cdfb01bd367::t_ddc32e2b0cdac3 28
+packages/engine/src/executor.ts
+  s_df7cdfb01bd367::t_225e39ad02fb54 21
+  s_df7cdfb01bd367::t_27efc57124badc 331
+packages/contracts/src/daemon.ts
+  s_df7cdfb01bd367::t_79fdb39eac558f 40
+packages/engine/src/comments.ts
+  s_df7cdfb01bd367::t_766abad40f5aad 30-32,34-40
+  s_df7cdfb01bd367::t_e7ab6bab92813f 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "4f5d0e40b6bfd2241cd3a6ac7fa63ac810fd18e8",
+  "prompts": {},
+  "sessions": {
+    "s_4b3bdb99d5e48f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "18e754af-0d20-46a4-8d28-1a90b823820b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_df7cdfb01bd367": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3241e472-d4f0-4486-aa81-c100fd4f0e75",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
