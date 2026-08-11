@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/router.tsx
+  s_0acfb9937c3810::t_c38bc8c6c042f5 1-2
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_0acfb9937c3810::t_76908bbe963247 1-4
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_0acfb9937c3810::t_bd3831baf8df63 1-4
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_0acfb9937c3810::t_b8a9ad2146019a 1-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "01d783b91782f018060e6365dab4edc64e576cd2",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
