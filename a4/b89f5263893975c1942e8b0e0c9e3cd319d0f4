@@ -1,0 +1,22 @@
+packages/engine/src/read-model.ts
+  s_0ea6a6274db916::t_a08a62b066bcc8 43-45,47-50
+  s_0ea6a6274db916::t_bfa8ad5d07476f 2,5-6
+  s_0ea6a6274db916::t_268c502f90f239 42,46
+  s_0ea6a6274db916::t_6b8f44dadc3739 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a4b89f5263893975c1942e8b0e0c9e3cd319d0f4",
+  "prompts": {},
+  "sessions": {
+    "s_0ea6a6274db916": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7fe4cdf2-e8ae-4b97-94fc-cfc5c70292b3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
