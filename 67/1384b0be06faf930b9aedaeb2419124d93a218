@@ -13,6 +13,8 @@ packages/engine/src/daemon.ts
   s_54ae1956cf9b03::t_13802554461dfb 33
   s_54ae1956cf9b03::t_8b49e6fecff29f 45
   s_54ae1956cf9b03::t_83d39d9c0d4b1e 38
+  s_54ae1956cf9b03::t_a5ceeb9be4ace8 36
+  s_54ae1956cf9b03::t_b42f07f1b65fba 184-185
 packages/engine/src/daemon-composition.test.ts
   s_54ae1956cf9b03::t_6b5e6f38c55549 11
   s_54ae1956cf9b03::t_67e9da1b3a6dac 54-61
