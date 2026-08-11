@@ -1,0 +1,55 @@
+apps/desktop/src/renderer/src/components/badges.tsx
+  s_1c726636ddd104::t_a4c0ae32050f96 1-30
+apps/desktop/src/renderer/src/components/nav-rail.tsx
+  s_1c726636ddd104::t_f5a30ead555fb9 1-106
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_1c726636ddd104::t_992738f3374cc2 8
+  s_1c726636ddd104::t_dc9e936ea15be1 1-7,9-81,83-149
+  s_1c726636ddd104::t_294814d04badaf 82
+apps/desktop/src/renderer/src/store/chrome.ts
+  s_1c726636ddd104::t_2d77801e16f11b 1,5-8,12-15
+apps/desktop/src/renderer/src/routes/activity.tsx
+  s_1c726636ddd104::t_5ee2001890c51b 32,76-80
+  s_1c726636ddd104::t_5fb0e657d7079b 81-83
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_1c726636ddd104::t_278844ecd78449 2,5
+apps/desktop/src/renderer/src/features/feed.ts
+  s_1c726636ddd104::t_52ff3c94f6298b 20-24
+  s_1c726636ddd104::t_7b99a3442173ca 1-19,25-69,72-86
+  s_1c726636ddd104::t_79b17e31266b1c 70-71
+apps/desktop/src/renderer/src/features/format.ts
+  s_1c726636ddd104::t_438690577cf4d3 1-17
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_1c726636ddd104::t_ef95df99c53504 5,7-8,45-46
+  s_1c726636ddd104::t_734a1f81128d08 49,51-53,55,58,60,65-67,70
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_1c726636ddd104::t_2c9f6e38a70bf9 67
+  s_1c726636ddd104::t_b0137f437e8a3d 84
+  s_1c726636ddd104::t_c8e436aae15af9 12
+  s_1c726636ddd104::t_2a5d9c0a74df42 11
+  s_1c726636ddd104::t_e2f0ca92fa668b 19
+  s_1c726636ddd104::t_a348f0b7ef158e 1-10,13-18,20-66,68-83,85-179
+apps/desktop/src/renderer/src/features/use-board.ts
+  s_1c726636ddd104::t_5fb9130b0a69e7 1,3-20
+  s_1c726636ddd104::t_0e591f3248e3e1 2
+packages/ui/src/components/separator.tsx
+  s_1c726636ddd104::t_0c510e70bb88c9 1-19
+packages/ui/src/components/scroll-area.tsx
+  s_1c726636ddd104::t_7bad62610fa7f6 1-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "570c596cdf8375c04c6a1bdd35435e374aa104e8",
+  "prompts": {},
+  "sessions": {
+    "s_1c726636ddd104": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "46f2982d-b1ca-44ac-8b17-9a451a98a9c3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
