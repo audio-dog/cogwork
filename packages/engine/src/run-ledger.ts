@@ -86,6 +86,11 @@ const resolveWatchTargetFrom = (runs: ReadonlyArray<RunRecord>, workItem: string
   return matches.find((run) => run.status === "running") ?? matches.at(0) ?? null;
 };
 
+const summaryOf = (events: ReadonlyMap<string, ReadonlyArray<RunEvent>>) => (run: RunRecord) => ({
+  ...run,
+  eventCount: events.get(run.id)?.length ?? 0,
+});
+
 const summarize = (
   runs: ReadonlyArray<RunRecord>,
   events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
@@ -94,7 +99,16 @@ const summarize = (
   [...runs]
     .sort((a, b) => b.startedAtMillis - a.startedAtMillis)
     .slice(0, limit)
-    .map((run) => ({ ...run, eventCount: events.get(run.id)?.length ?? 0 }));
+    .map(summaryOf(events));
+
+const summarizeRunning = (
+  runs: ReadonlyArray<RunRecord>,
+  events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
+) =>
+  [...runs]
+    .filter((run) => run.status === "running")
+    .sort((a, b) => b.startedAtMillis - a.startedAtMillis)
+    .map(summaryOf(events));
 
 const sortedEvents = (
   events: ReadonlyMap<string, ReadonlyArray<RunEvent>>,
@@ -195,6 +209,9 @@ export const makeMemory = Effect.gen(function* () {
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
         Effect.map(([runs, events]) => summarize(runs, events, limit)),
       ),
+    runningRuns: Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
+      Effect.map(([runs, events]) => summarizeRunning(runs, events)),
+    ),
     getRun: (runId: RunId) =>
       Effect.map(Ref.get(runsRef), (runs) => runs.find((run) => run.id === runId) ?? null),
     events: (runId: RunId) => Effect.map(Ref.get(eventsRef), (events) => sortedEvents(events, runId)),

@@ -145,6 +145,34 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("reports only running runs, newest first, with their event counts", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* ledger.insertRun(record("run-older", 1000));
+        yield* ledger.insertRun(record("run-newer", 3000));
+        yield* ledger.insertRun(record("run-done", 2000));
+        yield* ledger.updateRun(runId("run-done"), {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 2500,
+        });
+        yield* ledger.appendEvent(runId("run-newer"), {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 3001,
+        });
+
+        const running = yield* ledger.runningRuns;
+        const ids = running
+          .map((run) => run.id)
+          .filter((id) => id === "run-older" || id === "run-newer" || id === "run-done");
+        assert.deepStrictEqual(ids, ["run-newer", "run-older"]);
+        assert.strictEqual(running.find((run) => run.id === "run-newer")?.eventCount, 1);
+      }),
+    );
+
     it.effect("returns the most recent resumable run's session for a branch", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
