@@ -105,6 +105,10 @@ const stubCredentials = (token: string | null, source: CredentialSource, invalid
         : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
     persist: () => Effect.void,
     invalidate: (account) => Effect.sync(() => invalidated.push(account.key)),
+    providerKey: (account) =>
+      Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
+    persistProviderKey: (key) =>
+      Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
   });
 
 const withToken = (

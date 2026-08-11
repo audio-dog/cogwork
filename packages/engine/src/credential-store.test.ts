@@ -17,6 +17,7 @@ import {
   make,
   type StoredCredential,
   type StoredCredentials,
+  type StoredProviderKey,
   type StoredToken,
   type TokenRefresh,
 } from "./credential-store";
@@ -505,5 +506,112 @@ describe("CredentialStore (client credentials)", () => {
       const store = yield* CredentialStore;
       yield* store.invalidate(requesting);
     }).pipe(withEnv({})),
+  );
+});
+
+const providerAccount = { provider: "anthropic", envVars: ["ANTHROPIC_API_KEY"] } as const;
+
+const providerKey = (provider: string, key: string): StoredProviderKey => ({
+  provider,
+  key: Redacted.make(key),
+});
+
+const withProviderKeys = (keys: ReadonlyArray<StoredProviderKey>, env: Record<string, string> = {}) =>
+  Effect.provide(
+    Layer.mergeAll(
+      Layer.succeed(
+        CredentialStore,
+        make({
+          stored: {
+            load: Effect.succeed([]),
+            save: () => Effect.void,
+            loadProviderKeys: Effect.succeed(keys),
+          },
+        }),
+      ),
+      ConfigProvider.layer(ConfigProvider.fromEnv({ env })),
+    ),
+  );
+
+describe("CredentialStore (provider keys)", () => {
+  it.effect("resolves a stored key over the env var", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.providerKey(providerAccount);
+      assert.strictEqual(credential.source, "stored-key");
+      assert.strictEqual(Redacted.value(credential.key), "sk-stored");
+    }).pipe(withProviderKeys([providerKey("anthropic", "sk-stored")], { ANTHROPIC_API_KEY: "sk-env" })),
+  );
+
+  it.effect("falls back to the env var when no key is stored", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.providerKey(providerAccount);
+      assert.strictEqual(credential.source, "env");
+      assert.strictEqual(Redacted.value(credential.key), "sk-env");
+    }).pipe(withProviderKeys([], { ANTHROPIC_API_KEY: "sk-env" })),
+  );
+
+  it.effect("trims whitespace off an env-var key and ignores a blank one", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const credential = yield* store.providerKey({
+        provider: "google",
+        envVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+      });
+      assert.strictEqual(credential.source, "env");
+      assert.strictEqual(Redacted.value(credential.key), "sk-google");
+    }).pipe(withProviderKeys([], { GEMINI_API_KEY: "  ", GOOGLE_API_KEY: "  sk-google  " })),
+  );
+
+  it.effect("never hands one provider's stored key to another", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const error = yield* Effect.flip(store.providerKey(providerAccount));
+      assert.include(error.message, "ANTHROPIC_API_KEY");
+    }).pipe(withProviderKeys([providerKey("openai", "sk-openai")])),
+  );
+
+  it.effect("fails naming the env vars when neither a stored key nor an env var is set", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const error = yield* Effect.flip(
+        store.providerKey({ provider: "google", envVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] }),
+      );
+      assert.strictEqual(error.account, "google");
+      assert.include(error.message, "GEMINI_API_KEY or GOOGLE_API_KEY");
+    }).pipe(withProviderKeys([])),
+  );
+
+  it.effect("logs the source a provider key resolved from", () =>
+    Effect.gen(function* () {
+      const store = yield* CredentialStore;
+      const lines = yield* capturingLogs(store.providerKey(providerAccount));
+      assert.isTrue(lines.some((line) => line.includes("stored-key") && line.includes("anthropic")));
+    }).pipe(withProviderKeys([providerKey("anthropic", "sk-stored")])),
+  );
+
+  it.effect("persists a provider key through the wired store", () =>
+    Effect.gen(function* () {
+      const saved: Array<StoredProviderKey> = [];
+      const store = make({
+        stored: {
+          load: Effect.succeed([]),
+          save: () => Effect.void,
+          saveProviderKey: (key) => Effect.sync(() => void saved.push(key)),
+        },
+      });
+      yield* store.persistProviderKey(providerKey("openrouter", "sk-or-1"));
+      assert.strictEqual(saved.length, 1);
+      assert.strictEqual(saved[0] && Redacted.value(saved[0].key), "sk-or-1");
+    }),
+  );
+
+  it.effect("fails to persist when the store cannot save provider keys", () =>
+    Effect.gen(function* () {
+      const store = make({ stored: { load: Effect.succeed([]), save: () => Effect.void } });
+      const error = yield* Effect.flip(store.persistProviderKey(providerKey("openrouter", "sk-or-1")));
+      assert.include(error.message, "cannot persist provider keys");
+    }),
   );
 });
