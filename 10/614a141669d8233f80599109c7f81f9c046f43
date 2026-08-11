@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/activity-screen.tsx
+  s_975a296681dfb3::t_76b9cb076bbde5 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "10614a141669d8233f80599109c7f81f9c046f43",
+  "prompts": {},
+  "sessions": {
+    "s_975a296681dfb3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9854d002-05c9-4083-8ff3-1c9e4b9a89fd",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
