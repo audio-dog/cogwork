@@ -1,0 +1,19 @@
+docs/spec/next-phase.md
+  s_c9577291f3c7e4::t_87eaa0f83cc36d 1-392
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "b397e13afc9af896d90714782bf436a22dc1a7f6",
+  "prompts": {},
+  "sessions": {
+    "s_c9577291f3c7e4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d2467e7f-76f6-472a-b5c5-4bcc5cbe6d99",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
