@@ -29,7 +29,7 @@ function EventRow({ event }: { event: DaemonEvent }) {
   );
 }
 
-function ActivityPage() {
+function ActivityBody() {
   const result = useLiveEvents();
 
   if (result._tag === "Failure") {
@@ -70,6 +70,14 @@ function ActivityPage() {
         </ul>
       </CardContent>
     </Card>
+  );
+}
+
+function ActivityPage() {
+  return (
+    <div className="p-6">
+      <ActivityBody />
+    </div>
   );
 }
 

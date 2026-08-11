@@ -2,8 +2,10 @@ import { Badge } from "@clanker-forge/ui/components/badge";
 import { Button } from "@clanker-forge/ui/components/button";
 import { Switch } from "@clanker-forge/ui/components/switch";
 import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "@remixicon/react";
-import { createRootRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
+import { AttentionRail } from "../components/attention-rail";
+import { NavRail } from "../components/nav-rail";
 import { type EngineStatusValue, useEngineStatus } from "../features/use-engine-status";
 import { useChromeStore } from "../store/chrome";
 
@@ -39,46 +41,33 @@ function EngineControl() {
   );
 }
 
-function NavLink({ to, label }: { to: string; label: string }) {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  return (
-    <Button size="sm" variant={pathname === to ? "secondary" : "ghost"} render={<Link to={to} />}>
-      {label}
-    </Button>
-  );
-}
-
 function RootLayout() {
-  const railCollapsed = useChromeStore((state) => state.railCollapsed);
-  const toggleRail = useChromeStore((state) => state.toggleRail);
+  const attentionCollapsed = useChromeStore((state) => state.attentionCollapsed);
+  const toggleAttention = useChromeStore((state) => state.toggleAttention);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col">
       <header className="flex items-center justify-between border-b px-6 py-3">
-        <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold">clanker-forge</h1>
+        <div className="flex items-center gap-4">
+          <EngineControl />
           <Button
-            aria-label={railCollapsed ? "Expand rail" : "Collapse rail"}
+            aria-label={attentionCollapsed ? "Show attention" : "Hide attention"}
             size="icon-sm"
             variant="ghost"
-            onClick={toggleRail}
+            onClick={toggleAttention}
           >
-            {railCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
+            {attentionCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
           </Button>
-          <h1 className="text-lg font-semibold">clanker-forge</h1>
         </div>
-        <EngineControl />
       </header>
 
-      <div className="flex flex-1">
-        {!railCollapsed && (
-          <nav className="flex w-44 flex-col gap-1 border-r p-3">
-            <NavLink to="/" label="Overview" />
-            <NavLink to="/activity" label="Activity" />
-          </nav>
-        )}
-        <main className="flex-1 p-6">
+      <div className="flex min-h-0 flex-1">
+        <NavRail />
+        <main className="min-w-0 flex-1">
           <Outlet />
         </main>
+        {!attentionCollapsed && <AttentionRail />}
       </div>
     </div>
   );
