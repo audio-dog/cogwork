@@ -90,7 +90,7 @@ A workspace's binding of a lifecycle stage to a prompt template, playbook skill,
 _Avoid_: Workflow, pipeline
 
 **Issue tracker adapter**:
-A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
+A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`, and each adapter stamps its own — GitHub its configured `botLogin` or the `clanker-forge` fallback, Linear always `clanker-forge` — then reports on each observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
 _Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Source control provider adapter**:
@@ -118,7 +118,7 @@ The single home of the coordination-comment policy (`src/coordination.ts`), shar
 _Avoid_: Markers file (each adapter's `markers.ts` now holds only its wire codec and role-label mapping, not the policy).
 
 **Coordination markers**:
-Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. The coordination module owns the shared payload format; each adapter's wire codec only dresses it for the host. GitHub embeds markers as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments), and a Linear marker is only real at the start of a line. Claim markers carry `stage=` on both hosts; older stage-less markers still decode.
+Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. The coordination module owns the shared payload format; each adapter's wire codec only dresses it for the host. GitHub embeds markers as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments), and a Linear marker is only real at the start of a line. Claim markers carry `stage=` on both hosts; older stage-less markers still decode. A claim marker's `by=` value is each adapter's own wire detail — filled on write and matched on read to decide ownership — never a value handed down from above the seam.
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.
 
 **Coordination comment**:

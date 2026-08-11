@@ -1,10 +1,11 @@
-import { type OAuthAppConfig, type TriageRole, WorkItemId } from "@clanker-forge/contracts";
+import { type Claim, type OAuthAppConfig, type TriageRole, WorkItemId } from "@clanker-forge/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import type { CoordinationComment, CoordinationHost } from "../coordination";
 import * as Coordination from "../coordination";
 import {
+  type ClaimRequest,
   IssueTracker,
   IssueTrackerError,
   type IssueTrackerService,
@@ -99,12 +100,14 @@ const make = (client: LinearClientService): IssueTrackerService => {
       );
       const body = ledger?.body ?? "";
       const id = yield* itemId(issue.identifier);
+      const claim = claimLabeled ? Coordination.parseClaim(wireCodec, body) : null;
       return {
         id,
         title: issue.title,
         roles: rolesFrom(issue.labels, { name: issue.stateName, type: issue.stateType }, target.roleLabels),
         claimLabeled,
-        claim: claimLabeled ? Coordination.parseClaim(wireCodec, body) : null,
+        claim,
+        claimedByUs: claim?.by === Coordination.defaultClaimant,
         attempts: Coordination.parseAttempts(wireCodec, body),
         owned: ledger !== undefined,
         followUp: Coordination.parseFollowUp(wireCodec, body),
@@ -144,9 +147,10 @@ const make = (client: LinearClientService): IssueTrackerService => {
         }
         return yield* observeTarget(target);
       }),
-    claim: (workspace, id, claim) =>
+    claim: (workspace, id, request: ClaimRequest) =>
       Effect.gen(function* () {
         const target = yield* requireTarget(workspace);
+        const claim: Claim = { ...request, by: Coordination.defaultClaimant };
         yield* client.addLabel(target, id, claimLabel);
         yield* Coordination.upsertCoordination(wireCodec, coordinationHost(target, id), {
           status: Coordination.claimStatusFor(claim),

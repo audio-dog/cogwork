@@ -136,9 +136,6 @@ const retryableOf = (error: PrepareError | HarnessError) => {
 const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
-export const claimant = (workspace: RegisteredWorkspace) =>
-  workspace.config.issueTracker.botLogin ?? "clanker-forge";
-
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
 const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
 const encodeJson = Schema.encodeEffect(Schema.UnknownFromJsonString);
@@ -186,8 +183,9 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     at: number,
   ) {
-    const claim = { by: claimant(workspace), claimedAtMillis: at, stage: item.stage };
-    const result = yield* Effect.result(issueTracker.claim(workspace, item.id, claim));
+    const result = yield* Effect.result(
+      issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }),
+    );
     if (Result.isSuccess(result)) return true;
     yield* Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error: result.failure });
     return false;

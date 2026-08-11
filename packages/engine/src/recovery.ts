@@ -11,7 +11,6 @@ import {
   observedStage,
 } from "./classify";
 import { recoveryReason } from "./comments";
-import { claimant } from "./executor";
 import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -177,9 +176,8 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     observed: ReadonlyArray<ObservedItem>,
   ) {
-    const owner = claimant(workspace);
-    const claimedByUs = observed.filter((item) => item.claim?.by === owner);
-    yield* Effect.forEach(claimedByUs, (item) => recoverItem(workspace, item), { discard: true });
+    const ours = observed.filter((item) => item.claimedByUs);
+    yield* Effect.forEach(ours, (item) => recoverItem(workspace, item), { discard: true });
   });
 
   const recoverState = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState) => {

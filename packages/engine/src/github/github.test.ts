@@ -8,7 +8,7 @@ import type { CheckRun } from "../ci";
 import { classify } from "../classify";
 import * as Coordination from "../coordination";
 import type { FollowUpMarker } from "../follow-up";
-import { IssueTracker } from "../issue-tracker";
+import { type ClaimRequest, IssueTracker } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import { SourceControlProvider } from "../source-control";
@@ -28,6 +28,7 @@ import { layer as providerLayer } from "./provider";
 const id = Schema.decodeSync(WorkItemId);
 
 const defaultStatus = Coordination.defaultStatus;
+const serializeClaim = (claim: Claim) => Coordination.serializeClaim(wireCodec, claim);
 const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
 const serializeFollowUp = (marker: FollowUpMarker) => Coordination.serializeFollowUp(wireCodec, marker);
 const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
@@ -174,6 +175,20 @@ const workspace: RegisteredWorkspace = {
     harness: { preferred: "cursor" },
   }),
 };
+
+// A workspace that never names a bot login, so the adapter falls back to "clanker-forge" on write.
+const noBotWorkspace: RegisteredWorkspace = {
+  source: "gh.workspace.ts",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh-nobot",
+    checkoutPath: "/repos/gh",
+    issueTracker: { type: "github", repo: "owner/repo" },
+    harness: { preferred: "cursor" },
+  }),
+};
+
+// The GitHub adapter stamps a claim's `by` with the workspace's bot login on write.
+const observedClaim = (request: ClaimRequest): Claim => ({ by: bot.login, ...request });
 
 const withClient = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
@@ -332,13 +347,15 @@ describe("github work source adapter", () => {
   it.effect("round-trips a claim and an attempt through GitHub markers", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
+      const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
+      const claim = observedClaim(request);
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
-      yield* source.claim(workspace, id("#7"), claim);
+      yield* source.claim(workspace, id("#7"), request);
       yield* source.recordAttempt(workspace, id("#7"), attempt, "git worktree add: boom");
       const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#7");
       assert.deepStrictEqual(observed?.claim, claim);
+      assert.isTrue(observed?.claimedByUs);
       assert.deepStrictEqual(observed?.attempts, [attempt]);
       const client = yield* GitHubClient;
       const comments = botComments(yield* client.listComments(repo, 7));
@@ -346,6 +363,48 @@ describe("github work source adapter", () => {
       const { eligible, claimed } = classify(items);
       assert.strictEqual(eligible.length, 0);
       assert.deepStrictEqual(claimed[0]?.claim, claim);
+    }).pipe(
+      Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
+    ),
+  );
+
+  it.effect("reads a claim under a different bot login as not ours", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#33");
+      assert.strictEqual(observed?.claim?.by, "other-forge[bot]");
+      assert.isFalse(observed?.claimedByUs);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              number: 33,
+              title: "another daemon's claim",
+              labels: ["ready-for-agent", "clanker-forge:claimed"],
+            },
+          ],
+          comments: [
+            {
+              issue: 33,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeClaim({ by: "other-forge[bot]", claimedAtMillis: 1, stage: "implement" }),
+              ]),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("writes the clanker-forge fallback identity when no bot login is configured", () =>
+    Effect.gen(function* () {
+      const source = yield* IssueTracker;
+      const client = yield* GitHubClient;
+      yield* source.claim(noBotWorkspace, id("#7"), { claimedAtMillis: 1, stage: "implement" });
+      const bodies = (yield* client.listComments(repo, 7)).map((comment) => comment.body);
+      assert.isTrue(bodies.some((body) => body.includes("by=clanker-forge at=")));
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
     ),
@@ -380,11 +439,7 @@ describe("github work source adapter", () => {
   it.effect("stops claiming after release removes the claim marker label", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
-      yield* source.claim(workspace, id("#7"), {
-        by: "clanker-forge",
-        claimedAtMillis: 1,
-        stage: "implement",
-      });
+      yield* source.claim(workspace, id("#7"), { claimedAtMillis: 1, stage: "implement" });
       yield* source.release(workspace, id("#7"));
       const items = yield* observeItems(workspace);
       assert.isNull(items.find((item) => item.id === "#7")?.claim ?? null);
@@ -742,9 +797,9 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* GitHubClient;
-      const first: Claim = { by: "clanker-forge", claimedAtMillis: 10, stage: "implement" };
+      const first = { claimedAtMillis: 10, stage: "implement" } as const;
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 11 };
-      const second: Claim = { by: "clanker-forge", claimedAtMillis: 12, stage: "implement" };
+      const second = { claimedAtMillis: 12, stage: "implement" } as const;
       yield* source.claim(workspace, id("#11"), first);
       yield* source.recordAttempt(workspace, id("#11"), attempt);
       yield* source.claim(workspace, id("#11"), second);
@@ -755,7 +810,7 @@ describe("github work source adapter", () => {
       assert.include(comments[0]?.body ?? "", "<!-- clanker-forge:attempt");
       const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#11");
-      assert.deepStrictEqual(observed?.claim, second);
+      assert.deepStrictEqual(observed?.claim, observedClaim(second));
       assert.deepStrictEqual(observed?.attempts, [attempt]);
     }).pipe(
       Effect.provide(
@@ -796,11 +851,7 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* GitHubClient;
-      yield* source.claim(workspace, id("#14"), {
-        by: "clanker-forge",
-        claimedAtMillis: 1,
-        stage: "triage",
-      });
+      yield* source.claim(workspace, id("#14"), { claimedAtMillis: 1, stage: "triage" });
       const comments = yield* client.listComments(repo, 14);
       const ours = botComments(comments);
       assert.strictEqual(comments.length, 2);
@@ -828,14 +879,14 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* GitHubClient;
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 2, stage: "implement" };
-      yield* source.claim(workspace, id("#15"), claim);
+      const request = { claimedAtMillis: 2, stage: "implement" } as const;
+      yield* source.claim(workspace, id("#15"), request);
       const comments = botComments(yield* client.listComments(repo, 15));
       assert.strictEqual(comments.length, 2);
       assert.strictEqual(comments.filter((comment) => hasLedgerMarker(comment.body)).length, 1);
       const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#15");
-      assert.deepStrictEqual(observed?.claim, claim);
+      assert.deepStrictEqual(observed?.claim, observedClaim(request));
       // The legacy attempt sits in a comment that carries no ledger marker, so strict reads skip it.
       assert.deepStrictEqual(observed?.attempts, []);
     }).pipe(
@@ -860,16 +911,11 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* GitHubClient;
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
       const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
-      yield* source.claim(workspace, id("#16"), claim);
+      yield* source.claim(workspace, id("#16"), { claimedAtMillis: 1, stage: "triage" });
       yield* source.note(workspace, id("#16"), "Triage proposal body");
       yield* source.recordAttempt(workspace, id("#16"), attempt);
-      yield* source.claim(workspace, id("#16"), {
-        by: "clanker-forge",
-        claimedAtMillis: 3,
-        stage: "implement",
-      });
+      yield* source.claim(workspace, id("#16"), { claimedAtMillis: 3, stage: "implement" });
       const comments = botComments(yield* client.listComments(repo, 16));
       assert.strictEqual(comments.length, 2);
       const coordination = comments.find((comment) => hasLedgerMarker(comment.body));
@@ -881,11 +927,7 @@ describe("github work source adapter", () => {
       assert.include(coordination?.body ?? "", "Currently implementing this issue.");
       const observed = (yield* observeItems(workspace)).find((item) => item.id === "#16");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
-      assert.deepStrictEqual(observed?.claim, {
-        by: "clanker-forge",
-        claimedAtMillis: 3,
-        stage: "implement",
-      });
+      assert.deepStrictEqual(observed?.claim, observedClaim({ claimedAtMillis: 3, stage: "implement" }));
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 16, title: "proposal", labels: ["needs-triage"] }] })),
     ),
@@ -936,9 +978,9 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* GitHubClient;
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "triage" };
+      const request = { claimedAtMillis: 1, stage: "triage" } as const;
       const attempt: AttemptRecord = { stage: "triage", outcome: "succeeded", atMillis: 2 };
-      yield* source.claim(workspace, id("#21"), claim);
+      yield* source.claim(workspace, id("#21"), request);
       yield* source.note(
         workspace,
         id("#21"),
@@ -952,7 +994,7 @@ describe("github work source adapter", () => {
       assert.notInclude(proposal?.body ?? "", "outcome=failed");
       const observed = (yield* observeItems(workspace)).find((item) => item.id === "#21");
       assert.deepStrictEqual(observed?.attempts, [attempt]);
-      assert.deepStrictEqual(observed?.claim, claim);
+      assert.deepStrictEqual(observed?.claim, observedClaim(request));
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 21, title: "poison", labels: ["needs-triage"] }] })),
     ),
