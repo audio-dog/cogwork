@@ -77,7 +77,7 @@ One persisted, sequenced entry in a run's stream — an encoded harness event st
 _Avoid_: Log line, message
 
 **Run activity**:
-A live envelope broadcast while a run is in flight: run identity plus one harness event and its sequence. What the watch stream carries.
+A live envelope broadcast while a run is in flight: run identity (run id / sequence / timestamp), the correlation ids for grouping, and the one whole harness event. What the watch stream carries. The same shape is rebuilt when a settled run's persisted events are replayed for the run drill-in, so live and history read identically.
 _Avoid_: Run event (the persisted form), notification
 
 **Session**:
@@ -111,8 +111,12 @@ An external MCP server the engine provisions onto a run so the harness can call 
 _Avoid_: MCP server, playbook skill, tool (one server exposes many), harness tool (the harness's own built-ins), plugin, provider skill (Anthropic/OpenAI hosted sandbox bundles)
 
 **Harness event**:
-A normalized event streamed from a harness run — text, tool calls, session id, usage, finish reason. The engine persists these as run events and republishes them as run activity.
-_Avoid_: Message, token
+The whole AG-UI event a harness run streams, carried inside a stable envelope rather than curated down to a fixed set of fields. A handful of fields are named because our folds and clients read them (text delta, tool call id/name, result, session id, usage, finish reason); every other key the harness emits — tool-call input, reasoning deltas, correlation ids, per-turn cost, and AG-UI fields we don't name yet — rides along instead of being dropped at decode. The engine persists these as run events and republishes them as run activity. The first-party runner will emit AG-UI natively; cursor-acp maps its ACP stream best-effort.
+_Avoid_: Message, token, curated event (the point is that it is not curated)
+
+**Correlation ids**:
+The stable ids a client uses to thread streamed deltas back into one message or one tool call — `threadId`, `messageId`, `toolCallId` — lifted out of the harness event into the run-activity envelope so a consumer can group activity without re-parsing the whole payload. Distinct from our `RunId`, which identifies the local execution, not a span inside it.
+_Avoid_: Run id (that's the execution), message id alone (there are several)
 
 ### Daemon status (read models)
 

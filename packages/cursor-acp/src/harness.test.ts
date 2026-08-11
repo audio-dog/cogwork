@@ -1,8 +1,9 @@
 import type { Harness } from "@clanker-forge/engine";
+import { EventType, type StreamChunk } from "@tanstack/ai";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import * as Redacted from "effect/Redacted";
 import { assert, describe, it } from "vitest";
-import { mcpWorkspaceProjection } from "./harness";
+import { mcpWorkspaceProjection, toEvent } from "./harness";
 
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
@@ -41,5 +42,53 @@ describe("mcpWorkspaceProjection", () => {
 
     assert.isTrue(projection.hasSecrets);
     assert.deepStrictEqual(resolveAllSecrets(projection.secrets), { MCP_LINEAR_BEARER: "tok_123" });
+  });
+});
+
+describe("toEvent", () => {
+  it("carries a tool call result whole, args/results and all, including keys the schema never names", () => {
+    const chunk = {
+      type: EventType.TOOL_CALL_RESULT,
+      toolCallId: "call-1",
+      messageId: "msg-1",
+      content: "diff applied",
+      role: "tool",
+    } satisfies StreamChunk;
+
+    const event = toEvent(chunk);
+
+    assert.strictEqual(event.type, "TOOL_CALL_RESULT");
+    assert.strictEqual(event.content, "diff applied");
+    assert.strictEqual(event.toolCallId, "call-1");
+    assert.strictEqual(event.messageId, "msg-1");
+    assert.strictEqual(event.role, "tool");
+  });
+
+  it("carries streamed tool call arguments", () => {
+    const chunk = {
+      type: EventType.TOOL_CALL_ARGS,
+      toolCallId: "call-1",
+      delta: '{"path":"src/x.ts"}',
+    } satisfies StreamChunk;
+
+    const event = toEvent(chunk);
+
+    assert.strictEqual(event.type, "TOOL_CALL_ARGS");
+    assert.strictEqual(event.toolCallId, "call-1");
+    assert.strictEqual(event.delta, '{"path":"src/x.ts"}');
+  });
+
+  it("carries reasoning deltas", () => {
+    const chunk = {
+      type: EventType.REASONING_MESSAGE_CONTENT,
+      messageId: "msg-0",
+      delta: "weighing the two approaches",
+    } satisfies StreamChunk;
+
+    const event = toEvent(chunk);
+
+    assert.strictEqual(event.type, "REASONING_MESSAGE_CONTENT");
+    assert.strictEqual(event.delta, "weighing the two approaches");
+    assert.strictEqual(event.messageId, "msg-0");
   });
 });
