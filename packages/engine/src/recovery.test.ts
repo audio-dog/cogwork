@@ -14,8 +14,10 @@ import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
+import * as DaemonEventBus from "./daemon-event-bus";
 import type { ObservedItem } from "./issue-tracker";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -26,6 +28,7 @@ import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 
 const id = Schema.decodeSync(WorkItemId);
+const rid = Schema.decodeSync(RunId);
 const session = Schema.decodeSync(SessionId)("sess-abc");
 
 const wsA: RegisteredWorkspace = {
@@ -172,18 +175,25 @@ interface RecoveryDeps {
   readonly poll?: PollState;
 }
 
-const recoveryLayer = (deps: RecoveryDeps) =>
-  Recovery.layer.pipe(
+const recoveryLayer = (deps: RecoveryDeps) => {
+  const bus = DaemonEventBus.layer;
+  const runLedger = RunLedger.publishingLayer.pipe(
+    Layer.provide(Layer.succeed(RunLedger.CoreRunLedger, deps.ledger)),
+    Layer.provide(bus),
+  );
+  return Recovery.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
         registryLayer,
         workerLayer(deps.observed, deps.poll ?? okPoll),
         schedulerStub(deps.admitted),
         issueTrackerStub(deps.issueTracker ?? {}),
-        Layer.succeed(RunLedger.RunLedger, deps.ledger),
+        runLedger,
       ),
     ),
+    Layer.provideMerge(bus),
   );
+};
 
 describe("Recovery.recover", () => {
   it.effect("reschedules an interrupted run while holding its claim and recording no attempt", () =>
@@ -485,6 +495,55 @@ describe("Recovery.recover", () => {
           recoveryLayer({ observed: [withAttempts(claimedByUs, 0)], issueTracker, ledger, admitted }),
         ),
       );
+    }),
+  );
+
+  it.effect("announces the crash on the bus when it marks a still-running run crashed", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interruptedRun);
+      yield* Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const subscription = yield* bus.subscribe();
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const events = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "crashed"),
+          Stream.runCollect,
+        );
+        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        assert.deepStrictEqual(
+          changed.map((run) => run.status),
+          ["crashed"],
+        );
+        assert.strictEqual(changed.at(0)?.id, interruptedRun.id);
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })), Effect.scoped);
+    }),
+  );
+
+  it.effect("announces a stale-close on the bus for a leftover run it still finds running", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(crashedRun("stale-a", 1, "running"));
+      yield* ledger.insertRun(crashedRun("done-b", 2, "succeeded"));
+      yield* Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const subscription = yield* bus.subscribe();
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const events = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "failed"),
+          Stream.runCollect,
+        );
+        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        assert.deepStrictEqual(
+          changed.map((run) => run.status),
+          ["failed"],
+        );
+        assert.strictEqual(changed.at(0)?.id, rid("stale-a"));
+      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })), Effect.scoped);
     }),
   );
 });

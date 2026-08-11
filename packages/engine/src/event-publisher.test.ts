@@ -261,8 +261,7 @@ describe("DaemonEventPublisher", () => {
       ),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
-      Layer.provideMerge(RunLedger.layerMemory),
-      Layer.provideMerge(DaemonEventBus.layer),
+      Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(observing(itemsRef)),
     );

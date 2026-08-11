@@ -338,7 +338,8 @@ const provide = (
   runners: ReadonlyArray<HarnessRunner>,
   worktree: WorktreeManagerService = worktreeStub,
 ) => {
-  const runLedger = RunLedger.layerMemory;
+  const bus = DaemonEventBus.layer;
+  const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
   return Executor.layer.pipe(
     Layer.provideMerge(
@@ -346,7 +347,7 @@ const provide = (
         Layer.succeed(IssueTracker, ws),
         harnessLayer(runners).pipe(Layer.provide(sessionStore)),
         runLedger,
-        DaemonEventBus.layer,
+        bus,
         RunControl.layer,
         Layer.succeed(WorktreeManager, worktree),
         assemblerStub,

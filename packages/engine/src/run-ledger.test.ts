@@ -10,8 +10,12 @@ import {
 } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { layerMemory, RunLedger } from "./run-ledger";
+import * as DaemonEventBus from "./daemon-event-bus";
+import { layerMemory as memoryLedgerLayer, RunLedger } from "./run-ledger";
+
+const layerMemory = memoryLedgerLayer.pipe(Layer.provide(DaemonEventBus.layer));
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");

@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { RunEvent, RunId, RunRecord, Session, TokenUsage } from "@clanker-forge/contracts";
 import {
   RunEvent as RunEventSchema,
+  RunId as RunIdSchema,
   RunRecord as RunRecordSchema,
   RunSummary as RunSummarySchema,
   SessionId,
@@ -153,6 +154,7 @@ const runRecordFromRow = (row: {
 });
 
 const decodeSummary = Schema.decodeUnknownEffect(RunSummarySchema);
+const decodeRunId = Schema.decodeUnknownEffect(RunIdSchema);
 const decodeEvent = Schema.decodeUnknownEffect(RunEventSchema);
 const decodeRun = Schema.decodeUnknownEffect(RunRecordSchema);
 const decodeSession = Schema.decodeUnknownEffect(SessionSchema);
@@ -217,6 +219,16 @@ const make = (ledgerPath: string) =>
         Effect.orElseSucceed(() => [] as ReadonlyArray<A>),
       );
 
+    const writeIds = (operation: string, thunk: () => ReadonlyArray<{ readonly id: string }>) =>
+      readRows(operation, thunk).pipe(
+        Effect.flatMap((rows) =>
+          decodeAll(
+            decodeRunId,
+            rows.map((row) => row.id),
+          ),
+        ),
+      );
+
     const readRun = (operation: string, thunk: () => Parameters<typeof runRecordFromRow>[0] | undefined) =>
       Effect.try(thunk).pipe(
         Effect.tapError((cause) => warn(operation, cause)),
@@ -256,12 +268,14 @@ const make = (ledgerPath: string) =>
         }),
 
       interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
-        write("interruptRunning", () => {
-          db.update(runs)
+        writeIds("interruptRunning", () =>
+          db
+            .update(runs)
             .set({ status: "interrupted", endedAt: endedAtMillis })
             .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
-            .run();
-        }),
+            .returning({ id: runs.id })
+            .all(),
+        ),
 
       insertSession: (session: Session) =>
         write("insertSession", () => {
@@ -331,24 +345,28 @@ const make = (ledgerPath: string) =>
         ),
 
       closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
-        write("closeRunning", () => {
-          db.update(runs)
+        writeIds("closeRunning", () =>
+          db
+            .update(runs)
             .set({ status: "failed", endedAt: endedAtMillis })
             .where(
               and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")),
             )
-            .run();
-        }),
+            .returning({ id: runs.id })
+            .all(),
+        ),
 
       crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
-        write("crashRunning", () => {
-          db.update(runs)
+        writeIds("crashRunning", () =>
+          db
+            .update(runs)
             .set({ status: "crashed", endedAt: endedAtMillis })
             .where(
               and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")),
             )
-            .run();
-        }),
+            .returning({ id: runs.id })
+            .all(),
+        ),
 
       consecutiveCrashes: (workspace: string, workItem: string) =>
         readRows("consecutiveCrashes", () =>
@@ -493,4 +511,4 @@ const make = (ledgerPath: string) =>
     return service;
   });
 
-export const layer = (ledgerPath: string) => Layer.effect(RunLedger.RunLedger, make(ledgerPath));
+export const layer = (ledgerPath: string) => Layer.effect(RunLedger.CoreRunLedger, make(ledgerPath));

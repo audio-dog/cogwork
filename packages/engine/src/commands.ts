@@ -49,15 +49,6 @@ const parkedItem = (observed: ObservedItem | null) => {
   });
 };
 
-const publishRunChanged = Effect.fn("Daemon.commands.publishRunChanged")(function* (runId: RunId) {
-  const ledger = yield* RunLedger;
-  const run = yield* ledger.getRun(runId);
-  if (run === null) return;
-  const events = yield* ledger.events(runId);
-  const bus = yield* DaemonEventBus;
-  yield* bus.publishRun({ ...run, eventCount: events.length });
-});
-
 export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   readonly runId: RunId;
   readonly note?: string;
@@ -88,7 +79,6 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
       usage: run.usage,
       endedAtMillis,
     });
-    yield* publishRunChanged(payload.runId);
   }
 
   const issueTracker = yield* IssueTracker;
