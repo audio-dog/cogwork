@@ -1,0 +1,23 @@
+apps/desktop/CONTEXT.md
+  s_0acfb9937c3810::t_1fa5df6c0b2841 79-82
+  s_0acfb9937c3810::t_f83c58995924a5 60-63
+  s_0acfb9937c3810::t_398a328aa5ab95 9-12
+  s_0acfb9937c3810::t_5e8351030d36e2 47-51,54-59,64
+  s_0acfb9937c3810::t_208a0c725e63a8 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "13228da41ffd158d20ff2a4140c566f163cbd6a3",
+  "prompts": {},
+  "sessions": {
+    "s_0acfb9937c3810": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3bc24b7-e4a8-4f95-9e1f-79a241bc2d96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
