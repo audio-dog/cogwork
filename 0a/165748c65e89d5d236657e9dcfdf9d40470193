@@ -1,0 +1,26 @@
+packages/contracts/CONTEXT.md
+  s_b40385ab8707d5::t_1ac93a86c1eb3d 31-38
+packages/engine/CONTEXT.md
+  s_b40385ab8707d5::t_e3a316fa591f50 133
+  s_b40385ab8707d5::t_49b181cc65072e 32-34
+  s_b40385ab8707d5::t_c3ffcd94633475 35
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_b40385ab8707d5::t_bdb42acbdfb096 1-19,22
+  s_b40385ab8707d5::t_8b4e366330a492 20-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0a165748c65e89d5d236657e9dcfdf9d40470193",
+  "prompts": {},
+  "sessions": {
+    "s_b40385ab8707d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "368f5e22-a255-4845-b2ea-3abce0abba20",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
