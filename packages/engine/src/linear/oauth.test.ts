@@ -318,7 +318,7 @@ describe("linear oauth helpers", () => {
             },
       );
       const identity = yield* discoverIdentity("access-token");
-      assert.deepStrictEqual(identity, { organization: "acme", botUserId: "bot-user" });
+      assert.deepStrictEqual(identity, { organization: "acme", actorUserId: "bot-user" });
     }),
   );
 

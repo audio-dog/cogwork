@@ -37,13 +37,16 @@ export const StoredToken = Schema.Struct({
 });
 export type StoredToken = typeof StoredToken.Type;
 
-export const StoredCredential = Schema.Struct({
+const credentialFields = {
   issueTracker: TrimmedNonEmptyString,
   organization: TrimmedNonEmptyString,
-  botUserId: TrimmedNonEmptyString,
   token: StoredToken,
-});
+};
+
+export const StoredCredential = Schema.Struct({ ...credentialFields, actorUserId: TrimmedNonEmptyString });
 export type StoredCredential = typeof StoredCredential.Type;
+
+const StoredCredentialLegacy = Schema.Struct({ ...credentialFields, botUserId: TrimmedNonEmptyString });
 
 export const StoredProviderKey = Schema.Struct({
   provider: TrimmedNonEmptyString,
@@ -53,17 +56,23 @@ export type StoredProviderKey = typeof StoredProviderKey.Type;
 
 const CredentialFileV1 = Schema.Struct({
   version: Schema.Literal(1),
-  credentials: Schema.Array(StoredCredential),
+  credentials: Schema.Array(StoredCredentialLegacy),
+});
+
+const CredentialFileV2 = Schema.Struct({
+  version: Schema.Literal(2),
+  credentials: Schema.Array(StoredCredentialLegacy),
+  providerKeys: Schema.Array(StoredProviderKey),
 });
 
 export const CredentialFile = Schema.Struct({
-  version: Schema.Literal(2),
+  version: Schema.Literal(3),
   credentials: Schema.Array(StoredCredential),
   providerKeys: Schema.Array(StoredProviderKey),
 });
 export type CredentialFile = typeof CredentialFile.Type;
 
-export const CredentialFileWire = Schema.Union([CredentialFile, CredentialFileV1]);
+export const CredentialFileWire = Schema.Union([CredentialFile, CredentialFileV2, CredentialFileV1]);
 export type CredentialFileWire = typeof CredentialFileWire.Type;
 
 export interface CredentialFileContents {
@@ -71,14 +80,24 @@ export interface CredentialFileContents {
   readonly providerKeys: ReadonlyArray<StoredProviderKey>;
 }
 
-export const contentsOf = (file: CredentialFileWire): CredentialFileContents => ({
-  credentials: file.credentials,
-  providerKeys: file.version === 2 ? file.providerKeys : [],
+const upgradeLegacy = (credential: typeof StoredCredentialLegacy.Type) => ({
+  issueTracker: credential.issueTracker,
+  organization: credential.organization,
+  actorUserId: credential.botUserId,
+  token: credential.token,
 });
+
+export const contentsOf = (file: CredentialFileWire) => {
+  if (file.version === 3) {
+    return { credentials: file.credentials, providerKeys: file.providerKeys };
+  }
+  const providerKeys = file.version === 2 ? file.providerKeys : [];
+  return { credentials: file.credentials.map(upgradeLegacy), providerKeys };
+};
 
 export interface CredentialIdentity {
   readonly organization: string;
-  readonly botUserId: string;
+  readonly actorUserId: string;
 }
 
 export type CredentialSource = "env" | "stored-oauth" | "client-credentials";
@@ -202,7 +221,7 @@ const storedCredential = (credential: StoredCredential) =>
   ({
     source: "stored-oauth",
     token: credential.token.accessToken,
-    identity: { organization: credential.organization, botUserId: credential.botUserId },
+    identity: { organization: credential.organization, actorUserId: credential.actorUserId },
   }) satisfies Credential;
 
 const missingProviderKeyMessage = (account: ProviderAccount) =>

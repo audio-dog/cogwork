@@ -88,13 +88,13 @@ describe("login linear", () => {
         Effect.provideService(FetchHttpClient.Fetch, routedFetch),
       );
 
-      assert.deepStrictEqual(result, { organization: "acme", botUserId: "bot-user" });
+      assert.deepStrictEqual(result, { organization: "acme", actorUserId: "bot-user" });
 
       const store = yield* makeFileStore(filePath);
       const stored = yield* store.load;
       assert.strictEqual(stored.length, 1);
       assert.strictEqual(stored[0]?.organization, "acme");
-      assert.strictEqual(stored[0]?.botUserId, "bot-user");
+      assert.strictEqual(stored[0]?.actorUserId, "bot-user");
       assert.strictEqual(stored[0] && Redacted.value(stored[0].token.accessToken), "linear-access-token");
       assert.deepStrictEqual(stored[0]?.token.scopes, ["read", "write"]);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),

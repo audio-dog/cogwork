@@ -100,7 +100,7 @@ const storedToken = (expiresAtMillis: number, accessToken = "oauth-token"): Stor
 const stored = (organization: string, token: StoredToken): StoredCredential => ({
   issueTracker: "linear",
   organization,
-  botUserId: `bot-${organization}`,
+  actorUserId: `bot-${organization}`,
   token,
 });
 
@@ -134,7 +134,7 @@ describe("CredentialStore (stored)", () => {
     Effect.gen(function* () {
       const store = yield* CredentialStore;
       const credential = yield* store.bearerToken(account);
-      assert.deepStrictEqual(credential.identity, { organization: "acme", botUserId: "bot-acme" });
+      assert.deepStrictEqual(credential.identity, { organization: "acme", actorUserId: "bot-acme" });
     }).pipe(withStored([stored("acme", storedToken(far))])),
   );
 
