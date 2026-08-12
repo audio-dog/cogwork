@@ -141,12 +141,14 @@ for (const [wire, codec] of codecs) {
         humanCommentAtMillis: 1,
         noProgress: 0,
         baseDivergence: "conflict",
+        botTriggerAtMillis: 3,
       };
       const newer: FollowUpMarker = {
         checks: "passing",
         humanCommentAtMillis: 2,
         noProgress: 1,
         baseDivergence: "clean",
+        botTriggerAtMillis: 4,
       };
       const body = formatCoordinationBody(codec, {
         status: defaultStatus,
@@ -176,6 +178,7 @@ for (const [wire, codec] of codecs) {
         humanCommentAtMillis: 1,
         noProgress: 0,
         baseDivergence: "none",
+        botTriggerAtMillis: 0,
       });
     });
 
@@ -323,6 +326,7 @@ for (const [wire, codec] of codecs) {
             humanCommentAtMillis: 1,
             noProgress: 1,
             baseDivergence: "none",
+            botTriggerAtMillis: 0,
           }),
           detail: "Handing this to a human.",
         });
@@ -372,6 +376,7 @@ for (const [wire, codec] of codecs) {
             humanCommentAtMillis: 1,
             noProgress: 1,
             baseDivergence: "none",
+            botTriggerAtMillis: 0,
           }),
           detail: "Old folded detail",
         });

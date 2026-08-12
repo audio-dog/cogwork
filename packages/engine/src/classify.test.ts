@@ -27,6 +27,7 @@ const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"
   review,
   checks: "passing",
   latestHumanCommentAtMillis: null,
+  latestBotTriggerAtMillis: null,
   fresh: false,
   baseDivergence: "none",
   waitingSinceMillis: 0,
@@ -237,6 +238,7 @@ describe("classify", () => {
             humanCommentAtMillis: 0,
             noProgress: followUpNoProgressLimit - 1,
             baseDivergence: "conflict",
+            botTriggerAtMillis: 0,
           },
         }),
       }),
@@ -260,7 +262,13 @@ describe("classify", () => {
         pr: pr("pending", {
           checks: "failing",
           latestHumanCommentAtMillis: 50,
-          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 1, baseDivergence: "none" },
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 50,
+            noProgress: 1,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+          },
         }),
       }),
     ]);
@@ -275,7 +283,13 @@ describe("classify", () => {
         pr: pr("pending", {
           checks: "failing",
           latestHumanCommentAtMillis: 100,
-          followUp: { checks: "failing", humanCommentAtMillis: 50, noProgress: 2, baseDivergence: "none" },
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 50,
+            noProgress: 2,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+          },
         }),
       }),
     ]);
@@ -294,6 +308,7 @@ describe("classify", () => {
             humanCommentAtMillis: 50,
             noProgress: followUpNoProgressLimit - 1,
             baseDivergence: "none",
+            botTriggerAtMillis: 0,
           },
         }),
       }),

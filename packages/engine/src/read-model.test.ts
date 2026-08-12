@@ -39,6 +39,7 @@ const eligibleWithPr: EligibleWork = {
   followUp: {
     checks: "failing",
     humanCommentAtMillis: 0,
+    botTriggerAtMillis: 0,
     noProgress: 1,
     stalled: false,
     fresh: false,
