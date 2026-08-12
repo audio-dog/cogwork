@@ -1,0 +1,23 @@
+turbo.json
+  s_17913c510628e6::t_3efb4ca74f02af 9-12
+.github/workflows/pull-request.yml
+  s_17913c510628e6::t_0889504131506a 116-143
+package.json
+  s_17913c510628e6::t_ed825a4443b855 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bc236bffd3648f0046c61631576e40cbc1043bc8",
+  "prompts": {},
+  "sessions": {
+    "s_17913c510628e6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bbd033a9-183e-4220-a59f-676839fbf9b5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
