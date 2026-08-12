@@ -1,0 +1,57 @@
+packages/engine/src/interrupt-store.ts
+  s_0af5960e013152::t_a6b1a1de22661d 1-10,12-16,19-35,37,40,42-43
+  s_0af5960e013152::t_f9d59e6c0d9147 17-18
+  s_0af5960e013152::t_59825d638e08f3 11
+  s_0af5960e013152::t_62b3a23981de21 36,38-39,41
+packages/engine/src/session-store.ts
+  s_0af5960e013152::t_a6f894b4432abe 1
+  s_0af5960e013152::t_6b75e7c05965ef 107-108,112
+  s_0af5960e013152::t_6c96245bc1cf1c 109-111
+  s_0af5960e013152::t_20f6983675510d 7,9-14,20-21,30-35,88-106,113-115,118-124,126
+packages/engine/package.json
+  s_0af5960e013152::t_5ca71e9e039299 15-21
+packages/engine/src/tools/owned-tools.test.ts
+  s_0af5960e013152::t_1d6b7b2b8f1968 171
+  s_0af5960e013152::t_45e496ff395d17 172-173
+packages/engine/src/provider-runner.ts
+  s_0af5960e013152::t_b8f4af7a2793a1 141-147,149,164-167,170
+  s_0af5960e013152::t_9133172a32fd79 12,27,43,56
+packages/engine/CONTEXT.md
+  s_0af5960e013152::t_ca4aa9b857394b 65-66
+packages/cursor-acp/package.json
+  s_0af5960e013152::t_4df48e6611ce85 24-27
+packages/engine/src/provider-runner.test.ts
+  s_0af5960e013152::t_f30b784ae1b0d8 3-4
+  s_0af5960e013152::t_0de04a2615e324 173
+  s_0af5960e013152::t_857932dbd16be4 73-86,90
+  s_0af5960e013152::t_f86c272883e513 28
+  s_0af5960e013152::t_ce9273194acff3 19
+packages/engine/src/session-store.test.ts
+  s_0af5960e013152::t_2cf7fd55e8f7bc 67,87-89,102,109-122,126
+packages/engine/src/interrupt-store.test.ts
+  s_0af5960e013152::t_f8110c1c70d72d 1-80
+  s_0af5960e013152::t_616ccd4764fd4d 81-84
+packages/engine/src/tools/policy.test.ts
+  s_0af5960e013152::t_4392821687bcb1 116
+  s_0af5960e013152::t_6ba990d0e4e31a 117-118,133,144-146
+pnpm-lock.yaml
+  s_0af5960e013152::t_26ee9f851432ac 268-269,271-272,274-275,277-278,299-300,302-303,305-306,308-312,314-315,317-318,393-399,1659-1660,1662-1663,1665-1666,1668,1671-1672,1674-1675,1677,1679-1680,1682,1685-1695,1697,1699-1700,1703-1704,1708-1709,1711-1712,1714-1715,1732-1733,1735,4765-4767,5901,5904-5905,5909,5912-5913,5916,5920,5923-5924,5932,5934-5936,5945,5947-5950,5952-5956,5959-5961,5967,5969,5971,5973-5974,5978-5979,5985,5987-5988
+pnpm-workspace.yaml
+  s_0af5960e013152::t_d41aa10685a7a5 32-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d15e8973050b3e2d909d26e1501ae5b82eccf5b3",
+  "prompts": {},
+  "sessions": {
+    "s_0af5960e013152": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0762d123-9eaf-418b-90d4-6c0004344163",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
