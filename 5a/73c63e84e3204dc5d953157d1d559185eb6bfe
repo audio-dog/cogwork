@@ -1,0 +1,85 @@
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_bd3cd0f60dfe95::t_e457310d06bec6 86-89,96,99-115,123-129
+  s_bd3cd0f60dfe95::t_412881ac91d956 84-85
+  s_bd3cd0f60dfe95::t_3215dd59e458c8 130-132
+  s_bd3cd0f60dfe95::t_572e24934e43b7 4,6,8,10,12-14,18-36,40-42,49-70,77-79,133-140,153,170,177-180,189-192,194-201,203,206-207,209-213,217-219,221-225,229-231
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_bd3cd0f60dfe95::t_ebfd82675c8ef7 1-7,15-106,131
+  s_bd3cd0f60dfe95::t_a0b59defa4a834 107-112,142,153,155,208-210
+.agents/skills/react-composition-patterns/AGENTS.md
+  s_bd3cd0f60dfe95::t_563d88ff29aa4e 1-968
+.agents/skills/react-composition-patterns/SKILL.md
+  s_bd3cd0f60dfe95::t_381692e947bac9 1-101
+.agents/skills/react-composition-patterns/rules/architecture-avoid-boolean-props.md
+  s_bd3cd0f60dfe95::t_1b6a78e372933f 1-100
+.agents/skills/react-composition-patterns/rules/architecture-compound-components.md
+  s_bd3cd0f60dfe95::t_dac1ce9d8dc099 1-134
+.agents/skills/react-composition-patterns/rules/patterns-children-over-render-props.md
+  s_bd3cd0f60dfe95::t_53ae1bdf6e001c 1-87
+.agents/skills/react-composition-patterns/rules/patterns-explicit-variants.md
+  s_bd3cd0f60dfe95::t_774aa55d3d845f 1-100
+.agents/skills/react-composition-patterns/rules/react19-no-forwardref.md
+  s_bd3cd0f60dfe95::t_cd40be2b99a825 1-60
+.agents/skills/react-composition-patterns/rules/state-context-interface.md
+  s_bd3cd0f60dfe95::t_b8ef2eef0bcee5 1-191
+.agents/skills/react-composition-patterns/rules/state-decouple-implementation.md
+  s_bd3cd0f60dfe95::t_781881adb6ee3d 1-113
+.agents/skills/react-composition-patterns/rules/state-lift-state.md
+  s_bd3cd0f60dfe95::t_6a86ee3eadf755 1-125
+.github/workflows/pull-request.yml
+  s_bd3cd0f60dfe95::t_e605a682d5e98a 116-143
+apps/cli/src/ledger.test.ts
+  s_bd3cd0f60dfe95::t_3a4f76b61addcb 264-288
+apps/cli/src/ledger.ts
+  s_bd3cd0f60dfe95::t_5adf94789449db 13,280-289
+apps/desktop/CONTEXT.md
+  s_bd3cd0f60dfe95::t_8bb6920f5049b5 27-30
+apps/desktop/electron-builder.yml
+  s_bd3cd0f60dfe95::t_dbb0602b6b92d9 14-18
+apps/desktop/package.json
+  s_bd3cd0f60dfe95::t_8887cd35fdb562 45
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_bd3cd0f60dfe95::t_45ec968157cdad 6,8,10,98-134
+apps/desktop/src/renderer/src/features/daemon-error.test.ts
+  s_bd3cd0f60dfe95::t_2b14ec83d21d1a 1-36
+apps/desktop/src/renderer/src/features/daemon-error.ts
+  s_bd3cd0f60dfe95::t_51064d44906a6c 1-12
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_bd3cd0f60dfe95::t_19170f9d03dc1d 1-101
+apps/desktop/src/renderer/src/features/use-board.ts
+  s_bd3cd0f60dfe95::t_0de48c796d9210 3,9-13,20-22
+apps/desktop/src/renderer/src/features/use-live-events.ts
+  s_bd3cd0f60dfe95::t_6eddf589ff1b27 1,10,12-19
+apps/desktop/src/renderer/src/routes/activity.tsx
+  s_bd3cd0f60dfe95::t_7bf923f6c4aade 7,54
+package.json
+  s_bd3cd0f60dfe95::t_294345cf59ce05 13
+packages/engine/src/daemon.ts
+  s_bd3cd0f60dfe95::t_c42b48f82445a2 283-285,288
+packages/engine/src/run-ledger.test.ts
+  s_bd3cd0f60dfe95::t_c99d5a7c066f1d 303-329
+packages/engine/src/run-ledger.ts
+  s_bd3cd0f60dfe95::t_c59e0ec7ae2c11 64-66,156-163,260-261
+packages/ui/src/components/item.tsx
+  s_bd3cd0f60dfe95::t_730ecb65b25439 1-184
+pnpm-lock.yaml
+  s_bd3cd0f60dfe95::t_fcc35f96877beb 179-181,303,306
+turbo.json
+  s_bd3cd0f60dfe95::t_9804e7ab096379 9-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5a73c63e84e3204dc5d953157d1d559185eb6bfe",
+  "prompts": {},
+  "sessions": {
+    "s_bd3cd0f60dfe95": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "691aad3c-d12e-4dbf-80fe-495e4bcb3603",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
