@@ -1,0 +1,25 @@
+apps/desktop/package.json
+  s_c3cfadf82eb1fc::t_59ef6c2805500c 45
+apps/desktop/CONTEXT.md
+  s_c3cfadf82eb1fc::t_03f423793b548c 27-30
+apps/desktop/electron-builder.yml
+  s_c3cfadf82eb1fc::t_e7aee89950d032 14-18
+pnpm-lock.yaml
+  s_c3cfadf82eb1fc::t_4416ee6c20c34c 179-181,303,306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d048206cedb5ebc3f0869bd9f37e0d3287c188bf",
+  "prompts": {},
+  "sessions": {
+    "s_c3cfadf82eb1fc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af861cd2-dc36-48a4-bb21-298bf1818546",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
