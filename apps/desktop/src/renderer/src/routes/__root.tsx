@@ -7,6 +7,7 @@ import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "@remixicon/react";
 import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
 import { AttentionRail } from "../components/attention-rail";
+import { HistoryNav } from "../components/history-nav";
 import { NavRail } from "../components/nav-rail";
 import { PausedBanner, SchedulerControls } from "../components/scheduler-gauges";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
@@ -55,6 +56,7 @@ function RootLayout() {
           <header className="flex items-center justify-between border-b px-6 py-3">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
+              <HistoryNav />
               <h1 className="text-lg font-semibold">clanker-forge</h1>
             </div>
             <div className="flex items-center gap-4">

@@ -17,7 +17,7 @@
     "setup-worktree": "node scripts/setup-worktree.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.6",
+    "@biomejs/biome": "2.5.8",
     "@effect/tsgo": "catalog:",
     "@types/node": "catalog:",
     "turbo": "^2.10.7",
