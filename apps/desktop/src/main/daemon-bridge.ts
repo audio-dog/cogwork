@@ -1,4 +1,5 @@
 import * as net from "node:net";
+import { waitForDaemonListening } from "./wait-for-socket";
 
 export interface DaemonBridgeSink {
   readonly onData: (frame: Uint8Array) => void;
@@ -11,6 +12,8 @@ export interface DaemonBridgePort {
   readonly dispose: () => void;
 }
 
+const listenTimeoutMs = 10_000;
+
 export const createDaemonBridgePort = (socketPath: string, sink: DaemonBridgeSink): DaemonBridgePort => {
   const state: { socket: net.Socket | null } = { socket: null };
 
@@ -22,12 +25,8 @@ export const createDaemonBridgePort = (socketPath: string, sink: DaemonBridgeSin
     socket.destroy();
   };
 
-  const connect = (): Promise<void> =>
+  const openSocket = (): Promise<void> =>
     new Promise((resolve, reject) => {
-      if (state.socket && !state.socket.destroyed) {
-        resolve();
-        return;
-      }
       detach();
 
       const socket = net.createConnection({ path: socketPath });
@@ -59,6 +58,13 @@ export const createDaemonBridgePort = (socketPath: string, sink: DaemonBridgeSin
       socket.once("connect", onConnect);
       socket.once("error", onError);
     });
+
+  const connect = async (): Promise<void> => {
+    if (state.socket && !state.socket.destroyed) return;
+    const listening = await waitForDaemonListening(socketPath, AbortSignal.timeout(listenTimeoutMs));
+    if (!listening) throw new Error(`Timed out waiting for the daemon socket at ${socketPath}`);
+    await openSocket();
+  };
 
   const send = (frame: string) => {
     state.socket?.write(frame);
