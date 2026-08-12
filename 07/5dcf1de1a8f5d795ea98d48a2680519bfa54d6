@@ -1,0 +1,38 @@
+apps/cli/config/colony.workspace.ts
+  h_46518a29d4dd91 34
+packages/engine/CONTEXT.md
+  s_06ba3184b8a265::t_7593c681254496 69
+  s_06ba3184b8a265::t_29215a35f682ef 137
+  s_06ba3184b8a265::t_02ac0b8a7531fe 180-183
+  s_06ba3184b8a265::t_460c7e8ad62541 61,64-66
+  s_a73170fb160373::t_07ac4823449f86 67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "075dcf1de1a8f5d795ea98d48a2680519bfa54d6",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_06ba3184b8a265": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "97a4c5cb-f8ec-4c82-a7c3-c7f4ff223e23",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a73170fb160373": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "16221b2f-65f8-408f-811b-cb6473773ba1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
