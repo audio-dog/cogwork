@@ -22,3 +22,5 @@ export const runActivityAtom = Atom.family((runId: RunId) =>
 export const cancelRunAtom = DaemonAtomRpc.mutation("CancelRun");
 
 export const reclassifyAtom = DaemonAtomRpc.mutation("Reclassify");
+
+export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");
