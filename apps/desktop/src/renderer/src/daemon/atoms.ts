@@ -11,3 +11,5 @@ export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomR
 export const daemonStatusAtom = DaemonAtomRpc.query("GetStatus", undefined);
 
 export const daemonEventsAtom = DaemonAtomRpc.query("WatchEvents", undefined);
+
+export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");

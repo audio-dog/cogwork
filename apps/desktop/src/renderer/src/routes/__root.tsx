@@ -4,10 +4,11 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@clanker-forge/ui
 import { Switch } from "@clanker-forge/ui/components/switch";
 import { TooltipProvider } from "@clanker-forge/ui/components/tooltip";
 import { RiSidebarFoldLine, RiSidebarUnfoldLine } from "@remixicon/react";
-import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
 import { AttentionRail } from "../components/attention-rail";
 import { NavRail } from "../components/nav-rail";
+import { SchedulerGauges } from "../components/scheduler-gauges";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
 import { useChromeStore } from "../store/chrome";
 
@@ -43,6 +44,8 @@ function EngineControl() {
 function RootLayout() {
   const attentionCollapsed = useChromeStore((state) => state.attentionCollapsed);
   const toggleAttention = useChromeStore((state) => state.toggleAttention);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const railCollapsed = attentionCollapsed || pathname === "/lanes";
 
   return (
     <TooltipProvider>
@@ -56,22 +59,26 @@ function RootLayout() {
             </div>
             <div className="flex items-center gap-4">
               <EngineControl />
-              <Button
-                aria-label={attentionCollapsed ? "Show attention" : "Hide attention"}
-                size="icon-sm"
-                variant="ghost"
-                onClick={toggleAttention}
-              >
-                {attentionCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
-              </Button>
+              {pathname !== "/lanes" && (
+                <Button
+                  aria-label={attentionCollapsed ? "Show attention" : "Hide attention"}
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={toggleAttention}
+                >
+                  {attentionCollapsed ? <RiSidebarUnfoldLine /> : <RiSidebarFoldLine />}
+                </Button>
+              )}
             </div>
           </header>
+
+          <SchedulerGauges />
 
           <div className="flex min-h-0 flex-1">
             <div className="min-w-0 flex-1">
               <Outlet />
             </div>
-            {!attentionCollapsed && <AttentionRail />}
+            {!railCollapsed && <AttentionRail />}
           </div>
         </SidebarInset>
       </SidebarProvider>

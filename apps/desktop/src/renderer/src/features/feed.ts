@@ -45,7 +45,7 @@ const titleFor = (board: Board, run: RunSummary) =>
 const runs = (board: Board, filter: WorkspaceId | null) =>
   [...board.runs.values()].filter((run) => inWorkspace(filter, run.workspace));
 
-const items = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
+export const workspaceItems = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
   [...board.items.values()].filter(({ workspace }) => inWorkspace(filter, workspace));
 
 export const registeredWorkspaces = (board: Board): WorkspaceId[] =>
@@ -68,16 +68,16 @@ export const recentlyDone = (board: Board, filter: WorkspaceId | null, limit = 8
     .map((run) => ({ run, title: titleFor(board, run) }));
 
 export const queuedItems = (board: Board, filter: WorkspaceId | null): QueuedItem[] =>
-  items(board, filter).filter((entry): entry is QueuedItem => entry.item._tag === "Eligible");
+  workspaceItems(board, filter).filter((entry): entry is QueuedItem => entry.item._tag === "Eligible");
 
 export const blockedCount = (board: Board, filter: WorkspaceId | null): number =>
-  items(board, filter).filter(({ item }) => item._tag === "Blocked").length;
+  workspaceItems(board, filter).filter(({ item }) => item._tag === "Blocked").length;
 
 export const selfHalts = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
-  items(board, filter).filter(({ item }) => item._tag === "NeedsHuman");
+  workspaceItems(board, filter).filter(({ item }) => item._tag === "NeedsHuman");
 
 export const mergeGate = (board: Board, filter: WorkspaceId | null): MergeGateItem[] =>
-  items(board, filter)
+  workspaceItems(board, filter)
     .filter(
       (entry): entry is FeedItem & { item: ClassifiedItem & { pr: PrSummary } } =>
         entry.item.pr !== undefined && entry.item.pr.review === "ready",
