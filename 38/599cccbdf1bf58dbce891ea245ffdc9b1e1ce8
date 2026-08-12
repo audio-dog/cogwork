@@ -1,0 +1,20 @@
+apps/desktop/src/main/daemon-bridge.ts
+  s_5732847ee8b5f0::t_6bd7fbb8a0018a 2,15-16,28,62-67
+  s_5732847ee8b5f0::t_387d9b9be6dadc 68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "38599cccbdf1bf58dbce891ea245ffdc9b1e1ce8",
+  "prompts": {},
+  "sessions": {
+    "s_5732847ee8b5f0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d04da16f-2f39-47ae-b6b3-f37d293ee22a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
