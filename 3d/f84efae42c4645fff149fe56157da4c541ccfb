@@ -1,0 +1,32 @@
+.agents/skills/react-composition-patterns/AGENTS.md
+  h_46518a29d4dd91 1-968
+.agents/skills/react-composition-patterns/SKILL.md
+  h_46518a29d4dd91 1-101
+.agents/skills/react-composition-patterns/rules/architecture-avoid-boolean-props.md
+  h_46518a29d4dd91 1-100
+.agents/skills/react-composition-patterns/rules/architecture-compound-components.md
+  h_46518a29d4dd91 1-134
+.agents/skills/react-composition-patterns/rules/patterns-children-over-render-props.md
+  h_46518a29d4dd91 1-87
+.agents/skills/react-composition-patterns/rules/patterns-explicit-variants.md
+  h_46518a29d4dd91 1-100
+.agents/skills/react-composition-patterns/rules/react19-no-forwardref.md
+  h_46518a29d4dd91 1-60
+.agents/skills/react-composition-patterns/rules/state-context-interface.md
+  h_46518a29d4dd91 1-191
+.agents/skills/react-composition-patterns/rules/state-decouple-implementation.md
+  h_46518a29d4dd91 1-113
+.agents/skills/react-composition-patterns/rules/state-lift-state.md
+  h_46518a29d4dd91 1-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "3df84efae42c4645fff149fe56157da4c541ccfb",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
