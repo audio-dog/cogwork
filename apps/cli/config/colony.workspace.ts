@@ -31,7 +31,7 @@ export default defineWorkspace({
     actorLogin: "taylorfsteele",
   },
   harness: { preferred: "cursor" },
-  concurrency: 1,
+  concurrency: 3,
   playbook: {
     triage: { enabled: true, model: triageModel },
     implement: { enabled: true, model: implementModel },
