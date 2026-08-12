@@ -160,6 +160,7 @@ describe("lanes", () => {
     expect(acme.running).toBe(1);
     expect(acme.columns.find((c) => c.id === "needs-triage")?.count).toBe(1);
     expect(acme.columns.find((c) => c.id === "blocked")?.count).toBe(1);
+    expect(acme.columns.find((c) => c.id === "needs-triage")?.items).toHaveLength(1);
     expect(result[1].total).toBe(0);
   });
 });

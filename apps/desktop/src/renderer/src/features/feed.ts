@@ -84,3 +84,30 @@ export const mergeGate = (board: Board, filter: WorkspaceId | null): MergeGateIt
     )
     .map(({ workspace, item }) => ({ workspace, item, pr: item.pr }))
     .sort((a, b) => a.pr.waitingSinceMillis - b.pr.waitingSinceMillis);
+
+export const itemsWithPr = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
+  workspaceItems(board, filter).filter((entry) => entry.item.pr !== undefined);
+
+export const claimedItems = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
+  workspaceItems(board, filter).filter((entry) => entry.item._tag === "Claimed");
+
+export interface InboxSection {
+  readonly title: string;
+  readonly accent?: "human" | "pr" | "run";
+  readonly rows: ReadonlyArray<FeedItem>;
+}
+
+export const inboxSections = (board: Board, filter: WorkspaceId | null): ReadonlyArray<InboxSection> => {
+  const entries = workspaceItems(board, filter);
+  const queued = entries.filter((entry) => {
+    if (entry.item._tag !== "Eligible") return false;
+    return entry.item.stage === "triage" || entry.item.stage === "implement";
+  });
+  const sections: InboxSection[] = [
+    { title: "Needs a human", accent: "human", rows: selfHalts(board, filter) },
+    { title: "At the merge gate", accent: "pr", rows: itemsWithPr(board, filter) },
+    { title: "Running now", accent: "run", rows: claimedItems(board, filter) },
+    { title: "Queued", rows: queued },
+  ];
+  return sections.filter((section) => section.rows.length > 0);
+};

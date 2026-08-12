@@ -58,6 +58,7 @@ export const boardColumns = (board: Board, filter: WorkspaceId | null): Readonly
 
 export interface LaneColumn extends BoardColumnMeta {
   readonly count: number;
+  readonly items: ReadonlyArray<FeedItem>;
 }
 
 export interface Lane {
@@ -66,15 +67,20 @@ export interface Lane {
   readonly columns: ReadonlyArray<LaneColumn>;
   readonly running: number;
   readonly total: number;
+  readonly needsYou: number;
 }
 
 const runningIn = (board: Board, workspace: WorkspaceId): number =>
   [...board.runs.values()].filter((run) => run.status === "running" && run.workspace === workspace).length;
 
 const laneColumnsFor = (board: Board, name: WorkspaceId | null): ReadonlyArray<LaneColumn> => {
-  if (name === null) return boardColumnOrder.map((meta) => ({ ...meta, count: 0 }));
-  return boardColumns(board, name).map(({ id, label, items }) => ({ id, label, count: items.length }));
+  if (name === null) return boardColumnOrder.map((meta) => ({ ...meta, count: 0, items: [] }));
+  return boardColumns(board, name).map(({ id, label, items }) => ({ id, label, count: items.length, items }));
 };
+
+const needsYouIn = (board: Board, workspace: WorkspaceId): number =>
+  workspaceItems(board, workspace).filter(({ item }) => item._tag === "NeedsHuman" || item.pr !== undefined)
+    .length;
 
 const laneOf = (board: Board, state: WorkspaceState): Lane => {
   const name = state._tag === "Registered" ? state.name : null;
@@ -85,6 +91,7 @@ const laneOf = (board: Board, state: WorkspaceState): Lane => {
     columns,
     running: name === null ? 0 : runningIn(board, name),
     total: columns.reduce((sum, column) => sum + column.count, 0),
+    needsYou: name === null ? 0 : needsYouIn(board, name),
   };
 };
 
