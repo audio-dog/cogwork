@@ -28,6 +28,14 @@ _Avoid_: Closing keyword (`Closes #N`, the GitHub-only match this replaces), PR 
 A repo registered with the daemon: a checkout path bound to an issue tracker and, optionally, a source control provider, plus harness preferences and playbook config. The unit of isolation and per-repo configuration.
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
+**Actor identity**:
+Who the daemon acts *as* on a tracker — `issueTracker.actorUserId` (Linear user UUID) and `actorLogin` (GitHub login, on the tracker or the `sourceControl` block). It stamps claims and coordination comments and marks which comments/PRs are the daemon's own. One identity per workspace. (Renamed from `botUserId`/`botLogin`, since it can be any human or service account, not only a bot.)
+_Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
+
+**Assignee allowlist**:
+`issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced in the engine's classification, not here.
+_Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
+
 ### Lifecycle
 
 **Lifecycle stage**:
