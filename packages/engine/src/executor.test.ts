@@ -59,7 +59,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
   }),
@@ -91,7 +91,7 @@ const implementWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { implement: { enabled: true } },
   }),
@@ -102,7 +102,7 @@ const mcpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
     playbook: { implement: { enabled: true } },
@@ -114,7 +114,7 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
@@ -190,7 +190,7 @@ const followUpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { "follow-up": { enabled: true } },
   }),

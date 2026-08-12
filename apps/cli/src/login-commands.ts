@@ -75,7 +75,7 @@ const runLogin = (options: {
     const issueTracker = yield* findIssueTracker(options.configHome, options.workspace);
     const config = yield* resolveConfig(issueTracker);
     const result = yield* loginLinear(config);
-    yield* Console.log(`Logged in to Linear org "${result.organization}" as bot ${result.botUserId}.`);
+    yield* Console.log(`Logged in to Linear org "${result.organization}" as ${result.actorUserId}.`);
   }).pipe(
     Effect.provide(
       browserOpenerLayer.pipe(

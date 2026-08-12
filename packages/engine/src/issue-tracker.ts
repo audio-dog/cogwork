@@ -20,6 +20,7 @@ interface ObservedItemBase {
   readonly id: WorkItemId;
   readonly title: string;
   readonly roles: ReadonlyArray<TriageRole>;
+  readonly assignees: ReadonlyArray<string>;
   readonly claimLabeled: boolean;
   readonly claim: Claim | null;
   readonly claimedByUs: boolean;

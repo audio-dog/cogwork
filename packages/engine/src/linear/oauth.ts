@@ -225,7 +225,7 @@ export class LinearOAuthError extends Schema.TaggedErrorClass<LinearOAuthError>(
 
 export interface DiscoveredIdentity {
   readonly organization: string;
-  readonly botUserId: string;
+  readonly actorUserId: string;
 }
 
 // The org's urlKey is what `issueTracker.organization` config and `StoredCredential.organization`
@@ -239,5 +239,5 @@ export const discoverIdentity = Effect.fn("linear.oauth.discoverIdentity")(funct
         message: `Linear identity discovery failed: ${cause instanceof Error ? cause.message : String(cause)}`,
       }),
   });
-  return { organization: organization.urlKey, botUserId: viewer.id } satisfies DiscoveredIdentity;
+  return { organization: organization.urlKey, actorUserId: viewer.id } satisfies DiscoveredIdentity;
 });

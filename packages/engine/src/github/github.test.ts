@@ -41,6 +41,7 @@ interface SeedIssue {
   readonly number: number;
   readonly title: string;
   readonly labels: ReadonlyArray<string>;
+  readonly assignees?: ReadonlyArray<string>;
   readonly isPullRequest?: boolean;
   readonly openBlockers?: number;
 }
@@ -92,6 +93,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     seed.issues.map(
       (issue): RawIssue => ({
         ...issue,
+        assignees: issue.assignees ?? [],
         isPullRequest: issue.isPullRequest ?? false,
         openBlockers: issue.openBlockers ?? 0,
       }),
@@ -172,7 +174,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", botLogin: bot.login },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
     harness: { preferred: "cursor" },
   }),
 };

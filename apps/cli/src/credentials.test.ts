@@ -14,7 +14,7 @@ const stored = (accessToken: string, expiresAtMillis = Number.MAX_SAFE_INTEGER) 
   ({
     issueTracker: "linear",
     organization: "acme",
-    botUserId: "bot-user",
+    actorUserId: "bot-user",
     token: {
       accessToken: Redacted.make(accessToken),
       refreshToken: Redacted.make("refresh-token"),
@@ -99,7 +99,7 @@ describe("file-backed credential store", () => {
         assert.strictEqual(Redacted.value(credential.token), "oauth-token");
         assert.deepStrictEqual(credential.identity, {
           organization: "acme",
-          botUserId: "bot-user",
+          actorUserId: "bot-user",
         });
       }),
     ),

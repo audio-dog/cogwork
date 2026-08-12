@@ -24,7 +24,7 @@ export interface LinearLoginConfig {
 
 export interface LinearLoginResult {
   readonly organization: string;
-  readonly botUserId: string;
+  readonly actorUserId: string;
 }
 
 export interface BrowserOpenerService {
@@ -181,12 +181,15 @@ export const loginLinear = Effect.fn("cli.login.linear")(function* (config: Line
   yield* store.persist({
     issueTracker: "linear",
     organization: identity.organization,
-    botUserId: identity.botUserId,
+    actorUserId: identity.actorUserId,
     token,
   });
   yield* Effect.logInfo("stored Linear credential", {
     organization: identity.organization,
-    botUserId: identity.botUserId,
+    actorUserId: identity.actorUserId,
   });
-  return { organization: identity.organization, botUserId: identity.botUserId } satisfies LinearLoginResult;
+  return {
+    organization: identity.organization,
+    actorUserId: identity.actorUserId,
+  } satisfies LinearLoginResult;
 });

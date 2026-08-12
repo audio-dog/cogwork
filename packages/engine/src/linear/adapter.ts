@@ -33,21 +33,21 @@ import {
 } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
-  readonly botUserId: string | null;
+  readonly actorUserId: string | null;
   readonly roleLabels: ReturnType<typeof roleLabelsFor>;
 }
 
 const toCoordinationComment =
-  (botUserId: string | null) =>
+  (actorUserId: string | null) =>
   (comment: RawComment): CoordinationComment<string> => ({
     id: comment.id,
     body: comment.body,
-    isBot: botUserId !== null && comment.authorId === botUserId,
+    isBot: actorUserId !== null && comment.authorId === actorUserId,
     createdAtMillis: comment.createdAtMillis,
   });
 
-const coordinationScope = ({ botUserId }: LinearTarget) =>
-  botUserId === null ? null : { botUserId, ledgerMarker, proposalMarker: triageProposalAttribution };
+const coordinationScope = ({ actorUserId }: LinearTarget) =>
+  actorUserId === null ? null : { actorUserId, ledgerMarker, proposalMarker: triageProposalAttribution };
 
 const clientCredentialsFor = (oauth: OAuthAppConfig | undefined) =>
   oauth?.clientSecretEnv ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null;
@@ -61,7 +61,7 @@ const targetFor = (workspace: RegisteredWorkspace) => {
     organization: source.organization ?? null,
     clientCredentials: clientCredentialsFor(source.oauth),
     oauthClientId: source.oauth?.clientId ?? null,
-    botUserId: source.botUserId ?? null,
+    actorUserId: source.actorUserId ?? null,
     roleLabels: roleLabelsFor(source.roleLabels),
   } satisfies LinearTarget;
 };
@@ -87,7 +87,7 @@ const make = (client: LinearClientService): IssueTrackerService => {
   const coordinationHost = (target: LinearTarget, issueId: string): CoordinationHost<string> => ({
     comments: client
       .listComments(target, issueId)
-      .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.botUserId)))),
+      .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorUserId)))),
     edit: (id, body) => client.editComment(target, id, body),
     create: (body) => client.createComment(target, issueId, body),
   });
@@ -95,7 +95,7 @@ const make = (client: LinearClientService): IssueTrackerService => {
   const buildItem = (target: LinearTarget) =>
     Effect.fn("linear.buildItem")(function* (issue: ObservedRawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
-      const comments = issue.coordinationComments.map(toCoordinationComment(target.botUserId));
+      const comments = issue.coordinationComments.map(toCoordinationComment(target.actorUserId));
       const ledger = Coordination.selectLedger(wireCodec, comments);
       const body = ledger?.body ?? "";
       const id = yield* itemId(issue.identifier);
@@ -104,6 +104,7 @@ const make = (client: LinearClientService): IssueTrackerService => {
         id,
         title: issue.title,
         roles: rolesFrom(issue.labels, { name: issue.stateName, type: issue.stateType }, target.roleLabels),
+        assignees: issue.assignees,
         claimLabeled,
         claim,
         claimedByUs: claim?.by === Coordination.defaultClaimant,

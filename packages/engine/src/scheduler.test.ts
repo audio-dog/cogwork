@@ -36,7 +36,7 @@ const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace =>
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,
-    issueTracker: { type: "github", repo: `owner/${name}`, botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: `owner/${name}`, actorLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
     ...(concurrency === undefined ? {} : { concurrency }),

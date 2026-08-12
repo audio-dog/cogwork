@@ -34,6 +34,7 @@ export interface RawIssue {
   readonly identifier: string;
   readonly title: string;
   readonly labels: ReadonlyArray<string>;
+  readonly assignees: ReadonlyArray<string>;
   readonly stateName: string;
   readonly stateType: string;
   readonly openBlockers: number;
@@ -62,7 +63,7 @@ export interface RawLabel {
 }
 
 export interface CoordinationScope {
-  readonly botUserId: string;
+  readonly actorUserId: string;
   readonly ledgerMarker: string;
   readonly proposalMarker: string;
 }
@@ -86,6 +87,7 @@ const IssueNode = Schema.Struct({
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
   }),
+  assignee: Schema.optional(Schema.NullOr(Schema.Struct({ id: Schema.String }))),
   state: Schema.Struct({
     name: Schema.String,
     type: Schema.String,
@@ -182,6 +184,7 @@ const issueFields = `
       identifier
       title
       labels(first: ${labelPageSize}) { nodes { name } }
+      assignee { id }
       state { name type }
       inverseRelations(first: ${relationPageSize}) {
         nodes { type issue { state { type } } }
@@ -296,6 +299,7 @@ const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   identifier: issue.identifier,
   title: issue.title,
   labels: issue.labels.nodes.map((label) => label.name),
+  assignees: issue.assignee ? [issue.assignee.id] : [],
   stateName: issue.state.name,
   stateType: issue.state.type,
   openBlockers: openBlockersOf(issue),
@@ -430,7 +434,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   ) {
     const team = coordination
       ? yield* loadTeam(ref, coordinatedIssuesShape, {
-          bot: coordination.botUserId,
+          bot: coordination.actorUserId,
           ledger: coordination.ledgerMarker,
           proposal: coordination.proposalMarker,
         })

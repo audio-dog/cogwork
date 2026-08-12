@@ -29,6 +29,10 @@ _Avoid_: Circuit breaker (nothing is tripped open by error rate), throttle
 The partition of an issue tracker's observed items into eligible, claimed, blocked, and needs-human, each tagged with a lifecycle stage. *Blocked* means the issue tracker reports open blockers, so `implement` is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
 _Avoid_: Filtering, triage (triage is a stage, not this)
 
+**Assignee ownership gate**:
+A per-workspace precondition inside `classify`: when `issueTracker.assigneeAllowlist` is set, an observed item is silently dropped from every bucket unless one of its assignees is on the list. Absent allowlist means the gate is off and every item passes, exactly as before. The check is a re-evaluated precondition, not an action — it never releases a claim or interrupts an in-flight run; an item that loses its owner just stops being picked up on the next poll, honoring the tracker as the source of truth. The `actorUserId`/`actorLogin` identity (who the daemon *acts as*) is distinct from the allowlist (whose tickets the daemon is *allowed to pick up*).
+_Avoid_: Assignee filter (it gates all stages, not just a view), permission check
+
 **Scheduler**:
 The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. In-flight counts and budgets live here and nowhere else. It acts on a given work item at most once per snapshot generation: a completed item is not re-picked until a newer snapshot re-confirms it is eligible, which is what stops a fast execute tick from re-running work that a slow reconcile has not yet caught up on (see ADR 0001).
 _Avoid_: Queue, dispatcher, runner
@@ -126,7 +130,7 @@ A workspace's binding of a lifecycle stage to a prompt template, playbook skill,
 _Avoid_: Workflow, pipeline
 
 **Issue tracker adapter**:
-A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`, and each adapter stamps its own — GitHub its configured `botLogin` or the `clanker-forge` fallback, Linear always `clanker-forge` — then reports on each observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
+A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Each adapter reads tracker-native issues/labels/comments, writes coordination state into a bot-owned coordination comment, and posts human-facing notes (triage proposals) as separate comments. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`, and each adapter stamps its own — GitHub its configured `actorLogin` or the `clanker-forge` fallback, Linear always `clanker-forge` — then reports on each observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
 _Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Source control provider adapter**:
@@ -158,7 +162,7 @@ The store's non-interactive source: it trades an OAuth app's `client_id` and a `
 _Avoid_: Service account, machine token, app token (that is what it mints, not the source)
 
 **Stored credential**:
-One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `botUserId` the app posts as). Keyed by issue tracker and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
+One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `actorUserId` the app posts as). Keyed by issue tracker and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
 _Avoid_: Session, login (the login command that mints these does not exist yet)
 
 **Coordination module**:

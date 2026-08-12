@@ -133,6 +133,7 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   id: id("AUD-1"),
   title: "cancel me",
   roles: ["ready-for-agent"],
+  assignees: [],
   claimLabeled: true,
   claim: null,
   claimedByUs: true,

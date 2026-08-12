@@ -73,7 +73,11 @@ export const consecutiveFailures = (item: ObservedItem, stage: LifecycleStage) =
   return forStage.length - (lastNonFailure + 1);
 };
 
-const classifyOne = (item: ObservedItem): Outcome => {
+const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined) =>
+  !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
+
+const classifyOne = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined): Outcome => {
+  if (!ownedByActor(item, allowlist)) return { kind: "drop" };
   if (item.roles.includes("wontfix")) return { kind: "drop" };
   if (item.claim) return { kind: "claimed", claim: item.claim };
   if (item.claimLabeled) return { kind: "drop" };
@@ -88,7 +92,7 @@ const classifyOne = (item: ObservedItem): Outcome => {
 };
 
 export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
-  const outcome = classifyOne(item);
+  const outcome = classifyOne(item, undefined);
   if (outcome.kind === "eligible") {
     return { _tag: "Eligible", id: item.id, title: item.title, stage: outcome.stage, ...prFields(item) };
   }
@@ -133,8 +137,8 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   };
 };
 
-export const classify = (items: ReadonlyArray<ObservedItem>) => {
-  const outcomes = items.map((item) => ({ item, outcome: classifyOne(item) }));
+export const classify = (items: ReadonlyArray<ObservedItem>, allowlist?: ReadonlyArray<string>) => {
+  const outcomes = items.map((item) => ({ item, outcome: classifyOne(item, allowlist) }));
   const eligible = outcomes
     .flatMap(({ item, outcome }) => (outcome.kind === "eligible" ? [eligibleWork(item, outcome.stage)] : []))
     .sort(byStagePriority);

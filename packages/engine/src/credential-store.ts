@@ -40,7 +40,7 @@ export type StoredToken = typeof StoredToken.Type;
 export const StoredCredential = Schema.Struct({
   issueTracker: TrimmedNonEmptyString,
   organization: TrimmedNonEmptyString,
-  botUserId: TrimmedNonEmptyString,
+  actorUserId: TrimmedNonEmptyString,
   token: StoredToken,
 });
 export type StoredCredential = typeof StoredCredential.Type;
@@ -78,7 +78,7 @@ export const contentsOf = (file: CredentialFileWire): CredentialFileContents => 
 
 export interface CredentialIdentity {
   readonly organization: string;
-  readonly botUserId: string;
+  readonly actorUserId: string;
 }
 
 export type CredentialSource = "env" | "stored-oauth" | "client-credentials";
@@ -202,7 +202,7 @@ const storedCredential = (credential: StoredCredential) =>
   ({
     source: "stored-oauth",
     token: credential.token.accessToken,
-    identity: { organization: credential.organization, botUserId: credential.botUserId },
+    identity: { organization: credential.organization, actorUserId: credential.actorUserId },
   }) satisfies Credential;
 
 const missingProviderKeyMessage = (account: ProviderAccount) =>

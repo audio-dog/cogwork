@@ -24,17 +24,17 @@ import {
 import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
-  readonly botLogin: string | null;
+  readonly actorLogin: string | null;
 }
 
-const claimIdentity = (target: GitHubTarget) => target.botLogin ?? Coordination.defaultClaimant;
+const claimIdentity = (target: GitHubTarget) => target.actorLogin ?? Coordination.defaultClaimant;
 
 const toCoordinationComment =
-  (botLogin: string | null) =>
+  (actorLogin: string | null) =>
   (comment: RawComment): CoordinationComment<number> => ({
     id: comment.id,
     body: comment.body,
-    isBot: comment.authorLogin === botLogin,
+    isBot: comment.authorLogin === actorLogin,
     createdAtMillis: comment.createdAtMillis,
   });
 
@@ -47,7 +47,7 @@ const targetFor = (workspace: RegisteredWorkspace) => {
     owner,
     name,
     tokenEnv: source.tokenEnv ?? "GITHUB_TOKEN",
-    botLogin: source.botLogin ?? null,
+    actorLogin: source.actorLogin ?? null,
   } satisfies GitHubTarget;
 };
 
@@ -87,7 +87,7 @@ const make = (client: GitHubClientService): IssueTrackerService => {
   const coordinationHost = (target: GitHubTarget, number: number): CoordinationHost<number> => ({
     comments: client
       .listComments(target, number)
-      .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.botLogin)))),
+      .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorLogin)))),
     edit: (id, body) => client.editComment(target, id, body),
     create: (body) => client.createComment(target, number, body),
   });
@@ -95,8 +95,8 @@ const make = (client: GitHubClientService): IssueTrackerService => {
   const buildItem = (target: GitHubTarget) =>
     Effect.fn("github.buildItem")(function* (issue: RawIssue) {
       const claimLabeled = hasClaimLabel(issue.labels);
-      const rawComments = target.botLogin ? yield* client.listComments(target, issue.number) : [];
-      const comments = rawComments.map(toCoordinationComment(target.botLogin));
+      const rawComments = target.actorLogin ? yield* client.listComments(target, issue.number) : [];
+      const comments = rawComments.map(toCoordinationComment(target.actorLogin));
       const ledger = Coordination.selectLedger(wireCodec, comments);
       const body = ledger?.body ?? "";
       const id = yield* itemId(issue.number);
@@ -105,6 +105,7 @@ const make = (client: GitHubClientService): IssueTrackerService => {
         id,
         title: issue.title,
         roles: rolesFromLabels(issue.labels),
+        assignees: issue.assignees,
         claimLabeled,
         claim,
         claimedByUs: claim?.by === claimIdentity(target),
