@@ -25,7 +25,7 @@ export interface HarnessRequest {
 }
 
 // CLI harnesses only reach for SessionStore; the wider set is provided uniformly
-// so the first-party runner can assemble context and resolve its provider key.
+// so the provider runner can assemble context and resolve its provider key.
 export type HarnessRunnerEnv = SessionStore | ContextAssembler | CredentialStore;
 
 export class HarnessError extends Schema.TaggedErrorClass<HarnessError>()("HarnessError", {

@@ -3,7 +3,7 @@ import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
-import { ContextAssembler, Daemon, FirstParty, Registry } from "@clanker-forge/engine";
+import { ContextAssembler, Daemon, Provider, Registry } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
@@ -76,7 +76,7 @@ const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
-const firstPartyName = Schema.decodeSync(HarnessName)("first-party");
+const providerName = Schema.decodeSync(HarnessName)("provider");
 
 // The engine ships the playbook skills beside its source, and the daemon home
 // (where the global AGENTS.md and provisioned skills live) is the directory that
@@ -97,10 +97,7 @@ export const serverLayer = (options: DaemonOptions) =>
     runLedger: ledgerLayer(options.ledgerPath),
     registry: registryLayer(options.configHome),
     worktrees: worktreeManagerLayer,
-    harnessRunners: [
-      cursorRunner({ name: cursorName }),
-      FirstParty.firstPartyRunner({ name: firstPartyName }),
-    ],
+    harnessRunners: [cursorRunner({ name: cursorName }), Provider.providerRunner({ name: providerName })],
     scheduler: { globalLimit: options.maxConcurrency, dailyBudget: options.dailyBudget },
   });
 

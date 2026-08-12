@@ -1,0 +1,22 @@
+---
+description: Ban barrel files except a package's top-level entry point
+globs: **/*.ts,**/*.tsx
+alwaysApply: false
+---
+
+# No barrel files
+
+A barrel file is a module whose only job is to re-export from sibling modules —
+typically an `index.ts` that is a list of `export ... from "./x"`. Do not create them.
+
+- The **only** allowed barrel is a package's top-level entry point — the path a package
+  publishes as its public surface (`packages/*/src/index.ts`, or whatever its
+  `package.json` `exports`/`main` names). It is the one place that curates what the
+  package exposes.
+- Everywhere else, import from the module that actually defines the symbol
+  (`../provider-runner`), never from an intermediate re-export hub (`../provider`).
+- Prefer flat, prefixed file names over a folder with a re-export index: use
+  `provider-runner.ts` and `provider-adapter.ts`, not `provider/index.ts`.
+
+Intermediate barrels hide where code lives, invite import cycles, and defeat
+tree-shaking and dead-code detection.

@@ -17,20 +17,20 @@ import {
   ContextAssembler,
   type ContextAssemblerService,
   type InstructionLayer,
-} from "../context-assembler";
-import { CredentialStore } from "../credential-store";
-import { HarnessError, type HarnessRequest, type HarnessRunner } from "../harness";
-import { accountFor, findProvider } from "../providers";
-import { SessionStore, type ThreadMessage } from "../session-store";
+} from "./context-assembler";
+import { CredentialStore } from "./credential-store";
+import { HarnessError, type HarnessRequest, type HarnessRunner } from "./harness";
+import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
+import { bridgeChat } from "./provider-bridge";
+import { accountFor, findProvider } from "./providers";
+import { SessionStore, type ThreadMessage } from "./session-store";
 import {
   makeOwnedToolSet,
   openWorktreeSandbox,
   profileForStage,
   resolveBaseSha,
   watchWorktreeDiffs,
-} from "../tools";
-import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./adapter";
-import { bridgeChat } from "./bridge";
+} from "./tools";
 
 export interface RunChatOptions {
   readonly adapter: AnyTextAdapter;
@@ -53,7 +53,7 @@ const defaultRunChat: RunChat = (options) =>
     abortController: options.abortController,
   });
 
-export interface FirstPartyRunnerOptions {
+export interface ProviderRunnerOptions {
   readonly name: HarnessName;
   readonly defaultModel?: string;
   readonly makeAdapter?: ModelAdapterFactory;
@@ -70,7 +70,7 @@ const launchError = (retryable: boolean, message: string) =>
 const unknownModelError = (model: string) =>
   launchError(
     false,
-    `no first-party adapter for model "${model}"; use provider/model with a wired provider (openai, anthropic, google)`,
+    `no provider adapter for model "${model}"; use provider/model with a wired provider (openai, anthropic, google)`,
   );
 
 const labelToolResult = (message: ThreadMessage) =>
@@ -109,7 +109,7 @@ const contextMiddleware = (
     })),
 });
 
-export const firstPartyRunner = (options: FirstPartyRunnerOptions): HarnessRunner => {
+export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner => {
   const defaultModel = options.defaultModel ?? "anthropic/claude-sonnet-4-5";
   const makeAdapter = options.makeAdapter ?? defaultModelAdapterFactory;
   const runChat = options.runChat ?? defaultRunChat;

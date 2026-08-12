@@ -12,21 +12,21 @@ import {
   ContextAssemblerError,
   type ContextAssemblerService,
   type InstructionLayer,
-} from "../context-assembler";
-import { CredentialError, CredentialStore, type CredentialStoreService } from "../credential-store";
-import type { HarnessRequest } from "../harness";
-import { SessionStore, type SessionStoreService, type ThreadMessage } from "../session-store";
-import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./adapter";
+} from "./context-assembler";
+import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
+import type { HarnessRequest } from "./harness";
+import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
 import {
   defaultLoopBudget,
-  firstPartyRunner,
+  providerRunner,
   type RunChat,
   type RunChatOptions,
   resolveContextLayers,
-} from "./runner";
+} from "./provider-runner";
+import { SessionStore, type SessionStoreService, type ThreadMessage } from "./session-store";
 
 const SECRET = "sk-super-secret-value";
-const harnessName = Schema.decodeSync(HarnessName)("first-party");
+const harnessName = Schema.decodeSync(HarnessName)("provider");
 const sessionId = Schema.decodeSync(SessionId)("sess-resume-1");
 
 const sampleLayer: InstructionLayer = {
@@ -104,7 +104,7 @@ const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
   return handle.id;
 });
 
-describe("firstPartyRunner", () => {
+describe("providerRunner", () => {
   it.live(
     "bridges chat output, folds the resumed thread, hands the redacted key to the adapter, and never leaks it",
     () =>
@@ -121,7 +121,7 @@ describe("firstPartyRunner", () => {
           capturedOptions.push(options);
           return toAsyncIterable(scriptedChunks);
         };
-        const runner = firstPartyRunner({ name: harnessName, makeAdapter, runChat });
+        const runner = providerRunner({ name: harnessName, makeAdapter, runChat });
 
         const events = yield* Stream.runCollect(
           runner.run(request({ checkoutPath, session: sessionId })),
@@ -162,7 +162,7 @@ describe("firstPartyRunner", () => {
 
   it.effect("fails with a launch error when the model has no wired provider", () =>
     Effect.gen(function* () {
-      const runner = firstPartyRunner({
+      const runner = providerRunner({
         name: harnessName,
         runChat: () => toAsyncIterable(scriptedChunks),
       });
@@ -180,7 +180,7 @@ describe("firstPartyRunner", () => {
 
   it.effect("fails with a launch error when no api key is configured", () =>
     Effect.gen(function* () {
-      const runner = firstPartyRunner({
+      const runner = providerRunner({
         name: harnessName,
         runChat: () => toAsyncIterable(scriptedChunks),
       });
