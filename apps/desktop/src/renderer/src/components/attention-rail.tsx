@@ -2,27 +2,28 @@ import { Badge } from "@clanker-forge/ui/components/badge";
 import { Button } from "@clanker-forge/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
 import { Separator } from "@clanker-forge/ui/components/separator";
 import { RiExternalLinkLine, RiGitPullRequestLine, RiQuestionAnswerLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import type { FeedItem, MergeGateItem } from "../features/feed";
-import { mergeGate, selfHalts } from "../features/feed";
+import { mergeGate, needsHumanReasonLabel, selfHalts } from "../features/feed";
 import { relativeTime } from "../features/format";
 import { useBoard } from "../features/use-board";
 import { useChromeStore } from "../store/chrome";
 import { PrChecksBadge } from "./badges";
-
-const reasonLabel: Record<"needs-info" | "ready-for-human", string> = {
-  "needs-info": "Needs info",
-  "ready-for-human": "Ready for human",
-};
+import { ItemDetail } from "./item-detail";
+import { RailShell } from "./rail-shell";
 
 function SelfHaltCard({ entry }: { entry: FeedItem }) {
   const { item } = entry;
+  const select = useChromeStore((state) => state.select);
   if (item._tag !== "NeedsHuman") return null;
   return (
-    <Card size="sm">
+    <Card
+      className="cursor-pointer transition-colors hover:bg-muted/50"
+      size="sm"
+      onClick={() => select({ workspace: entry.workspace, workItem: item.id })}
+    >
       <CardHeader>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RiQuestionAnswerLine className="size-3.5" />
@@ -33,7 +34,7 @@ function SelfHaltCard({ entry }: { entry: FeedItem }) {
         <CardTitle className="mt-1 text-sm">{item.title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        <Badge variant="outline">{reasonLabel[item.reason]}</Badge>
+        <Badge variant="outline">{needsHumanReasonLabel[item.reason]}</Badge>
         {item.proposal ? (
           <p className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground whitespace-pre-wrap">
             {item.proposal}
@@ -48,8 +49,13 @@ function SelfHaltCard({ entry }: { entry: FeedItem }) {
 
 function MergeGateCard({ entry }: { entry: MergeGateItem }) {
   const { item, pr } = entry;
+  const select = useChromeStore((state) => state.select);
   return (
-    <Card size="sm">
+    <Card
+      className="cursor-pointer transition-colors hover:bg-muted/50"
+      size="sm"
+      onClick={() => select({ workspace: entry.workspace, workItem: item.id })}
+    >
       <CardHeader>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RiGitPullRequestLine className="size-3.5" />
@@ -66,7 +72,12 @@ function MergeGateCard({ entry }: { entry: MergeGateItem }) {
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">waiting {relativeTime(pr.waitingSinceMillis)}</span>
-          <Button size="xs" variant="ghost" render={<a href={pr.url} rel="noreferrer" target="_blank" />}>
+          <Button
+            size="xs"
+            variant="ghost"
+            render={<a href={pr.url} rel="noreferrer" target="_blank" />}
+            onClick={(event) => event.stopPropagation()}
+          >
             Open PR
             <RiExternalLinkLine data-icon="inline-end" />
           </Button>
@@ -88,7 +99,7 @@ function RailSection({ title, count, children }: { title: string; count: number;
   );
 }
 
-export function AttentionRail() {
+function AttentionList() {
   const result = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
 
@@ -136,14 +147,10 @@ export function AttentionRail() {
     );
   };
 
-  return (
-    <aside className="flex w-80 shrink-0 flex-col border-l">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">Attention</h2>
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="p-4">{body()}</div>
-      </ScrollArea>
-    </aside>
-  );
+  return <RailShell header={<h2 className="text-sm font-semibold">Attention</h2>}>{body()}</RailShell>;
+}
+
+export function AttentionRail() {
+  const selection = useChromeStore((state) => state.selection);
+  return selection ? <ItemDetail selection={selection} /> : <AttentionList />;
 }

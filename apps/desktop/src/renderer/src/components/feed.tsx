@@ -6,7 +6,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge
 import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
 import { Separator } from "@clanker-forge/ui/components/separator";
 import { RiEyeLine, RiGitBranchLine } from "@remixicon/react";
-import { Link } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import type { ReactNode } from "react";
 import type { FeedRun, QueuedItem } from "../features/feed";
@@ -30,8 +29,10 @@ function Section({ title, count, children }: { title: string; count?: number; ch
 
 function RunningCard({ entry }: { entry: FeedRun }) {
   const { run, title } = entry;
+  const select = useChromeStore((state) => state.select);
+  const watch = () => select({ workspace: run.workspace, workItem: run.workItem });
   return (
-    <Card>
+    <Card className="cursor-pointer transition-colors hover:bg-muted/50" onClick={watch}>
       <CardHeader>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RunStatusBadge status={run.status} />
@@ -41,7 +42,7 @@ function RunningCard({ entry }: { entry: FeedRun }) {
         </div>
         <CardTitle className="mt-1">{title ?? run.workItem}</CardTitle>
         <CardAction>
-          <Button size="sm" variant="outline" render={<Link to="/activity" />}>
+          <Button size="sm" variant="outline" onClick={watch}>
             <RiEyeLine data-icon="inline-start" />
             Watch
           </Button>
@@ -64,29 +65,43 @@ function RunningCard({ entry }: { entry: FeedRun }) {
   );
 }
 
-function QueuedRow({ entry }: { entry: QueuedItem }) {
+function SelectableRow({ onSelect, children }: { onSelect: () => void; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm ring-1 ring-foreground/10">
+    <button
+      type="button"
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-start text-sm ring-1 ring-foreground/10 transition-colors hover:bg-muted/50"
+      onClick={onSelect}
+    >
+      {children}
+    </button>
+  );
+}
+
+function QueuedRow({ entry }: { entry: QueuedItem }) {
+  const select = useChromeStore((state) => state.select);
+  return (
+    <SelectableRow onSelect={() => select({ workspace: entry.workspace, workItem: entry.item.id })}>
       <Badge variant="secondary">{entry.item.stage}</Badge>
       <span className="truncate">{entry.item.title}</span>
       <span className="ms-auto shrink-0 text-xs text-muted-foreground">
         {entry.workspace} · {entry.item.id}
       </span>
-    </div>
+    </SelectableRow>
   );
 }
 
 function DoneRow({ entry }: { entry: FeedRun }) {
   const { run, title } = entry;
+  const select = useChromeStore((state) => state.select);
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm ring-1 ring-foreground/10">
+    <SelectableRow onSelect={() => select({ workspace: run.workspace, workItem: run.workItem })}>
       <RunStatusBadge status={run.status} />
       <span className="truncate">{title ?? run.workItem}</span>
       <span className="ms-auto shrink-0 text-xs text-muted-foreground">
         {run.workspace}
         {run.endedAtMillis !== null && ` · ${relativeTime(run.endedAtMillis)}`}
       </span>
-    </div>
+    </SelectableRow>
   );
 }
 
