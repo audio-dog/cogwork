@@ -1,0 +1,19 @@
+docs/research/shadcn-ai-elements.md
+  s_5bdc4bd89000d7::t_5816dfc10723c4 1-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "dc9ec1e857cd4d10f84d877fd8602f90aa020874",
+  "prompts": {},
+  "sessions": {
+    "s_5bdc4bd89000d7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4e6474c6-623b-49f2-bdcf-960cf00a2a63",
+        "model": "claude-fable-5-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
