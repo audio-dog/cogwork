@@ -20,9 +20,9 @@ import {
 } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import { HarnessError, type HarnessRequest, type HarnessRunner } from "./harness";
-import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
+import { defaultModelAdapterFactory, type ModelAdapterFactory } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
-import { accountFor, findProvider } from "./providers";
+import { resolveModelAdapter } from "./provider-resolve";
 import { SessionStore, type ThreadMessage } from "./session-store";
 import {
   makeOwnedToolSet,
@@ -66,12 +66,6 @@ export const defaultLoopBudget = (stage: LifecycleStage) =>
 
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });
-
-const unknownModelError = (model: string) =>
-  launchError(
-    false,
-    `no provider adapter for model "${model}"; use provider/model with a wired provider (openai, anthropic, google)`,
-  );
 
 const labelToolResult = (message: ThreadMessage) =>
   message.toolName ? `Result from ${message.toolName}:\n${message.content}` : message.content;
@@ -120,21 +114,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
       Stream.unwrap(
         Effect.gen(function* () {
           const reference = request.model ?? defaultModel;
-          const resolved = parseModelRef(reference);
-          const provider = resolved ? findProvider(resolved.provider) : undefined;
-          if (!resolved || provider === undefined) {
-            return Stream.fail(unknownModelError(reference));
-          }
-
           const credentials = yield* CredentialStore;
-          const credential = yield* credentials
-            .providerKey(accountFor(provider))
-            .pipe(Effect.mapError((error) => launchError(false, error.message)));
-
-          const adapter = makeAdapter(resolved, credential.key);
-          if (adapter === null) {
-            return Stream.fail(unknownModelError(reference));
-          }
+          const adapter = yield* resolveModelAdapter(credentials, reference, makeAdapter).pipe(
+            Effect.mapError((error) => launchError(false, error.message)),
+          );
 
           const assembler = yield* ContextAssembler;
           const assembleRequest: AssembleRequest = {
