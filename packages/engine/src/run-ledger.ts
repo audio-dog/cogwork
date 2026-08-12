@@ -61,6 +61,9 @@ const crashed = (record: RunRecord, endedAtMillis: number): RunRecord => ({
 const stillRunning = (record: RunRecord, startedFromMillis: number) =>
   record.status === "running" && record.startedAtMillis >= startedFromMillis;
 
+const runningBefore = (record: RunRecord, beforeMillis: number) =>
+  record.status === "running" && record.startedAtMillis < beforeMillis;
+
 const unresumableStatuses = new Set<RunRecord["status"]>(["interrupted", "crashed", "exhausted"]);
 
 const forItem = (workspace: string, workItem: string) => (run: RunRecord) =>
@@ -147,6 +150,14 @@ export const makeMemory = Effect.gen(function* () {
         transition(
           runs,
           (run) => stillRunning(run, startedFromMillis),
+          (run) => interrupted(run, endedAtMillis),
+        ),
+      ),
+    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
+      Ref.modify(runsRef, (runs) =>
+        transition(
+          runs,
+          (run) => runningBefore(run, beforeMillis),
           (run) => interrupted(run, endedAtMillis),
         ),
       ),
@@ -246,6 +257,8 @@ const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusSer
       Effect.andThen(core.updateRun(runId, update), publish(runId)),
     interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
       Effect.tap(core.interruptRunning(startedFromMillis, endedAtMillis), publishAll),
+    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
+      Effect.tap(core.interruptRunningBefore(beforeMillis, endedAtMillis), publishAll),
     crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
       Effect.tap(core.crashRunning(workspace, workItem, endedAtMillis), publishAll),
     closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>

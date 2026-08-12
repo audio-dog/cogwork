@@ -24,8 +24,10 @@ The `main`-side owner of the engine's lifecycle. It stays idle at launch by defa
 **adopts** a daemon already listening or **spawns** one; it pipes the child's output to the log,
 restarts it a bounded number of times on unexpected exit, and stops it on Quit. The child is a real
 Node process (`electron-vite` dev runs the CLI `daemon` through tsx; a packaged build runs a bundled
-engine entry), never `ELECTRON_RUN_AS_NODE` or `utilityProcess`, so the RunAsNode fuse stays off
-(ADR 0008).
+engine entry), never `ELECTRON_RUN_AS_NODE` or `utilityProcess`. Not needing that env var at runtime
+is what lets us flip the RunAsNode fuse **off** at build time — the packaged binary sets
+`runAsNode: false` (plus sibling hardening fuses) via `electronFuses` in `electron-builder.yml`, so a
+packaged app ignores `ELECTRON_RUN_AS_NODE=1` entirely (ADR 0008).
 _Avoid_: Engine (that's the thing being supervised), worker/utility process (the rejected Electron
 primitives)
 

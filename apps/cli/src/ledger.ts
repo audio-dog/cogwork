@@ -10,7 +10,7 @@ import {
   workItemCandidates,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
-import { and, desc, eq, gt, gte, inArray, isNotNull, notInArray, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, lt, notInArray, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -273,6 +273,16 @@ const make = (ledgerPath: string) =>
             .update(runs)
             .set({ status: "interrupted", endedAt: endedAtMillis })
             .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
+            .returning({ id: runs.id })
+            .all(),
+        ),
+
+      interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
+        writeIds("interruptRunningBefore", () =>
+          db
+            .update(runs)
+            .set({ status: "interrupted", endedAt: endedAtMillis })
+            .where(and(eq(runs.status, "running"), lt(runs.startedAt, beforeMillis)))
             .returning({ id: runs.id })
             .all(),
         ),
