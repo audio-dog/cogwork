@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/features/use-live-events.ts
+  s_b78608008c7f23::t_380b6dff8ca37c 1,11
+  s_b78608008c7f23::t_f9198cf59c3ec6 15-20,22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "2045efd4cab791c3ffbf0d9531d14f5f1fbc6dff",
+  "prompts": {},
+  "sessions": {
+    "s_b78608008c7f23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "de136966-015e-408f-a01f-97fd97a083a5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
