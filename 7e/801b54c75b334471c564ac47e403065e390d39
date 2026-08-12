@@ -1,0 +1,100 @@
+packages/engine/src/classify.ts
+  s_b40385ab8707d5::t_9f43d0fcef797a 140-141
+  s_b40385ab8707d5::t_01b87f28627094 76-80
+  s_b40385ab8707d5::t_f579635b14d131 95
+apps/cli/feldspar.workspace.ts
+  s_b40385ab8707d5::t_62d3bc6240c2b8 28
+  s_b40385ab8707d5::t_c133594fa5dc06 15
+packages/engine/src/read-model.test.ts
+  s_b40385ab8707d5::t_d49b5456b31c80 97
+packages/contracts/src/workspace.ts
+  s_b40385ab8707d5::t_cffbad19a99545 35-37,46
+packages/engine/src/commands.test.ts
+  s_b40385ab8707d5::t_4dcc88dc819fa8 136
+packages/engine/src/reconcile.ts
+  s_b40385ab8707d5::t_3f4dd6ce840fad 193-195
+packages/engine/src/classify.test.ts
+  s_b40385ab8707d5::t_8a409e7b62b3bb 328-373
+  s_b40385ab8707d5::t_966cfbce43fb25 14
+packages/engine/src/linear/client.ts
+  s_b40385ab8707d5::t_5048df1d5d96b2 37
+  s_b40385ab8707d5::t_c76bb07089ab72 302
+  s_b40385ab8707d5::t_eac7890c4e3289 187
+  s_b40385ab8707d5::t_0f181517219e57 90
+packages/engine/src/engine.test.ts
+  s_b40385ab8707d5::t_4a76f93be597a6 160
+  s_b40385ab8707d5::t_f3acdbdce0d8b3 504
+  s_b40385ab8707d5::t_d6bff824ebcc96 200
+  s_b40385ab8707d5::t_cc118886fce17c 567
+  s_b40385ab8707d5::t_8ed4827c164b2e 538
+packages/engine/src/executor.test.ts
+  s_b40385ab8707d5::t_b0fe42ff6e628a 62,94,105,117,193
+packages/engine/src/recovery.test.ts
+  s_b40385ab8707d5::t_36a1223d0ea760 73
+  s_b40385ab8707d5::t_71d87728ef5c33 87
+  s_b40385ab8707d5::t_984c745c519bb7 101
+  s_b40385ab8707d5::t_a33508454e56e0 39
+packages/engine/src/github/github.test.ts
+  s_b40385ab8707d5::t_f30444d6697fac 44
+  s_b40385ab8707d5::t_8b60c827a302b7 96
+  s_b40385ab8707d5::t_1ad2ce87734aec 177
+packages/engine/src/github/client.ts
+  s_b40385ab8707d5::t_3405b2dee8475d 30
+  s_b40385ab8707d5::t_d6d6f96b2469f0 80
+  s_b40385ab8707d5::t_c18084877ab96a 162
+packages/engine/src/linear/client.test.ts
+  s_b40385ab8707d5::t_a090bd8a9d37e2 130
+  s_b40385ab8707d5::t_c4b067b3ade2ee 235
+packages/engine/src/event-publisher.test.ts
+  s_b40385ab8707d5::t_1d82d4aacf8164 107
+packages/engine/src/issue-tracker.ts
+  s_b40385ab8707d5::t_d9b167121a1b96 23
+packages/engine/src/linear/linear.test.ts
+  s_b40385ab8707d5::t_f403272f381c89 201
+  s_b40385ab8707d5::t_ed681190948422 39
+  s_b40385ab8707d5::t_d71c53d10cadb6 310-335
+  s_b40385ab8707d5::t_ac865b6f1f05ec 73
+packages/engine/src/hand-to-human.test.ts
+  s_b40385ab8707d5::t_f1c4b448fbc974 17
+packages/engine/src/scheduler.test.ts
+  s_b40385ab8707d5::t_b835c1dd622643 39
+packages/engine/src/linear/adapter.ts
+  s_b40385ab8707d5::t_ed7befbb8075cc 100
+  s_b40385ab8707d5::t_432284b24fef87 109
+  s_b40385ab8707d5::t_07a3b042af306e 36,41,45,49-52
+  s_b40385ab8707d5::t_d5c56bf11ae34b 66
+  s_b40385ab8707d5::t_de52d6e177a67a 92
+packages/engine/src/github/provider.ts
+  s_b40385ab8707d5::t_5a06b2bcaa8aa6 132
+  s_b40385ab8707d5::t_8d6b7f0c0c062d 152
+  s_b40385ab8707d5::t_33de145187aecc 27,33,37
+  s_b40385ab8707d5::t_1a1844e62ee420 46,50
+  s_b40385ab8707d5::t_af2e2828dc36b6 147
+  s_b40385ab8707d5::t_4e41adfcea73b4 100-101
+apps/cli/config/clanker-forge.workspace.ts
+  s_b40385ab8707d5::t_eadca7947e0a65 15
+packages/engine/src/github/adapter.ts
+  s_b40385ab8707d5::t_aa5354f425e18b 98-99
+  s_b40385ab8707d5::t_13a6a8843074c6 90
+  s_b40385ab8707d5::t_955697fa339c05 27,30,33,37
+  s_b40385ab8707d5::t_da2f66b8a30abd 108
+  s_b40385ab8707d5::t_94522be0068bc2 50
+packages/engine/src/observe.ts
+  s_b40385ab8707d5::t_8f4b5aa09e035e 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "7e801b54c75b334471c564ac47e403065e390d39",
+  "prompts": {},
+  "sessions": {
+    "s_b40385ab8707d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "368f5e22-a255-4845-b2ea-3abce0abba20",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
