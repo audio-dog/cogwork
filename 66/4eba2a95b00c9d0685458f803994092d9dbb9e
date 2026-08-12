@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/components/mission-control-ui.tsx
+  s_9a5e56b5dbc27a::t_b0a3f5fd0a7340 1-137
+  s_9a5e56b5dbc27a::t_e3554b923f5c57 138
+apps/desktop/src/renderer/src/features/feed.ts
+  s_9a5e56b5dbc27a::t_1aaad655560c48 87-113
+apps/desktop/src/renderer/src/features/board-view.ts
+  s_9a5e56b5dbc27a::t_02b190659ae186 77-78,81-84
+  s_9a5e56b5dbc27a::t_835f8220724fab 61,70
+  s_9a5e56b5dbc27a::t_5fa0f29d37e92b 94
+apps/desktop/src/renderer/src/features/board-view.test.ts
+  s_9a5e56b5dbc27a::t_7008353c8e0970 163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "664eba2a95b00c9d0685458f803994092d9dbb9e",
+  "prompts": {},
+  "sessions": {
+    "s_9a5e56b5dbc27a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e775d86f-125b-4131-abb8-695f6b98bc2a",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
