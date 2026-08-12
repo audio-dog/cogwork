@@ -1,6 +1,5 @@
-import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import { useAtomRefresh, useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import type * as Atom from "effect/unstable/reactivity/Atom";
-import { useCallback } from "react";
 import { daemonEventsAtom } from "../daemon/atoms";
 
 type EventsResult = typeof daemonEventsAtom extends Atom.Atom<infer V> ? V : never;
@@ -8,13 +7,16 @@ type EventsResult = typeof daemonEventsAtom extends Atom.Atom<infer V> ? V : nev
 export function useLiveEvents() {
   const result = useAtomValue(daemonEventsAtom);
   const pull = useAtomSet(daemonEventsAtom);
+  const resubscribe = useAtomRefresh(daemonEventsAtom);
 
-  const pump = useCallback(
-    (current: EventsResult) => {
-      if (current._tag === "Success" && !current.waiting && !current.value.done) pull();
-    },
-    [pull],
-  );
+  const pump = (current: EventsResult) => {
+    if (current.waiting) return;
+    // A dropped socket lands the stream in a terminal Failure that never
+    // re-pulls on its own. Re-subscribe so a fresh WatchEvents request parks
+    // on the connection gate and resumes once the daemon is reachable again.
+    if (current._tag === "Failure") return resubscribe();
+    if (current._tag === "Success" && !current.value.done) pull();
+  };
 
   useAtomSubscribe(daemonEventsAtom, pump, { immediate: true });
 

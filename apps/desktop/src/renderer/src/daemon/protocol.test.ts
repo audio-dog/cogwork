@@ -3,8 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
@@ -92,4 +95,41 @@ describe("IPC RPC protocol", () => {
         bridge.dispose();
       }
     }));
+
+  it(
+    "recovers after the daemon socket drops and the daemon restarts",
+    () =>
+      withTempSocket(async (socketPath) => {
+        const bridge = makeBridge(socketPath);
+
+        try {
+          await Effect.runPromise(
+            Effect.gen(function* () {
+              const client = yield* RpcClient.make(TestRpcs);
+
+              const first = yield* Scope.make();
+              yield* Layer.buildWithScope(serverLayer(socketPath), first);
+              expect(yield* client.Ping()).toBe("pong");
+
+              // Remove the socket file after closing so a fresh server can bind the same path.
+              yield* Scope.close(first, Exit.succeed(undefined));
+              yield* Effect.sync(() => rmSync(socketPath, { force: true }));
+
+              const second = yield* Scope.make();
+              yield* Layer.buildWithScope(serverLayer(socketPath), second);
+
+              // Retry across the reconnect window: a call can fail once while the old socket tears down.
+              const pong = yield* client
+                .Ping()
+                .pipe(Effect.retry(Schedule.spaced("100 millis")), Effect.timeout("10 seconds"));
+              expect(pong).toBe("pong");
+              yield* Scope.close(second, Exit.succeed(undefined));
+            }).pipe(Effect.provide(layerProtocolIpc(bridge)), Effect.scoped),
+          );
+        } finally {
+          bridge.dispose();
+        }
+      }),
+    20_000,
+  );
 });

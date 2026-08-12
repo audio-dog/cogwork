@@ -4,7 +4,7 @@ import { Badge } from "@clanker-forge/ui/components/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
 import { createFileRoute } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
+import { daemonErrorMessage } from "../features/daemon-error";
 import { EngineOfflineMessage } from "../features/engine-offline";
 import { type EnginePhase, enginePhase, useEngineStatus } from "../features/use-engine-status";
 import { useLiveEvents } from "../features/use-live-events";
@@ -51,7 +51,7 @@ function LiveActivity() {
     return (
       <Alert variant="destructive">
         <AlertTitle>Event stream disconnected</AlertTitle>
-        <AlertDescription>{Cause.pretty(result.cause)}</AlertDescription>
+        <AlertDescription>{daemonErrorMessage(result.cause)}</AlertDescription>
       </Alert>
     );
   }
