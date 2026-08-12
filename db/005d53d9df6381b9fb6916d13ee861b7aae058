@@ -1,0 +1,63 @@
+.agents/skills/react-composition-patterns/AGENTS.md
+  s_e76dd87a3f3f4b::t_cc0738b241763f 1-968
+.agents/skills/react-composition-patterns/SKILL.md
+  s_e76dd87a3f3f4b::t_a7c16f9674a174 1-101
+.agents/skills/react-composition-patterns/rules/architecture-avoid-boolean-props.md
+  s_e76dd87a3f3f4b::t_35e9e13c9d28ff 1-100
+.agents/skills/react-composition-patterns/rules/architecture-compound-components.md
+  s_e76dd87a3f3f4b::t_7944cfa1a593b2 1-134
+.agents/skills/react-composition-patterns/rules/patterns-children-over-render-props.md
+  s_e76dd87a3f3f4b::t_ed60d57406c439 1-87
+.agents/skills/react-composition-patterns/rules/patterns-explicit-variants.md
+  s_e76dd87a3f3f4b::t_c96a786badfcab 1-100
+.agents/skills/react-composition-patterns/rules/react19-no-forwardref.md
+  s_e76dd87a3f3f4b::t_4fbc28bc5767e8 1-60
+.agents/skills/react-composition-patterns/rules/state-context-interface.md
+  s_e76dd87a3f3f4b::t_edf8af5f7f630f 1-191
+.agents/skills/react-composition-patterns/rules/state-decouple-implementation.md
+  s_e76dd87a3f3f4b::t_00ae1b47486e9d 1-113
+.agents/skills/react-composition-patterns/rules/state-lift-state.md
+  s_e76dd87a3f3f4b::t_22edacc3762a9d 1-125
+.github/workflows/pull-request.yml
+  s_e76dd87a3f3f4b::t_4fcaa0cd775f23 116-143
+apps/cli/src/ledger.test.ts
+  s_e76dd87a3f3f4b::t_b9a4da979f32cf 264-288
+apps/cli/src/ledger.ts
+  s_e76dd87a3f3f4b::t_e37be7ef36280d 13,280-289
+apps/desktop/CONTEXT.md
+  s_e76dd87a3f3f4b::t_b3430c875f31d9 27-30
+apps/desktop/electron-builder.yml
+  s_e76dd87a3f3f4b::t_54e5c157a86ac4 14-18
+apps/desktop/package.json
+  s_e76dd87a3f3f4b::t_57e6a37f90add2 45
+apps/desktop/src/main/daemon-bridge.ts
+  s_e76dd87a3f3f4b::t_51285ad0fa4f9c 2,15-16,28,62-68
+package.json
+  s_e76dd87a3f3f4b::t_1cafd7bcbd630e 13
+packages/engine/src/daemon.ts
+  s_e76dd87a3f3f4b::t_69c4ea2a83e2b3 289-291,294
+packages/engine/src/run-ledger.test.ts
+  s_e76dd87a3f3f4b::t_79e70cd68f9835 303-329
+packages/engine/src/run-ledger.ts
+  s_e76dd87a3f3f4b::t_611ca13842b604 64-66,156-163,260-261
+pnpm-lock.yaml
+  s_e76dd87a3f3f4b::t_9ae66974d70618 179-181,303,306
+turbo.json
+  s_e76dd87a3f3f4b::t_40c549a0e12a76 9-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "db005d53d9df6381b9fb6916d13ee861b7aae058",
+  "prompts": {},
+  "sessions": {
+    "s_e76dd87a3f3f4b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "338901d0-2dad-4e72-9511-2f29fa9bfdb0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
