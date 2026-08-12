@@ -1,0 +1,24 @@
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_b78608008c7f23::t_f358387aecfe7c 98-113,115-120,126-134
+  s_b78608008c7f23::t_19ac33eabed76c 6,10
+  s_b78608008c7f23::t_439b79ab18d1ff 121
+  s_b78608008c7f23::t_630cdc3799c435 114
+  s_b78608008c7f23::t_15dc29de192849 8
+  s_b78608008c7f23::t_29ec9ef4537fe0 122-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6d533e6b3e7fe70d34dfb96041f121b34d38ae2c",
+  "prompts": {},
+  "sessions": {
+    "s_b78608008c7f23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "de136966-015e-408f-a01f-97fd97a083a5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
