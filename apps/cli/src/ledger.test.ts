@@ -261,6 +261,31 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("interrupts runs left running before a cutoff and spares later ones", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* ledger.insertRun(record("before-orphan", 3900));
+        yield* ledger.insertRun(record("before-fresh", 4100));
+        yield* ledger.insertRun(record("before-done", 3800));
+        yield* ledger.updateRun(runId("before-done"), {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 3850,
+        });
+
+        yield* ledger.interruptRunningBefore(4000, 5000);
+
+        const statuses = yield* Effect.forEach(["before-orphan", "before-fresh", "before-done"], (id) =>
+          Effect.map(ledger.getRun(runId(id)), (run) => [run?.status, run?.endedAtMillis]),
+        );
+        assert.deepStrictEqual(statuses, [
+          ["interrupted", 5000],
+          ["running", null],
+          ["succeeded", 3850],
+        ]);
+      }),
+    );
+
     it.effect("crashes the item's running runs and counts crashes until a success resets them", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
