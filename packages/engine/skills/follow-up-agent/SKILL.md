@@ -48,6 +48,8 @@ If [step 1](#1-read-the-state) found the base diverged, bring `main` back into t
 
 **Linear-history repos — rebase instead.** When the workspace's `linearHistory` flag is set, a merge commit is not allowed. Rebase the branch onto `main`, resolve the conflicts, and plan to push with `git push --force-with-lease` at [step 5](#5-push-and-summarize). Because that force-push rewrites the branch a human may be mid-review on, post a heads-up coordination note (marked per [step 5](#5-push-and-summarize)) so the reviewer isn't blindsided — say plainly that you rebased and force-pushed, and why.
 
+**A `pnpm-lock.yaml` conflict is not a hand-merge.** Leave the conflict markers in place and run `pnpm install` — pnpm reads both sides, reconciles them against the merged `package.json` files, and writes a valid lockfile — then `git add pnpm-lock.yaml`. Never hand-edit the lockfile, and never delete-and-regenerate it; both risk a tree that no longer matches what either branch actually resolved. Use plain `pnpm install` here, not `--frozen-lockfile`: frozen refuses to update the lockfile, which is the opposite of what a merge needs.
+
 If the conflicts are ones you genuinely cannot resolve, escalate per the [authority boundary](#authority-boundary) rather than guessing.
 
 Completion: `main` is integrated in your working tree and any conflicts are resolved. Never resolve a conflict by discarding a reviewer's or the base's intent you don't understand.
