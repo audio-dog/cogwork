@@ -1,0 +1,23 @@
+packages/engine/src/credential-store.ts
+  s_b40385ab8707d5::t_8a1c6d5dce9cfe 56,60,66,74,76
+apps/cli/src/credentials.ts
+  s_b40385ab8707d5::t_7fed32c74c0a41 44
+packages/engine/CONTEXT.md
+  s_b40385ab8707d5::t_6a901fe05e52d9 165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d57946306de98d2fa4fe6b6887fe57e63f8dfc51",
+  "prompts": {},
+  "sessions": {
+    "s_b40385ab8707d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "368f5e22-a255-4845-b2ea-3abce0abba20",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
