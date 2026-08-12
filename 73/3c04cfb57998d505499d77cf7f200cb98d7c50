@@ -1,0 +1,76 @@
+apps/desktop/src/renderer/src/features/feed.ts
+  s_bd3cd0f60dfe95::t_0a0502eff10828 86-89
+  s_bd3cd0f60dfe95::t_f3fdc9c023a7d1 5,8,12-15,96
+  s_a45ddfd4767a54::t_bb29f47dd029cc 16,90-95,97,102
+apps/desktop/src/main/window.ts
+  s_bd3cd0f60dfe95::t_a5dc85e993e3cb 33-36
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_bd3cd0f60dfe95::t_1c260f78856715 16-17
+  s_bd3cd0f60dfe95::t_8a6080e3247bf4 15
+  s_bd3cd0f60dfe95::t_6384229850c7a8 18-20
+  s_bd3cd0f60dfe95::t_daa92bd9a612aa 1-2,21-24
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_bd3cd0f60dfe95::t_d30ba9fa9fe86f 17-106
+  s_bd3cd0f60dfe95::t_6ac43a754a0f60 1-16,107-127
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_bd3cd0f60dfe95::t_902669f54ea45b 9
+  s_bd3cd0f60dfe95::t_11fe46440146fb 37
+  s_bd3cd0f60dfe95::t_1b109d6e149a73 14-15,19,22-26,52,54-58,75-80,102,150-155
+apps/desktop/src/renderer/src/components/triage-approval.tsx
+  s_bd3cd0f60dfe95::t_b033e09ec3afe3 12
+  s_bd3cd0f60dfe95::t_2aa9515e486d21 34
+  s_bd3cd0f60dfe95::t_4af9934cbbfd88 9-11
+  s_bd3cd0f60dfe95::t_cc253beafa441c 13-15,31-33
+  s_bd3cd0f60dfe95::t_c99376006e5dbe 35-37
+  s_bd3cd0f60dfe95::t_f348b1a9bd7597 1-8,16-30,38-82
+packages/ui/src/components/spinner.tsx
+  s_bd3cd0f60dfe95::t_167c2c2234de6e 1-17
+packages/ui/src/components/textarea.tsx
+  s_bd3cd0f60dfe95::t_14735dfb67f20f 1-18
+packages/ui/src/components/toggle-group.tsx
+  s_bd3cd0f60dfe95::t_6fd977cdd63850 1-86
+packages/ui/src/components/toggle.tsx
+  s_bd3cd0f60dfe95::t_f39faa50a6a828 1-42
+apps/desktop/src/renderer/src/components/badges.tsx
+  s_bd3cd0f60dfe95::t_7235c544d22001 1,31-53
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_bd3cd0f60dfe95::t_db7d9d676c1064 32-33,35,45,68-79,81,83,89,95,97,104
+apps/desktop/src/renderer/src/components/item-detail.tsx
+  s_bd3cd0f60dfe95::t_69514222080ee9 1-128
+apps/desktop/src/renderer/src/components/pr-gate.tsx
+  s_bd3cd0f60dfe95::t_2e39dc4687f744 1-29
+apps/desktop/src/renderer/src/components/rail-shell.tsx
+  s_bd3cd0f60dfe95::t_8db05bcb125c9f 1-13
+apps/desktop/src/renderer/src/components/run-drill-in.tsx
+  s_bd3cd0f60dfe95::t_8f54340c7df6eb 1-144
+apps/desktop/src/renderer/src/store/chrome.ts
+  s_bd3cd0f60dfe95::t_5949223e26b662 1,4-8,14-16,24-26
+packages/ui/src/components/field.tsx
+  s_bd3cd0f60dfe95::t_9ea07eb1ac417a 1-219
+packages/ui/src/components/label.tsx
+  s_bd3cd0f60dfe95::t_ca328560274b11 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "733c04cfb57998d505499d77cf7f200cb98d7c50",
+  "prompts": {},
+  "sessions": {
+    "s_a45ddfd4767a54": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "674f17f0-1644-417a-9072-c4002f5ed3ab",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_bd3cd0f60dfe95": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "691aad3c-d12e-4dbf-80fe-495e4bcb3603",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
