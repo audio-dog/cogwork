@@ -50,6 +50,7 @@ import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
 import { layer as runControlLayer } from "./run-control";
 import { type CoreRunLedger, RunLedger, publishingLayer as runLedgerPublishingLayer } from "./run-ledger";
+import { layer as runRecorderLayer } from "./run-recorder";
 import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
 import { ticketSlug, WorktreeManager } from "./worktree";
@@ -198,12 +199,14 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     Layer.provide(adapters.runLedger),
     Layer.provide(daemonEventBusLayer),
   );
+  const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
   const base = Layer.mergeAll(
     adapters.registry,
     daemonInfoLayer,
     issueTracker,
     runLedger,
+    runRecorder,
     Harness.layer(adapters.harnessRunners).pipe(
       Layer.provide(sessionStore),
       Layer.provide(adapters.contextAssembler),
