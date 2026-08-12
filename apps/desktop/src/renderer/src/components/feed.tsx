@@ -6,7 +6,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge
 import { Item, ItemActions, ItemContent, ItemGroup } from "@clanker-forge/ui/components/item";
 import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
 import { RiArrowRightSLine } from "@remixicon/react";
-import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { daemonErrorMessage } from "../features/daemon-error";
 import type { FeedRun, QueuedItem } from "../features/feed";
@@ -70,8 +69,10 @@ function LivePreview({ preview }: { preview: RunActivityPreview | undefined }) {
 
 function LiveCard({ entry, preview }: { entry: FeedRun; preview: RunActivityPreview | undefined }) {
   const { run, title } = entry;
+  const select = useChromeStore((state) => state.select);
+  const watch = () => select({ workspace: run.workspace, workItem: run.workItem });
   return (
-    <Card>
+    <Card className="cursor-pointer transition-colors hover:bg-muted/50" onClick={watch}>
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-xs text-muted-foreground">{run.workItem}</span>
@@ -82,7 +83,7 @@ function LiveCard({ entry, preview }: { entry: FeedRun; preview: RunActivityPrev
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <LivePreview preview={preview} />
-        <Button variant="link" size="sm" className="justify-start px-0" render={<Link to="/activity" />}>
+        <Button variant="link" size="sm" className="justify-start px-0" onClick={watch}>
           <RiArrowRightSLine data-icon="inline-start" />
           Watch this agent
         </Button>
@@ -93,8 +94,15 @@ function LiveCard({ entry, preview }: { entry: FeedRun; preview: RunActivityPrev
 
 function QueuedRow({ entry }: { entry: QueuedItem }) {
   const { item, workspace } = entry;
+  const select = useChromeStore((state) => state.select);
   return (
-    <Item render={<li />} variant="outline" size="sm">
+    <Item
+      render={<li />}
+      variant="outline"
+      size="sm"
+      className="cursor-pointer"
+      onClick={() => select({ workspace, workItem: item.id })}
+    >
       <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.id}</span>
       <Badge variant="secondary">{item.stage}</Badge>
       <ItemContent className="min-w-0 flex-1">
@@ -110,8 +118,15 @@ function QueuedRow({ entry }: { entry: QueuedItem }) {
 
 function DoneRow({ entry }: { entry: FeedRun }) {
   const { run, title } = entry;
+  const select = useChromeStore((state) => state.select);
   return (
-    <Item render={<li />} variant="outline" size="sm">
+    <Item
+      render={<li />}
+      variant="outline"
+      size="sm"
+      className="cursor-pointer"
+      onClick={() => select({ workspace: run.workspace, workItem: run.workItem })}
+    >
       <span className="shrink-0 font-mono text-xs text-muted-foreground">{run.workItem}</span>
       <ItemContent className="min-w-0 flex-1">
         <span className="truncate text-sm">{title ?? run.workItem}</span>

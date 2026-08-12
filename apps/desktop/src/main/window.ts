@@ -30,7 +30,10 @@ export const createMainWindow = (deps: MainWindowDeps): BrowserWindow => {
   window.on("ready-to-show", () => window.show());
 
   window.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
+    // Only hand real web links to the OS — never a file:// or custom-scheme url that shell.openExternal
+    // would launch as a local handler.
+    const protocol = URL.parse(details.url)?.protocol;
+    if (protocol === "https:" || protocol === "http:") shell.openExternal(details.url);
     return { action: "deny" };
   });
 

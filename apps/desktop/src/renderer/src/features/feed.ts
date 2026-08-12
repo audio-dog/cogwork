@@ -2,10 +2,17 @@ import {
   type Board,
   type ClassifiedItem,
   itemKey,
+  type NeedsHumanReason,
   type PrSummary,
   type RunSummary,
+  type WorkItemId,
   type WorkspaceId,
 } from "@clanker-forge/contracts";
+
+export const needsHumanReasonLabel: Record<NeedsHumanReason, string> = {
+  "needs-info": "Needs info",
+  "ready-for-human": "Ready for human",
+};
 
 export interface FeedRun {
   readonly run: RunSummary;
@@ -76,11 +83,23 @@ export const blockedCount = (board: Board, filter: WorkspaceId | null): number =
 export const selfHalts = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
   workspaceItems(board, filter).filter(({ item }) => item._tag === "NeedsHuman");
 
+export const boardItem = (board: Board, workspace: WorkspaceId, workItem: WorkItemId) =>
+  board.items.get(itemKey(workspace, workItem)) ?? null;
+
+export const runForItem = (board: Board, workspace: WorkspaceId, workItem: WorkItemId) => {
+  const forItem = [...board.runs.values()].filter(
+    (run) => run.workspace === workspace && run.workItem === workItem,
+  );
+  const live = forItem.find((run) => run.status === "running");
+  if (live) return live;
+  return forItem.sort((a, b) => b.startedAtMillis - a.startedAtMillis)[0] ?? null;
+};
+
 export const mergeGate = (board: Board, filter: WorkspaceId | null): MergeGateItem[] =>
   workspaceItems(board, filter)
     .filter(
       (entry): entry is FeedItem & { item: ClassifiedItem & { pr: PrSummary } } =>
-        entry.item.pr !== undefined && entry.item.pr.review === "ready",
+        entry.item.pr?.review === "ready",
     )
     .map(({ workspace, item }) => ({ workspace, item, pr: item.pr }))
     .sort((a, b) => a.pr.waitingSinceMillis - b.pr.waitingSinceMillis);

@@ -1,12 +1,13 @@
 import { Badge } from "@clanker-forge/ui/components/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
 import { Separator } from "@clanker-forge/ui/components/separator";
 import type { ReactNode } from "react";
 import { mergeGate, selfHalts } from "../features/feed";
 import { useBoard } from "../features/use-board";
 import { useChromeStore } from "../store/chrome";
 import { MergeGateCard, SelfHaltCard } from "./attention-items";
+import { ItemDetail } from "./item-detail";
+import { RailShell } from "./rail-shell";
 
 function RailSection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
   return (
@@ -67,17 +68,15 @@ function RailBody() {
   );
 }
 
-export function AttentionRail() {
+function AttentionList() {
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
-        <h2 className="text-sm font-semibold">Attention</h2>
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="p-4">
-          <RailBody />
-        </div>
-      </ScrollArea>
-    </aside>
+    <RailShell header={<h2 className="text-sm font-semibold">Attention</h2>}>
+      <RailBody />
+    </RailShell>
   );
+}
+
+export function AttentionRail() {
+  const selection = useChromeStore((state) => state.selection);
+  return selection ? <ItemDetail selection={selection} /> : <AttentionList />;
 }

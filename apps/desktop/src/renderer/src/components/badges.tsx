@@ -1,4 +1,4 @@
-import type { PrChecks, RunStatus } from "@clanker-forge/contracts";
+import type { PrBaseDivergence, PrChecks, PrReviewStatus, RunStatus } from "@clanker-forge/contracts";
 import { Badge } from "@clanker-forge/ui/components/badge";
 import type { ComponentProps } from "react";
 
@@ -27,4 +27,27 @@ const prChecks: Record<PrChecks, { label: string; variant: BadgeVariant }> = {
 export function PrChecksBadge({ checks }: { checks: PrChecks }) {
   const { label, variant } = prChecks[checks];
   return <Badge variant={variant}>{label}</Badge>;
+}
+
+const prReview: Record<PrReviewStatus, { label: string; variant: BadgeVariant }> = {
+  pending: { label: "Review pending", variant: "outline" },
+  "changes-requested": { label: "Changes requested", variant: "destructive" },
+  ready: { label: "Ready to merge", variant: "secondary" },
+};
+
+export function PrReviewBadge({ review }: { review: PrReviewStatus }) {
+  const { label, variant } = prReview[review];
+  return <Badge variant={variant}>{label}</Badge>;
+}
+
+const prDivergence: Record<PrBaseDivergence, { label: string; variant: BadgeVariant } | null> = {
+  conflict: { label: "Conflicts", variant: "destructive" },
+  clean: { label: "Behind base", variant: "outline" },
+  none: null,
+};
+
+export function PrDivergenceBadge({ divergence }: { divergence: PrBaseDivergence }) {
+  const badge = prDivergence[divergence];
+  if (!badge) return null;
+  return <Badge variant={badge.variant}>{badge.label}</Badge>;
 }
