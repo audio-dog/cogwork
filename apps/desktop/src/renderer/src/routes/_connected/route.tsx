@@ -15,10 +15,9 @@ function ConnectedLayout() {
   const { status } = useEngineStatus();
   const phase = enginePhase(status);
   const pageTitle = useMatches().at(-1)?.staticData?.pageTitle ?? "Mission control";
+  const result = useBoard();
 
   if (phase !== "up") return <EngineOfflineCard title={pageTitle} phase={phase} />;
-
-  const result = useBoard();
   if (result._tag !== "Success") return <DaemonUnavailable />;
 
   return <Outlet />;
