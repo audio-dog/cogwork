@@ -301,6 +301,33 @@ describe("RunLedger (memory)", () => {
   });
 
   it.layer(layerMemory)((it) => {
+    it.effect("interrupts runs left running by an earlier daemon and spares this daemon's own", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertRun(record("orphan", 3900));
+        yield* ledger.insertRun(record("fresh", 4100));
+        yield* ledger.insertRun(record("done", 3800));
+        yield* ledger.updateRun(runId("done"), {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 3850,
+        });
+
+        yield* ledger.interruptRunningBefore(4000, 5000);
+
+        const statuses = yield* Effect.forEach(["orphan", "fresh", "done"], (id) =>
+          Effect.map(ledger.getRun(runId(id)), (run) => [run?.status, run?.endedAtMillis]),
+        );
+        assert.deepStrictEqual(statuses, [
+          ["interrupted", 5000],
+          ["running", null],
+          ["succeeded", 3850],
+        ]);
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
     it.effect("offers a still-running run for resume once its session has a handle", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
