@@ -47,9 +47,7 @@ const toCoordinationComment =
   });
 
 const coordinationScope = ({ actorUserId }: LinearTarget) =>
-  actorUserId === null
-    ? null
-    : { botUserId: actorUserId, ledgerMarker, proposalMarker: triageProposalAttribution };
+  actorUserId === null ? null : { actorUserId, ledgerMarker, proposalMarker: triageProposalAttribution };
 
 const clientCredentialsFor = (oauth: OAuthAppConfig | undefined) =>
   oauth?.clientSecretEnv ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null;

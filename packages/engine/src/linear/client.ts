@@ -63,7 +63,7 @@ export interface RawLabel {
 }
 
 export interface CoordinationScope {
-  readonly botUserId: string;
+  readonly actorUserId: string;
   readonly ledgerMarker: string;
   readonly proposalMarker: string;
 }
@@ -434,7 +434,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   ) {
     const team = coordination
       ? yield* loadTeam(ref, coordinatedIssuesShape, {
-          bot: coordination.botUserId,
+          bot: coordination.actorUserId,
           ledger: coordination.ledgerMarker,
           proposal: coordination.proposalMarker,
         })
