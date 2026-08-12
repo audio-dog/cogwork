@@ -21,10 +21,10 @@
     "@agentclientprotocol/sdk": "0.25.1",
     "@clanker-forge/contracts": "workspace:*",
     "@clanker-forge/engine": "workspace:*",
-    "@tanstack/ai": "0.42.0",
-    "@tanstack/ai-acp": "0.2.3",
-    "@tanstack/ai-sandbox": "0.2.4",
-    "@tanstack/ai-sandbox-local-process": "0.2.0",
+    "@tanstack/ai": "0.44.0",
+    "@tanstack/ai-acp": "0.2.6",
+    "@tanstack/ai-sandbox": "0.3.2",
+    "@tanstack/ai-sandbox-local-process": "0.2.1",
     "effect": "catalog:effect"
   },
   "devDependencies": {

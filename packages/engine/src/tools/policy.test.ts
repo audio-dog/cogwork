@@ -113,7 +113,9 @@ describe("gated tool set", () => {
       const tools = makeOwnedToolSet(sandbox, readOnlyProfile);
       const write = tools.write.execute;
       if (write === undefined) throw new Error("write tool is missing a server executor");
-      const result = yield* Effect.promise(() => write({ path: "blocked.txt", content: "nope" }));
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(write({ path: "blocked.txt", content: "nope" })),
+      );
       assert.isTrue(isPolicyDenied(result));
 
       const list = yield* Effect.promise(() => sandbox.handle.fs.list("."));
@@ -128,7 +130,7 @@ describe("gated tool set", () => {
       const tools = makeOwnedToolSet(sandbox, readOnlyProfile);
       const read = tools.read.execute;
       if (read === undefined) throw new Error("read tool is missing a server executor");
-      const result = yield* Effect.promise(() => read({ path: "seed.txt" }));
+      const result = yield* Effect.promise(() => Promise.resolve(read({ path: "seed.txt" })));
       assert.isFalse(isPolicyDenied(result));
     }),
   );
@@ -139,7 +141,9 @@ describe("gated tool set", () => {
       const tools = makeOwnedToolSet(sandbox, fullProfile);
       const bash = tools.bash.execute;
       if (bash === undefined) throw new Error("bash tool is missing a server executor");
-      const result = yield* Effect.promise(() => bash({ command: "git push --force origin main" }));
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(bash({ command: "git push --force origin main" })),
+      );
       assert.isTrue(isPolicyDenied(result));
     }),
   );

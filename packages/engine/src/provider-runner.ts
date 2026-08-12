@@ -9,6 +9,7 @@ import {
   type StreamChunk,
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
+import { withPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
@@ -23,7 +24,7 @@ import { HarnessError, type HarnessRequest, type HarnessRunner } from "./harness
 import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { accountFor, findProvider } from "./providers";
-import { SessionStore, type ThreadMessage } from "./session-store";
+import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
   openWorktreeSandbox,
@@ -39,6 +40,7 @@ export interface RunChatOptions {
   readonly middleware: ReadonlyArray<ChatMiddleware>;
   readonly agentLoopStrategy: AgentLoopStrategy;
   readonly abortController: AbortController;
+  readonly threadId?: string;
 }
 
 export type RunChat = (options: RunChatOptions) => AsyncIterable<StreamChunk>;
@@ -51,6 +53,7 @@ const defaultRunChat: RunChat = (options) =>
     middleware: [...options.middleware],
     agentLoopStrategy: options.agentLoopStrategy,
     abortController: options.abortController,
+    threadId: options.threadId,
   });
 
 export interface ProviderRunnerOptions {
@@ -71,18 +74,6 @@ const unknownModelError = (model: string) =>
   launchError(
     false,
     `no provider adapter for model "${model}"; use provider/model with a wired provider (openai, anthropic, google)`,
-  );
-
-const labelToolResult = (message: ThreadMessage) =>
-  message.toolName ? `Result from ${message.toolName}:\n${message.content}` : message.content;
-
-// A resumed transcript is a coarse fold: no tool-call ids survive, so prior tool
-// results ride back as labelled user turns rather than malformed tool turns.
-const toModelMessages = (thread: ReadonlyArray<ThreadMessage>): ReadonlyArray<ModelMessage> =>
-  thread.map((message) =>
-    message.role === "assistant"
-      ? { role: "assistant", content: message.content }
-      : { role: "user", content: labelToolResult(message) },
   );
 
 // Falls back to the run-start layers when a refresh fails, so a broken read never
@@ -147,9 +138,15 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             .pipe(Effect.mapError((error) => launchError(false, error.message)));
 
           const store = yield* SessionStore;
-          const thread = request.session ? yield* store.loadThread(request.session) : [];
+          const session = request.session;
+          // History comes from the ledger-backed message store; the new prompt
+          // is this run's only fresh turn. We pass the full list so the middleware
+          // uses it verbatim rather than reloading — the ledger stays the truth.
+          const history = session
+            ? yield* Effect.promise(() => store.persistence.stores.messages.loadThread(session))
+            : [];
           const messages: ReadonlyArray<ModelMessage> = [
-            ...toModelMessages(thread),
+            ...history,
             { role: "user", content: request.prompt },
           ];
 
@@ -164,9 +161,13 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             adapter,
             messages,
             tools: Object.values(toolSet),
-            middleware: [contextMiddleware(assembler, assembleRequest, assembled.layers)],
+            middleware: [
+              withPersistence(store.persistence),
+              contextMiddleware(assembler, assembleRequest, assembled.layers),
+            ],
             agentLoopStrategy: maxIterations(defaultLoopBudget(request.stage)),
             abortController,
+            threadId: session ?? undefined,
           });
 
           const diffs = watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.catchCause(() => Stream.empty));

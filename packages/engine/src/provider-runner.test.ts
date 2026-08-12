@@ -1,6 +1,7 @@
 import { agUiTextDelta, HarnessName, SessionId } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { EventType, type StreamChunk } from "@tanstack/ai";
+import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
+import { type ChatWithInterruptsPersistence, defineAIPersistence } from "@tanstack/ai-persistence";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -15,6 +16,7 @@ import {
 } from "./context-assembler";
 import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 import type { HarnessRequest } from "./harness";
+import { makeInterruptStore } from "./interrupt-store";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
 import {
   defaultLoopBudget,
@@ -23,7 +25,7 @@ import {
   type RunChatOptions,
   resolveContextLayers,
 } from "./provider-runner";
-import { SessionStore, type SessionStoreService, type ThreadMessage } from "./session-store";
+import { SessionStore, type SessionStoreService } from "./session-store";
 
 const SECRET = "sk-super-secret-value";
 const harnessName = Schema.decodeSync(HarnessName)("provider");
@@ -68,12 +70,24 @@ const keyProvider: CredentialStoreService["providerKey"] = () =>
 const missingKeyProvider: CredentialStoreService["providerKey"] = () =>
   Effect.fail(new CredentialError({ account: "openai", message: "no api key for openai" }));
 
-const sessionStore = (thread: ReadonlyArray<ThreadMessage>): SessionStoreService => ({
-  loadThread: () => Effect.succeed(thread),
+const stubPersistence = (thread: ReadonlyArray<ModelMessage>): ChatWithInterruptsPersistence =>
+  defineAIPersistence({
+    stores: {
+      messages: {
+        loadThread: () => Promise.resolve([...thread]),
+        saveThread: () => Promise.resolve(),
+      },
+      runs: new InMemoryRunStore(),
+      interrupts: makeInterruptStore(),
+    },
+  });
+
+const sessionStore = (thread: ReadonlyArray<ModelMessage>): SessionStoreService => ({
+  persistence: stubPersistence(thread),
   resumeHandle: () => Effect.succeed(null),
 });
 
-const sessionLayer = (thread: ReadonlyArray<ThreadMessage>) =>
+const sessionLayer = (thread: ReadonlyArray<ModelMessage>) =>
   Layer.succeed(SessionStore, sessionStore(thread));
 
 const contextService = (layers: ReadonlyArray<InstructionLayer>): ContextAssemblerService => ({
@@ -156,6 +170,7 @@ describe("providerRunner", () => {
         );
         assert.lengthOf([...options.tools], 7);
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "clanker-forge-context"));
+        assert.isTrue(options.middleware.some((middleware) => middleware.name === "chat-persistence"));
       }),
     30000,
   );

@@ -1,16 +1,24 @@
-import type { AgUiEvent, SessionId } from "@clanker-forge/contracts";
+import type { AgUiEvent, RunEvent, SessionId } from "@clanker-forge/contracts";
 import {
   AgUiEvent as AgUiEventSchema,
   agUiDisplayName,
   agUiIsTerminal,
   agUiTextDelta,
+  SessionId as SessionIdSchema,
 } from "@clanker-forge/contracts";
+import { InMemoryRunStore, type ModelMessage } from "@tanstack/ai";
+import {
+  type ChatWithInterruptsPersistence,
+  defineAIPersistence,
+  type MessageStore,
+} from "@tanstack/ai-persistence";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { handleOf, RunLedger } from "./run-ledger";
+import { makeInterruptStore } from "./interrupt-store";
+import { handleOf, RunLedger, type RunLedgerService } from "./run-ledger";
 
 export interface ThreadMessage {
   readonly role: "assistant" | "tool";
@@ -19,7 +27,12 @@ export interface ThreadMessage {
 }
 
 export interface SessionStoreService {
-  readonly loadThread: (session: SessionId) => Effect.Effect<ReadonlyArray<ThreadMessage>>;
+  // The `@tanstack/ai-persistence` adapter the provider runner runs under: a
+  // ledger-backed message store (load folds the ledger, save is a no-op so the
+  // event-sourced ledger stays the one truth) beside process-scoped run and
+  // interrupt stores for durable pause/resume.
+  readonly persistence: ChatWithInterruptsPersistence;
+  // The opaque handle a CLI runner resumes its own history from.
   readonly resumeHandle: (session: SessionId) => Effect.Effect<string | null>;
 }
 
@@ -72,12 +85,45 @@ export const foldThread = (events: ReadonlyArray<{ readonly data: string }>) => 
   return flushText(decoded.reduce(foldEvent, emptyFold)).messages;
 };
 
+const labelToolResult = (message: ThreadMessage) =>
+  message.toolName ? `Result from ${message.toolName}:\n${message.content}` : message.content;
+
+// A resumed transcript is a coarse fold: no tool-call ids survive, so prior tool
+// results ride back as labelled user turns rather than malformed tool turns.
+export const toModelMessages = (thread: ReadonlyArray<ThreadMessage>): Array<ModelMessage> =>
+  thread.map((message) =>
+    message.role === "assistant"
+      ? { role: "assistant", content: message.content }
+      : { role: "user", content: labelToolResult(message) },
+  );
+
+const decodeSession = Schema.decodeUnknownOption(SessionIdSchema);
+
+// `loadThread` folds the session's run events into model messages; `saveThread`
+// is a no-op because the executor already appends every event to the ledger, so
+// writing the transcript back would fork the one truth.
+const ledgerMessageStore = (ledger: RunLedgerService): MessageStore => ({
+  loadThread: (threadId) =>
+    Effect.runPromise(
+      Option.match(decodeSession(threadId), {
+        onNone: () => Effect.succeed<ReadonlyArray<RunEvent>>([]),
+        onSome: (session) => ledger.sessionEvents(session),
+      }).pipe(Effect.map((events) => toModelMessages(foldThread(events)))),
+    ),
+  saveThread: () => Promise.resolve(),
+});
+
 export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
+  const persistence: ChatWithInterruptsPersistence = defineAIPersistence({
+    stores: {
+      messages: ledgerMessageStore(ledger),
+      runs: new InMemoryRunStore(),
+      interrupts: makeInterruptStore(),
+    },
+  });
   return {
-    loadThread: Effect.fn("SessionStore.loadThread")(function* (session: SessionId) {
-      return foldThread(yield* ledger.sessionEvents(session));
-    }),
+    persistence,
     resumeHandle: Effect.fn("SessionStore.resumeHandle")(function* (session: SessionId) {
       return yield* handleOf(ledger, session);
     }),
