@@ -3,13 +3,13 @@ packages:
   - 'apps/*'
 
 allowBuilds:
-  '@google/genai': set this to true or false
-  '@openrouter/sdk': set this to true or false
+  '@google/genai': false
+  '@openrouter/sdk': false
   electron: true
   electron-winstaller: true
   esbuild: true
   msgpackr-extract: true
-  protobufjs: set this to true or false
+  protobufjs: false
 
 catalog:
   '@effect/tsgo': '0.24.3'
