@@ -1,0 +1,39 @@
+packages/engine/src/daemon.ts
+  s_df722b9996f3ee::t_28d115f6f4ada5 53
+  s_df722b9996f3ee::t_cbf6c0f09be420 202,209
+packages/engine/src/run-recorder.test.ts
+  s_df722b9996f3ee::t_8fbd6fb541e630 1-19,21-29,31-32,35-77,80,172
+  s_df722b9996f3ee::t_c6391a3a378254 20
+  s_df722b9996f3ee::t_84f0842c88b40d 30
+  s_df722b9996f3ee::t_f135ff954572b9 33-34,78-79,81-171
+  s_df722b9996f3ee::t_63fad2de4c5210 173-175
+packages/engine/src/run-recorder.ts
+  s_df722b9996f3ee::t_7aa0e0165e5a9c 1-72
+packages/engine/src/executor.ts
+  s_df722b9996f3ee::t_7973a70fd83273 61
+  s_df722b9996f3ee::t_ab2f2898c15474 38
+  s_df722b9996f3ee::t_2c9fa002fd6960 221,227-228,230-231,233,238-240,249,251
+  s_df722b9996f3ee::t_bafbb4ccaa3806 2
+  s_df722b9996f3ee::t_e142f2fb3882de 131
+  s_df722b9996f3ee::t_d389d8074f4a46 235
+packages/engine/src/executor.test.ts
+  s_df722b9996f3ee::t_01472192d86edb 359
+  s_df722b9996f3ee::t_370963c9138aed 350
+  s_df722b9996f3ee::t_1eb2851b409e96 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "71165b02d673bb49460450d3eacc05a1922b16e4",
+  "prompts": {},
+  "sessions": {
+    "s_df722b9996f3ee": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "39c28e7a-9e47-4d52-bca9-9dcc1c3d158a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
