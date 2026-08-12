@@ -104,6 +104,7 @@ const eligibleItem = (title: string): TrackerItem => ({
   id: id("AUD-1"),
   title,
   roles: ["ready-for-agent"],
+  assignees: [],
   claimLabeled: false,
   claim: null,
   claimedByUs: false,

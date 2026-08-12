@@ -36,6 +36,7 @@ interface SeedIssue {
   readonly identifier: string;
   readonly title: string;
   readonly labels: ReadonlyArray<string>;
+  readonly assignees?: ReadonlyArray<string>;
   readonly stateName?: string;
   readonly stateType?: string;
   readonly openBlockers?: number;
@@ -69,6 +70,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         identifier: issue.identifier,
         title: issue.title,
         labels: issue.labels,
+        assignees: issue.assignees ?? [],
         stateName: issue.stateName ?? "Todo",
         stateType: issue.stateType ?? "unstarted",
         openBlockers: issue.openBlockers ?? 0,
@@ -196,7 +198,7 @@ const workspace: RegisteredWorkspace = {
     issueTracker: {
       type: "linear",
       team: "AUD",
-      botUserId: bot.id,
+      actorUserId: bot.id,
     },
     harness: { preferred: "cursor" },
   }),
@@ -299,6 +301,32 @@ describe("linear work source adapter", () => {
               stateName: "Canceled",
               stateType: "canceled",
             },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("carries assignees onto observed items so the allowlist gate can drop unowned work", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      assert.deepStrictEqual(items.find((item) => item.id === "AUD-40")?.assignees, ["user-me"]);
+      assert.deepStrictEqual(items.find((item) => item.id === "AUD-41")?.assignees, []);
+      assert.deepStrictEqual(
+        classify(items, ["user-me"]).eligible.map((entry) => entry.id),
+        [id("AUD-40")],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            {
+              identifier: "AUD-40",
+              title: "mine",
+              labels: ["state:ready-for-agent"],
+              assignees: ["user-me"],
+            },
+            { identifier: "AUD-41", title: "unassigned", labels: ["state:ready-for-agent"] },
           ],
         }),
       ),

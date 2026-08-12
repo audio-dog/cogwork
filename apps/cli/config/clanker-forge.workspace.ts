@@ -12,7 +12,7 @@ export default defineWorkspace({
     type: "github",
     repo: "taylorfsteele/clanker-forge",
     tokenEnv: "GITHUB_TOKEN",
-    botLogin: "audiodog-bot",
+    actorLogin: "audiodog-bot",
   },
   harness: { preferred: "cursor" },
   concurrency: 3,

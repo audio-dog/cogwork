@@ -14,7 +14,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",
-    issueTracker: { type: "github", repo: "owner/a", botLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/a", actorLogin: "clanker-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
   }),

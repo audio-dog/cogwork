@@ -27,6 +27,7 @@ export interface RawIssue {
   readonly number: number;
   readonly title: string;
   readonly labels: ReadonlyArray<string>;
+  readonly assignees: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
   readonly openBlockers: number;
 }
@@ -76,6 +77,7 @@ const IssueSchema = Schema.Struct({
   number: Schema.Finite,
   title: Schema.String,
   labels: Schema.Array(LabelName),
+  assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
   issue_dependencies_summary: Schema.optional(Schema.NullOr(DependenciesSummarySchema)),
 });
@@ -157,6 +159,7 @@ const toRawIssue = (issue: typeof IssueSchema.Type): RawIssue => ({
   number: issue.number,
   title: issue.title,
   labels: issue.labels.map(labelName),
+  assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
 });

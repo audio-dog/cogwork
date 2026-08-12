@@ -11,6 +11,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   id: id(over.id),
   title: over.title ?? `item ${over.id}`,
   roles: over.roles ?? [],
+  assignees: over.assignees ?? [],
   claimLabeled: over.claimLabeled ?? false,
   claim: over.claim ?? null,
   claimedByUs: over.claimedByUs ?? false,
@@ -322,6 +323,52 @@ describe("classify", () => {
     assert.deepStrictEqual(claimed[0]?.pr, summary);
     assert.deepStrictEqual(needsHuman[0]?.pr, summary);
     assert.isUndefined(eligible.find((e) => e.id === id("bare"))?.pr);
+  });
+
+  it("gates on the assignee allowlist across every stage when one is set", () => {
+    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "implement" };
+    const { eligible, claimed, blocked, needsHuman } = classify(
+      [
+        item({ id: "implement", roles: ["ready-for-agent"], assignees: ["intruder"] }),
+        item({ id: "triage", roles: ["needs-triage"], assignees: ["intruder"] }),
+        item({
+          id: "follow-up",
+          roles: ["ready-for-agent"],
+          pr: pr("changes-requested"),
+          assignees: ["intruder"],
+        }),
+        item({ id: "verify", roles: ["ready-for-agent"], pr: pr("ready"), assignees: ["intruder"] }),
+        item({ id: "claimed", roles: ["ready-for-agent"], claim, assignees: ["intruder"] }),
+        item({ id: "blocked", roles: ["ready-for-agent"], openBlockers: 1, assignees: ["intruder"] }),
+        item({ id: "human", roles: ["needs-info"], assignees: ["intruder"] }),
+      ],
+      ["me"],
+    );
+    assert.deepStrictEqual(
+      [eligible.length, claimed.length, blocked.length, needsHuman.length],
+      [0, 0, 0, 0],
+    );
+  });
+
+  it("keeps items whose assignee is on the allowlist", () => {
+    const { eligible } = classify(
+      [item({ id: "1", roles: ["ready-for-agent"], assignees: ["teammate", "me"] })],
+      ["me"],
+    );
+    assert.strictEqual(eligible[0]?.stage, "implement");
+  });
+
+  it("drops an allowlisted workspace's unassigned item", () => {
+    const { eligible, claimed, needsHuman } = classify(
+      [item({ id: "1", roles: ["ready-for-agent"], assignees: [] })],
+      ["me"],
+    );
+    assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
+  });
+
+  it("ignores assignees entirely when no allowlist is set", () => {
+    const { eligible } = classify([item({ id: "1", roles: ["ready-for-agent"], assignees: ["anyone"] })]);
+    assert.strictEqual(eligible[0]?.stage, "implement");
   });
 
   it("orders eligible work follow-up > triage > implement > verify", () => {

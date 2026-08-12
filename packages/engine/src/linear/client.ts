@@ -34,6 +34,7 @@ export interface RawIssue {
   readonly identifier: string;
   readonly title: string;
   readonly labels: ReadonlyArray<string>;
+  readonly assignees: ReadonlyArray<string>;
   readonly stateName: string;
   readonly stateType: string;
   readonly openBlockers: number;
@@ -86,6 +87,7 @@ const IssueNode = Schema.Struct({
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
   }),
+  assignee: Schema.optional(Schema.NullOr(Schema.Struct({ id: Schema.String }))),
   state: Schema.Struct({
     name: Schema.String,
     type: Schema.String,
@@ -182,6 +184,7 @@ const issueFields = `
       identifier
       title
       labels(first: ${labelPageSize}) { nodes { name } }
+      assignee { id }
       state { name type }
       inverseRelations(first: ${relationPageSize}) {
         nodes { type issue { state { type } } }
@@ -296,6 +299,7 @@ const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   identifier: issue.identifier,
   title: issue.title,
   labels: issue.labels.nodes.map((label) => label.name),
+  assignees: issue.assignee ? [issue.assignee.id] : [],
   stateName: issue.state.name,
   stateType: issue.state.type,
   openBlockers: openBlockersOf(issue),

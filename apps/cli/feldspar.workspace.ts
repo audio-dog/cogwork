@@ -12,7 +12,7 @@ export default defineWorkspace({
     type: "linear",
     team: "FEL",
     tokenEnv: "LINEAR_API_KEY",
-    botUserId: "02051c43-a071-42bd-9bae-8f6ede983375",
+    actorUserId: "02051c43-a071-42bd-9bae-8f6ede983375",
     roleLabels: {
       "needs-triage": "needs-triage",
       "ready-for-agent": "ready-for-agent",
@@ -25,7 +25,7 @@ export default defineWorkspace({
     type: "github",
     repo: "colonylabs/feldspar",
     tokenEnv: "PERSONAL_GITHUB_TOKEN",
-    botLogin: "taylorfsteele",
+    actorLogin: "taylorfsteele",
   },
   harness: { preferred: "cursor" },
   concurrency: 3,

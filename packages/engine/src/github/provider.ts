@@ -24,17 +24,17 @@ import {
 import { hasClankerMarker } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
-  readonly botLogin: string | null;
+  readonly actorLogin: string | null;
 }
 
 const targetFromRepo = (
   repo: string,
   tokenEnv: string | undefined,
-  botLogin: string | undefined,
+  actorLogin: string | undefined,
 ): GitHubTarget | null => {
   const [owner, name] = repo.split("/");
   if (!owner || !name) return null;
-  return { owner, name, tokenEnv: tokenEnv ?? "GITHUB_TOKEN", botLogin: botLogin ?? null };
+  return { owner, name, tokenEnv: tokenEnv ?? "GITHUB_TOKEN", actorLogin: actorLogin ?? null };
 };
 
 // A workspace's source control provider is its own `sourceControl` block when set, and otherwise its
@@ -43,11 +43,11 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
   const explicit = workspace.config.sourceControl;
   if (explicit) {
     if (explicit.type !== "github" || !explicit.repo) return null;
-    return targetFromRepo(explicit.repo, explicit.tokenEnv, explicit.botLogin);
+    return targetFromRepo(explicit.repo, explicit.tokenEnv, explicit.actorLogin);
   }
   const source = workspace.config.issueTracker;
   if (source.type !== "github" || !source.repo) return null;
-  return targetFromRepo(source.repo, source.tokenEnv, source.botLogin);
+  return targetFromRepo(source.repo, source.tokenEnv, source.actorLogin);
 };
 
 // The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.
@@ -97,8 +97,8 @@ export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
   );
 };
 
-export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botLogin: string | null) => {
-  if (!botLogin) {
+export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, actorLogin: string | null) => {
+  if (!actorLogin) {
     return { latestAtMillis: null, fresh: false };
   }
   const newest = feedback
@@ -129,7 +129,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     );
     const human = humanCommentSignal(
       [...comments, ...reviewComments, ...reviewFeedback(reviews)],
-      target.botLogin,
+      target.actorLogin,
     );
     return {
       number: pull.number,
@@ -144,12 +144,12 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   });
 
   const daemonPull = (target: GitHubTarget, pull: RawPull) =>
-    pull.authorLogin === target.botLogin || writeAccess.has(pull.authorAssociation);
+    pull.authorLogin === target.actorLogin || writeAccess.has(pull.authorAssociation);
 
   // The final key is the PR number: the higher number is the newer PR, since GitHub numbers them in
   // creation order.
   const rank = (target: GitHubTarget, branch: string, pull: RawPull) =>
-    [pull.headRef === branch ? 1 : 0, pull.authorLogin === target.botLogin ? 1 : 0, pull.number] as const;
+    [pull.headRef === branch ? 1 : 0, pull.authorLogin === target.actorLogin ? 1 : 0, pull.number] as const;
 
   const outranks = (target: GitHubTarget, branch: string, a: RawPull, b: RawPull) => {
     const [aExact, aBot, aNumber] = rank(target, branch, a);

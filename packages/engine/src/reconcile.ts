@@ -190,7 +190,9 @@ export const make = Effect.gen(function* () {
     }
     return yield* observe(workspace).pipe(
       Effect.tap(() => clearCooldown(scope)),
-      Effect.map((items) => okState(workspace, items, classify(items))),
+      Effect.map((items) =>
+        okState(workspace, items, classify(items, workspace.config.issueTracker.assigneeAllowlist)),
+      ),
       Effect.catchTag("IssueTrackerError", (error) => pauseFor(workspace, scope, error)),
     );
   });
