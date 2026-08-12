@@ -1,6 +1,9 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off
+import * as nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import { HarnessName } from "@clanker-forge/contracts";
 import { cursorRunner } from "@clanker-forge/cursor-acp";
-import { Daemon, Registry } from "@clanker-forge/engine";
+import { ContextAssembler, Daemon, Provider, Registry } from "@clanker-forge/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
@@ -14,7 +17,7 @@ import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
 import { layer as ledgerLayer } from "./ledger";
 import { loadFromDisk } from "./loader";
-import { worktreeManagerLayer } from "./platform";
+import { contextFsLayer, worktreeManagerLayer } from "./platform";
 
 export interface DaemonOptions {
   readonly socketPath: string;
@@ -73,15 +76,28 @@ const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
+const providerName = Schema.decodeSync(HarnessName)("provider");
+
+// The engine ships the playbook skills beside its source, and the daemon home
+// (where the global AGENTS.md and provisioned skills live) is the directory that
+// holds the credentials file.
+const engineSkillsDir = nodePath.resolve(
+  nodePath.dirname(fileURLToPath(import.meta.resolve("@clanker-forge/engine"))),
+  "../skills",
+);
+
+const contextAssemblerLayer = (homeDir: string) =>
+  ContextAssembler.layer({ homeDir, skillsDir: engineSkillsDir }).pipe(Layer.provide(contextFsLayer));
 
 export const serverLayer = (options: DaemonOptions) =>
   Daemon.serverLayer({
     transport: transportLayer(options.socketPath),
     credentials: credentialsLayer(options.credentialsPath),
+    contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
     runLedger: ledgerLayer(options.ledgerPath),
     registry: registryLayer(options.configHome),
     worktrees: worktreeManagerLayer,
-    harnessRunners: [cursorRunner({ name: cursorName })],
+    harnessRunners: [cursorRunner({ name: cursorName }), Provider.providerRunner({ name: providerName })],
     scheduler: { globalLimit: options.maxConcurrency, dailyBudget: options.dailyBudget },
   });
 

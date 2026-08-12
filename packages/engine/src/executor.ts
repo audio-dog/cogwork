@@ -1,4 +1,4 @@
-import type { RunRecord, Session, SessionId, TokenUsage } from "@clanker-forge/contracts";
+import type { LifecycleStage, RunRecord, Session, SessionId, TokenUsage } from "@clanker-forge/contracts";
 import {
   agUiDisplayName,
   agUiSessionId,
@@ -158,9 +158,12 @@ export const make = Effect.gen(function* () {
     checkoutPath: string,
     prompt: string,
     session: SessionId | null,
+    stage: LifecycleStage,
   ) {
     return {
       harness: resolved.harness,
+      stage,
+      skill: resolved.skill,
       checkoutPath,
       session,
       prompt,
@@ -420,7 +423,14 @@ export const make = Effect.gen(function* () {
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
-    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, last?.session ?? null);
+    return yield* harnessRequest(
+      workspace,
+      resolved,
+      worktree.path,
+      prompt,
+      last?.session ?? null,
+      item.stage,
+    );
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
@@ -428,7 +438,14 @@ export const make = Effect.gen(function* () {
     return {
       resolved,
       branch: null,
-      prepare: harnessRequest(workspace, resolved, workspace.config.checkoutPath, fullPrompt, null),
+      prepare: harnessRequest(
+        workspace,
+        resolved,
+        workspace.config.checkoutPath,
+        fullPrompt,
+        null,
+        item.stage,
+      ),
       complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
       fullPrompt,
       resume: false,
@@ -518,6 +535,7 @@ export const make = Effect.gen(function* () {
       worktree.path,
       prompt,
       decision.kind === "resume" ? (last?.session ?? null) : null,
+      item.stage,
     );
   });
 
@@ -563,7 +581,14 @@ export const make = Effect.gen(function* () {
   ) {
     if (item.stage === "triage") {
       const path = workspace.config.checkoutPath;
-      return yield* harnessRequest(workspace, resolved, path, buildContinuationNudge(path), session);
+      return yield* harnessRequest(
+        workspace,
+        resolved,
+        path,
+        buildContinuationNudge(path),
+        session,
+        item.stage,
+      );
     }
     const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
     return yield* harnessRequest(
@@ -572,6 +597,7 @@ export const make = Effect.gen(function* () {
       worktree.path,
       buildContinuationNudge(worktree.path),
       session,
+      item.stage,
     );
   });
 

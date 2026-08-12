@@ -62,7 +62,7 @@ The unit that runs one candidate end to end: claim, worktree, resolve playbook, 
 _Avoid_: Runner, worker, harness
 
 **Session store**:
-The read model a runner pulls a session's history from, given a `SessionId`. `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first) projected into ordered messages, mirroring the shape a `@tanstack/ai-persistence` message store returns, so when the first-party runner lands we swap this projection for that adapter with the ledger still the one source of truth. `resumeHandle` hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second store: the run ledger is the only place a conversation lives.
+The read model a runner pulls a session's history from, given a `SessionId`. `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first) projected into ordered messages, mirroring the shape a `@tanstack/ai-persistence` message store returns, so when the provider runner lands we swap this projection for that adapter with the ledger still the one source of truth. `resumeHandle` hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second store: the run ledger is the only place a conversation lives.
 _Avoid_: Message store (that's the persistence library's term we're mirroring), transcript database, second store
 
 **Harness request**:
@@ -82,7 +82,7 @@ Turns a workspace's configured MCP skills into the resolved set a run gets, fill
 _Avoid_: MCP server, credential store (it delegates to that, it is not that), context assembler (that builds instruction layers, not MCP capabilities)
 
 **Context assembler**:
-Builds the layered instruction set for one turn of the first-party harness runner — global, then repo, then playbook. Returns structured layers the runner renders into model system prompts; does not run for CLI harnesses.
+Builds the layered instruction set for one turn of the provider harness runner — global, then repo, then playbook. Returns structured layers the runner renders into model system prompts; does not run for CLI harnesses.
 _Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP skill assembler
 
 **Instruction layer**:
@@ -90,7 +90,7 @@ One slice of the context assembler's output: global (`~/.clanker-forge/AGENTS.md
 _Avoid_: Context source (opencode's term), rules file
 
 **Owned tool set**:
-The first-party tools the engine hands a run instead of leaning on the harness's built-ins: `read`, `write`, `edit`, `bash`, `glob`, `grep`, and `webfetch`. Each is a TanStack `toolDefinition` with an Effect handler, and each runs through the run's worktree sandbox rather than touching the host directly. There is no tracker or PR tool — `git` and `gh` ride in on `bash`. File-touching tools go through path confinement first; failures surface as a typed `ToolError`.
+The owned tools the engine hands a run instead of leaning on the harness's built-ins: `read`, `write`, `edit`, `bash`, `glob`, `grep`, and `webfetch`. Each is a TanStack `toolDefinition` with an Effect handler, and each runs through the run's worktree sandbox rather than touching the host directly. There is no tracker or PR tool — `git` and `gh` ride in on `bash`. File-touching tools go through path confinement first; failures surface as a typed `ToolError`.
 _Avoid_: Built-in tools (those are the harness's), MCP skill (that is an external capability, this set is native)
 
 **Worktree sandbox**:

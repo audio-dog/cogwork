@@ -1,0 +1,179 @@
+import type { HarnessName, LifecycleStage } from "@clanker-forge/contracts";
+import {
+  type AgentLoopStrategy,
+  type AnyTool,
+  type ChatMiddleware,
+  chat,
+  type ModelMessage,
+  maxIterations,
+  type StreamChunk,
+} from "@tanstack/ai";
+import type { AnyTextAdapter } from "@tanstack/ai/adapters";
+import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Stream from "effect/Stream";
+import {
+  type AssembleRequest,
+  ContextAssembler,
+  type ContextAssemblerService,
+  type InstructionLayer,
+} from "./context-assembler";
+import { CredentialStore } from "./credential-store";
+import { HarnessError, type HarnessRequest, type HarnessRunner } from "./harness";
+import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
+import { bridgeChat } from "./provider-bridge";
+import { accountFor, findProvider } from "./providers";
+import { SessionStore, type ThreadMessage } from "./session-store";
+import {
+  makeOwnedToolSet,
+  openWorktreeSandbox,
+  profileForStage,
+  resolveBaseSha,
+  watchWorktreeDiffs,
+} from "./tools";
+
+export interface RunChatOptions {
+  readonly adapter: AnyTextAdapter;
+  readonly messages: ReadonlyArray<ModelMessage>;
+  readonly tools: ReadonlyArray<AnyTool>;
+  readonly middleware: ReadonlyArray<ChatMiddleware>;
+  readonly agentLoopStrategy: AgentLoopStrategy;
+  readonly abortController: AbortController;
+}
+
+export type RunChat = (options: RunChatOptions) => AsyncIterable<StreamChunk>;
+
+const defaultRunChat: RunChat = (options) =>
+  chat({
+    adapter: options.adapter,
+    messages: [...options.messages],
+    tools: [...options.tools],
+    middleware: [...options.middleware],
+    agentLoopStrategy: options.agentLoopStrategy,
+    abortController: options.abortController,
+  });
+
+export interface ProviderRunnerOptions {
+  readonly name: HarnessName;
+  readonly defaultModel?: string;
+  readonly makeAdapter?: ModelAdapterFactory;
+  readonly runChat?: RunChat;
+}
+
+// Read-only stages get fewer turns than the writing stages.
+export const defaultLoopBudget = (stage: LifecycleStage) =>
+  stage === "triage" || stage === "verify" ? 12 : 40;
+
+const launchError = (retryable: boolean, message: string) =>
+  new HarnessError({ reason: "launch", retryable, message });
+
+const unknownModelError = (model: string) =>
+  launchError(
+    false,
+    `no provider adapter for model "${model}"; use provider/model with a wired provider (openai, anthropic, google)`,
+  );
+
+const labelToolResult = (message: ThreadMessage) =>
+  message.toolName ? `Result from ${message.toolName}:\n${message.content}` : message.content;
+
+// A resumed transcript is a coarse fold: no tool-call ids survive, so prior tool
+// results ride back as labelled user turns rather than malformed tool turns.
+const toModelMessages = (thread: ReadonlyArray<ThreadMessage>): ReadonlyArray<ModelMessage> =>
+  thread.map((message) =>
+    message.role === "assistant"
+      ? { role: "assistant", content: message.content }
+      : { role: "user", content: labelToolResult(message) },
+  );
+
+// Falls back to the run-start layers when a refresh fails, so a broken read never
+// strips context mid-run.
+export const resolveContextLayers = (
+  assembler: ContextAssemblerService,
+  request: AssembleRequest,
+  fallback: ReadonlyArray<InstructionLayer>,
+) =>
+  Effect.runPromise(Effect.result(assembler.assemble(request))).then((assembled) =>
+    Result.match(assembled, { onFailure: () => fallback, onSuccess: (value) => value.layers }),
+  );
+
+// Runs on every turn so a mid-run edit to an AGENTS.md reaches the next prompt.
+const contextMiddleware = (
+  assembler: ContextAssemblerService,
+  request: AssembleRequest,
+  fallback: ReadonlyArray<InstructionLayer>,
+): ChatMiddleware => ({
+  name: "clanker-forge-context",
+  onConfig: (_ctx, config) =>
+    resolveContextLayers(assembler, request, fallback).then((layers) => ({
+      systemPrompts: [...config.systemPrompts, ...layers.map((layer) => layer.content)],
+    })),
+});
+
+export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner => {
+  const defaultModel = options.defaultModel ?? "anthropic/claude-sonnet-4-5";
+  const makeAdapter = options.makeAdapter ?? defaultModelAdapterFactory;
+  const runChat = options.runChat ?? defaultRunChat;
+
+  return {
+    name: options.name,
+    run: (request: HarnessRequest) =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const reference = request.model ?? defaultModel;
+          const resolved = parseModelRef(reference);
+          const provider = resolved ? findProvider(resolved.provider) : undefined;
+          if (!resolved || provider === undefined) {
+            return Stream.fail(unknownModelError(reference));
+          }
+
+          const credentials = yield* CredentialStore;
+          const credential = yield* credentials
+            .providerKey(accountFor(provider))
+            .pipe(Effect.mapError((error) => launchError(false, error.message)));
+
+          const adapter = makeAdapter(resolved, credential.key);
+          if (adapter === null) {
+            return Stream.fail(unknownModelError(reference));
+          }
+
+          const assembler = yield* ContextAssembler;
+          const assembleRequest: AssembleRequest = {
+            cwd: request.checkoutPath,
+            projectRoot: request.checkoutPath,
+            skill: request.skill,
+          };
+          const assembled = yield* assembler
+            .assemble(assembleRequest)
+            .pipe(Effect.mapError((error) => launchError(false, error.message)));
+
+          const store = yield* SessionStore;
+          const thread = request.session ? yield* store.loadThread(request.session) : [];
+          const messages: ReadonlyArray<ModelMessage> = [
+            ...toModelMessages(thread),
+            { role: "user", content: request.prompt },
+          ];
+
+          const sandbox = yield* openWorktreeSandbox(request.checkoutPath).pipe(
+            Effect.mapError((error) => launchError(true, error.message)),
+          );
+          const baseSha = yield* resolveBaseSha(sandbox);
+          const toolSet = makeOwnedToolSet(sandbox, profileForStage(request.stage));
+
+          const abortController = new AbortController();
+          const chatStream = runChat({
+            adapter,
+            messages,
+            tools: Object.values(toolSet),
+            middleware: [contextMiddleware(assembler, assembleRequest, assembled.layers)],
+            agentLoopStrategy: maxIterations(defaultLoopBudget(request.stage)),
+            abortController,
+          });
+
+          const diffs = watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.catchCause(() => Stream.empty));
+          return Stream.merge(bridgeChat(chatStream), diffs, { haltStrategy: "left" }).pipe(
+            Stream.ensuring(Effect.sync(() => abortController.abort())),
+          );
+        }),
+      ),
+  };
+};

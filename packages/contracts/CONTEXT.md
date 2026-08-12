@@ -89,7 +89,7 @@ A live envelope broadcast while a run is in flight: run identity (run id / seque
 _Avoid_: Run event (the persisted form), notification
 
 **Session**:
-A first-class entity with its own `SessionId`, grouping the runs that make up one conversation — a run points at it by foreign key (`RunRecord.session`), and runs on the same branch (or a resumed run) share one. It comes in two kinds. An **owned-transcript** session is the first-party runner's: the whole conversation lives in our run ledger, so its transcript folds straight from the events and no handle is kept. An **opaque-handle** session is a CLI harness's: the harness keeps its own history and hands back an opaque `handle` (e.g. Cursor's session id) we store to resume it — `null` until the harness emits one. Every session is opaque-handle today; owned-transcript arrives with the first-party runner. The session is minted when the run is inserted, before the harness has said anything (see engine ADR 0002), so a run always names a session even before it can be resumed.
+A first-class entity with its own `SessionId`, grouping the runs that make up one conversation — a run points at it by foreign key (`RunRecord.session`), and runs on the same branch (or a resumed run) share one. It comes in two kinds. An **owned-transcript** session is the provider runner's: the whole conversation lives in our run ledger, so its transcript folds straight from the events and no handle is kept. An **opaque-handle** session is a CLI harness's: the harness keeps its own history and hands back an opaque `handle` (e.g. Cursor's session id) we store to resume it — `null` until the harness emits one. Every session is opaque-handle today; owned-transcript arrives with the provider runner. The session is minted when the run is inserted, before the harness has said anything (see engine ADR 0002), so a run always names a session even before it can be resumed.
 _Avoid_: Run, connection, handle (that's one field of the opaque-handle kind, not the session itself)
 
 **Exhausted / stalled / stuck**:
@@ -111,7 +111,7 @@ The input handed to a harness for one run: which harness, the checkout path, the
 _Avoid_: Prompt (that's one field), job
 
 **Playbook skill**:
-The coding playbook's named `SKILL.md` capability for a lifecycle stage (e.g. `triage-agent`). The engine owns loading it for the first-party harness runner; CLI harnesses still resolve the name themselves. Distinct from an MCP skill.
+The coding playbook's named `SKILL.md` capability for a lifecycle stage (e.g. `triage-agent`). The engine owns loading it for the provider harness runner; CLI harnesses still resolve the name themselves. Distinct from an MCP skill.
 _Avoid_: Skill (alone), MCP skill, agent skill (TanStack Intent authoring docs)
 
 **MCP skill**:
@@ -119,7 +119,7 @@ An external MCP server the engine provisions onto a run so the harness can call 
 _Avoid_: MCP server, playbook skill, tool (one server exposes many), harness tool (the harness's own built-ins), plugin, provider skill (Anthropic/OpenAI hosted sandbox bundles)
 
 **Harness event**:
-The whole AG-UI event a harness run streams, carried inside a stable envelope rather than curated down to a fixed set of fields. A handful of fields are named because our folds and clients read them (text delta, tool call id/name, result, session id, usage, finish reason); every other key the harness emits — tool-call input, reasoning deltas, correlation ids, per-turn cost, and AG-UI fields we don't name yet — rides along instead of being dropped at decode. The engine persists these as run events and republishes them as run activity. The first-party runner will emit AG-UI natively; cursor-acp maps its ACP stream best-effort.
+The whole AG-UI event a harness run streams, carried inside a stable envelope rather than curated down to a fixed set of fields. A handful of fields are named because our folds and clients read them (text delta, tool call id/name, result, session id, usage, finish reason); every other key the harness emits — tool-call input, reasoning deltas, correlation ids, per-turn cost, and AG-UI fields we don't name yet — rides along instead of being dropped at decode. The engine persists these as run events and republishes them as run activity. The provider runner will emit AG-UI natively; cursor-acp maps its ACP stream best-effort.
 _Avoid_: Message, token, curated event (the point is that it is not curated)
 
 **Correlation ids**:

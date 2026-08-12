@@ -2,7 +2,7 @@
 
 Orchestration control plane for AI coding agents — discover work from an issue tracker,
 schedule runs under concurrency and budget limits, and drive harnesses (Cursor ACP today;
-first-party runners next).
+the provider runner next).
 
 ## Packages
 
