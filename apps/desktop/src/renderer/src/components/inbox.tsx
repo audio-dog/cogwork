@@ -1,40 +1,26 @@
-import { Badge } from "@clanker-forge/ui/components/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
 import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
-import type { ReactNode } from "react";
-import { mergeGate, selfHalts } from "../features/feed";
+import { inboxSections, recentlyDone } from "../features/feed";
+import { relativeTime } from "../features/format";
 import { useChromeStore } from "../store/chrome";
-import { MergeGateCard, SelfHaltCard } from "./attention-items";
+import { RunStatusBadge } from "./badges";
 import { BoardGate } from "./board-gate";
-
-function Section({ title, count, children }: { title: string; count: number; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">{title}</h2>
-        <Badge variant="outline">{count}</Badge>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
-    </section>
-  );
-}
+import { InboxRow, SectionTitle, WorkspaceChip } from "./mission-control-ui";
 
 export function Inbox() {
   const filter = useChromeStore((state) => state.workspaceFilter);
   return (
     <BoardGate>
       {(board) => {
-        const halts = selfHalts(board, filter);
-        const gate = mergeGate(board, filter);
+        const sections = inboxSections(board, filter);
+        const done = recentlyDone(board, filter);
 
-        if (halts.length === 0 && gate.length === 0) {
+        if (sections.length === 0 && done.length === 0) {
           return (
             <Empty>
               <EmptyHeader>
                 <EmptyTitle>Inbox zero</EmptyTitle>
-                <EmptyDescription>
-                  Nothing is waiting on you — no self-halts and no PRs at the merge gate.
-                </EmptyDescription>
+                <EmptyDescription>Nothing needs your attention right now.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           );
@@ -42,21 +28,47 @@ export function Inbox() {
 
         return (
           <ScrollArea className="h-full">
-            <div className="flex flex-col gap-8 p-6">
-              <h1 className="text-lg font-semibold">Inbox</h1>
-              {halts.length > 0 && (
-                <Section title="Self-halts" count={halts.length}>
-                  {halts.map((entry) => (
-                    <SelfHaltCard key={`${entry.workspace}:${entry.item.id}`} entry={entry} />
-                  ))}
-                </Section>
-              )}
-              {gate.length > 0 && (
-                <Section title="Merge gate" count={gate.length}>
-                  {gate.map((entry) => (
-                    <MergeGateCard key={`${entry.workspace}:${entry.item.id}`} entry={entry} />
-                  ))}
-                </Section>
+            <div className="mx-auto flex max-w-[820px] flex-col gap-6 px-5 py-5 pb-10">
+              {sections.map((section) => (
+                <section key={section.title} className="flex flex-col gap-3">
+                  <SectionTitle title={section.title} count={section.rows.length} />
+                  <div className="flex flex-col gap-2">
+                    {section.rows.map((entry) => (
+                      <InboxRow
+                        key={`${entry.workspace}:${entry.item.id}`}
+                        entry={entry}
+                        accent={section.accent}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {done.length > 0 && (
+                <section className="flex flex-col gap-3">
+                  <SectionTitle title="Recently done" count={done.length} />
+                  <div className="flex flex-col gap-2">
+                    {done.map(({ run, title }) => (
+                      <div
+                        key={run.id}
+                        className="flex items-start gap-3 rounded-[11px] border bg-card p-3.5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs text-muted-foreground">{run.workItem}</span>
+                            <RunStatusBadge status={run.status} />
+                            <span className="text-sm">{title ?? run.workItem}</span>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right text-xs text-muted-foreground">
+                          <WorkspaceChip workspace={run.workspace} />
+                          {run.endedAtMillis !== null && (
+                            <div className="mt-1.5">{relativeTime(run.endedAtMillis)}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               )}
             </div>
           </ScrollArea>

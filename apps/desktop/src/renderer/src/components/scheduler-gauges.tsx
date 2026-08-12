@@ -1,33 +1,45 @@
 import type { SchedulerStats } from "@clanker-forge/contracts";
 import { Badge } from "@clanker-forge/ui/components/badge";
-import { Progress } from "@clanker-forge/ui/components/progress";
-import { Switch } from "@clanker-forge/ui/components/switch";
+import { Button } from "@clanker-forge/ui/components/button";
+import { cn } from "@clanker-forge/ui/lib/utils";
 import { useBoard } from "../features/use-board";
 import { useScheduling } from "../features/use-scheduling";
 
-const percent = (used: number, limit: number) => (limit > 0 ? Math.min(100, (used / limit) * 100) : 0);
+function SchedulingToggle({ scheduler }: { scheduler: SchedulerStats }) {
+  const { result, setScheduling } = useScheduling();
+  const paused = scheduler.scheduling === "paused";
 
-function Gauge({ label, used, limit }: { label: string; used: number; limit: number }) {
   return (
-    <div className="flex min-w-36 flex-col gap-1">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="tabular-nums">
-          {used} / {limit}
-        </span>
-      </div>
-      <Progress value={percent(used, limit)} className="w-full" />
-    </div>
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={result.waiting}
+      className={cn("gap-2", paused && "border-amber-500/40")}
+      onClick={() => setScheduling(paused ? "running" : "paused")}
+    >
+      <span
+        className={cn(
+          "size-2 rounded-full",
+          paused
+            ? "bg-amber-500 shadow-[0_0_8px] shadow-amber-500/60"
+            : "bg-emerald-500 shadow-[0_0_8px] shadow-emerald-500/60",
+        )}
+      />
+      {paused ? "Paused" : "Scheduling live"}
+    </Button>
   );
 }
 
-function WorkspaceLoad({ scheduler }: { scheduler: SchedulerStats }) {
+function SchedulerSummary({ scheduler }: { scheduler: SchedulerStats }) {
   const busy = scheduler.perWorkspace.filter((load) => load.inFlight > 0);
-  if (busy.length === 0) {
-    return <span className="text-xs text-muted-foreground">No workspace load</span>;
-  }
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+      <span>
+        <span className="font-medium text-foreground">{scheduler.globalInFlight}</span> running ·{" "}
+        <span className="font-medium text-foreground">{scheduler.dailyBudgetUsed}</span> /{" "}
+        {scheduler.dailyBudgetLimit} runs today
+      </span>
       {busy.map((load) => (
         <Badge key={load.name} variant="secondary">
           {load.name} · {load.inFlight}
@@ -37,39 +49,26 @@ function WorkspaceLoad({ scheduler }: { scheduler: SchedulerStats }) {
   );
 }
 
-function PauseControl({ scheduler }: { scheduler: SchedulerStats }) {
-  const { result, setScheduling } = useScheduling();
-  const paused = scheduler.scheduling === "paused";
-
-  return (
-    <div className="flex items-center gap-3">
-      <Badge variant={paused ? "destructive" : "default"}>{paused ? "Paused" : "Running"}</Badge>
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Scheduling</span>
-        <Switch
-          aria-label={paused ? "Resume scheduling" : "Pause scheduling"}
-          checked={!paused}
-          disabled={result.waiting}
-          onCheckedChange={(on) => setScheduling(on ? "running" : "paused")}
-        />
-      </div>
-    </div>
-  );
-}
-
-export function SchedulerGauges() {
+export function SchedulerControls() {
   const result = useBoard();
   if (result._tag !== "Success" || result.board.scheduler === null) return null;
 
   const scheduler = result.board.scheduler;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-b px-6 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-        <Gauge label="In flight" used={scheduler.globalInFlight} limit={scheduler.globalLimit} />
-        <Gauge label="Daily budget" used={scheduler.dailyBudgetUsed} limit={scheduler.dailyBudgetLimit} />
-        <WorkspaceLoad scheduler={scheduler} />
-      </div>
-      <PauseControl scheduler={scheduler} />
+    <div className="flex flex-wrap items-center gap-4">
+      <SchedulerSummary scheduler={scheduler} />
+      <SchedulingToggle scheduler={scheduler} />
+    </div>
+  );
+}
+
+export function PausedBanner() {
+  const result = useBoard();
+  if (result._tag !== "Success" || result.board.scheduler?.scheduling !== "paused") return null;
+
+  return (
+    <div className="border-b border-amber-500/30 bg-amber-500/10 px-6 py-1.5 text-center text-xs text-amber-700 dark:text-amber-300">
+      Scheduling is paused. No new runs start. Runs in flight finish.
     </div>
   );
 }

@@ -1,59 +1,75 @@
-import type { WorkspaceState } from "@clanker-forge/contracts";
 import { Badge } from "@clanker-forge/ui/components/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
-import type { Lane, LaneColumn } from "../features/board-view";
+import { ScrollArea, ScrollBar } from "@clanker-forge/ui/components/scroll-area";
+import type { Lane } from "../features/board-view";
 import { lanes } from "../features/board-view";
 import { BoardGate } from "./board-gate";
+import { LaneMiniCard } from "./mission-control-ui";
 
-function StateBadges({ state }: { state: WorkspaceState }) {
-  if (state._tag === "Failed") return <Badge variant="destructive">Failed to load</Badge>;
+function LaneHead({ lane }: { lane: Lane }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2.5 border-b bg-muted/30 px-3.5 py-2.5">
+      <span className="font-semibold">{lane.key}</span>
       <span className="text-xs text-muted-foreground">
-        {state.issueTracker} · {state.harness}
+        {lane.total} items · {lane.running} running
       </span>
-      {state.poll.status === "paused" && (
-        <Badge variant="outline">Polling paused · {state.poll.reason}</Badge>
+      {lane.needsYou > 0 && (
+        <Badge variant="outline" className="ms-auto">
+          {lane.needsYou} need you
+        </Badge>
+      )}
+      {lane.state._tag === "Failed" && (
+        <Badge variant="destructive" className="ms-auto">
+          Failed to load
+        </Badge>
+      )}
+      {lane.state._tag === "Registered" && lane.state.poll.status === "paused" && (
+        <Badge variant="outline" className="ms-auto">
+          Polling paused
+        </Badge>
       )}
     </div>
   );
 }
 
-function ColumnCount({ column }: { column: LaneColumn }) {
+function LaneBody({ lane }: { lane: Lane }) {
+  if (lane.state._tag === "Failed") {
+    return <p className="px-3.5 py-3 text-sm text-destructive">{lane.state.message}</p>;
+  }
+
   return (
-    <div className="flex min-w-20 flex-col items-center gap-1 rounded-lg px-3 py-2 ring-1 ring-foreground/5">
-      <span className="text-lg font-semibold tabular-nums">{column.count}</span>
-      <span className="text-center text-[11px] text-muted-foreground">{column.label}</span>
-    </div>
+    <ScrollArea className="w-full">
+      <div className="flex gap-3 px-3.5 py-3">
+        {lane.columns.map((column) => (
+          <section key={column.id} className="min-w-[150px] shrink-0">
+            <h3 className="mb-1.5 text-[10.5px] tracking-wider text-muted-foreground uppercase">
+              {column.label} · {column.count}
+            </h3>
+            {column.items.length === 0 ? (
+              <p className="text-xs text-muted-foreground">—</p>
+            ) : (
+              column.items.map((entry) => (
+                <LaneMiniCard
+                  key={`${entry.workspace}:${entry.item.id}`}
+                  entry={entry}
+                  running={entry.item._tag === "Claimed"}
+                />
+              ))
+            )}
+          </section>
+        ))}
+      </div>
+      <ScrollBar orientation="horizontal" />
+    </ScrollArea>
   );
 }
 
 function LaneRow({ lane }: { lane: Lane }) {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-base">{lane.key}</CardTitle>
-          <div className="flex items-center gap-2">
-            {lane.running > 0 && <Badge>{lane.running} running</Badge>}
-            <StateBadges state={lane.state} />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {lane.state._tag === "Failed" ? (
-          <p className="text-sm text-destructive">{lane.state.message}</p>
-        ) : (
-          <div className="flex flex-wrap gap-3">
-            {lane.columns.map((column) => (
-              <ColumnCount key={column.id} column={column} />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <article className="overflow-hidden rounded-[13px] border bg-card">
+      <LaneHead lane={lane} />
+      <LaneBody lane={lane} />
+    </article>
   );
 }
 
@@ -74,8 +90,7 @@ export function Lanes() {
         }
         return (
           <ScrollArea className="h-full">
-            <div className="flex flex-col gap-4 p-6">
-              <h1 className="text-lg font-semibold">Lanes</h1>
+            <div className="flex flex-col gap-3.5 px-5 py-[18px] pb-10">
               {rows.map((lane) => (
                 <LaneRow key={lane.key} lane={lane} />
               ))}

@@ -8,7 +8,7 @@ import { createRootRoute, Outlet, useRouterState } from "@tanstack/react-router"
 import type { ComponentProps } from "react";
 import { AttentionRail } from "../components/attention-rail";
 import { NavRail } from "../components/nav-rail";
-import { SchedulerGauges } from "../components/scheduler-gauges";
+import { PausedBanner, SchedulerControls } from "../components/scheduler-gauges";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
 import { useChromeStore } from "../store/chrome";
 
@@ -58,6 +58,7 @@ function RootLayout() {
               <h1 className="text-lg font-semibold">clanker-forge</h1>
             </div>
             <div className="flex items-center gap-4">
+              <SchedulerControls />
               <EngineControl />
               {pathname !== "/lanes" && (
                 <Button
@@ -72,7 +73,7 @@ function RootLayout() {
             </div>
           </header>
 
-          <SchedulerGauges />
+          <PausedBanner />
 
           <div className="flex min-h-0 flex-1">
             <div className="min-w-0 flex-1">
