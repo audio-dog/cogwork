@@ -1,0 +1,19 @@
+pnpm-workspace.yaml
+  s_e76dd87a3f3f4b::t_9b80462544058b 6-7,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "48af98793a30ef32acf97b614c01f6f072179364",
+  "prompts": {},
+  "sessions": {
+    "s_e76dd87a3f3f4b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "338901d0-2dad-4e72-9511-2f29fa9bfdb0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
