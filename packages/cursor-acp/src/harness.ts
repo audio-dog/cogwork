@@ -169,6 +169,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   const authMethodId = options.authMethodId ?? "cursor_login";
   return {
     name: options.name,
+    sessionKind: "opaque-handle",
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {

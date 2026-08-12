@@ -9,6 +9,9 @@ export type RunId = typeof RunId.Type;
 export const SessionId = TrimmedNonEmptyString.pipe(Schema.brand("SessionId"));
 export type SessionId = typeof SessionId.Type;
 
+export const SessionKind = Schema.Literals(["owned-transcript", "opaque-handle"]);
+export type SessionKind = typeof SessionKind.Type;
+
 const SessionFields = {
   id: SessionId,
   workspace: WorkspaceId,

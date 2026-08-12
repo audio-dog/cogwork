@@ -44,6 +44,9 @@ const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
 const handleOf = (ledger: RunLedger.RunLedgerService, session: SessionId | null | undefined) =>
   session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
 
+const kindOf = (ledger: RunLedger.RunLedgerService, session: SessionId | null | undefined) =>
+  session ? Effect.map(ledger.getSession(session), (found) => found?.kind ?? null) : Effect.succeed(null);
+
 const seedResumeSession = (handle: string | null = "sess-prev") =>
   Effect.flatMap(RunLedger.RunLedger, (ledger) =>
     ledger.insertSession({
@@ -177,6 +180,7 @@ const stuckImplementEvents: ReadonlyArray<AgUiEvent> = [
 
 const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
   name: cursor,
+  sessionKind: "opaque-handle",
   run: () =>
     Stream.concat(
       Stream.fromArray(implementStreamEvents),
@@ -271,6 +275,7 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => (
 
 const runner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
+  sessionKind: "opaque-handle",
   run: () => Stream.fromArray(events),
 });
 
@@ -280,6 +285,7 @@ const capturingRunner = (
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
 ): HarnessRunner => ({
   name: cursor,
+  sessionKind: "opaque-handle",
   run: (request) =>
     Stream.unwrap(
       Ref.update(requests, (xs) => [...xs, request]).pipe(
@@ -328,7 +334,14 @@ const unreachableRemoteWorktree: WorktreeManagerService = {
 
 const failingRunner = (error: HarnessError): HarnessRunner => ({
   name: cursor,
+  sessionKind: "opaque-handle",
   run: () => Stream.fail(error),
+});
+
+const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
+  name: cursor,
+  sessionKind: "owned-transcript",
+  run: () => Stream.fromArray(events),
 });
 
 const successEvents: ReadonlyArray<AgUiEvent> = [
@@ -352,6 +365,7 @@ const provide = (
     Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(IssueTracker, ws),
+        sessionStore,
         harnessLayer(runners).pipe(Layer.provide(runnerServices)),
         runLedger,
         bus,
@@ -583,6 +597,38 @@ describe("Executor.execute", () => {
         assert.strictEqual(run?.status, "succeeded");
         assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
         assert.deepStrictEqual(run?.usage, usage);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("mints an opaque-handle session for a Cursor-served run and captures its handle", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(recorder(calls), [runner(implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(yield* kindOf(ledger, run?.session), "opaque-handle");
+        assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("mints an owned-transcript session for a provider-served run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(recorder(calls), [ownedTranscriptRunner(implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "succeeded");
+        assert.strictEqual(yield* kindOf(ledger, run?.session), "owned-transcript");
       }).pipe(Effect.provide(layer));
     }),
   );

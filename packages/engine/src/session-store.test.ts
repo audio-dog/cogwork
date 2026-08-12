@@ -4,6 +4,8 @@ import {
   type RunEvent,
   RunId,
   SessionId,
+  type SessionKind,
+  sessionHandle,
   WorkItemId,
   WorkspaceId,
 } from "@clanker-forge/contracts";
@@ -124,6 +126,40 @@ describe("SessionStore ledger-backed message store", () => {
     Effect.gen(function* () {
       const store = yield* SessionStore;
       assert.deepStrictEqual(yield* loadThread(store, session), []);
+    }).pipe(Effect.provide(layer)),
+  );
+});
+
+describe("SessionStore.mint", () => {
+  const declares = (kind: SessionKind) => () => kind;
+
+  it.effect("mints an owned-transcript session when the runner declares it", () =>
+    Effect.gen(function* () {
+      const store = yield* SessionStore;
+      const ledger = yield* RunLedger;
+      const id = yield* store.mint({ workspace, harness, createdAtMillis: 5 }, declares("owned-transcript"));
+      const minted = yield* ledger.getSession(id);
+      assert.strictEqual(minted?.kind, "owned-transcript");
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("mints an opaque-handle session with no handle yet when the runner declares it", () =>
+    Effect.gen(function* () {
+      const store = yield* SessionStore;
+      const ledger = yield* RunLedger;
+      const id = yield* store.mint({ workspace, harness, createdAtMillis: 5 }, declares("opaque-handle"));
+      const minted = yield* ledger.getSession(id);
+      assert.strictEqual(minted?.kind, "opaque-handle");
+      assert.isNull(sessionHandle(minted));
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("gives each minted session a distinct id", () =>
+    Effect.gen(function* () {
+      const store = yield* SessionStore;
+      const first = yield* store.mint({ workspace, harness, createdAtMillis: 5 }, declares("opaque-handle"));
+      const second = yield* store.mint({ workspace, harness, createdAtMillis: 5 }, declares("opaque-handle"));
+      assert.notStrictEqual(first, second);
     }).pipe(Effect.provide(layer)),
   );
 });

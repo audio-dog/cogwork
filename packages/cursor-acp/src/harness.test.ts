@@ -1,9 +1,11 @@
+import { HarnessName } from "@clanker-forge/contracts";
 import type { Harness } from "@clanker-forge/engine";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
 import { assert, describe, it } from "vitest";
-import { cursorModelOptions, mcpWorkspaceProjection, toEvent } from "./harness";
+import { cursorModelOptions, cursorRunner, mcpWorkspaceProjection, toEvent } from "./harness";
 
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
@@ -42,6 +44,13 @@ describe("mcpWorkspaceProjection", () => {
 
     assert.isTrue(projection.hasSecrets);
     assert.deepStrictEqual(resolveAllSecrets(projection.secrets), { MCP_LINEAR_BEARER: "tok_123" });
+  });
+});
+
+describe("cursorRunner", () => {
+  it("declares the opaque-handle session kind", () => {
+    const runner = cursorRunner({ name: Schema.decodeSync(HarnessName)("cursor") });
+    assert.strictEqual(runner.sessionKind, "opaque-handle");
   });
 });
 
