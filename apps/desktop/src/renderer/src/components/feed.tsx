@@ -7,8 +7,8 @@ import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
 import { Separator } from "@clanker-forge/ui/components/separator";
 import { RiEyeLine, RiGitBranchLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
 import type { ReactNode } from "react";
+import { daemonErrorMessage } from "../features/daemon-error";
 import type { FeedRun, QueuedItem } from "../features/feed";
 import { blockedCount, queuedItems, recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
@@ -99,7 +99,7 @@ export function Feed() {
       <div className="p-6">
         <Alert variant="destructive">
           <AlertTitle>Could not reach the daemon</AlertTitle>
-          <AlertDescription>{Cause.pretty(result.cause)}</AlertDescription>
+          <AlertDescription>{daemonErrorMessage(result.cause)}</AlertDescription>
         </Alert>
       </div>
     );
