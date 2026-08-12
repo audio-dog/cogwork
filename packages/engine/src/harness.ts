@@ -1,4 +1,10 @@
-import type { AgUiEvent, HarnessName, LifecycleStage, SessionId } from "@clanker-forge/contracts";
+import type {
+  AgUiEvent,
+  HarnessName,
+  LifecycleStage,
+  SessionId,
+  SessionKind,
+} from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -36,11 +42,15 @@ export class HarnessError extends Schema.TaggedErrorClass<HarnessError>()("Harne
 
 export interface HarnessRunner {
   readonly name: HarnessName;
+  readonly sessionKind: SessionKind;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
 }
 
 export interface HarnessService {
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
+  // An unregistered harness falls back to opaque-handle: its run fails at
+  // dispatch anyway, and that was the one kind every session took before.
+  readonly sessionKind: (harness: HarnessName) => SessionKind;
 }
 
 export class Harness extends Context.Service<Harness, HarnessService>()("@clanker-forge/engine/harness") {}
@@ -73,6 +83,7 @@ export const make = (
         Stream.provideService(CredentialStore, services.credentialStore),
       );
     },
+    sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
   };
 };
 
