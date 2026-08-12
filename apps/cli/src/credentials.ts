@@ -41,7 +41,7 @@ export const makeFileStore = Effect.fn("credentials.file")(function* (filePath: 
     contents: CredentialStore.CredentialFileContents,
   ) {
     const encoded = yield* encodeFile({
-      version: 3,
+      version: 2,
       credentials: contents.credentials,
       providerKeys: contents.providerKeys,
     }).pipe(

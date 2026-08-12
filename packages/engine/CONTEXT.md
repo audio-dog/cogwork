@@ -162,7 +162,7 @@ The store's non-interactive source: it trades an OAuth app's `client_id` and a `
 _Avoid_: Service account, machine token, app token (that is what it mints, not the source)
 
 **Stored credential**:
-One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `actorUserId` the app posts as). Keyed by issue tracker and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business. The on-disk file is versioned (`CredentialFileWire`): reads upgrade older shapes on the fly — a v1/v2 file's `botUserId` becomes `actorUserId` — and any write rewrites the file at the current version, so the rename self-heals on the next save or token refresh with no hand-editing.
+One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, and the identity discovered when it was granted (the organization and the `actorUserId` the app posts as). Keyed by issue tracker and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
 _Avoid_: Session, login (the login command that mints these does not exist yet)
 
 **Coordination module**:

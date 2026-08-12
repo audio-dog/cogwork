@@ -168,32 +168,6 @@ describe("file-backed credential store", () => {
     ),
   );
 
-  it.effect(
-    "upgrades a legacy botUserId credential to actorUserId and rewrites it as the current version",
-    () =>
-      onDisk(({ filePath, fs }) =>
-        Effect.gen(function* () {
-          const legacy = `{"version":2,"credentials":[{"issueTracker":"linear","organization":"acme","botUserId":"legacy-user","token":{"accessToken":"legacy-token","refreshToken":"legacy-refresh","expiresAtMillis":${Number.MAX_SAFE_INTEGER},"scopes":["read","write"]}}],"providerKeys":[]}`;
-          yield* seed(fs, filePath, legacy);
-          const file = yield* makeFileStore(filePath);
-          const loaded = yield* file.load;
-          assert.strictEqual(loaded[0]?.actorUserId, "legacy-user");
-          yield* file.save({ ...stored("fresh-token"), organization: "other" });
-          const persisted = yield* file.load;
-          assert.deepStrictEqual(
-            persisted.map((entry) => [entry.organization, entry.actorUserId]),
-            [
-              ["acme", "legacy-user"],
-              ["other", "bot-user"],
-            ],
-          );
-          const raw = yield* fs.readFileString(filePath);
-          assert.include(raw, `"version":3`);
-          assert.notInclude(raw, `"botUserId"`);
-        }),
-      ),
-  );
-
   it.effect("refuses to overwrite a credential file it cannot read", () =>
     onDisk(({ filePath, fs }) =>
       Effect.gen(function* () {
