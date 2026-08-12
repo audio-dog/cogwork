@@ -1,0 +1,22 @@
+packages/engine/CONTEXT.md
+  s_e61445bd093cc0::t_24ee02c61ea764 69
+  s_e61445bd093cc0::t_860a2453de0b76 61,64-67,137,180-183
+apps/cli/config/colony.workspace.ts
+  s_e61445bd093cc0::t_5be7969dfe012f 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f8bc9c389e14cec6992b53a7bafd58f538c93489",
+  "prompts": {},
+  "sessions": {
+    "s_e61445bd093cc0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7e806b3d-611f-48d1-893d-13c6fa21c783",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
