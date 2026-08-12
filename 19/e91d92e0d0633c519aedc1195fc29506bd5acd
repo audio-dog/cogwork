@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/use-live-events.ts
+  s_b78608008c7f23::t_9c7f5d0e7b649c 12-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "19e91d92e0d0633c519aedc1195fc29506bd5acd",
+  "prompts": {},
+  "sessions": {
+    "s_b78608008c7f23": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "de136966-015e-408f-a01f-97fd97a083a5",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
