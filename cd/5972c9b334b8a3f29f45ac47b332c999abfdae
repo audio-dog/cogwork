@@ -1,0 +1,69 @@
+packages/cursor-acp/src/harness.test.ts
+  s_e61445bd093cc0::t_fdcc673b4f5f39 1,6,8
+  s_e61445bd093cc0::t_72652d9b8ba1d4 50-56
+packages/engine/src/executor.ts
+  s_e61445bd093cc0::t_aa3b233399ada7 183-186
+  s_e61445bd093cc0::t_d0024f752f9212 187
+  s_e61445bd093cc0::t_5ac31de8dfee0c 143
+  s_e61445bd093cc0::t_b18db3983fc003 39
+  s_e61445bd093cc0::t_ed3d922fb88130 1-2
+packages/engine/src/provider-runner.ts
+  s_e61445bd093cc0::t_a9bf3e0092f09d 104
+packages/engine/CONTEXT.md
+  s_e61445bd093cc0::t_151359c455a1fd 73,77
+  s_e61445bd093cc0::t_703e02395b2da2 65
+packages/engine/src/session-store.test.ts
+  s_e61445bd093cc0::t_2ae96c5a338058 133-166
+  s_e61445bd093cc0::t_704a046be99e41 7-8
+packages/contracts/src/run.ts
+  s_e61445bd093cc0::t_2066d5675a2882 12-14
+packages/contracts/CONTEXT.md
+  s_e61445bd093cc0::t_da8bb6107401dd 92
+packages/engine/src/executor.test.ts
+  s_e61445bd093cc0::t_b8e7f2ddb6f09a 368
+  s_e61445bd093cc0::t_9574fab2c9784e 604-635
+  s_e61445bd093cc0::t_210fa067b97d4c 47-49
+  s_e61445bd093cc0::t_1ff23d3c805c59 183
+  s_e61445bd093cc0::t_2f9ed9045586d1 337,341-344
+  s_e61445bd093cc0::t_432cbf24a58b21 278,288
+  s_e61445bd093cc0::t_0c1924450b71bd 345-346
+packages/engine/src/provider-runner.test.ts
+  s_e61445bd093cc0::t_515d86b1ccd026 88
+  s_e61445bd093cc0::t_890238c359621b 123-126
+packages/engine/src/daemon.ts
+  s_e61445bd093cc0::t_b34b30fe8ec7e9 207-209
+packages/engine/src/session-store.ts
+  s_e61445bd093cc0::t_860b078b97901a 1-9,27
+  s_e61445bd093cc0::t_e615ecaa4f851f 52-53
+  s_e61445bd093cc0::t_074885d1bd1194 140,148-152,158-164
+  s_e61445bd093cc0::t_0615d6ece8fdb2 38-43,54
+  s_e61445bd093cc0::t_7512e1d6ac1f7e 119-121
+  s_e61445bd093cc0::t_dfbec1f5d43fc7 122
+  s_e61445bd093cc0::t_8608578cb120dc 165
+packages/cursor-acp/src/harness.ts
+  s_e61445bd093cc0::t_b4030bd01d0143 172
+packages/engine/src/harness.ts
+  s_e61445bd093cc0::t_b52ed35cd3fd61 86
+  s_e61445bd093cc0::t_d4dddd7305fde2 45,53
+  s_e61445bd093cc0::t_b9c72b58d8e35c 51-52
+  s_e61445bd093cc0::t_eb0b4c630ea8e1 1-5,7
+  s_e61445bd093cc0::t_f85760f43cdfd0 6
+packages/engine/src/daemon-composition.test.ts
+  s_e61445bd093cc0::t_65d0f763f6400d 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cd5972c9b334b8a3f29f45ac47b332c999abfdae",
+  "prompts": {},
+  "sessions": {
+    "s_e61445bd093cc0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7e806b3d-611f-48d1-893d-13c6fa21c783",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
