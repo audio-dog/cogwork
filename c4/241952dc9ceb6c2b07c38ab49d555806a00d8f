@@ -1,0 +1,56 @@
+packages/engine/src/linear/oauth.ts
+  s_b40385ab8707d5::t_acdb01b3ead9ec 228
+  s_b40385ab8707d5::t_cbcec58023ea75 242
+apps/cli/src/login.test.ts
+  s_b40385ab8707d5::t_3734a4a370c9c8 97
+  s_b40385ab8707d5::t_0c23d3c13a3e5a 91
+packages/engine/src/credential-store.ts
+  s_b40385ab8707d5::t_2bf66e853a8b0f 59,62,64-69,75,84-87,100
+  s_c2d379c37fa44d::t_808d9f1b49fd9d 91-96
+  s_b40385ab8707d5::t_abedb62019e6b2 40,44-46,49
+  s_b40385ab8707d5::t_b6031650bc9091 224
+  s_b40385ab8707d5::t_36eae51e199562 83,90
+  s_b40385ab8707d5::t_b3e99ebdf6709f 50
+  s_c2d379c37fa44d::t_e629911774bdc3 97
+packages/engine/src/credential-store.test.ts
+  s_b40385ab8707d5::t_6efa60e18f79fc 103
+  s_b40385ab8707d5::t_358aa71d47bd4e 137
+apps/cli/src/login.ts
+  s_b40385ab8707d5::t_e0ad69e099653d 184,189,191-194
+  s_b40385ab8707d5::t_8e3bdbb1d76346 27
+apps/cli/src/login-commands.ts
+  s_b40385ab8707d5::t_f4a3b0a28ab0f1 78
+packages/engine/src/linear/oauth.test.ts
+  s_b40385ab8707d5::t_e6476eae0ac08e 321
+apps/cli/src/credentials.ts
+  s_b40385ab8707d5::t_289cb89677939e 44
+apps/cli/src/credentials.test.ts
+  s_b40385ab8707d5::t_206dd3fb9b2378 102
+  s_b40385ab8707d5::t_af5e34a761ed98 181-189
+  s_b40385ab8707d5::t_08547b3ca92861 17
+  s_b40385ab8707d5::t_5dd36280bfb4c8 171-180,190-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c4241952dc9ceb6c2b07c38ab49d555806a00d8f",
+  "prompts": {},
+  "sessions": {
+    "s_b40385ab8707d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "368f5e22-a255-4845-b2ea-3abce0abba20",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c2d379c37fa44d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "987f9ebb-6c11-44df-b07c-1a636ced623f",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
