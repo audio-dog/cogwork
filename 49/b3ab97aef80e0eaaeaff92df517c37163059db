@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/components/history-nav.tsx
+  s_1529119c4dacba::t_3e317c6f517575 1-4,6-12,38-45,58-60
+  s_1529119c4dacba::t_dcb931cb0a1f92 5,13-37,46-57
+apps/desktop/src/renderer/src/components/history-nav.test.ts
+  s_1529119c4dacba::t_5129729a1dd398 1-17
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_1529119c4dacba::t_597d25972d7f08 10
+  s_1529119c4dacba::t_305a5a597e7008 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "49b3ab97aef80e0eaaeaff92df517c37163059db",
+  "prompts": {},
+  "sessions": {
+    "s_1529119c4dacba": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0e433614-0756-4e22-a06b-36eb80ae894f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
