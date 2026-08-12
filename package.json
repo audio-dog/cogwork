@@ -10,6 +10,7 @@
     "format-and-lint:unsafe": "biome check . --write --unsafe",
     "format-and-lint": "biome check .",
     "prepare": "effect-tsgo patch",
+    "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "vendor": "node scripts/vendor.mjs",
