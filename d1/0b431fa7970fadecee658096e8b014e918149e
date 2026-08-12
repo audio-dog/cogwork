@@ -1,0 +1,60 @@
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_bd3cd0f60dfe95::t_225ec40c92f9c5 69-76
+  s_bd3cd0f60dfe95::t_624547f6c2288b 5,8,24,28-30,32-33,35,37-42,44,46-68
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_bd3cd0f60dfe95::t_58d7d397123b1a 25
+  s_bd3cd0f60dfe95::t_40291833e41d03 26
+apps/desktop/src/renderer/src/components/attention-items.tsx
+  s_bd3cd0f60dfe95::t_b719986621b2b9 6-74
+  s_bd3cd0f60dfe95::t_bff81cac8079f0 3-5
+  s_bd3cd0f60dfe95::t_dd5015c6fbf168 75-77
+  s_bd3cd0f60dfe95::t_bf603b7bf751c5 1-2,78-82
+apps/desktop/src/renderer/src/components/mission-control-ui.tsx
+  s_bd3cd0f60dfe95::t_eafd244d1d9d37 1-138
+apps/desktop/src/renderer/src/components/nav-rail.tsx
+  s_bd3cd0f60dfe95::t_3b6962a52fcd71 22,27-29
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_bd3cd0f60dfe95::t_0ca2bea1a9b49f 1-74
+apps/desktop/src/renderer/src/features/board-view.test.ts
+  s_bd3cd0f60dfe95::t_7d1f7cef4ee12a 1-166
+apps/desktop/src/renderer/src/features/board-view.ts
+  s_bd3cd0f60dfe95::t_d25e8c7a0f64a8 1-101
+apps/desktop/src/renderer/src/features/feed.ts
+  s_bd3cd0f60dfe95::t_05784438f1a546 55,78,81,84,99,106-132
+apps/desktop/src/renderer/src/features/use-scheduling.ts
+  s_bd3cd0f60dfe95::t_120d48c040b402 1-9
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_bd3cd0f60dfe95::t_54ab7cfa786943 13,15-17,24-27,33-47,52-54,59-61,66,68-70,74,76-84,89,102-108,116-136,140-155,158
+apps/desktop/src/renderer/src/router.tsx
+  s_bd3cd0f60dfe95::t_75d3313b747062 13-15
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_bd3cd0f60dfe95::t_00b8a5f0b18edb 7,11,47-48,61,63-72,76-77,82
+apps/desktop/src/renderer/src/routes/_connected/board.tsx
+  s_bd3cd0f60dfe95::t_32444860c72853 1-41
+apps/desktop/src/renderer/src/routes/_connected/inbox.tsx
+  s_bd3cd0f60dfe95::t_9a6b4e0aa0597d 1-75
+apps/desktop/src/renderer/src/routes/_connected/lanes.tsx
+  s_bd3cd0f60dfe95::t_d4421425e694bb 1-107
+apps/desktop/src/renderer/src/routes/_connected/route.tsx
+  s_bd3cd0f60dfe95::t_3965e16e448496 1-66
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_bd3cd0f60dfe95::t_3f2a3f52351d00 51-52
+packages/ui/src/components/progress.tsx
+  s_bd3cd0f60dfe95::t_03f796d804d371 1-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d10b431fa7970fadecee658096e8b014e918149e",
+  "prompts": {},
+  "sessions": {
+    "s_bd3cd0f60dfe95": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "691aad3c-d12e-4dbf-80fe-495e4bcb3603",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
