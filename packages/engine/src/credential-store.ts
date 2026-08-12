@@ -37,16 +37,15 @@ export const StoredToken = Schema.Struct({
 });
 export type StoredToken = typeof StoredToken.Type;
 
-const credentialFields = {
+export const StoredCredential = Schema.Struct({
   issueTracker: TrimmedNonEmptyString,
   organization: TrimmedNonEmptyString,
+  actorUserId: TrimmedNonEmptyString,
   token: StoredToken,
-};
-
-export const StoredCredential = Schema.Struct({ ...credentialFields, actorUserId: TrimmedNonEmptyString });
+});
 export type StoredCredential = typeof StoredCredential.Type;
 
-const StoredCredentialLegacy = Schema.Struct({ ...credentialFields, botUserId: TrimmedNonEmptyString });
+const StoredCredentialLegacy = StoredCredential.pipe(Schema.encodeKeys({ actorUserId: "botUserId" }));
 
 export const StoredProviderKey = Schema.Struct({
   provider: TrimmedNonEmptyString,
@@ -80,20 +79,10 @@ export interface CredentialFileContents {
   readonly providerKeys: ReadonlyArray<StoredProviderKey>;
 }
 
-const upgradeLegacy = (credential: typeof StoredCredentialLegacy.Type) => ({
-  issueTracker: credential.issueTracker,
-  organization: credential.organization,
-  actorUserId: credential.botUserId,
-  token: credential.token,
+export const contentsOf = (file: CredentialFileWire) => ({
+  credentials: file.credentials,
+  providerKeys: file.version === 1 ? [] : file.providerKeys,
 });
-
-export const contentsOf = (file: CredentialFileWire) => {
-  if (file.version === 3) {
-    return { credentials: file.credentials, providerKeys: file.providerKeys };
-  }
-  const providerKeys = file.version === 2 ? file.providerKeys : [];
-  return { credentials: file.credentials.map(upgradeLegacy), providerKeys };
-};
 
 export interface CredentialIdentity {
   readonly organization: string;
