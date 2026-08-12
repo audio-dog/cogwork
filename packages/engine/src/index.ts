@@ -6,6 +6,7 @@ export * as DaemonEventBus from "./daemon-event-bus";
 export { defineWorkspace } from "./define-workspace";
 export * as EventPublisher from "./event-publisher";
 export * as Executor from "./executor";
+export * as FirstParty from "./first-party";
 export * as Git from "./git";
 export * as GitHub from "./github";
 export * as HandToHuman from "./hand-to-human";

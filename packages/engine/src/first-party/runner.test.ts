@@ -1,0 +1,244 @@
+import { agUiTextDelta, HarnessName, SessionId } from "@clanker-forge/contracts";
+import { assert, describe, it } from "@effect/vitest";
+import { EventType, type StreamChunk } from "@tanstack/ai";
+import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import {
+  ContextAssembler,
+  ContextAssemblerError,
+  type ContextAssemblerService,
+  type InstructionLayer,
+} from "../context-assembler";
+import { CredentialError, CredentialStore, type CredentialStoreService } from "../credential-store";
+import type { HarnessRequest } from "../harness";
+import { SessionStore, type SessionStoreService, type ThreadMessage } from "../session-store";
+import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./adapter";
+import {
+  defaultLoopBudget,
+  firstPartyRunner,
+  type RunChat,
+  type RunChatOptions,
+  resolveContextLayers,
+} from "./runner";
+
+const SECRET = "sk-super-secret-value";
+const harnessName = Schema.decodeSync(HarnessName)("first-party");
+const sessionId = Schema.decodeSync(SessionId)("sess-resume-1");
+
+const sampleLayer: InstructionLayer = {
+  kind: "playbook",
+  source: "/skills/implement-agent/SKILL.md",
+  content: "Follow the implement playbook.",
+};
+
+const reqStub = { cwd: "/repo", projectRoot: "/repo", skill: "implement-agent" };
+
+const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => {
+  const iterator = items[Symbol.iterator]();
+  return {
+    [Symbol.asyncIterator]: (): AsyncIterator<A> => ({ next: () => Promise.resolve(iterator.next()) }),
+  };
+};
+
+const scriptedChunks: ReadonlyArray<StreamChunk> = [
+  { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "hello world" },
+  { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" },
+];
+
+const unexpected = () => Effect.die(new Error("credential store method not expected in this test"));
+
+const credentialStore = (providerKey: CredentialStoreService["providerKey"]): CredentialStoreService => ({
+  bearerToken: unexpected,
+  persist: unexpected,
+  invalidate: () => Effect.void,
+  providerKey,
+  persistProviderKey: unexpected,
+});
+
+const credentialLayer = (providerKey: CredentialStoreService["providerKey"]) =>
+  Layer.succeed(CredentialStore, credentialStore(providerKey));
+
+const keyProvider: CredentialStoreService["providerKey"] = () =>
+  Effect.succeed({ source: "env", key: Redacted.make(SECRET) });
+
+const missingKeyProvider: CredentialStoreService["providerKey"] = () =>
+  Effect.fail(new CredentialError({ account: "openai", message: "no api key for openai" }));
+
+const sessionStore = (thread: ReadonlyArray<ThreadMessage>): SessionStoreService => ({
+  loadThread: () => Effect.succeed(thread),
+  resumeHandle: () => Effect.succeed(null),
+});
+
+const sessionLayer = (thread: ReadonlyArray<ThreadMessage>) =>
+  Layer.succeed(SessionStore, sessionStore(thread));
+
+const contextService = (layers: ReadonlyArray<InstructionLayer>): ContextAssemblerService => ({
+  assemble: () => Effect.succeed({ layers, skillPath: "/skills/implement-agent" }),
+});
+
+const contextLayer = (layers: ReadonlyArray<InstructionLayer>) =>
+  Layer.succeed(ContextAssembler, contextService(layers));
+
+const request = (overrides: Partial<HarnessRequest>): HarnessRequest => ({
+  harness: harnessName,
+  stage: "implement",
+  skill: "implement-agent",
+  checkoutPath: "/tmp/does-not-matter",
+  session: null,
+  prompt: "do the thing",
+  model: "openai/gpt-4o",
+  effort: null,
+  mcpSkills: [],
+  ...overrides,
+});
+
+const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
+  const handle = yield* Effect.acquireRelease(
+    Effect.promise(() => localProcessSandbox({}).create({})),
+    (open) => Effect.promise(() => open.destroy()),
+  );
+  return handle.id;
+});
+
+describe("firstPartyRunner", () => {
+  it.live(
+    "bridges chat output, folds the resumed thread, hands the redacted key to the adapter, and never leaks it",
+    () =>
+      Effect.gen(function* () {
+        const checkoutPath = yield* scratchCheckout();
+        const adapterCalls: Array<{ provider: string; model: string; key: Redacted.Redacted<string> }> = [];
+        const capturedOptions: Array<RunChatOptions> = [];
+
+        const makeAdapter: ModelAdapterFactory = (resolved, key) => {
+          adapterCalls.push({ provider: resolved.provider, model: resolved.model, key });
+          return defaultModelAdapterFactory(resolved, key);
+        };
+        const runChat: RunChat = (options) => {
+          capturedOptions.push(options);
+          return toAsyncIterable(scriptedChunks);
+        };
+        const runner = firstPartyRunner({ name: harnessName, makeAdapter, runChat });
+
+        const events = yield* Stream.runCollect(
+          runner.run(request({ checkoutPath, session: sessionId })),
+        ).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              contextLayer([sampleLayer]),
+              credentialLayer(keyProvider),
+              sessionLayer([{ role: "assistant", content: "earlier turn" }]),
+            ),
+          ),
+        );
+
+        const serialized = yield* Schema.encodeEffect(Schema.UnknownFromJsonString)(events);
+        assert.include(serialized, "hello world");
+        assert.notInclude(serialized, SECRET);
+        assert.isTrue(events.some((event) => agUiTextDelta(event) === "hello world"));
+
+        assert.lengthOf(adapterCalls, 1);
+        assert.strictEqual(adapterCalls[0]?.provider, "openai");
+        assert.strictEqual(adapterCalls[0]?.model, "gpt-4o");
+        assert.strictEqual(adapterCalls[0] ? Redacted.value(adapterCalls[0].key) : null, SECRET);
+
+        const options = capturedOptions[0];
+        if (!options) return assert.fail("runChat was never invoked");
+        assert.deepStrictEqual(
+          [...options.messages],
+          [
+            { role: "assistant", content: "earlier turn" },
+            { role: "user", content: "do the thing" },
+          ],
+        );
+        assert.lengthOf([...options.tools], 7);
+        assert.isTrue(options.middleware.some((middleware) => middleware.name === "clanker-forge-context"));
+      }),
+    30000,
+  );
+
+  it.effect("fails with a launch error when the model has no wired provider", () =>
+    Effect.gen(function* () {
+      const runner = firstPartyRunner({
+        name: harnessName,
+        runChat: () => toAsyncIterable(scriptedChunks),
+      });
+      const error = yield* Effect.flip(
+        Stream.runDrain(runner.run(request({ model: "unknown-provider/whatever" }))).pipe(
+          Effect.provide(
+            Layer.mergeAll(contextLayer([sampleLayer]), credentialLayer(keyProvider), sessionLayer([])),
+          ),
+        ),
+      );
+      assert.strictEqual(error._tag, "HarnessError");
+      assert.strictEqual(error.reason, "launch");
+    }),
+  );
+
+  it.effect("fails with a launch error when no api key is configured", () =>
+    Effect.gen(function* () {
+      const runner = firstPartyRunner({
+        name: harnessName,
+        runChat: () => toAsyncIterable(scriptedChunks),
+      });
+      const error = yield* Effect.flip(
+        Stream.runDrain(runner.run(request({}))).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              contextLayer([sampleLayer]),
+              credentialLayer(missingKeyProvider),
+              sessionLayer([]),
+            ),
+          ),
+        ),
+      );
+      assert.strictEqual(error._tag, "HarnessError");
+      assert.strictEqual(error.reason, "launch");
+    }),
+  );
+});
+
+describe("parseModelRef", () => {
+  it("splits a provider/model reference", () => {
+    assert.deepStrictEqual(parseModelRef("openai/gpt-4o"), { provider: "openai", model: "gpt-4o" });
+  });
+
+  it("returns null for a bare model with no provider prefix", () => {
+    assert.isNull(parseModelRef("gpt-4o"));
+  });
+
+  it("returns null for an unwired provider prefix", () => {
+    assert.isNull(parseModelRef("openrouter/some-model"));
+  });
+});
+
+describe("defaultLoopBudget", () => {
+  it("gives read-only stages fewer turns than writing stages", () => {
+    assert.isBelow(defaultLoopBudget("triage"), defaultLoopBudget("implement"));
+    assert.isBelow(defaultLoopBudget("verify"), defaultLoopBudget("follow-up"));
+  });
+});
+
+describe("resolveContextLayers", () => {
+  it.effect("returns the assembled layers on success", () =>
+    Effect.gen(function* () {
+      const layers = yield* Effect.promise(() =>
+        resolveContextLayers(contextService([sampleLayer]), reqStub, []),
+      );
+      assert.deepStrictEqual([...layers], [sampleLayer]);
+    }),
+  );
+
+  it.effect("falls back to the run-start layers when assembly fails", () =>
+    Effect.gen(function* () {
+      const failing: ContextAssemblerService = {
+        assemble: () => Effect.fail(new ContextAssemblerError({ skill: "implement-agent", message: "boom" })),
+      };
+      const layers = yield* Effect.promise(() => resolveContextLayers(failing, reqStub, [sampleLayer]));
+      assert.deepStrictEqual([...layers], [sampleLayer]);
+    }),
+  );
+});

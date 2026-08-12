@@ -23,6 +23,7 @@ import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { cancelRun, reclassify, setScheduling } from "./commands";
+import type { ContextAssembler } from "./context-assembler";
 import type { CredentialStore } from "./credential-store";
 import {
   activityOf,
@@ -175,6 +176,7 @@ export const principalMiddlewareLayer = Layer.succeed(PrincipalMiddleware)(
 export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
+  readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, R>;
   readonly registry: Layer.Layer<WorkspaceRegistry, E, R>;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
@@ -202,7 +204,11 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     daemonInfoLayer,
     issueTracker,
     runLedger,
-    Harness.layer(adapters.harnessRunners).pipe(Layer.provide(sessionStore)),
+    Harness.layer(adapters.harnessRunners).pipe(
+      Layer.provide(sessionStore),
+      Layer.provide(adapters.contextAssembler),
+      Layer.provide(credentials),
+    ),
     McpSkill.layer.pipe(Layer.provide(credentials)),
     daemonEventBusLayer,
     runControlLayer,

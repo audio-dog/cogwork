@@ -17,6 +17,8 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
+import * as ContextAssembler from "./context-assembler";
+import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
 import { GitError } from "./git";
@@ -126,6 +128,10 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
 // A stand-in for the real credential-store-backed assembler: it hands back a redacted bearer for any
 // skill that declares auth, so the executor tests can prove the token reaches the request without
 // wiring a live credential store.
+const contextAssemblerStub = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: () => Effect.succeed({ layers: [], skillPath: "/" }),
+});
+
 const assemblerStub = Layer.succeed(McpSkillAssembler, {
   assemble: (config) =>
     Effect.succeed(
@@ -341,11 +347,12 @@ const provide = (
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
+  const runnerServices = Layer.mergeAll(sessionStore, contextAssemblerStub, CredentialStore.layerEnv);
   return Executor.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(IssueTracker, ws),
-        harnessLayer(runners).pipe(Layer.provide(sessionStore)),
+        harnessLayer(runners).pipe(Layer.provide(runnerServices)),
         runLedger,
         bus,
         RunControl.layer,

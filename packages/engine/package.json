@@ -13,6 +13,9 @@
     "@clanker-forge/contracts": "workspace:*",
     "@linear/sdk": "^89.0.0",
     "@tanstack/ai": "^0.42.0",
+    "@tanstack/ai-anthropic": "0.16.3",
+    "@tanstack/ai-gemini": "0.20.1",
+    "@tanstack/ai-openai": "0.17.1",
     "@tanstack/ai-sandbox": "0.2.4",
     "@tanstack/ai-sandbox-local-process": "0.2.0",
     "effect": "catalog:effect"

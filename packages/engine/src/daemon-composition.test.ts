@@ -8,6 +8,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as Socket from "effect/unstable/socket/Socket";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
+import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import type { HarnessRunner } from "./harness";
@@ -42,6 +43,10 @@ const stubRunner: HarnessRunner = {
   run: () => Stream.empty,
 };
 
+const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: () => Effect.succeed({ layers: [], skillPath: "/skills" }),
+});
+
 const socketServerLayer = (socket: Socket.Socket) =>
   Layer.succeed(SocketServer.SocketServer, {
     address: { _tag: "UnixAddress", path: "memory" },
@@ -63,6 +68,7 @@ describe("daemon server composition", () => {
       const serverLayer = Daemon.serverLayer({
         transport,
         credentials: CredentialStore.layerEnv,
+        contextAssembler: contextAssemblerLayer,
         runLedger: RunLedger.layerMemoryCore,
         registry: registryLayer,
         worktrees: worktreeLayer,
