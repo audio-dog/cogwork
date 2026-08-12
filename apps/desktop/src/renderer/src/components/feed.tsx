@@ -1,92 +1,128 @@
 import { Alert, AlertDescription, AlertTitle } from "@clanker-forge/ui/components/alert";
 import { Badge } from "@clanker-forge/ui/components/badge";
 import { Button } from "@clanker-forge/ui/components/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
+import { Item, ItemActions, ItemContent, ItemGroup } from "@clanker-forge/ui/components/item";
 import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
-import { Separator } from "@clanker-forge/ui/components/separator";
-import { RiEyeLine, RiGitBranchLine } from "@remixicon/react";
+import { RiArrowRightSLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
 import type { ReactNode } from "react";
+import { daemonErrorMessage } from "../features/daemon-error";
 import type { FeedRun, QueuedItem } from "../features/feed";
-import { blockedCount, queuedItems, recentlyDone, runningRuns } from "../features/feed";
-import { elapsed, relativeTime } from "../features/format";
+import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
+import { relativeTime } from "../features/format";
+import type { RunActivityPreview } from "../features/run-activity";
 import { useBoard } from "../features/use-board";
 import { useChromeStore } from "../store/chrome";
-import { RunStatusBadge } from "./badges";
 
-function Section({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
+function LiveDot() {
+  return <span className="size-2 shrink-0 animate-pulse rounded-full bg-primary" aria-hidden />;
+}
+
+function WorkspaceChip({ workspace }: { workspace: string }) {
+  return <Badge variant="outline">{workspace}</Badge>;
+}
+
+function Section({
+  title,
+  count,
+  live,
+  children,
+}: {
+  title: string;
+  count: number;
+  live?: boolean;
+  children: ReactNode;
+}) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">{title}</h2>
-        {count !== undefined && <Badge variant="outline">{count}</Badge>}
+        {live && <LiveDot />}
+        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{title}</h2>
+        <Badge variant="secondary">{count}</Badge>
       </div>
       {children}
     </section>
   );
 }
 
-function RunningCard({ entry }: { entry: FeedRun }) {
+function EmptyNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+      {children}
+    </p>
+  );
+}
+
+function LivePreview({ preview }: { preview: RunActivityPreview | undefined }) {
+  if (!preview) return null;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/40 p-2.5">
+      <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-primary uppercase">
+        <LiveDot />
+        {preview.label}
+      </div>
+      <p className="truncate font-mono text-xs text-muted-foreground">{preview.text || "…"}</p>
+    </div>
+  );
+}
+
+function LiveCard({ entry, preview }: { entry: FeedRun; preview: RunActivityPreview | undefined }) {
   const { run, title } = entry;
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <RunStatusBadge status={run.status} />
-          <span>{run.workspace}</span>
-          <span aria-hidden>·</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs text-muted-foreground">{run.workItem}</span>
+          <WorkspaceChip workspace={run.workspace} />
           <Badge variant="secondary">{run.stage}</Badge>
         </div>
         <CardTitle className="mt-1">{title ?? run.workItem}</CardTitle>
-        <CardAction>
-          <Button size="sm" variant="outline" render={<Link to="/activity" />}>
-            <RiEyeLine data-icon="inline-start" />
-            Watch
-          </Button>
-        </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span>{run.harness}</span>
-        {run.branch && (
-          <span className="flex items-center gap-1">
-            <RiGitBranchLine className="size-3.5" />
-            <span className="truncate">{run.branch}</span>
-          </span>
-        )}
-        <span>running {elapsed(run.startedAtMillis)}</span>
-        <span>
-          {run.eventCount} event{run.eventCount === 1 ? "" : "s"}
-        </span>
+      <CardContent className="flex flex-col gap-3">
+        <LivePreview preview={preview} />
+        <Button variant="link" size="sm" className="justify-start px-0" render={<Link to="/activity" />}>
+          <RiArrowRightSLine data-icon="inline-start" />
+          Watch this agent
+        </Button>
       </CardContent>
     </Card>
   );
 }
 
 function QueuedRow({ entry }: { entry: QueuedItem }) {
+  const { item, workspace } = entry;
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm ring-1 ring-foreground/10">
-      <Badge variant="secondary">{entry.item.stage}</Badge>
-      <span className="truncate">{entry.item.title}</span>
-      <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-        {entry.workspace} · {entry.item.id}
-      </span>
-    </div>
+    <Item render={<li />} variant="outline" size="sm">
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.id}</span>
+      <Badge variant="secondary">{item.stage}</Badge>
+      <ItemContent className="min-w-0 flex-1">
+        <span className="truncate text-sm">{item.title}</span>
+      </ItemContent>
+      <ItemActions>
+        {item.pr && <Badge variant="outline">PR #{item.pr.number}</Badge>}
+        <WorkspaceChip workspace={workspace} />
+      </ItemActions>
+    </Item>
   );
 }
 
 function DoneRow({ entry }: { entry: FeedRun }) {
   const { run, title } = entry;
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm ring-1 ring-foreground/10">
-      <RunStatusBadge status={run.status} />
-      <span className="truncate">{title ?? run.workItem}</span>
-      <span className="ms-auto shrink-0 text-xs text-muted-foreground">
-        {run.workspace}
-        {run.endedAtMillis !== null && ` · ${relativeTime(run.endedAtMillis)}`}
-      </span>
-    </div>
+    <Item render={<li />} variant="outline" size="sm">
+      <span className="shrink-0 font-mono text-xs text-muted-foreground">{run.workItem}</span>
+      <ItemContent className="min-w-0 flex-1">
+        <span className="truncate text-sm">{title ?? run.workItem}</span>
+      </ItemContent>
+      <ItemActions>
+        {run.endedAtMillis !== null && (
+          <span className="text-xs text-muted-foreground">{relativeTime(run.endedAtMillis)}</span>
+        )}
+        <WorkspaceChip workspace={run.workspace} />
+      </ItemActions>
+    </Item>
   );
 }
 
@@ -99,7 +135,7 @@ export function Feed() {
       <div className="p-6">
         <Alert variant="destructive">
           <AlertTitle>Could not reach the daemon</AlertTitle>
-          <AlertDescription>{Cause.pretty(result.cause)}</AlertDescription>
+          <AlertDescription>{daemonErrorMessage(result.cause)}</AlertDescription>
         </Alert>
       </div>
     );
@@ -116,23 +152,17 @@ export function Feed() {
     );
   }
 
-  const { board } = result;
+  const { board, previews } = result;
   const running = runningRuns(board, filter);
   const queued = queuedItems(board, filter);
   const done = recentlyDone(board, filter);
-  const blocked = blockedCount(board, filter);
 
   const isEmpty = running.length === 0 && queued.length === 0 && done.length === 0;
 
-  return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-8 p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Feed</h1>
-          {blocked > 0 && <Badge variant="outline">{blocked} blocked</Badge>}
-        </div>
-
-        {isEmpty && (
+  if (isEmpty) {
+    return (
+      <ScrollArea className="h-full">
+        <div className="p-6">
           <Empty>
             <EmptyHeader>
               <EmptyTitle>Nothing in flight</EmptyTitle>
@@ -141,38 +171,49 @@ export function Feed() {
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
-        )}
+        </div>
+      </ScrollArea>
+    );
+  }
 
-        {running.length > 0 && (
-          <Section title="Running" count={running.length}>
-            <div className="flex flex-col gap-4">
+  return (
+    <ScrollArea className="h-full">
+      <div className="flex flex-col gap-8 p-6">
+        <Section title="Live now" count={running.length} live>
+          {running.length === 0 ? (
+            <EmptyNote>No agents running.</EmptyNote>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4">
               {running.map((entry) => (
-                <RunningCard key={entry.run.id} entry={entry} />
+                <LiveCard key={entry.run.id} entry={entry} preview={previews.get(entry.run.id)} />
               ))}
             </div>
-          </Section>
-        )}
+          )}
+        </Section>
 
-        {queued.length > 0 && (
-          <Section title="Queued" count={queued.length}>
-            <div className="flex flex-col gap-2">
+        <Section title="Queued" count={queued.length}>
+          {queued.length === 0 ? (
+            <EmptyNote>Nothing queued.</EmptyNote>
+          ) : (
+            <ItemGroup>
               {queued.map((entry) => (
                 <QueuedRow key={`${entry.workspace}:${entry.item.id}`} entry={entry} />
               ))}
-            </div>
-          </Section>
-        )}
+            </ItemGroup>
+          )}
+        </Section>
 
-        {done.length > 0 && (
-          <Section title="Recently done">
-            <div className="flex flex-col gap-2">
+        <Section title="Recently done" count={done.length}>
+          {done.length === 0 ? (
+            <EmptyNote>Nothing done yet.</EmptyNote>
+          ) : (
+            <ItemGroup>
               {done.map((entry) => (
                 <DoneRow key={entry.run.id} entry={entry} />
               ))}
-            </div>
-            <Separator />
-          </Section>
-        )}
+            </ItemGroup>
+          )}
+        </Section>
       </div>
     </ScrollArea>
   );
