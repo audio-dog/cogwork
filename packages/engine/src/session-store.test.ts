@@ -64,7 +64,7 @@ describe("foldThread", () => {
   });
 });
 
-describe("SessionStore.loadThread", () => {
+describe("SessionStore ledger-backed message store", () => {
   const insert = (id: string, startedAtMillis: number, events: ReadonlyArray<RunEvent>) =>
     Effect.flatMap(RunLedger, (ledger) =>
       ledger
@@ -84,6 +84,9 @@ describe("SessionStore.loadThread", () => {
         .pipe(Effect.andThen(Effect.forEach(events, (e) => ledger.appendEvent(runId(id), e)))),
     );
 
+  const loadThread = (store: typeof SessionStore.Service, id: SessionId) =>
+    Effect.promise(() => store.persistence.stores.messages.loadThread(id));
+
   it.effect("folds a session's transcript across the runs that share it, oldest run first", () =>
     Effect.gen(function* () {
       yield* insert("run-2", 2000, [
@@ -96,9 +99,23 @@ describe("SessionStore.loadThread", () => {
       ]);
 
       const store = yield* SessionStore;
-      assert.deepStrictEqual(yield* store.loadThread(session), [
+      assert.deepStrictEqual(yield* loadThread(store, session), [
         { role: "assistant", content: "first" },
         { role: "assistant", content: "second" },
+      ]);
+    }).pipe(Effect.provide(layer)),
+  );
+
+  it.effect("carries a prior tool call back as a labelled user turn", () =>
+    Effect.gen(function* () {
+      yield* insert("run-1", 1000, [
+        event(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "bash", args: "ls" }),
+        event(1, { type: "RUN_FINISHED", finishReason: "stop" }),
+      ]);
+
+      const store = yield* SessionStore;
+      assert.deepStrictEqual(yield* loadThread(store, session), [
+        { role: "user", content: "Result from bash:\nls" },
       ]);
     }).pipe(Effect.provide(layer)),
   );
@@ -106,7 +123,7 @@ describe("SessionStore.loadThread", () => {
   it.effect("returns an empty transcript for a session with nothing recorded", () =>
     Effect.gen(function* () {
       const store = yield* SessionStore;
-      assert.deepStrictEqual(yield* store.loadThread(session), []);
+      assert.deepStrictEqual(yield* loadThread(store, session), []);
     }).pipe(Effect.provide(layer)),
   );
 });

@@ -168,7 +168,9 @@ describe("owned tools", () => {
       ]);
       const execute = tools.write.execute;
       if (execute === undefined) throw new Error("write tool is missing a server executor");
-      const result = yield* Effect.promise(() => execute({ path: "via-tool.txt", content: "ok" }));
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(execute({ path: "via-tool.txt", content: "ok" })),
+      );
       assert.deepStrictEqual(result, { path: "via-tool.txt", bytesWritten: 2 });
     }),
   );
