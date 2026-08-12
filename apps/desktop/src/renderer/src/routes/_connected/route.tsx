@@ -7,6 +7,23 @@ import { EngineOfflineMessage } from "../../features/engine-offline";
 import { useBoard } from "../../features/use-board";
 import { type EnginePhase, enginePhase, useEngineStatus } from "../../features/use-engine-status";
 
+export const Route = createFileRoute("/_connected")({
+  component: ConnectedLayout,
+});
+
+function ConnectedLayout() {
+  const { status } = useEngineStatus();
+  const phase = enginePhase(status);
+  const pageTitle = useMatches().at(-1)?.staticData?.pageTitle ?? "Mission control";
+
+  if (phase !== "up") return <EngineOfflineCard title={pageTitle} phase={phase} />;
+
+  const result = useBoard();
+  if (result._tag !== "Success") return <DaemonUnavailable />;
+
+  return <Outlet />;
+}
+
 function EngineOfflineCard({ title, phase }: { title: string; phase: Exclude<EnginePhase, "up"> }) {
   return (
     <div className="p-6">
@@ -47,20 +64,3 @@ function DaemonUnavailable() {
     </Empty>
   );
 }
-
-function ConnectedLayout() {
-  const { status } = useEngineStatus();
-  const phase = enginePhase(status);
-  const pageTitle = useMatches().at(-1)?.staticData?.pageTitle ?? "Mission control";
-
-  if (phase !== "up") return <EngineOfflineCard title={pageTitle} phase={phase} />;
-
-  const result = useBoard();
-  if (result._tag !== "Success") return <DaemonUnavailable />;
-
-  return <Outlet />;
-}
-
-export const Route = createFileRoute("/_connected")({
-  component: ConnectedLayout,
-});

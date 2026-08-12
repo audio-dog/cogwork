@@ -8,6 +8,11 @@ import { relativeTime } from "../../features/format";
 import { useBoard } from "../../features/use-board";
 import { useChromeStore } from "../../store/chrome";
 
+export const Route = createFileRoute("/_connected/inbox")({
+  staticData: { pageTitle: "Inbox" },
+  component: InboxPage,
+});
+
 function InboxPage() {
   const result = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
@@ -68,8 +73,3 @@ function InboxPage() {
     </ScrollArea>
   );
 }
-
-export const Route = createFileRoute("/_connected/inbox")({
-  staticData: { pageTitle: "Inbox" },
-  component: InboxPage,
-});

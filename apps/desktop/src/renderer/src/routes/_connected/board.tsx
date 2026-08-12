@@ -5,6 +5,11 @@ import { boardColumns } from "../../features/board-view";
 import { useBoard } from "../../features/use-board";
 import { useChromeStore } from "../../store/chrome";
 
+export const Route = createFileRoute("/_connected/board")({
+  staticData: { pageTitle: "Board" },
+  component: BoardPage,
+});
+
 function BoardPage() {
   const result = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
@@ -34,8 +39,3 @@ function BoardPage() {
     </ScrollArea>
   );
 }
-
-export const Route = createFileRoute("/_connected/board")({
-  staticData: { pageTitle: "Board" },
-  component: BoardPage,
-});

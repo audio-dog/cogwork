@@ -7,6 +7,47 @@ import type { Lane } from "../../features/board-view";
 import { lanes } from "../../features/board-view";
 import { useBoard } from "../../features/use-board";
 
+export const Route = createFileRoute("/_connected/lanes")({
+  staticData: { pageTitle: "Lanes" },
+  component: LanesPage,
+});
+
+function LanesPage() {
+  const result = useBoard();
+  if (result._tag !== "Success") return null;
+
+  const rows = lanes(result.board);
+  if (rows.length === 0) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>No workspaces</EmptyTitle>
+          <EmptyDescription>Register a workspace to see it appear as a lane here.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="flex flex-col gap-3.5 px-5 py-[18px] pb-10">
+        {rows.map((lane) => (
+          <LaneRow key={lane.key} lane={lane} />
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
+function LaneRow({ lane }: { lane: Lane }) {
+  return (
+    <article className="overflow-hidden rounded-[13px] border bg-card">
+      <LaneHead lane={lane} />
+      <LaneBody lane={lane} />
+    </article>
+  );
+}
+
 function LaneHead({ lane }: { lane: Lane }) {
   return (
     <div className="flex items-center gap-2.5 border-b bg-muted/30 px-3.5 py-2.5">
@@ -64,44 +105,3 @@ function LaneBody({ lane }: { lane: Lane }) {
     </ScrollArea>
   );
 }
-
-function LaneRow({ lane }: { lane: Lane }) {
-  return (
-    <article className="overflow-hidden rounded-[13px] border bg-card">
-      <LaneHead lane={lane} />
-      <LaneBody lane={lane} />
-    </article>
-  );
-}
-
-function LanesPage() {
-  const result = useBoard();
-  if (result._tag !== "Success") return null;
-
-  const rows = lanes(result.board);
-  if (rows.length === 0) {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>No workspaces</EmptyTitle>
-          <EmptyDescription>Register a workspace to see it appear as a lane here.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
-
-  return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-3.5 px-5 py-[18px] pb-10">
-        {rows.map((lane) => (
-          <LaneRow key={lane.key} lane={lane} />
-        ))}
-      </div>
-    </ScrollArea>
-  );
-}
-
-export const Route = createFileRoute("/_connected/lanes")({
-  staticData: { pageTitle: "Lanes" },
-  component: LanesPage,
-});
