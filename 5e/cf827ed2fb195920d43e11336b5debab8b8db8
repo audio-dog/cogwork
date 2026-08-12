@@ -1,0 +1,19 @@
+packages/ui/src/components/progress.tsx
+  s_9a5e56b5dbc27a::t_ae0e1859ffb0d9 1-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5ecf827ed2fb195920d43e11336b5debab8b8db8",
+  "prompts": {},
+  "sessions": {
+    "s_9a5e56b5dbc27a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e775d86f-125b-4131-abb8-695f6b98bc2a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
