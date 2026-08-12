@@ -5,7 +5,6 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -20,30 +19,18 @@ import { useChromeStore } from "../store/chrome";
 interface View {
   readonly label: string;
   readonly icon: ComponentType;
-  readonly to?: string;
+  readonly to: string;
 }
 
 const views: ReadonlyArray<View> = [
   { label: "Feed", icon: RiPulseLine, to: "/" },
-  { label: "Board", icon: RiLayoutGridLine },
-  { label: "Inbox", icon: RiInboxLine },
-  { label: "Lanes", icon: RiStackLine },
+  { label: "Board", icon: RiLayoutGridLine, to: "/board" },
+  { label: "Inbox", icon: RiInboxLine, to: "/inbox" },
+  { label: "Lanes", icon: RiStackLine, to: "/lanes" },
 ];
 
 function ViewItem({ view }: { view: View }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-
-  if (!view.to) {
-    return (
-      <SidebarMenuItem>
-        <SidebarMenuButton disabled tooltip={view.label}>
-          <view.icon />
-          <span>{view.label}</span>
-        </SidebarMenuButton>
-        <SidebarMenuBadge>Soon</SidebarMenuBadge>
-      </SidebarMenuItem>
-    );
-  }
 
   return (
     <SidebarMenuItem>
