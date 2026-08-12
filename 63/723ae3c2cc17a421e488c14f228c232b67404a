@@ -1,0 +1,22 @@
+biome.json
+  h_46518a29d4dd91 2,28-30
+apps/desktop/src/renderer/src/routes/_connected/route.tsx
+  h_46518a29d4dd91 18
+package.json
+  h_46518a29d4dd91 20
+packages/ui/src/components/sidebar.tsx
+  h_46518a29d4dd91 74
+pnpm-lock.yaml
+  h_46518a29d4dd91 58-59,617-621,628-633,640-645,653-659,667-673,681-687,695-701,708-713,720-725,4926-4936,4940-4942,4946-4948,4952-4954,4958-4960,4964-4966,4970-4972,4976-4978,4982-4984
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "63723ae3c2cc17a421e488c14f228c232b67404a",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
