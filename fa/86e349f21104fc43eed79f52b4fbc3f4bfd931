@@ -1,0 +1,19 @@
+apps/cli/config/colony.workspace.ts
+  s_b40385ab8707d5::t_8bd904c4d18d52 1-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fa86e349f21104fc43eed79f52b4fbc3f4bfd931",
+  "prompts": {},
+  "sessions": {
+    "s_b40385ab8707d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "368f5e22-a255-4845-b2ea-3abce0abba20",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
