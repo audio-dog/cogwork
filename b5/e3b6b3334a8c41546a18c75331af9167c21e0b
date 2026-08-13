@@ -1,0 +1,26 @@
+apps/desktop/package.json
+  s_41e1e8020ba74f::t_887cf1b4191529 20
+apps/desktop/scripts/ensure-electron.mjs
+  s_41e1e8020ba74f::t_76d8ce2198b09e 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b5e3b6b3334a8c41546a18c75331af9167c21e0b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_41e1e8020ba74f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e3803a4b-27b1-4619-af44-a5939e42c1e3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
