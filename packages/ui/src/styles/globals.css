@@ -132,3 +132,16 @@
     cursor: pointer;
   }
 }
+
+/* --workspace-titlebar-content-left insets content past the fixed sidebar
+   toggle. Derived on the wrapper (not :root) so the macOS override below feeds
+   the calc instead of freezing the non-mac value. */
+[data-slot="sidebar-wrapper"] {
+  --workspace-controls-left: 0.75rem;
+  --workspace-titlebar-content-left: calc(var(--workspace-controls-left) + 1.75rem + 0.5rem);
+}
+
+/* Wider inset so the toggle clears the macOS traffic lights. */
+[data-slot="sidebar-wrapper"].mac-traffic-lights {
+  --workspace-controls-left: 90px;
+}
