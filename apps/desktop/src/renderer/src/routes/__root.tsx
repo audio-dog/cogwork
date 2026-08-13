@@ -122,11 +122,17 @@ function ContentArea() {
 
 function RootLayout() {
   const { width, setWidth, reset } = useSidebarWidth();
-  const providerStyle = { "--sidebar-width": `${width}px` } as CSSProperties;
+  // Wider on macOS so the fixed toggle and title-bar content clear the traffic lights.
+  const controlsLeft = isMac ? "90px" : "0.75rem";
+  const providerStyle = {
+    "--sidebar-width": `${width}px`,
+    "--workspace-controls-left": controlsLeft,
+    "--workspace-titlebar-content-left": `calc(${controlsLeft} + 1.75rem + 0.5rem)`,
+  } as CSSProperties;
 
   return (
     <TooltipProvider>
-      <SidebarProvider className={isMac ? "mac-traffic-lights" : undefined} style={providerStyle}>
+      <SidebarProvider style={providerStyle}>
         <NavSidebar />
         <SidebarInset className="h-svh overflow-hidden">
           <ContentArea />

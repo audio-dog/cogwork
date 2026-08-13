@@ -1,5 +1,6 @@
 import { useSidebar } from "@clanker-forge/ui/components/sidebar";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useLocalStorageValue, useWindowSize } from "@react-hookz/web";
+import { useRef } from "react";
 
 const STORAGE_KEY = "cf.sidebarWidth";
 const DEFAULT_WIDTH = 16 * 16;
@@ -17,56 +18,19 @@ function clampWidth(width: number, viewportWidth: number) {
   return Math.min(Math.max(width, MIN_WIDTH), resolveMaxWidth(viewportWidth));
 }
 
-function readStoredWidth() {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return null;
-    const value = Number.parseFloat(raw);
-    return Number.isFinite(value) ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredWidth(width: number) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, String(width));
-  } catch {}
-}
-
-function clearStoredWidth() {
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch {}
-}
-
-function subscribeWindowWidth(onChange: () => void) {
-  window.addEventListener("resize", onChange);
-  return () => window.removeEventListener("resize", onChange);
-}
-
-function useWindowWidth() {
-  return useSyncExternalStore(
-    subscribeWindowWidth,
-    () => window.innerWidth,
-    () => Number.POSITIVE_INFINITY,
-  );
-}
-
 export function useSidebarWidth() {
-  const windowWidth = useWindowWidth();
-  const [storedWidth, setStoredWidth] = useState(() => readStoredWidth() ?? DEFAULT_WIDTH);
+  const { width: windowWidth } = useWindowSize();
+  const {
+    value: storedWidth,
+    set,
+    remove,
+  } = useLocalStorageValue(STORAGE_KEY, {
+    defaultValue: DEFAULT_WIDTH,
+    initializeWithValue: true,
+  });
 
-  const setWidth = (next: number) => {
-    const clamped = clampWidth(next, window.innerWidth);
-    setStoredWidth(clamped);
-    writeStoredWidth(clamped);
-  };
-
-  const reset = () => {
-    setStoredWidth(DEFAULT_WIDTH);
-    clearStoredWidth();
-  };
+  const setWidth = (next: number) => set(clampWidth(next, window.innerWidth));
+  const reset = () => remove();
 
   return { width: clampWidth(storedWidth, windowWidth), setWidth, reset };
 }
