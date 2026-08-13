@@ -17,7 +17,7 @@
     "build:win": "pnpm run build && electron-builder --win",
     "build": "electron-vite build",
     "dev": "electron-vite dev",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "node scripts/ensure-electron.mjs && electron-builder install-app-deps",
     "start": "electron-vite preview",
     "test": "vitest run",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
