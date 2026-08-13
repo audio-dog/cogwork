@@ -1,0 +1,103 @@
+packages/engine/CONTEXT.md
+  s_e161ba8632d41a::t_45558ddee74040 137,181
+apps/cli/src/ledger.ts
+  s_e161ba8632d41a::t_45558ddee74040 13,427
+packages/engine/src/coordination.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 144,151,181,329,379
+packages/contracts/src/workspace.ts
+  s_e161ba8632d41a::t_45558ddee74040 38,48
+packages/engine/src/github/github-helpers.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 7,156,162,172,189,205,221,234,241,244-308
+packages/engine/src/linear/markers.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 2-3,34-86
+  s_e161ba8632d41a::t_80e16e7dcf38a1 87
+packages/engine/src/run-ledger.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 147-164
+  s_e161ba8632d41a::t_82952a05f99c8c 146
+packages/engine/src/github/github.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 192-207,454,486,881-940
+  s_e161ba8632d41a::t_66d7a8bd65f6f0 941
+packages/engine/src/coordination.ts
+  s_e161ba8632d41a::t_45558ddee74040 144-145,196
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_e161ba8632d41a::t_45558ddee74040 56,58-59
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_e161ba8632d41a::t_45558ddee74040 31
+packages/engine/src/engine.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 21,217,473-474,482-483,588
+packages/engine/src/read-model.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 42
+packages/engine/src/resume-policy.ts
+  s_e161ba8632d41a::t_45558ddee74040 1-2,6,10,21-24,35-37,39,42-46
+packages/engine/src/commands.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 28,103-105,116-117
+packages/engine/src/linear/host.ts
+  s_e161ba8632d41a::t_45558ddee74040 1-153
+packages/engine/src/coordination-tracker.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 200,226-232
+packages/engine/src/daemon.ts
+  s_e161ba8632d41a::t_45558ddee74040 23,43,64,68,181-182,188
+packages/engine/src/run-ledger.ts
+  s_e161ba8632d41a::t_45558ddee74040 10,211
+apps/cli/config/colony.workspace.ts
+  s_e161ba8632d41a::t_45558ddee74040 32
+packages/engine/src/session-store.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 18,35-39,44-49,59-62
+packages/engine/src/run-recorder.ts
+  s_e161ba8632d41a::t_45558ddee74040 1-101
+packages/engine/src/classify.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 30,241,265-271,286-292,311
+apps/cli/src/ledger.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 73,239-252
+  s_e161ba8632d41a::t_5f2565c5187a7d 253-255
+packages/engine/src/session-store.ts
+  s_e161ba8632d41a::t_45558ddee74040 28-29,96-99,119-122,126-127,135,139
+packages/engine/src/watch-activity.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 1,14,21-24,26,42-44,54-72,77,79,81-86,97,111,113,115-119,130-135,148-150,152,155-165,167-169,176,187,191,193-199,201-204,212,227-234,236-240,269,271-273,278-283,296,298-300,307-312,330-331,334-335,344
+packages/engine/src/follow-up.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 16,39-45,62-79,93-99,111-117,130-136,148-154,166-172,178-196,211,229,237-259
+packages/contracts/CONTEXT.md
+  s_e161ba8632d41a::t_45558ddee74040 39-42
+packages/engine/src/follow-up.ts
+  s_e161ba8632d41a::t_45558ddee74040 1,14-15,26,36,47-48,51-54,59-60,79
+packages/engine/src/resume-policy.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 6-7,19-21,23-26,28-32,35-39,42-46,49-51,53-55,57-72,76-101,104-105,107
+packages/engine/src/executor.ts
+  s_e161ba8632d41a::t_45558ddee74040 2,38,62,72,132,203,209-210,212-213,215,217,220-222,231,233,389,440,443-444
+packages/engine/src/run-recorder.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 1-238
+packages/engine/src/executor.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 5,38,219,236-243,297,300,374-375,384,1091-1112
+  s_e161ba8632d41a::t_a829068ee442f4 1113-1116
+packages/engine/src/linear/adapter.ts
+  s_e161ba8632d41a::t_45558ddee74040 3-6,8
+packages/engine/src/event-publisher.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 35,39-41,273-274,372-373
+packages/contracts/src/run.ts
+  s_e161ba8632d41a::t_45558ddee74040 41-45
+packages/engine/src/linear/linear.test.ts
+  s_e161ba8632d41a::t_45558ddee74040 1,355-376
+packages/engine/src/github/provider.ts
+  s_e161ba8632d41a::t_45558ddee74040 28,35,39-45,54,58,84-91,93-94,115-125,129,136-141,156-158,165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "79702ec7d7e84bce4973a3a2225d18e658fdc16f",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e161ba8632d41a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d6019d79-dedf-4a18-bcb9-69c8a2311353",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
