@@ -27,7 +27,7 @@ export default defineWorkspace({
   sourceControl: {
     type: "github",
     repo: "colonylabs/colony",
-    tokenEnv: "PERSONAL_GITHUB_TOKEN",
+    tokenEnv: "GITHUB_TOKEN",
     actorLogin: "taylorfsteele",
     botAllowlist: ["cursor[bot]"],
   },
