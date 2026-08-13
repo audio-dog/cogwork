@@ -1,0 +1,32 @@
+packages/engine/src/executor.ts
+  s_8a866e7c9a3c34::t_27233369521fe6 2
+  s_8a866e7c9a3c34::t_3188ba2c828ee9 38,62,131,202,208-209,211-212,214,216,219-221,230,232
+apps/desktop/src/renderer/src/components/nav-rail.tsx
+  s_8a866e7c9a3c34::t_6e3f740c7dd98e 12
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_8a866e7c9a3c34::t_f73d991e337380 56,58-59
+packages/engine/src/daemon.ts
+  s_8a866e7c9a3c34::t_e480c7e46732ce 53,202,209
+packages/engine/src/executor.test.ts
+  s_8a866e7c9a3c34::t_c7b97d3854f5ce 38,373,383
+packages/engine/src/run-recorder.test.ts
+  s_8a866e7c9a3c34::t_4a51d445d4c7ca 1-175
+packages/engine/src/run-recorder.ts
+  s_8a866e7c9a3c34::t_3b3862a5a6e931 1-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1e9a4ad4347de535f321dee0cfe2a99955b2ab1a",
+  "prompts": {},
+  "sessions": {
+    "s_8a866e7c9a3c34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3b5b87e5-2dc3-4410-9847-f7777dfc80ca",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
