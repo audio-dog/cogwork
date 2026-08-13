@@ -85,6 +85,7 @@ const stubPersistence = (thread: ReadonlyArray<ModelMessage>): ChatWithInterrupt
 const sessionStore = (thread: ReadonlyArray<ModelMessage>): SessionStoreService => ({
   persistence: stubPersistence(thread),
   resumeHandle: () => Effect.succeed(null),
+  mint: () => Effect.die(new Error("mint not expected in this test")),
 });
 
 const sessionLayer = (thread: ReadonlyArray<ModelMessage>) =>
@@ -119,6 +120,10 @@ const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
 });
 
 describe("providerRunner", () => {
+  it("declares the owned-transcript session kind", () => {
+    assert.strictEqual(providerRunner({ name: harnessName }).sessionKind, "owned-transcript");
+  });
+
   it.live(
     "bridges chat output, folds the resumed thread, hands the redacted key to the adapter, and never leaks it",
     () =>

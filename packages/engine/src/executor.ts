@@ -1,5 +1,5 @@
-import type { LifecycleStage, RunRecord, Session, SessionId, TokenUsage } from "@clanker-forge/contracts";
-import { agUiTextDelta, agUiUsage, RunId, SessionId as SessionIdSchema } from "@clanker-forge/contracts";
+import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@clanker-forge/contracts";
+import { agUiTextDelta, agUiUsage, RunId } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -36,6 +36,7 @@ import { decideResume } from "./resume-policy";
 import { RunControl } from "./run-control";
 import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
+import { SessionStore } from "./session-store";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
@@ -122,7 +123,6 @@ const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
-const decodeSessionId = Schema.decodeUnknownEffect(SessionIdSchema);
 
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
@@ -132,10 +132,10 @@ export const make = Effect.gen(function* () {
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
   const runControl = yield* RunControl;
+  const sessionStore = yield* SessionStore;
   const handoff = handToHuman(issueTracker);
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
-  const sessionCounter = yield* Ref.make(0);
 
   const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
     workspace: RegisteredWorkspace,
@@ -164,29 +164,6 @@ export const make = Effect.gen(function* () {
       Effect.orDie,
     );
 
-  const nextSessionId = (startedAtMillis: number) =>
-    Ref.getAndUpdate(sessionCounter, (n) => n + 1).pipe(
-      Effect.flatMap((n) => decodeSessionId(`sess-${startedAtMillis}-${n}`)),
-      Effect.orDie,
-    );
-
-  const mintSession = Effect.fn("Executor.mintSession")(function* (
-    workspace: RegisteredWorkspace,
-    harness: Session["harness"],
-    createdAtMillis: number,
-  ) {
-    const id = yield* nextSessionId(createdAtMillis);
-    yield* ledger.insertSession({
-      kind: "opaque-handle",
-      id,
-      workspace: workspace.config.name,
-      harness,
-      createdAtMillis,
-      handle: null,
-    });
-    return id;
-  });
-
   const resolveSession = Effect.fn("Executor.resolveSession")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -195,7 +172,11 @@ export const make = Effect.gen(function* () {
   ) {
     if (item.resume) return item.resume.session;
     const existing = ops.branch ? yield* ledger.sessionForBranch(workspace.config.name, ops.branch) : null;
-    return existing ?? (yield* mintSession(workspace, ops.resolved.harness, startedAtMillis));
+    if (existing) return existing;
+    return yield* sessionStore.mint(
+      { workspace: workspace.config.name, harness: ops.resolved.harness, createdAtMillis: startedAtMillis },
+      harness.sessionKind,
+    );
   });
 
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (

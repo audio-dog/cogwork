@@ -5,8 +5,8 @@ import * as Ref from "effect/Ref";
 import { triageProposalBody } from "./comments";
 import {
   attemptStatus,
+  type CommentHost,
   type CoordinationComment,
-  type CoordinationHost,
   claimStatus,
   coordinationDetail,
   coordinationMarkers,
@@ -41,7 +41,7 @@ const makeStore = () =>
   Effect.gen(function* () {
     const commentsRef = yield* Ref.make<ReadonlyArray<CoordinationComment<number>>>([]);
     const seq = yield* Ref.make(1);
-    const host: CoordinationHost<number> = {
+    const host: CommentHost<number> = {
       comments: Ref.get(commentsRef),
       edit: (id, body) =>
         Ref.update(commentsRef, (comments) =>

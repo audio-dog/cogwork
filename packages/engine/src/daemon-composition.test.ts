@@ -40,6 +40,7 @@ const worktreeLayer = Layer.succeed(WorktreeManager, {
 
 const stubRunner: HarnessRunner = {
   name: Schema.decodeSync(HarnessName)("cursor"),
+  sessionKind: "opaque-handle",
   run: () => Stream.empty,
 };
 

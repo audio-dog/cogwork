@@ -207,6 +207,9 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     issueTracker,
     runLedger,
     runRecorder,
+    // The executor mints through the session store, so it is exposed here too;
+    // layer memoization keeps it the same instance the harness runners pull from.
+    sessionStore,
     Harness.layer(adapters.harnessRunners).pipe(
       Layer.provide(sessionStore),
       Layer.provide(adapters.contextAssembler),

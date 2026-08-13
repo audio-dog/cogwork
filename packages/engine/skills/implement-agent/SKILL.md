@@ -76,7 +76,7 @@ Implment any findings.
 
 Commit with the `git-master` skill
 
-Open the PR ready for review. The **PR body is a self-contained onboarding artifact** — a reviewer should need nothing but the PR to understand the change. Use this template:
+Open the PR ready for review. The **PR body is a self-contained onboarding artifact** — a reviewer should need nothing but the PR to understand the change. Write it in ASD-STE100 Simplified Technical English: give a little context so a reviewer who was not in the run can follow, and use the ubiquitous language from the driven repo's `CONTEXT.md` when present. Use the existing repo's PR template. If not present, use this template:
 
 ```markdown
 ## Ticket

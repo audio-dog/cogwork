@@ -101,6 +101,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
 
   return {
     name: options.name,
+    sessionKind: "owned-transcript",
     run: (request: HarnessRequest) =>
       Stream.unwrap(
         Effect.gen(function* () {
