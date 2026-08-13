@@ -1,0 +1,19 @@
+docs/research/shadcn-chat-components.md
+  s_2b25f91fd19458::t_1376f0e4f30fdb 1-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a4b50946f8ad8f46c5e3a255ca05768e40560627",
+  "prompts": {},
+  "sessions": {
+    "s_2b25f91fd19458": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1e10e651-52c6-4661-8c67-e9dd6a34c1f1",
+        "model": "claude-fable-5-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
