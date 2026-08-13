@@ -1,0 +1,404 @@
+packages/engine/src/commands.ts
+  s_90438704b97a22::t_82f2492e59c100 10
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_90438704b97a22::t_82f2492e59c100 7
+apps/desktop/src/preload/index.ts
+  s_90438704b97a22::t_82f2492e59c100 3,13,28,36
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_90438704b97a22::t_82f2492e59c100 5,7
+packages/engine/src/coordination.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,17,67,77,121,192-196,204,248,261,299,355,363,401,410,423-424,434-435,439,443,469,477,480-481,484,490
+apps/cli/src/commands.ts
+  s_90438704b97a22::t_82f2492e59c100 12-13,90,136
+packages/engine/src/context-assembler.test.ts
+  s_90438704b97a22::t_82f2492e59c100 12,60,74,143,145
+apps/cli/src/loader.ts
+  s_90438704b97a22::t_82f2492e59c100 2
+packages/engine/src/executor.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2,633
+packages/engine/src/git.ts
+  s_90438704b97a22::t_82f2492e59c100 53
+packages/engine/src/coordination.ts
+  s_90438704b97a22::t_82f2492e59c100 1,47,49,155
+packages/engine/src/issue-tracker.ts
+  s_90438704b97a22::t_82f2492e59c100 7,101
+packages/engine/src/linear/markers.ts
+  s_90438704b97a22::t_82f2492e59c100 1,21,53,56,60,72
+packages/engine/src/linear/oauth.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/recovery.test.ts
+  s_90438704b97a22::t_82f2492e59c100 10,39,75
+apps/desktop/src/renderer/src/components/pr-gate.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-2
+packages/engine/src/run-control.ts
+  s_90438704b97a22::t_82f2492e59c100 1,37
+apps/cli/src/status.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2,124,132
+  s_90438704b97a22::t_c0ee18cfb575b5 154
+  s_90438704b97a22::t_40f526b563e78d 13-14
+  s_90438704b97a22::t_883e28b72d7d2d 144
+  s_90438704b97a22::t_ae4c2522c2adf3 110
+packages/engine/src/run-ledger.ts
+  s_90438704b97a22::t_82f2492e59c100 9-10,238,242
+packages/cursor-acp/probe-mcp.ts
+  s_90438704b97a22::t_82f2492e59c100 5-6
+packages/engine/package.json
+  s_90438704b97a22::t_82f2492e59c100 2,13
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-5
+  s_90438704b97a22::t_b1f62722041772 6
+apps/desktop/src/renderer/src/routes/_connected/route.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-3
+apps/desktop/src/renderer/src/components/item-detail.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-3
+apps/desktop/src/renderer/src/main.tsx
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/cli/src/status.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+package.json
+  s_90438704b97a22::t_82f2492e59c100 2
+packages/engine/src/provider-runner.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,177
+apps/cli/src/commands.test.ts
+  s_90438704b97a22::t_82f2492e59c100 6
+packages/engine/src/observe.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/reconcile.ts
+  s_90438704b97a22::t_82f2492e59c100 8,228
+apps/desktop/AGENTS.md
+  s_90438704b97a22::t_82f2492e59c100 6,17,27,30,35
+apps/desktop/electron-builder.yml
+  s_90438704b97a22::t_201b68c54d7bfe 1
+  s_90438704b97a22::t_82f2492e59c100 2,20
+apps/desktop/src/renderer/src/features/board-view.test.ts
+  s_90438704b97a22::t_82f2492e59c100 8
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-4
+apps/cli/src/login-commands.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2
+apps/desktop/src/renderer/src/features/feed.ts
+  s_90438704b97a22::t_82f2492e59c100 10
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_90438704b97a22::t_82f2492e59c100 10-11,15
+packages/cursor-acp/scripts/sync-models.ts
+  s_90438704b97a22::t_82f2492e59c100 12,41
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_90438704b97a22::t_82f2492e59c100 3,5
+packages/engine/src/coordination-tracker.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/cli/src/login.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,71,112
+packages/engine/src/principal.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/provider-runner.ts
+  s_90438704b97a22::t_82f2492e59c100 1,90
+packages/engine/src/github/client.ts
+  s_90438704b97a22::t_82f2492e59c100 65,396
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_90438704b97a22::t_82f2492e59c100 3,26
+packages/engine/src/playbook.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/read-model.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2
+apps/desktop/src/main/daemon-paths.ts
+  s_90438704b97a22::t_82f2492e59c100 4
+apps/cli/src/paths.ts
+  s_90438704b97a22::t_82f2492e59c100 5,7
+apps/desktop/src/renderer/src/store/chrome.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/utility-call.ts
+  s_90438704b97a22::t_82f2492e59c100 29
+apps/cli/src/ledger.test.ts
+  s_90438704b97a22::t_82f2492e59c100 11-12,24,125,454
+packages/cursor-acp/package.json
+  s_90438704b97a22::t_82f2492e59c100 2,6,22-23
+apps/cli/src/watch.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,12
+packages/engine/src/context-fs.ts
+  s_90438704b97a22::t_82f2492e59c100 23
+packages/engine/src/tools/file-diff-feed.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/linear/client.test.ts
+  s_90438704b97a22::t_82f2492e59c100 218,231,247,259
+packages/engine/src/worktree-fs.ts
+  s_90438704b97a22::t_82f2492e59c100 27
+packages/engine/src/event-publisher.test.ts
+  s_90438704b97a22::t_82f2492e59c100 16
+packages/engine/src/decider.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/components/mission-control-ui.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-2
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_90438704b97a22::t_82f2492e59c100 88,91
+apps/desktop/src/renderer/src/components/triage-approval.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-7
+packages/contracts/package.json
+  s_90438704b97a22::t_82f2492e59c100 2
+docs/adr/0006-workspace-config-trends-toward-declarative-data.md
+  s_90438704b97a22::t_82f2492e59c100 22,25,50
+packages/contracts/src/principal.ts
+  s_90438704b97a22::t_82f2492e59c100 16,21,28
+packages/engine/src/linear/client.ts
+  s_90438704b97a22::t_82f2492e59c100 500
+apps/desktop/src/renderer/src/components/badges.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-2
+packages/engine/src/playbook.ts
+  s_90438704b97a22::t_82f2492e59c100 8,152
+packages/engine/src/worktree.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/main/index.ts
+  s_90438704b97a22::t_82f2492e59c100 34-35,57,85
+docs/spec/next-phase.md
+  s_90438704b97a22::t_82f2492e59c100 3,5,9,11-12,20-21,27,55-56,58,96,98,104,109,111,118,148,152,175,192,217,236,241,244,250,259,290,331,350,356,382-392
+packages/engine/src/registry.ts
+  s_90438704b97a22::t_82f2492e59c100 1,21
+packages/engine/src/tools/policy.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/scheduler.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2,261
+apps/cli/src/telemetry.ts
+  s_90438704b97a22::t_82f2492e59c100 13
+apps/cli/src/worktree-commands.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/components/run-drill-in.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-7
+packages/engine/src/harness.ts
+  s_90438704b97a22::t_82f2492e59c100 12,50
+packages/engine/src/github/markers.ts
+  s_90438704b97a22::t_82f2492e59c100 1,23,34,37,41,61
+apps/cli/src/watch.ts
+  s_90438704b97a22::t_82f2492e59c100 9
+apps/cli/src/main.ts
+  s_90438704b97a22::t_82f2492e59c100 13
+packages/engine/src/daemon-event-bus.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/linear/host.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/mcp-skill.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/features/use-board.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-7
+packages/engine/src/event-publisher.ts
+  s_90438704b97a22::t_82f2492e59c100 9,111
+apps/desktop/src/renderer/src/components/rail-shell.tsx
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/index.html
+  s_90438704b97a22::t_82f2492e59c100 5
+packages/engine/src/github/github-helpers.test.ts
+  s_90438704b97a22::t_82f2492e59c100 37,155,282
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/CONTEXT.md
+  s_90438704b97a22::t_82f2492e59c100 23,49,67
+apps/desktop/src/main/engine-command.test.ts
+  s_90438704b97a22::t_82f2492e59c100 5,26
+packages/engine/src/hand-to-human.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,17
+apps/cli/src/platform.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+docs/research/provider-auth-landscape.md
+  s_90438704b97a22::t_82f2492e59c100 3,5,51,108,207,214,216,218,239,242,267
+packages/engine/src/comments.ts
+  s_90438704b97a22::t_82f2492e59c100 1,3,6-7
+packages/engine/src/define-workspace.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/CONTEXT.md
+  s_90438704b97a22::t_82f2492e59c100 93,129,137,153,189,197
+docs/adr/0007-autonomous-with-override-triage-self-halts.md
+  s_90438704b97a22::t_82f2492e59c100 8-9
+packages/engine/src/classify.ts
+  s_90438704b97a22::t_82f2492e59c100 12-13
+packages/engine/src/run-recorder.test.ts
+  s_90438704b97a22::t_82f2492e59c100 12
+packages/engine/src/linear/markers.test.ts
+  s_90438704b97a22::t_82f2492e59c100 37,39-40,46,59,75
+apps/desktop/src/renderer/src/components/attention-items.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-3
+apps/desktop/src/renderer/src/components/history-nav.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-2
+apps/cli/package.json
+  s_90438704b97a22::t_82f2492e59c100 2,7,15-17
+packages/engine/src/credential-store.ts
+  s_90438704b97a22::t_82f2492e59c100 1,150
+packages/engine/src/mcp-skill.ts
+  s_90438704b97a22::t_82f2492e59c100 1,32
+packages/engine/src/hand-to-human.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/package.json
+  s_90438704b97a22::t_82f2492e59c100 2,28-29
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-2,8-10
+packages/engine/src/context-assembler.ts
+  s_90438704b97a22::t_82f2492e59c100 77
+packages/engine/src/daemon-composition.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/coordination-tracker.test.ts
+  s_90438704b97a22::t_82f2492e59c100 7
+  s_90438704b97a22::t_6a8c4cd846ee01 292
+  s_90438704b97a22::t_4dc7a7d8db8a03 284
+packages/cursor-acp/src/harness.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2
+apps/cli/src/ledger.ts
+  s_90438704b97a22::t_82f2492e59c100 2,11-12
+packages/engine/src/worktree-naming.test.ts
+  s_90438704b97a22::t_82f2492e59c100 32,36,40
+docs/agents/technical-disposition.md
+  s_90438704b97a22::t_82f2492e59c100 13,16-18
+packages/engine/src/issue-tracker-router.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_90438704b97a22::t_b0752b1d810c6e 131,133-134
+  s_90438704b97a22::t_82f2492e59c100 10,22,129
+packages/engine/src/comments.test.ts
+  s_90438704b97a22::t_82f2492e59c100 20,27
+packages/engine/src/github/provider.ts
+  s_90438704b97a22::t_82f2492e59c100 1,24,91,94
+apps/cli/src/platform.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,28,121,135
+packages/engine/src/linear/linear.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,355-368
+  s_90438704b97a22::t_b1b8ffaca12b2a 369-371
+packages/engine/src/linear/account.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+README.md
+  s_90438704b97a22::t_82f2492e59c100 1,13
+apps/desktop/src/renderer/src/features/use-scheduling.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/cli/src/credentials.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+docs/adr/0005-trust-boundary-is-authentication-not-payload-redaction.md
+  s_90438704b97a22::t_82f2492e59c100 11,39,60,80
+packages/engine/src/daemon-event-bus.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2,52
+apps/desktop/src/renderer/src/features/board-view.ts
+  s_90438704b97a22::t_82f2492e59c100 7
+apps/desktop/electron.vite.config.ts
+  s_90438704b97a22::t_82f2492e59c100 10
+packages/engine/src/read-model.test.ts
+  s_90438704b97a22::t_82f2492e59c100 11,32,98
+packages/engine/src/github/host.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/renderer/src/routes/activity.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-5
+packages/engine/src/github/github.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,75,181,223,374,391,397,414,420,872,934
+  s_90438704b97a22::t_052d8f8e2d835d 365
+  s_90438704b97a22::t_dfc134268ffe79 382
+packages/engine/src/model-catalog.ts
+  s_90438704b97a22::t_82f2492e59c100 51
+packages/engine/src/recovery.ts
+  s_90438704b97a22::t_82f2492e59c100 1,45,217
+packages/contracts/CONTEXT.md
+  s_90438704b97a22::t_82f2492e59c100 84
+packages/engine/src/watch-activity.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2
+packages/engine/src/commands.test.ts
+  s_90438704b97a22::t_82f2492e59c100 10
+packages/engine/src/engine.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/projector.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/cli/src/rpc.test.ts
+  s_90438704b97a22::t_82f2492e59c100 12,15-16
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-3
+apps/desktop/src/shared/ipc.ts
+  s_90438704b97a22::t_82f2492e59c100 4-10,21
+packages/ui/package.json
+  s_90438704b97a22::t_82f2492e59c100 2
+packages/engine/src/classify.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,70,136,322,344
+apps/cli/CONTEXT.md
+  s_90438704b97a22::t_82f2492e59c100 3,35
+packages/engine/src/daemon.ts
+  s_90438704b97a22::t_82f2492e59c100 9,49
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/provider-bridge.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+apps/desktop/src/preload/index.d.ts
+  s_90438704b97a22::t_82f2492e59c100 2,7
+packages/engine/src/run-recorder.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2,98
+packages/engine/src/source-control.ts
+  s_90438704b97a22::t_82f2492e59c100 1,32
+packages/ui/src/components/button.tsx
+  s_90438704b97a22::t_82f2492e59c100 2
+packages/engine/src/resume-policy.ts
+  s_90438704b97a22::t_82f2492e59c100 1
+packages/engine/src/executor.test.ts
+  s_90438704b97a22::t_82f2492e59c100 10,69,101,112,124,205
+apps/cli/config/colony.workspace.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2
+CONTEXT-MAP.md
+  s_90438704b97a22::t_82f2492e59c100 3,19
+apps/cli/feldspar.workspace.ts
+  s_90438704b97a22::t_82f2492e59c100 1-2
+apps/desktop/src/renderer/src/routes/_connected/lanes.tsx
+  s_90438704b97a22::t_82f2492e59c100 1-3
+docs/adr/0001-oauth-login-for-work-sources.md
+  s_90438704b97a22::t_82f2492e59c100 15
+apps/cli/src/models-commands.ts
+  s_90438704b97a22::t_82f2492e59c100 1,21
+apps/desktop/components.json
+  s_90438704b97a22::t_82f2492e59c100 15,18
+.cursor/agents/rule-reviewer.md
+  s_90438704b97a22::t_82f2492e59c100 13
+apps/desktop/src/renderer/src/daemon/electron-bridge.ts
+  s_90438704b97a22::t_82f2492e59c100 4-7
+packages/cursor-acp/src/harness.ts
+  s_90438704b97a22::t_82f2492e59c100 2-3,190
+packages/engine/docs/adr/0005-worktree-setup-for-harnesses-is-repo-local.md
+  s_90438704b97a22::t_82f2492e59c100 3,5,7,20
+apps/cli/src/credentials.test.ts
+  s_90438704b97a22::t_82f2492e59c100 1,68
+apps/desktop/src/main/tray.ts
+  s_90438704b97a22::t_82f2492e59c100 12,15
+apps/cli/src/login.ts
+  s_90438704b97a22::t_82f2492e59c100 3,35,68
+packages/engine/src/scheduler.test.ts
+  s_90438704b97a22::t_82f2492e59c100 8,39
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_90438704b97a22::t_82f2492e59c100 3
+packages/engine/src/run-ledger.test.ts
+  s_90438704b97a22::t_82f2492e59c100 10
+packages/engine/src/session-store.test.ts
+  s_90438704b97a22::t_82f2492e59c100 11
+packages/engine/src/session-store.ts
+  s_90438704b97a22::t_82f2492e59c100 8,14,57
+docs/research/tanstack-ai-audit.md
+  s_90438704b97a22::t_82f2492e59c100 3,95
+packages/engine/src/worktree.ts
+  s_90438704b97a22::t_82f2492e59c100 289
+apps/cli/src/rpc.ts
+  s_90438704b97a22::t_82f2492e59c100 4-6,85
+packages/cursor-acp/src/models.generated.ts
+  s_90438704b97a22::t_4412aef9361acd 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "510dd68c352f48eb6860000cfb1c1601259c8964",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_90438704b97a22": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8732f613-7da1-43ea-9045-c3241b95d3e4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
