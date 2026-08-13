@@ -12,8 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConnectedRouteRouteImport } from './routes/_connected/route'
 import { Route as ActivityRouteImport } from './routes/activity'
-import { Route as ConnectedBoardRouteImport } from './routes/_connected/board'
-import { Route as ConnectedInboxRouteImport } from './routes/_connected/inbox'
 import { Route as ConnectedLanesRouteImport } from './routes/_connected/lanes'
 
 const IndexRoute = IndexRouteImport.update({
@@ -30,16 +28,6 @@ const ActivityRoute = ActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConnectedBoardRoute = ConnectedBoardRouteImport.update({
-  id: '/board',
-  path: '/board',
-  getParentRoute: () => ConnectedRouteRoute,
-} as any)
-const ConnectedInboxRoute = ConnectedInboxRouteImport.update({
-  id: '/inbox',
-  path: '/inbox',
-  getParentRoute: () => ConnectedRouteRoute,
-} as any)
 const ConnectedLanesRoute = ConnectedLanesRouteImport.update({
   id: '/lanes',
   path: '/lanes',
@@ -49,15 +37,11 @@ const ConnectedLanesRoute = ConnectedLanesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
-  '/board': typeof ConnectedBoardRoute
-  '/inbox': typeof ConnectedInboxRoute
   '/lanes': typeof ConnectedLanesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
-  '/board': typeof ConnectedBoardRoute
-  '/inbox': typeof ConnectedInboxRoute
   '/lanes': typeof ConnectedLanesRoute
 }
 export interface FileRoutesById {
@@ -65,23 +49,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_connected': typeof ConnectedRouteRouteWithChildren
   '/activity': typeof ActivityRoute
-  '/_connected/board': typeof ConnectedBoardRoute
-  '/_connected/inbox': typeof ConnectedInboxRoute
   '/_connected/lanes': typeof ConnectedLanesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activity' | '/board' | '/inbox' | '/lanes'
+  fullPaths: '/' | '/activity' | '/lanes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activity' | '/board' | '/inbox' | '/lanes'
-  id:
-    | '__root__'
-    | '/'
-    | '/_connected'
-    | '/activity'
-    | '/_connected/board'
-    | '/_connected/inbox'
-    | '/_connected/lanes'
+  to: '/' | '/activity' | '/lanes'
+  id: '__root__' | '/' | '/_connected' | '/activity' | '/_connected/lanes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -113,20 +88,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_connected/board': {
-      id: '/_connected/board'
-      path: '/board'
-      fullPath: '/board'
-      preLoaderRoute: typeof ConnectedBoardRouteImport
-      parentRoute: typeof ConnectedRouteRoute
-    }
-    '/_connected/inbox': {
-      id: '/_connected/inbox'
-      path: '/inbox'
-      fullPath: '/inbox'
-      preLoaderRoute: typeof ConnectedInboxRouteImport
-      parentRoute: typeof ConnectedRouteRoute
-    }
     '/_connected/lanes': {
       id: '/_connected/lanes'
       path: '/lanes'
@@ -138,14 +99,10 @@ declare module '@tanstack/react-router' {
 }
 
 interface ConnectedRouteRouteChildren {
-  ConnectedBoardRoute: typeof ConnectedBoardRoute
-  ConnectedInboxRoute: typeof ConnectedInboxRoute
   ConnectedLanesRoute: typeof ConnectedLanesRoute
 }
 
 const ConnectedRouteRouteChildren: ConnectedRouteRouteChildren = {
-  ConnectedBoardRoute: ConnectedBoardRoute,
-  ConnectedInboxRoute: ConnectedInboxRoute,
   ConnectedLanesRoute: ConnectedLanesRoute,
 }
 
