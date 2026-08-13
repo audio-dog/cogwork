@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { triageProposalAttribution } from "../comments";
-import type { CoordinationComment, CoordinationHost } from "../coordination";
+import type { CommentHost, CoordinationComment } from "../coordination";
 import * as Coordination from "../coordination";
 import {
   type ClaimRequest,
@@ -84,7 +84,7 @@ const make = (client: LinearClientService): IssueTrackerService => {
     return target;
   });
 
-  const coordinationHost = (target: LinearTarget, issueId: string): CoordinationHost<string> => ({
+  const coordinationHost = (target: LinearTarget, issueId: string): CommentHost<string> => ({
     comments: client
       .listComments(target, issueId)
       .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorUserId)))),

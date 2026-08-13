@@ -1,4 +1,12 @@
-import type { AgUiEvent, RunEvent, SessionId } from "@clanker-forge/contracts";
+import type {
+  AgUiEvent,
+  HarnessName,
+  RunEvent,
+  Session,
+  SessionId,
+  SessionKind,
+  WorkspaceId,
+} from "@clanker-forge/contracts";
 import {
   AgUiEvent as AgUiEventSchema,
   agUiDisplayName,
@@ -16,6 +24,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { makeInterruptStore } from "./interrupt-store";
 import { handleOf, RunLedger, type RunLedgerService } from "./run-ledger";
@@ -26,6 +35,12 @@ export interface ThreadMessage {
   readonly toolName?: string;
 }
 
+export interface MintSpec {
+  readonly workspace: WorkspaceId;
+  readonly harness: HarnessName;
+  readonly createdAtMillis: number;
+}
+
 export interface SessionStoreService {
   // The `@tanstack/ai-persistence` adapter the provider runner runs under: a
   // ledger-backed message store (load folds the ledger, save is a no-op so the
@@ -34,6 +49,9 @@ export interface SessionStoreService {
   readonly persistence: ChatWithInterruptsPersistence;
   // The opaque handle a CLI runner resumes its own history from.
   readonly resumeHandle: (session: SessionId) => Effect.Effect<string | null>;
+  // Mints a session, taking its kind from `kindFor` (the harness service's
+  // declaration) so the caller names a harness, never a kind.
+  readonly mint: (spec: MintSpec, kindFor: (harness: HarnessName) => SessionKind) => Effect.Effect<SessionId>;
 }
 
 export class SessionStore extends Context.Service<SessionStore, SessionStoreService>()(
@@ -98,6 +116,10 @@ export const toModelMessages = (thread: ReadonlyArray<ThreadMessage>): Array<Mod
   );
 
 const decodeSession = Schema.decodeUnknownOption(SessionIdSchema);
+const decodeSessionId = Schema.decodeUnknownEffect(SessionIdSchema);
+
+const newSession = (spec: MintSpec, id: SessionId, kind: SessionKind): Session =>
+  kind === "owned-transcript" ? { kind, id, ...spec } : { kind, id, ...spec, handle: null };
 
 // `loadThread` folds the session's run events into model messages; `saveThread`
 // is a no-op because the executor already appends every event to the ledger, so
@@ -115,6 +137,7 @@ const ledgerMessageStore = (ledger: RunLedgerService): MessageStore => ({
 
 export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
+  const counter = yield* Ref.make(0);
   const persistence: ChatWithInterruptsPersistence = defineAIPersistence({
     stores: {
       messages: ledgerMessageStore(ledger),
@@ -122,10 +145,23 @@ export const make = Effect.gen(function* () {
       interrupts: makeInterruptStore(),
     },
   });
+  const nextId = (createdAtMillis: number) =>
+    Ref.getAndUpdate(counter, (n) => n + 1).pipe(
+      Effect.flatMap((n) => decodeSessionId(`sess-${createdAtMillis}-${n}`)),
+      Effect.orDie,
+    );
   return {
     persistence,
     resumeHandle: Effect.fn("SessionStore.resumeHandle")(function* (session: SessionId) {
       return yield* handleOf(ledger, session);
+    }),
+    mint: Effect.fn("SessionStore.mint")(function* (
+      spec: MintSpec,
+      kindFor: (harness: HarnessName) => SessionKind,
+    ) {
+      const id = yield* nextId(spec.createdAtMillis);
+      yield* ledger.insertSession(newSession(spec, id, kindFor(spec.harness)));
+      return id;
     }),
   } satisfies SessionStoreService;
 });

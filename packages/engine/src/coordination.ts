@@ -26,7 +26,7 @@ export interface CoordinationComment<Id> {
   readonly createdAtMillis: number;
 }
 
-export interface CoordinationHost<Id> {
+export interface CommentHost<Id> {
   readonly comments: Effect.Effect<ReadonlyArray<CoordinationComment<Id>>, IssueTrackerError>;
   readonly edit: (id: Id, body: string) => Effect.Effect<void, IssueTrackerError>;
   readonly create: (body: string) => Effect.Effect<void, IssueTrackerError>;
@@ -231,7 +231,7 @@ const nextDetail = (codec: WireCodec, update: CoordinationUpdate, previous: stri
 
 export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(function* <Id>(
   codec: WireCodec,
-  host: CoordinationHost<Id>,
+  host: CommentHost<Id>,
   update: CoordinationUpdate,
 ) {
   const comments = yield* host.comments;
@@ -252,7 +252,7 @@ export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(f
 
 export const postNote = Effect.fn("coordination.postNote")(function* <Id>(
   codec: WireCodec,
-  host: CoordinationHost<Id>,
+  host: CommentHost<Id>,
   detail: string,
 ) {
   const comments = yield* host.comments;
