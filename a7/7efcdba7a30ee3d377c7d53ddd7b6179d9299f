@@ -1,0 +1,36 @@
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_672a5067b65866::t_be8f917b855821 60,64,66,69
+  s_e161ba8632d41a::t_44fc5f9aac9506 1,3-11,13-15,17-19,21-30,32-33,35-36,38-39,41-42,46-47,53,59,61,63,65,68,70,72-127,129-160
+  s_e161ba8632d41a::t_23a7f428bf4ea0 2,12,16,20,31,34,37,40,43-45,48-52,54-58,62,67,71,128
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_e161ba8632d41a::t_8553061e940401 1-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a77efcdba7a30ee3d377c7d53ddd7b6179d9299f",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_672a5067b65866": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "99cf05df-095c-4ad2-9e10-5aeda6083ed1",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e161ba8632d41a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d6019d79-dedf-4a18-bcb9-69c8a2311353",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
