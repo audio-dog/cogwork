@@ -35,6 +35,7 @@ import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
+import { layer as runRecorderLayer } from "./run-recorder";
 import * as SessionStore from "./session-store";
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
@@ -369,6 +370,7 @@ const provide = (
 ) => {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
+  const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
   const runnerServices = Layer.mergeAll(sessionStore, contextAssemblerStub, CredentialStore.layerEnv);
   return Executor.layer.pipe(
@@ -378,6 +380,7 @@ const provide = (
         sessionStore,
         harnessLayer(runners).pipe(Layer.provide(runnerServices)),
         runLedger,
+        runRecorder,
         bus,
         RunControl.layer,
         Layer.succeed(WorktreeManager, worktree),

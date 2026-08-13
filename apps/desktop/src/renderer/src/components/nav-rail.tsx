@@ -9,7 +9,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@clanker-forge/ui/components/sidebar";
-import { RiInboxLine, RiLayoutGridLine, RiPulseLine, RiStackLine } from "@remixicon/react";
+import { RiPulseLine, RiStackLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
@@ -24,8 +24,6 @@ interface View {
 
 const views: ReadonlyArray<View> = [
   { label: "Feed", icon: RiPulseLine, to: "/" },
-  { label: "Board", icon: RiLayoutGridLine, to: "/board" },
-  { label: "Inbox", icon: RiInboxLine, to: "/inbox" },
   { label: "Lanes", icon: RiStackLine, to: "/lanes" },
 ];
 
