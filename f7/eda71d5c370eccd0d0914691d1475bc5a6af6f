@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_1de8ff4fee276b::t_d1d55d4da55db8 56,58-59
+apps/desktop/src/renderer/src/components/nav-rail.tsx
+  s_1de8ff4fee276b::t_f546fbbbb9446b 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f7eda71d5c370eccd0d0914691d1475bc5a6af6f",
+  "prompts": {},
+  "sessions": {
+    "s_1de8ff4fee276b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "70bd3951-e40d-479c-a855-500dab7d58d1",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
