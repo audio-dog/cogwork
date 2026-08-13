@@ -70,6 +70,7 @@ const resolveOther = Schema.decodeSync(WorkItemId)("#303");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const midSession = Schema.decodeSync(SessionId)("sess-mid");
 const foldSession = Schema.decodeSync(SessionId)("sess-fold");
+const ownedSession = Schema.decodeSync(SessionId)("sess-owned");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
 const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecord> = {}): RunRecord => ({
@@ -232,6 +233,23 @@ describe("sqlite RunLedger", () => {
         assert.strictEqual(yield* sessionByBranch("gh", "7-fix-export"), "sess-abc");
         assert.isNull(yield* sessionByBranch("gh", "9-other"));
         assert.isNull(yield* sessionByBranch("other", "7-fix-export"));
+      }),
+    );
+
+    it.effect("offers an owned-transcript run's session for resume even with no handle", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* ledger.insertSession({
+          kind: "owned-transcript",
+          id: ownedSession,
+          workspace,
+          harness,
+          createdAtMillis: 0,
+        });
+        yield* ledger.insertRun(record("owned-branch", 1000, { branch: "15-owned", session: ownedSession }));
+        const run = yield* ledger.latestRunByBranch("gh", "15-owned");
+        assert.strictEqual(run?.session, ownedSession);
+        assert.isNull(sessionHandle(yield* ledger.getSession(ownedSession)));
       }),
     );
 

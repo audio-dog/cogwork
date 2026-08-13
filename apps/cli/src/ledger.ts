@@ -10,7 +10,7 @@ import {
   workItemCandidates,
 } from "@clanker-forge/contracts";
 import { RunLedger } from "@clanker-forge/engine";
-import { and, desc, eq, gt, gte, inArray, isNotNull, lt, notInArray, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, lt, notInArray, or, type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -424,7 +424,7 @@ const make = (ledgerPath: string) =>
                 eq(runs.workspace, workspace),
                 eq(runs.branch, branch),
                 notInArray(runs.status, unresumableStatuses),
-                isNotNull(sessions.handle),
+                or(eq(sessions.kind, "owned-transcript"), isNotNull(sessions.handle)),
               ),
             )
             .orderBy(desc(runs.startedAt))
