@@ -15,6 +15,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { layerMemory, RunLedger } from "./run-ledger";
+import { layer as runRecorderLayer } from "./run-recorder";
 import { foldThread, make, SessionStore } from "./session-store";
 
 const runId = Schema.decodeSync(RunId);
@@ -31,19 +32,21 @@ const event = (seq: number, value: AgUiEvent): RunEvent => ({
   atMillis: 1000 + seq,
 });
 
-const layer = Layer.provideMerge(
-  Layer.effect(SessionStore, make),
-  layerMemory.pipe(Layer.provide(DaemonEventBus.layer)),
+const bus = DaemonEventBus.layer;
+const runLedger = layerMemory.pipe(Layer.provide(bus));
+const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
+const layer = Layer.effect(SessionStore, make).pipe(
+  Layer.provideMerge(Layer.mergeAll(runLedger, runRecorder)),
 );
 
 describe("foldThread", () => {
   it("splits assistant text on a tool call and keeps the tool's name and args", () => {
-    const events = [
-      event(0, { type: "TEXT_MESSAGE_CONTENT", delta: "Hello " }),
-      event(1, { type: "TEXT_MESSAGE_CONTENT", delta: "world" }),
-      event(2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "bash", args: "ls -la" }),
-      event(3, { type: "TEXT_MESSAGE_CONTENT", delta: "done" }),
-      event(4, { type: "RUN_FINISHED", finishReason: "stop" }),
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "TEXT_MESSAGE_CONTENT", delta: "Hello " },
+      { type: "TEXT_MESSAGE_CONTENT", delta: "world" },
+      { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "bash", args: "ls -la" },
+      { type: "TEXT_MESSAGE_CONTENT", delta: "done" },
+      { type: "RUN_FINISHED", finishReason: "stop" },
     ];
     assert.deepStrictEqual(foldThread(events), [
       { role: "assistant", content: "Hello world" },
@@ -53,16 +56,12 @@ describe("foldThread", () => {
   });
 
   it("folds each tool call once even when the harness streams several deltas for it", () => {
-    const events = [
-      event(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read", args: "a.ts" }),
-      event(1, { type: "TOOL_CALL_ARGS", toolCallId: "t1", args: "a.ts" }),
-      event(2, { type: "TOOL_CALL_END", toolCallId: "t1" }),
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read", args: "a.ts" },
+      { type: "TOOL_CALL_ARGS", toolCallId: "t1", args: "a.ts" },
+      { type: "TOOL_CALL_END", toolCallId: "t1" },
     ];
     assert.deepStrictEqual(foldThread(events), [{ role: "tool", content: "a.ts", toolName: "read" }]);
-  });
-
-  it("ignores events it cannot decode", () => {
-    assert.deepStrictEqual(foldThread([{ data: "not json" }]), []);
   });
 });
 

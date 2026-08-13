@@ -38,6 +38,11 @@ export type Session = typeof Session.Type;
 export const sessionHandle = (session: Session | null) =>
   session?.kind === "opaque-handle" ? session.handle : null;
 
+// Owned-transcript always resumes from the run ledger; opaque-handle only once
+// the harness has handed back a handle to pick the conversation up by.
+export const sessionResumable = (session: Session | null) =>
+  session?.kind === "owned-transcript" || sessionHandle(session) !== null;
+
 export const TokenUsage = Schema.Struct({
   inputTokens: Schema.optional(Schema.Natural),
   outputTokens: Schema.optional(Schema.Natural),

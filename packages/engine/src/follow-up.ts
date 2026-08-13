@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { CheckState } from "./ci";
 
@@ -10,6 +11,8 @@ export const FollowUpMarker = Schema.Struct({
   humanCommentAtMillis: Schema.Finite,
   noProgress: Schema.Finite,
   baseDivergence: Schema.Literals(["conflict", "clean", "none"]),
+  // Optional-with-default so markers persisted without a bot-trigger time still decode (as 0).
+  botTriggerAtMillis: Schema.Finite.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
 });
 
 export type FollowUpMarker = typeof FollowUpMarker.Type;
@@ -20,6 +23,7 @@ export interface ObservedPr {
   readonly review: PrReview;
   readonly checks: CheckState;
   readonly latestHumanCommentAtMillis: number | null;
+  readonly latestBotTriggerAtMillis: number | null;
   readonly fresh: boolean;
   readonly baseDivergence: BaseDivergence;
   readonly waitingSinceMillis: number;
@@ -29,6 +33,7 @@ export interface ObservedPr {
 export interface FollowUpContext {
   readonly checks: CheckState;
   readonly humanCommentAtMillis: number;
+  readonly botTriggerAtMillis: number;
   readonly noProgress: number;
   readonly stalled: boolean;
   readonly fresh: boolean;
@@ -39,13 +44,20 @@ export const followUpNoProgressLimit = 3;
 
 const humanCommentAt = (pr: ObservedPr) => pr.latestHumanCommentAtMillis ?? 0;
 
+const botTriggerAt = (pr: ObservedPr) => pr.latestBotTriggerAtMillis ?? 0;
+
 const hasNewHumanComment = (pr: ObservedPr) => humanCommentAt(pr) > (pr.followUp?.humanCommentAtMillis ?? 0);
+
+// Kept out of `progressSince`: a bot round wakes a follow-up but is never progress, so pure bot
+// back-and-forth still reaches the no-progress limit and hands off to a human.
+const hasNewBotTrigger = (pr: ObservedPr) => botTriggerAt(pr) > (pr.followUp?.botTriggerAtMillis ?? 0);
 
 export const triggersFollowUp = (pr: ObservedPr) =>
   pr.checks === "failing" ||
   pr.review === "changes-requested" ||
   pr.baseDivergence === "conflict" ||
-  hasNewHumanComment(pr);
+  hasNewHumanComment(pr) ||
+  hasNewBotTrigger(pr);
 
 const conflictResolved = (marker: FollowUpMarker, pr: ObservedPr) =>
   marker.baseDivergence === "conflict" && pr.baseDivergence !== "conflict";
@@ -64,6 +76,7 @@ export const followUpContext = (pr: ObservedPr): FollowUpContext => {
   return {
     checks: pr.checks,
     humanCommentAtMillis: humanCommentAt(pr),
+    botTriggerAtMillis: botTriggerAt(pr),
     noProgress,
     stalled: noProgress >= followUpNoProgressLimit,
     fresh: pr.fresh,

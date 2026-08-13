@@ -3,7 +3,8 @@ import { decideResume, type ResumeInputs } from "./resume-policy";
 
 const handle = "cursor-session-1";
 
-const inputs = (over: Partial<ResumeInputs> = {}): ResumeInputs => ({
+const opaque = (over: Partial<ResumeInputs> = {}): ResumeInputs => ({
+  sessionKind: "opaque-handle",
   handle,
   lastRunStartedAtMillis: 1_000,
   lastRunTotalTokens: 100,
@@ -15,55 +16,95 @@ const inputs = (over: Partial<ResumeInputs> = {}): ResumeInputs => ({
   ...over,
 });
 
+const owned = (over: Partial<ResumeInputs> = {}): ResumeInputs =>
+  opaque({ sessionKind: "owned-transcript", handle: null, ...over });
+
 describe("decideResume", () => {
-  it("resumes when the session is fresh enough on every axis", () => {
-    assert.deepStrictEqual(decideResume(inputs()), { kind: "resume", handle });
+  describe("opaque-handle", () => {
+    it("resumes when the session is fresh enough on every axis", () => {
+      assert.deepStrictEqual(decideResume(opaque()), { kind: "resume" });
+    });
+
+    it("starts fresh when there is no stored handle", () => {
+      assert.deepStrictEqual(decideResume(opaque({ handle: null })), {
+        kind: "fresh",
+        reason: "no-session",
+      });
+    });
+
+    it("starts fresh when the newest human comment asked for it", () => {
+      assert.deepStrictEqual(decideResume(opaque({ fresh: true })), {
+        kind: "fresh",
+        reason: "fresh-requested",
+      });
+    });
+
+    it("starts fresh when the worktree was recreated", () => {
+      assert.deepStrictEqual(decideResume(opaque({ worktreeRecreated: true })), {
+        kind: "fresh",
+        reason: "worktree-recreated",
+      });
+    });
+
+    it("starts fresh when the session aged past the limit", () => {
+      assert.deepStrictEqual(decideResume(opaque({ now: 20_000 })), { kind: "fresh", reason: "stale" });
+    });
+
+    it("ignores age when no age limit is configured", () => {
+      assert.strictEqual(decideResume(opaque({ now: 1_000_000, maxAgeMillis: null })).kind, "resume");
+    });
+
+    it("starts fresh when the session ran past the token limit", () => {
+      assert.deepStrictEqual(decideResume(opaque({ lastRunTotalTokens: 5_000 })), {
+        kind: "fresh",
+        reason: "token-limit",
+      });
+    });
+
+    it("cannot apply the token limit when usage is unavailable", () => {
+      assert.strictEqual(decideResume(opaque({ lastRunTotalTokens: null })).kind, "resume");
+    });
+
+    it("prefers an explicit fresh request over other fresh reasons", () => {
+      assert.deepStrictEqual(decideResume(opaque({ fresh: true, worktreeRecreated: true, now: 20_000 })), {
+        kind: "fresh",
+        reason: "fresh-requested",
+      });
+    });
   });
 
-  it("starts fresh when there is no stored handle", () => {
-    assert.deepStrictEqual(decideResume(inputs({ handle: null })), {
+  describe("owned-transcript", () => {
+    it("resumes by default, with no handle", () => {
+      assert.deepStrictEqual(decideResume(owned()), { kind: "resume" });
+    });
+
+    it("resumes even when the session aged past the opaque-handle limit", () => {
+      assert.deepStrictEqual(decideResume(owned({ now: 20_000 })), { kind: "resume" });
+    });
+
+    it("resumes even when the run ran past the opaque-handle token limit", () => {
+      assert.deepStrictEqual(decideResume(owned({ lastRunTotalTokens: 5_000 })), { kind: "resume" });
+    });
+
+    it("still starts fresh when the newest human comment asked for it", () => {
+      assert.deepStrictEqual(decideResume(owned({ fresh: true })), {
+        kind: "fresh",
+        reason: "fresh-requested",
+      });
+    });
+
+    it("still starts fresh when the worktree was recreated", () => {
+      assert.deepStrictEqual(decideResume(owned({ worktreeRecreated: true })), {
+        kind: "fresh",
+        reason: "worktree-recreated",
+      });
+    });
+  });
+
+  it("starts fresh when there is no session at all", () => {
+    assert.deepStrictEqual(decideResume(opaque({ sessionKind: null, handle: null })), {
       kind: "fresh",
       reason: "no-session",
-    });
-  });
-
-  it("starts fresh when the newest human comment asked for it", () => {
-    assert.deepStrictEqual(decideResume(inputs({ fresh: true })), {
-      kind: "fresh",
-      reason: "fresh-requested",
-    });
-  });
-
-  it("starts fresh when the worktree was recreated", () => {
-    assert.deepStrictEqual(decideResume(inputs({ worktreeRecreated: true })), {
-      kind: "fresh",
-      reason: "worktree-recreated",
-    });
-  });
-
-  it("starts fresh when the session aged past the limit", () => {
-    assert.deepStrictEqual(decideResume(inputs({ now: 20_000 })), { kind: "fresh", reason: "stale" });
-  });
-
-  it("ignores age when no age limit is configured", () => {
-    assert.strictEqual(decideResume(inputs({ now: 1_000_000, maxAgeMillis: null })).kind, "resume");
-  });
-
-  it("starts fresh when the session ran past the token limit", () => {
-    assert.deepStrictEqual(decideResume(inputs({ lastRunTotalTokens: 5_000 })), {
-      kind: "fresh",
-      reason: "token-limit",
-    });
-  });
-
-  it("cannot apply the token limit when usage is unavailable", () => {
-    assert.strictEqual(decideResume(inputs({ lastRunTotalTokens: null })).kind, "resume");
-  });
-
-  it("prefers an explicit fresh request over other fresh reasons", () => {
-    assert.deepStrictEqual(decideResume(inputs({ fresh: true, worktreeRecreated: true, now: 20_000 })), {
-      kind: "fresh",
-      reason: "fresh-requested",
     });
   });
 });

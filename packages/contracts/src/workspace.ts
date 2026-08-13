@@ -35,6 +35,7 @@ export const IssueTrackerConfig = Schema.Struct({
   actorLogin: Schema.optional(TrimmedNonEmptyString),
   actorUserId: Schema.optional(TrimmedNonEmptyString),
   assigneeAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
+  botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   roleLabels: Schema.optional(TriageRoleLabels),
 });
 export type IssueTrackerConfig = typeof IssueTrackerConfig.Type;
@@ -44,6 +45,7 @@ export const SourceControlConfig = Schema.Struct({
   repo: Schema.optional(TrimmedNonEmptyString),
   tokenEnv: Schema.optional(TrimmedNonEmptyString),
   actorLogin: Schema.optional(TrimmedNonEmptyString),
+  botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
 

@@ -2,6 +2,7 @@ import {
   HarnessName,
   type SessionId,
   SessionId as SessionIdSchema,
+  type SessionKind,
   sessionHandle,
   type TokenUsage,
   WorkItemId,
@@ -34,6 +35,7 @@ import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
+import { layer as runRecorderLayer } from "./run-recorder";
 import * as SessionStore from "./session-store";
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
@@ -214,6 +216,7 @@ const followUpItem = {
   followUp: {
     checks: "failing" as const,
     humanCommentAtMillis: 0,
+    botTriggerAtMillis: 0,
     noProgress: 0,
     stalled: false,
     fresh: false,
@@ -226,6 +229,14 @@ const followUpBranch = branchName(followUpItem);
 const followUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-42"),
+  text("Fixed the failing check and pushed.\nFOLLOWUP-RESULT: pushed"),
+  finished,
+];
+
+// An owned-transcript run never hands back a session handle — its conversation
+// lives in the run ledger — so these events carry no session id.
+const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
   text("Fixed the failing check and pushed.\nFOLLOWUP-RESULT: pushed"),
   finished,
 ];
@@ -283,9 +294,10 @@ const capturingRunner = (
   requests: Ref.Ref<ReadonlyArray<HarnessRequest>>,
   events: ReadonlyArray<AgUiEvent>,
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
+  sessionKind: SessionKind = "opaque-handle",
 ): HarnessRunner => ({
   name: cursor,
-  sessionKind: "opaque-handle",
+  sessionKind,
   run: (request) =>
     Stream.unwrap(
       Ref.update(requests, (xs) => [...xs, request]).pipe(
@@ -359,7 +371,8 @@ const provide = (
 ) => {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
-  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
+  const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
+  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerServices = Layer.mergeAll(sessionStore, contextAssemblerStub, CredentialStore.layerEnv);
   return Executor.layer.pipe(
     Layer.provideMerge(
@@ -368,6 +381,7 @@ const provide = (
         sessionStore,
         harnessLayer(runners).pipe(Layer.provide(runnerServices)),
         runLedger,
+        runRecorder,
         bus,
         RunControl.layer,
         Layer.succeed(WorktreeManager, worktree),
@@ -1070,6 +1084,32 @@ describe("Executor.execute", () => {
         assert.isNull(captured[0]?.session ?? null);
         assert.strictEqual(captured[1]?.session, run?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("resumes an owned-transcript follow-up by default, with no handle to lean on", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, ownedFollowUpEvents, Stream.empty, "owned-transcript")],
+        worktreeStubCreated(false),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const captured = yield* Ref.get(requests);
+        const ledger = yield* RunLedger.RunLedger;
+        const [second, first] = yield* ledger.listRuns(10);
+        assert.strictEqual(first?.session, second?.session);
+        assert.strictEqual(captured[1]?.session, second?.session);
+        assert.strictEqual(yield* kindOf(ledger, captured[1]?.session), "owned-transcript");
+        assert.isNull(yield* handleOf(ledger, captured[1]?.session));
+        assert.isAbove((yield* ledger.sessionEvents(second?.session ?? previousSession)).length, 0);
       }).pipe(Effect.provide(layer));
     }),
   );

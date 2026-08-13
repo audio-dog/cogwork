@@ -197,6 +197,7 @@ describe("coordination tracker", () => {
         humanCommentAtMillis: 4,
         noProgress: 1,
         baseDivergence: "clean",
+        botTriggerAtMillis: 0,
       };
       yield* tracker.recordFollowUp(workspace, decodeId("#5"), marker, "Handing this to a human.");
       yield* tracker.recordAttempt(workspace, decodeId("#5"), {
@@ -222,7 +223,13 @@ describe("coordination tracker", () => {
       yield* tracker.recordFollowUp(
         workspace,
         decodeId("#3"),
-        { checks: "failing", humanCommentAtMillis: 1, noProgress: 1, baseDivergence: "none" },
+        {
+          checks: "failing",
+          humanCommentAtMillis: 1,
+          noProgress: 1,
+          baseDivergence: "none",
+          botTriggerAtMillis: 0,
+        },
         "Old folded detail",
       );
       yield* tracker.note(workspace, decodeId("#3"), triageProposalBody("Recommend ready-for-agent."));

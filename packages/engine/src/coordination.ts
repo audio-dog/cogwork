@@ -141,6 +141,8 @@ export const parseFollowUp = (codec: WireCodec, body: string) => {
         noProgress: Number(pairs.noProgress),
         // Markers written before base divergence existed have no `base=`; read them as "none".
         baseDivergence: pairs.base ?? "none",
+        // Omit when absent so the schema default (0) applies rather than a NaN from `Number(undefined)`.
+        ...(pairs.bot === undefined ? {} : { botTriggerAtMillis: Number(pairs.bot) }),
       }),
     ),
   );
@@ -191,7 +193,7 @@ export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
 export const serializeFollowUp = (codec: WireCodec, marker: FollowUpMarker) =>
   codec.encode({
     name: "follow-up",
-    pairs: `checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence}`,
+    pairs: `checks=${marker.checks} human=${marker.humanCommentAtMillis} noProgress=${marker.noProgress} base=${marker.baseDivergence} bot=${marker.botTriggerAtMillis}`,
   });
 
 const detailSection = (codec: WireCodec, detail: string | null) => {

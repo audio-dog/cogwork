@@ -1,5 +1,5 @@
 import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@clanker-forge/contracts";
-import { agUiDisplayName, agUiSessionId, agUiTextDelta, agUiUsage, RunId } from "@clanker-forge/contracts";
+import { agUiTextDelta, agUiUsage, RunId, sessionHandle } from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -13,7 +13,6 @@ import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { agentFailureReason, prepareFailureReason, triageProposalBody } from "./comments";
 import type { CredentialError } from "./credential-store";
-import { activityOf, DaemonEventBus } from "./daemon-event-bus";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
 import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
@@ -36,6 +35,7 @@ import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
 import { RunControl } from "./run-control";
 import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
+import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
@@ -59,9 +59,7 @@ interface StageOps {
   readonly resume: boolean;
 }
 
-class SessionRestarted extends Data.TaggedError("SessionRestarted")<{
-  readonly nextSeq: number;
-}> {}
+class SessionRestarted extends Data.TaggedError("SessionRestarted")<Record<string, never>> {}
 
 const withFullPrompt = (request: HarnessRequest, prompt: string): HarnessRequest => ({
   ...request,
@@ -71,6 +69,7 @@ const withFullPrompt = (request: HarnessRequest, prompt: string): HarnessRequest
 const defaultFollowUp: FollowUpContext = {
   checks: "pending",
   humanCommentAtMillis: 0,
+  botTriggerAtMillis: 0,
   noProgress: 0,
   stalled: false,
   fresh: false,
@@ -124,19 +123,13 @@ const retryableOf = (error: PrepareError | HarnessError) => {
 const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
-// The harness hands back this handle as untrusted output, and it is later echoed verbatim into a
-// fenced shell block in the human handoff comment. Whitespace or a backtick would break out of that
-// fence, so a handle carrying either is refused rather than stored.
-const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : null);
-
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
-const encodeJson = Schema.encodeEffect(Schema.UnknownFromJsonString);
 
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const harness = yield* Harness;
   const ledger = yield* RunLedger;
-  const bus = yield* DaemonEventBus;
+  const recorder = yield* RunRecorder;
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
   const runControl = yield* RunControl;
@@ -200,81 +193,34 @@ export const make = Effect.gen(function* () {
     return false;
   });
 
-  const persistEvent = Effect.fn("Executor.persistEvent")(function* (
-    record: RunRecord,
-    seq: number,
-    event: AgUiEvent,
-  ) {
-    const atMillis = yield* Clock.currentTimeMillis;
-    const data = yield* encodeJson(event).pipe(Effect.orElseSucceed(() => "{}"));
-    yield* ledger.appendEvent(record.id, {
-      seq,
-      type: event.type,
-      name: agUiDisplayName(event),
-      data,
-      atMillis,
-    });
-    yield* bus.publishActivity(activityOf(record, seq, atMillis, event));
-  });
-
   const settleRun = (runId: RunId, update: RunUpdate) => ledger.updateRun(runId, update);
-
-  const nextHandle = Effect.fn("Executor.nextHandle")(function* (
-    record: RunRecord,
-    current: string | null,
-    raw: string | null,
-  ) {
-    const handle = cleanHandle(raw);
-    if (handle === null || handle === current || record.session === null) return current;
-    yield* ledger.recordSessionHandle(record.session, handle);
-    return handle;
-  });
 
   const foldEvent = Effect.fn("Executor.foldEvent")(function* (
     record: RunRecord,
     acc: RunAccumulator,
-    seq: number,
     event: AgUiEvent,
   ) {
-    const handle = yield* nextHandle(record, acc.handle, agUiSessionId(event));
-    yield* persistEvent(record, seq, event);
+    const handle = yield* recorder.record(record, event);
     return mergeEvent(acc, event, handle);
   });
 
   const foldStream = <E, R>(
     request: HarnessRequest,
-    step: (acc: RunAccumulator, event: AgUiEvent, index: number) => Effect.Effect<RunAccumulator, E, R>,
-  ) =>
-    Stream.runFoldEffect(
-      Stream.zipWithIndex(withFailureTerminal(harness.run(request))),
-      () => emptyAccumulator,
-      (acc: RunAccumulator, [event, index]: readonly [AgUiEvent, number]) => step(acc, event, index),
-    );
+    step: (acc: RunAccumulator, event: AgUiEvent) => Effect.Effect<RunAccumulator, E, R>,
+  ) => Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => emptyAccumulator, step);
 
-  const foldRun = Effect.fn("Executor.foldRun")(function* (
-    record: RunRecord,
-    request: HarnessRequest,
-    startSeq: number,
-  ) {
-    return yield* foldStream(request, (acc, event, index) => foldEvent(record, acc, index + startSeq, event));
-  });
+  const foldRun = (record: RunRecord, request: HarnessRequest) =>
+    foldStream(request, (acc, event) => foldEvent(record, acc, event));
 
-  const guardResume = (prev: RunAccumulator, next: RunAccumulator, index: number, expected: string) =>
+  const guardResume = (prev: RunAccumulator, next: RunAccumulator, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
-      ? Effect.fail(new SessionRestarted({ nextSeq: index + 1 }))
+      ? Effect.fail(new SessionRestarted({}))
       : Effect.succeed(next);
 
-  const foldResume = Effect.fn("Executor.foldResume")(function* (
-    record: RunRecord,
-    request: HarnessRequest,
-    expected: string,
-  ) {
-    return yield* foldStream(request, (acc, event, index) =>
-      foldEvent(record, acc, index, event).pipe(
-        Effect.flatMap((next) => guardResume(acc, next, index, expected)),
-      ),
+  const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
+    foldStream(request, (acc, event) =>
+      foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
     );
-  });
 
   const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
     record: RunRecord,
@@ -282,11 +228,9 @@ export const make = Effect.gen(function* () {
     request: HarnessRequest,
   ) {
     const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
-    if (!expected) return yield* foldRun(record, request, 0);
+    if (!expected) return yield* foldRun(record, request);
     return yield* foldResume(record, request, expected).pipe(
-      Effect.catchTag("SessionRestarted", (restart) =>
-        foldRun(record, withFullPrompt(request, ops.fullPrompt), restart.nextSeq),
-      ),
+      Effect.catchTag("SessionRestarted", () => foldRun(record, withFullPrompt(request, ops.fullPrompt))),
     );
   });
 
@@ -442,6 +386,7 @@ export const make = Effect.gen(function* () {
   const followUpMarker = (context: FollowUpContext) => ({
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
+    botTriggerAtMillis: context.botTriggerAtMillis,
     noProgress: context.noProgress,
     baseDivergence: context.baseDivergence,
   });
@@ -492,9 +437,11 @@ export const make = Effect.gen(function* () {
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
+    const session = last?.session ? yield* ledger.getSession(last.session) : null;
     const now = yield* Clock.currentTimeMillis;
     const decision = decideResume({
-      handle: yield* handleOf(ledger, last?.session ?? null),
+      sessionKind: session?.kind ?? null,
+      handle: sessionHandle(session),
       lastRunStartedAtMillis: last?.startedAtMillis ?? null,
       lastRunTotalTokens: last?.usage?.totalTokens ?? null,
       now,

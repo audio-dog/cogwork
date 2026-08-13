@@ -7,7 +7,7 @@ import type {
   SessionId,
   TokenUsage,
 } from "@clanker-forge/contracts";
-import { sessionHandle, workItemCandidates } from "@clanker-forge/contracts";
+import { sessionHandle, sessionResumable, workItemCandidates } from "@clanker-forge/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -208,7 +208,7 @@ export const makeMemory = Effect.gen(function* () {
               !unresumableStatuses.has(run.status) &&
               run.workspace === workspace &&
               run.branch === branch &&
-              sessionHandle(sessions.get(run.session) ?? null) !== null,
+              sessionResumable(sessions.get(run.session) ?? null),
           ),
         ),
       ),

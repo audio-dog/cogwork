@@ -144,6 +144,25 @@ describe("RunLedger (memory)", () => {
   });
 
   it.layer(layerMemory)((it) => {
+    it.effect("offers an owned-transcript run's session for resume even with no handle", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertSession({
+          kind: "owned-transcript",
+          id: session,
+          workspace,
+          harness,
+          createdAtMillis: 0,
+        });
+        yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export", session }));
+        const run = yield* ledger.latestRunByBranch("gh", "7-fix-export");
+        assert.strictEqual(run?.session, session);
+        assert.isNull(sessionHandle(yield* ledger.getSession(session)));
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
     it.effect("does not offer an interrupted run's session for resume", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;

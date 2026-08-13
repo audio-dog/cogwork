@@ -25,16 +25,24 @@ import { hasClankerMarker } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
   readonly actorLogin: string | null;
+  readonly botAllowlist: ReadonlySet<string>;
 }
 
 const targetFromRepo = (
   repo: string,
   tokenEnv: string | undefined,
   actorLogin: string | undefined,
+  botAllowlist: ReadonlyArray<string> | undefined,
 ): GitHubTarget | null => {
   const [owner, name] = repo.split("/");
   if (!owner || !name) return null;
-  return { owner, name, tokenEnv: tokenEnv ?? "GITHUB_TOKEN", actorLogin: actorLogin ?? null };
+  return {
+    owner,
+    name,
+    tokenEnv: tokenEnv ?? "GITHUB_TOKEN",
+    actorLogin: actorLogin ?? null,
+    botAllowlist: new Set(botAllowlist ?? []),
+  };
 };
 
 // A workspace's source control provider is its own `sourceControl` block when set, and otherwise its
@@ -43,11 +51,11 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
   const explicit = workspace.config.sourceControl;
   if (explicit) {
     if (explicit.type !== "github" || !explicit.repo) return null;
-    return targetFromRepo(explicit.repo, explicit.tokenEnv, explicit.actorLogin);
+    return targetFromRepo(explicit.repo, explicit.tokenEnv, explicit.actorLogin, explicit.botAllowlist);
   }
   const source = workspace.config.issueTracker;
   if (source.type !== "github" || !source.repo) return null;
-  return targetFromRepo(source.repo, source.tokenEnv, source.actorLogin);
+  return targetFromRepo(source.repo, source.tokenEnv, source.actorLogin, source.botAllowlist);
 };
 
 // The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.
@@ -73,10 +81,17 @@ const freshPattern = /\/fresh\b/i;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-type Feedback = Pick<RawComment, "authorAssociation" | "body" | "createdAtMillis">;
+type Feedback = Pick<RawComment, "authorLogin" | "authorAssociation" | "body" | "createdAtMillis">;
 
-const isHumanFeedback = (feedback: Feedback) =>
-  writeAccess.has(feedback.authorAssociation) && !hasClankerMarker(feedback.body);
+// An allowlisted login is always the trusted-bot path, never the human one, even if it reports write
+// access — that keeps a bot from ever setting `/fresh` or resetting the no-progress counter.
+const isHumanFeedback = (feedback: Feedback, botAllowlist: ReadonlySet<string>) =>
+  writeAccess.has(feedback.authorAssociation) &&
+  !botAllowlist.has(feedback.authorLogin) &&
+  !hasClankerMarker(feedback.body);
+
+const isTrustedBotFeedback = (feedback: Feedback, botAllowlist: ReadonlySet<string>) =>
+  botAllowlist.has(feedback.authorLogin) && !hasClankerMarker(feedback.body);
 
 export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
   const latestApprovalMillis = reviews.reduce(
@@ -97,20 +112,31 @@ export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
   );
 };
 
-export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, actorLogin: string | null) => {
+const newestOf = (feedback: ReadonlyArray<Feedback>) =>
+  feedback.reduce<Feedback | null>(
+    (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
+    null,
+  );
+
+export const humanCommentSignal = (
+  feedback: ReadonlyArray<Feedback>,
+  actorLogin: string | null,
+  botAllowlist: ReadonlySet<string>,
+) => {
   if (!actorLogin) {
     return { latestAtMillis: null, fresh: false };
   }
-  const newest = feedback
-    .filter(isHumanFeedback)
-    .reduce<Feedback | null>(
-      (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
-      null,
-    );
+  const newest = newestOf(feedback.filter((item) => isHumanFeedback(item, botAllowlist)));
   return {
     latestAtMillis: newest?.createdAtMillis ?? null,
     fresh: newest ? freshPattern.test(newest.body) : false,
   };
+};
+
+// Returns no `fresh` flag: `/fresh` restarts stay human-only, so a bot can never trigger one.
+export const botTriggerSignal = (feedback: ReadonlyArray<Feedback>, botAllowlist: ReadonlySet<string>) => {
+  const newest = newestOf(feedback.filter((item) => isTrustedBotFeedback(item, botAllowlist)));
+  return { latestAtMillis: newest?.createdAtMillis ?? null };
 };
 
 const make = (client: GitHubClientService): SourceControlProviderService => {
@@ -127,16 +153,16 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
         .filter((review) => writeAccess.has(review.authorAssociation))
         .map((review) => ({ login: review.authorLogin, state: review.state })),
     );
-    const human = humanCommentSignal(
-      [...comments, ...reviewComments, ...reviewFeedback(reviews)],
-      target.actorLogin,
-    );
+    const feedback = [...comments, ...reviewComments, ...reviewFeedback(reviews)];
+    const human = humanCommentSignal(feedback, target.actorLogin, target.botAllowlist);
+    const bot = botTriggerSignal(feedback, target.botAllowlist);
     return {
       number: pull.number,
       url: pull.url,
       review: prReview(pull, decision),
       checks: checkState(checks),
       latestHumanCommentAtMillis: human.latestAtMillis,
+      latestBotTriggerAtMillis: bot.latestAtMillis,
       fresh: human.fresh,
       baseDivergence: baseDivergenceOf(mergeableState),
       waitingSinceMillis: pull.updatedAtMillis,

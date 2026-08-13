@@ -18,6 +18,7 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
+import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { WorktreeManager } from "./worktree";
@@ -213,6 +214,7 @@ describe("reconcile worker", () => {
     review: "pending",
     checks: "passing",
     latestHumanCommentAtMillis: null,
+    latestBotTriggerAtMillis: null,
     fresh: false,
     baseDivergence: "none",
     waitingSinceMillis: 1_700_000_000_000,
@@ -468,6 +470,8 @@ describe("daemon heartbeats", () => {
 describe("daemon status over rpc", () => {
   const registryLayer = registeredSample;
   const schedulerStub = Layer.succeed(Scheduler.Scheduler, schedulerStubService);
+  const runLedger = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
+  const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger));
   const daemonLayer = (sourceLayer: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -475,7 +479,8 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
-      Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
+      Layer.provideMerge(runRecorder),
+      Layer.provideMerge(runLedger),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(sourceLayer),
     );
@@ -580,6 +585,7 @@ describe("daemon status over rpc", () => {
     review: "ready",
     checks: "passing",
     latestHumanCommentAtMillis: null,
+    latestBotTriggerAtMillis: null,
     fresh: false,
     baseDivergence: "none",
     waitingSinceMillis: 1_786_000_000_000,

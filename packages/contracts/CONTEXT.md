@@ -36,6 +36,10 @@ _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 `issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced in the engine's classification, not here.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
+**Bot allowlist**:
+`sourceControl.botAllowlist` (with the same fallback field on `issueTracker` the source-control target already borrows) — an optional, non-empty-when-present list of bot logins whose PR comments are trusted to *wake a follow-up*. Absent means the gate is off: no bot comment ever wakes one, exactly as before. A listed bot's comment is a wake signal only — it triggers a follow-up but does not reset the no-progress counter and can never set `/fresh`, so a stall still hands off to a human. It grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
+_Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot never steers)
+
 ### Lifecycle
 
 **Lifecycle stage**:
