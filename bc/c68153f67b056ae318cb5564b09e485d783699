@@ -1,0 +1,24 @@
+apps/cli/config/cogwork.workspace.ts
+  s_90438704b97a22::t_37b6424cb018ea 1-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bcc68153f67b056ae318cb5564b09e485d783699",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_90438704b97a22": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8732f613-7da1-43ea-9045-c3241b95d3e4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
