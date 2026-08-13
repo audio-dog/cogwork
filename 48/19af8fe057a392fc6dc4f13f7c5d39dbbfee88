@@ -1,0 +1,24 @@
+package.json
+  s_1cd73907d7ab5e::t_e3b40e33150ec7 13
+turbo.json
+  s_1cd73907d7ab5e::t_aa0c665f4c0370 15-16
+  s_1cd73907d7ab5e::t_6d8e5c2be01ed3 13-14,17
+README.md
+  s_1cd73907d7ab5e::t_60610d502c8b5c 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "4819af8fe057a392fc6dc4f13f7c5d39dbbfee88",
+  "prompts": {},
+  "sessions": {
+    "s_1cd73907d7ab5e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "962db6dc-ef01-457e-88ce-0cbc40cda23d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
