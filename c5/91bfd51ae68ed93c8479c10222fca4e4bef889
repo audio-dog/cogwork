@@ -1,0 +1,14 @@
+packages/engine/skills/implement-agent/SKILL.md
+  h_46518a29d4dd91 79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c591bfd51ae68ed93c8479c10222fca4e4bef889",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
