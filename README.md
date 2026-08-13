@@ -25,6 +25,7 @@ pnpm install
 pnpm vendor   # shallow-clone Effect v4 into .repos/effect for agent/human reference
 pnpm typecheck
 pnpm test
+pnpm dev      # run every package's dev server (the desktop app today)
 ```
 
 ## Vendored reference source
