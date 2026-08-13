@@ -1,0 +1,59 @@
+packages/engine/src/event-publisher.test.ts
+  s_645b1174618a1f::t_f260ff5a4a5640 35,39-40
+  s_645b1174618a1f::t_e7712fea1a1018 372-373
+  s_645b1174618a1f::t_8faa551a8c970b 273-274
+  s_645b1174618a1f::t_c346f17aca6d59 41
+packages/engine/src/run-recorder.ts
+  s_645b1174618a1f::t_c567ed4be28784 2-3,18-20,22
+  s_645b1174618a1f::t_40c0f2aec3316c 1
+  s_645b1174618a1f::t_b155f8a0ac75d0 70-86,88-92
+  s_645b1174618a1f::t_92529fb944dd98 87
+  s_645b1174618a1f::t_8b3d5eeb941c76 95-97
+packages/engine/src/run-recorder.test.ts
+  s_645b1174618a1f::t_037c65e4220350 60-75
+  s_645b1174618a1f::t_725deb53f27944 4
+  s_645b1174618a1f::t_591a391b179208 191-236
+packages/engine/src/engine.test.ts
+  s_645b1174618a1f::t_c99d191fb19f33 21
+  s_645b1174618a1f::t_6902d87accd33f 472-473,481-482
+packages/engine/src/daemon.ts
+  s_645b1174618a1f::t_2999de76b227a0 182
+  s_645b1174618a1f::t_0b10e7748451ee 43
+  s_645b1174618a1f::t_55492200df1578 23
+  s_645b1174618a1f::t_7fb785009cc9bf 64,68
+packages/engine/src/commands.test.ts
+  s_645b1174618a1f::t_9d76a9ef0bbf39 103-105,116-117
+  s_645b1174618a1f::t_9a816f72971cdb 28
+packages/engine/src/executor.test.ts
+  s_645b1174618a1f::t_6bc3e7d94822ea 364
+packages/engine/src/session-store.ts
+  s_645b1174618a1f::t_dda1eef0176b98 119-122,135,139
+  s_645b1174618a1f::t_c222f073b7affe 96-99
+  s_645b1174618a1f::t_6cb08121c061ad 28
+  s_645b1174618a1f::t_dcdc421493a25d 29
+  s_645b1174618a1f::t_2814109ae9ffc3 126
+  s_645b1174618a1f::t_e8afb3cf3d1d24 127
+packages/engine/src/watch-activity.test.ts
+  s_645b1174618a1f::t_5486474d4c6cdf 153
+  s_645b1174618a1f::t_b86a4760b912e7 1,14
+  s_645b1174618a1f::t_4d6ff23c6ac2b5 21-24,26,42-44,54-72,77,79,81-86,97,111,113,115-116,127-128,141-143,145,148-149,151-152,154-155,157-159,166,177,181,183-189,191-194,202,217-227,229-230,259,261-263,268-269,282,284-286,293-294,312-313,316-317,326
+packages/engine/src/session-store.test.ts
+  s_645b1174618a1f::t_0d239674b408b8 35-39,44-49,59-62
+  s_645b1174618a1f::t_d05a3e0a01d394 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "3ca21920c21767650f9443e7f946cd0fbc898cca",
+  "prompts": {},
+  "sessions": {
+    "s_645b1174618a1f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "093e43d0-c369-43fc-a1c5-46b2ca0ab69a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
