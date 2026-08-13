@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_e161ba8632d41a::t_949d9a0f7e5c05 125-131,135
+apps/desktop/package.json
+  s_e161ba8632d41a::t_c51055078221f5 34
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_e161ba8632d41a::t_c741033b941037 29
+  s_e161ba8632d41a::t_743a850cefbbfc 2-3,22-28,30-33
+pnpm-lock.yaml
+  s_e161ba8632d41a::t_627d3534dcaae0 151-153,1492-1502,2085-2088,5881-5886,6364-6365
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "30bf5e67ffc030c8643a6ad25c4b94e5c277c66e",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e161ba8632d41a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d6019d79-dedf-4a18-bcb9-69c8a2311353",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
