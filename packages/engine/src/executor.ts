@@ -1,5 +1,12 @@
 import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@clanker-forge/contracts";
-import { agUiDisplayName, agUiSessionId, agUiTextDelta, agUiUsage, RunId } from "@clanker-forge/contracts";
+import {
+  agUiDisplayName,
+  agUiSessionId,
+  agUiTextDelta,
+  agUiUsage,
+  RunId,
+  sessionHandle,
+} from "@clanker-forge/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -492,9 +499,11 @@ export const make = Effect.gen(function* () {
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
     const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
+    const session = last?.session ? yield* ledger.getSession(last.session) : null;
     const now = yield* Clock.currentTimeMillis;
     const decision = decideResume({
-      handle: yield* handleOf(ledger, last?.session ?? null),
+      sessionKind: session?.kind ?? null,
+      handle: sessionHandle(session),
       lastRunStartedAtMillis: last?.startedAtMillis ?? null,
       lastRunTotalTokens: last?.usage?.totalTokens ?? null,
       now,
