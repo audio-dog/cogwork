@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_e161ba8632d41a::t_5b3e4e1fb86668 71
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_e161ba8632d41a::t_713b7114332691 1-152,154-246,248-276
+  s_e161ba8632d41a::t_9c5aedf4a7ebbe 247
+  s_e161ba8632d41a::t_de86127f0d713c 153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "92ed4baaabdbf76979618f70233624c53532435b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e161ba8632d41a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d6019d79-dedf-4a18-bcb9-69c8a2311353",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
