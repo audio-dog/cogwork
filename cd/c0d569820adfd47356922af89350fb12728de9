@@ -1,0 +1,26 @@
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_e161ba8632d41a::t_5ee0b86ca5b5e8 1-72
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_e161ba8632d41a::t_91815ef8b76953 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cdc0d569820adfd47356922af89350fb12728de9",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e161ba8632d41a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d6019d79-dedf-4a18-bcb9-69c8a2311353",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
