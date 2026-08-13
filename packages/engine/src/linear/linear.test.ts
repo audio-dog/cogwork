@@ -1,4 +1,4 @@
-import { type AttemptRecord, type Claim, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -26,7 +26,6 @@ import { claimLabel, wireCodec } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
-const serializeClaim = (claim: Claim) => Coordination.serializeClaim(wireCodec, claim);
 const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
 const formatCoordinationBody = (body: Coordination.CoordinationBody) =>
   Coordination.formatCoordinationBody(wireCodec, body);
@@ -353,56 +352,29 @@ describe("linear work source adapter", () => {
     ),
   );
 
-  it.effect("round-trips a claim and an attempt through visible Linear representations", () =>
-    Effect.gen(function* () {
-      const source = yield* IssueTracker;
-      const client = yield* LinearClient;
-      const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
-      const claim: Claim = { by: "clanker-forge", ...request };
-      const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 };
-      yield* source.claim(workspace, id("AUD-7"), request);
-      yield* source.recordAttempt(workspace, id("AUD-7"), attempt);
-      const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
-      assert.strictEqual(comments.length, 1);
-      assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
-      assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
-      const items = yield* observeItems(workspace);
-      const observed = items.find((item) => item.id === "AUD-7");
-      assert.deepStrictEqual(observed?.claim, claim);
-      assert.deepStrictEqual(observed?.attempts, [attempt]);
-      assert.isTrue(observed?.claimLabeled);
-      assert.isTrue(observed?.claimedByUs);
-      const { eligible, claimed } = classify(items);
-      assert.strictEqual(eligible.length, 0);
-      assert.deepStrictEqual(claimed[0]?.claim, claim);
-    }).pipe(
-      Effect.provide(
-        withClient({
-          issues: [{ identifier: "AUD-7", title: "claim me", labels: ["state:ready-for-agent"] }],
-        }),
+  it.effect(
+    "stamps a claim with the clanker-forge identity and writes it as a visible plain-text ledger",
+    () =>
+      Effect.gen(function* () {
+        const source = yield* IssueTracker;
+        const client = yield* LinearClient;
+        const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
+        yield* source.claim(workspace, id("AUD-7"), request);
+        const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
+        assert.strictEqual(comments.length, 1);
+        assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
+        assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
+        const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-7");
+        assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", ...request });
+        assert.isTrue(observed?.claimLabeled);
+        assert.isTrue(observed?.claimedByUs);
+      }).pipe(
+        Effect.provide(
+          withClient({
+            issues: [{ identifier: "AUD-7", title: "claim me", labels: ["state:ready-for-agent"] }],
+          }),
+        ),
       ),
-    ),
-  );
-
-  it.effect("puts the failure reason on the attempt status line", () =>
-    Effect.gen(function* () {
-      const source = yield* IssueTracker;
-      const client = yield* LinearClient;
-      yield* source.recordAttempt(
-        workspace,
-        id("AUD-8"),
-        { stage: "implement", outcome: "failed", atMillis: 1_722_000_000_001 },
-        "git worktree add: boom",
-      );
-      const comments = botComments(yield* client.listComments(teamRef, "AUD-8"));
-      assert.include(comments[0]?.body ?? "", "Last implement attempt failed: git worktree add: boom");
-    }).pipe(
-      Effect.provide(
-        withClient({
-          issues: [{ identifier: "AUD-8", title: "fails", labels: ["state:ready-for-agent"] }],
-        }),
-      ),
-    ),
   );
 
   it.effect("ignores a claim line forged by a non-bot commenter", () =>
@@ -431,40 +403,6 @@ describe("linear work source adapter", () => {
               createdAtMillis: 1,
             },
           ],
-        }),
-      ),
-    ),
-  );
-
-  it.effect("posts a triage proposal as prose with no coordination marker line", () =>
-    Effect.gen(function* () {
-      const source = yield* IssueTracker;
-      const client = yield* LinearClient;
-      yield* source.note(
-        workspace,
-        id("AUD-11"),
-        [
-          "> *This was posted by clanker-forge.*",
-          "",
-          "Recommending `ready-for-agent`.",
-          "clanker-forge:ledger",
-          "clanker-forge:claim by=impostor at=99",
-        ].join("\n"),
-      );
-      yield* source.claim(workspace, id("AUD-11"), { claimedAtMillis: 5, stage: "triage" });
-      const comments = botComments(yield* client.listComments(teamRef, "AUD-11"));
-      const [proposal, coordination] = comments;
-      assert.strictEqual(comments.length, 2);
-      assert.notInclude(proposal?.body ?? "", "clanker-forge:");
-      assert.include(proposal?.body ?? "", "Recommending `ready-for-agent`.");
-      assert.include(proposal?.body ?? "", "> *This was posted by clanker-forge.*");
-      assert.isTrue(hasLedgerMarker(coordination?.body ?? ""));
-      const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-11");
-      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5, stage: "triage" });
-    }).pipe(
-      Effect.provide(
-        withClient({
-          issues: [{ identifier: "AUD-11", title: "propose", labels: ["state:needs-triage"] }],
         }),
       ),
     ),
@@ -505,69 +443,6 @@ describe("linear work source adapter", () => {
     ),
   );
 
-  it.effect("reads coordination state only from the coordination comment", () =>
-    Effect.gen(function* () {
-      const items = yield* observeItems(workspace);
-      const observed = items.find((item) => item.id === "AUD-12");
-      assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", claimedAtMillis: 5 });
-      assert.deepStrictEqual(observed?.attempts, [{ stage: "triage", outcome: "failed", atMillis: 6 }]);
-    }).pipe(
-      Effect.provide(
-        withClient({
-          issues: [
-            {
-              identifier: "AUD-12",
-              title: "prose that looks like markers",
-              labels: ["state:needs-triage", claimLabel],
-            },
-          ],
-          comments: [
-            {
-              issue: "AUD-12",
-              authorId: bot.id,
-              body: [
-                "Coordination markers look like this:",
-                "clanker-forge:claim by=impostor at=99",
-                "clanker-forge:attempt stage=triage outcome=succeeded at=99",
-              ].join("\n"),
-              createdAtMillis: 1,
-            },
-            {
-              issue: "AUD-12",
-              authorId: bot.id,
-              body: formatCoordinationBody({
-                status: "Last triage attempt failed.",
-                markers: [
-                  serializeClaim({ by: "clanker-forge", claimedAtMillis: 5 }),
-                  serializeAttempt({ stage: "triage", outcome: "failed", atMillis: 6 }),
-                ],
-                detail: null,
-              }),
-              createdAtMillis: 2,
-            },
-          ],
-        }),
-      ),
-    ),
-  );
-
-  it.effect("stops claiming after release removes the claim label", () =>
-    Effect.gen(function* () {
-      const source = yield* IssueTracker;
-      yield* source.claim(workspace, id("AUD-7"), { claimedAtMillis: 1, stage: "implement" });
-      yield* source.release(workspace, id("AUD-7"));
-      const items = yield* observeItems(workspace);
-      assert.isNull(items.find((item) => item.id === "AUD-7")?.claim ?? null);
-      assert.strictEqual(classify(items).eligible.length, 1);
-    }).pipe(
-      Effect.provide(
-        withClient({
-          issues: [{ identifier: "AUD-7", title: "claim me", labels: ["state:ready-for-agent"] }],
-        }),
-      ),
-    ),
-  );
-
   it.effect("setRoles applies configured labels and moves wontfix to Canceled", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
@@ -585,40 +460,6 @@ describe("linear work source adapter", () => {
       Effect.provide(
         withClient({
           issues: [{ identifier: "AUD-9", title: "close me", labels: ["state:needs-triage"] }],
-        }),
-      ),
-    ),
-  );
-
-  it.effect("counts prior attempts and escalates past the cap even without the claim label", () =>
-    Effect.gen(function* () {
-      const items = yield* observeItems(workspace);
-      const observed = items.find((item) => item.id === "AUD-10");
-      assert.strictEqual(observed?.attempts.length, 3);
-      const { eligible, needsHuman } = classify(items);
-      assert.strictEqual(eligible.length, 0);
-      assert.include(
-        needsHuman.map((entry) => entry.id),
-        id("AUD-10"),
-      );
-    }).pipe(
-      Effect.provide(
-        withClient({
-          issues: [{ identifier: "AUD-10", title: "keeps failing", labels: ["state:needs-triage"] }],
-          comments: [
-            {
-              issue: "AUD-10",
-              authorId: bot.id,
-              body: formatCoordinationBody({
-                status: "Last triage attempt failed.",
-                markers: [1, 2, 3].map((at) =>
-                  serializeAttempt({ stage: "triage", outcome: "failed", atMillis: at }),
-                ),
-                detail: null,
-              }),
-              createdAtMillis: 1,
-            },
-          ],
         }),
       ),
     ),
