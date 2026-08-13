@@ -1,5 +1,6 @@
-import type { AgUiEvent, RunId, RunRecord } from "@clanker-forge/contracts";
-import { agUiDisplayName, agUiSessionId } from "@clanker-forge/contracts";
+import type { RunId, SessionId } from "@clanker-forge/contracts";
+import { AgUiEvent, agUiDisplayName, agUiSessionId, type RunRecord } from "@clanker-forge/contracts";
+import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -14,7 +15,11 @@ import { RunLedger } from "./run-ledger";
 // fence, so a handle carrying either is refused rather than stored.
 const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : null);
 
+// The encode/decode between a harness event and a run event's stored payload is the recorder's
+// private detail. Nothing outside this module touches it, so live and replayed activity can only
+// ever agree.
 const encodeJson = Schema.encodeEffect(Schema.UnknownFromJsonString);
+const decodeEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
 
 interface RunTrack {
   readonly seq: number;
@@ -62,10 +67,34 @@ export const make = Effect.gen(function* () {
     return handle;
   });
 
-  return { record } as const;
+  // A settled run reads back through the same seam it was written through: decode each stored run
+  // event and lift it into the very same run activity a live subscriber saw, dropping any event that
+  // will not decode (a forward-compat guard, same as the live path).
+  const replay = Effect.fn("RunRecorder.replay")(function* (run: RunRecord) {
+    const events = yield* ledger.events(run.id);
+    return yield* Effect.forEach(events, (event) =>
+      decodeEvent(event.data).pipe(
+        Effect.map((decoded) => activityOf(run, event.seq, event.atMillis, decoded)),
+        Effect.option,
+      ),
+    ).pipe(Effect.map(Arr.getSomes));
+  });
+
+  // The decoded harness events a session's transcript fold consumes — every run that shares the
+  // session, oldest first — so the session store never decodes a run event itself.
+  const sessionEvents = Effect.fn("RunRecorder.sessionEvents")(function* (session: SessionId) {
+    const events = yield* ledger.sessionEvents(session);
+    return yield* Effect.forEach(events, (event) => decodeEvent(event.data).pipe(Effect.option)).pipe(
+      Effect.map(Arr.getSomes),
+    );
+  });
+
+  return { record, replay, sessionEvents } as const;
 });
 
-export class RunRecorder extends Context.Service<RunRecorder, Effect.Success<typeof make>>()(
+export type RunRecorderService = Effect.Success<typeof make>;
+
+export class RunRecorder extends Context.Service<RunRecorder, RunRecorderService>()(
   "@clanker-forge/engine/run-recorder/RunRecorder",
 ) {}
 

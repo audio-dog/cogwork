@@ -25,6 +25,7 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
+import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 
@@ -99,6 +100,9 @@ const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<Trac
       Ref.update(calls, (c) => ({ ...c, released: [...c.released, workItem] })),
   });
 
+const runLedgerLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
+const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedgerLayer));
+
 const daemonLayer = (
   source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>,
   scheduler = schedulerStub(),
@@ -109,7 +113,8 @@ const daemonLayer = (
     Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)))),
     Layer.provideMerge(registryLayer),
     Layer.provideMerge(scheduler),
-    Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
+    Layer.provideMerge(runRecorder),
+    Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(RunControl.layer),
     Layer.provideMerge(source),
   );

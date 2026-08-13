@@ -32,8 +32,12 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
+import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { SourceControlProvider } from "./source-control";
+
+const runLedgerTestLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
+const runRecorderTestLayer = runRecorderLayer.pipe(Layer.provide(runLedgerTestLayer));
 
 const id = Schema.decodeSync(WorkItemId);
 const stats = Schema.decodeSync(SchedulerStats);
@@ -266,7 +270,8 @@ describe("DaemonEventPublisher", () => {
       ),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
-      Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
+      Layer.provideMerge(runRecorderTestLayer),
+      Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(observing(itemsRef)),
     );
@@ -364,7 +369,8 @@ describe("DaemonEventPublisher", () => {
       ),
       Layer.provideMerge(failingRegistryLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
-      Layer.provideMerge(RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer))),
+      Layer.provideMerge(runRecorderTestLayer),
+      Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(observing(itemsRef)),
     );

@@ -1,14 +1,12 @@
 import type {
   AgUiEvent,
   HarnessName,
-  RunEvent,
   Session,
   SessionId,
   SessionKind,
   WorkspaceId,
 } from "@clanker-forge/contracts";
 import {
-  AgUiEvent as AgUiEventSchema,
   agUiDisplayName,
   agUiIsTerminal,
   agUiTextDelta,
@@ -27,7 +25,8 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { makeInterruptStore } from "./interrupt-store";
-import { handleOf, RunLedger, type RunLedgerService } from "./run-ledger";
+import { handleOf, RunLedger } from "./run-ledger";
+import { RunRecorder, type RunRecorderService } from "./run-recorder";
 
 export interface ThreadMessage {
   readonly role: "assistant" | "tool";
@@ -94,14 +93,10 @@ const foldEvent = (state: FoldState, event: AgUiEvent): FoldState => {
   return agUiIsTerminal(event) ? flushText(state) : state;
 };
 
-const decodeEvent = Schema.decodeUnknownOption(Schema.fromJsonString(AgUiEventSchema));
-
-export const foldThread = (events: ReadonlyArray<{ readonly data: string }>) => {
-  const decoded = events.flatMap((event) =>
-    Option.match(decodeEvent(event.data), { onNone: () => [], onSome: (value) => [value] }),
-  );
-  return flushText(decoded.reduce(foldEvent, emptyFold)).messages;
-};
+// Takes the harness events the recorder already decoded and folds them into transcript messages.
+// The recorder owns the decode, so this never touches a run event's stored payload.
+export const foldThread = (events: ReadonlyArray<AgUiEvent>) =>
+  flushText(events.reduce(foldEvent, emptyFold)).messages;
 
 const labelToolResult = (message: ThreadMessage) =>
   message.toolName ? `Result from ${message.toolName}:\n${message.content}` : message.content;
@@ -121,15 +116,15 @@ const decodeSessionId = Schema.decodeUnknownEffect(SessionIdSchema);
 const newSession = (spec: MintSpec, id: SessionId, kind: SessionKind): Session =>
   kind === "owned-transcript" ? { kind, id, ...spec } : { kind, id, ...spec, handle: null };
 
-// `loadThread` folds the session's run events into model messages; `saveThread`
-// is a no-op because the executor already appends every event to the ledger, so
-// writing the transcript back would fork the one truth.
-const ledgerMessageStore = (ledger: RunLedgerService): MessageStore => ({
+// `loadThread` folds the session's decoded harness events (from the recorder) into model messages;
+// `saveThread` is a no-op because the executor already appends every event to the ledger, so writing
+// the transcript back would fork the one truth.
+const ledgerMessageStore = (recorder: RunRecorderService): MessageStore => ({
   loadThread: (threadId) =>
     Effect.runPromise(
       Option.match(decodeSession(threadId), {
-        onNone: () => Effect.succeed<ReadonlyArray<RunEvent>>([]),
-        onSome: (session) => ledger.sessionEvents(session),
+        onNone: (): Effect.Effect<ReadonlyArray<AgUiEvent>> => Effect.succeed([]),
+        onSome: (session): Effect.Effect<ReadonlyArray<AgUiEvent>> => recorder.sessionEvents(session),
       }).pipe(Effect.map((events) => toModelMessages(foldThread(events)))),
     ),
   saveThread: () => Promise.resolve(),
@@ -137,10 +132,11 @@ const ledgerMessageStore = (ledger: RunLedgerService): MessageStore => ({
 
 export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
+  const recorder = yield* RunRecorder;
   const counter = yield* Ref.make(0);
   const persistence: ChatWithInterruptsPersistence = defineAIPersistence({
     stores: {
-      messages: ledgerMessageStore(ledger),
+      messages: ledgerMessageStore(recorder),
       runs: new InMemoryRunStore(),
       interrupts: makeInterruptStore(),
     },

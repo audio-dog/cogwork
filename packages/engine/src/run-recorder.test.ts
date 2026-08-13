@@ -1,6 +1,7 @@
 import {
   type AgUiEvent,
   HarnessName,
+  type RunEvent,
   RunId,
   type RunRecord,
   type Session,
@@ -55,6 +56,22 @@ const opaqueSession = (id: SessionId): Session => ({
 });
 
 const text = (delta: string) => ({ type: "TEXT_MESSAGE_CONTENT", delta }) satisfies AgUiEvent;
+
+const ledgerEvent = (seq: number, agUi: AgUiEvent, atMillis = 1000 + seq): RunEvent => ({
+  seq,
+  type: agUi.type,
+  name: agUi.name ?? null,
+  data: JSON.stringify(agUi),
+  atMillis,
+});
+
+const undecodable = (seq: number, atMillis = 1000 + seq): RunEvent => ({
+  seq,
+  type: "?",
+  name: null,
+  data: "not json",
+  atMillis,
+});
 
 const sessionEvent = (id: string) =>
   ({ type: "CUSTOM", name: "cursor.session-id", value: { sessionId: id } }) satisfies AgUiEvent;
@@ -169,6 +186,52 @@ describe("RunRecorder", () => {
         const recorder = yield* RunRecorder;
         const captured = yield* recorder.record(record, sessionEvent("cursor-abc"));
         assert.isNull(captured);
+      }),
+    );
+
+    it.effect("replays a settled run as the very activities its live watchers saw", () =>
+      Effect.gen(function* () {
+        const record = run("run-replay", { status: "succeeded", endedAtMillis: 2000 });
+        const { activities: live } = yield* recordAll(record, [runStarted, text("done"), finished]);
+
+        const recorder = yield* RunRecorder;
+        const replayed = yield* recorder.replay(record);
+
+        assert.deepStrictEqual(replayed, live);
+      }),
+    );
+
+    it.effect("drops a stored event it cannot decode when replaying", () =>
+      Effect.gen(function* () {
+        const record = run("run-replay-bad");
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.appendEvent(record.id, ledgerEvent(0, runStarted));
+        yield* ledger.appendEvent(record.id, undecodable(1));
+        yield* ledger.appendEvent(record.id, ledgerEvent(2, finished));
+
+        const recorder = yield* RunRecorder;
+        const replayed = yield* recorder.replay(record);
+
+        assert.deepStrictEqual(seqOf(replayed), [0, 2]);
+      }),
+    );
+
+    it.effect("hands the transcript fold a session's decoded events, oldest run first", () =>
+      Effect.gen(function* () {
+        const session = sessionId("sess-fold");
+        const older = run("run-old", { session, startedAtMillis: 1000 });
+        const newer = run("run-new", { session, startedAtMillis: 2000 });
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(older);
+        yield* ledger.insertRun(newer);
+        yield* ledger.appendEvent(older.id, ledgerEvent(0, text("first")));
+        yield* ledger.appendEvent(older.id, undecodable(1));
+        yield* ledger.appendEvent(newer.id, ledgerEvent(0, text("second")));
+
+        const recorder = yield* RunRecorder;
+        const decoded = yield* recorder.sessionEvents(session);
+
+        assert.deepStrictEqual(decoded, [text("first"), text("second")]);
       }),
     );
   });

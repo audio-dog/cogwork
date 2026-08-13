@@ -1,22 +1,17 @@
 import {
-  AgUiEvent,
   agUiIsTerminal,
   DaemonRpcs,
   localOwner,
   Principal,
   PrincipalMiddleware,
   type RunActivity,
-  type RunEvent,
   type RunId,
-  type RunRecord,
 } from "@clanker-forge/contracts";
-import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
-import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
@@ -25,12 +20,7 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { cancelRun, reclassify, setScheduling } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
 import type { CredentialStore } from "./credential-store";
-import {
-  activityOf,
-  DaemonEventBus,
-  layer as daemonEventBusLayer,
-  runActivityStream,
-} from "./daemon-event-bus";
+import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import * as Executor from "./executor";
 import * as GitHub from "./github";
@@ -50,7 +40,7 @@ import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
 import { layer as runControlLayer } from "./run-control";
 import { type CoreRunLedger, RunLedger, publishingLayer as runLedgerPublishingLayer } from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
+import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
 import { ticketSlug, WorktreeManager } from "./worktree";
@@ -64,18 +54,6 @@ export const daemonInfoLayer = Layer.effect(
   Effect.map(Clock.currentTimeMillis, (startedAtMillis) => ({ startedAtMillis })),
 );
 
-const decodeAgUiEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
-
-const activityFromEvent = (run: RunRecord, event: RunEvent) =>
-  decodeAgUiEvent(event.data).pipe(
-    Effect.map((agUiEvent) => activityOf(run, event.seq, event.atMillis, agUiEvent)),
-  );
-
-const activitiesFromLedger = (run: RunRecord, events: ReadonlyArray<RunEvent>) =>
-  Effect.forEach(events, (event) => activityFromEvent(run, event).pipe(Effect.option)).pipe(
-    Effect.map(Arr.getSomes),
-  );
-
 const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
@@ -83,10 +61,11 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   if (id === undefined) return bus.activity;
 
   const ledger = yield* RunLedger;
+  const recorder = yield* RunRecorder;
   const subscription = yield* bus.subscribe();
   const run = yield* ledger.getRun(id);
   if (run === null) return Stream.empty;
-  const history = yield* activitiesFromLedger(run, yield* ledger.events(id));
+  const history = yield* recorder.replay(run);
   const lastSeq = history.at(-1)?.seq ?? -1;
   const live = runActivityStream(Stream.fromSubscription(subscription)).pipe(
     Stream.filter((item) => item.runId === id && item.seq > lastSeq),
@@ -200,7 +179,7 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     Layer.provide(daemonEventBusLayer),
   );
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
-  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
+  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const base = Layer.mergeAll(
     adapters.registry,
     daemonInfoLayer,
