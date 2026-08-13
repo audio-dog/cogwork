@@ -1,0 +1,19 @@
+packages/engine/src/coordination-tracker.test.ts
+  s_a22acadac5325a::t_c041eb6cc8d44d 226-232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "e497b28069a9bcc0fd68fc738c85a7b4fe497589",
+  "prompts": {},
+  "sessions": {
+    "s_a22acadac5325a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7f4850de-7016-459d-98b0-7874fc55fcd5",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
