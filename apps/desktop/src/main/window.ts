@@ -19,6 +19,12 @@ export const createMainWindow = (deps: MainWindowDeps): BrowserWindow => {
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === "linux" ? { icon } : {}),
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 16, y: 14 } }
+      : {
+          titleBarStyle: "hidden" as const,
+          titleBarOverlay: { color: "#00000000", symbolColor: "#9ca3af", height: 44 },
+        }),
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       sandbox: false,
