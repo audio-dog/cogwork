@@ -4,6 +4,7 @@ import { parseIssues, type RawComment, type RawPull, type RawReview, reviewDecis
 import { ledgerMarker } from "./markers";
 import {
   baseDivergenceOf,
+  botTriggerSignal,
   branchBelongsToSlug,
   humanCommentSignal,
   prReview,
@@ -152,11 +153,13 @@ describe("prReview", () => {
 
 describe("humanCommentSignal", () => {
   const bot = "clanker-forge[bot]";
+  const noBots = new Set<string>();
 
   it("counts a write-access human comment and reads its /fresh directive", () => {
     const signal = humanCommentSignal(
       [comment({ authorAssociation: "COLLABORATOR", body: "please /fresh", createdAtMillis: 200 })],
       bot,
+      noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 200);
     assert.isTrue(signal.fresh);
@@ -166,6 +169,7 @@ describe("humanCommentSignal", () => {
     const signal = humanCommentSignal(
       [comment({ authorLogin: "drive-by", authorAssociation: "NONE", body: "/fresh", createdAtMillis: 200 })],
       bot,
+      noBots,
     );
     assert.isNull(signal.latestAtMillis);
     assert.isFalse(signal.fresh);
@@ -182,6 +186,7 @@ describe("humanCommentSignal", () => {
         }),
       ],
       bot,
+      noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 200);
   });
@@ -197,6 +202,7 @@ describe("humanCommentSignal", () => {
         }),
       ],
       bot,
+      noBots,
     );
     assert.isNull(signal.latestAtMillis);
   });
@@ -212,6 +218,7 @@ describe("humanCommentSignal", () => {
         }),
       ],
       bot,
+      noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 5);
   });
@@ -224,14 +231,80 @@ describe("humanCommentSignal", () => {
         comment({ authorLogin: "drive-by", authorAssociation: "NONE", body: "ignored", createdAtMillis: 99 }),
       ],
       bot,
+      noBots,
     );
     assert.strictEqual(signal.latestAtMillis, 30);
     assert.isTrue(signal.fresh);
   });
 
   it("cannot identify humans without a configured bot login", () => {
-    const signal = humanCommentSignal([comment({ createdAtMillis: 200 })], null);
+    const signal = humanCommentSignal([comment({ createdAtMillis: 200 })], null, noBots);
     assert.isNull(signal.latestAtMillis);
+  });
+
+  it("treats an allowlisted login as a bot, not a human, even with write access", () => {
+    const signal = humanCommentSignal(
+      [
+        comment({
+          authorLogin: "cursor[bot]",
+          authorAssociation: "MEMBER",
+          body: "please /fresh",
+          createdAtMillis: 200,
+        }),
+      ],
+      bot,
+      new Set(["cursor[bot]"]),
+    );
+    assert.isNull(signal.latestAtMillis);
+    assert.isFalse(signal.fresh);
+  });
+});
+
+describe("botTriggerSignal", () => {
+  const cursor = new Set(["cursor[bot]"]);
+
+  it("wakes on a listed bot's comment, ignoring association", () => {
+    const signal = botTriggerSignal(
+      [comment({ authorLogin: "cursor[bot]", authorAssociation: "NONE", createdAtMillis: 300 })],
+      cursor,
+    );
+    assert.strictEqual(signal.latestAtMillis, 300);
+  });
+
+  it("ignores an unlisted bot", () => {
+    const signal = botTriggerSignal(
+      [comment({ authorLogin: "dependabot[bot]", authorAssociation: "NONE", createdAtMillis: 300 })],
+      cursor,
+    );
+    assert.isNull(signal.latestAtMillis);
+  });
+
+  it("ignores a clanker-forge-marked body even from a listed bot", () => {
+    const signal = botTriggerSignal(
+      [comment({ authorLogin: "cursor[bot]", body: `finding\n${ledgerMarker}`, createdAtMillis: 300 })],
+      cursor,
+    );
+    assert.isNull(signal.latestAtMillis);
+  });
+
+  it("stays silent when no bots are allowlisted", () => {
+    const signal = botTriggerSignal(
+      [comment({ authorLogin: "cursor[bot]", createdAtMillis: 300 })],
+      new Set<string>(),
+    );
+    assert.isNull(signal.latestAtMillis);
+  });
+
+  it("takes the newest listed-bot comment across a mixed list", () => {
+    const signal = botTriggerSignal(
+      [
+        comment({ authorLogin: "cursor[bot]", body: "older", createdAtMillis: 10 }),
+        comment({ authorLogin: "cursor[bot]", body: "newer", createdAtMillis: 30 }),
+        comment({ authorLogin: "dependabot[bot]", body: "ignored", createdAtMillis: 99 }),
+      ],
+      cursor,
+    );
+    assert.strictEqual(signal.latestAtMillis, 30);
   });
 });
 

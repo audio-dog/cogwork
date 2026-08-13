@@ -13,6 +13,7 @@ const pr = (over: Partial<ObservedPr> = {}): ObservedPr => ({
   review: "pending",
   checks: "passing",
   latestHumanCommentAtMillis: null,
+  latestBotTriggerAtMillis: null,
   fresh: false,
   baseDivergence: "none",
   waitingSinceMillis: 0,
@@ -35,7 +36,13 @@ describe("triggersFollowUp", () => {
       triggersFollowUp(
         pr({
           latestHumanCommentAtMillis: 10,
-          followUp: { checks: "passing", humanCommentAtMillis: 10, noProgress: 0, baseDivergence: "none" },
+          followUp: {
+            checks: "passing",
+            humanCommentAtMillis: 10,
+            noProgress: 0,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+          },
         }),
       ),
     );
@@ -52,6 +59,24 @@ describe("triggersFollowUp", () => {
   it("does not trigger on a green, unreviewed, unchanged PR", () => {
     assert.isFalse(triggersFollowUp(pr()));
   });
+
+  it("triggers on a trusted-bot comment newer than the last follow-up marker", () => {
+    assert.isTrue(triggersFollowUp(pr({ latestBotTriggerAtMillis: 10 })));
+    assert.isFalse(
+      triggersFollowUp(
+        pr({
+          latestBotTriggerAtMillis: 10,
+          followUp: {
+            checks: "passing",
+            humanCommentAtMillis: 0,
+            noProgress: 0,
+            baseDivergence: "none",
+            botTriggerAtMillis: 10,
+          },
+        }),
+      ),
+    );
+  });
 });
 
 describe("noProgressCount", () => {
@@ -65,7 +90,13 @@ describe("noProgressCount", () => {
         pr({
           checks: "failing",
           latestHumanCommentAtMillis: 5,
-          followUp: { checks: "failing", humanCommentAtMillis: 5, noProgress: 1, baseDivergence: "none" },
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 5,
+            noProgress: 1,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+          },
         }),
       ),
       2,
@@ -77,7 +108,13 @@ describe("noProgressCount", () => {
       noProgressCount(
         pr({
           checks: "passing",
-          followUp: { checks: "failing", humanCommentAtMillis: 0, noProgress: 2, baseDivergence: "none" },
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 0,
+            noProgress: 2,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+          },
         }),
       ),
       0,
@@ -90,7 +127,13 @@ describe("noProgressCount", () => {
         pr({
           checks: "failing",
           latestHumanCommentAtMillis: 20,
-          followUp: { checks: "failing", humanCommentAtMillis: 10, noProgress: 2, baseDivergence: "none" },
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 10,
+            noProgress: 2,
+            baseDivergence: "none",
+            botTriggerAtMillis: 0,
+          },
         }),
       ),
       0,
@@ -102,7 +145,13 @@ describe("noProgressCount", () => {
       noProgressCount(
         pr({
           baseDivergence: "conflict",
-          followUp: { checks: "passing", humanCommentAtMillis: 0, noProgress: 1, baseDivergence: "conflict" },
+          followUp: {
+            checks: "passing",
+            humanCommentAtMillis: 0,
+            noProgress: 1,
+            baseDivergence: "conflict",
+            botTriggerAtMillis: 0,
+          },
         }),
       ),
       2,
@@ -114,10 +163,35 @@ describe("noProgressCount", () => {
       noProgressCount(
         pr({
           baseDivergence: "clean",
-          followUp: { checks: "passing", humanCommentAtMillis: 0, noProgress: 2, baseDivergence: "conflict" },
+          followUp: {
+            checks: "passing",
+            humanCommentAtMillis: 0,
+            noProgress: 2,
+            baseDivergence: "conflict",
+            botTriggerAtMillis: 0,
+          },
         }),
       ),
       0,
+    );
+  });
+
+  it("does not reset on a newer bot trigger when nothing else moved", () => {
+    assert.strictEqual(
+      noProgressCount(
+        pr({
+          checks: "failing",
+          latestBotTriggerAtMillis: 20,
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 0,
+            noProgress: 1,
+            baseDivergence: "none",
+            botTriggerAtMillis: 10,
+          },
+        }),
+      ),
+      2,
     );
   });
 });
@@ -134,6 +208,7 @@ describe("followUpContext", () => {
           humanCommentAtMillis: 5,
           noProgress: followUpNoProgressLimit - 1,
           baseDivergence: "none",
+          botTriggerAtMillis: 0,
         },
       }),
     );
@@ -151,11 +226,35 @@ describe("followUpContext", () => {
           humanCommentAtMillis: 0,
           noProgress: followUpNoProgressLimit - 1,
           baseDivergence: "conflict",
+          botTriggerAtMillis: 0,
         },
       }),
     );
     assert.strictEqual(context.noProgress, followUpNoProgressLimit);
     assert.isTrue(context.stalled);
     assert.strictEqual(context.baseDivergence, "conflict");
+  });
+
+  it("carries the latest bot-trigger time so the next marker records it", () => {
+    const context = followUpContext(pr({ latestBotTriggerAtMillis: 42 }));
+    assert.strictEqual(context.botTriggerAtMillis, 42);
+  });
+
+  it("stalls a bot-only back-and-forth once it reaches the no-progress limit", () => {
+    const context = followUpContext(
+      pr({
+        latestBotTriggerAtMillis: 30,
+        followUp: {
+          checks: "passing",
+          humanCommentAtMillis: 0,
+          noProgress: followUpNoProgressLimit - 1,
+          baseDivergence: "none",
+          botTriggerAtMillis: 20,
+        },
+      }),
+    );
+    assert.strictEqual(context.noProgress, followUpNoProgressLimit);
+    assert.isTrue(context.stalled);
+    assert.isFalse(context.fresh);
   });
 });

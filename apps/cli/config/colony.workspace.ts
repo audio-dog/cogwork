@@ -29,6 +29,7 @@ export default defineWorkspace({
     repo: "colonylabs/colony",
     tokenEnv: "PERSONAL_GITHUB_TOKEN",
     actorLogin: "taylorfsteele",
+    botAllowlist: ["cursor[bot]"],
   },
   harness: { preferred: "cursor" },
   concurrency: 3,

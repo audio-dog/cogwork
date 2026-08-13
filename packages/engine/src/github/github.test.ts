@@ -189,6 +189,22 @@ const noBotWorkspace: RegisteredWorkspace = {
   }),
 };
 
+const trustsCursorBot: RegisteredWorkspace = {
+  source: "gh.workspace.ts",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh-bots",
+    checkoutPath: "/repos/gh",
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
+    sourceControl: {
+      type: "github",
+      repo: "owner/repo",
+      actorLogin: bot.login,
+      botAllowlist: ["cursor[bot]"],
+    },
+    harness: { preferred: "cursor" },
+  }),
+};
+
 const withClient = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, providerLayer).pipe(
     Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
@@ -435,6 +451,7 @@ describe("github work source adapter", () => {
         humanCommentAtMillis: 100,
         noProgress: 1,
         baseDivergence: "none",
+        botTriggerAtMillis: 0,
       });
       const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
       assert.strictEqual(eligible?.stage, "follow-up");
@@ -466,6 +483,7 @@ describe("github work source adapter", () => {
                   humanCommentAtMillis: 100,
                   noProgress: 1,
                   baseDivergence: "none",
+                  botTriggerAtMillis: 0,
                 }),
               ]),
               createdAtMillis: 150,
@@ -858,5 +876,66 @@ describe("github work source adapter", () => {
         }),
       ),
     ),
+  );
+});
+
+describe("trusted review-bot follow-up (botAllowlist)", () => {
+  const botCommentPr = (comment: SeedComment): Seed => ({
+    issues: [
+      { number: 5, title: "in review", labels: ["ready-for-agent"] },
+      { number: 100, title: "bot pr", labels: [], isPullRequest: true },
+    ],
+    pulls: [pull({ number: 100, headRef: "5-in-review" })],
+    // The ledger comment on the item's issue is what marks it daemon-owned; without it the provider
+    // attaches no PR state and the bot feedback (on issue 100) is never observed.
+    comments: [{ issue: 5, authorLogin: bot.login, body: coordinationBody([]), createdAtMillis: 1 }, comment],
+  });
+
+  const cursorComment = (over: Partial<SeedComment> = {}): SeedComment => ({
+    issue: 100,
+    authorLogin: "cursor[bot]",
+    authorAssociation: "NONE",
+    body: "Medium severity: this looks like a bug.",
+    createdAtMillis: 300,
+    ...over,
+  });
+
+  it.effect("does not wake a follow-up when no botAllowlist is set", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#5");
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment())))),
+  );
+
+  it.effect("wakes a follow-up on a listed bot's new comment without setting fresh", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(trustsCursorBot);
+      const observed = items.find((item) => item.id === "#5");
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, 300);
+      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
+      assert.strictEqual(eligible?.stage, "follow-up");
+      assert.isFalse(eligible?.followUp?.fresh);
+    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment({ body: "please /fresh and fix this" }))))),
+  );
+
+  it.effect("ignores an unlisted bot's comment", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(trustsCursorBot);
+      const observed = items.find((item) => item.id === "#5");
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+      const eligible = classify(items).eligible.find((entry) => entry.id === "#5");
+      assert.isUndefined(eligible);
+    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment({ authorLogin: "dependabot[bot]" }))))),
+  );
+
+  it.effect("ignores a clanker-forge-marked body even from a listed bot", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(trustsCursorBot);
+      const observed = items.find((item) => item.id === "#5");
+      assert.strictEqual(observed?.pr?.latestBotTriggerAtMillis, null);
+    }).pipe(Effect.provide(withClient(botCommentPr(cursorComment({ body: coordinationBody([]) }))))),
   );
 });

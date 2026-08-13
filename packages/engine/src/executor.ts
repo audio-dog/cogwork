@@ -69,6 +69,7 @@ const withFullPrompt = (request: HarnessRequest, prompt: string): HarnessRequest
 const defaultFollowUp: FollowUpContext = {
   checks: "pending",
   humanCommentAtMillis: 0,
+  botTriggerAtMillis: 0,
   noProgress: 0,
   stalled: false,
   fresh: false,
@@ -385,6 +386,7 @@ export const make = Effect.gen(function* () {
   const followUpMarker = (context: FollowUpContext) => ({
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
+    botTriggerAtMillis: context.botTriggerAtMillis,
     noProgress: context.noProgress,
     baseDivergence: context.baseDivergence,
   });

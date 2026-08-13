@@ -215,6 +215,7 @@ const followUpItem = {
   followUp: {
     checks: "failing" as const,
     humanCommentAtMillis: 0,
+    botTriggerAtMillis: 0,
     noProgress: 0,
     stalled: false,
     fresh: false,
