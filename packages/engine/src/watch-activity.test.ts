@@ -113,7 +113,10 @@ describe("watchActivity", () => {
       const rec = record("run-1");
 
       yield* ledger.insertRun(rec);
-      yield* seed(rec, [event({ type: "RUN_STARTED" }), event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" })]);
+      yield* seed(rec, [
+        event({ type: "RUN_STARTED" }),
+        event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" }),
+      ]);
 
       const ready = yield* Deferred.make<void>();
       const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
@@ -124,8 +127,12 @@ describe("watchActivity", () => {
       );
 
       yield* Deferred.await(ready);
-      yield* eventBus.publishActivity(activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" }), 1001));
-      yield* eventBus.publishActivity(activity("run-1", 2, event({ type: "TEXT_MESSAGE_CONTENT", delta: "next" }), 1002));
+      yield* eventBus.publishActivity(
+        activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" }), 1001),
+      );
+      yield* eventBus.publishActivity(
+        activity("run-1", 2, event({ type: "TEXT_MESSAGE_CONTENT", delta: "next" }), 1002),
+      );
 
       const seen = yield* Fiber.join(fiber);
       assert.deepStrictEqual(
@@ -146,7 +153,10 @@ describe("watchActivity", () => {
       const late = event({ type: "TEXT_MESSAGE_CONTENT", delta: "late" });
 
       yield* ledger.insertRun(rec);
-      yield* seed(rec, [event({ type: "RUN_STARTED" }), event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" })]);
+      yield* seed(rec, [
+        event({ type: "RUN_STARTED" }),
+        event({ type: "TEXT_MESSAGE_CONTENT", delta: "mid" }),
+      ]);
 
       // The recorder owns the history read now, so the race is injected there: a
       // late event is published while replay runs, after the watcher subscribed.
@@ -265,8 +275,12 @@ describe("watchActivity", () => {
       const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(Stream.runCollect, Effect.forkChild);
 
       yield* Effect.yieldNow;
-      yield* eventBus.publishActivity(activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })));
-      yield* eventBus.publishActivity(activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })));
+      yield* eventBus.publishActivity(
+        activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })),
+      );
+      yield* eventBus.publishActivity(
+        activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })),
+      );
 
       const seen = yield* Fiber.join(fiber);
       assert.deepStrictEqual(
@@ -290,8 +304,12 @@ describe("watchActivity", () => {
       const second = yield* collect();
 
       yield* Effect.yieldNow;
-      yield* eventBus.publishActivity(activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })));
-      yield* eventBus.publishActivity(activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })));
+      yield* eventBus.publishActivity(
+        activity("run-1", 1, event({ type: "TEXT_MESSAGE_CONTENT", delta: "hi" })),
+      );
+      yield* eventBus.publishActivity(
+        activity("run-1", 2, event({ type: "RUN_FINISHED", finishReason: "stop" })),
+      );
 
       const seenFirst = yield* Fiber.join(first);
       const seenSecond = yield* Fiber.join(second);
