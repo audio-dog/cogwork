@@ -372,7 +372,7 @@ const provide = (
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
-  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger));
+  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerServices = Layer.mergeAll(sessionStore, contextAssemblerStub, CredentialStore.layerEnv);
   return Executor.layer.pipe(
     Layer.provideMerge(
