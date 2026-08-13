@@ -1,0 +1,19 @@
+packages/engine/src/watch-activity.test.ts
+  s_645b1174618a1f::t_6d083a9c1abee9 116-119,130-135,156-159,278-283,307-312
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1a17fcfb059c9c52591eed0467a32c1408927c2c",
+  "prompts": {},
+  "sessions": {
+    "s_645b1174618a1f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "093e43d0-c369-43fc-a1c5-46b2ca0ab69a",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
