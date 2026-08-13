@@ -1,0 +1,27 @@
+packages/engine/src/linear/linear.test.ts
+  s_892eb1657c9c4a::t_1f746ff08d3808 1
+  s_892eb1657c9c4a::t_b8db01e01194db 355-368
+  s_892eb1657c9c4a::t_24b73212383b6e 369-376
+packages/engine/src/linear/markers.test.ts
+  s_892eb1657c9c4a::t_0a15d5de8e126f 3
+  s_892eb1657c9c4a::t_c22281561e5ab2 60-85
+  s_892eb1657c9c4a::t_0aa7441d83dd4f 2
+  s_892eb1657c9c4a::t_030582c17045df 34-59,86
+  s_892eb1657c9c4a::t_51634648caa9c0 87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "705cf3cc4c87f58c349a47381fb80d50dcc8fc2d",
+  "prompts": {},
+  "sessions": {
+    "s_892eb1657c9c4a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ae339485-8216-409f-855f-0202f1f9955b",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
