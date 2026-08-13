@@ -1,10 +1,10 @@
-import type { NeedsHumanItem, TriageRole, WorkspaceId } from "@clanker-forge/contracts";
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Button } from "@clanker-forge/ui/components/button";
-import { Field, FieldGroup, FieldLabel } from "@clanker-forge/ui/components/field";
-import { Spinner } from "@clanker-forge/ui/components/spinner";
-import { Textarea } from "@clanker-forge/ui/components/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@clanker-forge/ui/components/toggle-group";
+import type { NeedsHumanItem, TriageRole, WorkspaceId } from "@cogwork/contracts";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Button } from "@cogwork/ui/components/button";
+import { Field, FieldGroup, FieldLabel } from "@cogwork/ui/components/field";
+import { Spinner } from "@cogwork/ui/components/spinner";
+import { Textarea } from "@cogwork/ui/components/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { useAtom } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import { useState } from "react";

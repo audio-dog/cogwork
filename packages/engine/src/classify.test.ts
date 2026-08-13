@@ -1,4 +1,4 @@
-import { type Claim, WorkItemId } from "@clanker-forge/contracts";
+import { type Claim, WorkItemId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
@@ -67,7 +67,7 @@ describe("classify", () => {
   });
 
   it("excludes claimed items from eligible and reports them as claimed", () => {
-    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1000 };
+    const claim: Claim = { by: "cogwork", claimedAtMillis: 1000 };
     const { eligible, claimed } = classify([item({ id: "1", roles: ["ready-for-agent"], claim })]);
     assert.strictEqual(eligible.length, 0);
     assert.deepStrictEqual(claimed[0]?.claim, claim);
@@ -133,7 +133,7 @@ describe("classify", () => {
   });
 
   it("keeps a claimed item claimed even while a blocker is open", () => {
-    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1000, stage: "implement" };
+    const claim: Claim = { by: "cogwork", claimedAtMillis: 1000, stage: "implement" };
     const { blocked, claimed } = classify([
       item({ id: "1", roles: ["ready-for-agent"], claim, openBlockers: 1 }),
     ]);
@@ -319,7 +319,7 @@ describe("classify", () => {
   });
 
   it("attaches the PR summary to every bucket that observed one, and leaves the rest bare", () => {
-    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1 };
+    const claim: Claim = { by: "cogwork", claimedAtMillis: 1 };
     const summary = {
       number: 1,
       url: "https://github.com/owner/repo/pull/1",
@@ -341,7 +341,7 @@ describe("classify", () => {
   });
 
   it("gates on the assignee allowlist across every stage when one is set", () => {
-    const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1, stage: "implement" };
+    const claim: Claim = { by: "cogwork", claimedAtMillis: 1, stage: "implement" };
     const { eligible, claimed, blocked, needsHuman } = classify(
       [
         item({ id: "implement", roles: ["ready-for-agent"], assignees: ["intruder"] }),

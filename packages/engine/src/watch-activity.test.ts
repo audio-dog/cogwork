@@ -1,5 +1,5 @@
-import type { AgUiEvent, RunRecord } from "@clanker-forge/contracts";
-import { HarnessName, RunId, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import type { AgUiEvent, RunRecord } from "@cogwork/contracts";
+import { HarnessName, RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";

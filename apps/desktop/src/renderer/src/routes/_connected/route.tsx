@@ -1,6 +1,6 @@
-import { Alert, AlertDescription, AlertTitle } from "@clanker-forge/ui/components/alert";
-import { Card, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { createFileRoute, Outlet, useMatches } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import { EngineOfflineMessage } from "../../features/engine-offline";

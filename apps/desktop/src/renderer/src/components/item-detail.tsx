@@ -1,6 +1,6 @@
-import { Button } from "@clanker-forge/ui/components/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { Separator } from "@clanker-forge/ui/components/separator";
+import { Button } from "@cogwork/ui/components/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Separator } from "@cogwork/ui/components/separator";
 import { RiArrowLeftLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { boardItem, runForItem } from "../features/feed";

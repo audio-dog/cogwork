@@ -34,7 +34,7 @@ const rawReview = (over: Partial<RawReview>): RawReview => ({
 const pull = (over: Partial<RawPull>): RawPull => ({
   number: 1,
   url: "https://github.com/owner/repo/pull/1",
-  authorLogin: "clanker-forge[bot]",
+  authorLogin: "cogwork[bot]",
   authorAssociation: "MEMBER",
   draft: false,
   headSha: "sha",
@@ -152,7 +152,7 @@ describe("prReview", () => {
 });
 
 describe("humanCommentSignal", () => {
-  const bot = "clanker-forge[bot]";
+  const bot = "cogwork[bot]";
   const noBots = new Set<string>();
 
   it("counts a write-access human comment and reads its /fresh directive", () => {
@@ -279,7 +279,7 @@ describe("botTriggerSignal", () => {
     assert.isNull(signal.latestAtMillis);
   });
 
-  it("ignores a clanker-forge-marked body even from a listed bot", () => {
+  it("ignores a cogwork-marked body even from a listed bot", () => {
     const signal = botTriggerSignal(
       [comment({ authorLogin: "cursor[bot]", body: `finding\n${ledgerMarker}`, createdAtMillis: 300 })],
       cursor,

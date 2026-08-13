@@ -1,15 +1,15 @@
 # Next phase: mission control, first-party runtime, proactive assistant
 
-The product and architecture spec for clanker-forge's next phase, with a sequenced roadmap. Every
+The product and architecture spec for cogwork's next phase, with a sequenced roadmap. Every
 decision here was settled on the wayfinder map
-[#146](https://github.com/taylorfsteele/clanker-forge/issues/146) between 2026-07 and 2026-08; each
+[#146](https://github.com/taylorfsteele/cogwork/issues/146) between 2026-07 and 2026-08; each
 section links the ticket or ADR that holds the full reasoning. This document is the index and the
 handoff — the tickets are the depth.
 
-## What clanker-forge is becoming
+## What cogwork is becoming
 
-**clanker-forge is a productivity assistant for a software engineer. Coding orchestration is its
-first capability, not its definition.** ([#155](https://github.com/taylorfsteele/clanker-forge/issues/155))
+**cogwork is a productivity assistant for a software engineer. Coding orchestration is its
+first capability, not its definition.** ([#155](https://github.com/taylorfsteele/cogwork/issues/155))
 
 The `triage → implement → follow-up → PR` pipeline that exists today is one **workflow**, keyed by a
 work-item type, running over a shared runtime (scheduler, run ledger, event bus). Future non-coding
@@ -17,14 +17,14 @@ workflows — a Slack reply, meeting prep — are peers over that same runtime, 
 pipeline. The general loop underneath every workflow is **sense → classify → schedule → act →
 record**; issue-tracker-plus-coding-harness is its first instance.
 
-The north star (a capstone, not the exit criterion): a meeting mentions a bug, clanker-forge mints
-the ticket, triages it, implements it, and opens the PR. clanker-forge builds clanker-forge.
+The north star (a capstone, not the exit criterion): a meeting mentions a bug, cogwork mints
+the ticket, triages it, implements it, and opens the PR. cogwork builds cogwork.
 
 Three phases get there:
 
 1. **Mission control** — a desktop app over the existing AFK daemon: watch the fleet, act on the few
    decisions the pipeline can't self-resolve.
-2. **First-party runtime** — clanker-forge owns the model loop (bring-your-own-provider) behind the
+2. **First-party runtime** — cogwork owns the model loop (bring-your-own-provider) behind the
    existing `HarnessRunner` seam; external CLI harnesses remain pluggable.
 3. **Proactive layer** — ingestion of real-world context (meetings first) that turns into proposed
    work items feeding the same pipeline.
@@ -52,10 +52,10 @@ Three phases get there:
 
 The maintainer's daily driver over the AFK daemon. Ambient confidence that everything is moving,
 plus the ability to act in place on the few decisions that land on a human.
-([#147](https://github.com/taylorfsteele/clanker-forge/issues/147) spec,
-[#154](https://github.com/taylorfsteele/clanker-forge/issues/154) prototype)
+([#147](https://github.com/taylorfsteele/cogwork/issues/147) spec,
+[#154](https://github.com/taylorfsteele/cogwork/issues/154) prototype)
 
-**Shell layout** (settled by the [prototype](https://github.com/taylorfsteele/clanker-forge/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html)):
+**Shell layout** (settled by the [prototype](https://github.com/taylorfsteele/cogwork/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html)):
 a Slack/Codex-style three-band desktop window.
 
 - **Left nav rail** — views (Feed / Board / Inbox / Lanes) and a per-workspace filter.
@@ -93,29 +93,29 @@ phase).
 
 ### Phase 2 — First-party runtime
 
-clanker-forge owns the model loop: a TanStack AI runner registered behind the existing
+cogwork owns the model loop: a TanStack AI runner registered behind the existing
 `HarnessRunner` seam, beside the CLI harnesses (cursor-acp), not replacing them. (engine ADR 0006;
-capability audit [#151](https://github.com/taylorfsteele/clanker-forge/issues/151))
+capability audit [#151](https://github.com/taylorfsteele/cogwork/issues/151))
 
 **Bring-your-own-provider.** API keys for every provider, plus OpenRouter OAuth (the only
 third-party OAuth a provider sanctions). ChatGPT-subscription login works but is
 unauthorized-in-writing — a flagged fast-follow, not v1. Anthropic prohibits and enforces against
 subscription-OAuth reuse. The model picker reads the models.dev `api.json` catalog.
-([#150](https://github.com/taylorfsteele/clanker-forge/issues/150))
+([#150](https://github.com/taylorfsteele/cogwork/issues/150))
 
 **The AFK keystone: no live ask.** The full allow/ask/deny policy vocabulary is authored now, but
 while AFK, `ask` compiles to `deny`. A denied tool call is a tool result the model adapts to — it
 never parks the item and adds no approval RPC. All approval UX and the interrupts machinery wait
-for the interactive phase. ([#153](https://github.com/taylorfsteele/clanker-forge/issues/153))
+for the interactive phase. ([#153](https://github.com/taylorfsteele/cogwork/issues/153))
 
-**Dogfood cutover is the phase-2 exit:** clanker-forge's own triage/implement/follow-up stages run
+**Dogfood cutover is the phase-2 exit:** cogwork's own triage/implement/follow-up stages run
 on the first-party runner by default, with cursor-acp still registered.
 
 ### Phase 3 — Proactive layer
 
 One new job: turn real-world context into a **proposed action**. In phase 3 there is exactly one
 kind — **mint a work item** — and the existing pipeline carries it the rest of the way.
-([#155](https://github.com/taylorfsteele/clanker-forge/issues/155))
+([#155](https://github.com/taylorfsteele/cogwork/issues/155))
 
 - **First context source: Granola meeting transcripts.** Slack and calendar come later.
 - **Extraction is agentic**, through the owned runtime (never a harness): separate actionable items
@@ -145,11 +145,11 @@ kind — **mint a work item** — and the existing pipeline carries it the rest 
 
 ## Architecture spec
 
-### Contracts and transport ([#148](https://github.com/taylorfsteele/clanker-forge/issues/148))
+### Contracts and transport ([#148](https://github.com/taylorfsteele/cogwork/issues/148))
 
 - **Transport stays Effect RPC over a Unix socket with NDJSON.** Effect RPC makes the protocol one
   swappable layer; WebSocket/HTTP+SSE and TLS are a later layer swap with no contract change. The
-  socket moves to `~/.clanker-forge` at `0600`.
+  socket moves to `~/.cogwork` at `0600`.
 - **CQS split.** `packages/contracts` RPCs divide into `DaemonQueries` (read) and `DaemonCommands`
   (state/behavior-changing); the auth seam guards commands more strictly.
 - **Commands** are unary and return the updated classified work-item read model — the same shape the
@@ -172,7 +172,7 @@ kind — **mint a work item** — and the existing pipeline carries it the rest 
   "there is no caller." Read models already key by `WorkspaceId`, so per-user scope is a later
   handler filter, not a reshape.
 
-### Desktop shell and UI client (ADR 0008, ADR 0009; [#149](https://github.com/taylorfsteele/clanker-forge/issues/149))
+### Desktop shell and UI client (ADR 0008, ADR 0009; [#149](https://github.com/taylorfsteele/cogwork/issues/149))
 
 - **Electron**, built with electron-vite + electron-builder (updates via electron-updater / GitHub
   channels). No Tauri, no browser-tab-first (browsers can't open the Unix socket), no Rust in
@@ -189,7 +189,7 @@ kind — **mint a work item** — and the existing pipeline carries it the rest 
   electron-log. The renderer never opens the socket — Effect RPC lives in main behind a typed
   main↔renderer IPC seam.
 
-### Session model ([#152](https://github.com/taylorfsteele/clanker-forge/issues/152))
+### Session model ([#152](https://github.com/taylorfsteele/cogwork/issues/152))
 
 The owned runtime **formalizes existing structure** — the scheduler already serializes per
 work-item, so no interactive coordinator is needed for AFK.
@@ -214,7 +214,7 @@ work-item, so no interactive coordinator is needed for AFK.
 - **Restart recovery keeps engine ADR 0002**: a crashed owned Run resumes by folding the transcript
   and sending the continuation nudge.
 
-### Tools, permissions, sandboxing ([#153](https://github.com/taylorfsteele/clanker-forge/issues/153))
+### Tools, permissions, sandboxing ([#153](https://github.com/taylorfsteele/cogwork/issues/153))
 
 - **Owned tool set** (opencode's shape): read, write, edit, bash, glob, grep, webfetch — TanStack
   `toolDefinition`s with Effect handlers. No tracker/PR tools; `git`/`gh` ride inside bash;
@@ -233,21 +233,21 @@ work-item, so no interactive coordinator is needed for AFK.
 - **Secrets:** credential store mints → TanStack Secrets channel → tool/exec env. Never the ledger
   or event log. The runner's own model API key resolves the same way.
 
-### Context assembly (engine ADR 0007; [#156](https://github.com/taylorfsteele/clanker-forge/issues/156))
+### Context assembly (engine ADR 0007; [#156](https://github.com/taylorfsteele/cogwork/issues/156))
 
 - The first-party runner pulls a **context assembler** that returns structured **instruction
   layers** — global → repo → playbook — rendered into `systemPrompts`; the filled playbook prompt
   stays the user message.
-- **Ambient instructions are `AGENTS.md` only:** `~/.clanker-forge/AGENTS.md` globally, plus every
+- **Ambient instructions are `AGENTS.md` only:** `~/.cogwork/AGENTS.md` globally, plus every
   `AGENTS.md` from the worktree cwd up to the project root.
 - **Playbook skills** come from `packages/engine/skills/` and are both inlined (`SKILL.md` in the
-  playbook layer) and **provisioned** — the skill directory copied under `~/.clanker-forge/`, never
+  playbook layer) and **provisioned** — the skill directory copied under `~/.cogwork/`, never
   into the driven worktree.
 - CLI harnesses keep today's name-in-prompt path; MCP skills stay on the capability channel;
   compaction is a named runner seam (`onConfig` / `summarize()`), algorithm deferred until the loop
   exists.
 
-### Provider layer ([#150](https://github.com/taylorfsteele/clanker-forge/issues/150), [#151](https://github.com/taylorfsteele/clanker-forge/issues/151))
+### Provider layer ([#150](https://github.com/taylorfsteele/cogwork/issues/150), [#151](https://github.com/taylorfsteele/cogwork/issues/151))
 
 - Extend the existing `credential-store.ts` seam: API keys per provider + the OpenRouter PKCE flow.
 - TanStack AI supplies the agent loop, provider adapters, the AG-UI event vocabulary, the policy
@@ -256,7 +256,7 @@ work-item, so no interactive coordinator is needed for AFK.
   prompt inbox and steer/queue semantics. Top risk from the audit: docs-vs-installed version drift —
   re-verify against the pinned version at build.
 
-### Seams held open, deliberately not built (`/prefactor` discipline, [#155](https://github.com/taylorfsteele/clanker-forge/issues/155))
+### Seams held open, deliberately not built (`/prefactor` discipline, [#155](https://github.com/taylorfsteele/cogwork/issues/155))
 
 Marked so future work knows the reopen cost; none of this is in scope to build:
 
@@ -287,7 +287,7 @@ Contract work first (it unblocks everything), then the shell, then the surfaces.
 
 1. **Split contracts into queries and commands; add the Principal seam.** CQS split of
    `packages/contracts`; `RpcMiddleware` injecting a fixed local-owner `Principal`; socket moved to
-   `~/.clanker-forge` at `0600`; token-as-header shape stubbed.
+   `~/.cogwork` at `0600`; token-as-header shape stubbed.
 2. **`DaemonEvent` union and the `WatchEvents` stream.** `RunActivity | ItemChanged | RunChanged |
    SchedulerChanged`, one-per-client, bounded buffers; `WatchActivity(runId)` kept for drill-in.
    Depends on slice 1.
@@ -328,7 +328,7 @@ The structural prefactor (slices 1–3) is behavior-preserving — cursor-acp ke
    envelope carrying a `SessionId`; short engine ADR 0006 amendment (a sharpening, not a
    reversal). Depends on slice 1.
 3. **`ContextAssembler` implementation.** Instruction layers (global/repo `AGENTS.md` walk +
-   playbook), skill inlining + provision under `~/.clanker-forge/`, per engine ADR 0007. CLI
+   playbook), skill inlining + provision under `~/.cogwork/`, per engine ADR 0007. CLI
    harness path untouched.
 4. **Provider credentials and model catalog.** Extend `credential-store.ts`: API keys per provider
    + OpenRouter PKCE OAuth; models.dev `api.json` as the picker catalog. **Human-paired** (real
@@ -347,13 +347,13 @@ The structural prefactor (slices 1–3) is behavior-preserving — cursor-acp ke
    slices 4, 7.
 9. **Persistence adoption.** `withPersistence` + the `interrupts` store at the then-pinned version;
    `messages` backed as a ledger projection so the ledger stays the one truth. Depends on slice 7.
-10. **Dogfood cutover.** Default clanker-forge's own playbooks to the first-party runner;
+10. **Dogfood cutover.** Default cogwork's own playbooks to the first-party runner;
     cursor-acp stays registered. **Human-paired** (judgment call on readiness). Depends on
     slices 7–9.
 
 ### Phase 3 — Proactive layer
 
-Direction is settled ([#155](https://github.com/taylorfsteele/clanker-forge/issues/155)); these
+Direction is settled ([#155](https://github.com/taylorfsteele/cogwork/issues/155)); these
 slices are deliberately coarser and graduate into sharp tickets once phase 2 lands. Blocked behind
 the owned runtime (extraction runs through it).
 
@@ -379,14 +379,14 @@ The full reasoning per area, in resolution order on the map:
 
 | Area | Ticket / ADR |
 |---|---|
-| TanStack AI capabilities | [#151](https://github.com/taylorfsteele/clanker-forge/issues/151) · [audit doc](../research/tanstack-ai-audit.md) |
-| Provider auth landscape | [#150](https://github.com/taylorfsteele/clanker-forge/issues/150) · [landscape doc](../research/provider-auth-landscape.md) |
-| Mission control product | [#147](https://github.com/taylorfsteele/clanker-forge/issues/147) · ADR [0007](../adr/0007-autonomous-with-override-triage-self-halts.md) |
-| Runtime session model | [#152](https://github.com/taylorfsteele/clanker-forge/issues/152) |
-| Tools / permissions / sandbox | [#153](https://github.com/taylorfsteele/clanker-forge/issues/153) |
-| Mission control UI shape | [#154](https://github.com/taylorfsteele/clanker-forge/issues/154) · [prototype](https://github.com/taylorfsteele/clanker-forge/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html) |
-| Client contract / transport | [#148](https://github.com/taylorfsteele/clanker-forge/issues/148) |
-| Desktop shell + UI stack | [#149](https://github.com/taylorfsteele/clanker-forge/issues/149) · ADRs [0008](../adr/0008-desktop-shell-is-electron-primary-daemon-host.md), [0009](../adr/0009-mission-control-ui-client-stack.md) |
-| Proactive layer + reframe | [#155](https://github.com/taylorfsteele/clanker-forge/issues/155) |
-| Context assembly | [#156](https://github.com/taylorfsteele/clanker-forge/issues/156) · engine ADR [0007](../../packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md) |
-| Wayfinder map | [#146](https://github.com/taylorfsteele/clanker-forge/issues/146) |
+| TanStack AI capabilities | [#151](https://github.com/taylorfsteele/cogwork/issues/151) · [audit doc](../research/tanstack-ai-audit.md) |
+| Provider auth landscape | [#150](https://github.com/taylorfsteele/cogwork/issues/150) · [landscape doc](../research/provider-auth-landscape.md) |
+| Mission control product | [#147](https://github.com/taylorfsteele/cogwork/issues/147) · ADR [0007](../adr/0007-autonomous-with-override-triage-self-halts.md) |
+| Runtime session model | [#152](https://github.com/taylorfsteele/cogwork/issues/152) |
+| Tools / permissions / sandbox | [#153](https://github.com/taylorfsteele/cogwork/issues/153) |
+| Mission control UI shape | [#154](https://github.com/taylorfsteele/cogwork/issues/154) · [prototype](https://github.com/taylorfsteele/cogwork/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html) |
+| Client contract / transport | [#148](https://github.com/taylorfsteele/cogwork/issues/148) |
+| Desktop shell + UI stack | [#149](https://github.com/taylorfsteele/cogwork/issues/149) · ADRs [0008](../adr/0008-desktop-shell-is-electron-primary-daemon-host.md), [0009](../adr/0009-mission-control-ui-client-stack.md) |
+| Proactive layer + reframe | [#155](https://github.com/taylorfsteele/cogwork/issues/155) |
+| Context assembly | [#156](https://github.com/taylorfsteele/cogwork/issues/156) · engine ADR [0007](../../packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md) |
+| Wayfinder map | [#146](https://github.com/taylorfsteele/cogwork/issues/146) |

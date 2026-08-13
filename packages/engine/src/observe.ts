@@ -1,4 +1,4 @@
-import type { WorkItemId } from "@clanker-forge/contracts";
+import type { WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import type { IssueTrackerService, ObservedItem, TrackerItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";

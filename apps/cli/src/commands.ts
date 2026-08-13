@@ -9,8 +9,8 @@ import {
   RunId,
   type RunSummary,
   WorkItemId,
-} from "@clanker-forge/contracts";
-import { Daemon, Registry } from "@clanker-forge/engine";
+} from "@cogwork/contracts";
+import { Daemon, Registry } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -87,7 +87,7 @@ const watchWorkItemArg = Argument.string("work-item").pipe(
 const runDaemon = Effect.fn("commands.runDaemon")(
   function* (options: DaemonOptions) {
     const registry = yield* Registry.WorkspaceRegistry;
-    yield* Effect.logInfo("clanker-forge daemon started", {
+    yield* Effect.logInfo("cogwork daemon started", {
       socket: options.socketPath,
       configHome: options.configHome,
       workspaces: registry.workspaces.length,
@@ -133,7 +133,7 @@ const overSocket = <E, R>(effect: Effect.Effect<void, E, R>, socketPath: string)
     Effect.scoped,
     Effect.provide(clientLayer(socketPath)),
     Effect.tapError((error) =>
-      Console.error(`Could not reach clanker-forge daemon at ${socketPath}: ${String(error)}`),
+      Console.error(`Could not reach cogwork daemon at ${socketPath}: ${String(error)}`),
     ),
   );
 

@@ -6,7 +6,7 @@ import {
   type RunActivity,
   type RunSummary,
   type SchedulerStats,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { formatScheduler } from "./status";
 
 interface TextBuffer {

@@ -1,4 +1,4 @@
-import type { RunId } from "@clanker-forge/contracts";
+import type { RunId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -34,7 +34,7 @@ export const make = Effect.gen(function* () {
 export type RunControlService = Effect.Success<typeof make>;
 
 export class RunControl extends Context.Service<RunControl, RunControlService>()(
-  "@clanker-forge/engine/run-control/RunControl",
+  "@cogwork/engine/run-control/RunControl",
 ) {}
 
 export const layer = Layer.effect(RunControl, make);

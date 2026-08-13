@@ -1,4 +1,4 @@
-import type { WorkItemId } from "@clanker-forge/contracts";
+import type { WorkItemId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -29,7 +29,7 @@ export interface SourceControlProviderService {
 export class SourceControlProvider extends Context.Service<
   SourceControlProvider,
   SourceControlProviderService
->()("@clanker-forge/engine/source-control/SourceControlProvider") {}
+>()("@cogwork/engine/source-control/SourceControlProvider") {}
 
 const noProvider: SourceControlProviderService = {
   observe: () => Effect.succeed(new Map()),

@@ -1,4 +1,4 @@
-import { ModelCatalog, Providers } from "@clanker-forge/engine";
+import { ModelCatalog, Providers } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -18,7 +18,7 @@ const runModels = (options: { readonly credentials: string }) =>
     const configured = yield* Providers.configuredProviders();
     if (configured.length === 0) {
       yield* Console.log(
-        "No providers configured. Store a key with `clanker-forge login key --provider <id>`, or set the provider's API key env var.",
+        "No providers configured. Store a key with `cogwork login key --provider <id>`, or set the provider's API key env var.",
       );
       return;
     }

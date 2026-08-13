@@ -6,8 +6,8 @@ import type {
   Session,
   SessionId,
   TokenUsage,
-} from "@clanker-forge/contracts";
-import { sessionHandle, sessionResumable, workItemCandidates } from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
+import { sessionHandle, sessionResumable, workItemCandidates } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -235,11 +235,11 @@ export const handleOf = (ledger: RunLedgerService, session: SessionId | null) =>
   session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
 
 export class RunLedger extends Context.Service<RunLedger, RunLedgerService>()(
-  "@clanker-forge/engine/run-ledger/RunLedger",
+  "@cogwork/engine/run-ledger/RunLedger",
 ) {}
 
 export class CoreRunLedger extends Context.Service<CoreRunLedger, RunLedgerService>()(
-  "@clanker-forge/engine/run-ledger/CoreRunLedger",
+  "@cogwork/engine/run-ledger/CoreRunLedger",
 ) {}
 
 const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusService) => {

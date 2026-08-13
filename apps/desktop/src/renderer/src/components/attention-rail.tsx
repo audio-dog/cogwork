@@ -1,6 +1,6 @@
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { Separator } from "@clanker-forge/ui/components/separator";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Separator } from "@cogwork/ui/components/separator";
 import type { ReactNode } from "react";
 import { mergeGate, selfHalts } from "../features/feed";
 import { useBoard } from "../features/use-board";

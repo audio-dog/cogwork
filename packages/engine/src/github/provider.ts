@@ -1,4 +1,4 @@
-import type { WorkItemId } from "@clanker-forge/contracts";
+import type { WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { checkState } from "../ci";
@@ -21,7 +21,7 @@ import {
   type ReviewDecision,
   reviewDecisionOf,
 } from "./client";
-import { hasClankerMarker } from "./markers";
+import { hasCogworkMarker } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
   readonly actorLogin: string | null;
@@ -88,10 +88,10 @@ type Feedback = Pick<RawComment, "authorLogin" | "authorAssociation" | "body" | 
 const isHumanFeedback = (feedback: Feedback, botAllowlist: ReadonlySet<string>) =>
   writeAccess.has(feedback.authorAssociation) &&
   !botAllowlist.has(feedback.authorLogin) &&
-  !hasClankerMarker(feedback.body);
+  !hasCogworkMarker(feedback.body);
 
 const isTrustedBotFeedback = (feedback: Feedback, botAllowlist: ReadonlySet<string>) =>
-  botAllowlist.has(feedback.authorLogin) && !hasClankerMarker(feedback.body);
+  botAllowlist.has(feedback.authorLogin) && !hasCogworkMarker(feedback.body);
 
 export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) => {
   const latestApprovalMillis = reviews.reduce(

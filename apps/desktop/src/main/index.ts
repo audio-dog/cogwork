@@ -31,8 +31,8 @@ const makeSupervisor = (): EngineSupervisor => {
     socketPath,
     packaged: app.isPackaged,
     baseDir,
-    nodeBinary: process.env.CLANKER_FORGE_NODE,
-    engineEntry: process.env.CLANKER_FORGE_ENGINE_ENTRY,
+    nodeBinary: process.env.COGWORK_NODE,
+    engineEntry: process.env.COGWORK_ENGINE_ENTRY,
   });
 
   const supervisor = new EngineSupervisor({
@@ -54,7 +54,7 @@ const makeSupervisor = (): EngineSupervisor => {
 
 const bootstrap = (): void => {
   app.whenReady().then(async () => {
-    electronApp.setAppUserModelId("com.clanker-forge");
+    electronApp.setAppUserModelId("com.cogwork");
     app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
 
     const supervisor = makeSupervisor();
@@ -82,12 +82,10 @@ const bootstrap = (): void => {
       });
     });
 
-    if (process.env.CLANKER_FORGE_ENGINE_AUTOSTART === "1") {
+    if (process.env.COGWORK_ENGINE_AUTOSTART === "1") {
       await supervisor.start();
     } else {
-      engineLogger.info(
-        "Engine idle at launch; toggle it on from the app or set CLANKER_FORGE_ENGINE_AUTOSTART=1",
-      );
+      engineLogger.info("Engine idle at launch; toggle it on from the app or set COGWORK_ENGINE_AUTOSTART=1");
     }
   });
 };

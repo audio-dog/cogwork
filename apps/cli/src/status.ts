@@ -1,4 +1,4 @@
-import type { DaemonStatus, PollState, SchedulerStats, WorkspaceInfo } from "@clanker-forge/contracts";
+import type { DaemonStatus, PollState, SchedulerStats, WorkspaceInfo } from "@cogwork/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 

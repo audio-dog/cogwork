@@ -1,6 +1,6 @@
 # 0002 — External per-repo config for forked engineering skills
 
-- **Status:** accepted (historical — the sync toolkit that owned this config moved out of clanker-forge; see [#178](https://github.com/taylorfsteele/clanker-forge/issues/178))
+- **Status:** accepted (historical — the sync toolkit that owned this config moved out of cogwork; see [#178](https://github.com/taylorfsteele/cogwork/issues/178))
 - **Date:** 2026-07-22
 
 ## Context
@@ -23,7 +23,7 @@ repo's SpecKit/ADR tooling and coworkers didn't want the files). Alternatives co
 
 Fork the consumer skills into `skills/` and keep per-repo config under
 `repo-config/<owner>--<repo>/`, resolved at `~/.agents/repo-config/` (symlinked by
-`pnpm link`, copied by `pnpm sync --global`). Because clanker-forge is public and the config
+`pnpm link`, copied by `pnpm sync --global`). Because cogwork is public and the config
 can reference employer-internal details, `repo-config/` contents are git-ignored (only its
 README is committed) — the directory is machine-local. Each fork carries a short **repo config
 resolution** rule: external home first, then the repo's committed `docs/agents/` — so repos

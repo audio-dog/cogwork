@@ -1,5 +1,5 @@
-import type { IssueTrackerConfig } from "@clanker-forge/contracts";
-import { Linear, Registry } from "@clanker-forge/engine";
+import type { IssueTrackerConfig } from "@cogwork/contracts";
+import { Linear, Registry } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

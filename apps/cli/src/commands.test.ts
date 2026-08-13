@@ -3,7 +3,7 @@ import {
   RunId as RunIdSchema,
   type WorkItemId,
   WorkItemId as WorkItemIdSchema,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";

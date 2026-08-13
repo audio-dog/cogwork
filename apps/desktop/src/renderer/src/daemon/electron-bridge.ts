@@ -1,8 +1,8 @@
 import type { DaemonRpcBridge } from "../../../shared/ipc";
 
 export const electronDaemonBridge: DaemonRpcBridge = {
-  connect: () => window.clankerForge.rpc.connect(),
-  send: (frame) => window.clankerForge.rpc.send(frame),
-  onData: (listener) => window.clankerForge.rpc.onData(listener),
-  onClosed: (listener) => window.clankerForge.rpc.onClosed(listener),
+  connect: () => window.cogwork.rpc.connect(),
+  send: (frame) => window.cogwork.rpc.send(frame),
+  onData: (listener) => window.cogwork.rpc.onData(listener),
+  onClosed: (listener) => window.cogwork.rpc.onClosed(listener),
 };

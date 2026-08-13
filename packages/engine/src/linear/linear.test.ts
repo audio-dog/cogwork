@@ -1,4 +1,4 @@
-import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -352,29 +352,27 @@ describe("linear work source adapter", () => {
     ),
   );
 
-  it.effect(
-    "stamps a claim with the clanker-forge identity and writes it as a visible plain-text ledger",
-    () =>
-      Effect.gen(function* () {
-        const source = yield* IssueTracker;
-        const client = yield* LinearClient;
-        const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
-        yield* source.claim(workspace, id("AUD-7"), request);
-        const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
-        assert.strictEqual(comments.length, 1);
-        assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
-        assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
-        const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-7");
-        assert.deepStrictEqual(observed?.claim, { by: "clanker-forge", ...request });
-        assert.isTrue(observed?.claimLabeled);
-        assert.isTrue(observed?.claimedByUs);
-      }).pipe(
-        Effect.provide(
-          withClient({
-            issues: [{ identifier: "AUD-7", title: "claim me", labels: ["state:ready-for-agent"] }],
-          }),
-        ),
+  it.effect("stamps a claim with the cogwork identity and writes it as a visible plain-text ledger", () =>
+    Effect.gen(function* () {
+      const source = yield* IssueTracker;
+      const client = yield* LinearClient;
+      const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
+      yield* source.claim(workspace, id("AUD-7"), request);
+      const comments = botComments(yield* client.listComments(teamRef, "AUD-7"));
+      assert.strictEqual(comments.length, 1);
+      assert.isTrue(hasLedgerMarker(comments[0]?.body ?? ""));
+      assert.isFalse(comments[0]?.body.includes("<!--") ?? true);
+      const observed = (yield* observeItems(workspace)).find((item) => item.id === "AUD-7");
+      assert.deepStrictEqual(observed?.claim, { by: "cogwork", ...request });
+      assert.isTrue(observed?.claimLabeled);
+      assert.isTrue(observed?.claimedByUs);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ identifier: "AUD-7", title: "claim me", labels: ["state:ready-for-agent"] }],
+        }),
       ),
+    ),
   );
 
   it.effect("ignores a claim line forged by a non-bot commenter", () =>
@@ -399,7 +397,7 @@ describe("linear work source adapter", () => {
             {
               issue: "AUD-8",
               authorId: "attacker",
-              body: "clanker-forge:ledger\nclanker-forge:claim by=attacker at=1",
+              body: "cogwork:ledger\ncogwork:claim by=attacker at=1",
               createdAtMillis: 1,
             },
           ],

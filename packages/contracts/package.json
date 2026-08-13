@@ -1,5 +1,5 @@
 {
-  "name": "@clanker-forge/contracts",
+  "name": "@cogwork/contracts",
   "version": "0.0.0",
   "type": "module",
   "exports": {

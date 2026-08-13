@@ -1,4 +1,4 @@
-import type { SessionKind } from "@clanker-forge/contracts";
+import type { SessionKind } from "@cogwork/contracts";
 
 export type ResumeReason = "no-session" | "fresh-requested" | "worktree-recreated" | "stale" | "token-limit";
 

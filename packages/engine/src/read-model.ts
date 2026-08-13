@@ -1,5 +1,5 @@
-import type { ActionableItem, ClassifiedItem, SchedulerStats } from "@clanker-forge/contracts";
-import { workspaceFailureState, workspaceStateFromInfo } from "@clanker-forge/contracts";
+import type { ActionableItem, ClassifiedItem, SchedulerStats } from "@cogwork/contracts";
+import { workspaceFailureState, workspaceStateFromInfo } from "@cogwork/contracts";
 import { classifiedItemOf, type EligibleWork } from "./classify";
 import type { ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "./projector";

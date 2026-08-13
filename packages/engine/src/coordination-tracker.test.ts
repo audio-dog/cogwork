@@ -4,7 +4,7 @@ import {
   type TriageRole,
   WorkItemId,
   WorkspaceConfig,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -281,7 +281,7 @@ describe("coordination tracker", () => {
               isBot: true,
               createdAtMillis: 1,
               body: coordinationBody([
-                serializeClaim({ by: "other-forge", claimedAtMillis: 1, stage: "implement" }),
+                serializeClaim({ by: "other-agent", claimedAtMillis: 1, stage: "implement" }),
               ]),
             },
           ],
@@ -289,7 +289,7 @@ describe("coordination tracker", () => {
       ]);
       const tracker = makeCoordinationTracker(host);
       const item = yield* observed(tracker, "#33");
-      assert.strictEqual(item?.claim?.by, "other-forge");
+      assert.strictEqual(item?.claim?.by, "other-agent");
       assert.isFalse(item?.claimedByUs);
     }),
   );

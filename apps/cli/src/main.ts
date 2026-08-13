@@ -10,7 +10,7 @@ import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
 import { worktreeCommand } from "./worktree-commands";
 
-const cli = Command.make("clanker-forge").pipe(
+const cli = Command.make("cogwork").pipe(
   Command.withSubcommands([
     daemonCommand,
     statusCommand,

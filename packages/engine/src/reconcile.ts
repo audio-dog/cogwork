@@ -5,7 +5,7 @@ import type {
   PollPauseReason,
   PollState,
   WorkspaceId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -225,7 +225,7 @@ export const make = Effect.gen(function* () {
 });
 
 export class ReconcileWorker extends Context.Service<ReconcileWorker, Effect.Success<typeof make>>()(
-  "@clanker-forge/engine/reconcile/ReconcileWorker",
+  "@cogwork/engine/reconcile/ReconcileWorker",
 ) {}
 
 export const layer = Layer.effect(ReconcileWorker, make);

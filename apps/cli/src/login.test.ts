@@ -1,4 +1,4 @@
-import { CredentialStore } from "@clanker-forge/engine";
+import { CredentialStore } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -68,7 +68,7 @@ describe("login linear", () => {
       vi.stubGlobal("fetch", vi.fn(routedFetch));
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-login-" });
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-login-" });
       const filePath = path.join(dir, "credentials.json");
 
       const result = yield* loginLinear(config).pipe(
@@ -109,7 +109,7 @@ const onDiskStore = <A, E>(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-login-key-" });
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-login-key-" });
     const filePath = path.join(dir, "credentials.json");
     return yield* use(filePath).pipe(
       Effect.provide(

@@ -1,9 +1,9 @@
 {
-  "name": "@clanker-forge/cursor-acp",
+  "name": "@cogwork/cursor-acp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Cursor `agent acp` harness runner for clanker-forge, built on TanStack AI acpCompatible + localProcessSandbox",
+  "description": "Cursor `agent acp` harness runner for cogwork, built on TanStack AI acpCompatible + localProcessSandbox",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
-    "@clanker-forge/contracts": "workspace:*",
-    "@clanker-forge/engine": "workspace:*",
+    "@cogwork/contracts": "workspace:*",
+    "@cogwork/engine": "workspace:*",
     "@tanstack/ai": "0.44.0",
     "@tanstack/ai-acp": "0.2.6",
     "@tanstack/ai-sandbox": "0.3.2",

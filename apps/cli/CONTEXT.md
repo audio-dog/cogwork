@@ -1,6 +1,6 @@
 # CLI (client & headless daemon host)
 
-`clanker-forge`, the command-line tool. It is a **client** that talks to a running daemon over RPC,
+`cogwork`, the command-line tool. It is a **client** that talks to a running daemon over RPC,
 and a **headless daemon host** for CI/SSH. On a laptop the desktop app is the primary daemon host;
 the CLI does not own that role. It speaks the shared kernel
 ([contracts](../../packages/contracts/CONTEXT.md)) and drives the
@@ -32,7 +32,7 @@ The directory of `*.workspace.ts` files the daemon loads at startup to learn whi
 _Avoid_: Config file, settings
 
 **Credential file**:
-Where stored OAuth credentials and AI-provider keys live on this machine — `~/.clanker-forge/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants or provider keys. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held. The file is `version: 2` — issue-tracker grants plus provider keys — and reads a `version: 1` file (grants only) as one with no provider keys, upgrading it on the next write. This file is the CLI's half of the engine's credential store; the CLI also hands the store Linear's client-credentials grant, so a machine with no file can still authenticate from a secret in the environment.
+Where stored OAuth credentials and AI-provider keys live on this machine — `~/.cogwork/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants or provider keys. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held. The file is `version: 2` — issue-tracker grants plus provider keys — and reads a `version: 1` file (grants only) as one with no provider keys, upgrading it on the next write. This file is the CLI's half of the engine's credential store; the CLI also hands the store Linear's client-credentials grant, so a machine with no file can still authenticate from a secret in the environment.
 _Avoid_: Keychain, secret store (this is a plain file; a keychain-backed layer would be a different implementation of the same engine seam)
 
 **login key**:

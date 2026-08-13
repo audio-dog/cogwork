@@ -5,8 +5,8 @@
 
 ## Context
 
-The mission-control v1 spec ([#147](https://github.com/taylorfsteele/clanker-forge/issues/147),
-under wayfinder map [#146](https://github.com/taylorfsteele/clanker-forge/issues/146)) had to
+The mission-control v1 spec ([#147](https://github.com/taylorfsteele/cogwork/issues/147),
+under wayfinder map [#146](https://github.com/taylorfsteele/cogwork/issues/146)) had to
 settle how much the human sits in the loop. One candidate surface was "triage approve/veto" — a
 queue where triage *proposes* a classification and waits for the maintainer to approve before the
 work proceeds.

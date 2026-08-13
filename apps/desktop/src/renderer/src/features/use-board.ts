@@ -1,4 +1,4 @@
-import { applyDaemonEvent, type Board, initialBoard } from "@clanker-forge/contracts";
+import { applyDaemonEvent, type Board, initialBoard } from "@cogwork/contracts";
 import type * as Cause from "effect/Cause";
 import { type RunActivityPreview, runPreviews } from "./run-activity";
 import { useLiveEvents } from "./use-live-events";

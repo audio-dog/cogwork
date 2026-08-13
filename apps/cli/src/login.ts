@@ -1,6 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
-import { CredentialStore, Linear, Providers } from "@clanker-forge/engine";
+import { CredentialStore, Linear, Providers } from "@cogwork/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -32,7 +32,7 @@ export interface BrowserOpenerService {
 }
 
 export class BrowserOpener extends Context.Service<BrowserOpener, BrowserOpenerService>()(
-  "@clanker-forge/cli/login/BrowserOpener",
+  "@cogwork/cli/login/BrowserOpener",
 ) {}
 
 const openCommand = (url: string) => {
@@ -65,7 +65,7 @@ interface CallbackParams {
 }
 
 const resultPage = (heading: string, detail: string) =>
-  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>clanker-forge</title></head><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem"><h1>${heading}</h1><p>${detail}</p></body></html>`;
+  `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>cogwork</title></head><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem"><h1>${heading}</h1><p>${detail}</p></body></html>`;
 
 const successPage = resultPage(
   "Linear login complete",

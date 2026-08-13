@@ -1,4 +1,4 @@
-import { agUiTextDelta, HarnessName, SessionId } from "@clanker-forge/contracts";
+import { agUiTextDelta, HarnessName, SessionId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
 import { type ChatWithInterruptsPersistence, defineAIPersistence } from "@tanstack/ai-persistence";
@@ -174,7 +174,7 @@ describe("providerRunner", () => {
           ],
         );
         assert.lengthOf([...options.tools], 7);
-        assert.isTrue(options.middleware.some((middleware) => middleware.name === "clanker-forge-context"));
+        assert.isTrue(options.middleware.some((middleware) => middleware.name === "cogwork-context"));
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "chat-persistence"));
       }),
     30000,

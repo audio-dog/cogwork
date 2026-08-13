@@ -1,4 +1,4 @@
-import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";

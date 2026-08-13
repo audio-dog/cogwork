@@ -26,7 +26,7 @@ export interface UtilityModelService {
 }
 
 export class UtilityModel extends Context.Service<UtilityModel, UtilityModelService>()(
-  "@clanker-forge/engine/utility-call/UtilityModel",
+  "@cogwork/engine/utility-call/UtilityModel",
 ) {}
 
 export interface UtilityChatOptions {

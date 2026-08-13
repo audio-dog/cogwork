@@ -1,9 +1,9 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
-import { HarnessName } from "@clanker-forge/contracts";
-import { cursorRunner } from "@clanker-forge/cursor-acp";
-import { ContextAssembler, Daemon, Provider, Registry } from "@clanker-forge/engine";
+import { HarnessName } from "@cogwork/contracts";
+import { cursorRunner } from "@cogwork/cursor-acp";
+import { ContextAssembler, Daemon, Provider, Registry } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
@@ -82,7 +82,7 @@ const providerName = Schema.decodeSync(HarnessName)("provider");
 // (where the global AGENTS.md and provisioned skills live) is the directory that
 // holds the credentials file.
 const engineSkillsDir = nodePath.resolve(
-  nodePath.dirname(fileURLToPath(import.meta.resolve("@clanker-forge/engine"))),
+  nodePath.dirname(fileURLToPath(import.meta.resolve("@cogwork/engine"))),
   "../skills",
 );
 

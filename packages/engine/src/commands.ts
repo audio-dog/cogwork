@@ -7,7 +7,7 @@ import {
   type WorkItemId,
   WorkItemNotFound,
   type WorkspaceId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { DaemonEventBus } from "./daemon-event-bus";

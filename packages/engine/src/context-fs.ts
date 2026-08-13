@@ -20,5 +20,5 @@ const makeUnavailable = () => ({
 export type ContextFsService = ReturnType<typeof makeUnavailable>;
 
 export class ContextFs extends Context.Service<ContextFs, ContextFsService>()(
-  "@clanker-forge/engine/context-fs/ContextFs",
+  "@cogwork/engine/context-fs/ContextFs",
 ) {}

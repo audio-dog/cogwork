@@ -1,4 +1,4 @@
-import { AgUiEvent } from "@clanker-forge/contracts";
+import { AgUiEvent } from "@cogwork/contracts";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";

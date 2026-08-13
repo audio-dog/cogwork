@@ -17,26 +17,21 @@ import {
 describe("comments", () => {
   it("normalizes status reasons: one line, truncated, markers stripped", () => {
     assert.strictEqual(
-      statusReason("git\n  failed <!-- clanker-forge:attempt stage=implement outcome=failed at=1 --> badly"),
+      statusReason("git\n  failed <!-- cogwork:attempt stage=implement outcome=failed at=1 --> badly"),
       "git failed badly",
     );
   });
 
   it("strips the plain-text marker lines Linear coordination bodies use", () => {
     assert.strictEqual(
-      statusReason("build failed\nclanker-forge:attempt stage=implement outcome=succeeded at=9"),
+      statusReason("build failed\ncogwork:attempt stage=implement outcome=succeeded at=9"),
       "build failed",
     );
   });
 
   it("keeps plain-text markers out of the handoff body", () => {
-    const body = handoffComment(
-      "implement",
-      { kind: "non-retryable" },
-      "boom\nclanker-forge:ledger",
-      undefined,
-    );
-    assert.notInclude(body, "clanker-forge:ledger");
+    const body = handoffComment("implement", { kind: "non-retryable" }, "boom\ncogwork:ledger", undefined);
+    assert.notInclude(body, "cogwork:ledger");
   });
 
   it("collapses whitespace", () => {
@@ -131,9 +126,7 @@ describe("comments", () => {
   });
 
   it("reads a proposal only from a body carrying the triage attribution", () => {
-    assert.isNull(
-      parseTriageProposal("> *This was posted by clanker-forge.*\n\nExhausted after 3 attempts."),
-    );
+    assert.isNull(parseTriageProposal("> *This was posted by cogwork.*\n\nExhausted after 3 attempts."));
     assert.isNull(parseTriageProposal("just a human comment"));
     assert.isNull(parseTriageProposal(triageProposalBody("")));
   });

@@ -1,4 +1,4 @@
-import { type Git, Registry, Worktree } from "@clanker-forge/engine";
+import { type Git, Registry, Worktree } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";

@@ -1,6 +1,6 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
-import { type ClankerForgeBridge, IpcChannel } from "../shared/ipc";
+import { type CogworkBridge, IpcChannel } from "../shared/ipc";
 
 const subscribe = <T>(channel: string, listener: (value: T) => void) => {
   const handler = (_event: Electron.IpcRendererEvent, value: T) => listener(value);
@@ -10,7 +10,7 @@ const subscribe = <T>(channel: string, listener: (value: T) => void) => {
   };
 };
 
-const bridge: ClankerForgeBridge = {
+const bridge: CogworkBridge = {
   getEngineStatus: () => ipcRenderer.invoke(IpcChannel.getEngineStatus),
   setEngineEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.setEngineEnabled, enabled),
   onEngineStatus: (listener) => subscribe(IpcChannel.engineStatusChanged, listener),
@@ -25,7 +25,7 @@ const bridge: ClankerForgeBridge = {
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("electron", electronAPI);
-    contextBridge.exposeInMainWorld("clankerForge", bridge);
+    contextBridge.exposeInMainWorld("cogwork", bridge);
   } catch (error) {
     console.error(error);
   }
@@ -33,5 +33,5 @@ if (process.contextIsolated) {
   // @ts-expect-error (define in dts)
   window.electron = electronAPI;
   // @ts-expect-error (define in dts)
-  window.clankerForge = bridge;
+  window.cogwork = bridge;
 }

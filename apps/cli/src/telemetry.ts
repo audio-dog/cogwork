@@ -10,7 +10,7 @@ export const telemetryLayer = Effect.gen(function* () {
   const endpoint = yield* Config.option(Config.string("OTEL_EXPORTER_OTLP_ENDPOINT"));
   if (Option.isNone(endpoint)) return NodeSdk.layerEmpty;
   return NodeSdk.layer(() => ({
-    resource: { serviceName: "clanker-forge-daemon" },
+    resource: { serviceName: "cogwork-daemon" },
     spanProcessor: new BatchSpanProcessor(new OTLPTraceExporter()),
   }));
 }).pipe(Layer.unwrap);

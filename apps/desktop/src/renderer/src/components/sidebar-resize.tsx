@@ -1,4 +1,4 @@
-import { useSidebar } from "@clanker-forge/ui/components/sidebar";
+import { useSidebar } from "@cogwork/ui/components/sidebar";
 import { useLocalStorageValue, useWindowSize } from "@react-hookz/web";
 import { useRef } from "react";
 

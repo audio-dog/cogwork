@@ -8,7 +8,7 @@ import {
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
@@ -29,7 +29,7 @@ const prSummary = Schema.decodeSync(PrSummary)({
   waitingSinceMillis: 0,
 });
 
-const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1000 };
+const claim: Claim = { by: "cogwork", claimedAtMillis: 1000 };
 
 const eligibleWithPr: EligibleWork = {
   id: id("e-pr"),
@@ -95,7 +95,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",
-    issueTracker: { type: "github", repo: "owner/example", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/example", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
   }),

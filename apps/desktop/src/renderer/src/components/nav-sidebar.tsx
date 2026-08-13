@@ -7,7 +7,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@clanker-forge/ui/components/dropdown-menu";
+} from "@cogwork/ui/components/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -19,7 +19,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@clanker-forge/ui/components/sidebar";
+} from "@cogwork/ui/components/sidebar";
 import { RiPulseLine, RiSettings3Line, RiStackLine, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
@@ -126,12 +126,12 @@ export function NavSidebar() {
     <Sidebar collapsible="offcanvas">
       <SidebarHeader className="@container/sidebar-header h-11 shrink-0 flex-row items-center px-3 py-0 [-webkit-app-region:drag]">
         <Link
-          aria-label="clanker-forge home"
+          aria-label="cogwork home"
           to="/"
-          className="ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
+          className="ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
         >
-          <span className="truncate text-sm font-semibold">clanker</span>
-          <span className="truncate text-sm font-medium text-muted-foreground">forge</span>
+          <span className="truncate text-sm font-semibold">cog</span>
+          <span className="truncate text-sm font-medium text-muted-foreground">work</span>
         </Link>
       </SidebarHeader>
       <SidebarContent>

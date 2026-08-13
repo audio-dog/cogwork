@@ -75,13 +75,13 @@ importers:
 
   apps/cli:
     dependencies:
-      '@clanker-forge/contracts':
+      '@cogwork/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@clanker-forge/cursor-acp':
+      '@cogwork/cursor-acp':
         specifier: workspace:*
         version: link:../../packages/cursor-acp
-      '@clanker-forge/engine':
+      '@cogwork/engine':
         specifier: workspace:*
         version: link:../../packages/engine
       '@effect/opentelemetry':
@@ -130,10 +130,10 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@clanker-forge/contracts':
+      '@cogwork/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@clanker-forge/ui':
+      '@cogwork/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@effect/atom-react':
@@ -261,10 +261,10 @@ importers:
       '@agentclientprotocol/sdk':
         specifier: 0.25.1
         version: 0.25.1(zod@3.25.76)
-      '@clanker-forge/contracts':
+      '@cogwork/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@clanker-forge/engine':
+      '@cogwork/engine':
         specifier: workspace:*
         version: link:../engine
       '@tanstack/ai':
@@ -292,7 +292,7 @@ importers:
 
   packages/engine:
     dependencies:
-      '@clanker-forge/contracts':
+      '@cogwork/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@linear/sdk':

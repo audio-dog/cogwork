@@ -74,7 +74,7 @@ export interface ContextAssemblerService {
 }
 
 export class ContextAssembler extends Context.Service<ContextAssembler, ContextAssemblerService>()(
-  "@clanker-forge/engine/context-assembler/ContextAssembler",
+  "@cogwork/engine/context-assembler/ContextAssembler",
 ) {}
 
 export const make = (config: ContextAssemblerConfig, fs: ContextFsService): ContextAssemblerService => {

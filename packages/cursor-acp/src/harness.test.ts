@@ -1,5 +1,5 @@
-import { HarnessName } from "@clanker-forge/contracts";
-import type { Harness } from "@clanker-forge/engine";
+import { HarnessName } from "@cogwork/contracts";
+import type { Harness } from "@cogwork/engine";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import * as Redacted from "effect/Redacted";

@@ -7,7 +7,7 @@ import {
   type RunSummary,
   type WorkItemId,
   type WorkspaceId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 
 export const needsHumanReasonLabel: Record<NeedsHumanReason, string> = {
   "needs-info": "Needs info",

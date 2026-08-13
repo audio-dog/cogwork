@@ -1,4 +1,4 @@
-import type { WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import type { WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { create } from "zustand";
 
 export interface ItemSelection {

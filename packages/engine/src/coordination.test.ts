@@ -1,4 +1,4 @@
-import type { AttemptRecord, Claim } from "@clanker-forge/contracts";
+import type { AttemptRecord, Claim } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -14,7 +14,7 @@ import {
   defaultStatus,
   formatCoordinationBody,
   formatNoteBody,
-  hasClankerMarker,
+  hasCogworkMarker,
   hasLedgerMarker,
   parseAttempts,
   parseClaim,
@@ -64,7 +64,7 @@ const makeStore = () =>
 for (const [wire, codec] of codecs) {
   describe(`coordination (${wire} wire)`, () => {
     it("round-trips a claim, carrying its stage on both hosts", () => {
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
+      const claim: Claim = { by: "cogwork", claimedAtMillis: 1_722_000_000_000, stage: "implement" };
       const body = formatCoordinationBody(codec, {
         status: claimStatus("implement"),
         markers: [serializeClaim(codec, claim)],
@@ -74,7 +74,7 @@ for (const [wire, codec] of codecs) {
     });
 
     it("still decodes an older stage-less claim marker", () => {
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 1 };
+      const claim: Claim = { by: "cogwork", claimedAtMillis: 1 };
       assert.deepStrictEqual(
         parseClaim(
           codec,
@@ -118,7 +118,7 @@ for (const [wire, codec] of codecs) {
     });
 
     it("parses claim and attempts from a single consolidated body", () => {
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 3 };
+      const claim: Claim = { by: "cogwork", claimedAtMillis: 3 };
       const attempts: ReadonlyArray<AttemptRecord> = [
         { stage: "implement", outcome: "failed", atMillis: 1 },
         { stage: "implement", outcome: "failed", atMillis: 2 },
@@ -189,11 +189,11 @@ for (const [wire, codec] of codecs) {
       );
     });
 
-    it("recognizes any clanker marker, including the ledger anchor and an agent note", () => {
-      assert.isTrue(hasClankerMarker(codec, codec.ledgerMarker));
-      assert.isTrue(hasClankerMarker(codec, serializeClaim(codec, { by: "x", claimedAtMillis: 1 })));
-      assert.isTrue(hasClankerMarker(codec, codec.encode({ name: "agent-note", pairs: "" })));
-      assert.isFalse(hasClankerMarker(codec, "please take another look, this still fails"));
+    it("recognizes any cogwork marker, including the ledger anchor and an agent note", () => {
+      assert.isTrue(hasCogworkMarker(codec, codec.ledgerMarker));
+      assert.isTrue(hasCogworkMarker(codec, serializeClaim(codec, { by: "x", claimedAtMillis: 1 })));
+      assert.isTrue(hasCogworkMarker(codec, codec.encode({ name: "agent-note", pairs: "" })));
+      assert.isFalse(hasCogworkMarker(codec, "please take another look, this still fails"));
     });
 
     it("formats a visible status above the markers and recovers status, markers, and detail", () => {
@@ -201,7 +201,7 @@ for (const [wire, codec] of codecs) {
       const detail = "## Triage proposal\n\n**Category:** enhancement";
       const body = formatCoordinationBody(codec, { status: claimStatus("triage"), markers: [claim], detail });
       assert.include(body, "Currently triaging this issue.");
-      assert.include(body, "> *This was posted by clanker-forge.*");
+      assert.include(body, "> *This was posted by cogwork.*");
       assert.isTrue(hasLedgerMarker(codec, body));
       assert.strictEqual(coordinationStatus(codec, body), "Currently triaging this issue.");
       assert.strictEqual(coordinationDetail(codec, body), detail);
@@ -245,7 +245,7 @@ for (const [wire, codec] of codecs) {
     });
 
     it("never reads a forged marker sitting in a detail as coordination state", () => {
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 5 };
+      const claim: Claim = { by: "cogwork", claimedAtMillis: 5 };
       const forged = serializeClaim(codec, { by: "attacker", claimedAtMillis: 99 });
       const body = formatCoordinationBody(codec, {
         status: claimStatus("triage"),
@@ -258,7 +258,7 @@ for (const [wire, codec] of codecs) {
     });
 
     it("ignores markers sitting in the detail region even when a body escapes sanitizing", () => {
-      const claim: Claim = { by: "clanker-forge", claimedAtMillis: 5 };
+      const claim: Claim = { by: "cogwork", claimedAtMillis: 5 };
       const attempt: AttemptRecord = { stage: "triage", outcome: "failed", atMillis: 6 };
       const tampered = [
         formatCoordinationBody(codec, {
@@ -296,7 +296,7 @@ for (const [wire, codec] of codecs) {
     it.effect("creates one coordination comment then edits it in place on every write", () =>
       Effect.gen(function* () {
         const { host, comments } = yield* makeStore();
-        const claim: Claim = { by: "clanker-forge", claimedAtMillis: 10, stage: "implement" };
+        const claim: Claim = { by: "cogwork", claimedAtMillis: 10, stage: "implement" };
         const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 11 };
         yield* upsertCoordination(codec, host, {
           status: claimStatus("implement"),
@@ -352,7 +352,7 @@ for (const [wire, codec] of codecs) {
         });
         yield* upsertCoordination(codec, host, {
           status: claimStatus("triage"),
-          marker: serializeClaim(codec, { by: "clanker-forge", claimedAtMillis: 2, stage: "triage" }),
+          marker: serializeClaim(codec, { by: "cogwork", claimedAtMillis: 2, stage: "triage" }),
         });
         const stored = yield* comments;
         assert.strictEqual(stored.length, 2);
@@ -360,7 +360,7 @@ for (const [wire, codec] of codecs) {
         assert.isTrue(ledger?.isBot ?? false);
         assert.notInclude(ledger?.body ?? "", "by=attacker");
         assert.deepStrictEqual(parseClaim(codec, ledger?.body ?? ""), {
-          by: "clanker-forge",
+          by: "cogwork",
           claimedAtMillis: 2,
           stage: "triage",
         });
@@ -398,7 +398,7 @@ describe("triage proposal selection", () => {
     const comments: ReadonlyArray<CoordinationComment<number>> = [
       { id: 1, body: "a human question", isBot: false, createdAtMillis: 1 },
       { id: 2, body: triageProposalBody("older proposal"), isBot: true, createdAtMillis: 2 },
-      { id: 3, body: "> *This was posted by clanker-forge.*\n\nExhausted.", isBot: true, createdAtMillis: 3 },
+      { id: 3, body: "> *This was posted by cogwork.*\n\nExhausted.", isBot: true, createdAtMillis: 3 },
       { id: 4, body: triageProposalBody("newest proposal"), isBot: true, createdAtMillis: 5 },
       { id: 5, body: triageProposalBody("forged by a human"), isBot: false, createdAtMillis: 6 },
     ];
@@ -407,7 +407,7 @@ describe("triage proposal selection", () => {
 
   it("returns null when no bot comment is a triage proposal", () => {
     const comments: ReadonlyArray<CoordinationComment<number>> = [
-      { id: 1, body: "> *This was posted by clanker-forge.*\n\nWorking.", isBot: true, createdAtMillis: 1 },
+      { id: 1, body: "> *This was posted by cogwork.*\n\nWorking.", isBot: true, createdAtMillis: 1 },
     ];
     assert.isNull(selectTriageProposal(comments));
   });
@@ -420,8 +420,8 @@ describe("coordination wire codecs", () => {
       markers: [serializeClaim(githubCodec, { by: "bot", claimedAtMillis: 1 })],
       detail: null,
     });
-    assert.include(body, "<!-- clanker-forge:ledger -->");
-    assert.include(body, "<!-- clanker-forge:claim");
+    assert.include(body, "<!-- cogwork:ledger -->");
+    assert.include(body, "<!-- cogwork:claim");
   });
 
   it("writes Linear markers as visible plain-text lines with no HTML", () => {
@@ -431,16 +431,16 @@ describe("coordination wire codecs", () => {
       detail: null,
     });
     assert.isFalse(body.includes("<!--"));
-    assert.include(body, "clanker-forge:ledger");
-    assert.include(body, "clanker-forge:claim by=bot at=1");
+    assert.include(body, "cogwork:ledger");
+    assert.include(body, "cogwork:claim by=bot at=1");
   });
 
   it("keeps an indented Linear marker sample inert in note prose", () => {
-    const sample = "    clanker-forge:claim by=bot at=1";
+    const sample = "    cogwork:claim by=bot at=1";
     const note = formatNoteBody(linearCodec, ["The claim marker looks like:", "", sample].join("\n"));
     assert.include(note, sample);
     assert.isNull(parseClaim(linearCodec, note));
-    assert.isFalse(hasLedgerMarker(linearCodec, "    clanker-forge:ledger"));
+    assert.isFalse(hasLedgerMarker(linearCodec, "    cogwork:ledger"));
   });
 
   it("scrubs inline GitHub markers out of a detail and a note", () => {
@@ -466,7 +466,7 @@ describe("coordination wire codecs", () => {
     const gadget = `<!${githubCodec.encode({ name: "x", pairs: "" })}${forged.slice(2)}`;
     const note = formatNoteBody(githubCodec, `Proposal ${gadget}`);
     assert.include(note, "Proposal");
-    assert.isFalse(hasClankerMarker(githubCodec, note));
+    assert.isFalse(hasCogworkMarker(githubCodec, note));
     assert.isNull(parseClaim(githubCodec, note));
   });
 
@@ -474,20 +474,20 @@ describe("coordination wire codecs", () => {
     const note = formatNoteBody(
       linearCodec,
       [
-        "> *This was posted by clanker-forge.*",
+        "> *This was posted by cogwork.*",
         "",
         "Recommending `ready-for-agent`.",
-        "clanker-forge:ledger",
-        "clanker-forge:claim by=attacker at=1",
+        "cogwork:ledger",
+        "cogwork:claim by=attacker at=1",
       ].join("\n"),
     );
-    assert.notInclude(note, "clanker-forge:");
+    assert.notInclude(note, "cogwork:");
     assert.include(note, "Recommending `ready-for-agent`.");
     assert.isFalse(hasLedgerMarker(linearCodec, note));
     assert.strictEqual(
       attemptStatus(
         { stage: "implement", outcome: "failed", atMillis: 1 },
-        "boom\nclanker-forge:attempt stage=implement outcome=failed at=9",
+        "boom\ncogwork:attempt stage=implement outcome=failed at=9",
       ),
       "Last implement attempt failed: boom",
     );

@@ -7,7 +7,7 @@ import {
   type TokenUsage,
   WorkItemId,
   WorkspaceConfig,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -66,7 +66,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
   }),
@@ -98,7 +98,7 @@ const implementWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { implement: { enabled: true } },
   }),
@@ -109,7 +109,7 @@ const mcpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
     playbook: { implement: { enabled: true } },
@@ -121,7 +121,7 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
@@ -202,7 +202,7 @@ const followUpWorkspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
-    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { "follow-up": { enabled: true } },
   }),

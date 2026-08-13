@@ -1,4 +1,4 @@
-import { type McpSkill, WorkspaceConfig } from "@clanker-forge/contracts";
+import { type McpSkill, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {

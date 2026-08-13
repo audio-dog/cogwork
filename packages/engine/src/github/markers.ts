@@ -1,4 +1,4 @@
-import type { TriageRole } from "@clanker-forge/contracts";
+import type { TriageRole } from "@cogwork/contracts";
 import type { MarkerSpan, WireCodec } from "../coordination";
 import * as Coordination from "../coordination";
 
@@ -20,7 +20,7 @@ const roleLabels = {
 
 const labelToRole = new Map(triageRoles.map((role) => [roleLabels[role], role]));
 
-export const claimLabel = "clanker-forge:claimed";
+export const claimLabel = "cogwork:claimed";
 
 const compact = <A>(value: A | undefined): ReadonlyArray<A> => (value === undefined ? [] : [value]);
 
@@ -31,14 +31,14 @@ export const roleLabel = (role: TriageRole) => roleLabels[role];
 
 export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(claimLabel);
 
-export const ledgerMarker = "<!-- clanker-forge:ledger -->";
+export const ledgerMarker = "<!-- cogwork:ledger -->";
 
 // GitHub renders HTML comments invisibly, so markers can sit inline without a reader ever seeing them.
-const scanPattern = /<!--\s*clanker-forge:([^>]*)-->/g;
+const scanPattern = /<!--\s*cogwork:([^>]*)-->/g;
 
 export const wireCodec: WireCodec = {
   ledgerMarker,
-  encode: ({ name, pairs }) => `<!-- clanker-forge:${name}${pairs ? ` ${pairs}` : ""} -->`,
+  encode: ({ name, pairs }) => `<!-- cogwork:${name}${pairs ? ` ${pairs}` : ""} -->`,
   scan: (body): ReadonlyArray<MarkerSpan> =>
     [...body.matchAll(scanPattern)].flatMap((match) => {
       const inner = (match[1] ?? "").trim();
@@ -58,4 +58,4 @@ export const wireCodec: WireCodec = {
 
 export const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
 
-export const hasClankerMarker = (body: string) => Coordination.hasClankerMarker(wireCodec, body);
+export const hasCogworkMarker = (body: string) => Coordination.hasCogworkMarker(wireCodec, body);

@@ -286,7 +286,7 @@ export const make = Effect.gen(function* () {
 export type WorktreeManagerService = Effect.Success<typeof make>;
 
 export class WorktreeManager extends Context.Service<WorktreeManager, WorktreeManagerService>()(
-  "@clanker-forge/engine/worktree/WorktreeManager",
+  "@cogwork/engine/worktree/WorktreeManager",
 ) {}
 
 export const managerLayer = Layer.effect(WorktreeManager, make);

@@ -85,10 +85,10 @@ Add one comment summarizing this round: if you integrated the base, say whether 
 **Every comment you post must carry a coordination marker.** End the body with this line:
 
 ```
-<!-- clanker-forge:agent-note -->
+<!-- cogwork:agent-note -->
 ```
 
-The engine reads a write-access comment with no `clanker-forge` marker as human feedback, and human feedback is a follow-up trigger. An unmarked note of yours therefore wakes another round, which posts another note — a loop that never settles, because each new note also resets the no-progress counter. The marker is what keeps your own writing out of the signal, and it is the only thing that does: the engine deliberately does not exclude comments by author login, so that an operator running the daemon under their own account is still heard.
+The engine reads a write-access comment with no `cogwork` marker as human feedback, and human feedback is a follow-up trigger. An unmarked note of yours therefore wakes another round, which posts another note — a loop that never settles, because each new note also resets the no-progress counter. The marker is what keeps your own writing out of the signal, and it is the only thing that does: the engine deliberately does not exclude comments by author login, so that an operator running the daemon under their own account is still heard.
 
 Then end the turn. Do not sit polling CI — the engine picks up the next round if the checks are still red or a human responds again.
 

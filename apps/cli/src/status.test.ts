@@ -1,5 +1,5 @@
-import type { DaemonStatus, WorkspaceInfo } from "@clanker-forge/contracts";
-import { HarnessName, IssueTrackerType, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import type { DaemonStatus, WorkspaceInfo } from "@cogwork/contracts";
+import { HarnessName, IssueTrackerType, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { formatStatus } from "./status";
@@ -10,8 +10,8 @@ const harnessName = Schema.decodeSync(HarnessName);
 const issueTrackerType = Schema.decodeSync(IssueTrackerType);
 
 const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
-  name: workspaceId("forge"),
-  checkoutPath: "/tmp/forge",
+  name: workspaceId("cogwork"),
+  checkoutPath: "/tmp/cogwork",
   issueTracker: issueTrackerType("github"),
   harness: harnessName("cursor"),
   poll: { status: "ok" },
@@ -107,7 +107,7 @@ describe("formatStatus", () => {
 
   it("omits the needs-human section when nothing is waiting on a human", () => {
     const output = formatStatus(status());
-    assert.include(output, "  - forge [github/cursor] /tmp/forge");
+    assert.include(output, "  - cogwork [github/cursor] /tmp/cogwork");
     assert.notInclude(output, "needs-human");
   });
 
@@ -121,7 +121,7 @@ describe("formatStatus", () => {
               {
                 id: workItemId("#2"),
                 title: "in flight",
-                claim: { by: "clanker-forge", claimedAtMillis: 10 },
+                claim: { by: "cogwork", claimedAtMillis: 10 },
               },
             ],
           }),
@@ -129,7 +129,7 @@ describe("formatStatus", () => {
       }),
     );
     assert.include(output, "        · implement #1 implement me");
-    assert.include(output, "        · #2 in flight (by clanker-forge)");
+    assert.include(output, "        · #2 in flight (by cogwork)");
   });
 
   it("reports a paused poll, scheduler load, and workspace load failures", () => {
@@ -141,7 +141,7 @@ describe("formatStatus", () => {
           globalLimit: 4,
           dailyBudgetUsed: 7,
           dailyBudgetLimit: 50,
-          perWorkspace: [{ name: workspaceId("forge"), inFlight: 1 }],
+          perWorkspace: [{ name: workspaceId("cogwork"), inFlight: 1 }],
         },
         workspaces: [
           workspace({
@@ -151,7 +151,7 @@ describe("formatStatus", () => {
         failures: [{ source: "broken.workspace.ts", message: "boom" }],
       }),
     );
-    assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 · paused (forge=1)");
+    assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 · paused (cogwork=1)");
     assert.include(output, "      paused: auth (needs attention) — auth failed");
     assert.include(output, "  ! broken.workspace.ts: boom");
   });

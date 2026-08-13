@@ -29,15 +29,15 @@ describe("worktree naming", () => {
   });
 
   it("defaults the worktree root to a sibling of the checkout", () => {
-    assert.strictEqual(worktreeRoot("/repos/clanker-forge"), "/repos/clanker-forge.worktrees");
+    assert.strictEqual(worktreeRoot("/repos/cogwork"), "/repos/cogwork.worktrees");
   });
 
   it("honours a configured root override", () => {
-    assert.strictEqual(worktreeRoot("/repos/clanker-forge", { root: "/tmp/wt" }), "/tmp/wt");
+    assert.strictEqual(worktreeRoot("/repos/cogwork", { root: "/tmp/wt" }), "/tmp/wt");
   });
 
   it("normalizes a trailing slash on a configured root", () => {
-    assert.strictEqual(worktreeRoot("/repos/clanker-forge", { root: "/tmp/wt/" }), "/tmp/wt");
+    assert.strictEqual(worktreeRoot("/repos/cogwork", { root: "/tmp/wt/" }), "/tmp/wt");
   });
 
   it("places a worktree under the root by branch", () => {

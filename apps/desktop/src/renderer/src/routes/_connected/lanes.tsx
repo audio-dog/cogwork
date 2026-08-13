@@ -1,6 +1,6 @@
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { ScrollArea, ScrollBar } from "@clanker-forge/ui/components/scroll-area";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { ScrollArea, ScrollBar } from "@cogwork/ui/components/scroll-area";
 import { createFileRoute } from "@tanstack/react-router";
 import { LaneMiniCard } from "../../components/mission-control-ui";
 import type { Lane } from "../../features/board-view";

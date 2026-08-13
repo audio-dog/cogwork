@@ -1,4 +1,4 @@
-import type { LifecycleStage, WorkItemId } from "@clanker-forge/contracts";
+import type { LifecycleStage, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import { attachCommand, type HandoffCause, handoffComment } from "./comments";
 import type { IssueTrackerService } from "./issue-tracker";

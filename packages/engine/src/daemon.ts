@@ -6,7 +6,7 @@ import {
   PrincipalMiddleware,
   type RunActivity,
   type RunId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -46,7 +46,7 @@ import * as SessionStore from "./session-store";
 import { ticketSlug, WorktreeManager } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
-  "@clanker-forge/engine/daemon/DaemonInfo",
+  "@cogwork/engine/daemon/DaemonInfo",
 ) {}
 
 export const daemonInfoLayer = Layer.effect(

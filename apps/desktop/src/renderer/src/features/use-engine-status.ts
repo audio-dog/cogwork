@@ -7,12 +7,12 @@ export function useEngineStatus() {
   const [status, setStatus] = useState<EngineStatusValue>("unknown");
 
   useEffect(() => {
-    window.clankerForge.getEngineStatus().then(setStatus);
-    return window.clankerForge.onEngineStatus(setStatus);
+    window.cogwork.getEngineStatus().then(setStatus);
+    return window.cogwork.onEngineStatus(setStatus);
   }, []);
 
   const setEnabled = (enabled: boolean) => {
-    window.clankerForge.setEngineEnabled(enabled).then(setStatus);
+    window.cogwork.setEngineEnabled(enabled).then(setStatus);
   };
 
   return { status, setEnabled };

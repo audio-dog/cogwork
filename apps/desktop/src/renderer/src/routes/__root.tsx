@@ -1,14 +1,9 @@
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Button } from "@clanker-forge/ui/components/button";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@clanker-forge/ui/components/resizable";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@clanker-forge/ui/components/sidebar";
-import { Switch } from "@clanker-forge/ui/components/switch";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@clanker-forge/ui/components/tooltip";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Button } from "@cogwork/ui/components/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@cogwork/ui/components/resizable";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@cogwork/ui/components/sidebar";
+import { Switch } from "@cogwork/ui/components/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiLayoutRightLine } from "@remixicon/react";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps, CSSProperties } from "react";

@@ -1,5 +1,5 @@
 {
-  "name": "@clanker-forge/engine",
+  "name": "@cogwork/engine",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clanker-forge/contracts": "workspace:*",
+    "@cogwork/contracts": "workspace:*",
     "@linear/sdk": "^89.0.0",
     "@tanstack/ai": "^0.44.0",
     "@tanstack/ai-anthropic": "0.16.5",

@@ -8,8 +8,8 @@ import {
   sessionHandle,
   WorkItemId,
   WorkspaceId,
-} from "@clanker-forge/contracts";
-import { RunLedger } from "@clanker-forge/engine";
+} from "@cogwork/contracts";
+import { RunLedger } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -21,7 +21,7 @@ import * as Schema from "effect/Schema";
 import { layer as ledgerLayer } from "./ledger";
 
 class TestLedgerPath extends Context.Service<TestLedgerPath, string>()(
-  "@clanker-forge/cli/ledger.test/TestLedgerPath",
+  "@cogwork/cli/ledger.test/TestLedgerPath",
 ) {}
 
 const runRow = (run: RunRecord) =>
@@ -122,7 +122,7 @@ describe("sqlite RunLedger", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-ledger-" });
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-" });
       const ledgerPath = path.join(dir, "runs.db");
       return Layer.merge(ledgerLayer(ledgerPath), Layer.succeed(TestLedgerPath, ledgerPath));
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
@@ -451,7 +451,7 @@ describe("sqlite RunLedger migration", () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-ledger-retired-" });
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-retired-" });
       const ledgerPath = path.join(dir, "runs.db");
       yield* insertRunAt(ledgerPath, record("retired-1", 1000));
       yield* writeRetiredStatus(ledgerPath);

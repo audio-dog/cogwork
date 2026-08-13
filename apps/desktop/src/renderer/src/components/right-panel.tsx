@@ -1,13 +1,13 @@
-import type { DaemonEvent } from "@clanker-forge/contracts";
-import { Button } from "@clanker-forge/ui/components/button";
+import type { DaemonEvent } from "@cogwork/contracts";
+import { Button } from "@cogwork/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@clanker-forge/ui/components/dropdown-menu";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { cn } from "@clanker-forge/ui/lib/utils";
+} from "@cogwork/ui/components/dropdown-menu";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { cn } from "@cogwork/ui/lib/utils";
 import {
   RiAddLine,
   RiCloseLine,

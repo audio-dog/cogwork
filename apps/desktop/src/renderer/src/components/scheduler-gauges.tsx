@@ -1,7 +1,7 @@
-import type { SchedulerStats } from "@clanker-forge/contracts";
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Button } from "@clanker-forge/ui/components/button";
-import { cn } from "@clanker-forge/ui/lib/utils";
+import type { SchedulerStats } from "@cogwork/contracts";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Button } from "@cogwork/ui/components/button";
+import { cn } from "@cogwork/ui/lib/utils";
 import { useBoard } from "../features/use-board";
 import { useScheduling } from "../features/use-scheduling";
 

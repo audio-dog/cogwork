@@ -4,7 +4,7 @@ import {
   type DaemonEvent,
   type RunActivity,
   type RunId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";

@@ -4,7 +4,7 @@ import {
   IssueTrackerError,
   type TriageRole,
   type WorkItemId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -98,7 +98,7 @@ export const makeEmpty = Effect.succeed({
 export type IssueTrackerService = Effect.Success<typeof makeEmpty>;
 
 export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
-  "@clanker-forge/engine/issue-tracker/IssueTracker",
+  "@cogwork/engine/issue-tracker/IssueTracker",
 ) {}
 
 export const emptyLayer = Layer.effect(IssueTracker, makeEmpty);

@@ -497,7 +497,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
 export type LinearClientService = Effect.Success<ReturnType<typeof make>>;
 
 export class LinearClient extends Context.Service<LinearClient, LinearClientService>()(
-  "@clanker-forge/engine/linear/client/LinearClient",
+  "@cogwork/engine/linear/client/LinearClient",
 ) {}
 
 export const layer = Layer.effect(LinearClient, Effect.flatMap(CredentialStore, make));

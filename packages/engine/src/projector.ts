@@ -1,4 +1,4 @@
-import type { WorkspaceConfig, WorkspaceEvent, WorkspaceFailureInfo } from "@clanker-forge/contracts";
+import type { WorkspaceConfig, WorkspaceEvent, WorkspaceFailureInfo } from "@cogwork/contracts";
 
 export interface RegisteredWorkspace {
   readonly source: string;

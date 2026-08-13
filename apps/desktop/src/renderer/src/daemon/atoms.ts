@@ -1,4 +1,4 @@
-import { DaemonRpcs, type RunId } from "@clanker-forge/contracts";
+import { DaemonRpcs, type RunId } from "@cogwork/contracts";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import * as AtomRpc from "effect/unstable/reactivity/AtomRpc";
 import { electronDaemonBridge } from "./electron-bridge";

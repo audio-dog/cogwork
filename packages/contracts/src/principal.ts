@@ -13,16 +13,16 @@ export interface PrincipalIdentity {
 }
 
 export class Principal extends Context.Service<Principal, PrincipalIdentity>()(
-  "@clanker-forge/contracts/principal",
+  "@cogwork/contracts/principal",
 ) {}
 
 export const localOwner: PrincipalIdentity = { id: localOwnerId };
 
-export const authTokenHeader = "x-clanker-forge-token";
+export const authTokenHeader = "x-cogwork-token";
 
 export class PrincipalMiddleware extends RpcMiddleware.Service<
   PrincipalMiddleware,
   {
     provides: Principal;
   }
->()("@clanker-forge/contracts/PrincipalMiddleware") {}
+>()("@cogwork/contracts/PrincipalMiddleware") {}

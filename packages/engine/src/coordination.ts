@@ -1,4 +1,4 @@
-import { AttemptRecord, Claim, type LifecycleStage } from "@clanker-forge/contracts";
+import { AttemptRecord, Claim, type LifecycleStage } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -44,9 +44,9 @@ export interface CoordinationBody {
   readonly detail: string | null;
 }
 
-const attribution = "> *This was posted by clanker-forge.*";
+const attribution = "> *This was posted by cogwork.*";
 
-export const defaultClaimant = "clanker-forge";
+export const defaultClaimant = "cogwork";
 
 const stageGerund: Record<LifecycleStage, string> = {
   triage: "triaging",
@@ -152,7 +152,7 @@ export const parseFollowUp = (codec: WireCodec, body: string) => {
 export const hasLedgerMarker = (codec: WireCodec, body: string) =>
   codec.scan(body).some((span) => span.name === "ledger");
 
-export const hasClankerMarker = (codec: WireCodec, body: string) => codec.scan(body).length > 0;
+export const hasCogworkMarker = (codec: WireCodec, body: string) => codec.scan(body).length > 0;
 
 export const coordinationStatus = (codec: WireCodec, body: string) => {
   const { ledgerStart } = decodeBody(codec, body);

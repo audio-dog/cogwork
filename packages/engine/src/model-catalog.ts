@@ -48,7 +48,7 @@ export interface ModelCatalogService {
 }
 
 export class ModelCatalog extends Context.Service<ModelCatalog, ModelCatalogService>()(
-  "@clanker-forge/engine/model-catalog/ModelCatalog",
+  "@cogwork/engine/model-catalog/ModelCatalog",
 ) {}
 
 const modelsFor = (api: CatalogApi, providerIds: ReadonlyArray<string>) =>

@@ -1,4 +1,4 @@
-import type { AttemptRecord, Claim, TriageRole, WorkItemId } from "@clanker-forge/contracts";
+import type { AttemptRecord, Claim, TriageRole, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
 import * as Coordination from "./coordination";

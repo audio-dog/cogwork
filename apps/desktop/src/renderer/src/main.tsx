@@ -1,4 +1,4 @@
-import "@clanker-forge/ui/globals.css";
+import "@cogwork/ui/globals.css";
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

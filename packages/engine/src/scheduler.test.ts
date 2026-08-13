@@ -5,7 +5,7 @@ import {
   type RunRecord,
   WorkItemId,
   WorkspaceConfig,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -36,7 +36,7 @@ const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace =>
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,
-    issueTracker: { type: "github", repo: `owner/${name}`, actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: `owner/${name}`, actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
     ...(concurrency === undefined ? {} : { concurrency }),

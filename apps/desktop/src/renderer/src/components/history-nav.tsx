@@ -1,5 +1,5 @@
-import { Button } from "@clanker-forge/ui/components/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@clanker-forge/ui/components/tooltip";
+import { Button } from "@cogwork/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftSLine, RiArrowRightSLine } from "@remixicon/react";
 import { useCanGoBack, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";

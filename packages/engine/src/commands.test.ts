@@ -7,7 +7,7 @@ import {
   type TriageRole,
   WorkItemId,
   WorkspaceId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";

@@ -1,4 +1,4 @@
-import type { McpSkill, WorkspaceConfig } from "@clanker-forge/contracts";
+import type { McpSkill, WorkspaceConfig } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -29,7 +29,7 @@ export interface McpSkillAssemblerService {
 }
 
 export class McpSkillAssembler extends Context.Service<McpSkillAssembler, McpSkillAssemblerService>()(
-  "@clanker-forge/engine/mcp-skill/McpSkillAssembler",
+  "@cogwork/engine/mcp-skill/McpSkillAssembler",
 ) {}
 
 export const make = (

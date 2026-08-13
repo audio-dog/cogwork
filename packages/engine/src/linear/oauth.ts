@@ -1,4 +1,4 @@
-import type { OAuthAppConfig } from "@clanker-forge/contracts";
+import type { OAuthAppConfig } from "@cogwork/contracts";
 import { LinearClient as LinearSdk } from "@linear/sdk";
 import * as Clock from "effect/Clock";
 import * as Crypto from "effect/Crypto";

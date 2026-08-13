@@ -1,4 +1,4 @@
-import type { LifecycleStage, SessionId } from "@clanker-forge/contracts";
+import type { LifecycleStage, SessionId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -42,7 +42,7 @@ export const make = Effect.gen(function* () {
       workspace,
       item.id,
       [
-        "> *This was posted by clanker-forge.*",
+        "> *This was posted by cogwork.*",
         "",
         "**Recovered a stale claim after a daemon restart.**",
         "",
@@ -214,7 +214,7 @@ export const make = Effect.gen(function* () {
 });
 
 export class Recovery extends Context.Service<Recovery, Effect.Success<typeof make>>()(
-  "@clanker-forge/engine/recovery",
+  "@cogwork/engine/recovery",
 ) {}
 
 export const layer = Layer.effect(Recovery, make);

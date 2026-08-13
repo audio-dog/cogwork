@@ -9,11 +9,11 @@ import { defaultSocketPath } from "./paths";
 import { transportLayer } from "./rpc";
 
 describe("daemon socket", () => {
-  it.effect("lives under the ~/.clanker-forge home", () =>
+  it.effect("lives under the ~/.cogwork home", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
-      assert.strictEqual(path.basename(path.dirname(defaultSocketPath)), ".clanker-forge");
-      assert.strictEqual(path.basename(defaultSocketPath), "clanker-forge.sock");
+      assert.strictEqual(path.basename(path.dirname(defaultSocketPath)), ".cogwork");
+      assert.strictEqual(path.basename(defaultSocketPath), "cogwork.sock");
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 

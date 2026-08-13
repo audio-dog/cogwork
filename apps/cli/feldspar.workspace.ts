@@ -1,5 +1,5 @@
-import type { CursorModel } from "@clanker-forge/cursor-acp";
-import { defineWorkspace } from "@clanker-forge/engine";
+import type { CursorModel } from "@cogwork/cursor-acp";
+import { defineWorkspace } from "@cogwork/engine";
 
 const triageModel = "composer-2.5" satisfies CursorModel;
 const implementModel = "claude-opus-4-8-thinking-high" satisfies CursorModel;

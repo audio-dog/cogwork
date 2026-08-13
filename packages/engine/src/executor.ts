@@ -1,5 +1,5 @@
-import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@clanker-forge/contracts";
-import { agUiTextDelta, agUiUsage, RunId, sessionHandle } from "@clanker-forge/contracts";
+import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@cogwork/contracts";
+import { agUiTextDelta, agUiUsage, RunId, sessionHandle } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -630,7 +630,7 @@ export const make = Effect.gen(function* () {
 });
 
 export class Executor extends Context.Service<Executor, Effect.Success<typeof make>>()(
-  "@clanker-forge/engine/executor",
+  "@cogwork/engine/executor",
 ) {}
 
 export const layer = Layer.effect(Executor, make);

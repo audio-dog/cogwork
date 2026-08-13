@@ -1,4 +1,4 @@
-import type { AgUiEvent } from "@clanker-forge/contracts";
+import type { AgUiEvent } from "@cogwork/contracts";
 import {
   DEFAULT_WORKSPACE_ROOT,
   type ExecResult,

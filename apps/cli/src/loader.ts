@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import type { Registry } from "@clanker-forge/engine";
+import type { Registry } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";

@@ -90,7 +90,7 @@ Builds the layered instruction set for one turn of the provider harness runner �
 _Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP skill assembler
 
 **Instruction layer**:
-One slice of the context assembler's output: global (`~/.clanker-forge/AGENTS.md`), repo (every `AGENTS.md` from worktree cwd up to project root), or playbook (the stage's playbook skill body). Distinct from the user-message playbook prompt template.
+One slice of the context assembler's output: global (`~/.cogwork/AGENTS.md`), repo (every `AGENTS.md` from worktree cwd up to project root), or playbook (the stage's playbook skill body). Distinct from the user-message playbook prompt template.
 _Avoid_: Context source (opencode's term), rules file
 
 **Owned tool set**:
@@ -126,7 +126,7 @@ The `SKILL.md` (and its directory) named by a playbook for a lifecycle stage, au
 _Avoid_: Skill (alone — ambiguous), MCP skill, sync skill
 
 **Skill provision**:
-A copy or link of a playbook skill directory onto a host path under `~/.clanker-forge/` that the run's tools can read, without writing into the driven worktree.
+A copy or link of a playbook skill directory onto a host path under `~/.cogwork/` that the run's tools can read, without writing into the driven worktree.
 _Avoid_: Sync, install, gitSkill (TanStack sandbox's clone-into-workspace form — same idea, different path)
 
 **Playbook**:
@@ -134,7 +134,7 @@ A workspace's binding of a lifecycle stage to a prompt template, playbook skill,
 _Avoid_: Workflow, pipeline
 
 **Issue tracker adapter**:
-A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Both adapters are the coordination tracker bound to a per-tracker coordination host: the host reads tracker-native issues/labels/comments and supplies the native writes; the choreography — coordination state into a bot-owned coordination comment, human-facing notes (triage proposals) as separate comments — lives in the coordination tracker, once. Linear's host pre-fetches its coordination comments in the item listing and its Canceled-on-wontfix write rides the after-role-change hook. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`, and each host stamps its own — GitHub its configured `actorLogin` or the `clanker-forge` fallback, Linear always `clanker-forge` — then reports on each observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
+A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Both adapters are the coordination tracker bound to a per-tracker coordination host: the host reads tracker-native issues/labels/comments and supplies the native writes; the choreography — coordination state into a bot-owned coordination comment, human-facing notes (triage proposals) as separate comments — lives in the coordination tracker, once. Linear's host pre-fetches its coordination comments in the item listing and its Canceled-on-wontfix write rides the after-role-change hook. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`, and each host stamps its own — GitHub its configured `actorLogin` or the `cogwork` fallback, Linear always `cogwork` — then reports on each observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
 _Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Source control provider adapter**:
@@ -150,7 +150,7 @@ An AI provider's API key, resolved through the credential store beside the issue
 _Avoid_: Bearer token (that's the issue-tracker credential with an identity and expiry), secret manager
 
 **Supported providers**:
-The in-engine registry of the AI providers clanker-forge has a runner for — Anthropic, OpenAI, OpenRouter, Google — each with its display name and the env vars its key resolves from. It is the deterministic, offline source of truth for "which providers, which env vars," so key resolution never depends on a network fetch; the models.dev catalog only feeds the model list. A provider is **configured** when a key resolves for it (stored or env); unconfigured providers drop out of the picker silently rather than erroring.
+The in-engine registry of the AI providers cogwork has a runner for — Anthropic, OpenAI, OpenRouter, Google — each with its display name and the env vars its key resolves from. It is the deterministic, offline source of truth for "which providers, which env vars," so key resolution never depends on a network fetch; the models.dev catalog only feeds the model list. A provider is **configured** when a key resolves for it (stored or env); unconfigured providers drop out of the picker silently rather than erroring.
 _Avoid_: Model catalog (that's the network list of models; this is the local capability set), provider adapter
 
 **Model catalog**:
@@ -186,7 +186,7 @@ The single home of the coordination-comment policy (`src/coordination.ts`), shar
 _Avoid_: Markers file (each adapter's `markers.ts` now holds only its wire codec and role-label mapping, not the policy).
 
 **Coordination markers**:
-Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. The coordination module owns the shared payload format; each adapter's wire codec only dresses it for the host. GitHub embeds markers as HTML comments; Linear writes the same payloads as visible `clanker-forge:…` plain-text lines (Linear has no hidden HTML comments), and a Linear marker is only real at the start of a line. Claim markers carry `stage=` on both hosts; older stage-less markers still decode. A claim marker's `by=` value is each adapter's own wire detail — filled on write and matched on read to decide ownership — never a value handed down from above the seam.
+Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. The coordination module owns the shared payload format; each adapter's wire codec only dresses it for the host. GitHub embeds markers as HTML comments; Linear writes the same payloads as visible `cogwork:…` plain-text lines (Linear has no hidden HTML comments), and a Linear marker is only real at the start of a line. Claim markers carry `stage=` on both hosts; older stage-less markers still decode. A claim marker's `by=` value is each adapter's own wire detail — filled on write and matched on read to decide ownership — never a value handed down from above the seam.
 _Avoid_: Metadata. The "ledger" marker here is not the run ledger.
 
 **Coordination comment**:
@@ -194,7 +194,7 @@ The single bot-owned comment an adapter keeps on an issue for control-plane stat
 _Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
 
 **Worktree manager**:
-The git worktree lifecycle for the repos clanker-forge *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on clanker-forge itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
+The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
 _Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)
 
 **Branch divergence**:

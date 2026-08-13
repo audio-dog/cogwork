@@ -1,5 +1,5 @@
-appId: com.clanker-forge
-productName: clanker-forge
+appId: com.scribehow.cogwork
+productName: cogwork
 directories:
   buildResources: build
 files:
@@ -17,7 +17,7 @@ electronFuses:
   enableNodeOptionsEnvironmentVariable: false
   onlyLoadAppFromAsar: true
 win:
-  executableName: clanker-forge
+  executableName: cogwork
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

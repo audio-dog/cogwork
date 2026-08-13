@@ -1,4 +1,4 @@
-import { type TriageRole, WorkItemId } from "@clanker-forge/contracts";
+import { type TriageRole, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { CommentHost, CoordinationComment } from "../coordination";

@@ -1,5 +1,5 @@
 {
-  "name": "clanker-forge",
+  "name": "cogwork",
   "version": "0.0.1",
   "private": true,
   "description": "Orchestration control plane for AI coding agents: discover work, schedule runs, and drive harnesses.",

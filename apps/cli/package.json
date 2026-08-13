@@ -1,10 +1,10 @@
 {
-  "name": "@clanker-forge/cli",
+  "name": "@cogwork/cli",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "bin": {
-    "clanker-forge": "./src/main.ts"
+    "cogwork": "./src/main.ts"
   },
   "scripts": {
     "start": "tsx src/main.ts",
@@ -12,9 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clanker-forge/contracts": "workspace:*",
-    "@clanker-forge/cursor-acp": "workspace:*",
-    "@clanker-forge/engine": "workspace:*",
+    "@cogwork/contracts": "workspace:*",
+    "@cogwork/cursor-acp": "workspace:*",
+    "@cogwork/engine": "workspace:*",
     "@effect/opentelemetry": "catalog:effect",
     "@effect/platform-node": "catalog:effect",
     "@opentelemetry/api": "~1.9.1",

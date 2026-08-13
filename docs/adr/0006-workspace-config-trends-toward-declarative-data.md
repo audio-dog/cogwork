@@ -19,10 +19,10 @@ t3code, Cursor, and Codex keep config as declarative, schema-validated JSON (ope
 offers a `$schema` and remote JSON config). The only place opencode runs code is an
 explicit plugin system — loaded by `import()` from a plugin dir or an npm package,
 unsandboxed, trusted purely by provenance. Nobody sandboxes; nobody makes their base
-config executable either. clanker-forge is unusual in collapsing settings and code into
+config executable either. cogwork is unusual in collapsing settings and code into
 one executed file.
 
-This matters for the trajectory: as clanker-forge becomes a desktop and then web app,
+This matters for the trajectory: as cogwork becomes a desktop and then web app,
 config should be GUI-editable and cloud-syncable — which executable TypeScript from a
 folder is not.
 
@@ -47,7 +47,7 @@ separately.
 
 - The config-as-code trust question dissolves in the target state — data cannot execute,
   so there is nothing to sandbox.
-- clanker-forge gains cloud sync and a GUI config editor almost for free once config is
+- cogwork gains cloud sync and a GUI config editor almost for free once config is
   data, matching the Cursor/Codex model.
 - A migration is owed: the current `*.workspace.ts` files and the `import()`-based loader
   must move to a declarative schema. Until then, the documented trust assumption stands as

@@ -12,10 +12,10 @@
   "iconLibrary": "remixicon",
   "aliases": {
     "components": "#components",
-    "ui": "@clanker-forge/ui/components",
+    "ui": "@cogwork/ui/components",
     "lib": "#lib",
     "hooks": "#hooks",
-    "utils": "@clanker-forge/ui/lib/utils"
+    "utils": "@cogwork/ui/lib/utils"
   },
   "rtl": true,
   "menuColor": "inverted-translucent",

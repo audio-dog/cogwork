@@ -4,7 +4,7 @@ import {
   type WorkspaceId,
   type WorkspaceState,
   workspaceKey,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { type FeedItem, workspaceItems } from "./feed";
 
 export type BoardColumnId =

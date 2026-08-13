@@ -1,5 +1,5 @@
-import type { RunId, SessionId } from "@clanker-forge/contracts";
-import { AgUiEvent, agUiDisplayName, agUiSessionId, type RunRecord } from "@clanker-forge/contracts";
+import type { RunId, SessionId } from "@cogwork/contracts";
+import { AgUiEvent, agUiDisplayName, agUiSessionId, type RunRecord } from "@cogwork/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -95,7 +95,7 @@ export const make = Effect.gen(function* () {
 export type RunRecorderService = Effect.Success<typeof make>;
 
 export class RunRecorder extends Context.Service<RunRecorder, RunRecorderService>()(
-  "@clanker-forge/engine/run-recorder/RunRecorder",
+  "@cogwork/engine/run-recorder/RunRecorder",
 ) {}
 
 export const layer = Layer.effect(RunRecorder, make);

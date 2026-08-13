@@ -1,4 +1,4 @@
-import { ContextFs, Git } from "@clanker-forge/engine";
+import { ContextFs, Git } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -25,7 +25,7 @@ const identity = "git config user.email agent@example.com && git config user.nam
 const fixture = Effect.fn("test.fixture")(function* (branch: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const root = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-git-" });
+  const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-git-" });
   const remote = path.join(root, "remote.git");
   const checkout = path.join(root, "checkout");
   const peer = path.join(root, "peer");
@@ -118,7 +118,7 @@ describe("contextFsLayer against a real filesystem", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const context = yield* ContextFs.ContextFs;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-context-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-" });
       const agents = path.join(root, "AGENTS.md");
       yield* fs.writeFileString(agents, "repo rules");
 
@@ -132,7 +132,7 @@ describe("contextFsLayer against a real filesystem", () => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const context = yield* ContextFs.ContextFs;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-context-" });
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-" });
 
       const source = path.join(root, "skills", "implement-agent");
       yield* fs.makeDirectory(path.join(source, "reference"), { recursive: true });

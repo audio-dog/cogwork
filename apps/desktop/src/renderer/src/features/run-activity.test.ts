@@ -1,4 +1,4 @@
-import { type AgUiEvent, DaemonEvent } from "@clanker-forge/contracts";
+import { type AgUiEvent, DaemonEvent } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { runPreviews } from "./run-activity";

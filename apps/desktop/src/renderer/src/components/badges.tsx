@@ -1,5 +1,5 @@
-import type { PrBaseDivergence, PrChecks, PrReviewStatus, RunStatus } from "@clanker-forge/contracts";
-import { Badge } from "@clanker-forge/ui/components/badge";
+import type { PrBaseDivergence, PrChecks, PrReviewStatus, RunStatus } from "@cogwork/contracts";
+import { Badge } from "@cogwork/ui/components/badge";
 import type { ComponentProps } from "react";
 
 type BadgeVariant = ComponentProps<typeof Badge>["variant"];

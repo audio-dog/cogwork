@@ -7,7 +7,7 @@ import {
   SessionId,
   WorkItemId,
   WorkspaceConfig,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -36,7 +36,7 @@ const wsA: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",
-    issueTracker: { type: "github", repo: "owner/a", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/a", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
   }),
@@ -72,7 +72,7 @@ const claimedByUs: ObservedItem = {
   roles: ["ready-for-agent"],
   assignees: [],
   claimLabeled: true,
-  claim: { by: "clanker-bot", claimedAtMillis: 1, stage: "implement" },
+  claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "implement" },
   claimedByUs: true,
   attempts: [],
   openBlockers: 0,

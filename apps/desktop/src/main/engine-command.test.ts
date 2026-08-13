@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveEngineCommand } from "./engine-command";
 
-const socketPath = "/home/me/.clanker-forge/clanker-forge.sock";
+const socketPath = "/home/me/.cogwork/cogwork.sock";
 
 describe("resolveEngineCommand", () => {
   it("runs the CLI daemon through the CLI's own tsx in development", () => {
@@ -23,7 +23,7 @@ describe("resolveEngineCommand", () => {
   });
 
   it("runs a bundled engine entry with node when packaged", () => {
-    const baseDir = "/Applications/clanker-forge.app/Contents/Resources";
+    const baseDir = "/Applications/cogwork.app/Contents/Resources";
     const command = resolveEngineCommand({ socketPath, packaged: true, baseDir });
 
     expect(command.command).toBe("node");

@@ -9,8 +9,8 @@ import type {
   NeedsHumanReason,
   PrSummary,
   SessionId,
-} from "@clanker-forge/contracts";
-import { stagePriority } from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
+import { stagePriority } from "@cogwork/contracts";
 import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./follow-up";
 import type { ObservedItem } from "./issue-tracker";
 

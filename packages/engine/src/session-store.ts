@@ -5,13 +5,13 @@ import type {
   SessionId,
   SessionKind,
   WorkspaceId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import {
   agUiDisplayName,
   agUiIsTerminal,
   agUiTextDelta,
   SessionId as SessionIdSchema,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { InMemoryRunStore, type ModelMessage } from "@tanstack/ai";
 import {
   type ChatWithInterruptsPersistence,
@@ -54,7 +54,7 @@ export interface SessionStoreService {
 }
 
 export class SessionStore extends Context.Service<SessionStore, SessionStoreService>()(
-  "@clanker-forge/engine/session-store/SessionStore",
+  "@cogwork/engine/session-store/SessionStore",
 ) {}
 
 interface FoldState {

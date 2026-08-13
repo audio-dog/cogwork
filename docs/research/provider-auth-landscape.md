@@ -1,8 +1,8 @@
 # Provider auth and model-catalog landscape
 
-Resolves [#150](https://github.com/taylorfsteele/clanker-forge/issues/150) (part of wayfinder map #146).
+Resolves [#150](https://github.com/taylorfsteele/cogwork/issues/150) (part of wayfinder map #146).
 
-**Question:** For bring-your-own-provider in clanker-forge's TanStack AI runtime — which providers
+**Question:** For bring-your-own-provider in cogwork's TanStack AI runtime — which providers
 support subscription OAuth login vs API-key-only vs neither, what does the ToS actually say about a
 third-party app reusing subscription tokens, how does opencode implement credentials, and what
 should feed the model picker?
@@ -48,7 +48,7 @@ The authoritative statement is the Claude Code [Legal and compliance page](https
 > enforce these restrictions and may do so without prior notice."
 
 That sentence describes exactly what a "log in with your Anthropic account" feature in
-clanker-forge would be. The enforcement timeline:
+cogwork would be. The enforcement timeline:
 
 - **Jan 2026** — Anthropic blocked consumer OAuth tokens used by opencode, Roo Code, Goose, and
   OpenClaw, and "tightened safeguards against spoofing the Claude Code harness"; some user
@@ -105,7 +105,7 @@ consumers are pointed at the Antigravity product family. What remains:
 - **Vertex AI / enterprise Code Assist** — OAuth exists but requires a GCP project and is scoped
   to Google's own surfaces.
 
-For clanker-forge: Google is API-key-only.
+For cogwork: Google is API-key-only.
 
 ### OpenRouter — the one provider that wants this
 
@@ -204,18 +204,18 @@ the package version — great for correctness of the code paths we ship, useless
 (no pricing, no new-model pickup between releases, no cross-provider metadata).
 
 **Recommendation:** fetch models.dev (`api.json`) as the runtime catalog for the picker — filter
-to the providers clanker-forge has adapters for, cache with TTL + bundled-snapshot fallback the
+to the providers cogwork has adapters for, cache with TTL + bundled-snapshot fallback the
 way opencode does — and let TanStack AI's types validate the models we hardcode (defaults, tests).
 Don't invent a third catalog. The `env` field in models.dev doubles as the source for "which env
 var do we read for this provider," same trick opencode uses.
 
 ---
 
-## 5. Recommended credential architecture for clanker-forge
+## 5. Recommended credential architecture for cogwork
 
-clanker-forge already has the right seam: `packages/engine/src/credential-store.ts` defines a
+cogwork already has the right seam: `packages/engine/src/credential-store.ts` defines a
 `CredentialStore` service resolving stored-OAuth → client-credentials → env, with schema-validated
-persistence (`CredentialFile`, version 1) in `~/.clanker-forge/credentials.json`, single-flight
+persistence (`CredentialFile`, version 1) in `~/.cogwork/credentials.json`, single-flight
 refresh gating per account, and `Redacted` tokens throughout. Extend it; don't replace it.
 
 **Build order (by leverage / risk):**
@@ -236,10 +236,10 @@ refresh gating per account, and `Redacted` tokens throughout. Extend it; don't r
    written, and enforced without notice; Google's consumer surface no longer exists. Claude and
    Gemini are API-key providers here, full stop.
 5. **GitHub Copilot: only via partnership.** The opencode precedent shows GitHub will bless
-   third-party harnesses; pursue it if/when clanker-forge wants Copilot, rather than shipping the
+   third-party harnesses; pursue it if/when cogwork wants Copilot, rather than shipping the
    `copilot_internal` gray path.
 
-**Where tokens live:** stay with `~/.clanker-forge/credentials.json` (0600) rather than adopting
+**Where tokens live:** stay with `~/.cogwork/credentials.json` (0600) rather than adopting
 opencode's SQLite — the daemon already owns that file and the versioned-schema migration path
 (`version: 1` → `2` adding a `provider` credential kind) is cheap. Keep the existing per-account
 semaphore refresh gating; OpenRouter needs none (keys don't expire), ChatGPT OAuth reuses the
@@ -264,4 +264,4 @@ semaphore refresh gating; OpenRouter needs none (keys don't expire), ChatGPT OAu
 - models.dev — https://github.com/sst/models.dev and https://models.dev/api.json
 - TanStack AI — https://tanstack.com/ai/latest/docs/getting-started/overview and https://tanstack.com/ai/latest/docs/advanced/per-model-type-safety
 - opencode vendored source — `.repos/opencode/packages/core/src/{credential.ts,integration.ts,models-dev.ts}`, `.repos/opencode/packages/core/src/plugin/provider/{openai.ts,opencode.ts,anthropic.ts,github-copilot.ts}`, `.repos/opencode/packages/schema/src/credential.ts`, `.repos/opencode/packages/web/src/content/docs/providers.mdx`
-- clanker-forge credential seam — `packages/engine/src/credential-store.ts`
+- cogwork credential seam — `packages/engine/src/credential-store.ts`

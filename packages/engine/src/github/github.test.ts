@@ -1,4 +1,4 @@
-import { type AttemptRecord, type Claim, WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import { type AttemptRecord, type Claim, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -72,7 +72,7 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
 }
 
-const bot = { login: "clanker-forge[bot]" } as const;
+const bot = { login: "cogwork[bot]" } as const;
 const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
 
 const seedComments = (comments: ReadonlyArray<SeedComment>) =>
@@ -178,7 +178,7 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 
-// A workspace that never names a bot login, so the adapter falls back to "clanker-forge" on write.
+// A workspace that never names a bot login, so the adapter falls back to "cogwork" on write.
 const noBotWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
   config: Schema.decodeSync(WorkspaceConfig)({
@@ -220,7 +220,7 @@ const observeItems = (workspace: RegisteredWorkspace) =>
 
 const pull = (over: Partial<RawPull> & { readonly number: number; readonly headRef: string }): RawPull => ({
   url: `https://github.com/owner/repo/pull/${over.number}`,
-  authorLogin: "clanker-forge[bot]",
+  authorLogin: "cogwork[bot]",
   authorAssociation: "MEMBER",
   draft: false,
   headSha: `sha-${over.number}`,
@@ -362,7 +362,7 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
       const observed = items.find((item) => item.id === "#33");
-      assert.strictEqual(observed?.claim?.by, "other-forge[bot]");
+      assert.strictEqual(observed?.claim?.by, "other-agent[bot]");
       assert.isFalse(observed?.claimedByUs);
     }).pipe(
       Effect.provide(
@@ -371,7 +371,7 @@ describe("github work source adapter", () => {
             {
               number: 33,
               title: "another daemon's claim",
-              labels: ["ready-for-agent", "clanker-forge:claimed"],
+              labels: ["ready-for-agent", "cogwork:claimed"],
             },
           ],
           comments: [
@@ -379,7 +379,7 @@ describe("github work source adapter", () => {
               issue: 33,
               authorLogin: bot.login,
               body: coordinationBody([
-                serializeClaim({ by: "other-forge[bot]", claimedAtMillis: 1, stage: "implement" }),
+                serializeClaim({ by: "other-agent[bot]", claimedAtMillis: 1, stage: "implement" }),
               ]),
             },
           ],
@@ -388,13 +388,13 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("writes the clanker-forge fallback identity when no bot login is configured", () =>
+  it.effect("writes the cogwork fallback identity when no bot login is configured", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* GitHubClient;
       yield* source.claim(noBotWorkspace, id("#7"), { claimedAtMillis: 1, stage: "implement" });
       const bodies = (yield* client.listComments(repo, 7)).map((comment) => comment.body);
-      assert.isTrue(bodies.some((body) => body.includes("by=clanker-forge at=")));
+      assert.isTrue(bodies.some((body) => body.includes("by=cogwork at=")));
     }).pipe(
       Effect.provide(withClient({ issues: [{ number: 7, title: "claim me", labels: ["ready-for-agent"] }] })),
     ),
@@ -411,13 +411,13 @@ describe("github work source adapter", () => {
     }).pipe(
       Effect.provide(
         withClient({
-          issues: [{ number: 8, title: "targeted", labels: ["ready-for-agent", "clanker-forge:claimed"] }],
+          issues: [{ number: 8, title: "targeted", labels: ["ready-for-agent", "cogwork:claimed"] }],
           comments: [
             {
               issue: 8,
               authorLogin: "attacker",
               authorAssociation: "NONE",
-              body: "<!-- clanker-forge:claim by=attacker at=1 -->",
+              body: "<!-- cogwork:claim by=attacker at=1 -->",
               createdAtMillis: 1,
             },
           ],
@@ -869,7 +869,7 @@ describe("github work source adapter", () => {
             {
               issue: 29,
               authorLogin: bot.login,
-              body: "> *This was posted by clanker-forge.*\n\n**Exhausted after 3 failed triage attempts.**",
+              body: "> *This was posted by cogwork.*\n\n**Exhausted after 3 failed triage attempts.**",
               createdAtMillis: 1,
             },
           ],
@@ -931,7 +931,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
     }).pipe(Effect.provide(withClient(botCommentPr(cursorComment({ authorLogin: "dependabot[bot]" }))))),
   );
 
-  it.effect("ignores a clanker-forge-marked body even from a listed bot", () =>
+  it.effect("ignores a cogwork-marked body even from a listed bot", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(trustsCursorBot);
       const observed = items.find((item) => item.id === "#5");

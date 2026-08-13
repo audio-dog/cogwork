@@ -1,10 +1,10 @@
-import { Alert, AlertDescription, AlertTitle } from "@clanker-forge/ui/components/alert";
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Button } from "@clanker-forge/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { Item, ItemActions, ItemContent, ItemGroup } from "@clanker-forge/ui/components/item";
-import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Button } from "@cogwork/ui/components/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Item, ItemActions, ItemContent, ItemGroup } from "@cogwork/ui/components/item";
+import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { RiArrowRightSLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { daemonErrorMessage } from "../features/daemon-error";

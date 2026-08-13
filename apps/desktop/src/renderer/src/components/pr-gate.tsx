@@ -1,5 +1,5 @@
-import type { PrSummary } from "@clanker-forge/contracts";
-import { Button } from "@clanker-forge/ui/components/button";
+import type { PrSummary } from "@cogwork/contracts";
+import { Button } from "@cogwork/ui/components/button";
 import { RiExternalLinkLine } from "@remixicon/react";
 import { relativeTime } from "../features/format";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";

@@ -1,10 +1,10 @@
-import type { RunSummary } from "@clanker-forge/contracts";
-import { Alert, AlertDescription, AlertTitle } from "@clanker-forge/ui/components/alert";
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Button } from "@clanker-forge/ui/components/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@clanker-forge/ui/components/empty";
-import { Separator } from "@clanker-forge/ui/components/separator";
-import { Spinner } from "@clanker-forge/ui/components/spinner";
+import type { RunSummary } from "@cogwork/contracts";
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Button } from "@cogwork/ui/components/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Separator } from "@cogwork/ui/components/separator";
+import { Spinner } from "@cogwork/ui/components/spinner";
 import { useAtom } from "@effect/atom-react";
 import { RiStopCircleLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";

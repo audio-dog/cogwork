@@ -1,4 +1,4 @@
-import { ScrollArea } from "@clanker-forge/ui/components/scroll-area";
+import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import type { ReactNode } from "react";
 
 export function RailShell({ header, children }: { header: ReactNode; children: ReactNode }) {

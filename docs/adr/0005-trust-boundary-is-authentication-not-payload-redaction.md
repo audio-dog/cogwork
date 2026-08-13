@@ -8,7 +8,7 @@
 
 The daemon exposes state over local RPC. `GetStatus` returns workspace status and
 config-load failures; `WatchActivity` streams live agent output (message text, tool
-calls). The socket is local and openable by any same-user process. clanker-forge is
+calls). The socket is local and openable by any same-user process. cogwork is
 single-user today, becomes a desktop app next, and a web app long-term — where the
 daemon is reached over a network.
 
@@ -36,7 +36,7 @@ Keep RPC payloads rich. Full failure messages, absolute `checkoutPath`, and the 
 *channel*, not the payload:
 
 - **Now (local / desktop):** an owner-only (`0600`) socket under a per-user directory
-  (`~/.clanker-forge/`). Same trust as the user's shell.
+  (`~/.cogwork/`). Same trust as the user's shell.
 - **Later (web / remote):** real authentication and TLS, added when the daemon goes
   remote — not payload scrubbing.
 
@@ -57,7 +57,7 @@ the detail server-side. This is a robustness and UX practice, not secrecy.
 ## Amendment (2026-08-06) — the auth seam
 
 The original decision named *where* the trust boundary sits (the channel) but not *the
-seam* auth drops into. [Client contract and transport (#148)](https://github.com/taylorfsteele/clanker-forge/issues/148)
+seam* auth drops into. [Client contract and transport (#148)](https://github.com/taylorfsteele/cogwork/issues/148)
 resolved that seam. This amendment records it, so "add auth when remote" has a concrete
 insertion point rather than a reopened design.
 
@@ -77,7 +77,7 @@ assume there is no caller.** The single seam that enforces it:
 - **Commands and queries are separate RPC groups.** The split gives the middleware one
   place to guard state-changing commands more strictly than reads, when auth arrives.
 
-Built now: the middleware seam (fixed local owner) and the socket move to `~/.clanker-forge`
+Built now: the middleware seam (fixed local owner) and the socket move to `~/.cogwork`
 at `0600` — the original decision named this location, but the code had drifted to
 `$TMPDIR` with no permission set, so this closes that gap. Explicitly **not** built now:
 the login flow, TLS, and the scope filter. Each drops into the seams above when the daemon

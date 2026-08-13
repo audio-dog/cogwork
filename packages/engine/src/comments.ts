@@ -1,10 +1,10 @@
-import type { LifecycleStage } from "@clanker-forge/contracts";
+import type { LifecycleStage } from "@cogwork/contracts";
 
-const attribution = "> *This was posted by clanker-forge.*";
+const attribution = "> *This was posted by cogwork.*";
 
 const resultLine = /^\s*(?:IMPLEMENT|FOLLOWUP|TRIAGE)-(?:RESULT|DECISION):.*$/gim;
-const htmlMarker = /<!--\s*clanker-forge:[^>]*-->/g;
-const textMarker = /^[ \t]*clanker-forge:.*$/gm;
+const htmlMarker = /<!--\s*cogwork:[^>]*-->/g;
+const textMarker = /^[ \t]*cogwork:.*$/gm;
 
 const stripMarkers = (text: string) => text.replace(htmlMarker, "").replace(textMarker, "");
 

@@ -1,4 +1,4 @@
-import { WorkItemId, WorkspaceConfig } from "@clanker-forge/contracts";
+import { WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -14,7 +14,7 @@ const workspace: RegisteredWorkspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",
-    issueTracker: { type: "github", repo: "owner/a", actorLogin: "clanker-bot" },
+    issueTracker: { type: "github", repo: "owner/a", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
   }),

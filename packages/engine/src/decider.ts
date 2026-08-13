@@ -1,4 +1,4 @@
-import { WorkspaceConfig, type WorkspaceEvent } from "@clanker-forge/contracts";
+import { WorkspaceConfig, type WorkspaceEvent } from "@cogwork/contracts";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { RegistryState } from "./projector";

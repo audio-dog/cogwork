@@ -1,6 +1,6 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
-import { AgUiEvent, type HarnessName } from "@clanker-forge/contracts";
-import { Harness, SessionStore } from "@clanker-forge/engine";
+import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
+import { Harness, SessionStore } from "@cogwork/engine";
 import { chat, EventType, type StreamChunk } from "@tanstack/ai";
 import {
   type AcpHarnessContext,
@@ -187,7 +187,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           });
           const projection = mcpWorkspaceProjection(request.mcpSkills);
           const sandbox = defineSandbox({
-            id: `clanker-forge-${options.name}`,
+            id: `cogwork-${options.name}`,
             provider: localProcessSandbox({ dir: request.checkoutPath, scrubEnv }),
             workspace: defineWorkspace({
               source: { type: "none" },

@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkItemId, WorkspaceId } from "@clanker-forge/contracts";
+import { DaemonRpcs, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";

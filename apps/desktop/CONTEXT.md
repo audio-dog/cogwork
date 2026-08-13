@@ -20,7 +20,7 @@ _Avoid_: App (ambiguous with the whole product), frontend (the renderer is only 
 
 **Engine supervisor**:
 The `main`-side owner of the engine's lifecycle. It stays idle at launch by default (set
-`CLANKER_FORGE_ENGINE_AUTOSTART=1` to start on boot); once started it probes the socket and either
+`COGWORK_ENGINE_AUTOSTART=1` to start on boot); once started it probes the socket and either
 **adopts** a daemon already listening or **spawns** one; it pipes the child's output to the log,
 restarts it a bounded number of times on unexpected exit, and stops it on Quit. The child is a real
 Node process (`electron-vite` dev runs the CLI `daemon` through tsx; a packaged build runs a bundled
@@ -46,7 +46,7 @@ _Avoid_: Minimize to tray (hiding is not minimizing), background mode
 
 **Typed IPC seam**:
 The single `main`↔`renderer` boundary, exposed through the preload `contextBridge`
-(`window.clankerForge`). It carries two kinds of traffic: typed engine-control methods
+(`window.cogwork`). It carries two kinds of traffic: typed engine-control methods
 (`getEngineStatus` / `setEngineEnabled` / `onEngineStatus`), and the daemon **RPC relay**. The
 renderer never opens the socket — the seam is the only way it reaches the daemon.
 _Avoid_: Direct socket access from the renderer, ad-hoc `ipcRenderer` channels outside the bridge
@@ -64,7 +64,7 @@ _Avoid_: Decoding or interpreting RPC in `main`, a second transport for read-mod
 **Engine toggle**:
 Runtime start/stop of the engine from the renderer, through the seam (`setEngineEnabled`) and shown
 as a switch in the header. On drives the supervisor's adopt-or-spawn; off stops a spawned engine.
-Because the engine is idle at launch (unless `CLANKER_FORGE_ENGINE_AUTOSTART=1`), debugging the app
+Because the engine is idle at launch (unless `COGWORK_ENGINE_AUTOSTART=1`), debugging the app
 never accidentally starts a daemon. The switch reflects real engine status, not a local guess — it
 follows the same status broadcasts as the rest of the UI.
 _Avoid_: A separate "enabled" preference that can drift from the supervisor's actual state

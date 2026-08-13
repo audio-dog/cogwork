@@ -1,4 +1,4 @@
-import type { WorkspaceConfig } from "@clanker-forge/contracts";
+import type { WorkspaceConfig } from "@cogwork/contracts";
 import type { CredentialAccount } from "../credential-store";
 
 export const credentialAccountFor = (config: WorkspaceConfig): CredentialAccount | null => {

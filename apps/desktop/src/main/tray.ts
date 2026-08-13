@@ -9,10 +9,10 @@ export interface TrayDeps {
 export const createTray = (deps: TrayDeps): Tray => {
   const image = nativeImage.createFromPath(icon).resize({ width: 18, height: 18 });
   const tray = new Tray(image);
-  tray.setToolTip("clanker-forge");
+  tray.setToolTip("cogwork");
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "Show clanker-forge", click: deps.onShow },
+      { label: "Show cogwork", click: deps.onShow },
       { type: "separator" },
       { label: "Quit (stops the engine)", click: deps.onQuit },
     ]),

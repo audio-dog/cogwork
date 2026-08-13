@@ -1,4 +1,4 @@
-import type { HarnessName, LifecycleStage } from "@clanker-forge/contracts";
+import type { HarnessName, LifecycleStage } from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -87,7 +87,7 @@ const contextMiddleware = (
   request: AssembleRequest,
   fallback: ReadonlyArray<InstructionLayer>,
 ): ChatMiddleware => ({
-  name: "clanker-forge-context",
+  name: "cogwork-context",
   onConfig: (_ctx, config) =>
     resolveContextLayers(assembler, request, fallback).then((layers) => ({
       systemPrompts: [...config.systemPrompts, ...layers.map((layer) => layer.content)],

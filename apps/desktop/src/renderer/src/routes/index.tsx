@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { createFileRoute } from "@tanstack/react-router";
 import { Feed } from "../components/feed";
 import { EngineOfflineMessage } from "../features/engine-offline";

@@ -9,7 +9,7 @@ interface CopyCall {
   readonly dest: string;
 }
 
-const config = { homeDir: "/home/.clanker-forge", skillsDir: "/engine/skills" };
+const config = { homeDir: "/home/.cogwork", skillsDir: "/engine/skills" };
 
 const request: AssembleRequest = {
   cwd: "/repos/app/packages/web",
@@ -57,7 +57,7 @@ describe("ContextAssembler.assemble", () => {
         config,
         stubFs(
           {
-            "/home/.clanker-forge/AGENTS.md": "global rules",
+            "/home/.cogwork/AGENTS.md": "global rules",
             "/repos/app/AGENTS.md": "repo root rules",
             "/repos/app/packages/web/AGENTS.md": "web package rules",
             "/engine/skills/implement-agent/SKILL.md": "implement skill body",
@@ -71,7 +71,7 @@ describe("ContextAssembler.assemble", () => {
       assert.deepStrictEqual(
         [...assembled.layers],
         [
-          { kind: "global", source: "/home/.clanker-forge/AGENTS.md", content: "global rules" },
+          { kind: "global", source: "/home/.cogwork/AGENTS.md", content: "global rules" },
           { kind: "repo", source: "/repos/app/AGENTS.md", content: "repo root rules" },
           { kind: "repo", source: "/repos/app/packages/web/AGENTS.md", content: "web package rules" },
           {
@@ -140,9 +140,9 @@ describe("ContextAssembler.assemble", () => {
 
       const assembled = yield* assembler.assemble(request);
 
-      assert.strictEqual(assembled.skillPath, "/home/.clanker-forge/skills/implement-agent");
+      assert.strictEqual(assembled.skillPath, "/home/.cogwork/skills/implement-agent");
       assert.deepStrictEqual(yield* Ref.get(copies), [
-        { source: "/engine/skills/implement-agent", dest: "/home/.clanker-forge/skills/implement-agent" },
+        { source: "/engine/skills/implement-agent", dest: "/home/.cogwork/skills/implement-agent" },
       ]);
       assert.isTrue(assembled.skillPath.startsWith(config.homeDir));
       assert.isFalse(assembled.skillPath.startsWith(request.projectRoot));

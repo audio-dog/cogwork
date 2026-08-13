@@ -6,7 +6,7 @@ import {
   type WorkspaceId,
   WorkspaceState,
   workspaceKey,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -108,6 +108,6 @@ export type DaemonEventPublisherService = Effect.Success<typeof make>;
 export class DaemonEventPublisher extends Context.Service<
   DaemonEventPublisher,
   DaemonEventPublisherService
->()("@clanker-forge/engine/event-publisher/DaemonEventPublisher") {}
+>()("@cogwork/engine/event-publisher/DaemonEventPublisher") {}
 
 export const layer = Layer.effect(DaemonEventPublisher, make);

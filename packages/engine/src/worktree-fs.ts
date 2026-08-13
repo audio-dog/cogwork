@@ -24,5 +24,5 @@ const makeUnavailable = () => ({
 export type WorktreeFsService = ReturnType<typeof makeUnavailable>;
 
 export class WorktreeFs extends Context.Service<WorktreeFs, WorktreeFsService>()(
-  "@clanker-forge/engine/worktree-fs/WorktreeFs",
+  "@cogwork/engine/worktree-fs/WorktreeFs",
 ) {}

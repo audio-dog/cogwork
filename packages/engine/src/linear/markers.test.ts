@@ -34,20 +34,16 @@ describe("linear markers", () => {
 
 describe("linear wire codec", () => {
   it("encodes markers as visible plain-text lines, never hidden HTML comments", () => {
-    assert.strictEqual(wireCodec.encode({ name: "ledger", pairs: "" }), "clanker-forge:ledger");
+    assert.strictEqual(wireCodec.encode({ name: "ledger", pairs: "" }), "cogwork:ledger");
     assert.strictEqual(
-      wireCodec.encode({ name: "claim", pairs: "by=clanker-forge at=1" }),
-      "clanker-forge:claim by=clanker-forge at=1",
+      wireCodec.encode({ name: "claim", pairs: "by=cogwork at=1" }),
+      "cogwork:claim by=cogwork at=1",
     );
     assert.isFalse(wireCodec.encode({ name: "claim", pairs: "by=x at=1" }).includes("<!--"));
   });
 
   it("reads a marker only at the start of a line, so an indented sample stays inert", () => {
-    const body = [
-      "clanker-forge:ledger",
-      "clanker-forge:claim by=me at=2",
-      "  clanker-forge:claim by=x at=9",
-    ].join("\n");
+    const body = ["cogwork:ledger", "cogwork:claim by=me at=2", "  cogwork:claim by=x at=9"].join("\n");
     const spans = wireCodec.scan(body);
     assert.deepStrictEqual(
       spans.map((span) => [span.name, span.pairs]),
@@ -60,7 +56,7 @@ describe("linear wire codec", () => {
 
   it("carries markers forward through a formatted body, the read-modify-write the tracker relies on", () => {
     const claim = Coordination.serializeClaim(wireCodec, {
-      by: "clanker-forge",
+      by: "cogwork",
       claimedAtMillis: 1,
       stage: "implement",
     });
@@ -76,7 +72,7 @@ describe("linear wire codec", () => {
     });
     assert.deepStrictEqual(Coordination.coordinationMarkers(wireCodec, body), [claim, attempt]);
     assert.deepStrictEqual(Coordination.parseClaim(wireCodec, body), {
-      by: "clanker-forge",
+      by: "cogwork",
       claimedAtMillis: 1,
       stage: "implement",
     });

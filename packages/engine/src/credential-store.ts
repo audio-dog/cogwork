@@ -1,4 +1,4 @@
-import { TrimmedNonEmptyString } from "@clanker-forge/contracts";
+import { TrimmedNonEmptyString } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -147,7 +147,7 @@ export interface CredentialStoreService {
 }
 
 export class CredentialStore extends Context.Service<CredentialStore, CredentialStoreService>()(
-  "@clanker-forge/engine/credential-store/CredentialStore",
+  "@cogwork/engine/credential-store/CredentialStore",
 ) {}
 
 export const accountOf = (credential: StoredCredential) =>

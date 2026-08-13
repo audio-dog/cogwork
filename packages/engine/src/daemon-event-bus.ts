@@ -1,5 +1,5 @@
-import type { AgUiEvent, DaemonEvent, RunActivity, RunRecord, RunSummary } from "@clanker-forge/contracts";
-import { agUiCorrelation } from "@clanker-forge/contracts";
+import type { AgUiEvent, DaemonEvent, RunActivity, RunRecord, RunSummary } from "@cogwork/contracts";
+import { agUiCorrelation } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -49,7 +49,7 @@ export const make = Effect.gen(function* () {
 export type DaemonEventBusService = Effect.Success<typeof make>;
 
 export class DaemonEventBus extends Context.Service<DaemonEventBus, DaemonEventBusService>()(
-  "@clanker-forge/engine/daemon-event-bus/DaemonEventBus",
+  "@cogwork/engine/daemon-event-bus/DaemonEventBus",
 ) {}
 
 export const layer = Layer.effect(DaemonEventBus, make);

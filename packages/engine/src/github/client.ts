@@ -62,7 +62,7 @@ export interface RawReview {
 const baseHeaders = {
   Accept: "application/vnd.github+json",
   "X-GitHub-Api-Version": "2022-11-28",
-  "User-Agent": "clanker-forge",
+  "User-Agent": "cogwork",
 };
 
 const LabelName = Schema.Union([Schema.String, Schema.Struct({ name: Schema.String })]);
@@ -393,7 +393,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
 export type GitHubClientService = Effect.Success<ReturnType<typeof make>>;
 
 export class GitHubClient extends Context.Service<GitHubClient, GitHubClientService>()(
-  "@clanker-forge/engine/github/client/GitHubClient",
+  "@cogwork/engine/github/client/GitHubClient",
 ) {}
 
 export const layer = Layer.effect(GitHubClient, Effect.flatMap(HttpClient.HttpClient, make));

@@ -1,5 +1,5 @@
-import type { ClassifiedItem } from "@clanker-forge/contracts";
-import { Badge } from "@clanker-forge/ui/components/badge";
+import type { ClassifiedItem } from "@cogwork/contracts";
+import { Badge } from "@cogwork/ui/components/badge";
 import type { FeedItem } from "../features/feed";
 
 export function ItemBadges({ item }: { item: ClassifiedItem }) {

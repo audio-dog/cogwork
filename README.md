@@ -1,4 +1,4 @@
-# clanker-forge
+# cogwork
 
 Orchestration control plane for AI coding agents — discover work from an issue tracker,
 schedule runs under concurrency and budget limits, and drive harnesses (Cursor ACP today;
@@ -10,7 +10,7 @@ the provider runner next).
 |---|---|
 | **contracts** (`packages/contracts`) | Shared schemas and vocabulary (`WorkItem`, `Run`, `Claim`, harness terms) |
 | **engine** (`packages/engine`) | Daemon, reconcile, scheduler, executor, worktrees, tracker/provider adapters |
-| **cli** (`apps/cli`) | `clanker-forge` client and headless daemon host |
+| **cli** (`apps/cli`) | `cogwork` client and headless daemon host |
 | **cursor-acp** (`packages/cursor-acp`) | Cursor harness adapter over ACP |
 
 Playbook skills for headless stages live in `packages/engine/skills/`.

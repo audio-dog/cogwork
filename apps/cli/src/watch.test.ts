@@ -1,4 +1,4 @@
-import type { AgUiEvent, LifecycleStage, RunActivity } from "@clanker-forge/contracts";
+import type { AgUiEvent, LifecycleStage, RunActivity } from "@cogwork/contracts";
 import {
   agUiCorrelation,
   applyDaemonEvent,
@@ -9,7 +9,7 @@ import {
   SchedulerStats,
   WorkItemId,
   WorkspaceId,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { flushWatch, initialWatchState, renderBoard, stepWatch, type WatchState } from "./watch";

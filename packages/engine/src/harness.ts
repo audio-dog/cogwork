@@ -1,10 +1,4 @@
-import type {
-  AgUiEvent,
-  HarnessName,
-  LifecycleStage,
-  SessionId,
-  SessionKind,
-} from "@clanker-forge/contracts";
+import type { AgUiEvent, HarnessName, LifecycleStage, SessionId, SessionKind } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -15,7 +9,7 @@ import { CredentialStore, type CredentialStoreService } from "./credential-store
 import type { ResolvedMcpSkill } from "./mcp-skill";
 import { SessionStore, type SessionStoreService } from "./session-store";
 
-export type { AgUiEvent } from "@clanker-forge/contracts";
+export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
 
 export interface HarnessRequest {
@@ -53,7 +47,7 @@ export interface HarnessService {
   readonly sessionKind: (harness: HarnessName) => SessionKind;
 }
 
-export class Harness extends Context.Service<Harness, HarnessService>()("@clanker-forge/engine/harness") {}
+export class Harness extends Context.Service<Harness, HarnessService>()("@cogwork/engine/harness") {}
 
 export interface HarnessRunnerServices {
   readonly sessionStore: SessionStoreService;

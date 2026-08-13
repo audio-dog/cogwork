@@ -1,4 +1,4 @@
-import { CredentialStore } from "@clanker-forge/engine";
+import { CredentialStore } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -65,7 +65,7 @@ const onDisk = <A, E>(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const dir = yield* fs.makeTempDirectoryScoped({ prefix: "clanker-forge-credentials-" });
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-credentials-" });
     return yield* use({ filePath: path.join(dir, "nested", "credentials.json"), fs });
   }).pipe(
     Effect.scoped,

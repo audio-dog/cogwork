@@ -1,4 +1,4 @@
-import type { LifecycleStage } from "@clanker-forge/contracts";
+import type { LifecycleStage } from "@cogwork/contracts";
 import {
   defineSandboxPolicy,
   evaluateCommand,

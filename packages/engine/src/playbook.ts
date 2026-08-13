@@ -5,7 +5,7 @@ import type {
   PlaybookStageConfig,
   TriageRole,
   WorkspaceConfig,
-} from "@clanker-forge/contracts";
+} from "@cogwork/contracts";
 
 export interface ResolvedStage {
   readonly enabled: boolean;
@@ -149,7 +149,7 @@ const parseLastSentinel = <A extends string>(pattern: RegExp, valid: ReadonlyArr
 const decisionFooter = [
   "",
   "When you are done, write your proposal for the maintainer as your final message.",
-  "It will be published verbatim on {id} inside the single comment clanker-forge keeps there,",
+  "It will be published verbatim on {id} inside the single comment cogwork keeps there,",
   "so write it as that comment body.",
   "End your final message with exactly one line, and nothing after it:",
   `TRIAGE-DECISION: <${decisionRoles.join(" | ")}>`,

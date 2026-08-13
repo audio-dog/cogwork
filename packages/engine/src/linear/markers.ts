@@ -1,4 +1,4 @@
-import type { TriageRole, TriageRoleLabels } from "@clanker-forge/contracts";
+import type { TriageRole, TriageRoleLabels } from "@cogwork/contracts";
 import type { MarkerSpan, WireCodec } from "../coordination";
 import * as Coordination from "../coordination";
 
@@ -18,7 +18,7 @@ export const defaultRoleLabels = {
   wontfix: "state:wontfix",
 } satisfies Record<TriageRole, string>;
 
-export const claimLabel = "clanker-forge:claimed";
+export const claimLabel = "cogwork:claimed";
 
 export const canceledStateName = "Canceled";
 
@@ -50,14 +50,14 @@ export const roleLabel = (role: TriageRole, roleLabels: Record<TriageRole, strin
 
 export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(claimLabel);
 
-export const ledgerMarker = "clanker-forge:ledger";
+export const ledgerMarker = "cogwork:ledger";
 
 // A marker is only real at the start of a line, which keeps an indented sample in prose inert.
-const scanPattern = /^clanker-forge:([\w-]+)(?:[ \t]+(.*))?$/gm;
+const scanPattern = /^cogwork:([\w-]+)(?:[ \t]+(.*))?$/gm;
 
 export const wireCodec: WireCodec = {
   ledgerMarker,
-  encode: ({ name, pairs }) => `clanker-forge:${name}${pairs ? ` ${pairs}` : ""}`,
+  encode: ({ name, pairs }) => `cogwork:${name}${pairs ? ` ${pairs}` : ""}`,
   scan: (body): ReadonlyArray<MarkerSpan> =>
     [...body.matchAll(scanPattern)].map((match) => ({
       name: match[1] ?? "",
@@ -69,4 +69,4 @@ export const wireCodec: WireCodec = {
 
 export const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
 
-export const hasClankerMarker = (body: string) => Coordination.hasClankerMarker(wireCodec, body);
+export const hasCogworkMarker = (body: string) => Coordination.hasCogworkMarker(wireCodec, body);

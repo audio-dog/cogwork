@@ -1,5 +1,5 @@
-import type { WorkspaceId } from "@clanker-forge/contracts";
-import { stagePriority } from "@clanker-forge/contracts";
+import type { WorkspaceId } from "@cogwork/contracts";
+import { stagePriority } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -258,7 +258,7 @@ export const make = (config: SchedulerConfig) =>
   });
 
 export class Scheduler extends Context.Service<Scheduler, Effect.Success<ReturnType<typeof make>>>()(
-  "@clanker-forge/engine/scheduler",
+  "@cogwork/engine/scheduler",
 ) {}
 
 export const layer = (config: SchedulerConfig) => Layer.effect(Scheduler, make(config));

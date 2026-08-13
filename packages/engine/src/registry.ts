@@ -1,4 +1,4 @@
-import type { WorkspaceFailureInfo } from "@clanker-forge/contracts";
+import type { WorkspaceFailureInfo } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import { decide, type WorkspaceCommand } from "./decider";
 import { emptyRegistry, projectEvent, type RegisteredWorkspace, type RegistryState } from "./projector";
@@ -18,7 +18,7 @@ export interface LoadResult {
 }
 
 export class WorkspaceRegistry extends Context.Service<WorkspaceRegistry, RegistryState>()(
-  "@clanker-forge/engine/registry/WorkspaceRegistry",
+  "@cogwork/engine/registry/WorkspaceRegistry",
 ) {}
 
 const toCommands = (result: LoadResult) => [

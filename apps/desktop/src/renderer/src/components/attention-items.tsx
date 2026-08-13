@@ -1,6 +1,6 @@
-import { Badge } from "@clanker-forge/ui/components/badge";
-import { Button } from "@clanker-forge/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@clanker-forge/ui/components/card";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Button } from "@cogwork/ui/components/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { RiExternalLinkLine, RiGitPullRequestLine, RiQuestionAnswerLine } from "@remixicon/react";
 import type { FeedItem, MergeGateItem } from "../features/feed";
 import { needsHumanReasonLabel } from "../features/feed";
