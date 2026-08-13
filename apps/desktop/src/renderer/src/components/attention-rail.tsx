@@ -68,7 +68,7 @@ function RailBody() {
   );
 }
 
-function AttentionList() {
+export function AttentionList() {
   return (
     <RailShell header={<h2 className="text-sm font-semibold">Attention</h2>}>
       <RailBody />
