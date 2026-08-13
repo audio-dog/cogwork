@@ -1,20 +1,32 @@
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@clanker-forge/ui/components/dropdown-menu";
+import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
 } from "@clanker-forge/ui/components/sidebar";
-import { RiPulseLine, RiStackLine } from "@remixicon/react";
+import { RiPulseLine, RiSettings3Line, RiStackLine, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
 import { useBoard } from "../features/use-board";
 import { useChromeStore } from "../store/chrome";
+import { useTheme } from "./theme-provider";
 
 interface View {
   readonly label: string;
@@ -29,7 +41,6 @@ const views: ReadonlyArray<View> = [
 
 function ViewItem({ view }: { view: View }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-
   return (
     <SidebarMenuItem>
       <SidebarMenuButton isActive={pathname === view.to} render={<Link to={view.to} />} tooltip={view.label}>
@@ -77,11 +88,52 @@ function WorkspaceFilter() {
   );
 }
 
-export function NavRail() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-
+function UserButton() {
+  const { theme, setTheme } = useTheme();
   return (
-    <Sidebar collapsible="icon">
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <SidebarMenuButton tooltip="Account" className="gap-2">
+            <RiUserLine />
+            <span>Account</span>
+          </SidebarMenuButton>
+        }
+      />
+      <DropdownMenuContent side="top" align="start" className="min-w-48">
+        <DropdownMenuItem disabled>
+          <RiSettings3Line />
+          Settings (coming soon)
+        </DropdownMenuItem>
+        <DropdownMenuItem render={<Link to="/activity" />}>
+          <RiPulseLine />
+          Raw activity
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Theme</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as typeof theme)}>
+          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function NavSidebar() {
+  return (
+    <Sidebar collapsible="offcanvas">
+      <SidebarHeader className="@container/sidebar-header h-11 shrink-0 flex-row items-center px-3 py-0 [-webkit-app-region:drag]">
+        <Link
+          aria-label="clanker-forge home"
+          to="/"
+          className="ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
+        >
+          <span className="truncate text-sm font-semibold">clanker</span>
+          <span className="truncate text-sm font-medium text-muted-foreground">forge</span>
+        </Link>
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Views</SidebarGroupLabel>
@@ -94,24 +146,14 @@ export function NavRail() {
           </SidebarGroupContent>
         </SidebarGroup>
         <WorkspaceFilter />
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={pathname === "/activity"}
-                  render={<Link to="/activity" />}
-                  tooltip="Raw activity"
-                >
-                  <RiPulseLine />
-                  <span>Raw activity</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
-      <SidebarRail />
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <UserButton />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }

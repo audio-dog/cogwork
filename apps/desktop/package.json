@@ -31,6 +31,7 @@
     "@effect/platform-node": "catalog:effect",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@react-hookz/web": "^26.1.0",
     "@remixicon/react": "^4.9.0",
     "@tanstack/react-router": "^1.170.25",
     "effect": "catalog:effect",
