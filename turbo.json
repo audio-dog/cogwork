@@ -10,6 +10,11 @@
       "dependsOn": ["^build"],
       "outputs": ["out/**"]
     },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": ["NODE_PATH", "ELECTRON_*"]
+    },
     "test": {
       "dependsOn": ["transit", "^test"]
     },
