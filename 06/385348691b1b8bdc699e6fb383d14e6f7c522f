@@ -1,0 +1,65 @@
+packages/engine/src/executor.ts
+  s_df722b9996f3ee::t_17d9e012a8ba64 2
+  s_df722b9996f3ee::t_a0878c88d84b3b 1
+  s_df722b9996f3ee::t_d8c13410326e76 39,135,175-179
+packages/contracts/CONTEXT.md
+  s_df722b9996f3ee::t_967dbc86ecb966 92
+packages/contracts/src/run.ts
+  s_df722b9996f3ee::t_1ffca789fc4d6b 12-14
+packages/cursor-acp/src/harness.test.ts
+  s_df722b9996f3ee::t_57de4e7204fba5 1,6,8,50-56
+packages/cursor-acp/src/harness.ts
+  s_df722b9996f3ee::t_570c0ea6d48f61 172
+packages/engine/CONTEXT.md
+  s_df722b9996f3ee::t_952d4749ca59ef 69,77,81,137,181
+packages/engine/skills/implement-agent/SKILL.md
+  s_df722b9996f3ee::t_5adc234c544bd8 79
+packages/engine/src/coordination-tracker.test.ts
+  s_df722b9996f3ee::t_2046455427c938 1-311
+packages/engine/src/coordination-tracker.ts
+  s_df722b9996f3ee::t_f4350f34fe4178 1-135
+packages/engine/src/coordination.test.ts
+  s_df722b9996f3ee::t_08cd914c2357c9 8,44
+packages/engine/src/coordination.ts
+  s_df722b9996f3ee::t_82fdb42aec19c9 29,232,253
+packages/engine/src/daemon-composition.test.ts
+  s_df722b9996f3ee::t_16c294673b82e2 43
+packages/engine/src/executor.test.ts
+  s_df722b9996f3ee::t_55818023c3a299 48-50,184,279,289,338,342-347,370,607-638
+packages/engine/src/github/adapter.ts
+  s_df722b9996f3ee::t_f59c9309d51060 3-6,8
+packages/engine/src/github/github.test.ts
+  s_df722b9996f3ee::t_deb6847945a7f1 12
+packages/engine/src/github/host.ts
+  s_df722b9996f3ee::t_2f824776a5f2ed 1-124
+packages/engine/src/harness.ts
+  s_df722b9996f3ee::t_650b10af3e7838 1-7,45,51-53,86
+packages/engine/src/linear/adapter.ts
+  s_df722b9996f3ee::t_72bfc7eed35fcb 6,87
+packages/engine/src/provider-runner.test.ts
+  s_df722b9996f3ee::t_07a0981c6a2015 88,123-126
+packages/engine/src/provider-runner.ts
+  s_df722b9996f3ee::t_0811929c5d7bc4 104
+packages/engine/src/session-store.test.ts
+  s_df722b9996f3ee::t_8f116d3110112e 7-8,133-166
+packages/engine/src/session-store.ts
+  s_df722b9996f3ee::t_546dff5e40d3ae 1-9,27,38-43,52-54,119-122,140,148-152,158-165
+packages/engine/src/daemon.ts
+  s_df722b9996f3ee::t_b6fb93c0e0b1c3 210-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "06385348691b1b8bdc699e6fb383d14e6f7c522f",
+  "prompts": {},
+  "sessions": {
+    "s_df722b9996f3ee": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "39c28e7a-9e47-4d52-bca9-9dcc1c3d158a",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
