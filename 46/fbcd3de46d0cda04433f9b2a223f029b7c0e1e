@@ -1,0 +1,89 @@
+apps/desktop/src/renderer/src/components/route-error.tsx
+  s_c40cd7ddc4753f::t_6d082a8cd3eb60 1-46
+packages/cursor-acp/FINDINGS.md
+  h_46518a29d4dd91 99
+  h_46518a29d4dd91 63
+packages/ui/src/components/message-scroller.tsx
+  s_58177b0cd2c0fd::t_4c30cfa5749ced 1-123
+apps/desktop/src/main/index.ts
+  s_c40cd7ddc4753f::t_0ea74ff4b2b274 60-69
+  s_c40cd7ddc4753f::t_53157f93b78816 9
+apps/desktop/package.json
+  s_58177b0cd2c0fd::t_f74ff8f1b12279 20
+  s_58177b0cd2c0fd::t_5254ff0ef59523 50
+packages/ui/src/components/bubble.tsx
+  s_58177b0cd2c0fd::t_0a568a63f86584 1-118
+apps/desktop/src/renderer/src/features/report-error.ts
+  s_c40cd7ddc4753f::t_36e9013f8d08c7 1-13
+packages/ui/src/components/marker.tsx
+  s_58177b0cd2c0fd::t_0a568a63f86584 1-68
+apps/desktop/src/main/logger.ts
+  s_c40cd7ddc4753f::t_66606787960406 5-8,17-32
+apps/desktop/src/shared/ipc.ts
+  s_c40cd7ddc4753f::t_bbaca51e446f3a 11,14-20
+  s_c40cd7ddc4753f::t_17e09316a272a9 35
+  s_c40cd7ddc4753f::t_60563aadf7ef9e 21
+apps/desktop/src/main/window.ts
+  s_c40cd7ddc4753f::t_e77105ec2d7d95 96
+  s_c40cd7ddc4753f::t_d74e5966483e48 6,20-26,28-42,44-52
+  s_c40cd7ddc4753f::t_c0480674135d45 12-19,27,43
+  s_c40cd7ddc4753f::t_b27493fc78cd73 78
+  s_c40cd7ddc4753f::t_2c93d63fb2960d 53
+apps/desktop/src/main/ipc.ts
+  s_c40cd7ddc4753f::t_bbdae5649e5ee7 51-53,57
+  s_c40cd7ddc4753f::t_1ae87308466efb 2,5,12-23
+  s_c40cd7ddc4753f::t_a4165b86aaea1e 38-39
+  s_c40cd7ddc4753f::t_3bd3fa8861c22e 24
+docs/adr/0003-work-source-as-coordination-substrate.md
+  h_46518a29d4dd91 15
+  h_46518a29d4dd91 8
+apps/desktop/src/renderer/src/router.tsx
+  s_c40cd7ddc4753f::t_60a4465972cf06 2-3,9-10
+apps/desktop/src/renderer/src/main.tsx
+  s_c40cd7ddc4753f::t_68e8300a7fd8d9 7-16
+packages/ui/package.json
+  s_58177b0cd2c0fd::t_0a568a63f86584 21
+packages/ui/src/components/collapsible.tsx
+  s_58177b0cd2c0fd::t_f2a9e46592d951 1-15
+docs/adr/0004-tanstack-ai-as-execution-layer.md
+  h_46518a29d4dd91 10
+apps/desktop/src/preload/index.ts
+  s_c40cd7ddc4753f::t_7294e3f6b8179e 23
+packages/ui/src/components/message.tsx
+  s_58177b0cd2c0fd::t_0a568a63f86584 1-81
+apps/desktop/tsr.config.json
+  s_58177b0cd2c0fd::t_273b9deb0e28f9 1-6
+packages/ui/src/components/attachment.tsx
+  s_58177b0cd2c0fd::t_4c30cfa5749ced 1-189
+pnpm-lock.yaml
+  s_58177b0cd2c0fd::t_b96feab3a9e223 191-193,353-355,1627-1637,1841-1845,1850-1853,1858-1861,5976-5980,6173-6180,6188-6194,6205-6217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "46fbcd3de46d0cda04433f9b2a223f029b7c0e1e",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_58177b0cd2c0fd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "18624d1f-86ad-43d5-a166-655f562b4f7e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c40cd7ddc4753f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "27abfd2e-ed77-4fd7-bf87-dd7fe32152a6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
