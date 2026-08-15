@@ -60,7 +60,7 @@ rides on `RUN_FINISHED` (`q2_usage_reported = false` in both runs). No token cou
 anywhere in the stream: `session_info_update` carries only `{ title }`,
 `available_commands_update` the slash-command list (and the adapter drops both anyway).
 
-Consequence: the audiodog policy of reading `usage.inputTokens` (from `@cursor/sdk`) to
+Consequence: reading `usage.inputTokens` (from `@cursor/sdk`) to
 detect near-context-limit staleness has **no equivalent over Cursor ACP today**.
 
 ## Q3 — Blocking extension methods to a non-answering client: **clean refusal, gracefully handled**
@@ -96,7 +96,7 @@ headless `--resume` needs `--trust`/`--force` (else it blocks on a workspace-tru
 and `agent ls` is a TUI requiring a real TTY (raw mode) — not headless-friendly.
 
 So programmatic re-attach works (any ACP client can `session/load` the persisted session),
-but the pasteable `cursor-agent --resume <id>` human handoff that the audiodog adapter's
+but the pasteable `cursor-agent --resume <id>` human handoff that
 `attachCommand` produces does **not** resolve an ACP-origin session id.
 
 ## Recommendation

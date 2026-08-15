@@ -20,6 +20,7 @@ const bridge: CogworkBridge = {
     onData: (listener) => subscribe(IpcChannel.rpcData, listener),
     onClosed: (listener) => subscribe(IpcChannel.rpcClosed, listener),
   },
+  reportError: (report) => ipcRenderer.send(IpcChannel.rendererError, report),
 };
 
 if (process.contextIsolated) {
