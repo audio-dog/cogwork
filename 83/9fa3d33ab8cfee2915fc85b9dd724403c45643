@@ -1,0 +1,38 @@
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_b52b26a3d00cd1::t_ed2308d68a0f82 18,25,34
+  s_b52b26a3d00cd1::t_dc1cdec7367d89 62
+  s_b52b26a3d00cd1::t_3145139b3fca0d 120
+  s_b52b26a3d00cd1::t_fcdd7eb5ede131 47,51
+  s_b52b26a3d00cd1::t_cc20a96e534622 8,12
+apps/desktop/src/renderer/src/components/feed-variants.tsx
+  s_b52b26a3d00cd1::t_11f9a5db01d30e 437
+  s_b52b26a3d00cd1::t_a94f5959e12277 423
+  s_b52b26a3d00cd1::t_952171c30bef58 15-16
+  s_b52b26a3d00cd1::t_c94c2327426c14 32-33
+apps/desktop/src/renderer/src/components/feed-terminal-strips.tsx
+  s_b52b26a3d00cd1::t_0053a681c38f68 1-5,15,17-21,24-25,30,48-69,71-77,80,84,87-89,91-106,108-115,117-124,128-130,132-163,167-200,202-204,206-233
+apps/desktop/src/renderer/src/routes/index.tsx
+  s_b52b26a3d00cd1::t_680a49d4b65922 4-6
+  s_b52b26a3d00cd1::t_22e1b7fd839209 31,33-34,38,43,45-47,58,61-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "839fa3d33ab8cfee2915fc85b9dd724403c45643",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b52b26a3d00cd1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "92185704-dc8f-4575-92a9-ea3378da0b99",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
