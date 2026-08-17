@@ -1,0 +1,47 @@
+packages/engine/src/event-publisher.test.ts
+  s_792467ff8317d5::t_e96899f06ce952 76-82
+packages/engine/src/coordination-tracker.ts
+  s_792467ff8317d5::t_8c971398147012 200,202
+  s_792467ff8317d5::t_3728a318cd4981 79-94,128,137,145,153-199,201,203-222
+  s_792467ff8317d5::t_9442f316aeeaff 5-6,8,10-11
+  s_792467ff8317d5::t_2a6e7fa31901c4 74-78
+  s_792467ff8317d5::t_a2dc80d81c60d6 12,15,17,19
+packages/engine/src/engine.test.ts
+  s_792467ff8317d5::t_dbb64e5ac87363 57-63
+packages/engine/src/recovery.test.ts
+  s_792467ff8317d5::t_8e95aec24c922a 160-166
+packages/engine/src/executor.test.ts
+  s_792467ff8317d5::t_0fe2471398b07e 285-291
+packages/engine/src/issue-tracker.ts
+  s_792467ff8317d5::t_41f58bafed26b7 74
+  s_792467ff8317d5::t_003250016ef028 5
+  s_792467ff8317d5::t_ca6142b7642f7d 134-147
+  s_792467ff8317d5::t_8d2d89878ba832 51-73,75-87
+packages/engine/src/coordination-tracker.test.ts
+  s_792467ff8317d5::t_356a67de47abe7 319-444
+  s_792467ff8317d5::t_23636d63bd025f 445-447
+packages/engine/src/hand-to-human.test.ts
+  s_792467ff8317d5::t_aaf865618c1c28 34-40
+packages/engine/src/issue-tracker-router.ts
+  s_792467ff8317d5::t_26b698841942b5 25-31
+packages/engine/src/commands.test.ts
+  s_792467ff8317d5::t_55402944063745 87-93
+packages/engine/src/issue-tracker-router.test.ts
+  s_792467ff8317d5::t_e07b616f009b5c 46-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "71a0a7a70de116e57824de6c15f11a89a64527ac",
+  "prompts": {},
+  "sessions": {
+    "s_792467ff8317d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2e86da9b-9afa-4f60-afaa-3f5e104fa38a",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
