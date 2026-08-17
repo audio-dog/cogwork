@@ -1,48 +1,43 @@
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Badge } from "@cogwork/ui/components/badge";
-import { Button } from "@cogwork/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
-import { Item, ItemActions, ItemContent, ItemGroup } from "@cogwork/ui/components/item";
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
-import { RiArrowRightSLine } from "@remixicon/react";
-import type { ReactNode } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
+import { RiCheckLine, RiTimeLine } from "@remixicon/react";
+import type { ComponentType, ReactNode } from "react";
 import { daemonErrorMessage } from "../features/daemon-error";
 import type { FeedRun, QueuedItem } from "../features/feed";
 import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
-import { relativeTime } from "../features/format";
+import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
 import { useBoard } from "../features/use-board";
+import { useNow } from "../features/use-now";
 import { useChromeStore } from "../store/chrome";
 
-function LiveDot() {
-  return <span className="size-2 shrink-0 animate-pulse rounded-full bg-primary" aria-hidden />;
-}
-
-function WorkspaceChip({ workspace }: { workspace: string }) {
-  return <Badge variant="outline">{workspace}</Badge>;
-}
-
-function Section({
-  title,
-  count,
-  live,
-  children,
-}: {
-  title: string;
-  count: number;
-  live?: boolean;
-  children: ReactNode;
-}) {
+// Three small staggered-fade dots: the "live" indicator on a running strip. A
+// spinning loader reads as too busy stacked across many strips, so we keep it
+// calm (decision on #15).
+function TypingDots() {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        {live && <LiveDot />}
-        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{title}</h2>
-        <Badge variant="secondary">{count}</Badge>
-      </div>
-      {children}
-    </section>
+    <span className="flex size-3.5 shrink-0 items-center justify-center gap-0.5" aria-hidden>
+      {[0, 150, 300].map((delay) => (
+        <span
+          key={delay}
+          className="size-1 animate-pulse rounded-full bg-primary"
+          style={{ animationDelay: `${delay}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function SectionHeading({ title, count, live }: { title: string; count: number; live?: boolean }) {
+  return (
+    <div className="flex items-center gap-2">
+      {live && <TypingDots />}
+      <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{title}</h2>
+      <Badge variant="secondary">{count}</Badge>
+    </div>
   );
 }
 
@@ -54,90 +49,194 @@ function EmptyNote({ children }: { children: ReactNode }) {
   );
 }
 
-function LivePreview({ preview }: { preview: RunActivityPreview | undefined }) {
-  if (!preview) return null;
+// The live console line: `label ▸ preview` in monospace with a blinking caret,
+// so a strip reads like a terminal tailing the run.
+function ConsoleLine({ preview }: { preview: RunActivityPreview | undefined }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/40 p-2.5">
-      <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-primary uppercase">
-        <LiveDot />
-        {preview.label}
-      </div>
-      <p className="truncate font-mono text-xs text-muted-foreground">{preview.text || "…"}</p>
-    </div>
+    <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+      <span className="text-primary">{preview?.label ?? "working"}</span>
+      <span className="text-muted-foreground/60"> ▸ </span>
+      {preview?.text || ""}
+      <span className="ms-0.5 inline-block animate-pulse text-primary">▋</span>
+    </span>
   );
 }
 
-function LiveCard({ entry, preview }: { entry: FeedRun; preview: RunActivityPreview | undefined }) {
+// One terminal strip: a right meta-rail (stage / workspace / id / elapsed) in
+// fixed-width columns so they line up across rows, with the console line below.
+function TerminalStrip({
+  entry,
+  preview,
+  now,
+}: {
+  entry: FeedRun;
+  preview: RunActivityPreview | undefined;
+  now: number;
+}) {
+  const select = useChromeStore((state) => state.select);
   const { run, title } = entry;
-  const select = useChromeStore((state) => state.select);
-  const watch = () => select({ workspace: run.workspace, workItem: run.workItem });
   return (
-    <Card className="cursor-pointer transition-colors hover:bg-muted/50" onClick={watch}>
-      <CardHeader>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-muted-foreground">{run.workItem}</span>
-          <WorkspaceChip workspace={run.workspace} />
-          <Badge variant="secondary">{run.stage}</Badge>
-        </div>
-        <CardTitle className="mt-1">{title ?? run.workItem}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <LivePreview preview={preview} />
-        <Button variant="link" size="sm" className="justify-start px-0" onClick={watch}>
-          <RiArrowRightSLine data-icon="inline-start" />
-          Watch this agent
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function QueuedRow({ entry }: { entry: QueuedItem }) {
-  const { item, workspace } = entry;
-  const select = useChromeStore((state) => state.select);
-  return (
-    <Item
-      render={<li />}
-      variant="outline"
-      size="sm"
-      className="cursor-pointer"
-      onClick={() => select({ workspace, workItem: item.id })}
-    >
-      <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.id}</span>
-      <Badge variant="secondary">{item.stage}</Badge>
-      <ItemContent className="min-w-0 flex-1">
-        <span className="truncate text-sm">{item.title}</span>
-      </ItemContent>
-      <ItemActions>
-        {item.pr && <Badge variant="outline">PR #{item.pr.number}</Badge>}
-        <WorkspaceChip workspace={workspace} />
-      </ItemActions>
-    </Item>
-  );
-}
-
-function DoneRow({ entry }: { entry: FeedRun }) {
-  const { run, title } = entry;
-  const select = useChromeStore((state) => state.select);
-  return (
-    <Item
-      render={<li />}
-      variant="outline"
-      size="sm"
-      className="cursor-pointer"
+    <button
+      type="button"
       onClick={() => select({ workspace: run.workspace, workItem: run.workItem })}
+      className="flex w-full flex-col gap-1 px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
     >
-      <span className="shrink-0 font-mono text-xs text-muted-foreground">{run.workItem}</span>
-      <ItemContent className="min-w-0 flex-1">
-        <span className="truncate text-sm">{title ?? run.workItem}</span>
-      </ItemContent>
-      <ItemActions>
-        {run.endedAtMillis !== null && (
-          <span className="text-xs text-muted-foreground">{relativeTime(run.endedAtMillis)}</span>
-        )}
-        <WorkspaceChip workspace={run.workspace} />
-      </ItemActions>
-    </Item>
+      <span className="flex w-full items-center gap-3">
+        <TypingDots />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{title ?? run.workItem}</span>
+        <Badge variant="secondary" className="w-20 shrink-0 justify-center">
+          {run.stage}
+        </Badge>
+        <span className="w-16 shrink-0 truncate text-end text-xs text-muted-foreground">{run.workspace}</span>
+        <span className="w-14 shrink-0 text-end font-mono text-xs text-muted-foreground">{run.workItem}</span>
+        <span className="w-12 shrink-0 text-end font-mono text-xs text-muted-foreground tabular-nums">
+          {elapsed(run.startedAtMillis, now)}
+        </span>
+      </span>
+      <span className="flex ps-[1.375rem]">
+        <ConsoleLine preview={preview} />
+      </span>
+    </button>
+  );
+}
+
+function LiveNow({
+  running,
+  previews,
+}: {
+  running: ReadonlyArray<FeedRun>;
+  previews: ReadonlyMap<string, RunActivityPreview>;
+}) {
+  const now = useNow();
+  return (
+    <section className="flex flex-col gap-3">
+      <SectionHeading title="Live now" count={running.length} live />
+      {running.length === 0 ? (
+        <EmptyNote>No agents running right now.</EmptyNote>
+      ) : (
+        <div className="divide-y overflow-hidden rounded-xl border">
+          {running.map((entry) => (
+            <TerminalStrip key={entry.run.id} entry={entry} preview={previews.get(entry.run.id)} now={now} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+const runStateBadge: Record<
+  FeedRun["run"]["status"],
+  { variant: "secondary" | "destructive" | "outline"; icon?: ComponentType<{ className?: string }> }
+> = {
+  running: { variant: "secondary" },
+  succeeded: { variant: "secondary", icon: RiCheckLine },
+  failed: { variant: "destructive" },
+  crashed: { variant: "destructive" },
+  interrupted: { variant: "outline" },
+  exhausted: { variant: "outline" },
+};
+
+function RunStateBadge({ status }: { status: FeedRun["run"]["status"] }) {
+  const { variant, icon: Icon } = runStateBadge[status];
+  return (
+    <Badge variant={variant} className="gap-1 font-normal capitalize">
+      {Icon && <Icon className="size-3" />}
+      {status}
+    </Badge>
+  );
+}
+
+function QueuedBadge() {
+  return (
+    <Badge variant="outline" className="gap-1 font-normal">
+      <RiTimeLine className="size-3" />
+      Queued
+    </Badge>
+  );
+}
+
+function LedgerRow({
+  state,
+  id,
+  title,
+  workspace,
+  when,
+  onClick,
+}: {
+  state: ReactNode;
+  id: string;
+  title: string;
+  workspace: string;
+  when: string;
+  onClick: () => void;
+}) {
+  return (
+    <TableRow className="cursor-pointer" onClick={onClick}>
+      <TableCell>{state}</TableCell>
+      <TableCell className="font-mono text-xs text-muted-foreground">{id}</TableCell>
+      <TableCell className="truncate text-foreground">{title}</TableCell>
+      <TableCell>
+        <Badge variant="outline">{workspace}</Badge>
+      </TableCell>
+      <TableCell className="text-end text-xs text-muted-foreground tabular-nums">{when}</TableCell>
+    </TableRow>
+  );
+}
+
+// The ledger folds queued and recently-done into one reference table, splitting
+// "watch" (the live strips above) from "look it up".
+function Ledger({ queued, done }: { queued: ReadonlyArray<QueuedItem>; done: ReadonlyArray<FeedRun> }) {
+  const select = useChromeStore((state) => state.select);
+  const total = queued.length + done.length;
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Ledger</h2>
+        <Badge variant="secondary">{total}</Badge>
+        <span className="text-xs text-muted-foreground">queued &amp; recently done</span>
+      </div>
+      {total === 0 ? (
+        <EmptyNote>Nothing queued or finished yet.</EmptyNote>
+      ) : (
+        <div className="overflow-hidden rounded-xl border">
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-32 text-[10px] tracking-wider uppercase">State</TableHead>
+                <TableHead className="w-20 text-[10px] tracking-wider uppercase">Item</TableHead>
+                <TableHead className="text-[10px] tracking-wider uppercase">Title</TableHead>
+                <TableHead className="w-36 text-[10px] tracking-wider uppercase">Workspace</TableHead>
+                <TableHead className="w-24 text-end text-[10px] tracking-wider uppercase">When</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {queued.map((entry) => (
+                <LedgerRow
+                  key={`q:${entry.workspace}:${entry.item.id}`}
+                  state={<QueuedBadge />}
+                  id={entry.item.id}
+                  title={entry.item.title}
+                  workspace={entry.workspace}
+                  when={entry.item.stage}
+                  onClick={() => select({ workspace: entry.workspace, workItem: entry.item.id })}
+                />
+              ))}
+              {done.map((entry) => (
+                <LedgerRow
+                  key={`d:${entry.run.id}`}
+                  state={<RunStateBadge status={entry.run.status} />}
+                  id={entry.run.workItem}
+                  title={entry.title ?? entry.run.workItem}
+                  workspace={entry.run.workspace}
+                  when={entry.run.endedAtMillis !== null ? relativeTime(entry.run.endedAtMillis) : "—"}
+                  onClick={() => select({ workspace: entry.run.workspace, workItem: entry.run.workItem })}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -172,9 +271,7 @@ export function Feed() {
   const queued = queuedItems(board, filter);
   const done = recentlyDone(board, filter);
 
-  const isEmpty = running.length === 0 && queued.length === 0 && done.length === 0;
-
-  if (isEmpty) {
+  if (running.length === 0 && queued.length === 0 && done.length === 0) {
     return (
       <ScrollArea className="h-full">
         <div className="p-6">
@@ -193,42 +290,9 @@ export function Feed() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="flex flex-col gap-8 p-6">
-        <Section title="Live now" count={running.length} live>
-          {running.length === 0 ? (
-            <EmptyNote>No agents running.</EmptyNote>
-          ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4">
-              {running.map((entry) => (
-                <LiveCard key={entry.run.id} entry={entry} preview={previews.get(entry.run.id)} />
-              ))}
-            </div>
-          )}
-        </Section>
-
-        <Section title="Queued" count={queued.length}>
-          {queued.length === 0 ? (
-            <EmptyNote>Nothing queued.</EmptyNote>
-          ) : (
-            <ItemGroup>
-              {queued.map((entry) => (
-                <QueuedRow key={`${entry.workspace}:${entry.item.id}`} entry={entry} />
-              ))}
-            </ItemGroup>
-          )}
-        </Section>
-
-        <Section title="Recently done" count={done.length}>
-          {done.length === 0 ? (
-            <EmptyNote>Nothing done yet.</EmptyNote>
-          ) : (
-            <ItemGroup>
-              {done.map((entry) => (
-                <DoneRow key={entry.run.id} entry={entry} />
-              ))}
-            </ItemGroup>
-          )}
-        </Section>
+      <div className="flex flex-col gap-6 p-6">
+        <LiveNow running={running} previews={previews} />
+        <Ledger queued={queued} done={done} />
       </div>
     </ScrollArea>
   );
