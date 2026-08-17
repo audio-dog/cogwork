@@ -282,6 +282,13 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => (
   note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, body: detail }),
   setRoles: (_workspace, itemId, changes) =>
     record(calls, { method: "setRoles", item: itemId, add: changes.add, remove: changes.remove }),
+  triaged: () => Effect.void,
+  implemented: () => Effect.void,
+  followedUp: () => Effect.void,
+  attemptFailed: () => Effect.void,
+  handOff: () => Effect.void,
+  stalled: () => Effect.void,
+  reclassify: () => Effect.void,
 });
 
 const runner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({

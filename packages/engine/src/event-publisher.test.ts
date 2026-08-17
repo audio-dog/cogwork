@@ -73,6 +73,13 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
   recordFollowUp: () => Effect.void,
   note: () => Effect.void,
   setRoles: () => Effect.void,
+  triaged: () => Effect.void,
+  implemented: () => Effect.void,
+  followedUp: () => Effect.void,
+  attemptFailed: () => Effect.void,
+  handOff: () => Effect.void,
+  stalled: () => Effect.void,
+  reclassify: () => Effect.void,
 });
 
 const providerStub = Layer.succeed(SourceControlProvider, { observe: () => Effect.succeed(new Map()) });

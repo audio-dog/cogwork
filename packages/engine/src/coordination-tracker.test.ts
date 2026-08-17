@@ -316,3 +316,132 @@ describe("coordination tracker", () => {
     }),
   );
 });
+
+const marker: FollowUpMarker = {
+  checks: "failing",
+  humanCommentAtMillis: 4,
+  noProgress: 2,
+  baseDivergence: "clean",
+  botTriggerAtMillis: 0,
+};
+
+const ledgerBody = (comments: ReadonlyArray<CoordinationComment<number>>) =>
+  Coordination.selectLedger(codec, comments)?.body ?? "";
+
+describe("coordination outcomes", () => {
+  it.effect("triaged posts the proposal, swaps the role, and records a triage success", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 10, labels: ["needs-triage"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.triaged(workspace, decodeId("#10"), {
+        role: "ready-for-agent",
+        proposal: triageProposalBody("Recommend ready-for-agent."),
+        atMillis: 11,
+      });
+      const stored = yield* itemAt(10);
+      assert.include(ledgerBody(stored?.comments ?? []), "triage completed.");
+      const item = yield* observed(tracker, "#10");
+      assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-agent"]);
+      assert.deepStrictEqual(item?.attempts, [{ stage: "triage", outcome: "succeeded", atMillis: 11 }]);
+      assert.strictEqual(item?.proposal, "Recommend ready-for-agent.");
+    }),
+  );
+
+  it.effect("implemented clears ready-for-agent and records an implement success", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 11, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.implemented(workspace, decodeId("#11"), { atMillis: 12 });
+      const stored = yield* itemAt(11);
+      assert.include(ledgerBody(stored?.comments ?? []), "implement completed.");
+      const item = yield* observed(tracker, "#11");
+      assert.deepStrictEqual([...(item?.roles ?? [])], []);
+      assert.deepStrictEqual(item?.attempts, [{ stage: "implement", outcome: "succeeded", atMillis: 12 }]);
+    }),
+  );
+
+  it.effect("followedUp records the follow-up marker and a follow-up success", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 12, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.followedUp(workspace, decodeId("#12"), { marker, atMillis: 13 });
+      const stored = yield* itemAt(12);
+      assert.include(ledgerBody(stored?.comments ?? []), "follow-up completed.");
+      const item = yield* observed(tracker, "#12");
+      assert.deepStrictEqual(item?.followUp, marker);
+      assert.deepStrictEqual(item?.attempts, [{ stage: "follow-up", outcome: "succeeded", atMillis: 13 }]);
+    }),
+  );
+
+  it.effect("attemptFailed folds the reason into the status and records a failed attempt", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 13, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.attemptFailed(workspace, decodeId("#13"), {
+        stage: "implement",
+        atMillis: 14,
+        reason: "pnpm install: exit 1",
+      });
+      const stored = yield* itemAt(13);
+      assert.include(
+        ledgerBody(stored?.comments ?? []),
+        "Last implement attempt failed: pnpm install: exit 1",
+      );
+      const item = yield* observed(tracker, "#13");
+      assert.deepStrictEqual(item?.attempts, [{ stage: "implement", outcome: "failed", atMillis: 14 }]);
+    }),
+  );
+
+  it.effect("handOff clears the stage role, adds ready-for-human, and posts the note", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 14, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.handOff(workspace, decodeId("#14"), {
+        stage: "implement",
+        note: "Handing this to a human.",
+      });
+      const item = yield* observed(tracker, "#14");
+      assert.deepStrictEqual([...(item?.roles ?? [])], ["ready-for-human"]);
+      const stored = yield* itemAt(14);
+      const note = stored?.comments.find((comment) => !Coordination.hasLedgerMarker(codec, comment.body));
+      assert.strictEqual(note?.body, "Handing this to a human.");
+    }),
+  );
+
+  it.effect("stalled records the abandonment, carries the detail, and adds ready-for-human", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 15, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.stalled(workspace, decodeId("#15"), {
+        marker,
+        atMillis: 16,
+        detail: "Follow-up made no progress. Handing this to a human.",
+      });
+      const stored = yield* itemAt(15);
+      const body = ledgerBody(stored?.comments ?? []);
+      assert.include(body, "follow-up abandoned.");
+      assert.strictEqual(
+        Coordination.coordinationDetail(codec, body),
+        "Follow-up made no progress. Handing this to a human.",
+      );
+      const item = yield* observed(tracker, "#15");
+      assert.include([...(item?.roles ?? [])], "ready-for-human");
+      assert.deepStrictEqual(item?.attempts, [{ stage: "follow-up", outcome: "abandoned", atMillis: 16 }]);
+    }),
+  );
+
+  it.effect("reclassify applies the role changes and posts the note", () =>
+    Effect.gen(function* () {
+      const { host, itemAt, roleLog } = yield* makeFakeHost([{ number: 16, labels: ["needs-triage"] }]);
+      const tracker = makeCoordinationTracker(host);
+      const changes: RoleChanges = { remove: ["needs-triage"], add: ["wontfix"] };
+      yield* tracker.reclassify(workspace, decodeId("#16"), { changes, note: "Not planned." });
+      const item = yield* observed(tracker, "#16");
+      assert.deepStrictEqual([...(item?.roles ?? [])], ["wontfix"]);
+      assert.deepStrictEqual(yield* roleLog, [{ number: 16, changes }]);
+      const stored = yield* itemAt(16);
+      const note = stored?.comments.find((comment) => !Coordination.hasLedgerMarker(codec, comment.body));
+      assert.strictEqual(note?.body, "Not planned.");
+    }),
+  );
+});

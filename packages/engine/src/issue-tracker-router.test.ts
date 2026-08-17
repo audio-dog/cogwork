@@ -43,6 +43,13 @@ const fakeSource = (source: string, log: Array<Recorded>) =>
     recordFollowUp: () => Effect.void,
     note: () => Effect.void,
     setRoles: () => Effect.void,
+    triaged: () => Effect.void,
+    implemented: () => Effect.void,
+    followedUp: () => Effect.void,
+    attemptFailed: () => Effect.void,
+    handOff: () => Effect.void,
+    stalled: () => Effect.void,
+    reclassify: () => Effect.void,
   }) as unknown as IssueTrackerService;
 
 const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1 };
