@@ -2,13 +2,21 @@ import type { AttemptRecord, Claim, TriageRole, WorkItemId } from "@cogwork/cont
 import * as Effect from "effect/Effect";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
 import * as Coordination from "./coordination";
+import type { FollowUpMarker } from "./follow-up";
+import { handoffRoleFor } from "./hand-to-human";
 import type {
+  AttemptFailedOutcome,
   ClaimRequest,
-  FollowUpMarker,
+  FollowedUpOutcome,
+  HandOffOutcome,
+  ImplementedOutcome,
   IssueTrackerError,
   IssueTrackerService,
+  ReclassifyOutcome,
   RoleChanges,
+  StalledOutcome,
   TrackerItem,
+  TriagedOutcome,
 } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 
@@ -63,6 +71,27 @@ export const makeCoordinationTracker = <Ref, CommentId>(
   host: CoordinationHost<Ref, CommentId>,
 ): IssueTrackerService => {
   const { codec } = host;
+
+  const applyRoles = Effect.fn("coordinationTracker.applyRoles")(function* (ref: Ref, changes: RoleChanges) {
+    yield* Effect.forEach(changes.remove, (role) => host.removeRole(ref, role));
+    yield* Effect.forEach(changes.add, (role) => host.addRole(ref, role));
+    yield* host.afterRoleChange(ref, changes);
+  });
+
+  const writeAttempt = (ref: Ref, attempt: AttemptRecord, reason?: string) =>
+    Coordination.upsertCoordination(codec, host.comments(ref), {
+      status: Coordination.attemptStatus(attempt, reason),
+      marker: Coordination.serializeAttempt(codec, attempt),
+    });
+
+  const writeFollowUp = (ref: Ref, marker: FollowUpMarker, detail?: string) =>
+    Coordination.upsertCoordination(codec, host.comments(ref), {
+      marker: Coordination.serializeFollowUp(codec, marker),
+      detail,
+    });
+
+  const writeNote = (ref: Ref, detail: string) => Coordination.postNote(codec, host.comments(ref), detail);
+
   return {
     rateLimitScope: host.rateLimitScope,
     observe: Effect.fn("coordinationTracker.observe")(function* (workspace: RegisteredWorkspace) {
@@ -96,10 +125,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       reason?: string,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* Coordination.upsertCoordination(codec, host.comments(ref), {
-        status: Coordination.attemptStatus(attempt, reason),
-        marker: Coordination.serializeAttempt(codec, attempt),
-      });
+      yield* writeAttempt(ref, attempt, reason);
     }),
     recordFollowUp: Effect.fn("coordinationTracker.recordFollowUp")(function* (
       workspace: RegisteredWorkspace,
@@ -108,10 +134,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       detail?: string,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* Coordination.upsertCoordination(codec, host.comments(ref), {
-        marker: Coordination.serializeFollowUp(codec, marker),
-        detail,
-      });
+      yield* writeFollowUp(ref, marker, detail);
     }),
     note: Effect.fn("coordinationTracker.note")(function* (
       workspace: RegisteredWorkspace,
@@ -119,7 +142,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       detail: string,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* Coordination.postNote(codec, host.comments(ref), detail);
+      yield* writeNote(ref, detail);
     }),
     setRoles: Effect.fn("coordinationTracker.setRoles")(function* (
       workspace: RegisteredWorkspace,
@@ -127,9 +150,76 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       changes: RoleChanges,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* Effect.forEach(changes.remove, (role) => host.removeRole(ref, role));
-      yield* Effect.forEach(changes.add, (role) => host.addRole(ref, role));
-      yield* host.afterRoleChange(ref, changes);
+      yield* applyRoles(ref, changes);
+    }),
+    triaged: Effect.fn("coordinationTracker.triaged")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      outcome: TriagedOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      yield* writeNote(ref, outcome.proposal);
+      yield* applyRoles(ref, { remove: ["needs-triage"], add: [outcome.role] });
+      yield* writeAttempt(ref, { stage: "triage", outcome: "succeeded", atMillis: outcome.atMillis });
+    }),
+    implemented: Effect.fn("coordinationTracker.implemented")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      outcome: ImplementedOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      yield* applyRoles(ref, { remove: ["ready-for-agent"], add: [] });
+      yield* writeAttempt(ref, { stage: "implement", outcome: "succeeded", atMillis: outcome.atMillis });
+    }),
+    followedUp: Effect.fn("coordinationTracker.followedUp")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      outcome: FollowedUpOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      yield* writeFollowUp(ref, outcome.marker);
+      yield* writeAttempt(ref, { stage: "follow-up", outcome: "succeeded", atMillis: outcome.atMillis });
+    }),
+    attemptFailed: Effect.fn("coordinationTracker.attemptFailed")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      outcome: AttemptFailedOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      yield* writeAttempt(
+        ref,
+        { stage: outcome.stage, outcome: "failed", atMillis: outcome.atMillis },
+        outcome.reason,
+      );
+    }),
+    handOff: Effect.fn("coordinationTracker.handOff")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      outcome: HandOffOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      const cleared = handoffRoleFor(outcome.stage);
+      yield* applyRoles(ref, { remove: cleared ? [cleared] : [], add: ["ready-for-human"] });
+      if (outcome.note !== undefined) yield* writeNote(ref, outcome.note);
+    }),
+    stalled: Effect.fn("coordinationTracker.stalled")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      outcome: StalledOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      yield* writeFollowUp(ref, outcome.marker, outcome.detail);
+      yield* applyRoles(ref, { remove: [], add: ["ready-for-human"] });
+      yield* writeAttempt(ref, { stage: "follow-up", outcome: "abandoned", atMillis: outcome.atMillis });
+    }),
+    reclassify: Effect.fn("coordinationTracker.reclassify")(function* (
+      workspace: RegisteredWorkspace,
+      id: WorkItemId,
+      outcome: ReclassifyOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      yield* applyRoles(ref, outcome.changes);
+      if (outcome.note !== undefined) yield* writeNote(ref, outcome.note);
     }),
   };
 };

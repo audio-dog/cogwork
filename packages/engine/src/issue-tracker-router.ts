@@ -22,6 +22,13 @@ export const route = (github: IssueTrackerService, linear: IssueTrackerService):
       forWorkspace(workspace).recordFollowUp(workspace, id, marker, detail),
     note: (workspace, id, detail) => forWorkspace(workspace).note(workspace, id, detail),
     setRoles: (workspace, id, changes) => forWorkspace(workspace).setRoles(workspace, id, changes),
+    triaged: (workspace, id, outcome) => forWorkspace(workspace).triaged(workspace, id, outcome),
+    implemented: (workspace, id, outcome) => forWorkspace(workspace).implemented(workspace, id, outcome),
+    followedUp: (workspace, id, outcome) => forWorkspace(workspace).followedUp(workspace, id, outcome),
+    attemptFailed: (workspace, id, outcome) => forWorkspace(workspace).attemptFailed(workspace, id, outcome),
+    handOff: (workspace, id, outcome) => forWorkspace(workspace).handOff(workspace, id, outcome),
+    stalled: (workspace, id, outcome) => forWorkspace(workspace).stalled(workspace, id, outcome),
+    reclassify: (workspace, id, outcome) => forWorkspace(workspace).reclassify(workspace, id, outcome),
   };
 };
 

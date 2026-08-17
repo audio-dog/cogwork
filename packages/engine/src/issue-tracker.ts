@@ -2,6 +2,7 @@ import {
   type AttemptRecord,
   type Claim,
   IssueTrackerError,
+  type LifecycleStage,
   type TriageRole,
   type WorkItemId,
 } from "@cogwork/contracts";
@@ -45,6 +46,43 @@ export interface ObservedItem extends ObservedItemBase {
 export interface RoleChanges {
   readonly add: ReadonlyArray<TriageRole>;
   readonly remove: ReadonlyArray<TriageRole>;
+}
+
+export interface TriagedOutcome {
+  readonly role: TriageRole;
+  readonly proposal: string;
+  readonly atMillis: number;
+}
+
+export interface ImplementedOutcome {
+  readonly atMillis: number;
+}
+
+export interface FollowedUpOutcome {
+  readonly marker: FollowUpMarker;
+  readonly atMillis: number;
+}
+
+export interface AttemptFailedOutcome {
+  readonly stage: LifecycleStage;
+  readonly atMillis: number;
+  readonly reason?: string;
+}
+
+export interface HandOffOutcome {
+  readonly stage: LifecycleStage;
+  readonly note?: string;
+}
+
+export interface StalledOutcome {
+  readonly marker: FollowUpMarker;
+  readonly atMillis: number;
+  readonly detail: string;
+}
+
+export interface ReclassifyOutcome {
+  readonly changes: RoleChanges;
+  readonly note?: string;
 }
 
 const noAdapter = (workspace: RegisteredWorkspace) =>
@@ -92,6 +130,20 @@ export const makeEmpty = Effect.succeed({
   ) => failWhenRemote(workspace),
   note: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _detail: string) => failWhenRemote(workspace),
   setRoles: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _changes: RoleChanges) =>
+    failWhenRemote(workspace),
+  triaged: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: TriagedOutcome) =>
+    failWhenRemote(workspace),
+  implemented: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: ImplementedOutcome) =>
+    failWhenRemote(workspace),
+  followedUp: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: FollowedUpOutcome) =>
+    failWhenRemote(workspace),
+  attemptFailed: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: AttemptFailedOutcome) =>
+    failWhenRemote(workspace),
+  handOff: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: HandOffOutcome) =>
+    failWhenRemote(workspace),
+  stalled: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: StalledOutcome) =>
+    failWhenRemote(workspace),
+  reclassify: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: ReclassifyOutcome) =>
     failWhenRemote(workspace),
 } as const);
 
