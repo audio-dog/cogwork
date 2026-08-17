@@ -1,0 +1,25 @@
+packages/engine/CONTEXT.md
+  s_be9684aa3c594f::t_625ace97eb5a50 181,184-186
+  s_be9684aa3c594f::t_b74c466d520698 187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1c3ecbe3480d4a2cd4dab160235f8d56781a0724",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_be9684aa3c594f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "618d75f4-5116-4685-b636-7cbe6230e377",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
