@@ -69,6 +69,47 @@ never accidentally starts a daemon. The switch reflects real engine status, not 
 follows the same status broadcasts as the rest of the UI.
 _Avoid_: A separate "enabled" preference that can drift from the supervisor's actual state
 
+### Shell surfaces
+
+The renderer's UI vocabulary, settled while charting the shell-revamp map (orchestration issue #7).
+These name the *meaning* of each surface; the visual layout of several is still being prototyped.
+
+**Side panel**:
+The contextual right-hand panel of the shell — tabbed, resizable, and expandable to full window. It
+holds a couple of fixed tabs (Attention, Activity) alongside per-work-item tabs. "Tab" is the human
+word for a unit of the panel; the renderer's `SurfaceKind` is the code word for what a tab shows.
+_Avoid_: Right rail (the old fixed form), sidebar (that's the left nav), inspector.
+
+**Feed**:
+The shell's mission-control home surface — live, queued, and recently-done work items as cards.
+Clicking a card opens that item's tab in the side panel. It stays mission-control; there is no
+chat-first home.
+_Avoid_: Dashboard, home screen, Board / Inbox (both deleted).
+
+**Item tab**:
+A side-panel tab opened by clicking a work item card — one per work item, titled by its `WorkItemId`
+(`#50`, `AUD-1`), deduped (a second open focuses the existing tab) and persistent (no preview state).
+The canonical drill-in, and both a context and an action surface: identity, triage
+approve/reclassify, the item's Pull request, blockers, the live run transcript, previous attempts,
+and metadata. The Pull-request section is labelled plainly "Pull request" — never "PR gate".
+_Avoid_: Detail tab (there is no single reusable one), preview tab, PR gate (as user-facing copy).
+
+**Attention tab**:
+The fixed side-panel tab listing items that need a person — self-halts and merge gates — from which
+a human approves/reclassifies or opens a PR. Its triage approval reuses the same component as the
+item tab.
+_Avoid_: Inbox (deleted), notifications, needs-human queue.
+
+**Activity tab**:
+The fixed side-panel tab showing the raw daemon event stream, distinct from the run transcript.
+_Avoid_: Transcript (that's the folded per-run view), log, firehose.
+
+**Run transcript**:
+A live (or replayed) agent run rendered as **Conversation + Now** inside an item tab: a natural-prose
+stream with reasoning / tool calls / diffs folded to one-line rows, over a relocatable "Now" status
+line. The item tab is focal on it while a run is live.
+_Avoid_: Raw activity (that's the Activity tab), firehose, chat log.
+
 ## Cross-context edges
 
 - **desktop → cli.** In development the supervisor spawns the CLI `daemon` command as the engine
