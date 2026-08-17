@@ -8,7 +8,16 @@ export const IpcChannel = {
   rpcSend: "cogwork:rpc-send",
   rpcData: "cogwork:rpc-data",
   rpcClosed: "cogwork:rpc-closed",
+  rendererError: "cogwork:renderer-error",
 } as const;
+
+// A renderer-side failure (router error boundary, unhandled rejection) forwarded to `main`
+// so it lands in the same node logs as engine and IPC failures.
+export interface RendererErrorReport {
+  readonly message: string;
+  readonly stack?: string;
+  readonly origin?: string;
+}
 
 // Renderer relays RPC wire frames to `main`; it never opens the daemon socket (ADR 0009).
 export interface DaemonRpcBridge {
@@ -23,4 +32,5 @@ export interface CogworkBridge {
   readonly setEngineEnabled: (enabled: boolean) => Promise<EngineStatus>;
   readonly onEngineStatus: (listener: (status: EngineStatus) => void) => () => void;
   readonly rpc: DaemonRpcBridge;
+  readonly reportError: (report: RendererErrorReport) => void;
 }

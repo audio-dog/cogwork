@@ -5,14 +5,14 @@
 
 ## Context
 
-The generalized orchestration daemon (successor to the audiodog orchestrator) needs somewhere
+The generalized orchestration daemon needs somewhere
 to keep coordination state: claims ("a session is running against this ticket"), attempt
 counts, and blocked markers. Two models were considered:
 
 - **Ledger-owned coordination** — the daemon's local database is authoritative for locks and
   retries; the tracker only receives human-meaningful updates. Cleaner adapter contract,
   no plumbing writes to shared trackers, but the local DB becomes state you can lose.
-- **Tracker-owned coordination** (audiodog's model) — claims and attempt records live on the
+- **Tracker-owned coordination** — claims and attempt records live on the
   ticket itself (labels, comment markers); the local DB is a disposable cache.
 
 ## Decision

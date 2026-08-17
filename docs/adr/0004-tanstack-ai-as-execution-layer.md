@@ -7,8 +7,7 @@
 
 The orchestration engine needs to (a) drive coding-agent harness sessions (Cursor, Claude
 Code, Codex) in checkouts and (b) make direct model calls of its own (triage routing,
-summaries). The audiodog orchestrator hand-rolled a `HarnessAdapter` port on `@cursor/sdk`
-and never implemented its Claude/Codex placeholders. Alternatives considered: keep the
+summaries). Alternatives considered: keep the
 hand-rolled port per harness; use Effect v4's unstable AI modules for model calls; special-case
 Cursor on `@cursor/sdk` while using TanStack for the rest.
 

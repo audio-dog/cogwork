@@ -3,10 +3,53 @@ import { is } from "@electron-toolkit/utils";
 import { BrowserWindow, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
 import icon from "../../resources/icon.png?asset";
+import { mainLogger } from "./logger";
 
 export interface MainWindowDeps {
   readonly shouldQuit: () => boolean;
 }
+
+const loadRenderer = (window: BrowserWindow): void => {
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    window.loadURL(process.env.ELECTRON_RENDERER_URL);
+  } else {
+    window.loadFile(join(__dirname, "../renderer/index.html"));
+  }
+};
+
+// A GPU/network-service crash disposes the render frame and leaves a white screen that a manual
+// refresh can't recover, because the render process is gone. Reload it ourselves — but cap retries
+// so a renderer that crashes on every load can't spin in a reload loop.
+const maxReloadsPerWindow = 3;
+const reloadCooldownMs = 30_000;
+
+const installCrashRecovery = (window: BrowserWindow): void => {
+  const reloads = { count: 0, firstAt: 0 };
+
+  const reload = (why: string): void => {
+    const now = Date.now();
+    if (now - reloads.firstAt > reloadCooldownMs) {
+      reloads.count = 0;
+      reloads.firstAt = now;
+    }
+    if (reloads.count >= maxReloadsPerWindow) {
+      mainLogger.error(
+        `Renderer keeps failing (${why}); stopped auto-reloading after ${reloads.count} tries`,
+      );
+      return;
+    }
+    reloads.count += 1;
+    mainLogger.warn(`Recovering renderer (${why}); reload ${reloads.count}/${maxReloadsPerWindow}`);
+    loadRenderer(window);
+  };
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    mainLogger.error(`Render process gone: ${details.reason} (exitCode ${details.exitCode})`);
+    if (details.reason !== "clean-exit") reload(`render-process-gone: ${details.reason}`);
+  });
+
+  window.webContents.on("unresponsive", () => reload("unresponsive"));
+};
 
 export const createMainWindow = (deps: MainWindowDeps): BrowserWindow => {
   const windowState = windowStateKeeper({ defaultWidth: 1100, defaultHeight: 760 });
@@ -32,6 +75,7 @@ export const createMainWindow = (deps: MainWindowDeps): BrowserWindow => {
   });
 
   windowState.manage(window);
+  installCrashRecovery(window);
 
   window.on("ready-to-show", () => window.show());
 
@@ -49,11 +93,7 @@ export const createMainWindow = (deps: MainWindowDeps): BrowserWindow => {
     window.hide();
   });
 
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    window.loadURL(process.env.ELECTRON_RENDERER_URL);
-  } else {
-    window.loadFile(join(__dirname, "../renderer/index.html"));
-  }
+  loadRenderer(window);
 
   return window;
 };

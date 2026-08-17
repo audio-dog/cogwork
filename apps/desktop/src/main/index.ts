@@ -6,7 +6,7 @@ import { defaultSocketPath } from "./daemon-paths";
 import { resolveEngineCommand } from "./engine-command";
 import { EngineSupervisor } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
-import { engineLogger } from "./logger";
+import { engineLogger, mainLogger } from "./logger";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
 import { createMainWindow } from "./window";
@@ -56,6 +56,16 @@ const bootstrap = (): void => {
   app.whenReady().then(async () => {
     electronApp.setAppUserModelId("com.cogwork");
     app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
+
+    // GPU/utility/network-service crashes (the `exit_code=15` that starts the white-screen cascade)
+    // surface here rather than only on stderr, so they land in the same node logs as everything else.
+    app.on("child-process-gone", (_event, details) => {
+      const label = details.name ?? details.serviceName ?? details.type;
+      mainLogger.error(`Child process gone: ${label} — ${details.reason} (exitCode ${details.exitCode})`);
+    });
+    app.on("render-process-gone", (_event, _contents, details) => {
+      mainLogger.error(`Render process gone: ${details.reason} (exitCode ${details.exitCode})`);
+    });
 
     const supervisor = makeSupervisor();
 
