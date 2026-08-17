@@ -95,10 +95,25 @@ and metadata. The Pull-request section is labelled plainly "Pull request" — ne
 _Avoid_: Detail tab (there is no single reusable one), preview tab, PR gate (as user-facing copy).
 
 **Attention tab**:
-The fixed side-panel tab listing items that need a person — self-halts and merge gates — from which
-a human approves/reclassifies or opens a PR. Its triage approval reuses the same component as the
-item tab.
-_Avoid_: Inbox (deleted), notifications, needs-human queue.
+The fixed side-panel tab listing the work items that need a person. It holds two kinds — **Needs a
+decision** and **Ready to merge** (below) — in one list, filterable by kind (default: all) and by
+workspace. Each card is a **launcher**: clicking anywhere on it opens that item's item tab, where the
+human acts; a card also carries a quick provider-aware "open on the tracker / code host" button.
+Cards show **deterministic** signals only (the reason, wait time, PR status) — never AI-written prose.
+_Avoid_: Inbox (deleted), notifications, needs-human queue, self-halt / merge gate (renamed below).
+
+**Needs a decision**:
+An attention item where the agent stopped and waits on a human — it needs info, or it is ready for a
+human to take over (read-model tag `NeedsHuman`, reasons `needs-info` / `ready-for-human`). The human
+resolves it with triage approve/reclassify on the **item tab**, not on the attention card. The
+agent's triage proposal is AI prose; it lives on the item tab, clearly marked as an AI suggestion.
+_Avoid_: Self-halt (jargon), needs-human (the code tag, not the human word).
+
+**Ready to merge**:
+An attention item that is a pull request ready and waiting for a human (PR review `ready`). The card
+shows its checks / review / base-divergence / wait time; the human opens it on the code host to merge
+(no in-app merge).
+_Avoid_: Merge gate, PR gate (old jargon; the PR section elsewhere is still labelled "Pull request").
 
 **Activity tab**:
 The fixed side-panel tab showing the raw daemon event stream, distinct from the run transcript.
