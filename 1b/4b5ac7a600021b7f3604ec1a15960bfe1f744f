@@ -1,0 +1,33 @@
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_b3bff578988fd1::t_0994fc6ccd0c25 104-105,107
+  s_b3bff578988fd1::t_ce93e2d3d0926b 115
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_b3bff578988fd1::t_e509c524263605 15,32-36,46,52,60,65,67-74,81,107-113,140
+packages/ui/src/components/dropdown-menu.tsx
+  h_46518a29d4dd91 39,133
+apps/desktop/src/renderer/src/routes/settings-prototype.tsx
+  s_b3bff578988fd1::t_74aa3c92ef9ae5 30
+  s_b3bff578988fd1::t_68e4da2f7505a6 1-29,31-120,123,125-130,132-576
+  s_b3bff578988fd1::t_de9b0c06b549c7 121-122,124,131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1b4b5ac7a600021b7f3604ec1a15960bfe1f744f",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b3bff578988fd1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "dcffa1ed-d12b-4163-9bf6-2ce7041cb294",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
