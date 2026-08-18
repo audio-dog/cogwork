@@ -83,9 +83,9 @@ const flushText = (state: WatchState, runId: string): readonly [WatchState, Read
 
 const finishSummary = (event: AgUiEvent) => {
   const reason = sanitize(event.finishReason ?? "finished");
-  const total = event.usage?.totalTokens;
-  const tokens = total === undefined ? "" : ` (${total} tokens)`;
-  return `■ run ${reason}${tokens}`;
+  const usage = event.usage;
+  if (usage?.totalTokens === undefined) return `■ run ${reason}`;
+  return `■ run ${reason} (${usage.estimated ? "~" : ""}${usage.totalTokens} tokens)`;
 };
 
 interface Ctx {

@@ -113,10 +113,14 @@ const runDaemon = Effect.fn("commands.runDaemon")(
     effect.pipe(Effect.scoped, Effect.provide(Layer.merge(serverLayer(options), telemetryLayer))),
 );
 
+const usageLabel = (usage: RunSummary["usage"]) => {
+  if (usage?.totalTokens === undefined) return "";
+  return `  tokens=${usage.estimated ? "~" : ""}${usage.totalTokens}`;
+};
+
 const formatRun = (run: RunSummary) => {
   const session = run.session ? `  session=${run.session}` : "";
-  const usage = run.usage?.totalTokens === undefined ? "" : `  tokens=${run.usage.totalTokens}`;
-  return `  ${run.id}  ${run.status}  ${run.stage}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${session}${usage}`;
+  return `  ${run.id}  ${run.status}  ${run.stage}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${session}${usageLabel(run.usage)}`;
 };
 
 const formatRuns = (runs: ReadonlyArray<RunSummary>) =>
