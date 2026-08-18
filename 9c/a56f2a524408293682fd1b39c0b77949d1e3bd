@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_b3bff578988fd1::t_fb0a8292787e4e 114
+packages/ui/src/components/input-group.tsx
+  s_b3bff578988fd1::t_9aa081a4dce8b0 1-139
+packages/ui/src/components/dropdown-menu.tsx
+  s_b3bff578988fd1::t_33620684c63722 39,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9ca56f2a524408293682fd1b39c0b77949d1e3bd",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_b3bff578988fd1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "dcffa1ed-d12b-4163-9bf6-2ce7041cb294",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
