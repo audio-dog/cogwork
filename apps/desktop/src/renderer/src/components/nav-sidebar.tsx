@@ -20,7 +20,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
-import { RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
+import { RiFlaskLine, RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
@@ -34,7 +34,11 @@ interface View {
   readonly to: string;
 }
 
-const views: ReadonlyArray<View> = [{ label: "Feed", icon: RiPulseLine, to: "/" }];
+const views: ReadonlyArray<View> = [
+  { label: "Feed", icon: RiPulseLine, to: "/" },
+  // PROTOTYPE — throwaway link for the item-tab layout prototype (ticket #25). Remove with the prototype.
+  { label: "Item tab (proto)", icon: RiFlaskLine, to: "/item-tab-prototype" },
+];
 
 function ViewItem({ view }: { view: View }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });

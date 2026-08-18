@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as ItemTabPrototypeRouteImport } from './routes/item-tab-prototype'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ActivityRoute = ActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ItemTabPrototypeRoute = ItemTabPrototypeRouteImport.update({
+  id: '/item-tab-prototype',
+  path: '/item-tab-prototype',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/item-tab-prototype': typeof ItemTabPrototypeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/item-tab-prototype': typeof ItemTabPrototypeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/item-tab-prototype': typeof ItemTabPrototypeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activity'
+  fullPaths: '/' | '/activity' | '/item-tab-prototype'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activity'
-  id: '__root__' | '/' | '/activity'
+  to: '/' | '/activity' | '/item-tab-prototype'
+  id: '__root__' | '/' | '/activity' | '/item-tab-prototype'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActivityRoute: typeof ActivityRoute
+  ItemTabPrototypeRoute: typeof ItemTabPrototypeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/item-tab-prototype': {
+      id: '/item-tab-prototype'
+      path: '/item-tab-prototype'
+      fullPath: '/item-tab-prototype'
+      preLoaderRoute: typeof ItemTabPrototypeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivityRoute: ActivityRoute,
+  ItemTabPrototypeRoute: ItemTabPrototypeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
