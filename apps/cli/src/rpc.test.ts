@@ -52,4 +52,28 @@ describe("daemon socket", () => {
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
+
+  it.effect("releases the socket on scope teardown, leaving nothing to leak", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const home = yield* fs.makeTempDirectoryScoped({ prefix: "cf-" });
+      const dir = path.join(home, "home");
+      const socketPath = path.join(dir, "d.sock");
+
+      yield* Effect.gen(function* () {
+        assert.isTrue(yield* fs.exists(socketPath));
+      }).pipe(
+        Effect.provide(transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson))),
+        Effect.scoped,
+      );
+
+      assert.isFalse(yield* fs.exists(socketPath));
+
+      yield* Effect.void.pipe(
+        Effect.provide(transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson))),
+        Effect.scoped,
+      );
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
 });
