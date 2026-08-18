@@ -1,0 +1,22 @@
+apps/desktop/components.json
+  h_46518a29d4dd91 21
+packages/ui/src/components/context-menu.tsx
+  h_46518a29d4dd91 1-239
+packages/ui/src/components/item.tsx
+  h_46518a29d4dd91 8,10-12
+packages/ui/components.json
+  h_46518a29d4dd91 21
+packages/ui/src/components/menubar.tsx
+  h_46518a29d4dd91 1-255
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "547bdf6d1dcca1dd8a071486a383e4ee9faa74ca",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
