@@ -1,0 +1,38 @@
+apps/desktop/src/renderer/src/routes/item-tab-prototype.tsx
+  s_ac4f6ad17da921::t_5cdd3042b79130 1-67
+apps/desktop/src/renderer/src/components/prototype-switcher.tsx
+  s_ac4f6ad17da921::t_a18c339209fb44 1-119
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_ac4f6ad17da921::t_2f16920905774c 14,26-30,35,40,46,50,52-53,59,78-84,91
+apps/desktop/src/renderer/src/components/item-tab-variants.tsx
+  s_ac4f6ad17da921::t_cc3abab905dee7 841
+  s_ac4f6ad17da921::t_822ecfa6301309 835
+  s_ac4f6ad17da921::t_4e6a6efac26be2 787
+  s_ac4f6ad17da921::t_e85854f124fc6d 338-340
+  s_ac4f6ad17da921::t_b5389e9297bac4 1-337,341-786,788-793,795-834,836-840,842-988
+  s_ac4f6ad17da921::t_52d9e8644b4fd4 794
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_ac4f6ad17da921::t_7fbe7602dc687e 23
+  s_ac4f6ad17da921::t_716648787c1c81 37-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6ca32df1322af0b59e235ee48b2005f591836ae8",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_ac4f6ad17da921": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5549520e-4d3b-47dc-a270-440143e4f346",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
