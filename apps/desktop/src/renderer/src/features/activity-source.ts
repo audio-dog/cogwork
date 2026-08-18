@@ -258,7 +258,8 @@ export interface LifecycleState {
 export const initialLifecycleState: LifecycleState = { engine: null, connection: "connecting" };
 
 export const stepLifecycle = (prev: LifecycleState, sample: LifecycleSample) => {
-  const engineRows = prev.engine === sample.engine ? [] : [engineRow(sample.engine, sample.atMillis)];
+  const engineRows =
+    prev.engine !== null && prev.engine !== sample.engine ? [engineRow(sample.engine, sample.atMillis)] : [];
   const connectionRows =
     prev.connection === sample.connection ? [] : [connectionRow(sample.connection, sample.atMillis)];
   return {

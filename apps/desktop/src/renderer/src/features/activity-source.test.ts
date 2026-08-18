@@ -242,8 +242,14 @@ describe("synthesizeLifecycle — transition-only", () => {
       { engine: "up", connection: "live", atMillis: 3 },
     ]);
 
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => r.summary)).toEqual(["Engine started", "Connection restored"]);
+    expect(rows).toHaveLength(1);
+    expect(rows.map((r) => r.summary)).toEqual(["Connection restored"]);
+  });
+
+  it("does not synthesize engine stopped on first sample when engine is off", () => {
+    const rows = synthesizeLifecycle([{ engine: "off", connection: "connecting", atMillis: 1 }]);
+
+    expect(rows).toHaveLength(0);
   });
 
   it("emits one row per real transition, with the right severity", () => {
@@ -255,7 +261,6 @@ describe("synthesizeLifecycle — transition-only", () => {
     ]);
 
     expect(rows.map((r) => ({ summary: r.summary, severity: r.severity, kind: r.kind }))).toEqual([
-      { summary: "Engine starting", severity: "info", kind: "engine" },
       { summary: "Engine started", severity: "success", kind: "engine" },
       { summary: "Connection restored", severity: "info", kind: "connection" },
       { summary: "Engine stopped", severity: "warn", kind: "engine" },
@@ -360,11 +365,10 @@ describe("deriveActivityFeed — the unified fold", () => {
 
     expect(feed.log.map((r) => r.summary)).toEqual([
       "42 · run succeeded",
-      "Engine started",
       "Connection restored",
       "1 removed",
     ]);
-    expect(feed.total).toBe(4);
+    expect(feed.total).toBe(3);
   });
 
   it("reports the live Now-zone and bounds the log", () => {
