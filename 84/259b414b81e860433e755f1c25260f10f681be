@@ -1,0 +1,26 @@
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_4980621b4465ae::t_a9b5996b7b2693 121-141
+  s_4980621b4465ae::t_f519b14548a8c9 167
+  s_4980621b4465ae::t_37dc55bca130b4 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "84259b414b81e860433e755f1c25260f10f681be",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_4980621b4465ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c0ab0d4a-b5e3-4c46-afac-0427c7082b3c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
