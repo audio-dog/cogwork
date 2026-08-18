@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/features/activity-source.ts
+  s_e4a11fa8a7561e::t_75af9354f89181 261-262
+apps/desktop/src/renderer/src/features/activity-source.test.ts
+  s_e4a11fa8a7561e::t_410bba9a6c88d7 245-252
+  s_e4a11fa8a7561e::t_383fbe224039f0 371
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "822057d13a289f0740c7ce365cb94989a566b107",
+  "prompts": {},
+  "sessions": {
+    "s_e4a11fa8a7561e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "acaca5fe-b628-42c3-b18f-e9dc0f92c17e",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
