@@ -16,24 +16,24 @@ import type { ItemSelection } from "../store/chrome";
 import { useChromeStore } from "../store/chrome";
 
 interface FeedState {
-  readonly running: ReadonlyArray<FeedRun>;
-  readonly queued: ReadonlyArray<QueuedItem>;
-  readonly done: ReadonlyArray<FeedRun>;
-  readonly previews: ReadonlyMap<string, RunActivityPreview>;
+  running: ReadonlyArray<FeedRun>;
+  queued: ReadonlyArray<QueuedItem>;
+  done: ReadonlyArray<FeedRun>;
+  previews: ReadonlyMap<string, RunActivityPreview>;
 }
 
 interface FeedActions {
-  readonly select: (selection: ItemSelection) => void;
+  select: (selection: ItemSelection) => void;
 }
 
 interface FeedMeta {
-  readonly now: number;
+  now: number;
 }
 
 interface FeedContextValue {
-  readonly state: FeedState;
-  readonly actions: FeedActions;
-  readonly meta: FeedMeta;
+  state: FeedState;
+  actions: FeedActions;
+  meta: FeedMeta;
 }
 
 const FeedContext = createContext<FeedContextValue | null>(null);
