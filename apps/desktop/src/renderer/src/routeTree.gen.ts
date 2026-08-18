@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as AttentionPrototypeRouteImport } from './routes/attention-prototype'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ActivityRoute = ActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AttentionPrototypeRoute = AttentionPrototypeRouteImport.update({
+  id: '/attention-prototype',
+  path: '/attention-prototype',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/attention-prototype': typeof AttentionPrototypeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/attention-prototype': typeof AttentionPrototypeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/attention-prototype': typeof AttentionPrototypeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activity'
+  fullPaths: '/' | '/activity' | '/attention-prototype'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activity'
-  id: '__root__' | '/' | '/activity'
+  to: '/' | '/activity' | '/attention-prototype'
+  id: '__root__' | '/' | '/activity' | '/attention-prototype'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActivityRoute: typeof ActivityRoute
+  AttentionPrototypeRoute: typeof AttentionPrototypeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/attention-prototype': {
+      id: '/attention-prototype'
+      path: '/attention-prototype'
+      fullPath: '/attention-prototype'
+      preLoaderRoute: typeof AttentionPrototypeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivityRoute: ActivityRoute,
+  AttentionPrototypeRoute: AttentionPrototypeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
