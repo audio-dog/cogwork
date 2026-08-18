@@ -25,6 +25,15 @@ export const OAuthAppConfig = Schema.Struct({
 });
 export type OAuthAppConfig = typeof OAuthAppConfig.Type;
 
+// Where a GitHub workspace reads ticket priority: a Projects v2 board named by its project number,
+// and the single-select field to read (defaults to "Priority"). Mirrors the optional `roleLabels`
+// precedent — absent means the workspace reads no priority and every item resolves to the default.
+export const GitHubPrioritySource = Schema.Struct({
+  project: Schema.Int.check(Schema.isGreaterThan(0)),
+  field: Schema.optional(TrimmedNonEmptyString),
+});
+export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
+
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   repo: Schema.optional(TrimmedNonEmptyString),
@@ -37,6 +46,7 @@ export const IssueTrackerConfig = Schema.Struct({
   assigneeAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   roleLabels: Schema.optional(TriageRoleLabels),
+  priority: Schema.optional(GitHubPrioritySource),
 });
 export type IssueTrackerConfig = typeof IssueTrackerConfig.Type;
 
