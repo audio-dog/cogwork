@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_4c26ca09bd2cc4::t_00be20cdd7f3e7 7,15,18-68,112-116,143-146,155,194-197,199-207,209,211,216-244,269,272,282-301
+  s_4c26ca09bd2cc4::t_74eb08d6da00f5 350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9a94fd2b5eed098e9b2363c82fdb48dd7911ddf6",
+  "prompts": {},
+  "sessions": {
+    "s_4c26ca09bd2cc4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba8c5e96-abb9-41cc-ad39-52e7a13551f4",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
