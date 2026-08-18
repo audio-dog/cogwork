@@ -1,0 +1,22 @@
+packages/contracts/src/ag-ui.ts
+  s_e16c6eb613012a::t_0008e6daa661b4 73
+  s_e16c6eb613012a::t_734e3b34eec36d 12
+packages/contracts/src/run.ts
+  s_e16c6eb613012a::t_075a6ee8da3665 50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "8765e048a53dabe000941e0c650b882e482b2641",
+  "prompts": {},
+  "sessions": {
+    "s_e16c6eb613012a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af1af487-5d38-492d-88ed-7b3aacacefd0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
