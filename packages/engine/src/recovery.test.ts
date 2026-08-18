@@ -108,6 +108,20 @@ const unclaimed: ObservedItem = {
   pr: null,
 };
 
+const staleNoStage: ObservedItem = {
+  id: id("#4"),
+  title: "stale",
+  roles: [],
+  assignees: [],
+  claimLabeled: true,
+  claim: { by: "cogwork-bot", claimedAtMillis: 1 },
+  claimedByUs: true,
+  attempts: [],
+  openBlockers: 0,
+  proposal: null,
+  pr: null,
+};
+
 const failedAttempt = (atMillis: number): AttemptRecord => ({
   stage: "implement",
   outcome: "failed",
@@ -215,7 +229,7 @@ describe("Recovery.recover", () => {
       yield* ledger.insertRun(interrupted);
       const issueTracker: Partial<IssueTrackerService> = {
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
-        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
@@ -261,19 +275,19 @@ describe("Recovery.recover", () => {
   it.effect("never escalates an interrupted item to a human, even one attempt from exhaustion", () =>
     Effect.gen(function* () {
       const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
-      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const handoffs = yield* Ref.make<ReadonlyArray<string>>([]);
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
       const issueTracker: Partial<IssueTrackerService> = {
-        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
-        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+        attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        handOff: (_workspace, itemId) => Ref.update(handoffs, (xs) => [...xs, itemId]),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
         assert.deepStrictEqual(yield* Ref.get(attempts), []);
-        assert.deepStrictEqual(yield* Ref.get(roles), []);
+        assert.deepStrictEqual(yield* Ref.get(handoffs), []);
       }).pipe(
         Effect.provide(
           recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
@@ -291,8 +305,8 @@ describe("Recovery.recover", () => {
       const ledger = yield* RunLedger.makeMemory;
       const issueTracker: Partial<IssueTrackerService> = {
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
-        recordAttempt: (_workspace, itemId, _attempt, reason) =>
-          Ref.update(attempts, (xs) => [...xs, { item: itemId, reason }]),
+        attemptFailed: (_workspace, itemId, outcome) =>
+          Ref.update(attempts, (xs) => [...xs, { item: itemId, reason: outcome.reason }]),
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
       };
       yield* Effect.gen(function* () {
@@ -314,6 +328,33 @@ describe("Recovery.recover", () => {
     }),
   );
 
+  it.effect("writes the stale-recovery prose through the note primitive when no stage survives", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const handoffs = yield* Ref.make<ReadonlyArray<string>>([]);
+      const notes = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        handOff: (_workspace, itemId) => Ref.update(handoffs, (xs) => [...xs, itemId]),
+        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        const note = (yield* Ref.get(notes))[0] ?? "";
+        assert.include(note, "Recovered a stale claim after a daemon restart.");
+        assert.include(note, recoveryReason);
+        assert.deepStrictEqual(yield* Ref.get(released), [id("#4")]);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+        assert.deepStrictEqual(yield* Ref.get(handoffs), []);
+      }).pipe(Effect.provide(recoveryLayer({ observed: [staleNoStage], issueTracker, ledger, admitted })));
+    }),
+  );
+
   it.effect("hands an exhausted recovery the resume handle its session kept before the daemon died", () =>
     Effect.gen(function* () {
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
@@ -329,7 +370,7 @@ describe("Recovery.recover", () => {
       });
       yield* ledger.insertRun({ ...interruptedRun, status: "failed", endedAtMillis: 2, session });
       const issueTracker: Partial<IssueTrackerService> = {
-        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
+        handOff: (_workspace, _itemId, outcome) => Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
@@ -346,12 +387,15 @@ describe("Recovery.recover", () => {
   it.effect("hands an exhausted recovery to a human with a handoff note", () =>
     Effect.gen(function* () {
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
-      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const stages = yield* Ref.make<ReadonlyArray<string>>([]);
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       const issueTracker: Partial<IssueTrackerService> = {
-        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
-        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+        handOff: (_workspace, _itemId, outcome) =>
+          Effect.gen(function* () {
+            yield* Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]);
+            yield* Ref.update(stages, (xs) => [...xs, outcome.stage]);
+          }),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
@@ -359,7 +403,7 @@ describe("Recovery.recover", () => {
         const note = (yield* Ref.get(notes))[0] ?? "";
         assert.include(note, "Exhausted after 3 failed implement attempts");
         assert.include(note, recoveryReason);
-        assert.deepStrictEqual(yield* Ref.get(roles), ["ready-for-human"]);
+        assert.deepStrictEqual(yield* Ref.get(stages), ["implement"]);
       }).pipe(
         Effect.provide(
           recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
@@ -377,7 +421,7 @@ describe("Recovery.recover", () => {
       yield* ledger.insertRun(interruptedRun);
       const issueTracker: Partial<IssueTrackerService> = {
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
-        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
@@ -409,7 +453,7 @@ describe("Recovery.recover", () => {
 
   it.effect("resumes a fresh crash when an earlier success reset the crash count", () =>
     Effect.gen(function* () {
-      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const handoffs = yield* Ref.make<ReadonlyArray<string>>([]);
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
@@ -417,7 +461,7 @@ describe("Recovery.recover", () => {
       yield* ledger.insertRun(crashedRun("ok", 3, "succeeded"));
       yield* ledger.insertRun(crashedRun("crash-c", 4, "running"));
       const issueTracker: Partial<IssueTrackerService> = {
-        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+        handOff: (_workspace, itemId) => Ref.update(handoffs, (xs) => [...xs, itemId]),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
@@ -426,7 +470,7 @@ describe("Recovery.recover", () => {
           (yield* Ref.get(admitted)).map((work) => work.id),
           [id("#1")],
         );
-        assert.deepStrictEqual(yield* Ref.get(roles), []);
+        assert.deepStrictEqual(yield* Ref.get(handoffs), []);
       }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
     }),
   );
@@ -436,7 +480,7 @@ describe("Recovery.recover", () => {
       const released = yield* Ref.make<ReadonlyArray<string>>([]);
       const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
-      const roles = yield* Ref.make<ReadonlyArray<string>>([]);
+      const stages = yield* Ref.make<ReadonlyArray<string>>([]);
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       const running = crashedRun("crash-c", 3, "running");
@@ -445,9 +489,12 @@ describe("Recovery.recover", () => {
       yield* ledger.insertRun(running);
       const issueTracker: Partial<IssueTrackerService> = {
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
-        recordAttempt: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
-        note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
-        setRoles: (_workspace, _itemId, changes) => Ref.update(roles, (xs) => [...xs, ...changes.add]),
+        attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
+        handOff: (_workspace, _itemId, outcome) =>
+          Effect.gen(function* () {
+            yield* Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]);
+            yield* Ref.update(stages, (xs) => [...xs, outcome.stage]);
+          }),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
@@ -455,7 +502,7 @@ describe("Recovery.recover", () => {
         const note = (yield* Ref.get(notes))[0] ?? "";
         assert.include(note, "Exhausted after 3 consecutive implement crashes");
         assert.include(note, recoveryReason);
-        assert.deepStrictEqual(yield* Ref.get(roles), ["ready-for-human"]);
+        assert.deepStrictEqual(yield* Ref.get(stages), ["implement"]);
         assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
         assert.deepStrictEqual(yield* Ref.get(attempts), []);
         assert.deepStrictEqual(yield* Ref.get(admitted), []);
@@ -494,7 +541,7 @@ describe("Recovery.recover", () => {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       const issueTracker: Partial<IssueTrackerService> = {
-        recordAttempt: () => Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "boom" })),
+        attemptFailed: () => Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "boom" })),
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
