@@ -6,7 +6,6 @@ import { mergeGate, selfHalts } from "../features/feed";
 import { useBoard } from "../features/use-board";
 import { useChromeStore } from "../store/chrome";
 import { MergeGateCard, SelfHaltCard } from "./attention-items";
-import { ItemDetail } from "./item-detail";
 import { RailShell } from "./rail-shell";
 
 function RailSection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
@@ -74,9 +73,4 @@ export function AttentionList() {
       <RailBody />
     </RailShell>
   );
-}
-
-export function AttentionRail() {
-  const selection = useChromeStore((state) => state.selection);
-  return selection ? <ItemDetail selection={selection} /> : <AttentionList />;
 }
