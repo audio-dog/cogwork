@@ -407,6 +407,29 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("round-trips the estimated flag on a best-guess usage", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const id = runId("usage-estimated");
+        yield* ledger.insertRun(record("usage-estimated", 9500));
+        yield* ledger.updateRun(id, {
+          status: "succeeded",
+          usage: { inputTokens: 12, outputTokens: 3, totalTokens: 15, estimated: true },
+          endedAtMillis: 9600,
+        });
+
+        const summaries = yield* ledger.listRuns(10);
+        const summary = summaries.find((row) => row.id === id);
+        assert.isDefined(summary);
+        assert.deepStrictEqual(summary?.usage, {
+          inputTokens: 12,
+          outputTokens: 3,
+          totalTokens: 15,
+          estimated: true,
+        });
+      }),
+    );
+
     it.effect("resolves a watch target by work item, running-first, past the recent-runs window", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;

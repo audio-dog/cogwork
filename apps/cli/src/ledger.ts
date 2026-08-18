@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS runs (
   input_tokens INTEGER,
   output_tokens INTEGER,
   total_tokens INTEGER,
+  estimated INTEGER,
   status TEXT NOT NULL,
   started_at INTEGER NOT NULL,
   ended_at INTEGER
@@ -65,6 +66,7 @@ const runColumns = (record: {
   inputTokens: record.usage?.inputTokens ?? null,
   outputTokens: record.usage?.outputTokens ?? null,
   totalTokens: record.usage?.totalTokens ?? null,
+  estimated: record.usage?.estimated ?? null,
   status: record.status,
   endedAt: record.endedAtMillis,
 });
@@ -100,12 +102,14 @@ const usageOf = (row: {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly totalTokens: number | null;
+  readonly estimated: boolean | null;
 }): TokenUsage | null => {
   if (row.inputTokens === null && row.outputTokens === null && row.totalTokens === null) return null;
   return {
     ...(row.inputTokens === null ? {} : { inputTokens: row.inputTokens }),
     ...(row.outputTokens === null ? {} : { outputTokens: row.outputTokens }),
     ...(row.totalTokens === null ? {} : { totalTokens: row.totalTokens }),
+    ...(row.estimated ? { estimated: true } : {}),
   };
 };
 
@@ -120,6 +124,7 @@ const runRecordSelection = {
   inputTokens: runs.inputTokens,
   outputTokens: runs.outputTokens,
   totalTokens: runs.totalTokens,
+  estimated: runs.estimated,
   status: runs.status,
   startedAt: runs.startedAt,
   endedAt: runs.endedAt,
@@ -136,6 +141,7 @@ const runRecordFromRow = (row: {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly totalTokens: number | null;
+  readonly estimated: boolean | null;
   readonly status: string;
   readonly startedAt: number;
   readonly endedAt: number | null;
@@ -168,9 +174,9 @@ const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows
     ),
   ).pipe(Effect.map((chunks) => chunks.flat()));
 
-const ensureBranchColumn = (sqlite: DatabaseSync) => {
+const addColumnIfMissing = (sqlite: DatabaseSync, ddl: string) => {
   try {
-    sqlite.exec("ALTER TABLE runs ADD COLUMN branch TEXT");
+    sqlite.exec(ddl);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!message.includes("duplicate column")) throw error;
@@ -190,7 +196,8 @@ const open = (ledgerPath: string) =>
       Effect.sync(() => {
         const sqlite = new DatabaseSync(ledgerPath);
         sqlite.exec(bootstrapSql);
-        ensureBranchColumn(sqlite);
+        addColumnIfMissing(sqlite, "ALTER TABLE runs ADD COLUMN branch TEXT");
+        addColumnIfMissing(sqlite, "ALTER TABLE runs ADD COLUMN estimated INTEGER");
         migrateBlockedToExhausted(sqlite);
         return drizzle({ client: sqlite });
       }),
