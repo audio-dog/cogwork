@@ -7,8 +7,6 @@ export interface ItemSelection {
 }
 
 interface ChromeState {
-  readonly attentionCollapsed: boolean;
-  readonly toggleAttention: () => void;
   readonly workspaceFilter: WorkspaceId | null;
   readonly setWorkspaceFilter: (workspace: WorkspaceId | null) => void;
   readonly selection: ItemSelection | null;
@@ -17,11 +15,9 @@ interface ChromeState {
 }
 
 export const useChromeStore = create<ChromeState>((set) => ({
-  attentionCollapsed: false,
-  toggleAttention: () => set((state) => ({ attentionCollapsed: !state.attentionCollapsed })),
   workspaceFilter: null,
   setWorkspaceFilter: (workspace) => set({ workspaceFilter: workspace }),
   selection: null,
-  select: (selection) => set({ selection, attentionCollapsed: false }),
+  select: (selection) => set({ selection }),
   clearSelection: () => set({ selection: null }),
 }));

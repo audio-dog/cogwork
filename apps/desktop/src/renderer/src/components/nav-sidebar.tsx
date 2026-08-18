@@ -20,7 +20,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
-import { RiPulseLine, RiSettings3Line, RiStackLine, RiUserLine } from "@remixicon/react";
+import { RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
@@ -34,10 +34,7 @@ interface View {
   readonly to: string;
 }
 
-const views: ReadonlyArray<View> = [
-  { label: "Feed", icon: RiPulseLine, to: "/" },
-  { label: "Lanes", icon: RiStackLine, to: "/lanes" },
-];
+const views: ReadonlyArray<View> = [{ label: "Feed", icon: RiPulseLine, to: "/" }];
 
 function ViewItem({ view }: { view: View }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
