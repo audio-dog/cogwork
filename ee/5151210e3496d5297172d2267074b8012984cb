@@ -1,0 +1,114 @@
+packages/engine/src/classify.ts
+  s_493e0803232299::t_817a7b1fc9a4f9 14
+  s_493e0803232299::t_795a746fe2de95 144
+  s_493e0803232299::t_465ba919baae21 133
+  s_493e0803232299::t_d9c225e7421685 24
+  s_493e0803232299::t_29c6cd709b4185 10
+packages/engine/src/scheduler.test.ts
+  s_493e0803232299::t_be6ecdc177a6cd 4
+  s_493e0803232299::t_f857bb28c6e678 47-52,56
+  s_493e0803232299::t_cc021aadf2d9ff 119-120,122-151
+  s_f53de7984c9c7b::t_f9e8c8bf73922f 118,121,152
+packages/engine/src/linear/host.ts
+  s_493e0803232299::t_22180182215171 98
+packages/engine/src/github/client.ts
+  s_493e0803232299::t_b944df7d2ab82c 139-144
+  s_493e0803232299::t_4bf6bcb8b09791 421
+  s_493e0803232299::t_726f70161bbad9 362-364,367-371,380-382
+  s_493e0803232299::t_7586c15bc14a0f 18
+  s_493e0803232299::t_02d4c854ba3e9b 383-384
+  s_493e0803232299::t_58cfe78d8df403 334-361,365-366,372-379,385
+  s_493e0803232299::t_a2fd20be70571b 386
+  s_493e0803232299::t_e4876ff2e934d0 1
+packages/engine/src/read-model.test.ts
+  s_493e0803232299::t_9b5d2c5dbbcade 56
+  s_493e0803232299::t_9abf3a1408299f 38
+packages/engine/src/linear/linear.test.ts
+  s_493e0803232299::t_a962c710e38be9 78
+  s_493e0803232299::t_642e31f4d8ce91 43
+  s_493e0803232299::t_193ab7b9bfb1dd 491-519
+  s_493e0803232299::t_d38ee990d5c9d4 1
+  s_493e0803232299::t_6568d614c679d9 20,520-521
+packages/engine/src/github/host.ts
+  s_493e0803232299::t_6b0ae3b508de42 103-120
+  s_493e0803232299::t_9c64c7d81c60e7 1-7,20
+  s_493e0803232299::t_01f279a34fd8fd 49
+  s_493e0803232299::t_66ad3711e441a8 82,96,101-102,121,130,133
+packages/engine/src/commands.test.ts
+  s_493e0803232299::t_5c4ad6703211b5 155
+packages/engine/src/scheduler.ts
+  s_493e0803232299::t_d0b3dfc4c998f5 2
+  s_493e0803232299::t_138ce3506dc796 142
+  s_493e0803232299::t_55805ae21d0edb 69-71
+packages/engine/src/engine.test.ts
+  s_493e0803232299::t_bdca98a1a248a4 514
+  s_493e0803232299::t_b032c43802d2ba 549
+  s_493e0803232299::t_1f57700d062142 205
+  s_493e0803232299::t_c9678708aaf807 164
+  s_493e0803232299::t_fb60aadaa066e0 579
+packages/engine/src/coordination-tracker.ts
+  s_493e0803232299::t_cf3f527a91928a 1-8
+  s_493e0803232299::t_d103e006e45f94 43
+  s_493e0803232299::t_7f66621bd50a19 80
+packages/engine/src/coordination-tracker.test.ts
+  s_493e0803232299::t_b6cd5da4796834 125
+packages/engine/src/event-publisher.test.ts
+  s_493e0803232299::t_13181ac879d162 124
+packages/engine/src/recovery.test.ts
+  s_493e0803232299::t_9812c422c42160 80,95,110,125
+packages/engine/src/github/github.test.ts
+  s_493e0803232299::t_7439943bc928b1 231,884-935,938-939
+  s_493e0803232299::t_d8a28a1c914aec 223
+  s_493e0803232299::t_e722f94ac87f16 1
+  s_493e0803232299::t_a9e5be6a022b1d 2-7,18,79-80,129-131,179-182,224-230,232-233,936-937,940-942
+packages/engine/src/classify.test.ts
+  s_493e0803232299::t_afefd218bbdf7f 402-445
+  s_493e0803232299::t_e29a956596c636 22
+packages/engine/src/linear/client.ts
+  s_493e0803232299::t_24aea42e8c1b31 1
+  s_493e0803232299::t_1ff280dd27b637 90
+  s_493e0803232299::t_580bb3f75a3799 89
+  s_493e0803232299::t_13fd57e06a3710 302-304,306-307,317
+  s_493e0803232299::t_3fb2b2963e3bbc 190
+  s_493e0803232299::t_60bd4cf035ea23 305
+  s_493e0803232299::t_2938f4675868c5 42
+packages/engine/src/issue-tracker.ts
+  s_493e0803232299::t_d1645730db711f 6
+  s_493e0803232299::t_53e9b738fba821 32-34
+packages/engine/src/github/priority.test.ts
+  s_493e0803232299::t_7f87b4cc6da6e0 1-87
+packages/engine/src/executor.test.ts
+  s_493e0803232299::t_ffd3fc43ab0038 75-81
+  s_493e0803232299::t_5bd5b19b695d72 222
+  s_493e0803232299::t_73f6c1ecf21284 161
+packages/engine/src/github/priority.ts
+  s_493e0803232299::t_8a53a65991c9b7 13
+  s_493e0803232299::t_77168fa304671e 1-12,14-75,78-83
+  s_493e0803232299::t_10172ad25ed42b 76-77
+packages/engine/src/observe.ts
+  s_493e0803232299::t_8c5e90e3623db4 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ee5151210e3496d5297172d2267074b8012984cb",
+  "prompts": {},
+  "sessions": {
+    "s_493e0803232299": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21d42f45-fb94-48ab-a2dd-587135f75789",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f53de7984c9c7b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c71410e8-2fcb-4553-afb9-1e8a878aa414",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
