@@ -12,7 +12,12 @@ import * as Schema from "effect/Schema";
 import { triageProposalBody } from "./comments";
 import type { CommentHost, CoordinationComment } from "./coordination";
 import * as Coordination from "./coordination";
-import { type CoordinationHost, type ListedItem, makeCoordinationTracker } from "./coordination-tracker";
+import {
+  type CoordinationHost,
+  handoffRoleFor,
+  type ListedItem,
+  makeCoordinationTracker,
+} from "./coordination-tracker";
 import type { FollowUpMarker } from "./follow-up";
 import { wireCodec } from "./github/markers";
 import type { RoleChanges } from "./issue-tracker";
@@ -175,7 +180,11 @@ describe("coordination tracker", () => {
       const claim = { claimedAtMillis: 10, stage: "implement" } as const;
       const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 11 };
       yield* tracker.claim(workspace, decodeId("#7"), claim);
-      yield* tracker.recordAttempt(workspace, decodeId("#7"), attempt, "git worktree add: boom");
+      yield* tracker.attemptFailed(workspace, decodeId("#7"), {
+        stage: "implement",
+        atMillis: 11,
+        reason: "git worktree add: boom",
+      });
       const item = yield* observed(tracker, "#7");
       assert.deepStrictEqual(item?.claim, { by: claimant, ...claim });
       assert.deepStrictEqual(item?.attempts, [attempt]);
@@ -188,50 +197,21 @@ describe("coordination tracker", () => {
     }),
   );
 
-  it.effect("records a follow-up marker and carries a hand-off detail through a later write", () =>
-    Effect.gen(function* () {
-      const { host, itemAt } = yield* makeFakeHost([{ number: 5, labels: ["ready-for-agent"] }]);
-      const tracker = makeCoordinationTracker(host);
-      const marker: FollowUpMarker = {
-        checks: "failing",
-        humanCommentAtMillis: 4,
-        noProgress: 1,
-        baseDivergence: "clean",
-        botTriggerAtMillis: 0,
-      };
-      yield* tracker.recordFollowUp(workspace, decodeId("#5"), marker, "Handing this to a human.");
-      yield* tracker.recordAttempt(workspace, decodeId("#5"), {
-        stage: "follow-up",
-        outcome: "failed",
-        atMillis: 6,
-      });
-      const item = yield* observed(tracker, "#5");
-      assert.deepStrictEqual(item?.followUp, marker);
-      const stored = yield* itemAt(5);
-      assert.strictEqual(stored?.comments.length, 1);
-      assert.strictEqual(
-        Coordination.coordinationDetail(codec, stored?.comments[0]?.body ?? ""),
-        "Handing this to a human.",
-      );
-    }),
-  );
-
   it.effect("posts a note as its own comment, clears a stale detail, and reads back as the proposal", () =>
     Effect.gen(function* () {
       const { host, itemAt } = yield* makeFakeHost([{ number: 3, labels: ["needs-triage"] }]);
       const tracker = makeCoordinationTracker(host);
-      yield* tracker.recordFollowUp(
-        workspace,
-        decodeId("#3"),
-        {
+      yield* tracker.stalled(workspace, decodeId("#3"), {
+        marker: {
           checks: "failing",
           humanCommentAtMillis: 1,
           noProgress: 1,
           baseDivergence: "none",
           botTriggerAtMillis: 0,
         },
-        "Old folded detail",
-      );
+        atMillis: 2,
+        detail: "Old folded detail",
+      });
       yield* tracker.note(workspace, decodeId("#3"), triageProposalBody("Recommend ready-for-agent."));
       const stored = yield* itemAt(3);
       assert.strictEqual(stored?.comments.length, 2);
@@ -254,18 +234,6 @@ describe("coordination tracker", () => {
       assert.isNull(item?.claim ?? null);
       const stored = yield* itemAt(7);
       assert.isFalse(stored?.labels.includes(claimLabel) ?? true);
-    }),
-  );
-
-  it.effect("swaps role labels and then runs the after-role-change hook", () =>
-    Effect.gen(function* () {
-      const { host, roleLog } = yield* makeFakeHost([{ number: 1, labels: ["needs-triage"] }]);
-      const tracker = makeCoordinationTracker(host);
-      const changes: RoleChanges = { add: ["wontfix"], remove: ["needs-triage"] };
-      yield* tracker.setRoles(workspace, decodeId("#1"), changes);
-      const item = yield* observed(tracker, "#1");
-      assert.deepStrictEqual([...(item?.roles ?? [])].toSorted(), ["wontfix"]);
-      assert.deepStrictEqual(yield* roleLog, [{ number: 1, changes }]);
     }),
   );
 
@@ -444,4 +412,16 @@ describe("coordination outcomes", () => {
       assert.strictEqual(note?.body, "Not planned.");
     }),
   );
+});
+
+describe("handoffRoleFor", () => {
+  it("maps each staged role back to the role a hand-off clears", () => {
+    assert.strictEqual(handoffRoleFor("implement"), "ready-for-agent");
+    assert.strictEqual(handoffRoleFor("triage"), "needs-triage");
+  });
+
+  it("clears no role for stages that carry none", () => {
+    assert.isNull(handoffRoleFor("follow-up"));
+    assert.isNull(handoffRoleFor("verify"));
+  });
 });

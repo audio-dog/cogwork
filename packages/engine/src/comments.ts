@@ -1,4 +1,6 @@
-import type { LifecycleStage } from "@cogwork/contracts";
+import type { LifecycleStage, WorkItemId } from "@cogwork/contracts";
+import type { RegisteredWorkspace } from "./projector";
+import { checkoutPathFor } from "./worktree";
 
 const attribution = "> *This was posted by cogwork.*";
 
@@ -96,4 +98,25 @@ export const handoffComment = (
   return resume === undefined
     ? lines.join("\n")
     : [...lines, "", "Resume the session manually:", "", "```sh", resume, "```"].join("\n");
+};
+
+interface HandoffItem {
+  readonly id: WorkItemId;
+  readonly title: string;
+}
+
+export interface HandoffRequest {
+  readonly workspace: RegisteredWorkspace;
+  readonly item: HandoffItem;
+  readonly stage: LifecycleStage;
+  readonly cause: HandoffCause;
+  readonly reason: string;
+  readonly session: string | null | undefined;
+}
+
+export const handoffNote = (request: HandoffRequest) => {
+  const { workspace, item, stage, cause, reason, session } = request;
+  const checkout = checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
+  const resume = session ? attachCommand(checkout, session) : undefined;
+  return handoffComment(stage, cause, reason, resume);
 };

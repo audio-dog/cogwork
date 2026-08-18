@@ -271,10 +271,7 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => (
   observe: () => Effect.succeed([]),
   claim: (_workspace, itemId) => record(calls, { method: "claim", item: itemId }),
   release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
-  recordAttempt: () => Effect.void,
-  recordFollowUp: () => Effect.void,
   note: () => Effect.void,
-  setRoles: () => Effect.void,
   triaged: (_workspace, itemId, outcome) =>
     record(calls, { method: "triaged", item: itemId, role: outcome.role, proposal: outcome.proposal }),
   implemented: (_workspace, itemId) => record(calls, { method: "implemented", item: itemId }),

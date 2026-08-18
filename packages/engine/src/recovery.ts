@@ -10,9 +10,8 @@ import {
   maxAttemptsPerStage,
   observedStage,
 } from "./classify";
-import { type HandoffCause, recoveryReason } from "./comments";
-import { handoffNote, releaseClaim as makeReleaseClaim } from "./hand-to-human";
-import { IssueTracker, type ObservedItem } from "./issue-tracker";
+import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
+import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
