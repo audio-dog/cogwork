@@ -1,0 +1,27 @@
+packages/engine/src/github/client.ts
+  s_493e0803232299::t_2ad40f482000ed 379
+packages/engine/src/github/priority.ts
+  s_493e0803232299::t_13fbecc3543247 7-9,14-23
+  s_493e0803232299::t_d89f3abacedec4 78-82,88-95,99-100,102
+  s_493e0803232299::t_9d0bbedaa86cbe 62-67
+  s_493e0803232299::t_9be1e952c1fe96 101
+packages/engine/src/github/priority.test.ts
+  s_493e0803232299::t_9f6c4234854d24 2-4,12-13,25-34,51,71,89,94-110,112,117
+  s_493e0803232299::t_53e09eb2196a70 113,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b2056bcaeecdbf278c494f3210222cbcbfd0730a",
+  "prompts": {},
+  "sessions": {
+    "s_493e0803232299": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21d42f45-fb94-48ab-a2dd-587135f75789",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
