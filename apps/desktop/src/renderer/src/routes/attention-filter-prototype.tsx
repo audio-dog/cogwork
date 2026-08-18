@@ -24,7 +24,7 @@ const scenarioKeys = scenarioMeta.map((s) => s.key);
 function AttentionFilterPrototypePage() {
   const { treatment, scenario, full } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const activeTreatment: FilterTreatmentKey = treatment ?? "f4";
+  const activeTreatment: FilterTreatmentKey = treatment ?? "g1";
   const activeScenario: ScenarioKey = scenario ?? "busy";
   const isFull = full ?? false;
 

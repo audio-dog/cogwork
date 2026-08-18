@@ -455,8 +455,79 @@ function FilterF4({
   );
 }
 
-// F5 — a funnel icon (active dot) over a slim summary banner (Codex info strip),
-// keeping the header row minimal until a workspace filter is on.
+// The winning workspace control (F5): a funnel icon that opens the multi-select
+// menu, with an active dot. Reused by every G treatment below.
+function WorkspaceFunnel({
+  entries,
+  workspaces,
+  filter,
+}: {
+  entries: ReadonlyArray<AttentionEntry>;
+  workspaces: ReadonlyArray<string>;
+  filter: FilterState;
+}) {
+  if (workspaces.length <= 1) return null;
+  const active = filter.workspaces.size > 0;
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button size="icon-sm" variant="ghost" aria-label="Filter workspaces" className="relative ms-auto">
+            <RiFilter3Line />
+            {active && (
+              <span className="absolute end-0.5 top-0.5 size-2 rounded-full bg-primary" aria-hidden />
+            )}
+          </Button>
+        }
+      />
+      <PopoverContent align="end" className="w-56">
+        <WorkspaceMenu entries={entries} workspaces={workspaces} filter={filter} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// The slim summary banner (Codex info strip) — only when a workspace filter is on.
+function WorkspaceBanner({ filter }: { filter: FilterState }) {
+  if (filter.workspaces.size === 0) return null;
+  return (
+    <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+      <RiFilter3Line className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{[...filter.workspaces].join(", ")}</span>
+      <button type="button" onClick={filter.clearWorkspaces} className="shrink-0 hover:text-foreground">
+        Clear
+      </button>
+    </div>
+  );
+}
+
+// Shared header shell: a kind control on the left, the workspace funnel on the
+// right, and the workspace banner underneath. G treatments only swap the kind slot.
+function FilterHeader({
+  kind,
+  entries,
+  workspaces,
+  filter,
+}: {
+  kind: ReactNode;
+  entries: ReadonlyArray<AttentionEntry>;
+  workspaces: ReadonlyArray<string>;
+  filter: FilterState;
+}) {
+  return (
+    <div className="flex flex-col border-b">
+      <div className="flex items-center gap-2 px-3 py-2">
+        {kind}
+        <WorkspaceFunnel entries={entries} workspaces={workspaces} filter={filter} />
+      </div>
+      <WorkspaceBanner filter={filter} />
+    </div>
+  );
+}
+
+// F5 — original: two multi-select kind pills (implicit all). Kept for reference;
+// its jank is that "nothing selected" and "everything selected" look different
+// but mean the same thing. The G treatments below fix that.
 function FilterF5({
   entries,
   workspaces,
@@ -466,44 +537,128 @@ function FilterF5({
   workspaces: ReadonlyArray<string>;
   filter: FilterState;
 }) {
-  const active = filter.workspaces.size > 0;
   return (
-    <div className="flex flex-col border-b">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <KindPills entries={entries} filter={filter} />
-        {workspaces.length > 1 && (
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Filter workspaces"
-                  className="relative ms-auto"
-                >
-                  <RiFilter3Line />
-                  {active && (
-                    <span className="absolute end-0.5 top-0.5 size-2 rounded-full bg-primary" aria-hidden />
-                  )}
-                </Button>
-              }
-            />
-            <PopoverContent align="end" className="w-56">
-              <WorkspaceMenu entries={entries} workspaces={workspaces} filter={filter} />
-            </PopoverContent>
-          </Popover>
-        )}
-      </div>
-      {active && (
-        <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
-          <RiFilter3Line className="size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{[...filter.workspaces].join(", ")}</span>
-          <button type="button" onClick={filter.clearWorkspaces} className="shrink-0 hover:text-foreground">
-            Clear
-          </button>
-        </div>
+    <FilterHeader
+      entries={entries}
+      workspaces={workspaces}
+      filter={filter}
+      kind={<KindPills entries={entries} filter={filter} />}
+    />
+  );
+}
+
+// ===========================================================================
+// G1 / G2 / G3 — same F5 workspace funnel + banner, three ways to render the
+// kind chips so that "all" is never ambiguous with "everything selected".
+// ===========================================================================
+
+// G1 — single-select pills (mutually exclusive, so "both" is impossible) plus a
+// clear "×" that appears whenever a kind is active. None active = all.
+function KindPillsSingle({
+  entries,
+  filter,
+}: {
+  entries: ReadonlyArray<AttentionEntry>;
+  filter: FilterState;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <ToggleGroup
+        value={[...filter.kinds]}
+        onValueChange={(v) => filter.setKinds(new Set(v as AttentionKind[]))}
+      >
+        {kindOptions.map((opt) => (
+          <ToggleGroupItem key={opt.key} value={opt.key} variant="outline" size="sm" className="gap-1.5">
+            {opt.label}
+            <span className="text-muted-foreground">{kindCount(entries, opt.key)}</span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      {filter.kinds.size > 0 && (
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Clear kind filter"
+          onClick={() => filter.setKinds(new Set())}
+        >
+          <RiCloseLine />
+        </Button>
       )}
     </div>
+  );
+}
+
+// G2 / G3 — a real segmented control: exactly one of [All · Needs · Ready] is
+// always active, so there is no ambiguous state and "All" is the built-in reset.
+// G3 adds a count on every segment (Codex "+557 -613" steal).
+function KindSegmented({
+  entries,
+  filter,
+  withCounts,
+}: {
+  entries: ReadonlyArray<AttentionEntry>;
+  filter: FilterState;
+  withCounts?: boolean;
+}) {
+  const active = filter.kinds.size === 1 ? [...filter.kinds][0] : "all";
+  return (
+    <ToggleGroup
+      value={[active]}
+      onValueChange={(v) => {
+        const next = (v as string[])[0];
+        filter.setKindSingle(!next || next === "all" ? "all" : (next as AttentionKind));
+      }}
+    >
+      <ToggleGroupItem value="all" variant="outline" size="sm" className="gap-1.5">
+        All
+        {withCounts && <span className="text-muted-foreground">{entries.length}</span>}
+      </ToggleGroupItem>
+      {kindOptions.map((opt) => (
+        <ToggleGroupItem key={opt.key} value={opt.key} variant="outline" size="sm" className="gap-1.5">
+          {opt.label}
+          {withCounts && <span className="text-muted-foreground">{kindCount(entries, opt.key)}</span>}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
+type KindTreatmentProps = {
+  entries: ReadonlyArray<AttentionEntry>;
+  workspaces: ReadonlyArray<string>;
+  filter: FilterState;
+};
+
+function FilterG1({ entries, workspaces, filter }: KindTreatmentProps) {
+  return (
+    <FilterHeader
+      entries={entries}
+      workspaces={workspaces}
+      filter={filter}
+      kind={<KindPillsSingle entries={entries} filter={filter} />}
+    />
+  );
+}
+
+function FilterG2({ entries, workspaces, filter }: KindTreatmentProps) {
+  return (
+    <FilterHeader
+      entries={entries}
+      workspaces={workspaces}
+      filter={filter}
+      kind={<KindSegmented entries={entries} filter={filter} />}
+    />
+  );
+}
+
+function FilterG3({ entries, workspaces, filter }: KindTreatmentProps) {
+  return (
+    <FilterHeader
+      entries={entries}
+      workspaces={workspaces}
+      filter={filter}
+      kind={<KindSegmented entries={entries} filter={filter} withCounts />}
+    />
   );
 }
 
@@ -511,11 +666,14 @@ function FilterF5({
 // Stage
 // ---------------------------------------------------------------------------
 
-export type FilterTreatmentKey = "f4" | "f5" | "f1" | "f2" | "f3";
+export type FilterTreatmentKey = "g1" | "g2" | "g3" | "f4" | "f5" | "f1" | "f2" | "f3";
 
 export const filterMeta: ReadonlyArray<{ key: FilterTreatmentKey; name: string }> = [
+  { key: "g1", name: "Single-select pills + clear ×" },
+  { key: "g2", name: "Segmented All · Needs · Ready" },
+  { key: "g3", name: "Segmented + counts" },
   { key: "f4", name: "Pills + workspace menu" },
-  { key: "f5", name: "Pills + filter icon" },
+  { key: "f5", name: "Multi pills (ambiguous)" },
   { key: "f1", name: "Tabs + Select" },
   { key: "f2", name: "Faceted popovers" },
   { key: "f3", name: "Chip rail" },
@@ -533,6 +691,9 @@ function FilterBody({
   filter: FilterState;
 }) {
   const props = { entries, workspaces, filter };
+  if (treatment === "g1") return <FilterG1 {...props} />;
+  if (treatment === "g2") return <FilterG2 {...props} />;
+  if (treatment === "g3") return <FilterG3 {...props} />;
   if (treatment === "f4") return <FilterF4 {...props} />;
   if (treatment === "f5") return <FilterF5 {...props} />;
   if (treatment === "f1") return <FilterF1 {...props} />;
