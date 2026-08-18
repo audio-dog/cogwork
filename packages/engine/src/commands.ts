@@ -11,7 +11,6 @@ import {
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { DaemonEventBus } from "./daemon-event-bus";
-import { handoffRoleFor } from "./hand-to-human";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, schedulerStatsOf } from "./read-model";
@@ -82,14 +81,9 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const issueTracker = yield* IssueTracker;
-  const removeRole = handoffRoleFor(run.stage);
   yield* issueTracker
-    .setRoles(workspace, run.workItem, { remove: removeRole ? [removeRole] : [], add: ["ready-for-human"] })
-    .pipe(
-      Effect.andThen(payload.note ? issueTracker.note(workspace, run.workItem, payload.note) : Effect.void),
-      Effect.andThen(issueTracker.release(workspace, run.workItem)),
-      Effect.orDie,
-    );
+    .handOff(workspace, run.workItem, { stage: run.stage, note: payload.note })
+    .pipe(Effect.andThen(issueTracker.release(workspace, run.workItem)), Effect.orDie);
 
   const snapshot = yield* (yield* ReconcileWorker).snapshot;
   const observed = observedFor(snapshot, run.workspace, run.workItem);
@@ -120,8 +114,10 @@ export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
   const issueTracker = yield* IssueTracker;
   const remove = observed.roles.filter((role) => role !== payload.role);
   const add = observed.roles.includes(payload.role) ? [] : [payload.role];
-  yield* issueTracker.setRoles(workspace, payload.workItem, { remove, add });
-  if (payload.note) yield* issueTracker.note(workspace, payload.workItem, payload.note);
+  yield* issueTracker.reclassify(workspace, payload.workItem, {
+    changes: { remove, add },
+    note: payload.note,
+  });
 
   const item = classifiedItemWithPr({ ...observed, roles: [payload.role] });
   if (item !== null) {

@@ -16,10 +16,11 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
-import type { RoleChanges, TrackerItem } from "./issue-tracker";
+import type { HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
@@ -60,12 +61,12 @@ const schedulerStub = (setScheduling?: Scheduler.Scheduler["Service"]["setSchedu
   });
 
 interface TrackerCalls {
-  readonly setRoles: ReadonlyArray<{ readonly workItem: WorkItemId; readonly changes: RoleChanges }>;
-  readonly notes: ReadonlyArray<{ readonly workItem: WorkItemId; readonly body: string }>;
+  readonly reclassify: ReadonlyArray<{ readonly workItem: WorkItemId; readonly outcome: ReclassifyOutcome }>;
+  readonly handOff: ReadonlyArray<{ readonly workItem: WorkItemId; readonly outcome: HandOffOutcome }>;
   readonly released: ReadonlyArray<WorkItemId>;
 }
 
-const emptyCalls: TrackerCalls = { setRoles: [], notes: [], released: [] };
+const emptyCalls: TrackerCalls = { reclassify: [], handOff: [], released: [] };
 
 const providerStub = Layer.succeed(SourceControlProvider, {
   observe: () => Effect.succeed(new Map<WorkItemId, PrSignals>()),
@@ -99,10 +100,10 @@ const trackerLayer = (
 const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<TrackerCalls>) =>
   trackerLayer({
     observe: () => Effect.succeed(items),
-    setRoles: (_workspace, workItem, changes) =>
-      Ref.update(calls, (c) => ({ ...c, setRoles: [...c.setRoles, { workItem, changes }] })),
-    note: (_workspace, workItem, body) =>
-      Ref.update(calls, (c) => ({ ...c, notes: [...c.notes, { workItem, body }] })),
+    reclassify: (_workspace, workItem, outcome) =>
+      Ref.update(calls, (c) => ({ ...c, reclassify: [...c.reclassify, { workItem, outcome }] })),
+    handOff: (_workspace, workItem, outcome) =>
+      Ref.update(calls, (c) => ({ ...c, handOff: [...c.handOff, { workItem, outcome }] })),
     release: (_workspace, workItem) =>
       Ref.update(calls, (c) => ({ ...c, released: [...c.released, workItem] })),
   });
@@ -158,13 +159,16 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
 });
 
 describe("CancelRun", () => {
-  it.effect("settles the run, parks the item for a human, releases the claim, and posts a note", () => {
+  it.effect("settles the run, hands the item off to a human, and releases the claim", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     return Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
       yield* ledger.insertRun(runRecord());
       const worker = yield* Reconcile.ReconcileWorker;
       yield* worker.submit();
+
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
 
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const item = yield* client.CancelRun({ runId: rid("run-1"), note: "stopping this one" });
@@ -177,8 +181,16 @@ describe("CancelRun", () => {
 
       const recorded = yield* Ref.get(calls);
       assert.deepStrictEqual(recorded.released, [id("AUD-1")]);
-      assert.deepStrictEqual(recorded.notes, [{ workItem: id("AUD-1"), body: "stopping this one" }]);
-      assert.strictEqual(recorded.setRoles[0]?.changes.add.includes("ready-for-human"), true);
+      assert.deepStrictEqual(recorded.handOff, [
+        { workItem: id("AUD-1"), outcome: { stage: "implement", note: "stopping this one" } },
+      ]);
+
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter((event) => event._tag === "ItemChanged"),
+        Stream.take(1),
+        Stream.runCollect,
+      );
+      assert.strictEqual(published?.item._tag, "NeedsHuman");
     }).pipe(Effect.provide(daemonLayer(recordingTracker([trackerItem()], calls))), Effect.scoped);
   });
 
@@ -215,6 +227,9 @@ describe("Reclassify", () => {
       const worker = yield* Reconcile.ReconcileWorker;
       yield* worker.submit();
 
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const result = yield* client.Reclassify({
         workspace: wsid("example"),
@@ -225,9 +240,22 @@ describe("Reclassify", () => {
 
       assert.strictEqual(result?._tag, "Eligible");
       const recorded = yield* Ref.get(calls);
-      assert.deepStrictEqual(recorded.notes, [{ workItem: id("AUD-2"), body: "picking this up" }]);
-      assert.strictEqual(recorded.setRoles[0]?.changes.add.includes("ready-for-agent"), true);
-      assert.strictEqual(recorded.setRoles[0]?.changes.remove.includes("needs-triage"), true);
+      assert.deepStrictEqual(recorded.reclassify, [
+        {
+          workItem: id("AUD-2"),
+          outcome: {
+            changes: { remove: ["needs-triage"], add: ["ready-for-agent"] },
+            note: "picking this up",
+          },
+        },
+      ]);
+
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.take(1),
+        Stream.runCollect,
+      );
+      assert.strictEqual(published?._tag, "ItemChanged");
+      if (published?._tag === "ItemChanged") assert.strictEqual(published.item._tag, "Eligible");
     }).pipe(Effect.provide(daemonLayer(recordingTracker([item], calls))), Effect.scoped);
   });
 
@@ -284,7 +312,7 @@ describe("Reclassify", () => {
         daemonLayer(
           trackerLayer({
             observe: () => Effect.succeed([trackerItem({ id: id("AUD-4") })]),
-            setRoles: () =>
+            reclassify: () =>
               Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "tracker down" })),
           }),
         ),
