@@ -259,7 +259,14 @@ export const make = Effect.gen(function* () {
     if (exhausted) {
       yield* issueTracker.handOff(workspace, item.id, {
         stage: item.stage,
-        note: handoffNote(workspace, item, item.stage, handoffCause(retryable, attempts), reason, handle),
+        note: handoffNote({
+          workspace,
+          item,
+          stage: item.stage,
+          cause: handoffCause(retryable, attempts),
+          reason,
+          session: handle,
+        }),
       });
     }
     yield* settleRun(runId, {

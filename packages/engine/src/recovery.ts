@@ -10,8 +10,8 @@ import {
   maxAttemptsPerStage,
   observedStage,
 } from "./classify";
-import { recoveryReason } from "./comments";
-import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
+import { type HandoffCause, recoveryReason } from "./comments";
+import { handoffNote, releaseClaim as makeReleaseClaim } from "./hand-to-human";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
@@ -27,8 +27,27 @@ export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const ledger = yield* RunLedger;
   const scheduler = yield* Scheduler;
-  const handoff = handToHuman(issueTracker);
   const releaseClaim = makeReleaseClaim(issueTracker);
+
+  const handOffExhausted = Effect.fn("Recovery.handOffExhausted")(function* (
+    workspace: RegisteredWorkspace,
+    item: ObservedItem,
+    stage: LifecycleStage,
+    cause: HandoffCause,
+    session: SessionId | null,
+  ) {
+    yield* issueTracker.handOff(workspace, item.id, {
+      stage,
+      note: handoffNote({
+        workspace,
+        item,
+        stage,
+        cause,
+        reason: recoveryReason,
+        session: yield* handleOf(ledger, session),
+      }),
+    });
+  });
 
   const noteStaleRecovery = Effect.fn("Recovery.noteStaleRecovery")(function* (
     workspace: RegisteredWorkspace,
@@ -68,21 +87,13 @@ export const make = Effect.gen(function* () {
       attempts,
       exhausted,
     });
-    yield* issueTracker.recordAttempt(
-      workspace,
-      item.id,
-      { stage, outcome: "failed", atMillis: endedAtMillis },
-      recoveryReason,
-    );
-    if (!exhausted) return;
-    yield* handoff({
-      workspace,
-      item,
+    yield* issueTracker.attemptFailed(workspace, item.id, {
       stage,
-      cause: { kind: "max-attempts", attempts },
+      atMillis: endedAtMillis,
       reason: recoveryReason,
-      session: yield* handleOf(ledger, session),
     });
+    if (!exhausted) return;
+    yield* handOffExhausted(workspace, item, stage, { kind: "max-attempts", attempts }, session);
   });
 
   const recoverStale = Effect.fn("Recovery.recoverStale")(function* (
@@ -131,14 +142,7 @@ export const make = Effect.gen(function* () {
       stage,
       crashes,
     });
-    yield* handoff({
-      workspace,
-      item,
-      stage,
-      cause: { kind: "crash-loop", crashes },
-      reason: recoveryReason,
-      session: yield* handleOf(ledger, session),
-    });
+    yield* handOffExhausted(workspace, item, stage, { kind: "crash-loop", crashes }, session);
     yield* releaseClaim(workspace, item.id);
   });
 
