@@ -1,0 +1,24 @@
+packages/contracts/src/triage.test.ts
+  s_493e0803232299::t_5ce1f7bf77a13d 1-32
+packages/contracts/src/triage.ts
+  s_493e0803232299::t_fb40bb6082d064 38-49
+  s_493e0803232299::t_92aea0243b45c9 19-37
+packages/contracts/CONTEXT.md
+  s_493e0803232299::t_e99caeb961150a 49-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "64d79c410c8d63363cac3619dc943db60b4fb2b4",
+  "prompts": {},
+  "sessions": {
+    "s_493e0803232299": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21d42f45-fb94-48ab-a2dd-587135f75789",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
