@@ -20,7 +20,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
-import { RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
+import { RiFlaskLine, RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
@@ -118,6 +118,27 @@ function UserButton() {
   );
 }
 
+// PROTOTYPE — throwaway dev-only entry point for the Attention tab prototype
+// (wayfinder #26). Remove this group when the prototype is folded in.
+function PrototypesGroup() {
+  if (!import.meta.env.DEV) return null;
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>Prototypes</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton render={<Link to="/attention-prototype" />} tooltip="Attention tab prototype">
+              <RiFlaskLine />
+              <span>Attention tab</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
 export function NavSidebar() {
   return (
     <Sidebar collapsible="offcanvas">
@@ -143,6 +164,7 @@ export function NavSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <WorkspaceFilter />
+        <PrototypesGroup />
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
