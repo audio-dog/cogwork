@@ -4,7 +4,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/co
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
 import { RiCheckLine, RiTimeLine } from "@remixicon/react";
-import type { ComponentType, ReactNode } from "react";
+import { type ComponentType, createContext, type ReactNode, use } from "react";
 import { daemonErrorMessage } from "../features/daemon-error";
 import type { FeedRun, QueuedItem } from "../features/feed";
 import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
@@ -12,11 +12,60 @@ import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
 import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
+import type { ItemSelection } from "../store/chrome";
 import { useChromeStore } from "../store/chrome";
 
-// Three small staggered-fade dots: the "live" indicator on a running strip. A
-// spinning loader reads as too busy stacked across many strips, so we keep it
-// calm (decision on #15).
+interface FeedState {
+  readonly running: ReadonlyArray<FeedRun>;
+  readonly queued: ReadonlyArray<QueuedItem>;
+  readonly done: ReadonlyArray<FeedRun>;
+  readonly previews: ReadonlyMap<string, RunActivityPreview>;
+}
+
+interface FeedActions {
+  readonly select: (selection: ItemSelection) => void;
+}
+
+interface FeedMeta {
+  readonly now: number;
+}
+
+interface FeedContextValue {
+  readonly state: FeedState;
+  readonly actions: FeedActions;
+  readonly meta: FeedMeta;
+}
+
+const FeedContext = createContext<FeedContextValue | null>(null);
+
+function useFeed(): FeedContextValue {
+  const value = use(FeedContext);
+  if (!value) throw new Error("Feed parts must render inside Feed.Provider");
+  return value;
+}
+
+function FeedProvider({
+  children,
+  state,
+  actions,
+  meta,
+}: {
+  children: ReactNode;
+  state: FeedState;
+  actions: FeedActions;
+  meta: FeedMeta;
+}) {
+  return <FeedContext value={{ state, actions, meta }}>{children}</FeedContext>;
+}
+
+function FeedFrame({ children }: { children: ReactNode }) {
+  return (
+    <ScrollArea className="h-full">
+      <div className="flex flex-col gap-6 p-6">{children}</div>
+    </ScrollArea>
+  );
+}
+
 function TypingDots() {
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center gap-0.5" aria-hidden>
@@ -49,8 +98,6 @@ function EmptyNote({ children }: { children: ReactNode }) {
   );
 }
 
-// The live console line: `label ▸ preview` in monospace with a blinking caret,
-// so a strip reads like a terminal tailing the run.
 function ConsoleLine({ preview }: { preview: RunActivityPreview | undefined }) {
   return (
     <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
@@ -62,18 +109,11 @@ function ConsoleLine({ preview }: { preview: RunActivityPreview | undefined }) {
   );
 }
 
-// One terminal strip: a right meta-rail (stage / workspace / id / elapsed) in
-// fixed-width columns so they line up across rows, with the console line below.
-function TerminalStrip({
-  entry,
-  preview,
-  now,
-}: {
-  entry: FeedRun;
-  preview: RunActivityPreview | undefined;
-  now: number;
-}) {
-  const select = useChromeStore((state) => state.select);
+function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivityPreview | undefined }) {
+  const {
+    actions: { select },
+    meta: { now },
+  } = useFeed();
   const { run, title } = entry;
   return (
     <button
@@ -100,14 +140,10 @@ function TerminalStrip({
   );
 }
 
-function LiveNow({
-  running,
-  previews,
-}: {
-  running: ReadonlyArray<FeedRun>;
-  previews: ReadonlyMap<string, RunActivityPreview>;
-}) {
-  const now = useNow();
+function LiveNowSection() {
+  const {
+    state: { running, previews },
+  } = useFeed();
   return (
     <section className="flex flex-col gap-3">
       <SectionHeading title="Live now" count={running.length} live />
@@ -116,7 +152,7 @@ function LiveNow({
       ) : (
         <div className="divide-y overflow-hidden rounded-xl border">
           {running.map((entry) => (
-            <TerminalStrip key={entry.run.id} entry={entry} preview={previews.get(entry.run.id)} now={now} />
+            <TerminalStrip key={entry.run.id} entry={entry} preview={previews.get(entry.run.id)} />
           ))}
         </div>
       )}
@@ -155,38 +191,57 @@ function QueuedBadge() {
   );
 }
 
-function LedgerRow({
-  state,
-  id,
-  title,
-  workspace,
-  when,
-  onClick,
-}: {
-  state: ReactNode;
-  id: string;
-  title: string;
-  workspace: string;
-  when: string;
-  onClick: () => void;
-}) {
+function QueuedLedgerRow({ entry }: { entry: QueuedItem }) {
+  const {
+    actions: { select },
+  } = useFeed();
   return (
-    <TableRow className="cursor-pointer" onClick={onClick}>
-      <TableCell>{state}</TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{id}</TableCell>
-      <TableCell className="truncate text-foreground">{title}</TableCell>
+    <TableRow
+      className="cursor-pointer"
+      onClick={() => select({ workspace: entry.workspace, workItem: entry.item.id })}
+    >
       <TableCell>
-        <Badge variant="outline">{workspace}</Badge>
+        <QueuedBadge />
       </TableCell>
-      <TableCell className="text-end text-xs text-muted-foreground tabular-nums">{when}</TableCell>
+      <TableCell className="font-mono text-xs text-muted-foreground">{entry.item.id}</TableCell>
+      <TableCell className="truncate text-foreground">{entry.item.title}</TableCell>
+      <TableCell>
+        <Badge variant="outline">{entry.workspace}</Badge>
+      </TableCell>
+      <TableCell className="text-end text-xs text-muted-foreground tabular-nums">—</TableCell>
     </TableRow>
   );
 }
 
-// The ledger folds queued and recently-done into one reference table, splitting
-// "watch" (the live strips above) from "look it up".
-function Ledger({ queued, done }: { queued: ReadonlyArray<QueuedItem>; done: ReadonlyArray<FeedRun> }) {
-  const select = useChromeStore((state) => state.select);
+function DoneLedgerRow({ entry }: { entry: FeedRun }) {
+  const {
+    actions: { select },
+  } = useFeed();
+  const { run, title } = entry;
+  return (
+    <TableRow
+      className="cursor-pointer"
+      onClick={() => select({ workspace: run.workspace, workItem: run.workItem })}
+    >
+      <TableCell>
+        <RunStateBadge status={run.status} />
+      </TableCell>
+      <TableCell className="font-mono text-xs text-muted-foreground">{run.workItem}</TableCell>
+      <TableCell className="truncate text-foreground">{title ?? run.workItem}</TableCell>
+      <TableCell>
+        <Badge variant="outline">{run.workspace}</Badge>
+      </TableCell>
+      <TableCell className="text-end text-xs text-muted-foreground tabular-nums">
+        {run.endedAtMillis !== null ? relativeTime(run.endedAtMillis) : "—"}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function LedgerSection() {
+  const {
+    state: { queued, done },
+  } = useFeed();
   const total = queued.length + done.length;
   return (
     <section className="flex flex-col gap-2">
@@ -211,32 +266,36 @@ function Ledger({ queued, done }: { queued: ReadonlyArray<QueuedItem>; done: Rea
             </TableHeader>
             <TableBody>
               {queued.map((entry) => (
-                <LedgerRow
-                  key={`q:${entry.workspace}:${entry.item.id}`}
-                  state={<QueuedBadge />}
-                  id={entry.item.id}
-                  title={entry.item.title}
-                  workspace={entry.workspace}
-                  when={entry.item.stage}
-                  onClick={() => select({ workspace: entry.workspace, workItem: entry.item.id })}
-                />
+                <QueuedLedgerRow key={`q:${entry.workspace}:${entry.item.id}`} entry={entry} />
               ))}
               {done.map((entry) => (
-                <LedgerRow
-                  key={`d:${entry.run.id}`}
-                  state={<RunStateBadge status={entry.run.status} />}
-                  id={entry.run.workItem}
-                  title={entry.title ?? entry.run.workItem}
-                  workspace={entry.run.workspace}
-                  when={entry.run.endedAtMillis !== null ? relativeTime(entry.run.endedAtMillis) : "—"}
-                  onClick={() => select({ workspace: entry.run.workspace, workItem: entry.run.workItem })}
-                />
+                <DoneLedgerRow key={`d:${entry.run.id}`} entry={entry} />
               ))}
             </TableBody>
           </Table>
         </div>
       )}
     </section>
+  );
+}
+
+const FeedCompound = {
+  Provider: FeedProvider,
+  Frame: FeedFrame,
+  LiveNow: LiveNowSection,
+  Ledger: LedgerSection,
+};
+
+function FeedContent({ running, queued, done, previews }: FeedState) {
+  const select = useChromeStore((state) => state.select);
+  const now = useNow();
+  return (
+    <FeedCompound.Provider state={{ running, queued, done, previews }} actions={{ select }} meta={{ now }}>
+      <FeedCompound.Frame>
+        <FeedCompound.LiveNow />
+        <FeedCompound.Ledger />
+      </FeedCompound.Frame>
+    </FeedCompound.Provider>
   );
 }
 
@@ -288,12 +347,5 @@ export function Feed() {
     );
   }
 
-  return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-6 p-6">
-        <LiveNow running={running} previews={previews} />
-        <Ledger queued={queued} done={done} />
-      </div>
-    </ScrollArea>
-  );
+  return <FeedContent running={running} queued={queued} done={done} previews={previews} />;
 }
