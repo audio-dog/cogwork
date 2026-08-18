@@ -101,17 +101,18 @@ function UserButton() {
         }
       />
       <DropdownMenuContent side="top" align="start" className="min-w-48">
-        <DropdownMenuItem disabled>
+        {/* PROTOTYPE (#17): entry into the settings-experience prototype. */}
+        <DropdownMenuItem render={<Link to="/settings-prototype" search={{ variant: "A" }} />}>
           <RiSettings3Line />
-          Settings (coming soon)
+          Settings
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/activity" />}>
           <RiPulseLine />
           Raw activity
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Theme</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as typeof theme)}>
+          <DropdownMenuLabel>Theme</DropdownMenuLabel>
           <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>

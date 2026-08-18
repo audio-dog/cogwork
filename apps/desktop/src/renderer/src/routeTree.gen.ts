@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConnectedRouteRouteImport } from './routes/_connected/route'
 import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as SettingsPrototypeRouteImport } from './routes/settings-prototype'
 import { Route as ConnectedLanesRouteImport } from './routes/_connected/lanes'
 
 const IndexRoute = IndexRouteImport.update({
@@ -28,6 +29,11 @@ const ActivityRoute = ActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsPrototypeRoute = SettingsPrototypeRouteImport.update({
+  id: '/settings-prototype',
+  path: '/settings-prototype',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConnectedLanesRoute = ConnectedLanesRouteImport.update({
   id: '/lanes',
   path: '/lanes',
@@ -37,11 +43,13 @@ const ConnectedLanesRoute = ConnectedLanesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/settings-prototype': typeof SettingsPrototypeRoute
   '/lanes': typeof ConnectedLanesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
+  '/settings-prototype': typeof SettingsPrototypeRoute
   '/lanes': typeof ConnectedLanesRoute
 }
 export interface FileRoutesById {
@@ -49,20 +57,28 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_connected': typeof ConnectedRouteRouteWithChildren
   '/activity': typeof ActivityRoute
+  '/settings-prototype': typeof SettingsPrototypeRoute
   '/_connected/lanes': typeof ConnectedLanesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activity' | '/lanes'
+  fullPaths: '/' | '/activity' | '/settings-prototype' | '/lanes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activity' | '/lanes'
-  id: '__root__' | '/' | '/_connected' | '/activity' | '/_connected/lanes'
+  to: '/' | '/activity' | '/settings-prototype' | '/lanes'
+  id:
+    | '__root__'
+    | '/'
+    | '/_connected'
+    | '/activity'
+    | '/settings-prototype'
+    | '/_connected/lanes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConnectedRouteRoute: typeof ConnectedRouteRouteWithChildren
   ActivityRoute: typeof ActivityRoute
+  SettingsPrototypeRoute: typeof SettingsPrototypeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -86,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/activity'
       fullPath: '/activity'
       preLoaderRoute: typeof ActivityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings-prototype': {
+      id: '/settings-prototype'
+      path: '/settings-prototype'
+      fullPath: '/settings-prototype'
+      preLoaderRoute: typeof SettingsPrototypeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_connected/lanes': {
@@ -114,6 +137,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConnectedRouteRoute: ConnectedRouteRouteWithChildren,
   ActivityRoute: ActivityRoute,
+  SettingsPrototypeRoute: SettingsPrototypeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
