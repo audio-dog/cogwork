@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/components/activity-variants.tsx
+  s_9626cf56d1ceac::t_acb8a92a42017b 50,53-54,59
+  s_9626cf56d1ceac::t_920c8c4ef6775d 854-865
+  s_9626cf56d1ceac::t_9d713c4c9731fc 60
+apps/desktop/src/renderer/src/routes/activity-prototype.tsx
+  s_9626cf56d1ceac::t_3f824e775f48ae 2-7,10-16,21,26,29,32,37,42-47,63-65,69
+apps/desktop/src/renderer/src/features/activity-log.ts
+  s_9626cf56d1ceac::t_3b3b2e0fa4733d 356-636
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5858e84e57fc120909e69d85a51f155bddf82f2b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_9626cf56d1ceac": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e5d2fbe-e001-4cd1-aa15-72f9a70ab78f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
