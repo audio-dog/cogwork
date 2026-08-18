@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/components/activity-variants.tsx
+  s_9626cf56d1ceac::t_f29afac54f9514 531-532
+  s_9626cf56d1ceac::t_272fcf9986c837 523-524,668-669
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "223fea11fdf633d64fcbaf10095b2fd55535e6d9",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_9626cf56d1ceac": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e5d2fbe-e001-4cd1-aa15-72f9a70ab78f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
