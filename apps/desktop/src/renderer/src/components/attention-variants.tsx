@@ -120,6 +120,166 @@ const byUrgency = (a: AttentionEntry, b: AttentionEntry) => {
 };
 
 // ---------------------------------------------------------------------------
+// Mock scenarios (DEV ONLY — the daemon has no live attention items right now)
+//
+// #26 asks for real daemon data, and the Live scenario still uses it. These
+// mock scenarios exist only so the card anatomy and list density can be judged
+// while the board is quiet. They never ship (the whole prototype is throwaway),
+// and the switcher defaults to a busy mock so there is always something to see.
+// ---------------------------------------------------------------------------
+
+const MIN = 60_000;
+const wid = (s: string) => s as unknown as ClassifiedItem["id"];
+const trk = (s: string) => s as unknown as IssueTrackerType;
+
+const mockPr = (
+  n: number,
+  checks: PrSummary["checks"],
+  base: PrSummary["baseDivergence"],
+  waitMin: number,
+): PrSummary => ({
+  number: n,
+  url: `https://github.com/colonylabs/cogwork/pull/${n}`,
+  checks,
+  review: "ready",
+  baseDivergence: base,
+  waitingSinceMillis: Date.now() - waitMin * MIN,
+});
+
+const decision = (
+  workspace: string,
+  id: string,
+  title: string,
+  reason: NeedsHumanReason,
+  tracker: string,
+): AttentionEntry => ({
+  workspace,
+  item: { _tag: "NeedsHuman", id: wid(id), title, reason, proposal: null },
+  kind: "needs-decision",
+  pr: null,
+  tracker: trk(tracker),
+  reason,
+  waitMillis: null,
+});
+
+const readyPr = (
+  workspace: string,
+  id: string,
+  title: string,
+  pr: PrSummary,
+  tracker: string,
+): AttentionEntry => ({
+  workspace,
+  item: { _tag: "Eligible", id: wid(id), title, stage: "verify", pr },
+  kind: "ready-to-merge",
+  pr,
+  tracker: trk(tracker),
+  reason: null,
+  waitMillis: pr.waitingSinceMillis,
+});
+
+const busyEntries: ReadonlyArray<AttentionEntry> = [
+  decision("cogwork", "AUD-1", "Audit engine ADR 0006 against the shipped scheduler", "needs-info", "github"),
+  decision(
+    "cogwork",
+    "#61",
+    "Notifications: dock badge for Needs-a-decision items",
+    "ready-for-human",
+    "github",
+  ),
+  decision(
+    "clanker-forge",
+    "CLF-204",
+    "Coordination-outcome verbs: confirm the tracker mapping",
+    "needs-info",
+    "github",
+  ),
+  decision("atlas-api", "ATL-88", "Rate-limit policy for the public search endpoint", "needs-info", "linear"),
+  decision(
+    "atlas-api",
+    "ATL-91",
+    "Should the export job run per-tenant or globally?",
+    "ready-for-human",
+    "linear",
+  ),
+  readyPr(
+    "cogwork",
+    "#41",
+    "Empty states: one consistent treatment",
+    mockPr(44, "passing", "none", 95),
+    "github",
+  ),
+  readyPr(
+    "cogwork",
+    "#35",
+    "Feed: Spotlight + Ledger with terminal strips",
+    mockPr(52, "pending", "clean", 22),
+    "github",
+  ),
+  readyPr(
+    "clanker-forge",
+    "CLF-198",
+    "Migrate claim recovery onto coordination outcomes",
+    mockPr(31, "failing", "none", 140),
+    "github",
+  ),
+  readyPr(
+    "clanker-forge",
+    "CLF-201",
+    "Prune the tracker step verbs",
+    mockPr(33, "passing", "conflict", 260),
+    "github",
+  ),
+  readyPr(
+    "atlas-api",
+    "ATL-77",
+    "Add cursor pagination to the audit log API",
+    mockPr(12, "passing", "none", 8),
+    "linear",
+  ),
+];
+
+const decisionsOnly = busyEntries.filter((e) => e.kind === "needs-decision");
+const prsOnly = busyEntries.filter((e) => e.kind === "ready-to-merge");
+const quietEntries: ReadonlyArray<AttentionEntry> = [
+  decision("cogwork", "AUD-1", "Audit engine ADR 0006 against the shipped scheduler", "needs-info", "github"),
+  readyPr(
+    "cogwork",
+    "#41",
+    "Empty states: one consistent treatment",
+    mockPr(44, "passing", "none", 95),
+    "github",
+  ),
+];
+
+export type ScenarioKey = "live" | "busy" | "decisions" | "prs" | "quiet" | "empty";
+
+export const scenarioMeta: ReadonlyArray<{ key: ScenarioKey; name: string }> = [
+  { key: "busy", name: "Busy · both kinds" },
+  { key: "decisions", name: "Decisions only" },
+  { key: "prs", name: "PRs only" },
+  { key: "quiet", name: "Quiet · one each" },
+  { key: "empty", name: "Empty" },
+  { key: "live", name: "Live daemon" },
+];
+
+const mockScenarios: Record<Exclude<ScenarioKey, "live">, ReadonlyArray<AttentionEntry>> = {
+  busy: busyEntries,
+  decisions: decisionsOnly,
+  prs: prsOnly,
+  quiet: quietEntries,
+  empty: [],
+};
+
+const workspacesOf = (entries: ReadonlyArray<AttentionEntry>) =>
+  [...new Set(entries.map((e) => e.workspace))].sort();
+
+function mockData(scenario: Exclude<ScenarioKey, "live">): AttentionData {
+  const entries = mockScenarios[scenario];
+  return { _tag: "ready", entries, workspaces: workspacesOf(entries) };
+}
+
+// ---------------------------------------------------------------------------
 // Shared anatomy pieces (composed differently by each variant)
 // ---------------------------------------------------------------------------
 
@@ -714,8 +874,18 @@ function LastOpened({ entry }: { entry: AttentionEntry | null }) {
   );
 }
 
-export function AttentionStage({ variant, full }: { variant: VariantKey; full: boolean }) {
-  const data = useAttentionData();
+export function AttentionStage({
+  variant,
+  scenario,
+  full,
+}: {
+  variant: VariantKey;
+  scenario: ScenarioKey;
+  full: boolean;
+}) {
+  // Always call the hook (rules of hooks); use it only for the Live scenario.
+  const live = useAttentionData();
+  const data: AttentionData = scenario === "live" ? live : mockData(scenario);
   const [kindFilter, setKindFilter] = useState<KindFilterValue>("all");
   const [workspaceFilter, setWorkspaceFilter] = useState<string | null>(null);
   const [lastOpened, setLastOpened] = useState<AttentionEntry | null>(null);
