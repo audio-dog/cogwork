@@ -49,6 +49,11 @@ interface RunAccumulator {
 
 const emptyAccumulator: RunAccumulator = { text: "", handle: null, usage: null };
 
+// A best-guess estimate undercounts the real transcript, so it must never trip the
+// resume token cap — only metered usage from the harness can gate the resume decision.
+export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
+  usage && !usage.estimated ? (usage.totalTokens ?? null) : null;
+
 interface StageOps {
   readonly resolved: ResolvedStage;
   readonly branch: string | null;
@@ -434,7 +439,7 @@ export const make = Effect.gen(function* () {
       sessionKind: session?.kind ?? null,
       handle: sessionHandle(session),
       lastRunStartedAtMillis: last?.startedAtMillis ?? null,
-      lastRunTotalTokens: last?.usage?.totalTokens ?? null,
+      lastRunTotalTokens: meteredTotalTokens(last?.usage),
       now,
       worktreeRecreated: worktree.created,
       fresh: context.fresh,

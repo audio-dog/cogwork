@@ -1200,3 +1200,18 @@ describe("Executor.execute", () => {
     }),
   );
 });
+
+describe("meteredTotalTokens", () => {
+  it("passes a metered total straight through to the resume cap", () => {
+    assert.strictEqual(Executor.meteredTotalTokens({ totalTokens: 5_000 }), 5_000);
+  });
+
+  it("withholds a best-guess estimate so it can never trip the resume cap", () => {
+    assert.isNull(Executor.meteredTotalTokens({ totalTokens: 5_000, estimated: true }));
+  });
+
+  it("reports no total when usage is absent", () => {
+    assert.isNull(Executor.meteredTotalTokens(null));
+    assert.isNull(Executor.meteredTotalTokens(undefined));
+  });
+});
