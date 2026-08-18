@@ -19,7 +19,7 @@ import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cogwork/ui/components/select";
 import { Tabs, TabsList, TabsTrigger } from "@cogwork/ui/components/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
-import { RiArrowDownSLine, RiCloseLine, RiFilter3Line } from "@remixicon/react";
+import { RiArrowDownSLine, RiCheckLine, RiCloseLine, RiFilter3Line } from "@remixicon/react";
 import { type ReactNode, useState } from "react";
 import {
   AllClear,
@@ -48,10 +48,13 @@ const kindOptions: ReadonlyArray<{ key: AttentionKind; label: string }> = [
 interface FilterState {
   readonly kinds: ReadonlySet<AttentionKind>;
   readonly workspaces: ReadonlySet<string>;
+  readonly setKinds: (s: ReadonlySet<AttentionKind>) => void;
+  readonly setWorkspaces: (s: ReadonlySet<string>) => void;
   readonly setKindSingle: (v: "all" | AttentionKind) => void;
   readonly setWorkspaceSingle: (v: string | null) => void;
   readonly toggleKind: (k: AttentionKind) => void;
   readonly toggleWorkspace: (w: string) => void;
+  readonly clearWorkspaces: () => void;
   readonly clearAll: () => void;
 }
 
@@ -67,10 +70,13 @@ function useFilterState(): FilterState {
   return {
     kinds,
     workspaces,
+    setKinds,
+    setWorkspaces,
     setKindSingle: (v) => setKinds(v === "all" ? new Set() : new Set([v])),
     setWorkspaceSingle: (v) => setWorkspaces(v === null ? new Set() : new Set([v])),
     toggleKind: (k) => setKinds((s) => toggle(s, k)),
     toggleWorkspace: (w) => setWorkspaces((s) => toggle(s, w)),
+    clearWorkspaces: () => setWorkspaces(new Set()),
     clearAll: () => {
       setKinds(new Set());
       setWorkspaces(new Set());
@@ -347,13 +353,169 @@ function FilterF3({
   );
 }
 
+// ===========================================================================
+// F4 / F5 — refined: kind pills (implicit "all", no All chip) + a compact,
+// multi-select workspace control (Codex review-panel steal). No workspace chips.
+// ===========================================================================
+
+// Two kind pills, multi-select. None selected = all — so there is no "All" chip.
+function KindPills({ entries, filter }: { entries: ReadonlyArray<AttentionEntry>; filter: FilterState }) {
+  return (
+    <ToggleGroup
+      multiple
+      value={[...filter.kinds]}
+      onValueChange={(v) => filter.setKinds(new Set(v as AttentionKind[]))}
+    >
+      {kindOptions.map((opt) => (
+        <ToggleGroupItem key={opt.key} value={opt.key} variant="outline" size="sm" className="gap-1.5">
+          {opt.label}
+          <span className="text-muted-foreground">{kindCount(entries, opt.key)}</span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
+const workspaceSummary = (filter: FilterState): string => {
+  const n = filter.workspaces.size;
+  if (n === 0) return "All workspaces";
+  if (n === 1) return [...filter.workspaces][0];
+  return `${n} workspaces`;
+};
+
+// Shared popover body: "All workspaces" reset + a multi-select checkbox per
+// workspace. Any combination, in a fixed-width menu that never grows the header.
+function WorkspaceMenu({
+  entries,
+  workspaces,
+  filter,
+}: {
+  entries: ReadonlyArray<AttentionEntry>;
+  workspaces: ReadonlyArray<string>;
+  filter: FilterState;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <button
+        type="button"
+        onClick={filter.clearWorkspaces}
+        className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1.5 text-start text-sm hover:bg-accent"
+      >
+        <span>All workspaces</span>
+        {filter.workspaces.size === 0 && <RiCheckLine className="size-4 text-muted-foreground" />}
+      </button>
+      <span className="my-0.5 h-px bg-border" aria-hidden />
+      {workspaces.map((w) => (
+        <button
+          key={w}
+          type="button"
+          onClick={() => filter.toggleWorkspace(w)}
+          className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm hover:bg-accent"
+        >
+          <Checkbox checked={filter.workspaces.has(w)} tabIndex={-1} className="pointer-events-none" />
+          <span className="flex-1 truncate">{w}</span>
+          <span className="text-xs text-muted-foreground">
+            {entries.filter((e) => e.workspace === w).length}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// F4 — inline dropdown that summarises the selection (Codex "origin/main ▾").
+function FilterF4({
+  entries,
+  workspaces,
+  filter,
+}: {
+  entries: ReadonlyArray<AttentionEntry>;
+  workspaces: ReadonlyArray<string>;
+  filter: FilterState;
+}) {
+  return (
+    <Toolbar>
+      <KindPills entries={entries} filter={filter} />
+      {workspaces.length > 1 && (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button size="sm" variant="outline" className="ms-auto max-w-40 gap-1">
+                <span className="truncate">{workspaceSummary(filter)}</span>
+                <RiArrowDownSLine data-icon="inline-end" />
+              </Button>
+            }
+          />
+          <PopoverContent align="end" className="w-56">
+            <WorkspaceMenu entries={entries} workspaces={workspaces} filter={filter} />
+          </PopoverContent>
+        </Popover>
+      )}
+    </Toolbar>
+  );
+}
+
+// F5 — a funnel icon (active dot) over a slim summary banner (Codex info strip),
+// keeping the header row minimal until a workspace filter is on.
+function FilterF5({
+  entries,
+  workspaces,
+  filter,
+}: {
+  entries: ReadonlyArray<AttentionEntry>;
+  workspaces: ReadonlyArray<string>;
+  filter: FilterState;
+}) {
+  const active = filter.workspaces.size > 0;
+  return (
+    <div className="flex flex-col border-b">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <KindPills entries={entries} filter={filter} />
+        {workspaces.length > 1 && (
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Filter workspaces"
+                  className="relative ms-auto"
+                >
+                  <RiFilter3Line />
+                  {active && (
+                    <span className="absolute end-0.5 top-0.5 size-2 rounded-full bg-primary" aria-hidden />
+                  )}
+                </Button>
+              }
+            />
+            <PopoverContent align="end" className="w-56">
+              <WorkspaceMenu entries={entries} workspaces={workspaces} filter={filter} />
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+      {active && (
+        <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+          <RiFilter3Line className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{[...filter.workspaces].join(", ")}</span>
+          <button type="button" onClick={filter.clearWorkspaces} className="shrink-0 hover:text-foreground">
+            Clear
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Stage
 // ---------------------------------------------------------------------------
 
-export type FilterTreatmentKey = "f1" | "f2" | "f3";
+export type FilterTreatmentKey = "f4" | "f5" | "f1" | "f2" | "f3";
 
 export const filterMeta: ReadonlyArray<{ key: FilterTreatmentKey; name: string }> = [
+  { key: "f4", name: "Pills + workspace menu" },
+  { key: "f5", name: "Pills + filter icon" },
   { key: "f1", name: "Tabs + Select" },
   { key: "f2", name: "Faceted popovers" },
   { key: "f3", name: "Chip rail" },
@@ -371,6 +533,8 @@ function FilterBody({
   filter: FilterState;
 }) {
   const props = { entries, workspaces, filter };
+  if (treatment === "f4") return <FilterF4 {...props} />;
+  if (treatment === "f5") return <FilterF5 {...props} />;
   if (treatment === "f1") return <FilterF1 {...props} />;
   if (treatment === "f2") return <FilterF2 {...props} />;
   return <FilterF3 {...props} />;
