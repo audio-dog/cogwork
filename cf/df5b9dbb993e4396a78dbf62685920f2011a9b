@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/components/prototype-switcher.tsx
+  s_4980621b4465ae::t_12f4f462d20f83 1-119
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_4980621b4465ae::t_c60e56b62a2f70 14,26-30,35,40,46,50,52-53,59,78-84,91
+apps/desktop/src/renderer/src/routes/attention-prototype.tsx
+  s_4980621b4465ae::t_a85856c06f2d41 1-49
+apps/desktop/src/renderer/src/components/attention-variants.tsx
+  s_4980621b4465ae::t_7aea8856fc86f4 1-759
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cfdf5b9dbb993e4396a78dbf62685920f2011a9b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_4980621b4465ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c0ab0d4a-b5e3-4c46-afac-0427c7082b3c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
