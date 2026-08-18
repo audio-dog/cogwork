@@ -15,7 +15,7 @@ import { agentFailureReason, prepareFailureReason, triageProposalBody } from "./
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
-import { handToHuman, releaseClaim as makeReleaseClaim } from "./hand-to-human";
+import { handoffNote, releaseClaim as makeReleaseClaim } from "./hand-to-human";
 import { type AgUiEvent, Harness, type HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
@@ -134,7 +134,6 @@ export const make = Effect.gen(function* () {
   const assembler = yield* McpSkillAssembler;
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
-  const handoff = handToHuman(issueTracker);
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
@@ -252,20 +251,15 @@ export const make = Effect.gen(function* () {
       retryable,
       exhausted,
     });
-    yield* issueTracker.recordAttempt(
-      workspace,
-      item.id,
-      { stage: item.stage, outcome: "failed", atMillis: endedAtMillis },
+    yield* issueTracker.attemptFailed(workspace, item.id, {
+      stage: item.stage,
+      atMillis: endedAtMillis,
       reason,
-    );
+    });
     if (exhausted) {
-      yield* handoff({
-        workspace,
-        item,
+      yield* issueTracker.handOff(workspace, item.id, {
         stage: item.stage,
-        cause: handoffCause(retryable, attempts),
-        reason,
-        session: handle,
+        note: handoffNote(workspace, item, item.stage, handoffCause(retryable, attempts), reason, handle),
       });
     }
     yield* settleRun(runId, {
@@ -284,11 +278,9 @@ export const make = Effect.gen(function* () {
     const decision = resolveTriageDecision(acc.text);
     yield* warnTriageDecision(item, decision);
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* issueTracker.note(workspace, item.id, triageProposalBody(acc.text));
-    yield* issueTracker.setRoles(workspace, item.id, { remove: ["needs-triage"], add: [decision.role] });
-    yield* issueTracker.recordAttempt(workspace, item.id, {
-      stage: "triage",
-      outcome: "succeeded",
+    yield* issueTracker.triaged(workspace, item.id, {
+      role: decision.role,
+      proposal: triageProposalBody(acc.text),
       atMillis: endedAtMillis,
     });
     yield* settleRun(runId, {
@@ -305,12 +297,7 @@ export const make = Effect.gen(function* () {
     acc: RunAccumulator,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* issueTracker.setRoles(workspace, item.id, { remove: ["ready-for-agent"], add: [] });
-    yield* issueTracker.recordAttempt(workspace, item.id, {
-      stage: "implement",
-      outcome: "succeeded",
-      atMillis: endedAtMillis,
-    });
+    yield* issueTracker.implemented(workspace, item.id, { atMillis: endedAtMillis });
     yield* settleRun(runId, {
       status: "succeeded",
       usage: acc.usage,
@@ -399,10 +386,8 @@ export const make = Effect.gen(function* () {
     context: FollowUpContext,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* issueTracker.recordFollowUp(workspace, item.id, followUpMarker(context));
-    yield* issueTracker.recordAttempt(workspace, item.id, {
-      stage: "follow-up",
-      outcome: "succeeded",
+    yield* issueTracker.followedUp(workspace, item.id, {
+      marker: followUpMarker(context),
       atMillis: endedAtMillis,
     });
     yield* settleRun(runId, {
@@ -480,17 +465,10 @@ export const make = Effect.gen(function* () {
   ) {
     const atMillis = yield* Clock.currentTimeMillis;
     const context = item.followUp ?? defaultFollowUp;
-    yield* issueTracker.recordFollowUp(
-      workspace,
-      item.id,
-      followUpMarker(context),
-      `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.`,
-    );
-    yield* issueTracker.setRoles(workspace, item.id, { remove: [], add: ["ready-for-human"] });
-    yield* issueTracker.recordAttempt(workspace, item.id, {
-      stage: "follow-up",
-      outcome: "abandoned",
+    yield* issueTracker.stalled(workspace, item.id, {
+      marker: followUpMarker(context),
       atMillis,
+      detail: `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.`,
     });
   });
 
