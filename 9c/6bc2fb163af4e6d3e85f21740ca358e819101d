@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/features/activity-source.test.ts
+  s_e4a11fa8a7561e::t_a723da984cabb8 203-208
+  s_e4a11fa8a7561e::t_bc4c7f4195be18 253-254,261-262,268,271-273,275,277-279
+  s_e4a11fa8a7561e::t_1f337f779145c6 1-73,80-176,178-202,209-252,255-260,263-267,269-270,274,276,280-387,389-392
+  s_e4a11fa8a7561e::t_dd02710c31cb41 74-79
+  s_e4a11fa8a7561e::t_66b08f2e83bebb 177
+  s_e4a11fa8a7561e::t_5250c6c8769bae 388
+apps/desktop/src/renderer/src/features/activity-source.ts
+  s_e4a11fa8a7561e::t_be38e65f43b6f6 1-12,21-28,30-35,38-39,42-61,64-100,103-155,175-176,189,192-195,198,200-215,227,234-240,242-259,262-263,272-273,282-296,298-314,316-329,333-339,341-342
+  s_e4a11fa8a7561e::t_7da4e7fd96975f 13-20,29,36-37,40-41,62-63,101-102,156-174,177-188,190-191,196-197,199,216-226,260-261,264-271,274-281,297,315,330-332,340
+  s_e4a11fa8a7561e::t_b13fcf8f427b2d 228-233,241
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9c6bc2fb163af4e6d3e85f21740ca358e819101d",
+  "prompts": {},
+  "sessions": {
+    "s_e4a11fa8a7561e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "acaca5fe-b628-42c3-b18f-e9dc0f92c17e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
