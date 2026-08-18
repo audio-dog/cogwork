@@ -1,0 +1,45 @@
+packages/engine/src/comments.ts
+  s_3067ebcae51049::t_34362fd8b6b838 102-122
+  s_3067ebcae51049::t_ef18a33635c641 1-3
+packages/engine/src/recovery.ts
+  s_3067ebcae51049::t_fa054af64f0f54 13-14
+packages/engine/src/linear/linear.test.ts
+  s_3067ebcae51049::t_09ebc3a51fce46 444,448-449
+packages/engine/src/issue-tracker.test.ts
+  s_3067ebcae51049::t_ac534371fea232 6,16,21-36
+packages/engine/src/issue-tracker-router.test.ts
+  s_3067ebcae51049::t_38dc8a55538007 1,41-45,56-62
+  s_3067ebcae51049::t_4e7d494330dd24 63-65,77
+packages/engine/src/comments.test.ts
+  s_3067ebcae51049::t_66eb3b6ced2d63 149-175
+  s_3067ebcae51049::t_c1cf5084144f9f 1,3,8,19-31
+packages/engine/src/coordination-tracker.ts
+  s_3067ebcae51049::t_09995f4608a00f 25-27
+  s_3067ebcae51049::t_1ee4bf8e85b6f7 22-24
+  s_3067ebcae51049::t_1ccc908f8f1f43 1
+packages/engine/src/executor.ts
+  s_3067ebcae51049::t_ffdcdf49d151b8 14,19
+packages/engine/src/issue-tracker.ts
+  s_3067ebcae51049::t_302c588714505a 143-155
+packages/engine/src/coordination-tracker.test.ts
+  s_3067ebcae51049::t_54ba1bee7b7bcc 204-205,212-214
+  s_3067ebcae51049::t_a62eb9cc8b0583 416-427
+  s_3067ebcae51049::t_e1d108e3fc50f2 15-20
+  s_3067ebcae51049::t_98531e7341230a 183-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "7cc3b90ce154439ab6bfbccf0a1b0605944b900b",
+  "prompts": {},
+  "sessions": {
+    "s_3067ebcae51049": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6499fb59-dc4e-4dc9-88d7-7f7b9765935e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
