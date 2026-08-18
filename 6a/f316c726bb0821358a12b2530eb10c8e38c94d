@@ -1,0 +1,24 @@
+docs/spec/desktop-shell-revamp.md
+  s_91b6dc935c9adb::t_c9c9369eb1ac2d 1-240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6af316c726bb0821358a12b2530eb10c8e38c94d",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_91b6dc935c9adb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c097dd9c-c1ed-4da9-9c47-e36e975016c7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
