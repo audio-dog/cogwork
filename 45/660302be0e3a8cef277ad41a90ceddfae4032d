@@ -1,0 +1,19 @@
+apps/cli/src/rpc.test.ts
+  s_f845e71a7c8505::t_4ab1699e65f759 55-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "45660302be0e3a8cef277ad41a90ceddfae4032d",
+  "prompts": {},
+  "sessions": {
+    "s_f845e71a7c8505": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7fc1587d-25bd-4774-be76-9151725dadb5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
