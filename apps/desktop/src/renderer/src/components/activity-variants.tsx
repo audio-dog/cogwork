@@ -15,11 +15,15 @@
 
 import { Button } from "@cogwork/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
+import { Checkbox } from "@cogwork/ui/components/checkbox";
 import { Input } from "@cogwork/ui/components/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@cogwork/ui/components/popover";
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import {
+  RiCheckLine,
   RiCloseLine,
   RiCodeLine,
   RiDashboard3Line,
@@ -29,6 +33,7 @@ import {
   RiEyeLine,
   RiEyeOffLine,
   RiFileList2Line,
+  RiFilter3Line,
   RiFlashlightLine,
   RiFolder3Line,
   RiPauseLine,
@@ -90,11 +95,11 @@ const kindIcon: Record<ActivityKind, ComponentType<{ className?: string }>> = {
 };
 
 // Category filter — groups the eight kinds into the handful a human reasons
-// about ("show me runs", "show me system events").
-type TypeFilter = "all" | "run" | "item" | "workspace" | "scheduler" | "system";
+// about ("show me runs", "show me system events"). Multi-select, so an empty
+// selection means "all" (there is no explicit All chip — see #26 F5).
+type TypeCategory = "run" | "item" | "workspace" | "scheduler" | "system";
 
-const typeFilterOptions: ReadonlyArray<{ key: TypeFilter; label: string }> = [
-  { key: "all", label: "All" },
+const categoryMeta: ReadonlyArray<{ key: TypeCategory; label: string }> = [
   { key: "run", label: "Runs" },
   { key: "item", label: "Items" },
   { key: "scheduler", label: "Scheduler" },
@@ -102,12 +107,32 @@ const typeFilterOptions: ReadonlyArray<{ key: TypeFilter; label: string }> = [
   { key: "system", label: "System" },
 ];
 
-const inCategory = (kind: ActivityKind, filter: TypeFilter): boolean => {
-  if (filter === "all") return true;
-  if (filter === "item") return kind === "item" || kind === "item-removed";
-  if (filter === "system") return kind === "engine" || kind === "connection" || kind === "stream";
-  return kind === filter;
+const categoryLabel: Record<TypeCategory, string> = {
+  run: "Runs",
+  item: "Items",
+  scheduler: "Scheduler",
+  workspace: "Workspaces",
+  system: "System",
 };
+
+const categoryOf = (kind: ActivityKind): TypeCategory => {
+  if (kind === "item" || kind === "item-removed") return "item";
+  if (kind === "engine" || kind === "connection" || kind === "stream") return "system";
+  return kind;
+};
+
+const inSelected = (kind: ActivityKind, selected: ReadonlySet<TypeCategory>): boolean =>
+  selected.size === 0 || selected.has(categoryOf(kind));
+
+// The type filter is dependency-injected as state + actions + counts, so every
+// variant renders the same selection with its own chrome.
+interface TypeFilterState {
+  readonly selected: ReadonlySet<TypeCategory>;
+  readonly toggle: (c: TypeCategory) => void;
+  readonly set: (next: ReadonlyArray<TypeCategory>) => void;
+  readonly clear: () => void;
+  readonly counts: Record<TypeCategory, number>;
+}
 
 // ---------------------------------------------------------------------------
 // Shared props (composed differently by each variant)
@@ -118,8 +143,7 @@ interface VariantProps {
   readonly log: ReadonlyArray<ActivityRow>; // filtered + newest-first
   readonly shown: number;
   readonly total: number;
-  readonly typeFilter: TypeFilter;
-  readonly setTypeFilter: (v: TypeFilter) => void;
+  readonly types: TypeFilterState;
   readonly search: string;
   readonly setSearch: (v: string) => void;
   readonly verbose: boolean;
@@ -127,6 +151,107 @@ interface VariantProps {
   readonly frozen: boolean;
   readonly setFrozen: (v: boolean) => void;
   readonly onOpen: (row: ActivityRow) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Shared type filter — funnel + multi-select popover + summary banner. Reuses
+// the Attention-tab filter design language (#26 F5): a funnel icon with an
+// active dot, a fixed-width checkbox menu with an "All" reset, and a slim
+// summary banner with Clear so the header never grows.
+// ---------------------------------------------------------------------------
+
+function TypeFunnel({ types }: { types: TypeFilterState }) {
+  const active = types.selected.size > 0;
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button size="icon-sm" variant="ghost" aria-label="Filter event types" className="relative">
+            <RiFilter3Line />
+            {active && (
+              <span className="absolute end-0.5 top-0.5 size-2 rounded-full bg-primary" aria-hidden />
+            )}
+          </Button>
+        }
+      />
+      <PopoverContent align="end" className="w-56">
+        <div className="flex flex-col gap-0.5">
+          <button
+            type="button"
+            onClick={types.clear}
+            className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1.5 text-start text-sm hover:bg-accent"
+          >
+            <span>All event types</span>
+            {types.selected.size === 0 && <RiCheckLine className="size-4 text-muted-foreground" />}
+          </button>
+          <span className="my-0.5 h-px bg-border" aria-hidden />
+          {categoryMeta.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => types.toggle(opt.key)}
+              className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm hover:bg-accent"
+            >
+              <Checkbox checked={types.selected.has(opt.key)} tabIndex={-1} className="pointer-events-none" />
+              <span className="flex-1 truncate">{opt.label}</span>
+              <span className="text-xs text-muted-foreground">{types.counts[opt.key]}</span>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TypeBanner({ types }: { types: TypeFilterState }) {
+  if (types.selected.size === 0) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+      <RiFilter3Line className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">
+        {[...types.selected].map((c) => categoryLabel[c]).join(", ")}
+      </span>
+      <button type="button" onClick={types.clear} className="shrink-0 hover:text-foreground">
+        Clear
+      </button>
+    </div>
+  );
+}
+
+// An icon-only toggle with a real tooltip (verbose / freeze live here).
+function IconToggle({
+  on,
+  onToggle,
+  onIcon,
+  offIcon,
+  onLabel,
+  offLabel,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  onIcon: ReactNode;
+  offIcon: ReactNode;
+  onLabel: string;
+  offLabel: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant={on ? "secondary" : "ghost"}
+            aria-pressed={on}
+            aria-label={on ? onLabel : offLabel}
+            onClick={onToggle}
+          >
+            {on ? onIcon : offIcon}
+          </Button>
+        }
+      />
+      <TooltipContent side="bottom">{on ? onLabel : offLabel}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -293,47 +418,73 @@ function TranscriptFold({ group, onOpen }: { group: FoldGroup; onOpen: (row: Act
   );
 }
 
+// The Now zone, brought over from Layout C but tightened: prominent enough to
+// parse at a glance (engine / connection / scheduler gauge / heartbeat run
+// rows), without the full Card weight so it still reads as a pinned header.
+function NowPanel({ now }: { now: NowState }) {
+  return (
+    <div className="shrink-0 border-b bg-muted/20 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <StatusDot tone={engineTone[now.engine]} pulse={now.engine === "up"} />
+        <span className="text-sm font-semibold">Now</span>
+        <div className="ml-auto flex items-center gap-2.5 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <RiFlashlightLine className="size-3.5" />
+            {engineLabel[now.engine]}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <RiWifiLine className="size-3.5" />
+            {connectionLabel[now.connection]}
+          </span>
+        </div>
+      </div>
+      {now.scheduler && (
+        <div className="mt-2 flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5 text-xs">
+          <RiDashboard3Line className="size-4 text-muted-foreground" />
+          <span className="font-medium tabular-nums">
+            {now.scheduler.globalInFlight}/{now.scheduler.globalLimit}
+          </span>
+          <span className="text-muted-foreground">in flight</span>
+          <span className="ml-auto text-muted-foreground tabular-nums">
+            budget {now.scheduler.dailyBudgetUsed}/{now.scheduler.dailyBudgetLimit}
+          </span>
+        </div>
+      )}
+      {now.runs.length > 0 ? (
+        <div className="mt-2 space-y-1">
+          {now.runs.map((run) => (
+            <div
+              key={run.runId}
+              className="flex items-center gap-2 rounded-md border border-border/60 bg-card px-2.5 py-1.5"
+            >
+              <RiRobot2Line className="size-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{run.workItem}</p>
+                {run.preview && (
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {run.preview.label}
+                    {run.preview.text ? ` · ${run.preview.text}` : ""}
+                  </p>
+                )}
+              </div>
+              <PulseDots />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 px-0.5 text-xs text-muted-foreground">No runs in flight.</p>
+      )}
+    </div>
+  );
+}
+
 function VariantA(props: VariantProps) {
   const groups = groupConsecutive(props.log);
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Now band — pinned, single line */}
-      <div className="shrink-0 border-b bg-muted/30 px-3 py-2">
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5 font-medium tracking-wide text-foreground uppercase">
-            <StatusDot tone={engineTone[props.now.engine]} pulse={props.now.engine === "up"} />
-            Now
-          </span>
-          <span>{engineLabel[props.now.engine]}</span>
-          <span aria-hidden>·</span>
-          <span>{connectionLabel[props.now.connection]}</span>
-          {props.now.scheduler && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="tabular-nums">
-                {props.now.scheduler.globalInFlight}/{props.now.scheduler.globalLimit} in flight
-              </span>
-            </>
-          )}
-        </div>
-        {props.now.runs.length > 0 && (
-          <div className="mt-1.5 space-y-px">
-            {props.now.runs.map((run) => (
-              <div key={run.runId} className="flex items-center gap-1.5 text-[12px] leading-5">
-                <PulseDots />
-                <span className="min-w-0 truncate font-medium text-foreground">{run.workItem}</span>
-                {run.preview && (
-                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                    {run.preview.label}
-                    {run.preview.text ? ` · ${run.preview.text}` : ""}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <NowPanel now={props.now} />
       <TranscriptToolbar {...props} />
+      <TypeBanner types={props.types} />
       <ScrollArea className="min-h-0 flex-1">
         <div className="-mx-1 space-y-px px-3 py-1">
           {groups.length === 0 ? (
@@ -361,55 +512,27 @@ function TranscriptToolbar(props: VariantProps) {
           className="h-7 ps-7 text-xs"
         />
       </div>
-      <FilterMenu {...props} />
-      <ToolbarToggles {...props} />
-    </div>
-  );
-}
-
-// A compact type dropdown shared by A (kept minimal to match the dense feel).
-function FilterMenu(props: VariantProps) {
-  return (
-    <ToggleGroup
-      spacing={0}
-      value={[props.typeFilter]}
-      onValueChange={(v) => {
-        const next = v[0] as TypeFilter | undefined;
-        if (next) props.setTypeFilter(next);
-      }}
-    >
-      {typeFilterOptions.slice(0, 3).map((opt) => (
-        <ToggleGroupItem key={opt.key} value={opt.key} variant="outline" size="sm" className="text-xs">
-          {opt.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
-
-function ToolbarToggles(props: VariantProps) {
-  return (
-    <div className="flex shrink-0 items-center gap-0.5">
-      <Button
-        size="icon-sm"
-        variant={props.verbose ? "secondary" : "ghost"}
-        aria-pressed={props.verbose}
-        aria-label={props.verbose ? "Hide low-signal events" : "Show low-signal events"}
-        title={props.verbose ? "Verbose: on" : "Verbose: off"}
-        onClick={() => props.setVerbose(!props.verbose)}
-      >
-        {props.verbose ? <RiEyeLine /> : <RiEyeOffLine />}
-      </Button>
-      <Button
-        size="icon-sm"
-        variant={props.frozen ? "secondary" : "ghost"}
-        aria-pressed={props.frozen}
-        aria-label={props.frozen ? "Resume live tail" : "Freeze the log"}
-        title={props.frozen ? "Frozen — click to resume" : "Live — click to freeze"}
-        onClick={() => props.setFrozen(!props.frozen)}
-      >
-        {props.frozen ? <RiPlayMiniLine /> : <RiPauseLine />}
-      </Button>
+      <TypeFunnel types={props.types} />
+      <TooltipProvider>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <IconToggle
+            on={props.verbose}
+            onToggle={() => props.setVerbose(!props.verbose)}
+            onIcon={<RiEyeLine />}
+            offIcon={<RiEyeOffLine />}
+            onLabel="Showing low-signal events"
+            offLabel="Show low-signal events"
+          />
+          <IconToggle
+            on={props.frozen}
+            onToggle={() => props.setFrozen(!props.frozen)}
+            onIcon={<RiPlayMiniLine />}
+            offIcon={<RiPauseLine />}
+            onLabel="Frozen — resume live tail"
+            offLabel="Freeze the log"
+          />
+        </div>
+      </TooltipProvider>
     </div>
   );
 }
@@ -536,25 +659,38 @@ function VariantB(props: VariantProps) {
           {props.frozen ? <RiPlayMiniLine /> : <RiPauseLine />}
           {props.frozen ? "Frozen" : "Freeze"}
         </Button>
-        <Button
-          size="icon-sm"
-          variant={props.verbose ? "secondary" : "ghost"}
-          aria-pressed={props.verbose}
-          title={props.verbose ? "Verbose: on" : "Verbose: off"}
-          onClick={() => props.setVerbose(!props.verbose)}
-        >
-          {props.verbose ? <RiEyeLine /> : <RiEyeOffLine />}
-        </Button>
+        <TooltipProvider>
+          <IconToggle
+            on={props.verbose}
+            onToggle={() => props.setVerbose(!props.verbose)}
+            onIcon={<RiEyeLine />}
+            offIcon={<RiEyeOffLine />}
+            onLabel="Showing low-signal events"
+            offLabel="Show low-signal events"
+          />
+        </TooltipProvider>
       </div>
       <div className="flex shrink-0 gap-1 border-b bg-muted/10 px-2 py-1">
-        {typeFilterOptions.map((opt) => (
+        <button
+          type="button"
+          onClick={props.types.clear}
+          className={cn(
+            "rounded px-1.5 py-0.5 font-mono text-[11px] transition-colors",
+            props.types.selected.size === 0
+              ? "bg-primary/15 text-primary"
+              : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
+          )}
+        >
+          all
+        </button>
+        {categoryMeta.map((opt) => (
           <button
             key={opt.key}
             type="button"
-            onClick={() => props.setTypeFilter(opt.key)}
+            onClick={() => props.types.toggle(opt.key)}
             className={cn(
               "rounded px-1.5 py-0.5 font-mono text-[11px] transition-colors",
-              props.typeFilter === opt.key
+              props.types.selected.has(opt.key)
                 ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
             )}
@@ -721,14 +857,12 @@ function VariantC(props: VariantProps) {
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <ToggleGroup
+                multiple
                 spacing={0}
-                value={[props.typeFilter]}
-                onValueChange={(v) => {
-                  const next = v[0] as TypeFilter | undefined;
-                  if (next) props.setTypeFilter(next);
-                }}
+                value={[...props.types.selected]}
+                onValueChange={(v) => props.types.set(v as ReadonlyArray<TypeCategory>)}
               >
-                {typeFilterOptions.map((opt) => (
+                {categoryMeta.map((opt) => (
                   <ToggleGroupItem
                     key={opt.key}
                     value={opt.key}
@@ -863,7 +997,7 @@ export function ActivityStage({
   // Always call the hook (rules of hooks); use it only for the Live scenario.
   const live = useActivityFeed();
   const feed = scenario === "live" ? live : mockActivityFeed(scenario);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [selectedTypes, setSelectedTypes] = useState<ReadonlySet<TypeCategory>>(new Set());
   const [search, setSearch] = useState("");
   const [verbose, setVerbose] = useState(false);
   const [frozen, setFrozen] = useState(false);
@@ -875,23 +1009,42 @@ export function ActivityStage({
   if (!frozen && frozenLog !== null) setFrozenLog(null);
 
   const source = frozen && frozenLog ? frozenLog : feed.log;
+
+  // Counts reflect the verbosity-filtered log, before the type filter narrows.
+  const visibleForCounts = source.filter((row) => verbose || !row.lowSignal);
+  const counts: Record<TypeCategory, number> = { run: 0, item: 0, scheduler: 0, workspace: 0, system: 0 };
+  for (const row of visibleForCounts) counts[categoryOf(row.kind)] += 1;
+
   const needle = search.trim().toLowerCase();
   const filtered = source.filter((row) => {
     if (!verbose && row.lowSignal) return false;
-    if (!inCategory(row.kind, typeFilter)) return false;
+    if (!inSelected(row.kind, selectedTypes)) return false;
     if (needle && !`${row.summary} ${row.label} ${row.entity?.id ?? ""}`.toLowerCase().includes(needle))
       return false;
     return true;
   });
   const newestFirst = [...filtered].reverse();
 
+  const types: TypeFilterState = {
+    selected: selectedTypes,
+    toggle: (c) =>
+      setSelectedTypes((prev) => {
+        const next = new Set(prev);
+        if (next.has(c)) next.delete(c);
+        else next.add(c);
+        return next;
+      }),
+    set: (nextCategories) => setSelectedTypes(new Set(nextCategories)),
+    clear: () => setSelectedTypes(new Set()),
+    counts,
+  };
+
   const props: VariantProps = {
     now: feed.now,
     log: newestFirst,
     shown: newestFirst.length,
     total: feed.total,
-    typeFilter,
-    setTypeFilter,
+    types,
     search,
     setSearch,
     verbose,
