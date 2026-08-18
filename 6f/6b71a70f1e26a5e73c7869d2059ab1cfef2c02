@@ -1,0 +1,41 @@
+packages/cursor-acp/FINDINGS.md
+  s_e16c6eb613012a::t_e07f8269fdf8e0 66-82
+packages/cursor-acp/src/harness.ts
+  s_e16c6eb613012a::t_adf5897ccdf7ed 243
+  s_6e75598df42465::t_d888138dd29cfc 101-103
+  s_e16c6eb613012a::t_453fbc495c56d4 111,122,124,128
+  s_6e75598df42465::t_d1e6f12d6ddc78 125-127
+  s_e16c6eb613012a::t_97584f3ab32c5d 94-100,104-110,112-121,123,129-131
+packages/cursor-acp/CONTEXT.md
+  s_e16c6eb613012a::t_895b890fcddfec 31-32,34
+  s_e16c6eb613012a::t_9ac9ca5bb80086 33
+packages/cursor-acp/src/harness.test.ts
+  s_e16c6eb613012a::t_c7755a395c2387 1,5,8,10-19
+  s_e16c6eb613012a::t_6e94f3c43bc800 20
+  s_e16c6eb613012a::t_10bd8eac03a90d 152,159-167,171,181-187
+  s_e16c6eb613012a::t_92c750b18b9214 130-151,153-158,168-170,172-180,188-190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6f6b71a70f1e26a5e73c7869d2059ab1cfef2c02",
+  "prompts": {},
+  "sessions": {
+    "s_6e75598df42465": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a3ef850b-56d2-46c8-81f3-f8be923a0dea",
+        "model": "claude-opus-4-8-thinking-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e16c6eb613012a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af1af487-5d38-492d-88ed-7b3aacacefd0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
