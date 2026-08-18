@@ -1,0 +1,27 @@
+packages/ui/src/components/popover.tsx
+  s_9fdda4d1986fe8::t_b03d337ab9b54d 2
+  s_9fdda4d1986fe8::t_4cf9493a7eb6e5 1,3-67
+apps/desktop/src/renderer/src/components/funnel-filter.tsx
+  s_9fdda4d1986fe8::t_b99a16adc16d36 1-3,5-13,15-16,20-21,33-36,38-44,48-50,52-63,65-67,69-72,80-83,86-89,91-101,103-104,107,110-112,114-115,117-127,132-137,139-143
+  s_9fdda4d1986fe8::t_396f05a2345b24 4,14,17-19,22-32,37,45-47,51,64,68,73-79,84-85,90,102,105-106,108-109,113,116,128-131,138
+apps/desktop/src/renderer/src/components/funnel-filter.test.ts
+  s_9fdda4d1986fe8::t_fea996c0e4ea70 1-36
+packages/ui/src/components/checkbox.tsx
+  s_9fdda4d1986fe8::t_23fbd9647f851d 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "135a53378e4511d16849a9cefe0aa61cd0ca8fab",
+  "prompts": {},
+  "sessions": {
+    "s_9fdda4d1986fe8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "522a425f-ab26-45a7-a085-5a31687cb6d3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
