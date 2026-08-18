@@ -1,0 +1,39 @@
+packages/engine/src/recovery.ts
+  s_c5806136e46d5b::t_ef621f5d742f41 14
+  s_c5806136e46d5b::t_c8c2bdf7781844 145
+  s_c5806136e46d5b::t_ce4edf0110d1b6 90,92,95
+  s_c5806136e46d5b::t_95e2db66dd8026 96
+  s_c5806136e46d5b::t_4244343be6c084 13
+  s_c5806136e46d5b::t_0509bfca0d694e 32-51
+packages/engine/src/recovery.test.ts
+  s_c5806136e46d5b::t_571a9d5c9ca68c 278,283-284,290
+  s_c5806136e46d5b::t_8fe9291a5f468c 232
+  s_c5806136e46d5b::t_2745bf2e165002 331-353
+  s_c5806136e46d5b::t_6a569a7ccfc231 456,464,473
+  s_c5806136e46d5b::t_1a633eb47de1f7 308-309
+  s_c5806136e46d5b::t_8d0b06e238a7bb 424
+  s_c5806136e46d5b::t_4d325e3d4b73b6 373
+  s_c5806136e46d5b::t_eb4c0426e0e80d 544
+  s_c5806136e46d5b::t_98c3750816b02b 390,394-398,406
+  s_c5806136e46d5b::t_c57a4092d55f0b 483,492-497,505
+  s_c5806136e46d5b::t_d3ad50763fbfd5 111-124
+  s_c5806136e46d5b::t_6ccb237e20fd90 354-357
+packages/engine/src/hand-to-human.ts
+  s_c5806136e46d5b::t_1424822b3080f4 41-47,50,56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f45ef7238594d420a6a649b779c73f147806266a",
+  "prompts": {},
+  "sessions": {
+    "s_c5806136e46d5b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "397536de-f36f-4887-8ec0-748990ff8e90",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
