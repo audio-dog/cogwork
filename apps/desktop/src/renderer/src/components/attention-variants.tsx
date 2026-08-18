@@ -114,7 +114,7 @@ export function useAttentionData(): AttentionData {
 
 // Global order for the flat treatment: decisions first (a blocked agent is the
 // most urgent launcher), then PRs by longest wait.
-const byUrgency = (a: AttentionEntry, b: AttentionEntry) => {
+export const byUrgency = (a: AttentionEntry, b: AttentionEntry) => {
   if (a.kind !== b.kind) return a.kind === "needs-decision" ? -1 : 1;
   return (a.waitMillis ?? 0) - (b.waitMillis ?? 0);
 };
@@ -274,7 +274,7 @@ const mockScenarios: Record<Exclude<ScenarioKey, "live">, ReadonlyArray<Attentio
 const workspacesOf = (entries: ReadonlyArray<AttentionEntry>) =>
   [...new Set(entries.map((e) => e.workspace))].sort();
 
-function mockData(scenario: Exclude<ScenarioKey, "live">): AttentionData {
+export function mockData(scenario: Exclude<ScenarioKey, "live">): AttentionData {
   const entries = mockScenarios[scenario];
   return { _tag: "ready", entries, workspaces: workspacesOf(entries) };
 }
@@ -518,7 +518,7 @@ function counts(entries: ReadonlyArray<AttentionEntry>): Record<KindFilterValue,
 const applyKind = (entries: ReadonlyArray<AttentionEntry>, kind: KindFilterValue) =>
   kind === "all" ? entries : entries.filter((e) => e.kind === kind);
 
-function AllClear() {
+export function AllClear() {
   return (
     <p className="px-1 py-6 text-center text-xs text-muted-foreground">
       Nothing needs a person right now.
@@ -638,7 +638,13 @@ function VariantA({
 // Variant B — Flat urgency rows (dense; NO group headers, leading kind marker)
 // ===========================================================================
 
-function AttentionRow({ entry, onOpen }: { entry: AttentionEntry; onOpen: (e: AttentionEntry) => void }) {
+export function AttentionRow({
+  entry,
+  onOpen,
+}: {
+  entry: AttentionEntry;
+  onOpen: (e: AttentionEntry) => void;
+}) {
   const Icon = kindStyle[entry.kind].icon;
   return (
     <button
@@ -827,7 +833,7 @@ function VariantBody({ variant, props }: { variant: VariantKey; props: VariantPr
 }
 
 // Mimics the RightPanel tab strip so the variant is judged in context.
-function PanelFrame({ children }: { children: ReactNode }) {
+export function PanelFrame({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-full min-h-0 flex-col border-l bg-background">
       <div className="flex h-11 min-h-11 shrink-0 items-center gap-1 border-b px-2">
@@ -847,7 +853,7 @@ function PanelFrame({ children }: { children: ReactNode }) {
   );
 }
 
-function FakeMainColumn() {
+export function FakeMainColumn() {
   return (
     <div className="flex h-full flex-col gap-3 p-6 opacity-40 select-none" aria-hidden>
       <div className="h-6 w-32 rounded bg-muted" />
@@ -859,7 +865,7 @@ function FakeMainColumn() {
   );
 }
 
-function LastOpened({ entry }: { entry: AttentionEntry | null }) {
+export function LastOpened({ entry }: { entry: AttentionEntry | null }) {
   return (
     <div className="border-t bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
       {entry ? (

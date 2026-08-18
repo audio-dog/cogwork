@@ -128,9 +128,21 @@ function PrototypesGroup() {
       <SidebarGroupContent>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton render={<Link to="/attention-prototype" />} tooltip="Attention tab prototype">
+            <SidebarMenuButton
+              render={<Link to="/attention-prototype" />}
+              tooltip="Attention tab layout prototype"
+            >
               <RiFlaskLine />
-              <span>Attention tab</span>
+              <span>Attention layout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={<Link to="/attention-filter-prototype" />}
+              tooltip="Attention tab filtering prototype"
+            >
+              <RiFlaskLine />
+              <span>Attention filters</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
