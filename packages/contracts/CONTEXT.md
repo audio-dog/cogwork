@@ -46,6 +46,10 @@ _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot neve
 One of `triage`, `implement`, `follow-up`, `verify` — the kind of work a run performs on an item. Chosen by classification from the item's roles and PR state.
 _Avoid_: Step, phase, task type
 
+**Priority**:
+One of `urgent`, `high`, `medium`, `low` — a four-level scale (`priorityRank`, highest first) that orders work *within* a lifecycle stage and nowhere else. Stage is always the primary sort key, so a low-priority follow-up still runs before an urgent implement; priority only breaks ties between items of the same stage, and stable tracker order breaks ties between items of the same priority. Every observed item carries a resolved priority. Each adapter reads its own tracker's field and maps it onto this scale (`resolvePriority`, case-insensitive); anything absent, blank, or unrecognized becomes the `defaultPriority`, `medium`. Priority orders work — it never gates eligibility — so a value we can't read must never drop an item; it just lands in the middle.
+_Avoid_: Stage priority (that's the fixed stage order, `stagePriority`), severity, weight, rank (alone — `priorityRank` is the ordering, priority is the value)
+
 **Triage role**:
 A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; stages drive execution.
 _Avoid_: Status, state, label (when you mean the role's meaning)
