@@ -93,12 +93,12 @@ export function SettingsSidebar() {
     navigate({
       to: "/settings/$section",
       params: { section: entry.sectionId },
-      search: { focus: entry.id },
+      search: { focus: entry.id, jump: Date.now() },
     });
   };
 
   return (
-    <Sidebar collapsible="offcanvas">
+    <Sidebar collapsible="none">
       <SidebarHeader className="h-11 shrink-0 [-webkit-app-region:drag]" />
       <SidebarContent>
         <div className="flex flex-col gap-2 px-2">

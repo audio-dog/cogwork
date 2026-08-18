@@ -13,14 +13,21 @@ import {
 } from "../features/settings-catalog";
 import { useDesktopPreferences } from "../store/preferences";
 
-const FocusedSettingContext = createContext<string | undefined>(undefined);
+const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});
 
 function useFocusScroll(id: string) {
-  const focus = use(FocusedSettingContext);
+  const { focus, jump } = use(FocusedSettingContext);
   const scrolledFor = useRef<string | undefined>(undefined);
+  const active = focus === id;
+  const scrollToken = active ? `${id}:${jump ?? 0}` : undefined;
+
+  if (!active) {
+    scrolledFor.current = undefined;
+  }
+
   return (node: HTMLElement | null) => {
-    if (!node || focus !== id || scrolledFor.current === focus) return;
-    scrolledFor.current = focus;
+    if (!node || !scrollToken || scrolledFor.current === scrollToken) return;
+    scrolledFor.current = scrollToken;
     node.scrollIntoView({ block: "center" });
   };
 }
@@ -38,12 +45,14 @@ function CloseToHideControl() {
 }
 
 function SettingRow({ entry, children }: { entry: SettingEntry; children: ReactNode }) {
-  const focus = use(FocusedSettingContext);
+  const { focus, jump } = use(FocusedSettingContext);
   const scrollRef = useFocusScroll(entry.id);
+  const flashing = focus === entry.id;
   return (
     <Item
+      key={flashing ? `${entry.id}:${jump ?? 0}` : entry.id}
       ref={scrollRef}
-      className={cn("scroll-mt-8 rounded-lg", focus === entry.id && "settings-focus-flash")}
+      className={cn("scroll-mt-8 rounded-lg", flashing && "settings-focus-flash")}
     >
       <ItemContent>
         <ItemTitle>{entry.title}</ItemTitle>
@@ -99,10 +108,18 @@ function SectionBody({ sectionId }: { sectionId: SettingsSectionId }) {
   }
 }
 
-export function SettingsSectionView({ sectionId, focus }: { sectionId: SettingsSectionId; focus?: string }) {
+export function SettingsSectionView({
+  sectionId,
+  focus,
+  jump,
+}: {
+  sectionId: SettingsSectionId;
+  focus?: string;
+  jump?: number;
+}) {
   const section = findSection(sectionId);
   return (
-    <FocusedSettingContext value={focus}>
+    <FocusedSettingContext value={{ focus, jump }}>
       <div className="flex flex-col gap-8">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">{section?.label}</h1>
         <SectionBody sectionId={sectionId} />

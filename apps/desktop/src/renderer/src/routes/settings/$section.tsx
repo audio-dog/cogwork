@@ -4,11 +4,13 @@ import { isSettingsSectionId } from "../../features/settings-catalog";
 
 interface SectionSearch {
   readonly focus?: string;
+  readonly jump?: number;
 }
 
 export const Route = createFileRoute("/settings/$section")({
   validateSearch: (search: Record<string, unknown>): SectionSearch => ({
     focus: typeof search.focus === "string" ? search.focus : undefined,
+    jump: typeof search.jump === "number" ? search.jump : undefined,
   }),
   beforeLoad: ({ params }) => {
     if (!isSettingsSectionId(params.section)) {
@@ -20,7 +22,7 @@ export const Route = createFileRoute("/settings/$section")({
 
 function SettingsSectionPage() {
   const { section } = Route.useParams();
-  const { focus } = Route.useSearch();
+  const { focus, jump } = Route.useSearch();
   if (!isSettingsSectionId(section)) return null;
-  return <SettingsSectionView sectionId={section} focus={focus} />;
+  return <SettingsSectionView sectionId={section} focus={focus} jump={jump} />;
 }
