@@ -1,0 +1,19 @@
+packages/engine/src/hand-to-human.ts
+  s_de03dfbbcf4c92::t_e60f472dcdaac5 41-53,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "56edf33f8e085c22e4d842543b3ab17586078bdd",
+  "prompts": {},
+  "sessions": {
+    "s_de03dfbbcf4c92": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bb6860a5-a523-4b5b-ba51-43ef350efb32",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
