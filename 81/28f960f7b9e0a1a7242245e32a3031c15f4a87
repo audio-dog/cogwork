@@ -1,0 +1,26 @@
+packages/cursor-acp/package.json
+  s_e16c6eb613012a::t_2c227fb9df53f4 31
+packages/cursor-acp/src/harness.ts
+  s_e16c6eb613012a::t_71171bf08c0a78 94
+packages/cursor-acp/src/estimate-accuracy.test.ts
+  s_e16c6eb613012a::t_1e819022b12014 63,65-68
+  s_e16c6eb613012a::t_eb938189a24dcc 1-62,64,69-85
+pnpm-lock.yaml
+  s_e16c6eb613012a::t_005d0c7a578c93 289-291,3131-3133,7512-7513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "8128f960f7b9e0a1a7242245e32a3031c15f4a87",
+  "prompts": {},
+  "sessions": {
+    "s_e16c6eb613012a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af1af487-5d38-492d-88ed-7b3aacacefd0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
