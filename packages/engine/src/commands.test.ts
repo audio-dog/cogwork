@@ -243,11 +243,17 @@ describe("Reclassify", () => {
       assert.deepStrictEqual(recorded.reclassify, [
         {
           workItem: id("AUD-2"),
-          outcome: { changes: { remove: ["needs-triage"], add: ["ready-for-agent"] }, note: "picking this up" },
+          outcome: {
+            changes: { remove: ["needs-triage"], add: ["ready-for-agent"] },
+            note: "picking this up",
+          },
         },
       ]);
 
-      const [published] = yield* Stream.fromSubscription(subscription).pipe(Stream.take(1), Stream.runCollect);
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.take(1),
+        Stream.runCollect,
+      );
       assert.strictEqual(published?._tag, "ItemChanged");
       if (published?._tag === "ItemChanged") assert.strictEqual(published.item._tag, "Eligible");
     }).pipe(Effect.provide(daemonLayer(recordingTracker([item], calls))), Effect.scoped);

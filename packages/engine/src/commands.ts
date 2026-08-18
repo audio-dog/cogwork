@@ -114,7 +114,10 @@ export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
   const issueTracker = yield* IssueTracker;
   const remove = observed.roles.filter((role) => role !== payload.role);
   const add = observed.roles.includes(payload.role) ? [] : [payload.role];
-  yield* issueTracker.reclassify(workspace, payload.workItem, { changes: { remove, add }, note: payload.note });
+  yield* issueTracker.reclassify(workspace, payload.workItem, {
+    changes: { remove, add },
+    note: payload.note,
+  });
 
   const item = classifiedItemWithPr({ ...observed, roles: [payload.role] });
   if (item !== null) {
