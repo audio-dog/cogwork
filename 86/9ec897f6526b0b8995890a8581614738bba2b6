@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/components/attention-filter-variants.tsx
+  s_4980621b4465ae::t_db554245eeb13f 536-537
+  s_4980621b4465ae::t_c423ab745384b8 51-52,57,73-74,79
+  s_4980621b4465ae::t_a6a50c9c99ae92 22
+  s_4980621b4465ae::t_e719cbfef842e2 365
+  s_4980621b4465ae::t_b74bc10f1d8fdb 356-364,366-509,514,517-518
+apps/desktop/src/renderer/src/routes/attention-filter-prototype.tsx
+  s_4980621b4465ae::t_ecaa41f2816420 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "869ec897f6526b0b8995890a8581614738bba2b6",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_4980621b4465ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c0ab0d4a-b5e3-4c46-afac-0427c7082b3c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
