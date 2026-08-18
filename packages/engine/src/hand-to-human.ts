@@ -38,15 +38,26 @@ export const releaseClaim = (tracker: IssueTrackerService) =>
     );
   });
 
+export const handoffNote = (
+  workspace: RegisteredWorkspace,
+  item: HandoffItem,
+  stage: LifecycleStage,
+  cause: HandoffCause,
+  reason: string,
+  session: string | null | undefined,
+) => {
+  const checkout = checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
+  const resume = session ? attachCommand(checkout, session) : undefined;
+  return handoffComment(stage, cause, reason, resume);
+};
+
 export const handToHuman = (tracker: IssueTrackerService) =>
   Effect.fn("HandToHuman.handToHuman")(function* (request: HandoffRequest) {
     const { workspace, item, stage, cause, reason, session } = request;
     const role = handoffRoleFor(stage);
-    const checkout = checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
-    const resume = session ? attachCommand(checkout, session) : undefined;
     yield* tracker.setRoles(workspace, item.id, {
       remove: role ? [role] : [],
       add: ["ready-for-human"],
     });
-    yield* tracker.note(workspace, item.id, handoffComment(stage, cause, reason, resume));
+    yield* tracker.note(workspace, item.id, handoffNote(workspace, item, stage, cause, reason, session));
   });
