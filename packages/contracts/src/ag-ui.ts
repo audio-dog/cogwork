@@ -9,6 +9,7 @@ const AgUiUsage = Schema.StructWithRest(
     promptTokens: Schema.optional(Schema.Finite),
     completionTokens: Schema.optional(Schema.Finite),
     totalTokens: Schema.optional(Schema.Finite),
+    estimated: Schema.optional(Schema.Boolean),
   }),
   [anyExtraKeys],
 );
@@ -69,6 +70,7 @@ export const agUiUsage = (event: AgUiEvent): TokenUsage | null => {
     inputTokens: event.usage.promptTokens,
     outputTokens: event.usage.completionTokens,
     totalTokens: event.usage.totalTokens,
+    ...(event.usage.estimated ? { estimated: true } : {}),
   };
 };
 
