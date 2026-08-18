@@ -1,68 +1,61 @@
-// PROTOTYPE — throwaway. Answers wayfinder ticket #17: "what should the Settings
-// experience look like?". Three radically different structural takes on the same v1
-// settings (theme, close-to-hide, scheduler limits, daily budget), switchable via the
-// floating bottom bar or ?variant= / arrow keys. Reachable from the account menu
-// (nav-sidebar "Settings"). The winner gets rewritten properly; the losers get deleted.
-//
-// Assumption: each variant renders full-window (fixed inset-0) so the sidebar-takeover,
-// full-page, and command-overlay shapes can each own the whole surface honestly, instead
-// of sitting beside the real left sidebar. Only the settings content uses real primitives
-// at real density — mutations are local stubs (theme is the one real write).
+// PROTOTYPE — throwaway. Wayfinder #17 / build #42.
+// Converged design: sidebar-takeover layout (variant A) + Codex organization
+// (big category header, smaller sub-section headers over grouped divided rows) +
+// T3 Code's system/light/dark preview picker for theme.
+// Sidebar owns "Back to app"; no "Settings" title; no sidebar collapse toggle.
+// Built from real @cogwork/ui primitives (Item, Card, ToggleGroup, InputGroup) —
+// no bespoke form CSS. Reachable from the account menu → Settings.
 import { Button } from "@cogwork/ui/components/button";
-import { Card, CardContent } from "@cogwork/ui/components/card";
-import { Input } from "@cogwork/ui/components/input";
+import { Card } from "@cogwork/ui/components/card";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupText,
+} from "@cogwork/ui/components/input-group";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@cogwork/ui/components/item";
 import { Separator } from "@cogwork/ui/components/separator";
 import { Switch } from "@cogwork/ui/components/switch";
+import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
+import { cn } from "@cogwork/ui/lib/utils";
 import {
+  RiAddLine,
   RiArrowLeftLine,
-  RiArrowLeftSLine,
-  RiArrowRightSLine,
+  RiCloseLine,
   RiComputerLine,
-  RiMoneyDollarCircleLine,
   RiMoonLine,
   RiPaletteLine,
   RiSearchLine,
+  RiSettings3Line,
   RiSpeedUpLine,
+  RiSubtractLine,
   RiSunLine,
-  RiWindow2Line,
 } from "@remixicon/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { ComponentType } from "react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useTheme } from "../components/theme-provider";
 
-const VARIANTS = ["A", "B", "C"] as const;
-type Variant = (typeof VARIANTS)[number];
+type ThemeValue = "system" | "light" | "dark";
 
-const VARIANT_LABEL: Record<Variant, string> = {
-  A: "Sidebar takeover",
-  B: "Full-page scroll",
-  C: "Command overlay",
-};
+// --- settings model (stub state; theme is the one real write) ----------------------
 
-// --- shared settings model (stub state; theme is the one real write) ---------------
-
-interface SettingsModel {
-  theme: ReturnType<typeof useTheme>["theme"];
-  setTheme: ReturnType<typeof useTheme>["setTheme"];
-  closeToHide: boolean;
-  setCloseToHide: (value: boolean) => void;
-  globalLimit: number;
-  setGlobalLimit: (value: number) => void;
-  perWorkspaceLimit: number;
-  setPerWorkspaceLimit: (value: number) => void;
-  dailyBudget: number;
-  setDailyBudget: (value: number) => void;
-}
-
-function useSettingsModel(): SettingsModel {
+function useSettingsModel() {
   const { theme, setTheme } = useTheme();
   const [closeToHide, setCloseToHide] = useState(true);
   const [globalLimit, setGlobalLimit] = useState(3);
   const [perWorkspaceLimit, setPerWorkspaceLimit] = useState(1);
   const [dailyBudget, setDailyBudget] = useState(25);
   return {
-    theme,
+    theme: theme as ThemeValue,
     setTheme,
     closeToHide,
     setCloseToHide,
@@ -75,502 +68,447 @@ function useSettingsModel(): SettingsModel {
   };
 }
 
-// --- leaf controls (shared; layout is not) -----------------------------------------
+type SettingsModel = ReturnType<typeof useSettingsModel>;
 
-function ThemeControl({ model }: { model: SettingsModel }) {
-  const options = [
-    { value: "system", label: "System", icon: RiComputerLine },
-    { value: "light", label: "Light", icon: RiSunLine },
-    { value: "dark", label: "Dark", icon: RiMoonLine },
-  ] as const;
+// --- information architecture ------------------------------------------------------
+
+type CategoryId = "general" | "appearance" | "engine";
+type RowId = "close-to-hide" | "global-limit" | "per-workspace-limit" | "daily-budget";
+
+interface Category {
+  id: CategoryId;
+  label: string;
+  icon: ComponentType;
+}
+
+type SubSection =
+  | { kind: "rows"; id: string; label: string; rows: readonly RowId[] }
+  | { kind: "theme"; id: string; label: string };
+
+const CATEGORIES: readonly Category[] = [
+  { id: "general", label: "General", icon: RiSettings3Line },
+  { id: "appearance", label: "Appearance", icon: RiPaletteLine },
+  { id: "engine", label: "Engine", icon: RiSpeedUpLine },
+];
+
+const SUBSECTIONS: Record<CategoryId, readonly SubSection[]> = {
+  general: [{ kind: "rows", id: "window", label: "Window", rows: ["close-to-hide"] }],
+  appearance: [{ kind: "theme", id: "theme", label: "Theme" }],
+  engine: [
+    { kind: "rows", id: "scheduler", label: "Scheduler", rows: ["global-limit", "per-workspace-limit"] },
+    { kind: "rows", id: "budget", label: "Budget", rows: ["daily-budget"] },
+  ],
+};
+
+interface RowMeta {
+  title: string;
+  description: string;
+  category: CategoryId;
+  keywords: readonly string[];
+}
+
+const ROWS: Record<RowId, RowMeta> = {
+  "close-to-hide": {
+    title: "Close to hide",
+    description: "Closing the window hides it and leaves the engine running.",
+    category: "general",
+    keywords: ["close", "hide", "window", "tray", "menu bar", "quit"],
+  },
+  "global-limit": {
+    title: "Global concurrency",
+    description: "How many runs the scheduler keeps in flight across all workspaces.",
+    category: "engine",
+    keywords: ["scheduler", "concurrency", "limit", "runs", "parallel", "global"],
+  },
+  "per-workspace-limit": {
+    title: "Per-workspace concurrency",
+    description: "How many runs stay in flight inside a single workspace.",
+    category: "engine",
+    keywords: ["scheduler", "concurrency", "workspace", "limit", "runs"],
+  },
+  "daily-budget": {
+    title: "Daily budget",
+    description: "Spend ceiling per day before the engine pauses new work.",
+    category: "engine",
+    keywords: ["budget", "spend", "cost", "money", "daily", "cap"],
+  },
+};
+
+const THEME_TILES: readonly { value: ThemeValue; label: string; icon: ComponentType }[] = [
+  { value: "system", label: "System", icon: RiComputerLine },
+  { value: "light", label: "Light", icon: RiSunLine },
+  { value: "dark", label: "Dark", icon: RiMoonLine },
+];
+
+// --- search index ------------------------------------------------------------------
+// Theme is a whole sub-section (the picker), not a row, so it is indexed on its own.
+
+type SearchId = RowId | "theme";
+
+interface SearchEntry {
+  id: SearchId;
+  title: string;
+  category: CategoryId;
+  keywords: readonly string[];
+}
+
+const SEARCH_INDEX: readonly SearchEntry[] = [
+  {
+    id: "theme",
+    title: "Theme",
+    category: "appearance",
+    keywords: ["theme", "appearance", "dark", "light", "color", "scheme", "system"],
+  },
+  ...(Object.keys(ROWS) as RowId[]).map((id) => ({
+    id,
+    title: ROWS[id].title,
+    category: ROWS[id].category,
+    keywords: ROWS[id].keywords,
+  })),
+];
+
+const categoryOf = (id: CategoryId): Category => CATEGORIES.find((entry) => entry.id === id) ?? CATEGORIES[0];
+
+function matchesSearch(entry: SearchEntry, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  return [entry.title, ...entry.keywords].join(" ").toLowerCase().includes(needle);
+}
+
+// --- controls (real primitives, no bespoke form CSS) -------------------------------
+
+function NumberStepper({
+  value,
+  onChange,
+  min = 0,
+  label,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  label: string;
+}) {
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-lg border p-0.5">
-      {options.map((option) => (
-        <Button
-          key={option.value}
-          size="sm"
-          variant={model.theme === option.value ? "secondary" : "ghost"}
-          onClick={() => model.setTheme(option.value)}
+    <InputGroup className="w-28">
+      <InputGroupInput
+        aria-label={label}
+        inputMode="numeric"
+        value={String(value)}
+        onChange={(event) => onChange(Math.max(min, Number(event.target.value.replace(/\D/g, "")) || min))}
+        className="text-center tabular-nums"
+      />
+      <InputGroupAddon>
+        <InputGroupButton
+          size="icon-xs"
+          aria-label={`Decrease ${label}`}
+          onClick={() => onChange(Math.max(min, value - 1))}
         >
-          <option.icon />
-          {option.label}
-        </Button>
+          <RiSubtractLine />
+        </InputGroupButton>
+      </InputGroupAddon>
+      <InputGroupAddon align="inline-end">
+        <InputGroupButton size="icon-xs" aria-label={`Increase ${label}`} onClick={() => onChange(value + 1)}>
+          <RiAddLine />
+        </InputGroupButton>
+      </InputGroupAddon>
+    </InputGroup>
+  );
+}
+
+function BudgetInput({ model }: { model: SettingsModel }) {
+  return (
+    <InputGroup className="w-36">
+      <InputGroupInput
+        aria-label="Daily budget"
+        inputMode="numeric"
+        value={String(model.dailyBudget)}
+        onChange={(event) => model.setDailyBudget(Number(event.target.value.replace(/\D/g, "")) || 0)}
+        className="tabular-nums"
+      />
+      <InputGroupAddon>
+        <InputGroupText>$</InputGroupText>
+      </InputGroupAddon>
+      <InputGroupAddon align="inline-end">
+        <InputGroupText>/ day</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>
+  );
+}
+
+function RowControl({ rowId, model }: { rowId: RowId; model: SettingsModel }) {
+  switch (rowId) {
+    case "close-to-hide":
+      return (
+        <Switch
+          aria-label="Close to hide"
+          checked={model.closeToHide}
+          onCheckedChange={model.setCloseToHide}
+        />
+      );
+    case "global-limit":
+      return (
+        <NumberStepper
+          value={model.globalLimit}
+          onChange={model.setGlobalLimit}
+          min={1}
+          label="Global concurrency"
+        />
+      );
+    case "per-workspace-limit":
+      return (
+        <NumberStepper
+          value={model.perWorkspaceLimit}
+          onChange={model.setPerWorkspaceLimit}
+          min={1}
+          label="Per-workspace concurrency"
+        />
+      );
+    case "daily-budget":
+      return <BudgetInput model={model} />;
+    default:
+      return null;
+  }
+}
+
+function SettingRow({ rowId, model, focused }: { rowId: RowId; model: SettingsModel; focused: boolean }) {
+  const meta = ROWS[rowId];
+  return (
+    <Item id={`setting-${rowId}`} className={cn("scroll-mt-8 transition-colors", focused && "bg-primary/10")}>
+      <ItemContent>
+        <ItemTitle>{meta.title}</ItemTitle>
+        <ItemDescription>{meta.description}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <RowControl rowId={rowId} model={model} />
+      </ItemActions>
+    </Item>
+  );
+}
+
+// Mock window preview, tinted per scheme (T3 Code's color-scheme picker).
+function ThemePreview({ kind }: { kind: ThemeValue }) {
+  const lightHalf = (
+    <div className="flex-1 bg-white p-1.5">
+      <div className="h-1.5 w-8 rounded-full bg-slate-200" />
+      <div className="mt-1 h-1.5 w-10 rounded-full bg-slate-200" />
+    </div>
+  );
+  const darkHalf = (
+    <div className="flex-1 bg-slate-900 p-1.5">
+      <div className="h-1.5 w-8 rounded-full bg-slate-600" />
+      <div className="mt-1 h-1.5 w-10 rounded-full bg-slate-700" />
+    </div>
+  );
+  return (
+    <div className="flex h-20 overflow-hidden rounded-lg border">
+      {kind === "dark" ? darkHalf : lightHalf}
+      {kind === "system" && darkHalf}
+    </div>
+  );
+}
+
+function ThemePicker({ model }: { model: SettingsModel }) {
+  return (
+    <ToggleGroup
+      className="grid w-full grid-cols-3 gap-3"
+      value={[model.theme]}
+      onValueChange={(values) => {
+        const next = values[0] as ThemeValue | undefined;
+        if (next) model.setTheme(next);
+      }}
+    >
+      {THEME_TILES.map((tile) => {
+        const Icon = tile.icon;
+        return (
+          <ToggleGroupItem
+            key={tile.value}
+            value={tile.value}
+            aria-label={tile.label}
+            className="h-auto w-full flex-col items-stretch gap-2 rounded-xl border border-input bg-transparent p-2 hover:bg-transparent aria-pressed:bg-transparent data-pressed:border-primary data-pressed:bg-transparent data-pressed:ring-2 data-pressed:ring-primary"
+          >
+            <ThemePreview kind={tile.value} />
+            <span className="flex items-center gap-1.5 px-1 pb-1 text-sm font-medium">
+              <Icon />
+              {tile.label}
+            </span>
+          </ToggleGroupItem>
+        );
+      })}
+    </ToggleGroup>
+  );
+}
+
+// --- content ----------------------------------------------------------------------
+
+function SubSectionBlock({
+  sub,
+  model,
+  focus,
+}: {
+  sub: SubSection;
+  model: SettingsModel;
+  focus: SearchId | null;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-sm font-medium text-muted-foreground">{sub.label}</h2>
+      {sub.kind === "theme" ? (
+        <div
+          id="setting-theme"
+          className={cn(
+            "scroll-mt-8 rounded-xl transition-shadow",
+            focus === "theme" && "ring-2 ring-primary ring-offset-4 ring-offset-background",
+          )}
+        >
+          <ThemePicker model={model} />
+        </div>
+      ) : (
+        <Card className="gap-0 py-0">
+          {sub.rows.map((rowId, index) => (
+            <Fragment key={rowId}>
+              {index > 0 && <Separator />}
+              <SettingRow rowId={rowId} model={model} focused={focus === rowId} />
+            </Fragment>
+          ))}
+        </Card>
+      )}
+    </section>
+  );
+}
+
+function CategoryPage({
+  category,
+  model,
+  focus,
+}: {
+  category: Category;
+  model: SettingsModel;
+  focus: SearchId | null;
+}) {
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-8 px-8 py-8">
+      <h1 className="text-2xl font-semibold tracking-tight">{category.label}</h1>
+      {SUBSECTIONS[category.id].map((sub) => (
+        <SubSectionBlock key={sub.id} sub={sub} model={model} focus={focus} />
       ))}
     </div>
   );
 }
 
-function CloseToHideControl({ model }: { model: SettingsModel }) {
+// A search hit in the sidebar: category icon + setting name + category label (T3 Code style).
+function SearchResultRow({ entry, onSelect }: { entry: SearchEntry; onSelect: () => void }) {
+  const category = categoryOf(entry.category);
+  const Icon = category.icon;
   return (
-    <Switch aria-label="Close to hide" checked={model.closeToHide} onCheckedChange={model.setCloseToHide} />
+    <Item
+      size="sm"
+      render={<button type="button" onClick={onSelect} />}
+      className="w-full cursor-pointer text-left hover:bg-sidebar-accent"
+    >
+      <ItemMedia variant="icon">
+        <Icon />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>{entry.title}</ItemTitle>
+        <ItemDescription>{category.label}</ItemDescription>
+      </ItemContent>
+    </Item>
   );
 }
 
-function NumberField({
-  label,
-  value,
-  onChange,
-  min = 0,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  min?: number;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span>{label}</span>
-      <Input
-        aria-label={label}
-        type="number"
-        min={min}
-        className="h-7 w-16 text-sm text-foreground"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </div>
-  );
-}
+// --- shell (sidebar takeover) ------------------------------------------------------
 
-function SchedulerControl({ model }: { model: SettingsModel }) {
-  return (
-    <div className="flex items-center gap-3">
-      <NumberField label="Global" value={model.globalLimit} onChange={model.setGlobalLimit} min={1} />
-      <NumberField
-        label="Per workspace"
-        value={model.perWorkspaceLimit}
-        onChange={model.setPerWorkspaceLimit}
-        min={1}
-      />
-    </div>
-  );
-}
-
-function BudgetControl({ model }: { model: SettingsModel }) {
-  return (
-    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-      <span>$</span>
-      <Input
-        type="number"
-        min={0}
-        className="h-7 w-24 text-sm text-foreground"
-        value={model.dailyBudget}
-        onChange={(event) => model.setDailyBudget(Number(event.target.value))}
-      />
-      <span>/ day</span>
-    </div>
-  );
-}
-
-// --- settings registry -------------------------------------------------------------
-
-interface Section {
-  id: string;
-  label: string;
-  icon: ComponentType;
-}
-
-interface SettingItem {
-  id: string;
-  sectionId: string;
-  title: string;
-  description: string;
-  keywords: readonly string[];
-  Control: ComponentType<{ model: SettingsModel }>;
-}
-
-const SECTIONS: readonly Section[] = [
-  { id: "appearance", label: "Appearance", icon: RiPaletteLine },
-  { id: "window", label: "Window", icon: RiWindow2Line },
-  { id: "scheduler", label: "Scheduler", icon: RiSpeedUpLine },
-  { id: "budget", label: "Budget", icon: RiMoneyDollarCircleLine },
-];
-
-const SETTINGS: readonly SettingItem[] = [
-  {
-    id: "theme",
-    sectionId: "appearance",
-    title: "Theme",
-    description: "System, light, or dark appearance for the app.",
-    keywords: ["theme", "appearance", "dark", "light", "color"],
-    Control: ThemeControl,
-  },
-  {
-    id: "close-to-hide",
-    sectionId: "window",
-    title: "Close to hide",
-    description: "Closing the window hides it and leaves the engine running.",
-    keywords: ["close", "hide", "window", "tray", "dock", "quit"],
-    Control: CloseToHideControl,
-  },
-  {
-    id: "scheduler-limits",
-    sectionId: "scheduler",
-    title: "Concurrency limits",
-    description: "How many runs the scheduler keeps in flight, globally and per workspace.",
-    keywords: ["scheduler", "concurrency", "limit", "in flight", "runs", "parallel"],
-    Control: SchedulerControl,
-  },
-  {
-    id: "daily-budget",
-    sectionId: "budget",
-    title: "Daily budget",
-    description: "Spend ceiling per day before the engine pauses new work.",
-    keywords: ["budget", "spend", "cost", "money", "daily", "cap"],
-    Control: BudgetControl,
-  },
-];
-
-function matches(item: SettingItem, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (q === "") return true;
-  const haystack = [item.title, item.description, ...item.keywords].join(" ").toLowerCase();
-  return haystack.includes(q);
-}
-
-function sectionOf(sectionId: string): Section {
-  return SECTIONS.find((section) => section.id === sectionId) ?? SECTIONS[0];
-}
-
-// --- shared presentational bits ----------------------------------------------------
-
-function SettingRow({ item, model }: { item: SettingItem; model: SettingsModel }) {
-  const Control = item.Control;
-  return (
-    <Card size="sm">
-      <CardContent className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <div className="text-sm font-medium">{item.title}</div>
-          <div className="text-sm text-muted-foreground">{item.description}</div>
-        </div>
-        <div className="shrink-0">
-          <Control model={model} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function StateReadout({ model }: { model: SettingsModel }) {
-  return (
-    <div className="rounded-lg border border-dashed p-3 font-mono text-xs text-muted-foreground">
-      state · theme={model.theme} · closeToHide={String(model.closeToHide)} · global=
-      {model.globalLimit} · perWorkspace={model.perWorkspaceLimit} · budget=${model.dailyBudget}
-    </div>
-  );
-}
-
-function SearchInput({
-  value,
-  onChange,
-  placeholder,
-  className,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  className?: string;
-}) {
-  return (
-    <div className={`relative ${className ?? ""}`}>
-      <RiSearchLine className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        className="pl-8"
-        placeholder={placeholder}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  );
-}
-
-// --- Variant A: sidebar takeover ---------------------------------------------------
-
-function VariantA({ model }: { model: SettingsModel }) {
+function SettingsPrototype() {
+  const navigate = useNavigate();
+  const model = useSettingsModel();
+  const [active, setActive] = useState<CategoryId>("general");
   const [query, setQuery] = useState("");
-  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  // The setting a search hit jumped to; drives scroll-into-view + a transient highlight.
+  const [focus, setFocus] = useState<SearchId | null>(null);
   const searching = query.trim() !== "";
-  const results = SETTINGS.filter((item) => matches(item, query));
-  const shownSection = searching ? null : sectionOf(activeSection);
-  const shownItems = searching ? results : SETTINGS.filter((item) => item.sectionId === activeSection);
+  const category = categoryOf(active);
+  const results = SEARCH_INDEX.filter((entry) => matchesSearch(entry, query));
+
+  // Reveal a jumped-to setting: scroll it into view, then let the highlight fade.
+  useEffect(() => {
+    if (!focus) return;
+    document.getElementById(`setting-${focus}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const timer = window.setTimeout(() => setFocus(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [focus]);
+
+  const openSetting = (entry: SearchEntry) => {
+    setActive(entry.category);
+    setQuery("");
+    setFocus(entry.id);
+  };
 
   return (
-    <div className="flex h-full">
+    <div className="fixed inset-0 z-[60] flex bg-background">
       <aside className="flex w-64 shrink-0 flex-col border-r bg-sidebar">
-        <div className="flex flex-col gap-2 p-3">
-          <div className="px-1 text-sm font-semibold">Settings</div>
-          <SearchInput value={query} onChange={setQuery} placeholder="Search settings…" />
+        <div className="h-11 shrink-0 [-webkit-app-region:drag]" />
+        <div className="flex flex-col gap-3 px-3 pb-3">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="w-fit justify-start px-2 [-webkit-app-region:no-drag]"
+            onClick={() => navigate({ to: "/" })}
+          >
+            <RiArrowLeftLine data-icon="inline-start" />
+            Back to app
+          </Button>
+          <InputGroup>
+            <InputGroupInput
+              placeholder="Search settings…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <InputGroupAddon>
+              <RiSearchLine />
+            </InputGroupAddon>
+            {searching && (
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => setQuery("")}>
+                  <RiCloseLine />
+                </InputGroupButton>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
         </div>
-        <Separator />
-        <nav className="flex flex-col gap-0.5 overflow-auto p-2">
+        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto px-2 pb-3">
           {searching ? (
-            results.length === 0 ? (
-              <div className="px-2 py-1.5 text-sm text-muted-foreground">No matches</div>
-            ) : (
-              results.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveSection(item.sectionId);
-                    setQuery("");
-                  }}
-                  className="flex flex-col items-start rounded-md px-2 py-1.5 text-left text-sm hover:bg-sidebar-accent"
-                >
-                  <span>{item.title}</span>
-                  <span className="text-xs text-muted-foreground">{sectionOf(item.sectionId).label}</span>
-                </button>
+            results.length > 0 ? (
+              results.map((entry) => (
+                <SearchResultRow key={entry.id} entry={entry} onSelect={() => openSetting(entry)} />
               ))
+            ) : (
+              <p className="px-2 py-3 text-sm text-muted-foreground">No settings match.</p>
             )
           ) : (
-            SECTIONS.map((section) => {
-              const Icon = section.icon;
-              const active = section.id === activeSection;
+            CATEGORIES.map((entry) => {
+              const Icon = entry.icon;
               return (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() => setActiveSection(section.id)}
-                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
-                    active ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/60"
-                  }`}
+                <Button
+                  key={entry.id}
+                  size="sm"
+                  variant={entry.id === active ? "secondary" : "ghost"}
+                  className="w-full justify-start"
+                  onClick={() => setActive(entry.id)}
                 >
-                  <Icon />
-                  <span>{section.label}</span>
-                </button>
+                  <Icon data-icon="inline-start" />
+                  {entry.label}
+                </Button>
               );
             })
           )}
         </nav>
       </aside>
       <main className="min-w-0 flex-1 overflow-auto">
-        <div className="mx-auto flex max-w-2xl flex-col gap-4 p-8">
-          <h1 className="text-lg font-semibold">
-            {searching ? `Results for “${query.trim()}”` : shownSection?.label}
-          </h1>
-          {shownItems.map((item) => (
-            <SettingRow key={item.id} item={item} model={model} />
-          ))}
-          <StateReadout model={model} />
-        </div>
+        <CategoryPage category={category} model={model} focus={focus} />
       </main>
     </div>
   );
 }
 
-// --- Variant B: full-page scroll, search-first, no rail ----------------------------
-
-function VariantB({ model }: { model: SettingsModel }) {
-  const [query, setQuery] = useState("");
-  const visibleSections = SECTIONS.filter((section) =>
-    SETTINGS.some((item) => item.sectionId === section.id && matches(item, query)),
-  );
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 border-b px-6 py-3">
-        <SearchInput
-          className="max-w-md flex-1"
-          value={query}
-          onChange={setQuery}
-          placeholder="Search all settings…"
-        />
-        <div className="ml-auto flex items-center gap-1">
-          {SECTIONS.map((section) => (
-            <a
-              key={section.id}
-              href={`#section-${section.id}`}
-              className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              {section.label}
-            </a>
-          ))}
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-10 p-10">
-          <div>
-            <h1 className="text-2xl font-semibold">Settings</h1>
-            <p className="text-sm text-muted-foreground">Everything in one scroll.</p>
-          </div>
-          {visibleSections.length === 0 && (
-            <div className="text-sm text-muted-foreground">No settings match “{query.trim()}”.</div>
-          )}
-          {visibleSections.map((section) => {
-            const Icon = section.icon;
-            const items = SETTINGS.filter((item) => item.sectionId === section.id && matches(item, query));
-            return (
-              <section key={section.id} id={`section-${section.id}`} className="flex flex-col gap-3">
-                <div className="flex items-center gap-2 border-b pb-2 text-sm font-semibold text-muted-foreground">
-                  <Icon />
-                  <span>{section.label}</span>
-                </div>
-                {items.map((item) => (
-                  <SettingRow key={item.id} item={item} model={model} />
-                ))}
-              </section>
-            );
-          })}
-          <StateReadout model={model} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- Variant C: command overlay over a dimmed app ----------------------------------
-
-function VariantC({ model }: { model: SettingsModel }) {
-  const [query, setQuery] = useState("");
-  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
-  const searching = query.trim() !== "";
-  const results = SETTINGS.filter((item) => matches(item, query));
-
-  return (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/30 p-8 backdrop-blur-sm">
-      <div className="flex h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border bg-popover shadow-xl">
-        <div className="border-b p-2">
-          <SearchInput value={query} onChange={setQuery} placeholder="Type to jump to a setting…" />
-        </div>
-        {searching ? (
-          <div className="min-h-0 flex-1 overflow-auto p-3">
-            {results.length === 0 ? (
-              <div className="p-4 text-sm text-muted-foreground">No settings match “{query.trim()}”.</div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {results.map((item) => (
-                  <div key={item.id} className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {sectionOf(item.sectionId).label}
-                    </span>
-                    <SettingRow item={item} model={model} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1">
-            <nav className="flex w-48 shrink-0 flex-col gap-0.5 overflow-auto border-r p-2">
-              {SECTIONS.map((section) => {
-                const Icon = section.icon;
-                const active = section.id === activeSection;
-                return (
-                  <button
-                    key={section.id}
-                    type="button"
-                    onClick={() => setActiveSection(section.id)}
-                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
-                      active ? "bg-accent font-medium" : "hover:bg-accent/60"
-                    }`}
-                  >
-                    <Icon />
-                    <span>{section.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-            <div className="min-w-0 flex-1 overflow-auto p-4">
-              <div className="flex flex-col gap-3">
-                <h2 className="text-sm font-semibold">{sectionOf(activeSection).label}</h2>
-                {SETTINGS.filter((item) => item.sectionId === activeSection).map((item) => (
-                  <SettingRow key={item.id} item={item} model={model} />
-                ))}
-                <StateReadout model={model} />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// --- shell: title strip + floating switcher ----------------------------------------
-
-function isEditable(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || !!target.closest("input, textarea, select, [contenteditable='true']"))
-  );
-}
-
-function PrototypeSwitcher({ variant }: { variant: Variant }) {
-  const navigate = useNavigate();
-  const index = VARIANTS.indexOf(variant);
-  const go = (next: Variant) => navigate({ to: "/settings-prototype", search: { variant: next } });
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey || isEditable(event.target)) return;
-      if (event.key === "ArrowLeft") go(VARIANTS[(index - 1 + VARIANTS.length) % VARIANTS.length]);
-      if (event.key === "ArrowRight") go(VARIANTS[(index + 1) % VARIANTS.length]);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index]);
-
-  if (import.meta.env.PROD) return null;
-
-  return (
-    <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border bg-popover px-1.5 py-1 shadow-lg [-webkit-app-region:no-drag]">
-      <Button
-        aria-label="Previous variant"
-        size="icon-sm"
-        variant="ghost"
-        onClick={() => go(VARIANTS[(index - 1 + VARIANTS.length) % VARIANTS.length])}
-      >
-        <RiArrowLeftSLine />
-      </Button>
-      <span className="px-2 text-xs font-medium tabular-nums">
-        {variant} — {VARIANT_LABEL[variant]}
-      </span>
-      <Button
-        aria-label="Next variant"
-        size="icon-sm"
-        variant="ghost"
-        onClick={() => go(VARIANTS[(index + 1) % VARIANTS.length])}
-      >
-        <RiArrowRightSLine />
-      </Button>
-    </div>
-  );
-}
-
-function SettingsPrototype() {
-  const { variant } = Route.useSearch();
-  const navigate = useNavigate();
-  const model = useSettingsModel();
-
-  return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-background">
-      <div className="flex h-11 shrink-0 items-center border-b pr-3 pl-[var(--workspace-titlebar-content-left)] [-webkit-app-region:drag]">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="[-webkit-app-region:no-drag]"
-          onClick={() => navigate({ to: "/" })}
-        >
-          <RiArrowLeftLine />
-          Back to app
-        </Button>
-        <span className="ml-2 text-sm text-muted-foreground">Settings prototype</span>
-      </div>
-      <div className="relative min-h-0 flex-1">
-        {variant === "A" && <VariantA model={model} />}
-        {variant === "B" && <VariantB model={model} />}
-        {variant === "C" && <VariantC model={model} />}
-      </div>
-      <PrototypeSwitcher variant={variant} />
-    </div>
-  );
-}
-
 export const Route = createFileRoute("/settings-prototype")({
-  validateSearch: (search: Record<string, unknown>): { variant: Variant } => {
-    const value = search.variant;
-    return { variant: VARIANTS.includes(value as Variant) ? (value as Variant) : "A" };
-  },
   component: SettingsPrototype,
 });

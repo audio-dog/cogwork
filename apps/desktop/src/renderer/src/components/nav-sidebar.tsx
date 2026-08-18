@@ -102,7 +102,7 @@ function UserButton() {
       />
       <DropdownMenuContent side="top" align="start" className="min-w-48">
         {/* PROTOTYPE (#17): entry into the settings-experience prototype. */}
-        <DropdownMenuItem render={<Link to="/settings-prototype" search={{ variant: "A" }} />}>
+        <DropdownMenuItem render={<Link to="/settings-prototype" />}>
           <RiSettings3Line />
           Settings
         </DropdownMenuItem>
