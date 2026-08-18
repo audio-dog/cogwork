@@ -5,9 +5,11 @@ import type * as React from "react";
 import { Separator } from "#components/separator";
 import { cn } from "#lib/utils";
 
-function ItemGroup({ className, ...props }: React.ComponentProps<"ul">) {
+function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <ul
+    // biome-ignore lint/a11y/useSemanticElements: Fine for primitives
+    <div
+      role="list"
       data-slot="item-group"
       className={cn(
         "group/item-group flex w-full flex-col gap-4 has-data-[size=sm]:gap-2.5 has-data-[size=xs]:gap-2",
