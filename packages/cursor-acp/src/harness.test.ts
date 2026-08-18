@@ -1,11 +1,23 @@
-import { HarnessName } from "@cogwork/contracts";
+import { type AgUiEvent, agUiUsage, HarnessName } from "@cogwork/contracts";
 import type { Harness } from "@cogwork/engine";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
+import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { assert, describe, it } from "vitest";
-import { cursorModelOptions, cursorRunner, mcpWorkspaceProjection, toEvent } from "./harness";
+import {
+  cursorModelOptions,
+  cursorRunner,
+  estimatedUsage,
+  mcpWorkspaceProjection,
+  toEvent,
+  withEstimatedUsage,
+} from "./harness";
+
+const collect = (stream: Stream.Stream<AgUiEvent, Harness.HarnessError>) =>
+  Effect.runPromise(Stream.runCollect(stream));
 
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
@@ -113,5 +125,66 @@ describe("toEvent", () => {
     assert.strictEqual(event.type, "REASONING_MESSAGE_CONTENT");
     assert.strictEqual(event.delta, "weighing the two approaches");
     assert.strictEqual(event.messageId, "msg-0");
+  });
+});
+
+describe("estimatedUsage", () => {
+  it("counts tokens as ceil(chars / 4) and marks the result estimated", () => {
+    assert.deepStrictEqual(estimatedUsage(40, 20), {
+      promptTokens: 10,
+      completionTokens: 5,
+      totalTokens: 15,
+      estimated: true,
+    });
+  });
+
+  it("rounds partial tokens up so any output still shows a count", () => {
+    assert.deepStrictEqual(estimatedUsage(3, 1), {
+      promptTokens: 1,
+      completionTokens: 1,
+      totalTokens: 2,
+      estimated: true,
+    });
+  });
+});
+
+describe("withEstimatedUsage", () => {
+  it("attaches an estimate from prompt + streamed text when the terminal event has none", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "TEXT_MESSAGE_CONTENT", delta: "hello" },
+      { type: "REASONING_MESSAGE_CONTENT", delta: "abcd" },
+      { type: "RUN_FINISHED", finishReason: "stop" },
+    ];
+
+    return collect(withEstimatedUsage(8, Stream.fromIterable(events))).then((out) => {
+      const finished = out.at(-1);
+      assert.strictEqual(finished?.type, "RUN_FINISHED");
+      assert.deepStrictEqual(finished && agUiUsage(finished), {
+        inputTokens: 2,
+        outputTokens: 3,
+        totalTokens: 5,
+        estimated: true,
+      });
+    });
+  });
+
+  it("leaves a run that already reports real usage untouched", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "TEXT_MESSAGE_CONTENT", delta: "hello" },
+      {
+        type: "RUN_FINISHED",
+        finishReason: "stop",
+        usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+      },
+    ];
+
+    return collect(withEstimatedUsage(8, Stream.fromIterable(events))).then((out) => {
+      const finished = out.at(-1);
+      assert.deepStrictEqual(finished && agUiUsage(finished), {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+      });
+    });
   });
 });

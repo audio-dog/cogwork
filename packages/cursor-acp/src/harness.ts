@@ -91,6 +91,44 @@ const bridge = (stream: AsyncIterable<StreamChunk>) =>
     ),
   );
 
+const estimateTokens = (chars: number) => Math.ceil(chars / 4);
+
+const outputChars = (event: AgUiEvent) =>
+  event.type === "TEXT_MESSAGE_CONTENT" || event.type === "REASONING_MESSAGE_CONTENT"
+    ? (event.delta?.length ?? 0)
+    : 0;
+
+// Cursor's `agent acp` never reports token usage — the ACP prompt response is `{stopReason}`
+// with no `usage`, and no session update carries counts (see FINDINGS.md Q2) — so without an
+// estimate a completed run records nothing.
+export const estimatedUsage = (promptChars: number, outputTextChars: number) => {
+  const promptTokens = estimateTokens(promptChars);
+  const completionTokens = estimateTokens(outputTextChars);
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    estimated: true,
+  };
+};
+
+export const withEstimatedUsage = (
+  promptChars: number,
+  stream: Stream.Stream<AgUiEvent, Harness.HarnessError>,
+) =>
+  Stream.mapAccum(
+    stream,
+    () => 0,
+    (streamed: number, event: AgUiEvent): readonly [number, ReadonlyArray<AgUiEvent>] => {
+      const next = streamed + outputChars(event);
+      const emit: AgUiEvent =
+        event.type === "RUN_FINISHED" && !event.usage
+          ? { ...event, usage: estimatedUsage(promptChars, next) }
+          : event;
+      return [next, [emit]];
+    },
+  );
+
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
 // Cursor's agent sends these vendor JSON-RPC requests to report completed
@@ -202,7 +240,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             middleware: [withSandbox(sandbox)],
             ...(handle || request.effort ? { modelOptions } : {}),
           });
-          return bridge(stream);
+          return withEstimatedUsage(request.prompt.length, bridge(stream));
         }),
       ),
   };
