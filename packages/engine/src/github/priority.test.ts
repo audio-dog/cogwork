@@ -1,5 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
-import { type ProjectPrioritiesPayload, pageOf } from "./priority";
+import { type PriorityRepo, type ProjectPrioritiesPayload, pageOf } from "./priority";
+
+const repo: PriorityRepo = { owner: "owner", name: "repo" };
 
 const payload = (
   nodes: ReadonlyArray<{
@@ -7,6 +9,8 @@ const payload = (
     readonly isIssue?: boolean;
     readonly name?: string;
     readonly hasField?: boolean;
+    readonly owner?: string;
+    readonly repository?: string;
   }>,
   page: { readonly hasNextPage: boolean; readonly endCursor: string | null } = {
     hasNextPage: false,
@@ -18,7 +22,16 @@ const payload = (
       items: {
         pageInfo: page,
         nodes: nodes.map((node) => ({
-          content: node.isIssue === false ? null : { number: node.number },
+          content:
+            node.isIssue === false
+              ? null
+              : {
+                  number: node.number,
+                  repository: {
+                    name: node.repository ?? repo.name,
+                    owner: { login: node.owner ?? repo.owner },
+                  },
+                },
           fieldValueByName: node.hasField === false ? null : { name: node.name },
         })),
       },
@@ -35,6 +48,7 @@ describe("pageOf", () => {
         { number: 3, name: "MEDIUM" },
         { number: 4, name: "Low" },
       ]),
+      repo,
     );
     assert.deepStrictEqual(
       [...page.entries],
@@ -54,6 +68,7 @@ describe("pageOf", () => {
         { number: 2, name: undefined },
         { number: 3, name: "P0" },
       ]),
+      repo,
     );
     assert.deepStrictEqual(
       [...page.entries],
@@ -71,17 +86,35 @@ describe("pageOf", () => {
         { isIssue: false, name: "Urgent" },
         { number: 5, name: "High" },
       ]),
+      repo,
     );
     assert.deepStrictEqual([...page.entries], [[5, "high"]]);
   });
 
+  it("skips cards from another repository so issue numbers cannot collide", () => {
+    const page = pageOf(
+      payload([
+        { number: 5, name: "Urgent", owner: "other", repository: "repo" },
+        { number: 5, name: "Low", owner: "owner", repository: "other" },
+        { number: 5, name: "High" },
+      ]),
+      repo,
+    );
+    assert.deepStrictEqual([...page.entries], [[5, "high"]]);
+  });
+
+  it("matches repository owner and name case-insensitively", () => {
+    const page = pageOf(payload([{ number: 7, name: "Urgent", owner: "Owner", repository: "Repo" }]), repo);
+    assert.deepStrictEqual([...page.entries], [[7, "urgent"]]);
+  });
+
   it("reports the next cursor only while more pages remain", () => {
-    assert.strictEqual(pageOf(payload([], { hasNextPage: true, endCursor: "abc" })).nextCursor, "abc");
-    assert.strictEqual(pageOf(payload([], { hasNextPage: false, endCursor: "abc" })).nextCursor, null);
+    assert.strictEqual(pageOf(payload([], { hasNextPage: true, endCursor: "abc" }), repo).nextCursor, "abc");
+    assert.strictEqual(pageOf(payload([], { hasNextPage: false, endCursor: "abc" }), repo).nextCursor, null);
   });
 
   it("returns nothing when the owner or board is absent", () => {
-    assert.deepStrictEqual([...pageOf({ repositoryOwner: null }).entries], []);
-    assert.deepStrictEqual([...pageOf({ repositoryOwner: { projectV2: null } }).entries], []);
+    assert.deepStrictEqual([...pageOf({ repositoryOwner: null }, repo).entries], []);
+    assert.deepStrictEqual([...pageOf({ repositoryOwner: { projectV2: null } }, repo).entries], []);
   });
 });

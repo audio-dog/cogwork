@@ -4,13 +4,23 @@ import * as Schema from "effect/Schema";
 export const defaultPriorityField = "Priority";
 
 // One page of a Projects v2 board read over GraphQL. Each item links to its content (we only care
-// about issues) and carries the single-select value of the named priority field. Both are nullable:
-// a card can point at a PR or draft, and the field can be unset — either way the item has no
-// readable priority and resolves to the default.
+// about issues in this workspace's repo) and carries the single-select value of the named priority
+// field. Both are nullable: a card can point at a PR or draft, and the field can be unset — either
+// way the item has no readable priority and resolves to the default.
 const ItemNode = Schema.Struct({
   content: Schema.NullOr(
     Schema.Struct({
       number: Schema.optional(Schema.Finite),
+      repository: Schema.optional(
+        Schema.Struct({
+          name: Schema.optional(Schema.String),
+          owner: Schema.optional(
+            Schema.Struct({
+              login: Schema.optional(Schema.String),
+            }),
+          ),
+        }),
+      ),
     }),
   ),
   fieldValueByName: Schema.NullOr(
@@ -49,7 +59,12 @@ query ProjectPriorities($owner: String!, $number: Int!, $field: String!, $cursor
         items(first: 100, after: $cursor) {
           pageInfo { hasNextPage endCursor }
           nodes {
-            content { ... on Issue { number } }
+            content {
+              ... on Issue {
+                number
+                repository { name owner { login } }
+              }
+            }
             fieldValueByName(name: $field) {
               ... on ProjectV2ItemFieldSingleSelectValue { name }
             }
@@ -60,19 +75,31 @@ query ProjectPriorities($owner: String!, $number: Int!, $field: String!, $cursor
   }
 }`;
 
+export interface PriorityRepo {
+  readonly owner: string;
+  readonly name: string;
+}
+
 export interface PriorityPage {
   readonly entries: ReadonlyArray<readonly [number, Priority]>;
   readonly nextCursor: string | null;
 }
 
-// Reduce one decoded page into issue-number → priority entries. Cards without an issue number are
-// skipped; an unset or unknown field value resolves to the default priority.
-export const pageOf = (payload: ProjectPrioritiesPayload): PriorityPage => {
+const matchesRepo = (repo: PriorityRepo, owner: string | undefined, name: string | undefined): boolean =>
+  owner?.toLowerCase() === repo.owner.toLowerCase() && name?.toLowerCase() === repo.name.toLowerCase();
+
+// Reduce one decoded page into issue-number → priority entries for this workspace's repo only.
+// Board cards can span repos and issue numbers collide across them, so we read each issue's
+// repository and skip cards from anywhere else. Cards without an issue number are skipped; an unset
+// or unknown field value resolves to the default priority.
+export const pageOf = (payload: ProjectPrioritiesPayload, repo: PriorityRepo): PriorityPage => {
   const items = payload.repositoryOwner?.projectV2?.items;
   if (!items) return { entries: [], nextCursor: null };
   const entries = items.nodes.flatMap((node): ReadonlyArray<readonly [number, Priority]> => {
-    const number = node.content?.number;
-    if (number === undefined) return [];
+    const content = node.content;
+    const number = content?.number;
+    if (number === undefined || content === null) return [];
+    if (!matchesRepo(repo, content.repository?.owner?.login, content.repository?.name)) return [];
     const entry: readonly [number, Priority] = [number, resolvePriority(node.fieldValueByName?.name)];
     return [entry];
   });

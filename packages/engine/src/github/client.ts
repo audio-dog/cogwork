@@ -376,7 +376,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         cursor,
       });
       const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
-      const page = pageOf(payload);
+      const page = pageOf(payload, repo);
       for (const [number, priority] of page.entries) byNumber.set(number, priority);
       cursor = page.nextCursor;
     } while (cursor !== null);
