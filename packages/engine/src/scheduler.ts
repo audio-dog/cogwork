@@ -1,5 +1,5 @@
 import type { WorkspaceId } from "@cogwork/contracts";
-import { stagePriority } from "@cogwork/contracts";
+import { byStageThenPriority as byStageThenPriorityOf } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -66,8 +66,9 @@ export interface Candidate {
   readonly keys: ReadonlyArray<string>;
 }
 
-const byPriority = (a: Candidate, b: Candidate) =>
-  stagePriority.indexOf(a.work.stage) - stagePriority.indexOf(b.work.stage);
+// Order the whole flattened candidate list by the one shared rule: stage first, then priority within
+// a stage. A stable sort keeps items of equal stage and priority in their prior order.
+const byStageThenPriority = (a: Candidate, b: Candidate) => byStageThenPriorityOf(a.work, b.work);
 
 const fits = (candidate: Candidate, state: SchedulerState, config: SchedulerConfig) =>
   !state.stopping &&
@@ -138,7 +139,7 @@ export const plan = (
   stamp: TickStamp,
 ) =>
   [...candidates]
-    .sort(byPriority)
+    .sort(byStageThenPriority)
     .reduce<Plan>(
       (acc, candidate) =>
         fits(candidate, acc.state, config)

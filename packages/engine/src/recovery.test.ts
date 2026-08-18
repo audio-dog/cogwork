@@ -77,6 +77,7 @@ const claimedByUs: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 
@@ -91,6 +92,7 @@ const claimedByOther: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 
@@ -105,6 +107,7 @@ const unclaimed: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 
@@ -119,6 +122,7 @@ const staleNoStage: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 

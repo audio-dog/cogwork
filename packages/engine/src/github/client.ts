@@ -1,3 +1,4 @@
+import type { GitHubPrioritySource, Priority } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -14,6 +15,7 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
 import { IssueTrackerError } from "../issue-tracker";
+import { decodeProjectPriorities, defaultPriorityField, pageOf, priorityQuery } from "./priority";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -133,6 +135,12 @@ const CheckRunSchema = Schema.Struct({
 });
 
 const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema) });
+
+const GraphQlResponse = Schema.Struct({
+  data: Schema.optional(Schema.Unknown),
+  errors: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ message: Schema.String })))),
+});
+const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
@@ -323,6 +331,59 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     yield* send(repo, withBody);
   });
 
+  // The one GraphQL read path in an otherwise REST-only adapter, added for the Projects v2 priority
+  // field the REST API cannot reach. A `200` carrying an `errors` array (e.g. a missing scope) is a
+  // failure just like a `4xx`.
+  const graphql = Effect.fn("github.graphql")(function* (
+    repo: GitHubRepoRef,
+    query: string,
+    variables: Record<string, unknown>,
+  ) {
+    const request = HttpClientRequest.post("https://api.github.com/graphql");
+    const withBody = yield* Effect.mapError(
+      HttpClientRequest.bodyJson(request, { query, variables }),
+      toUnavailable,
+    );
+    const response = yield* Effect.retry(send(repo, withBody), {
+      while: isTransient,
+      schedule: transientBackoff,
+      times: 3,
+    });
+    const json = yield* Effect.mapError(response.json, toUnavailable);
+    const decoded = yield* Effect.mapError(decodeGraphQl(json), toUnavailable);
+    if (decoded.errors && decoded.errors.length > 0) {
+      return yield* unavailable(
+        `GitHub GraphQL error: ${decoded.errors.map((error) => error.message).join("; ")}`,
+      );
+    }
+    return decoded.data;
+  });
+
+  // Page through a Projects v2 board and collect issue-number → priority. One paged GraphQL query,
+  // not one per issue, so the cost tracks board size rather than backlog size.
+  const collectPriorities = Effect.fn("github.projectPriorities")(function* (
+    repo: GitHubRepoRef,
+    source: GitHubPrioritySource,
+  ) {
+    const field = source.field ?? defaultPriorityField;
+    const byNumber = new Map<number, Priority>();
+    let cursor: string | null = null;
+    do {
+      const data = yield* graphql(repo, priorityQuery, {
+        owner: repo.owner,
+        number: source.project,
+        field,
+        cursor,
+      });
+      const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
+      const page = pageOf(payload);
+      for (const [number, priority] of page.entries) byNumber.set(number, priority);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    const result: ReadonlyMap<number, Priority> = byNumber;
+    return result;
+  });
+
   return {
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
@@ -357,6 +418,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     }),
     listReviewComments,
     listReviews,
+    projectPriorities: collectPriorities,
     listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/commits/${sha}/check-runs?per_page=100`));
