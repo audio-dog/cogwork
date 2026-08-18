@@ -520,16 +520,16 @@ function TranscriptToolbar(props: VariantProps) {
             onToggle={() => props.setVerbose(!props.verbose)}
             onIcon={<RiEyeLine />}
             offIcon={<RiEyeOffLine />}
-            onLabel="Showing low-signal events"
-            offLabel="Show low-signal events"
+            onLabel="Hide minor events"
+            offLabel="Show minor events"
           />
           <IconToggle
             on={props.frozen}
             onToggle={() => props.setFrozen(!props.frozen)}
             onIcon={<RiPlayMiniLine />}
             offIcon={<RiPauseLine />}
-            onLabel="Frozen — resume live tail"
-            offLabel="Freeze the log"
+            onLabel="Resume new events"
+            offLabel="Pause new events"
           />
         </div>
       </TooltipProvider>
@@ -665,8 +665,8 @@ function VariantB(props: VariantProps) {
             onToggle={() => props.setVerbose(!props.verbose)}
             onIcon={<RiEyeLine />}
             offIcon={<RiEyeOffLine />}
-            onLabel="Showing low-signal events"
-            offLabel="Show low-signal events"
+            onLabel="Hide minor events"
+            offLabel="Show minor events"
           />
         </TooltipProvider>
       </div>
