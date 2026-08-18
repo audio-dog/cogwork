@@ -25,7 +25,9 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
 import { useBoard } from "../features/use-board";
+import { useInSettings } from "../features/use-settings-route";
 import { useChromeStore } from "../store/chrome";
+import { SettingsSidebar } from "./settings-sidebar";
 import { useTheme } from "./theme-provider";
 
 interface View {
@@ -98,9 +100,9 @@ function UserButton() {
         }
       />
       <DropdownMenuContent side="top" align="start" className="min-w-48">
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem render={<Link to="/settings" />}>
           <RiSettings3Line />
-          Settings (coming soon)
+          Settings
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/activity" />}>
           <RiPulseLine />
@@ -119,6 +121,10 @@ function UserButton() {
 }
 
 export function NavSidebar() {
+  return useInSettings() ? <SettingsSidebar /> : <AppSidebar />;
+}
+
+function AppSidebar() {
   return (
     <Sidebar collapsible="offcanvas">
       <SidebarHeader className="@container/sidebar-header h-11 shrink-0 flex-row items-center px-3 py-0 [-webkit-app-region:drag]">

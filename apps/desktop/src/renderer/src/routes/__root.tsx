@@ -12,6 +12,7 @@ import { RightPanel } from "../components/right-panel";
 import { PausedBanner, SchedulerControls } from "../components/scheduler-gauges";
 import { SidebarResizeHandle, useSidebarWidth } from "../components/sidebar-resize";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
+import { useInSettings } from "../features/use-settings-route";
 import { useRightPanelStore } from "../store/right-panel";
 
 const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
@@ -46,6 +47,7 @@ function EngineControl() {
 
 // Rendered outside the sidebar so it stays put when the sidebar collapses.
 function SidebarControl() {
+  if (useInSettings()) return null;
   return (
     <div className="pointer-events-none fixed top-0 left-[var(--workspace-controls-left)] z-50 flex h-11 items-center">
       <Tooltip>
@@ -115,6 +117,10 @@ function ContentArea() {
   return <MainColumn />;
 }
 
+function ShellContent() {
+  return useInSettings() ? <Outlet /> : <ContentArea />;
+}
+
 function RootLayout() {
   const { width, setWidth, reset } = useSidebarWidth();
   // Wider on macOS so the fixed toggle and title-bar content clear the traffic lights.
@@ -130,7 +136,7 @@ function RootLayout() {
       <SidebarProvider style={providerStyle}>
         <NavSidebar />
         <SidebarInset className="h-svh overflow-hidden">
-          <ContentArea />
+          <ShellContent />
         </SidebarInset>
         <SidebarControl />
         <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
