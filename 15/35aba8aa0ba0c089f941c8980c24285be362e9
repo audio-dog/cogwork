@@ -1,0 +1,41 @@
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_9626cf56d1ceac::t_5a57548efec298 14,26-30,35,40,46,50,52-53,59,78-84,91
+apps/desktop/src/renderer/src/features/activity-log.ts
+  s_9626cf56d1ceac::t_73d27784ec5e01 1-355
+apps/desktop/src/renderer/src/components/activity-variants.tsx
+  s_9626cf56d1ceac::t_d9fbf5ff450314 1-40,71-221,223-483,485-654,656-911
+  s_9626cf56d1ceac::t_11220f2c4cb31f 47-54
+  s_9626cf56d1ceac::t_e599058348bfb0 222
+  s_9626cf56d1ceac::t_3b2206db585b1e 484
+  s_9626cf56d1ceac::t_e9b29a90598cc5 655
+  s_9626cf56d1ceac::t_96a24120b33ad0 41-46,55-70
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_9626cf56d1ceac::t_f01faae820fdf8 23
+  s_9626cf56d1ceac::t_dcc4d10ca7b31d 121-147
+  s_9626cf56d1ceac::t_22b2601bc7d6a6 173
+apps/desktop/src/renderer/src/routes/activity-prototype.tsx
+  s_9626cf56d1ceac::t_5bfe2e9ac31f8d 1-53
+apps/desktop/src/renderer/src/components/prototype-switcher.tsx
+  s_9626cf56d1ceac::t_f9535be4c89fca 1-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1535aba8aa0ba0c089f941c8980c24285be362e9",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_9626cf56d1ceac": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e5d2fbe-e001-4cd1-aa15-72f9a70ab78f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
