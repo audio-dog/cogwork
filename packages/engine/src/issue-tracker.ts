@@ -116,21 +116,7 @@ export const makeEmpty = Effect.succeed({
   claim: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: ClaimRequest) =>
     failWhenRemote(workspace),
   release: (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace),
-  recordAttempt: (
-    workspace: RegisteredWorkspace,
-    _itemId: WorkItemId,
-    _attempt: AttemptRecord,
-    _reason?: string,
-  ) => failWhenRemote(workspace),
-  recordFollowUp: (
-    workspace: RegisteredWorkspace,
-    _itemId: WorkItemId,
-    _marker: FollowUpMarker,
-    _detail?: string,
-  ) => failWhenRemote(workspace),
   note: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _detail: string) => failWhenRemote(workspace),
-  setRoles: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _changes: RoleChanges) =>
-    failWhenRemote(workspace),
   triaged: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: TriagedOutcome) =>
     failWhenRemote(workspace),
   implemented: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: ImplementedOutcome) =>
@@ -154,3 +140,16 @@ export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerServ
 ) {}
 
 export const emptyLayer = Layer.effect(IssueTracker, makeEmpty);
+
+export const releaseClaim = (tracker: IssueTrackerService) =>
+  Effect.fn("IssueTracker.releaseClaim")(function* (workspace: RegisteredWorkspace, itemId: WorkItemId) {
+    yield* tracker.release(workspace, itemId).pipe(
+      Effect.catchTag("IssueTrackerError", (error) =>
+        Effect.logWarning("claim release failed", {
+          workspace: workspace.config.name,
+          item: itemId,
+          message: error.message,
+        }),
+      ),
+    );
+  });

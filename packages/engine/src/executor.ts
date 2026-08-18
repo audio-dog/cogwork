@@ -11,13 +11,12 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
-import { agentFailureReason, prepareFailureReason, triageProposalBody } from "./comments";
+import { agentFailureReason, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
-import { handoffNote, releaseClaim as makeReleaseClaim } from "./hand-to-human";
 import { type AgUiEvent, Harness, type HarnessError, type HarnessRequest } from "./harness";
-import { IssueTracker, type IssueTrackerError } from "./issue-tracker";
+import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import {
   buildContinuationNudge,

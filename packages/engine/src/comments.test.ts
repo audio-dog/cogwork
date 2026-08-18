@@ -1,8 +1,11 @@
+import { WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Schema from "effect/Schema";
 import {
   agentFailureReason,
   attachCommand,
   handoffComment,
+  handoffNote,
   oneLine,
   parseTriageProposal,
   prepareFailureReason,
@@ -13,6 +16,19 @@ import {
   triageProposalBody,
   truncate,
 } from "./comments";
+import type { RegisteredWorkspace } from "./projector";
+
+const workspace: RegisteredWorkspace = {
+  source: "a.workspace.ts",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "a",
+    checkoutPath: "/repos/a",
+    issueTracker: { type: "github", repo: "owner/a" },
+    harness: { preferred: "cursor" },
+  }),
+};
+
+const item = { id: Schema.decodeSync(WorkItemId)("#1"), title: "item 1" };
 
 describe("comments", () => {
   it("normalizes status reasons: one line, truncated, markers stripped", () => {
@@ -129,5 +145,32 @@ describe("comments", () => {
     assert.isNull(parseTriageProposal("> *This was posted by cogwork.*\n\nExhausted after 3 attempts."));
     assert.isNull(parseTriageProposal("just a human comment"));
     assert.isNull(parseTriageProposal(triageProposalBody("")));
+  });
+
+  it("builds a hand-off note with a resume command when the run left a session", () => {
+    const note = handoffNote({
+      workspace,
+      item,
+      stage: "implement",
+      cause: { kind: "max-attempts", attempts: 3 },
+      reason: "boom",
+      session: "sess-1",
+    });
+    assert.include(note, "Exhausted after 3 failed implement attempts.");
+    assert.include(note, "Last failure: boom");
+    assert.include(note, "agent --resume 'sess-1'");
+  });
+
+  it("omits the resume block when the run left no session", () => {
+    const note = handoffNote({
+      workspace,
+      item,
+      stage: "triage",
+      cause: { kind: "crash-loop", crashes: 2 },
+      reason: "gone",
+      session: null,
+    });
+    assert.include(note, "Exhausted after 2 consecutive triage crashes.");
+    assert.notInclude(note, "Resume the session");
   });
 });

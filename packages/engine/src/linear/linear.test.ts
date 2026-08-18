@@ -441,13 +441,12 @@ describe("linear work source adapter", () => {
     ),
   );
 
-  it.effect("setRoles applies configured labels and moves wontfix to Canceled", () =>
+  it.effect("reclassify applies configured labels and moves wontfix to Canceled", () =>
     Effect.gen(function* () {
       const source = yield* IssueTracker;
       const client = yield* LinearClient;
-      yield* source.setRoles(workspace, id("AUD-9"), {
-        remove: ["needs-triage"],
-        add: ["wontfix"],
+      yield* source.reclassify(workspace, id("AUD-9"), {
+        changes: { remove: ["needs-triage"], add: ["wontfix"] },
       });
       const issues = yield* client.observeIssues(teamRef, null);
       const issue = issues.find((entry) => entry.identifier === "AUD-9");

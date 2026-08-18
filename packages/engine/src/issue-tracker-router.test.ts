@@ -1,4 +1,4 @@
-import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
+import { WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -34,33 +34,35 @@ const fakeSource = (source: string, log: Array<Recorded>) =>
     observe: () => Effect.succeed([]),
     claim: () => Effect.void,
     release: () => Effect.void,
-    recordAttempt: (
-      _workspace: RegisteredWorkspace,
-      _id: WorkItemId,
-      _attempt: AttemptRecord,
-      reason?: string,
-    ) => Effect.sync(() => void log.push({ source, reason })),
-    recordFollowUp: () => Effect.void,
     note: () => Effect.void,
-    setRoles: () => Effect.void,
     triaged: () => Effect.void,
     implemented: () => Effect.void,
     followedUp: () => Effect.void,
-    attemptFailed: () => Effect.void,
+    attemptFailed: (
+      _workspace: RegisteredWorkspace,
+      _id: WorkItemId,
+      outcome: { readonly reason?: string },
+    ) => Effect.sync(() => void log.push({ source, reason: outcome.reason })),
     handOff: () => Effect.void,
     stalled: () => Effect.void,
     reclassify: () => Effect.void,
   }) as unknown as IssueTrackerService;
-
-const attempt: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 1 };
 
 describe("issueTrackerRouter", () => {
   it.effect("forwards the failure reason to the adapter for the workspace's source", () =>
     Effect.gen(function* () {
       const log: Array<Recorded> = [];
       const router = route(fakeSource("github", log), fakeSource("linear", log));
-      yield* router.recordAttempt(githubWorkspace, id("#7"), attempt, "git worktree add: boom");
-      yield* router.recordAttempt(linearWorkspace, id("AUD-7"), attempt, "pnpm install: exit 1");
+      yield* router.attemptFailed(githubWorkspace, id("#7"), {
+        stage: "implement",
+        atMillis: 1,
+        reason: "git worktree add: boom",
+      });
+      yield* router.attemptFailed(linearWorkspace, id("AUD-7"), {
+        stage: "implement",
+        atMillis: 1,
+        reason: "pnpm install: exit 1",
+      });
       assert.deepStrictEqual(log, [
         { source: "github", reason: "git worktree add: boom" },
         { source: "linear", reason: "pnpm install: exit 1" },
@@ -72,7 +74,7 @@ describe("issueTrackerRouter", () => {
     Effect.gen(function* () {
       const log: Array<Recorded> = [];
       const router = route(fakeSource("github", log), fakeSource("linear", log));
-      yield* router.recordAttempt(githubWorkspace, id("#7"), attempt);
+      yield* router.attemptFailed(githubWorkspace, id("#7"), { stage: "implement", atMillis: 1 });
       assert.deepStrictEqual(log, [{ source: "github", reason: undefined }]);
     }),
   );
