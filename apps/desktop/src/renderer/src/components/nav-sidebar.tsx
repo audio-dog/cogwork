@@ -20,7 +20,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
-import { RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
+import { RiFlaskLine, RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
@@ -118,6 +118,33 @@ function UserButton() {
   );
 }
 
+// PROTOTYPE — throwaway dev-only entry point for the Activity tab two-zone
+// layout prototype (wayfinder #27). Remove this group when the prototype is
+// folded in.
+function PrototypesGroup() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  if (!import.meta.env.DEV) return null;
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>Prototypes</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname === "/activity-prototype"}
+              render={<Link to="/activity-prototype" />}
+              tooltip="Activity tab two-zone layout prototype"
+            >
+              <RiFlaskLine />
+              <span>Activity layout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
 export function NavSidebar() {
   return (
     <Sidebar collapsible="offcanvas">
@@ -143,6 +170,7 @@ export function NavSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <WorkspaceFilter />
+        <PrototypesGroup />
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
