@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_36985aeeb2ab7a::t_d8400ac2fd5104 41,43
+  s_36985aeeb2ab7a::t_b178d78c22c9c8 44
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_36985aeeb2ab7a::t_c02372e43c6f24 23
+  s_36985aeeb2ab7a::t_4f7dd78baf7eb0 37
+apps/desktop/src/renderer/src/store/chrome.ts
+  s_36985aeeb2ab7a::t_e76f009178ede6 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bfce0ebc9b17d5fd3a472e77a4e2cecb4cb4c11e",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_36985aeeb2ab7a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "20117082-9194-4ec8-a0ed-20ef2dc09a96",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
