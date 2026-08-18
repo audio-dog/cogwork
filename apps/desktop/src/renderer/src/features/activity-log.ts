@@ -353,3 +353,284 @@ export const severityText: Record<ActivitySeverity, string> = {
 };
 
 export const rowTime = (atMillis: number) => relativeTime(atMillis);
+
+// ---------------------------------------------------------------------------
+// Mock scenarios (DEV ONLY)
+//
+// The daemon has no live events while the engine is off, so these seed the
+// layouts with a realistic feed purely so the two-zone density can be judged
+// (ticket #27). They never ship — the whole prototype is throwaway — and the
+// switcher keeps a "Live daemon" scenario for when the engine is running.
+// ---------------------------------------------------------------------------
+
+export type ScenarioKey = "busy" | "calm" | "errors" | "live";
+
+export const scenarioMeta: ReadonlyArray<{ key: ScenarioKey; name: string }> = [
+  { key: "busy", name: "Busy · all event kinds" },
+  { key: "calm", name: "Calm · engine ticking over" },
+  { key: "errors", name: "Errors · degraded engine" },
+  { key: "live", name: "Live daemon" },
+];
+
+const MIN = 60_000;
+
+interface RowSeed {
+  readonly agoMin: number;
+  readonly kind: ActivityKind;
+  readonly label: string;
+  readonly summary: string;
+  readonly severity: ActivitySeverity;
+  readonly entity?: ActivityEntity;
+  readonly lowSignal?: boolean;
+  readonly raw?: unknown;
+}
+
+const seedRows = (now: number, seeds: ReadonlyArray<RowSeed>): ReadonlyArray<ActivityRow> =>
+  seeds
+    .map((seed, i) => ({
+      id: `mock:${i}:${seed.kind}`,
+      kind: seed.kind,
+      atMillis: now - seed.agoMin * MIN,
+      label: seed.label,
+      summary: seed.summary,
+      severity: seed.severity,
+      entity: seed.entity ?? null,
+      raw: JSON.stringify(seed.raw ?? { mock: true, kind: seed.kind, summary: seed.summary }, null, 2),
+      lowSignal: seed.lowSignal ?? false,
+    }))
+    .sort((a, b) => a.atMillis - b.atMillis);
+
+const item = (id: string, workspace: string): ActivityEntity => ({ type: "item", id, workspace });
+const run = (id: string, workspace: string): ActivityEntity => ({ type: "run", id, workspace });
+
+const busyNow = (): NowState => ({
+  engine: "up",
+  connection: "live",
+  scheduler: {
+    scheduling: "running",
+    globalInFlight: 2,
+    globalLimit: 4,
+    dailyBudgetUsed: 37,
+    dailyBudgetLimit: 100,
+    perWorkspace: [],
+  } as SchedulerStats,
+  runs: [
+    {
+      runId: "run_8f2a",
+      workspace: "api",
+      workItem: "api#412",
+      stage: "implement",
+      status: "running",
+      preview: { label: "edit", text: "packages/contracts/src/run.ts" },
+    },
+    {
+      runId: "run_1c7d",
+      workspace: "web",
+      workItem: "web#88",
+      stage: "triage",
+      status: "running",
+      preview: { label: "responding", text: "Looking at the failing snapshot test in the composer…" },
+    },
+  ],
+});
+
+const busySeeds: ReadonlyArray<RowSeed> = [
+  { agoMin: 44, kind: "engine", label: "Engine", summary: "Engine started", severity: "success" },
+  { agoMin: 43, kind: "workspace", label: "Workspace", summary: "api registered · github", severity: "info" },
+  { agoMin: 43, kind: "workspace", label: "Workspace", summary: "web registered · github", severity: "info" },
+  {
+    agoMin: 40,
+    kind: "scheduler",
+    label: "Scheduler",
+    summary: "0/4 in flight · budget 0/100",
+    severity: "info",
+    lowSignal: true,
+  },
+  {
+    agoMin: 31,
+    kind: "item",
+    label: "Item",
+    summary: "Add rate limiting to the public API → claimed",
+    severity: "info",
+    entity: item("api#412", "api"),
+  },
+  {
+    agoMin: 28,
+    kind: "run",
+    label: "Run",
+    summary: "api#412 · run running",
+    severity: "info",
+    entity: run("run_8f2a", "api"),
+  },
+  // A burst of consecutive Item events to exercise Variant A's "+N previous" fold.
+  {
+    agoMin: 19,
+    kind: "item",
+    label: "Item",
+    summary: "Fix flaky auth test → claimed",
+    severity: "info",
+    entity: item("api#409", "api"),
+  },
+  {
+    agoMin: 18,
+    kind: "item",
+    label: "Item",
+    summary: "Upgrade Effect to v4 → blocked · 2 open",
+    severity: "warn",
+    entity: item("api#377", "api"),
+  },
+  {
+    agoMin: 18,
+    kind: "item",
+    label: "Item",
+    summary: "Composer emoji picker → needs a person",
+    severity: "warn",
+    entity: item("web#88", "web"),
+  },
+  {
+    agoMin: 12,
+    kind: "scheduler",
+    label: "Scheduler",
+    summary: "2/4 in flight · budget 21/100",
+    severity: "info",
+    lowSignal: true,
+  },
+  {
+    agoMin: 9,
+    kind: "run",
+    label: "Run",
+    summary: "web#88 · run succeeded",
+    severity: "success",
+    entity: run("run_0b41", "web"),
+  },
+  { agoMin: 6, kind: "stream", label: "Stream", summary: "Event stream disconnected", severity: "error" },
+  { agoMin: 6, kind: "connection", label: "Connection", summary: "Connection restored", severity: "info" },
+  {
+    agoMin: 4,
+    kind: "run",
+    label: "Run",
+    summary: "api#377 · run failed",
+    severity: "error",
+    entity: run("run_9d02", "api"),
+  },
+  {
+    agoMin: 2,
+    kind: "item-removed",
+    label: "Item",
+    summary: "api#360 removed",
+    severity: "info",
+    entity: item("api#360", "api"),
+    lowSignal: true,
+  },
+  {
+    agoMin: 1,
+    kind: "run",
+    label: "Run",
+    summary: "api#412 · run running",
+    severity: "info",
+    entity: run("run_8f2a", "api"),
+  },
+  {
+    agoMin: 0,
+    kind: "scheduler",
+    label: "Scheduler",
+    summary: "2/4 in flight · budget 37/100",
+    severity: "info",
+    lowSignal: true,
+  },
+];
+
+const calmNow = (): NowState => ({
+  engine: "up",
+  connection: "live",
+  scheduler: {
+    scheduling: "running",
+    globalInFlight: 1,
+    globalLimit: 4,
+    dailyBudgetUsed: 8,
+    dailyBudgetLimit: 100,
+    perWorkspace: [],
+  } as SchedulerStats,
+  runs: [
+    {
+      runId: "run_5a10",
+      workspace: "api",
+      workItem: "api#420",
+      stage: "implement",
+      status: "running",
+      preview: { label: "read", text: "apps/desktop/src/renderer/src/components/right-panel.tsx" },
+    },
+  ],
+});
+
+const calmSeeds: ReadonlyArray<RowSeed> = [
+  { agoMin: 15, kind: "engine", label: "Engine", summary: "Engine started", severity: "success" },
+  { agoMin: 14, kind: "workspace", label: "Workspace", summary: "api registered · github", severity: "info" },
+  {
+    agoMin: 6,
+    kind: "item",
+    label: "Item",
+    summary: "Tidy the run-activity fold → claimed",
+    severity: "info",
+    entity: item("api#420", "api"),
+  },
+  {
+    agoMin: 5,
+    kind: "run",
+    label: "Run",
+    summary: "api#420 · run running",
+    severity: "info",
+    entity: run("run_5a10", "api"),
+  },
+];
+
+const errorsNow = (): NowState => ({
+  engine: "failed",
+  connection: "lost",
+  scheduler: {
+    scheduling: "paused",
+    globalInFlight: 0,
+    globalLimit: 4,
+    dailyBudgetUsed: 96,
+    dailyBudgetLimit: 100,
+    perWorkspace: [],
+  } as SchedulerStats,
+  runs: [],
+});
+
+const errorsSeeds: ReadonlyArray<RowSeed> = [
+  { agoMin: 20, kind: "engine", label: "Engine", summary: "Engine started", severity: "success" },
+  {
+    agoMin: 12,
+    kind: "workspace",
+    label: "Workspace",
+    summary: "web failed · clone timed out after 30s",
+    severity: "error",
+  },
+  { agoMin: 8, kind: "scheduler", label: "Scheduler", summary: "paused · 0/4 in flight", severity: "warn" },
+  {
+    agoMin: 6,
+    kind: "run",
+    label: "Run",
+    summary: "api#377 · run crashed",
+    severity: "error",
+    entity: run("run_9d02", "api"),
+  },
+  { agoMin: 4, kind: "stream", label: "Stream", summary: "Event stream disconnected", severity: "error" },
+  { agoMin: 2, kind: "engine", label: "Engine", summary: "Engine failed", severity: "error" },
+];
+
+const scenarios: Record<
+  Exclude<ScenarioKey, "live">,
+  { now: () => NowState; seeds: ReadonlyArray<RowSeed> }
+> = {
+  busy: { now: busyNow, seeds: busySeeds },
+  calm: { now: calmNow, seeds: calmSeeds },
+  errors: { now: errorsNow, seeds: errorsSeeds },
+};
+
+export function mockActivityFeed(scenario: Exclude<ScenarioKey, "live">): ActivityFeed {
+  const { now, seeds } = scenarios[scenario];
+  const log = seedRows(Date.now(), seeds);
+  return { ready: true, now: now(), log, total: log.length };
+}

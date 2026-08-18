@@ -47,11 +47,16 @@ import {
 import {
   type ActivityKind,
   type ActivityRow,
+  mockActivityFeed,
   type NowState,
   rowTime,
+  type ScenarioKey,
+  scenarioMeta,
   severityText,
   useActivityFeed,
 } from "../features/activity-log";
+
+export { type ScenarioKey, scenarioMeta };
 
 // Make a non-button element behave like a toggle for keyboard users. Rows can't
 // be real <button>s because they contain a nested entity-link button.
@@ -846,8 +851,18 @@ function LastOpened({ row }: { row: ActivityRow | null }) {
   );
 }
 
-export function ActivityStage({ variant, full }: { variant: VariantKey; full: boolean }) {
-  const feed = useActivityFeed();
+export function ActivityStage({
+  variant,
+  scenario,
+  full,
+}: {
+  variant: VariantKey;
+  scenario: ScenarioKey;
+  full: boolean;
+}) {
+  // Always call the hook (rules of hooks); use it only for the Live scenario.
+  const live = useActivityFeed();
+  const feed = scenario === "live" ? live : mockActivityFeed(scenario);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [search, setSearch] = useState("");
   const [verbose, setVerbose] = useState(false);
