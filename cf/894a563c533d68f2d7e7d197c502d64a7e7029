@@ -1,0 +1,21 @@
+apps/cli/src/watch.ts
+  s_e16c6eb613012a::t_1a763e962d5e22 86-88
+apps/cli/src/commands.ts
+  s_e16c6eb613012a::t_bfb7ecc4aeba4a 116-120,123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cf894a563c533d68f2d7e7d197c502d64a7e7029",
+  "prompts": {},
+  "sessions": {
+    "s_e16c6eb613012a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af1af487-5d38-492d-88ed-7b3aacacefd0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
