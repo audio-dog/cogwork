@@ -91,7 +91,7 @@ const bridge = (stream: AsyncIterable<StreamChunk>) =>
     ),
   );
 
-const estimateTokens = (chars: number) => Math.ceil(chars / 4);
+export const estimateTokens = (chars: number) => Math.ceil(chars / 4);
 
 const outputChars = (event: AgUiEvent) =>
   event.type === "TEXT_MESSAGE_CONTENT" || event.type === "REASONING_MESSAGE_CONTENT"
