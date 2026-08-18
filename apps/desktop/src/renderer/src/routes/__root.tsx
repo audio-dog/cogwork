@@ -12,6 +12,7 @@ import { RightPanel } from "../components/right-panel";
 import { PausedBanner, SchedulerControls } from "../components/scheduler-gauges";
 import { SidebarResizeHandle, useSidebarWidth } from "../components/sidebar-resize";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
+import { useInSettings } from "../features/use-settings-route";
 import { useRightPanelStore } from "../store/right-panel";
 
 const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
@@ -115,6 +116,10 @@ function ContentArea() {
   return <MainColumn />;
 }
 
+function ShellContent() {
+  return useInSettings() ? <Outlet /> : <ContentArea />;
+}
+
 function RootLayout() {
   const { width, setWidth, reset } = useSidebarWidth();
   // Wider on macOS so the fixed toggle and title-bar content clear the traffic lights.
@@ -130,7 +135,7 @@ function RootLayout() {
       <SidebarProvider style={providerStyle}>
         <NavSidebar />
         <SidebarInset className="h-svh overflow-hidden">
-          <ContentArea />
+          <ShellContent />
         </SidebarInset>
         <SidebarControl />
         <SidebarResizeHandle onCommit={setWidth} onReset={reset} />

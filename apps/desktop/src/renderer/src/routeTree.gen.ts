@@ -12,7 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConnectedRouteRouteImport } from './routes/_connected/route'
 import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as ConnectedLanesRouteImport } from './routes/_connected/lanes'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,40 +31,78 @@ const ActivityRoute = ActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRouteRoute = SettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConnectedLanesRoute = ConnectedLanesRouteImport.update({
   id: '/lanes',
   path: '/lanes',
   getParentRoute: () => ConnectedRouteRoute,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsSectionRoute = SettingsSectionRouteImport.update({
+  id: '/$section',
+  path: '/$section',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/activity': typeof ActivityRoute
   '/lanes': typeof ConnectedLanesRoute
+  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/activity': typeof ActivityRoute
   '/lanes': typeof ConnectedLanesRoute
+  '/settings/$section': typeof SettingsSectionRoute
+  '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_connected': typeof ConnectedRouteRouteWithChildren
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/activity': typeof ActivityRoute
   '/_connected/lanes': typeof ConnectedLanesRoute
+  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/activity' | '/lanes'
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/activity'
+    | '/lanes'
+    | '/settings/$section'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/activity' | '/lanes'
-  id: '__root__' | '/' | '/_connected' | '/activity' | '/_connected/lanes'
+  to: '/' | '/activity' | '/lanes' | '/settings/$section' | '/settings'
+  id:
+    | '__root__'
+    | '/'
+    | '/_connected'
+    | '/settings'
+    | '/activity'
+    | '/_connected/lanes'
+    | '/settings/$section'
+    | '/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConnectedRouteRoute: typeof ConnectedRouteRouteWithChildren
+  SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
   ActivityRoute: typeof ActivityRoute
 }
 
@@ -88,12 +129,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_connected/lanes': {
       id: '/_connected/lanes'
       path: '/lanes'
       fullPath: '/lanes'
       preLoaderRoute: typeof ConnectedLanesRouteImport
       parentRoute: typeof ConnectedRouteRoute
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/$section': {
+      id: '/settings/$section'
+      path: '/$section'
+      fullPath: '/settings/$section'
+      preLoaderRoute: typeof SettingsSectionRouteImport
+      parentRoute: typeof SettingsRouteRoute
     }
   }
 }
@@ -110,9 +172,24 @@ const ConnectedRouteRouteWithChildren = ConnectedRouteRoute._addFileChildren(
   ConnectedRouteRouteChildren,
 )
 
+interface SettingsRouteRouteChildren {
+  SettingsSectionRoute: typeof SettingsSectionRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
+  SettingsSectionRoute: SettingsSectionRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
+  SettingsRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConnectedRouteRoute: ConnectedRouteRouteWithChildren,
+  SettingsRouteRoute: SettingsRouteRouteWithChildren,
   ActivityRoute: ActivityRoute,
 }
 export const routeTree = rootRouteImport
