@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/routes/attention-prototype.tsx
+  s_4980621b4465ae::t_05dcf72af0f076 7-13,18,23,26,29,34,39-44,60-62,64-68
+apps/desktop/src/renderer/src/components/attention-variants.tsx
+  s_4980621b4465ae::t_3ded290b715c89 122-281
+  s_4980621b4465ae::t_8d58b7af54177c 877-888
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b4b88dabf76846e4336408605be9e245aced363d",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_4980621b4465ae": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c0ab0d4a-b5e3-4c46-afac-0427c7082b3c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
