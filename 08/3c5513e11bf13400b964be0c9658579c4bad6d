@@ -1,0 +1,21 @@
+packages/engine/src/commands.test.ts
+  s_463ebc6cbacf6e::t_86c9eb8aadd11e 246-249,253-256
+packages/engine/src/commands.ts
+  s_463ebc6cbacf6e::t_7606b11e61da0b 117-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "083c5513e11bf13400b964be0c9658579c4bad6d",
+  "prompts": {},
+  "sessions": {
+    "s_463ebc6cbacf6e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "dac6c892-f3d1-4ae5-87b7-b1dac2a7b664",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
