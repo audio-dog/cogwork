@@ -284,15 +284,34 @@ const make = (ledgerPath: string) =>
             .all(),
         ),
 
-      interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
-        writeIds("interruptRunningBefore", () =>
+      interruptRunningBefore: (
+        beforeMillis: number,
+        endedAtMillis: number,
+        held: ReadonlyArray<RunLedger.HeldRun> = [],
+      ) => {
+        const heldMatch =
+          held.length === 0
+            ? undefined
+            : or(
+                ...held.map((item) =>
+                  and(eq(runs.workspace, item.workspace), eq(runs.workItem, item.workItem)),
+                ),
+              );
+        return writeIds("interruptRunningBefore", () =>
           db
             .update(runs)
             .set({ status: "interrupted", endedAt: endedAtMillis })
-            .where(and(eq(runs.status, "running"), lt(runs.startedAt, beforeMillis)))
+            .where(
+              and(
+                eq(runs.status, "running"),
+                lt(runs.startedAt, beforeMillis),
+                heldMatch === undefined ? undefined : sql`not (${heldMatch})`,
+              ),
+            )
             .returning({ id: runs.id })
             .all(),
-        ),
+        );
+      },
 
       insertSession: (session: Session) =>
         write("insertSession", () => {
@@ -403,6 +422,23 @@ const make = (ledgerPath: string) =>
             )
             .all(),
         ).pipe(Effect.map((rows) => Number(rows[0]?.count ?? 0))),
+
+      consecutiveCrashesForRecovery: (workspace: string, workItem: string) =>
+        readRows("consecutiveCrashesForRecovery", () =>
+          db
+            .select(runRecordSelection)
+            .from(runs)
+            .where(and(eq(runs.workspace, workspace), eq(runs.workItem, workItem)))
+            .orderBy(runs.startedAt)
+            .all(),
+        ).pipe(
+          Effect.flatMap((rows) =>
+            decodeAll(decodeRun, rows.map(runRecordFromRow)).pipe(
+              Effect.orElseSucceed(() => [] as ReadonlyArray<RunRecord>),
+            ),
+          ),
+          Effect.map(RunLedger.consecutiveCrashesForRecoveryOf),
+        ),
 
       appendEvent: (runId: RunId, event: RunEvent) =>
         write("appendEvent", () => {
