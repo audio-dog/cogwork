@@ -90,6 +90,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       return {
         id,
         title: issue.title,
+        url: issue.url,
         roles: rolesFrom(issue.labels, { name: issue.stateName, type: issue.stateType }, target.roleLabels),
         assignees: issue.assignees,
         claimLabeled: hasClaimLabel(issue.labels),

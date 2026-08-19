@@ -88,6 +88,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
       return {
         id,
         title: issue.title,
+        url: issue.url,
         roles: rolesFromLabels(issue.labels),
         assignees: issue.assignees,
         claimLabeled: hasClaimLabel(issue.labels),
