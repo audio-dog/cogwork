@@ -1,0 +1,29 @@
+packages/engine/src/scheduler.test.ts
+  s_06cc6f116a0de6::t_5d80d8c001698d 73-84
+packages/engine/src/scheduler.ts
+  s_06cc6f116a0de6::t_d77e2c3304e321 50-51
+  s_06cc6f116a0de6::t_44a9de23b4191c 188
+  s_06cc6f116a0de6::t_b68488530892ec 22
+  s_06cc6f116a0de6::t_fc7320bebc4f3d 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1eb422d22f12f710cd484102068910d5294b1382",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_06cc6f116a0de6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "85bc8812-365e-497c-b21a-af007d6aad7f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
