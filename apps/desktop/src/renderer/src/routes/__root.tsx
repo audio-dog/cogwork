@@ -1,14 +1,15 @@
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@cogwork/ui/components/resizable";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@cogwork/ui/components/sidebar";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
+import { cn } from "@cogwork/ui/lib/utils";
 import { RiLayoutRightLine } from "@remixicon/react";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps, CSSProperties } from "react";
 import { NavSidebar } from "../components/nav-sidebar";
 import { RightPanel } from "../components/right-panel";
+import { RightPanelResizeHandle, useRightPanelWidth } from "../components/right-panel-resize";
 import { PausedBanner, SchedulerControls } from "../components/scheduler-gauges";
 import { SidebarResizeHandle, useSidebarWidth } from "../components/sidebar-resize";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../features/use-engine-status";
@@ -92,35 +93,56 @@ function MainColumn() {
   );
 }
 
-function ContentArea() {
+// Always mounted so opening and closing animates its width, like the left sidebar's
+// offcanvas slide. Collapsed to zero width when closed; the inner column keeps a
+// fixed width so the content does not reflow mid-slide.
+function RightPanelRegion({ open }: { open: boolean }) {
+  return (
+    <div
+      data-slot="right-panel-region"
+      className={cn(
+        "h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-linear",
+        open ? "w-[var(--right-panel-width)] border-l" : "w-0",
+      )}
+    >
+      <div className="h-full w-[var(--right-panel-width)]">
+        <RightPanel />
+      </div>
+    </div>
+  );
+}
+
+function ContentArea({
+  onResizeCommit,
+  onResizeReset,
+}: {
+  onResizeCommit: (width: number) => void;
+  onResizeReset: () => void;
+}) {
   const panelOpen = useRightPanelStore((store) => store.open);
   const maximized = useRightPanelStore((store) => store.maximized);
 
   if (panelOpen && maximized) return <RightPanel />;
 
-  if (panelOpen) {
-    return (
-      <ResizablePanelGroup orientation="horizontal">
-        <ResizablePanel defaultSize="64%" minSize="30%">
-          <MainColumn />
-        </ResizablePanel>
-        <ResizableHandle />
-        <ResizablePanel defaultSize="36%" minSize="24%" maxSize="55%">
-          <RightPanel />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    );
-  }
-
-  return <MainColumn />;
+  return (
+    <div className="flex h-full min-h-0">
+      <div className="min-w-0 flex-1">
+        <MainColumn />
+      </div>
+      {panelOpen && <RightPanelResizeHandle onCommit={onResizeCommit} onReset={onResizeReset} />}
+      <RightPanelRegion open={panelOpen} />
+    </div>
+  );
 }
 
 function RootLayout() {
   const { width, setWidth, reset } = useSidebarWidth();
+  const rightPanel = useRightPanelWidth();
   // Wider on macOS so the fixed toggle and title-bar content clear the traffic lights.
   const controlsLeft = isMac ? "90px" : "0.75rem";
   const providerStyle = {
     "--sidebar-width": `${width}px`,
+    "--right-panel-width": `${rightPanel.width}px`,
     "--workspace-controls-left": controlsLeft,
     "--workspace-titlebar-content-left": `calc(${controlsLeft} + 1.75rem + 0.5rem)`,
   } as CSSProperties;
@@ -130,7 +152,7 @@ function RootLayout() {
       <SidebarProvider style={providerStyle}>
         <NavSidebar />
         <SidebarInset className="h-svh overflow-hidden">
-          <ContentArea />
+          <ContentArea onResizeCommit={rightPanel.setWidth} onResizeReset={rightPanel.reset} />
         </SidebarInset>
         <SidebarControl />
         <SidebarResizeHandle onCommit={setWidth} onReset={reset} />

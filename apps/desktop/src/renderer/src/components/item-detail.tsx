@@ -1,11 +1,9 @@
-import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { Separator } from "@cogwork/ui/components/separator";
-import { RiArrowLeftLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { boardItem, runForItem } from "../features/feed";
 import { useBoard } from "../features/use-board";
-import { type ItemSelection, useChromeStore } from "../store/chrome";
+import type { ItemSelection } from "../store/chrome";
 import { PrGate } from "./pr-gate";
 import { RailShell } from "./rail-shell";
 import { RunDrillIn } from "./run-drill-in";
@@ -20,16 +18,8 @@ function DetailSection({ title, children }: { title: string; children: ReactNode
   );
 }
 
-function BackHeader({ label }: { label: string }) {
-  const clearSelection = useChromeStore((state) => state.clearSelection);
-  return (
-    <>
-      <Button aria-label="Back to attention" size="icon-sm" variant="ghost" onClick={clearSelection}>
-        <RiArrowLeftLine />
-      </Button>
-      <h2 className="truncate text-sm font-semibold">{label}</h2>
-    </>
-  );
+function DetailHeader({ title }: { title: string }) {
+  return <h2 className="truncate text-sm font-semibold">{title}</h2>;
 }
 
 export function ItemDetail({ selection }: { selection: ItemSelection }) {
@@ -39,7 +29,7 @@ export function ItemDetail({ selection }: { selection: ItemSelection }) {
 
   if (!entry) {
     return (
-      <RailShell header={<BackHeader label="Item detail" />}>
+      <RailShell header={<DetailHeader title="Item detail" />}>
         <Empty>
           <EmptyHeader>
             <EmptyTitle>Item is gone</EmptyTitle>
@@ -94,7 +84,7 @@ export function ItemDetail({ selection }: { selection: ItemSelection }) {
   const sections = candidates.filter((section): section is Section => section !== null);
 
   return (
-    <RailShell header={<BackHeader label={item.title} />}>
+    <RailShell header={<DetailHeader title={item.title} />}>
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{selection.workspace}</span>

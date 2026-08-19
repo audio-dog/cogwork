@@ -1,6 +1,6 @@
 import { useSidebar } from "@cogwork/ui/components/sidebar";
-import { useLocalStorageValue, useWindowSize } from "@react-hookz/web";
 import { useRef } from "react";
+import { clampResizableWidth, useResizableWidth } from "./resizable-width";
 
 const STORAGE_KEY = "cf.sidebarWidth";
 const DEFAULT_WIDTH = 16 * 16;
@@ -9,30 +9,10 @@ const DEFAULT_WIDTH = 16 * 16;
 // so the sidebar can shrink past it without the wordmark overflowing the edge.
 const MIN_WIDTH = 13 * 16;
 const MAIN_CONTENT_MIN_WIDTH = 30 * 16;
-
-function resolveMaxWidth(viewportWidth: number) {
-  return Math.max(MIN_WIDTH, Math.floor(viewportWidth) - MAIN_CONTENT_MIN_WIDTH);
-}
-
-function clampWidth(width: number, viewportWidth: number) {
-  return Math.min(Math.max(width, MIN_WIDTH), resolveMaxWidth(viewportWidth));
-}
+const BOUNDS = { minWidth: MIN_WIDTH, mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH };
 
 export function useSidebarWidth() {
-  const { width: windowWidth } = useWindowSize();
-  const {
-    value: storedWidth,
-    set,
-    remove,
-  } = useLocalStorageValue(STORAGE_KEY, {
-    defaultValue: DEFAULT_WIDTH,
-    initializeWithValue: true,
-  });
-
-  const setWidth = (next: number) => set(clampWidth(next, window.innerWidth));
-  const reset = () => remove();
-
-  return { width: clampWidth(storedWidth, windowWidth), setWidth, reset };
+  return useResizableWidth({ storageKey: STORAGE_KEY, defaultWidth: DEFAULT_WIDTH, ...BOUNDS });
 }
 
 interface DragState {
@@ -88,7 +68,11 @@ export function SidebarResizeHandle({
     const drag = dragRef.current;
     if (!drag) return;
     event.preventDefault();
-    drag.width = clampWidth(drag.startWidth + (event.clientX - drag.startX), window.innerWidth);
+    drag.width = clampResizableWidth(
+      drag.startWidth + (event.clientX - drag.startX),
+      window.innerWidth,
+      BOUNDS,
+    );
     drag.wrapper.style.setProperty("--sidebar-width", `${drag.width}px`);
   };
 
