@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/features/token-usage.ts
+  s_ab2f2430a33b1b::t_d3bdd5d1070111 1-2,4-6,8
+  s_ab2f2430a33b1b::t_7673fcf6924de6 3,7
+apps/desktop/src/renderer/src/components/token-count.tsx
+  s_ab2f2430a33b1b::t_4676313ee2b018 1-2,4-5,19-23,25-34
+  s_ab2f2430a33b1b::t_d07b7d2c0785b1 3,6-7,9-11,13-14,16
+  s_ab2f2430a33b1b::t_8b649001bfa072 8,12,15,17-18,24
+apps/desktop/src/renderer/src/features/token-usage.test.ts
+  s_ab2f2430a33b1b::t_95e4dbaadb0a45 5,15,29
+  s_ab2f2430a33b1b::t_c1d617aa80b992 1-4,6-14,16-28,30-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cd9ce2fd6f888943b4e4d2c8ae31e9fae31d061e",
+  "prompts": {},
+  "sessions": {
+    "s_ab2f2430a33b1b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b2f4007d-be10-43a4-8e6d-c15c34aaedc6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
