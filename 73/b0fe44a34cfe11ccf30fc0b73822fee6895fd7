@@ -1,0 +1,19 @@
+apps/desktop/CONTEXT.md
+  s_a2e09eab072b34::t_45ddd61c489a36 27-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "73b0fe44a34cfe11ccf30fc0b73822fee6895fd7",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
