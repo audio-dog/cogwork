@@ -122,6 +122,7 @@ function ShellContent() {
 }
 
 function RootLayout() {
+  const inSettings = useInSettings();
   const { width, setWidth, reset } = useSidebarWidth();
   // Wider on macOS so the fixed toggle and title-bar content clear the traffic lights.
   const controlsLeft = isMac ? "90px" : "0.75rem";
@@ -139,7 +140,7 @@ function RootLayout() {
           <ShellContent />
         </SidebarInset>
         <SidebarControl />
-        <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
+        {inSettings ? null : <SidebarResizeHandle onCommit={setWidth} onReset={reset} />}
       </SidebarProvider>
     </TooltipProvider>
   );
