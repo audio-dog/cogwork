@@ -1,0 +1,19 @@
+configs/lint/no-side-effect-in-state-updater.grit
+  s_67d24b651fe6e8::t_a5201bcf06c555 29-33,35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "301bf9883393ed6269003da0f2ce500bdb54b762",
+  "prompts": {},
+  "sessions": {
+    "s_67d24b651fe6e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1c4bd9b6-766b-4b11-8de6-23a31149786d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
