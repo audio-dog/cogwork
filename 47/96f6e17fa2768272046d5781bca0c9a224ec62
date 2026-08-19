@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/engine-offline.tsx
+  s_55aea74576ff2b::t_ea23ecdb0c0ef7 4-6
+apps/desktop/src/renderer/src/routes/_app/activity.tsx
+  s_55aea74576ff2b::t_8d0f46e41f7632 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "4796f6e17fa2768272046d5781bca0c9a224ec62",
+  "prompts": {},
+  "sessions": {
+    "s_55aea74576ff2b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8a538b37-b085-49a2-86cd-1ab52a8b6dab",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
