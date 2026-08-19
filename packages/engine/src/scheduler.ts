@@ -19,6 +19,7 @@ import { branchName, ticketSlug } from "./worktree";
 export interface SchedulerConfig {
   readonly globalLimit: number;
   readonly dailyBudget: number;
+  readonly startPaused?: boolean;
 }
 
 export interface SchedulerState {
@@ -44,6 +45,9 @@ export const initialState: SchedulerState = {
   stopping: false,
   paused: false,
 };
+
+export const seedState = (config: SchedulerConfig) =>
+  config.startPaused ? { ...initialState, paused: true } : initialState;
 
 export interface DrainOptions {
   readonly graceMillis: number;
@@ -181,7 +185,7 @@ export const make = (config: SchedulerConfig) =>
     const executor = yield* Executor;
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
-    const stateRef = yield* Ref.make(initialState);
+    const stateRef = yield* Ref.make(seedState(config));
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
     const runJob = (candidate: Candidate) =>

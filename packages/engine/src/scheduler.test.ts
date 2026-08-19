@@ -70,6 +70,18 @@ const candidate = (
 
 const stamp = (day: number, generation = 1): Scheduler.TickStamp => ({ day, generation });
 
+describe("Scheduler.seedState", () => {
+  const base = { globalLimit: 10, dailyBudget: 100 };
+
+  it("starts running by default so the headless daemon schedules immediately", () => {
+    assert.strictEqual(Scheduler.seedState(base).paused, false);
+  });
+
+  it("starts paused when startPaused is set so a desktop launch holds until resumed", () => {
+    assert.strictEqual(Scheduler.seedState({ ...base, startPaused: true }).paused, true);
+  });
+});
+
 describe("Scheduler.plan", () => {
   const wsA = workspaceOf("a");
   const wsB = workspaceOf("b");
