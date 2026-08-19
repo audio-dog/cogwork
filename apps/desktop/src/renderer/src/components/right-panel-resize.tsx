@@ -21,6 +21,35 @@ function insetWidth(wrapper: HTMLElement): number {
   return inset?.getBoundingClientRect().width ?? window.innerWidth;
 }
 
+const RIGHT_PANEL_CLAMP = {
+  minWidth: MIN_WIDTH,
+  mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
+};
+
+function readRightPanelWidth(wrapper: HTMLElement): number {
+  const parsed = Number.parseFloat(wrapper.style.getPropertyValue("--right-panel-width"));
+  if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+  const region = wrapper.querySelector<HTMLElement>("[data-slot='right-panel-region']");
+  return region?.getBoundingClientRect().width ?? DEFAULT_WIDTH;
+}
+
+function rightPanelIsOpen(wrapper: HTMLElement): boolean {
+  const region = wrapper.querySelector<HTMLElement>("[data-slot='right-panel-region']");
+  return (region?.getBoundingClientRect().width ?? 0) > 0;
+}
+
+// While the left sidebar drag eats inset width, shrink an open right panel so the
+// flex main column keeps its minimum instead of absorbing all of the squeeze.
+export function reclampOpenRightPanelWidth(wrapper: HTMLElement): void {
+  if (!rightPanelIsOpen(wrapper)) return;
+  const clamped = clampResizableWidth(readRightPanelWidth(wrapper), insetWidth(wrapper), RIGHT_PANEL_CLAMP);
+  wrapper.style.setProperty("--right-panel-width", `${clamped}px`);
+}
+
+export function rightPanelRegionElement(wrapper: HTMLElement): HTMLElement | null {
+  return wrapper.querySelector<HTMLElement>("[data-slot='right-panel-region']");
+}
+
 interface RightPanelWidthActions {
   readonly setWidth: (width: number) => void;
   readonly reset: () => void;
@@ -120,10 +149,7 @@ export function RightPanelResizeHandle({
     drag.width = clampResizableWidth(
       drag.startWidth - (event.clientX - drag.startX),
       insetWidth(drag.wrapper),
-      {
-        minWidth: MIN_WIDTH,
-        mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
-      },
+      RIGHT_PANEL_CLAMP,
     );
     drag.wrapper.style.setProperty("--right-panel-width", `${drag.width}px`);
   };

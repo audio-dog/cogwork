@@ -1,6 +1,7 @@
 import { useSidebar } from "@cogwork/ui/components/sidebar";
 import { useRef } from "react";
 import { clampResizableWidth, useResizableWidth } from "./resizable-width";
+import { reclampOpenRightPanelWidth, rightPanelRegionElement } from "./right-panel-resize";
 
 const STORAGE_KEY = "cf.sidebarWidth";
 const DEFAULT_WIDTH = 16 * 16;
@@ -21,6 +22,7 @@ interface DragState {
   width: number;
   wrapper: HTMLElement;
   transitionTargets: HTMLElement[];
+  rightPanelRegion: HTMLElement | null;
 }
 
 export function SidebarResizeHandle({
@@ -50,6 +52,8 @@ export function SidebarResizeHandle({
     for (const element of transitionTargets) {
       element.style.setProperty("transition-duration", "0ms");
     }
+    const rightPanelRegion = rightPanelRegionElement(wrapper);
+    rightPanelRegion?.style.setProperty("transition-duration", "0ms");
 
     event.preventDefault();
     rail.setPointerCapture(event.pointerId);
@@ -61,6 +65,7 @@ export function SidebarResizeHandle({
       width: startWidth,
       wrapper,
       transitionTargets,
+      rightPanelRegion,
     };
   };
 
@@ -74,6 +79,7 @@ export function SidebarResizeHandle({
       BOUNDS,
     );
     drag.wrapper.style.setProperty("--sidebar-width", `${drag.width}px`);
+    reclampOpenRightPanelWidth(drag.wrapper);
   };
 
   const endDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -82,6 +88,7 @@ export function SidebarResizeHandle({
     for (const element of drag.transitionTargets) {
       element.style.removeProperty("transition-duration");
     }
+    drag.rightPanelRegion?.style.removeProperty("transition-duration");
     document.body.style.removeProperty("cursor");
     document.body.style.removeProperty("user-select");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
