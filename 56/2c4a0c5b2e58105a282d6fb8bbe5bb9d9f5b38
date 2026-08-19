@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/features/use-scheduling.ts
+  s_a2e09eab072b34::t_a86bd5015222c4 2,4
+apps/desktop/src/renderer/src/features/use-scheduling-main-sync.ts
+  s_a2e09eab072b34::t_44490ed84b901b 1-27
+apps/desktop/src/renderer/src/features/use-live-events.ts
+  s_a2e09eab072b34::t_3460f46e3797c7 1,8-18
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_a2e09eab072b34::t_e8b0a635725a14 6,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "562c4a0c5b2e58105a282d6fb8bbe5bb9d9f5b38",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
