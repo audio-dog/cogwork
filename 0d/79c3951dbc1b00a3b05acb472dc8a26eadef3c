@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_a2e09eab072b34::t_904048c4e0add5 54-56
+  s_a2e09eab072b34::t_51046a7f549711 53,66-70
+  s_a2e09eab072b34::t_7e7140deac33d9 5
+  s_a2e09eab072b34::t_9111057b186f95 71-72
+apps/desktop/src/main/ipc.ts
+  s_a2e09eab072b34::t_631a7015446a28 32-33
+  s_a2e09eab072b34::t_aac5eb30c5339f 1,34
+apps/desktop/src/shared/ipc.ts
+  s_a2e09eab072b34::t_606efb28a3d5e3 1-2,8
+  s_a2e09eab072b34::t_2147f9666e4f56 36
+apps/desktop/src/preload/index.ts
+  s_a2e09eab072b34::t_642432c3a546e3 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0d79c3951dbc1b00a3b05acb472dc8a26eadef3c",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
