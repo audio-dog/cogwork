@@ -51,6 +51,11 @@ describe("credentialAccountFor", () => {
     assert.strictEqual(account?.tokenEnv, "LINEAR_API_KEY");
   });
 
+  it("keys a multi-team workspace by its name so one token covers every team", () => {
+    const account = credentialAccountFor(config({ issueTracker: { type: "linear", teams: ["GRO", "BIL"] } }));
+    assert.strictEqual(account?.key, "lin");
+  });
+
   it("returns null for a non-Linear workspace", () => {
     const account = credentialAccountFor(config({ issueTracker: { type: "github", repo: "owner/repo" } }));
     assert.isNull(account);

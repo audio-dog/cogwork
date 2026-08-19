@@ -27,6 +27,13 @@ import { claimLabel, wireCodec } from "./markers";
 
 const id = Schema.decodeSync(WorkItemId);
 
+// The fake mirrors Linear: a team read returns only that team's issues, and a write only lands when
+// the target team owns the issue — so a mis-routed write is visible as a failure, not a silent no-op.
+const teamKeyOf = (identifier: string) => {
+  const dash = identifier.indexOf("-");
+  return dash === -1 ? identifier : identifier.slice(0, dash);
+};
+
 const serializeAttempt = (attempt: AttemptRecord) => Coordination.serializeAttempt(wireCodec, attempt);
 const formatCoordinationBody = (body: Coordination.CoordinationBody) =>
   Coordination.formatCoordinationBody(wireCodec, body);
@@ -57,10 +64,14 @@ const bot = { id: "bot-user" } as const;
 
 const teamRef: LinearTeamRef = {
   team: "AUD",
-  tokenEnv: "LINEAR_API_KEY",
-  organization: null,
-  clientCredentials: null,
-  oauthClientId: null,
+  account: {
+    key: "AUD",
+    issueTracker: "linear",
+    organization: null,
+    tokenEnv: "LINEAR_API_KEY",
+    clientCredentials: null,
+    oauthClientId: null,
+  },
 };
 
 const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
@@ -100,10 +111,20 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
       issues.map((issue) => (issue.identifier === identifier ? update(issue) : issue)),
     );
 
-  const guard = <A>(effect: Effect.Effect<A>) =>
+  const guard = <A>(effect: Effect.Effect<A, IssueTrackerError>) =>
     seed.authError
       ? Effect.fail(new IssueTrackerError({ reason: "auth", message: "Linear authentication failed" }))
       : effect;
+
+  const inTeam = <A>(ref: LinearTeamRef, issueId: string, effect: Effect.Effect<A>) =>
+    teamKeyOf(issueId) === ref.team
+      ? effect
+      : Effect.fail(
+          new IssueTrackerError({
+            reason: "unavailable",
+            message: `issue ${issueId} is not in team ${ref.team}`,
+          }),
+        );
 
   const countObserve = seed.observeCalls;
 
@@ -123,59 +144,79 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         );
 
   return {
-    observeIssues: (_ref, coordination) =>
+    observeIssues: (ref, coordination) =>
       guard(
         Effect.gen(function* () {
           if (countObserve) yield* Ref.update(countObserve, (count) => count + 1);
           const issues = yield* Ref.get(issuesRef);
           const comments = yield* Ref.get(commentsRef);
-          return issues.map(
-            (issue): ObservedRawIssue => ({
-              ...issue,
-              coordinationComments: coordinationFor(issue.identifier, comments, coordination),
-            }),
-          );
+          return issues
+            .filter((issue) => teamKeyOf(issue.identifier) === ref.team)
+            .map(
+              (issue): ObservedRawIssue => ({
+                ...issue,
+                coordinationComments: coordinationFor(issue.identifier, comments, coordination),
+              }),
+            );
         }),
       ),
     listWorkflowStates: () => guard(Effect.succeed(states)),
     listComments: (_ref, issueId) =>
       guard(Ref.get(commentsRef).pipe(Effect.map((all) => [...(all.get(issueId) ?? [])]))),
-    addLabel: (_ref, issueId, label) =>
-      guard(patch(issueId, (issue) => ({ ...issue, labels: [...issue.labels, label] }))),
-    removeLabel: (_ref, issueId, label) =>
+    addLabel: (ref, issueId, label) =>
       guard(
-        patch(issueId, (issue) => ({
-          ...issue,
-          labels: issue.labels.filter((existing) => existing !== label),
-        })),
+        inTeam(
+          ref,
+          issueId,
+          patch(issueId, (issue) => ({ ...issue, labels: [...issue.labels, label] })),
+        ),
       ),
-    setState: (_ref, issueId, stateId) =>
+    removeLabel: (ref, issueId, label) =>
       guard(
-        Effect.gen(function* () {
-          const state = states.find((entry) => entry.id === stateId);
-          if (!state) return;
-          yield* patch(issueId, (issue) => ({
+        inTeam(
+          ref,
+          issueId,
+          patch(issueId, (issue) => ({
             ...issue,
-            stateName: state.name,
-            stateType: state.type,
-          }));
-        }).pipe(Effect.asVoid),
+            labels: issue.labels.filter((existing) => existing !== label),
+          })),
+        ),
       ),
-    createComment: (_ref, issueId, body) =>
+    setState: (ref, issueId, stateId) =>
       guard(
-        Effect.gen(function* () {
-          const seq = yield* Ref.get(commentSeq);
-          yield* Ref.set(commentSeq, seq + 1);
-          const comment: RawComment = {
-            id: `comment-${seq}`,
-            authorId: bot.id,
-            body,
-            createdAtMillis: seq,
-          };
-          yield* Ref.update(commentsRef, (all) =>
-            new Map(all).set(issueId, [...(all.get(issueId) ?? []), comment]),
-          );
-        }),
+        inTeam(
+          ref,
+          issueId,
+          Effect.gen(function* () {
+            const state = states.find((entry) => entry.id === stateId);
+            if (!state) return;
+            yield* patch(issueId, (issue) => ({
+              ...issue,
+              stateName: state.name,
+              stateType: state.type,
+            }));
+          }).pipe(Effect.asVoid),
+        ),
+      ),
+    createComment: (ref, issueId, body) =>
+      guard(
+        inTeam(
+          ref,
+          issueId,
+          Effect.gen(function* () {
+            const seq = yield* Ref.get(commentSeq);
+            yield* Ref.set(commentSeq, seq + 1);
+            const comment: RawComment = {
+              id: `comment-${seq}`,
+              authorId: bot.id,
+              body,
+              createdAtMillis: seq,
+            };
+            yield* Ref.update(commentsRef, (all) =>
+              new Map(all).set(issueId, [...(all.get(issueId) ?? []), comment]),
+            );
+          }),
+        ),
       ),
     editComment: (_ref, commentId, body) =>
       guard(
@@ -216,6 +257,20 @@ const customRolesWorkspace: RegisteredWorkspace = {
       roleLabels: { "ready-for-agent": "custom:agent-ready" },
     },
   },
+};
+
+const multiTeamWorkspace: RegisteredWorkspace = {
+  source: "linear.workspace.ts",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "multi",
+    checkoutPath: "/repos/multi",
+    issueTracker: {
+      type: "linear",
+      teams: ["GRO", "BIL"],
+      actorUserId: bot.id,
+    },
+    harness: { preferred: "cursor" },
+  }),
 };
 
 const withClient = (seed: Seed) =>
@@ -518,6 +573,62 @@ describe("linear work source adapter", () => {
         }),
       ),
     ),
+  );
+
+  it.effect("polls every configured team and merges the observed items", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(multiTeamWorkspace);
+      assert.deepStrictEqual(items.map((item) => item.id).sort(), ["BIL-1", "GRO-1"]);
+      assert.deepStrictEqual(
+        classify(items)
+          .eligible.map((entry) => entry.id)
+          .sort(),
+        ["BIL-1", "GRO-1"],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { identifier: "GRO-1", title: "growth work", labels: ["state:ready-for-agent"] },
+            { identifier: "BIL-1", title: "billing work", labels: ["state:ready-for-agent"] },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("routes a write to the team named by the issue prefix, not the first team", () =>
+    Effect.gen(function* () {
+      const source = yield* IssueTracker;
+      const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
+      yield* source.claim(multiTeamWorkspace, id("BIL-7"), request);
+      const observed = (yield* observeItems(multiTeamWorkspace)).find((item) => item.id === "BIL-7");
+      assert.deepStrictEqual(observed?.claim, { by: "cogwork", ...request });
+      assert.isTrue(observed?.claimLabeled);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { identifier: "GRO-1", title: "growth work", labels: ["state:ready-for-agent"] },
+            { identifier: "BIL-7", title: "claim me", labels: ["state:ready-for-agent"] },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("fails clearly when an item's prefix matches none of the configured teams", () =>
+    Effect.gen(function* () {
+      const source = yield* IssueTracker;
+      const request = { claimedAtMillis: 1_722_000_000_000, stage: "implement" } as const;
+      const result = yield* Effect.result(source.claim(multiTeamWorkspace, id("ZZZ-1"), request));
+      if (result._tag !== "Failure" || result.failure._tag !== "IssueTrackerError") {
+        assert.fail("expected an IssueTrackerError for an unconfigured team");
+        return;
+      }
+      assert.strictEqual(result.failure.reason, "unavailable");
+      assert.include(result.failure.message, "ZZZ-1");
+    }).pipe(Effect.provide(withClient({ issues: [] }))),
   );
 
   it.effect("surfaces auth failure as IssueTrackerError reason auth", () =>

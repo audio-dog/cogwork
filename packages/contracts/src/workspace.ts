@@ -34,7 +34,10 @@ export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   repo: Schema.optional(TrimmedNonEmptyString),
+  // `team` is the shorthand for a one-team Linear workspace; `teams` lets one workspace watch several
+  // teams under a single token. Read both through `linearTeams`, which merges them into one list.
   team: Schema.optional(TrimmedNonEmptyString),
+  teams: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   organization: Schema.optional(TrimmedNonEmptyString),
   tokenEnv: Schema.optional(TrimmedNonEmptyString),
   oauth: Schema.optional(OAuthAppConfig),
@@ -46,6 +49,12 @@ export const IssueTrackerConfig = Schema.Struct({
   priority: Schema.optional(GitHubPrioritySource),
 });
 export type IssueTrackerConfig = typeof IssueTrackerConfig.Type;
+
+export const linearTeams = (source: IssueTrackerConfig): ReadonlyArray<string> => {
+  if (source.type !== "linear") return [];
+  const merged = [...(source.team ? [source.team] : []), ...(source.teams ?? [])];
+  return [...new Set(merged)];
+};
 
 export const SourceControlConfig = Schema.Struct({
   type: SourceControlType,

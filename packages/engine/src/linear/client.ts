@@ -11,8 +11,8 @@ import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import {
-  type ClientCredentialsRef,
   type Credential,
+  type CredentialAccount,
   CredentialStore,
   type CredentialStoreService,
 } from "../credential-store";
@@ -20,10 +20,9 @@ import { IssueTrackerError } from "../issue-tracker";
 
 export interface LinearTeamRef {
   readonly team: string;
-  readonly tokenEnv: string;
-  readonly organization: string | null;
-  readonly clientCredentials: ClientCredentialsRef | null;
-  readonly oauthClientId: string | null;
+  // The whole workspace reads through one Linear credential, so every team ref carries the same
+  // account; the team key alone routes writes, decoupled from which credential fetches them.
+  readonly account: CredentialAccount;
 }
 
 // Linear's request budget is per user and shared across every key that user owns, so every workspace
@@ -348,28 +347,19 @@ const sdkAuth = (credential: Credential) =>
     ? { apiKey: Redacted.value(credential.token) }
     : { accessToken: Redacted.value(credential.token) };
 
-const accountFor = (ref: LinearTeamRef) => ({
-  key: ref.team,
-  issueTracker: "linear",
-  organization: ref.organization,
-  tokenEnv: ref.tokenEnv,
-  clientCredentials: ref.clientCredentials,
-  oauthClientId: ref.oauthClientId,
-});
-
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {
   const resumeAt = yield* Ref.make(new Map<string, number>());
 
   const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
     const credential = yield* Effect.mapError(
-      credentials.bearerToken(accountFor(ref)),
+      credentials.bearerToken(ref.account),
       (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
     );
     return new LinearSdk(sdkAuth(credential));
   });
 
   const holdOff = Effect.fn("linear.holdOff")(function* (ref: LinearTeamRef, nowMillis: number) {
-    const until = (yield* Ref.get(resumeAt)).get(rateLimitScopeOf(ref.tokenEnv));
+    const until = (yield* Ref.get(resumeAt)).get(rateLimitScopeOf(ref.account.tokenEnv));
     if (until === undefined || until <= nowMillis) return;
     return yield* new IssueTrackerError({
       reason: "rate-limited",
@@ -381,7 +371,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   const noteRateLimit = (ref: LinearTeamRef, nowMillis: number, error: IssueTrackerError) =>
     Ref.update(resumeAt, (entries) =>
       new Map(entries).set(
-        rateLimitScopeOf(ref.tokenEnv),
+        rateLimitScopeOf(ref.account.tokenEnv),
         nowMillis + (error.retryAfterMillis ?? defaultCooldownMillis),
       ),
     );
@@ -390,7 +380,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   // store ever gets that the token it holds has to be minted again.
   const noteFailure = (ref: LinearTeamRef, nowMillis: number, error: IssueTrackerError) => {
     if (error.reason === "rate-limited") return noteRateLimit(ref, nowMillis, error);
-    if (error.reason === "auth") return credentials.invalidate(accountFor(ref));
+    if (error.reason === "auth") return credentials.invalidate(ref.account);
     return Effect.void;
   };
 

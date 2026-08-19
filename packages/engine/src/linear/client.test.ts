@@ -11,10 +11,14 @@ import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client
 
 const ref: LinearTeamRef = {
   team: "AUD",
-  tokenEnv: "LINEAR_API_KEY",
-  organization: null,
-  clientCredentials: null,
-  oauthClientId: null,
+  account: {
+    key: "AUD",
+    issueTracker: "linear",
+    organization: null,
+    tokenEnv: "LINEAR_API_KEY",
+    clientCredentials: null,
+    oauthClientId: null,
+  },
 };
 
 const linearMaxQueryComplexity = 10_000;

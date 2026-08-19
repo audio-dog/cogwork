@@ -3,6 +3,7 @@ import {
   type Claim,
   IssueTrackerError,
   type LifecycleStage,
+  linearTeams,
   type Priority,
   type TriageRole,
   type WorkItemId,
@@ -95,8 +96,8 @@ const noAdapter = (workspace: RegisteredWorkspace) =>
   });
 
 const hasRemoteSource = (workspace: RegisteredWorkspace) => {
-  const { type, team, repo } = workspace.config.issueTracker;
-  return type === "linear" ? Boolean(team) : Boolean(repo);
+  const source = workspace.config.issueTracker;
+  return source.type === "linear" ? linearTeams(source).length > 0 : Boolean(source.repo);
 };
 
 const failWhenRemote = Effect.fn("IssueTracker.guard")(function* (workspace: RegisteredWorkspace) {
