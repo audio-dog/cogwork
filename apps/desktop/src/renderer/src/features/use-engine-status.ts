@@ -5,17 +5,33 @@ import { reportRendererError } from "./report-error";
 export type EngineStatusValue = EngineStatus | "unknown";
 
 let currentStatus: EngineStatusValue = "unknown";
+let restarting = false;
 let unsubscribeIpc: (() => void) | null = null;
 const listeners = new Set<() => void>();
 
+function notifyListeners() {
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
 function setStatus(next: EngineStatusValue) {
+  if (restarting && (next === "stopped" || next === "unknown")) {
+    return;
+  }
   if (next === currentStatus) {
     return;
   }
   currentStatus = next;
-  for (const listener of listeners) {
-    listener();
+  notifyListeners();
+}
+
+function setRestarting(next: boolean) {
+  if (next === restarting) {
+    return;
   }
+  restarting = next;
+  notifyListeners();
 }
 
 function subscribe(onStoreChange: () => void): () => void {
@@ -37,8 +53,13 @@ function getSnapshot(): EngineStatusValue {
   return currentStatus;
 }
 
+function getRestartingSnapshot(): boolean {
+  return restarting;
+}
+
 export function useEngineStatus() {
   const status = useSyncExternalStore(subscribe, getSnapshot);
+  const isRestarting = useSyncExternalStore(subscribe, getRestartingSnapshot);
 
   const applyStatus = (transition: Promise<EngineStatus>) =>
     transition.then(setStatus).catch((error) => {
@@ -48,10 +69,14 @@ export function useEngineStatus() {
 
   const setEnabled = (enabled: boolean) => applyStatus(window.cogwork.setEngineEnabled(enabled));
 
-  const restart = () =>
-    applyStatus(window.cogwork.setEngineEnabled(false).then(() => window.cogwork.setEngineEnabled(true)));
+  const restart = () => {
+    setRestarting(true);
+    return applyStatus(
+      window.cogwork.setEngineEnabled(false).then(() => window.cogwork.setEngineEnabled(true)),
+    ).finally(() => setRestarting(false));
+  };
 
-  return { status, setEnabled, restart };
+  return { status, isRestarting, setEnabled, restart };
 }
 
 export type EnginePhase = "off" | "starting" | "up" | "failed";

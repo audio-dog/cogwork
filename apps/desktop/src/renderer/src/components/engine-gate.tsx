@@ -35,6 +35,7 @@ interface EngineGateActions {
 interface EngineGateContextValue {
   readonly treatment: Treatment;
   readonly phase: EnginePhase;
+  readonly isRestarting: boolean;
   readonly actions: EngineGateActions;
 }
 
@@ -47,12 +48,12 @@ function useEngineGate() {
 }
 
 function EngineGateProvider({ children }: { children: ReactNode }) {
-  const { status, setEnabled, restart } = useEngineStatus();
+  const { status, isRestarting, setEnabled, restart } = useEngineStatus();
   const board = useBoard();
   const phase = enginePhase(status);
   const treatment = treatmentFor(phase, board._tag);
   return (
-    <EngineGateContext value={{ treatment, phase, actions: { setEnabled, restart } }}>
+    <EngineGateContext value={{ treatment, phase, isRestarting, actions: { setEnabled, restart } }}>
       {children}
     </EngineGateContext>
   );
@@ -60,10 +61,11 @@ function EngineGateProvider({ children }: { children: ReactNode }) {
 
 function TurnOnEngineButton({ size }: { size?: "sm" }) {
   const {
+    isRestarting,
     actions: { setEnabled },
   } = useEngineGate();
   return (
-    <Button size={size} onClick={() => setEnabled(true)}>
+    <Button size={size} disabled={isRestarting} onClick={() => setEnabled(true)}>
       <RiFlashlightLine data-icon="inline-start" />
       {TURN_ON_ACTION}
     </Button>
@@ -72,10 +74,11 @@ function TurnOnEngineButton({ size }: { size?: "sm" }) {
 
 function RestartEngineButton({ size }: { size?: "sm" }) {
   const {
+    isRestarting,
     actions: { restart },
   } = useEngineGate();
   return (
-    <Button size={size} onClick={restart}>
+    <Button size={size} disabled={isRestarting} onClick={restart}>
       <RiRestartLine data-icon="inline-start" />
       {RESTART_ACTION}
     </Button>
