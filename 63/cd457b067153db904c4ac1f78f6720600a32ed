@@ -1,0 +1,39 @@
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_1403970937bed1::t_b5dd74ca0463ec 115
+  s_1403970937bed1::t_7144cfc1dfd8cf 84,91
+  s_1403970937bed1::t_9e662626d01e30 2-8,10,12,14-15,23-24,26-31,67-83,85-90,92-107,109-114,116-128,130-135,137-205,245-246,248-251,254-264,266-281,290,292
+  s_1403970937bed1::t_a7f5592c6346da 108
+  s_1403970937bed1::t_22d2eae1898f98 22
+  s_1403970937bed1::t_aed40469bbe808 39
+  s_1403970937bed1::t_da6e4a1609d001 208,211-212
+  s_1403970937bed1::t_4c04dc16b6089e 35,38,40,42,46-48,51-52
+  s_1403970937bed1::t_5e3776b5c17644 129
+  s_1403970937bed1::t_7225fe5610a2d5 247,252-253
+  s_1403970937bed1::t_e49d7fdfc1b6fe 136
+  s_1403970937bed1::t_4300a790adcfda 206
+apps/desktop/src/renderer/src/store/engine-preferences.ts
+  s_1403970937bed1::t_de4b76b26b38c2 1-3,8-29
+  s_1403970937bed1::t_a18364f8dad75a 4-7
+apps/desktop/src/renderer/src/components/theme-provider.tsx
+  s_1403970937bed1::t_736d259605d22a 4
+apps/desktop/src/renderer/src/features/settings-values.test.ts
+  s_1403970937bed1::t_10b3f805b64bfd 1-46
+apps/desktop/src/renderer/src/features/settings-values.ts
+  s_1403970937bed1::t_61ee5bdb9c04e3 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "63cd457b067153db904c4ac1f78f6720600a32ed",
+  "prompts": {},
+  "sessions": {
+    "s_1403970937bed1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "59d7134e-9808-4f47-8eac-4576331790fb",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
