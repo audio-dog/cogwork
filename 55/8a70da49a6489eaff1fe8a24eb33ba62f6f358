@@ -1,0 +1,30 @@
+apps/desktop/src/main/engine-command.ts
+  s_a2e09eab072b34::t_49bcc891154e2c 18-19,26
+apps/desktop/src/main/index.ts
+  s_a2e09eab072b34::t_35618c556a2a78 95-97
+apps/desktop/CONTEXT.md
+  s_a2e09eab072b34::t_59f6ab814e8b14 69-73
+  s_a2e09eab072b34::t_997a82a9bb0381 26-27
+  s_a2e09eab072b34::t_ed114445086679 24-25
+  s_a2e09eab072b34::t_40f214b2148310 22-23
+apps/desktop/src/main/engine-command.test.ts
+  s_a2e09eab072b34::t_6af0037f62c893 48-50
+  s_a2e09eab072b34::t_bbf62b8a06ac8d 21
+  s_a2e09eab072b34::t_d56606383055a1 51-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "558a70da49a6489eaff1fe8a24eb33ba62f6f358",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
