@@ -133,6 +133,19 @@ export function ThemeProvider({
     };
   }, [theme, applyTheme]);
 
+  const toggleTheme = React.useEffectEvent(() => {
+    const nextTheme =
+      theme === "dark"
+        ? "light"
+        : theme === "light"
+          ? "dark"
+          : getSystemTheme() === "dark"
+            ? "light"
+            : "dark";
+
+    setTheme(nextTheme);
+  });
+
   // biome-ignore lint/plugin/no-use-effect: registers a global keyboard shortcut listener
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -152,19 +165,7 @@ export function ThemeProvider({
         return;
       }
 
-      setThemeState((currentTheme) => {
-        const nextTheme =
-          currentTheme === "dark"
-            ? "light"
-            : currentTheme === "light"
-              ? "dark"
-              : getSystemTheme() === "dark"
-                ? "light"
-                : "dark";
-
-        localStorage.setItem(storageKey, nextTheme);
-        return nextTheme;
-      });
+      toggleTheme();
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -172,7 +173,7 @@ export function ThemeProvider({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [storageKey]);
+  }, []);
 
   // biome-ignore lint/plugin/no-use-effect: syncs theme across tabs via the storage event
   React.useEffect(() => {

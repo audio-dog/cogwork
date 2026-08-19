@@ -53,7 +53,8 @@
     "./configs/lint/no-match-void-branch.grit",
     "./configs/lint/warn-effect-sync-wrapper.grit",
     "./configs/lint/no-runtime-runfork.grit",
-    "./configs/lint/no-effect-never.grit"
+    "./configs/lint/no-effect-never.grit",
+    "./configs/lint/no-side-effect-in-state-updater.grit"
   ],
   "javascript": {
     "formatter": {
