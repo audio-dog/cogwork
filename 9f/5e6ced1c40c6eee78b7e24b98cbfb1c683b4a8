@@ -1,0 +1,24 @@
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_1403970937bed1::t_766e354f2aa2f1 134
+apps/desktop/src/renderer/src/features/settings-values.ts
+  s_1403970937bed1::t_fbaf210fcbf653 7-18
+apps/desktop/src/renderer/src/features/settings-values.test.ts
+  s_1403970937bed1::t_ebd4fcbe7688e9 20,24-31
+  s_1403970937bed1::t_3e8289d41c6886 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9f5e6ced1c40c6eee78b7e24b98cbfb1c683b4a8",
+  "prompts": {},
+  "sessions": {
+    "s_1403970937bed1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "59d7134e-9808-4f47-8eac-4576331790fb",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
