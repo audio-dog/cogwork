@@ -1,11 +1,11 @@
 import { useLocalStorageValue, useWindowSize } from "@react-hookz/web";
 
 export interface ResizableWidthBounds {
-  readonly minWidth: number;
+  minWidth: number;
   // Width the neighbouring column must always keep, so the panel never eats the whole window.
-  readonly mainContentMinWidth: number;
-  // Chrome already occupying horizontal space (e.g. an expanded left sidebar).
-  readonly reservedWidth?: number;
+  mainContentMinWidth: number;
+  // Chrome already occupying horizontal space (e.g. an expanded left sidebar or open side panel).
+  reservedWidth?: number;
 }
 
 export function clampResizableWidth(

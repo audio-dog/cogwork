@@ -1,4 +1,4 @@
-import type { DaemonEvent } from "@cogwork/contracts";
+import type { DaemonEvent, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Button } from "@cogwork/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
@@ -10,13 +10,12 @@ import {
   RiFocus2Line,
   RiPulseLine,
 } from "@remixicon/react";
-import type { ComponentType, ReactNode } from "react";
 import { useLiveEvents } from "../features/use-live-events";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { AttentionList } from "./attention-rail";
 import { ItemDetail } from "./item-detail";
 
-function SurfaceFill({ children }: { children: ReactNode }) {
+function SurfaceFill({ children }: { children: React.ReactNode }) {
   return (
     <div className="size-full [&>aside]:size-full [&>aside]:w-full [&>aside]:border-l-0">{children}</div>
   );
@@ -37,7 +36,7 @@ function describeLiveEvent(event: DaemonEvent): string {
   }
 }
 
-function ActivitySurface() {
+function ActivityPanelBody() {
   const result = useLiveEvents();
   if (result._tag !== "Success") {
     return <p className="p-4 text-xs text-muted-foreground">Waiting for daemon events…</p>;
@@ -62,46 +61,101 @@ function ActivitySurface() {
   );
 }
 
-function SurfaceBody({ surface }: { surface: Surface }) {
-  switch (surface.kind) {
-    case "attention":
-      return (
-        <SurfaceFill>
-          <AttentionList />
-        </SurfaceFill>
-      );
-    case "activity":
-      return <ActivitySurface />;
-    case "item":
-      return (
-        <SurfaceFill>
-          <ItemDetail selection={{ workspace: surface.workspace, workItem: surface.workItem }} />
-        </SurfaceFill>
-      );
-  }
+function AttentionPanelBody() {
+  return (
+    <SurfaceFill>
+      <AttentionList />
+    </SurfaceFill>
+  );
 }
 
-interface TabView {
-  readonly icon: ComponentType<{ className?: string }>;
-  readonly label: string;
-  readonly tooltip?: string;
-  readonly closeable: boolean;
+function ItemPanelBody({ workspace, workItem }: { workspace: WorkspaceId; workItem: WorkItemId }) {
+  return (
+    <SurfaceFill>
+      <ItemDetail selection={{ workspace, workItem }} />
+    </SurfaceFill>
+  );
 }
 
-function tabView(surface: Surface): TabView {
-  switch (surface.kind) {
-    case "attention":
-      return { icon: RiFocus2Line, label: "Attention", closeable: false };
-    case "activity":
-      return { icon: RiPulseLine, label: "Activity", closeable: false };
-    case "item":
-      return {
-        icon: RiFileList2Line,
-        label: surface.workItem,
-        tooltip: surface.workspace,
-        closeable: true,
-      };
-  }
+function AttentionTab({ active, onSelect }: { active: boolean; onSelect: () => void }) {
+  return (
+    <div
+      className={cn(
+        "flex h-7 shrink-0 items-center gap-0.5 rounded-md pr-2 pl-2 text-xs",
+        active
+          ? "bg-accent text-foreground"
+          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+      )}
+    >
+      <button type="button" className="flex min-w-0 cursor-pointer items-center gap-1.5" onClick={onSelect}>
+        <RiFocus2Line className="size-3.5 shrink-0" />
+        <span className="truncate">Attention</span>
+      </button>
+    </div>
+  );
+}
+
+function ActivityTab({ active, onSelect }: { active: boolean; onSelect: () => void }) {
+  return (
+    <div
+      className={cn(
+        "flex h-7 shrink-0 items-center gap-0.5 rounded-md pr-2 pl-2 text-xs",
+        active
+          ? "bg-accent text-foreground"
+          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+      )}
+    >
+      <button type="button" className="flex min-w-0 cursor-pointer items-center gap-1.5" onClick={onSelect}>
+        <RiPulseLine className="size-3.5 shrink-0" />
+        <span className="truncate">Activity</span>
+      </button>
+    </div>
+  );
+}
+
+function ItemTab({
+  workspace,
+  workItem,
+  active,
+  onSelect,
+  onClose,
+}: {
+  workspace: WorkspaceId;
+  workItem: WorkItemId;
+  active: boolean;
+  onSelect: () => void;
+  onClose: () => void;
+}) {
+  const trigger = (
+    <button type="button" className="flex min-w-0 cursor-pointer items-center gap-1.5" onClick={onSelect}>
+      <RiFileList2Line className="size-3.5 shrink-0" />
+      <span className="truncate">{workItem}</span>
+    </button>
+  );
+
+  return (
+    <div
+      className={cn(
+        "flex h-7 shrink-0 items-center gap-0.5 rounded-md pr-1 pl-2 text-xs",
+        active
+          ? "bg-accent text-foreground"
+          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+      )}
+    >
+      <Tooltip>
+        <TooltipTrigger render={trigger} />
+        <TooltipContent side="bottom">{workspace}</TooltipContent>
+      </Tooltip>
+      <button
+        type="button"
+        aria-label={`Close ${workItem}`}
+        className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
+        onClick={onClose}
+      >
+        <RiCloseLine className="size-3" />
+      </button>
+    </div>
+  );
 }
 
 function SurfaceTab({ surface }: { surface: Surface }) {
@@ -109,50 +163,23 @@ function SurfaceTab({ surface }: { surface: Surface }) {
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
   const id = surfaceId(surface);
-  const view = tabView(surface);
-  const Icon = view.icon;
   const isActive = id === active;
+  const select = () => setActive(id);
 
-  const trigger = (
-    <button
-      type="button"
-      className="flex min-w-0 cursor-pointer items-center gap-1.5"
-      onClick={() => setActive(id)}
-    >
-      <Icon className="size-3.5 shrink-0" />
-      <span className="truncate">{view.label}</span>
-    </button>
-  );
-
+  if (surface.kind === "attention") {
+    return <AttentionTab active={isActive} onSelect={select} />;
+  }
+  if (surface.kind === "activity") {
+    return <ActivityTab active={isActive} onSelect={select} />;
+  }
   return (
-    <div
-      className={cn(
-        "flex h-7 shrink-0 items-center gap-0.5 rounded-md pl-2 text-xs",
-        view.closeable ? "pr-1" : "pr-2",
-        isActive
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-      )}
-    >
-      {view.tooltip ? (
-        <Tooltip>
-          <TooltipTrigger render={trigger} />
-          <TooltipContent side="bottom">{view.tooltip}</TooltipContent>
-        </Tooltip>
-      ) : (
-        trigger
-      )}
-      {view.closeable && (
-        <button
-          type="button"
-          aria-label={`Close ${view.label}`}
-          className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
-          onClick={() => closeSurface(id)}
-        >
-          <RiCloseLine className="size-3" />
-        </button>
-      )}
-    </div>
+    <ItemTab
+      workspace={surface.workspace}
+      workItem={surface.workItem}
+      active={isActive}
+      onSelect={select}
+      onClose={() => closeSurface(id)}
+    />
   );
 }
 
@@ -197,7 +224,11 @@ export function RightPanel() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <SurfaceBody surface={current} />
+        {current.kind === "attention" && <AttentionPanelBody />}
+        {current.kind === "activity" && <ActivityPanelBody />}
+        {current.kind === "item" && (
+          <ItemPanelBody workspace={current.workspace} workItem={current.workItem} />
+        )}
       </div>
     </div>
   );

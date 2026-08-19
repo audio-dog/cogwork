@@ -1,16 +1,17 @@
 import { useSidebar } from "@cogwork/ui/components/sidebar";
-import { createContext, use, useLayoutEffect, useRef } from "react";
-import { clampResizableWidth, useResizableWidth } from "./resizable-width";
+import type { CSSProperties } from "react";
+import { createContext, use, useRef } from "react";
+import { clampResizableWidth, useResizableWidth } from "../hooks/use-resizable-width";
 
-const STORAGE_KEY = "cf.rightPanelWidth";
-export const DEFAULT_WIDTH = 30 * 16;
-const MIN_WIDTH = 22 * 16;
+export const RIGHT_PANEL_STORAGE_KEY = "cf.rightPanelWidth";
+export const RIGHT_PANEL_DEFAULT_WIDTH = 30 * 16;
+export const RIGHT_PANEL_MIN_WIDTH = 22 * 16;
 // Keep the main column usable no matter how wide the panel is dragged.
 const MAIN_CONTENT_MIN_WIDTH = 30 * 16;
 
 function storedPanelBounds(sidebarWidth: number, sidebarExpanded: boolean) {
   return {
-    minWidth: MIN_WIDTH,
+    minWidth: RIGHT_PANEL_MIN_WIDTH,
     mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
     reservedWidth: sidebarExpanded ? sidebarWidth : 0,
   };
@@ -22,7 +23,7 @@ function insetWidth(wrapper: HTMLElement): number {
 }
 
 const RIGHT_PANEL_CLAMP = {
-  minWidth: MIN_WIDTH,
+  minWidth: RIGHT_PANEL_MIN_WIDTH,
   mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
 };
 
@@ -30,12 +31,17 @@ function readRightPanelWidth(wrapper: HTMLElement): number {
   const parsed = Number.parseFloat(wrapper.style.getPropertyValue("--right-panel-width"));
   if (!Number.isNaN(parsed) && parsed > 0) return parsed;
   const region = wrapper.querySelector<HTMLElement>("[data-slot='right-panel-region']");
-  return region?.getBoundingClientRect().width ?? DEFAULT_WIDTH;
+  return region?.getBoundingClientRect().width ?? RIGHT_PANEL_DEFAULT_WIDTH;
 }
 
 function rightPanelIsOpen(wrapper: HTMLElement): boolean {
   const region = wrapper.querySelector<HTMLElement>("[data-slot='right-panel-region']");
   return (region?.getBoundingClientRect().width ?? 0) > 0;
+}
+
+export function reservedOpenRightPanelWidth(wrapper: HTMLElement): number {
+  if (!rightPanelIsOpen(wrapper)) return 0;
+  return readRightPanelWidth(wrapper);
 }
 
 // While the left sidebar drag eats inset width, shrink an open right panel so the
@@ -51,8 +57,8 @@ export function rightPanelRegionElement(wrapper: HTMLElement): HTMLElement | nul
 }
 
 interface RightPanelWidthActions {
-  readonly setWidth: (width: number) => void;
-  readonly reset: () => void;
+  setWidth: (width: number) => void;
+  reset: () => void;
 }
 
 export const RightPanelWidthContext = createContext<RightPanelWidthActions | null>(null);
@@ -65,15 +71,15 @@ export function useRightPanelWidthActions(): RightPanelWidthActions {
 
 function useStoredRightPanelWidth(sidebarWidth: number, sidebarExpanded: boolean) {
   return useResizableWidth({
-    storageKey: STORAGE_KEY,
-    defaultWidth: DEFAULT_WIDTH,
+    storageKey: RIGHT_PANEL_STORAGE_KEY,
+    defaultWidth: RIGHT_PANEL_DEFAULT_WIDTH,
     ...storedPanelBounds(sidebarWidth, sidebarExpanded),
   });
 }
 
 // Lives inside SidebarProvider so it can read collapsed state for clamp bounds.
-// Writes --right-panel-width directly on the wrapper so __root__'s style prop
-// (which only tracks sidebar width) never stomps the persisted value on re-render.
+// Inherits --right-panel-width to descendants via a contents wrapper so __root__'s
+// sidebar-only style prop never stomps the persisted value on re-render.
 export function RightPanelWidthProvider({
   sidebarWidth,
   children,
@@ -84,18 +90,15 @@ export function RightPanelWidthProvider({
   const { state } = useSidebar();
   const expanded = state === "expanded";
   const rightPanel = useStoredRightPanelWidth(sidebarWidth, expanded);
-  const widthRef = useRef(rightPanel.width);
-  widthRef.current = rightPanel.width;
-
-  useLayoutEffect(() => {
-    document
-      .querySelector<HTMLElement>("[data-slot='sidebar-wrapper']")
-      ?.style.setProperty("--right-panel-width", `${widthRef.current}px`);
-  }, [rightPanel.width]);
+  const panelStyle = {
+    "--right-panel-width": `${rightPanel.width}px`,
+  } as CSSProperties;
 
   return (
     <RightPanelWidthContext value={{ setWidth: rightPanel.setWidth, reset: rightPanel.reset }}>
-      {children}
+      <div className="contents" style={panelStyle}>
+        {children}
+      </div>
     </RightPanelWidthContext>
   );
 }
@@ -123,7 +126,7 @@ export function RightPanelResizeHandle({
     const wrapper = handle.closest<HTMLElement>("[data-slot='sidebar-wrapper']");
     if (!wrapper) return;
     const region = wrapper.querySelector<HTMLElement>("[data-slot='right-panel-region']");
-    const startWidth = region?.getBoundingClientRect().width ?? DEFAULT_WIDTH;
+    const startWidth = region?.getBoundingClientRect().width ?? RIGHT_PANEL_DEFAULT_WIDTH;
     // Suppress the width transition so the drag tracks the cursor 1:1.
     region?.style.setProperty("transition-duration", "0ms");
 

@@ -29,14 +29,19 @@ export function ItemDetail({ selection }: { selection: ItemSelection }) {
 
   if (!entry) {
     return (
-      <RailShell header={<DetailHeader title="Item detail" />}>
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>Item is gone</EmptyTitle>
-            <EmptyDescription>This item is no longer on the board.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </RailShell>
+      <RailShell.Frame>
+        <RailShell.Header>
+          <DetailHeader title="Item detail" />
+        </RailShell.Header>
+        <RailShell.Body>
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>Item is gone</EmptyTitle>
+              <EmptyDescription>This item is no longer on the board.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </RailShell.Body>
+      </RailShell.Frame>
     );
   }
 
@@ -84,35 +89,40 @@ export function ItemDetail({ selection }: { selection: ItemSelection }) {
   const sections = candidates.filter((section): section is Section => section !== null);
 
   return (
-    <RailShell header={<DetailHeader title={item.title} />}>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{selection.workspace}</span>
-          <span aria-hidden>·</span>
-          <span>{item.id}</span>
+    <RailShell.Frame>
+      <RailShell.Header>
+        <DetailHeader title={item.title} />
+      </RailShell.Header>
+      <RailShell.Body>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{selection.workspace}</span>
+            <span aria-hidden>·</span>
+            <span>{item.id}</span>
+          </div>
+          <h1 className="text-sm font-semibold">{item.title}</h1>
         </div>
-        <h1 className="text-sm font-semibold">{item.title}</h1>
-      </div>
 
-      {sections.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>Nothing to act on</EmptyTitle>
-            <EmptyDescription>
-              This item has no live run, self-halt, or pull request right now.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="mt-4 flex flex-col gap-5">
-          {sections.map((section, index) => (
-            <div key={section.key} className="flex flex-col gap-5">
-              {index > 0 && <Separator />}
-              {section.node}
-            </div>
-          ))}
-        </div>
-      )}
-    </RailShell>
+        {sections.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>Nothing to act on</EmptyTitle>
+              <EmptyDescription>
+                This item has no live run, self-halt, or pull request right now.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="mt-4 flex flex-col gap-5">
+            {sections.map((section, index) => (
+              <div key={section.key} className="flex flex-col gap-5">
+                {index > 0 && <Separator />}
+                {section.node}
+              </div>
+            ))}
+          </div>
+        )}
+      </RailShell.Body>
+    </RailShell.Frame>
   );
 }

@@ -1,7 +1,16 @@
 import { useSidebar } from "@cogwork/ui/components/sidebar";
+import { useLocalStorageValue, useWindowSize } from "@react-hookz/web";
 import { useRef } from "react";
-import { clampResizableWidth, useResizableWidth } from "./resizable-width";
-import { reclampOpenRightPanelWidth, rightPanelRegionElement } from "./right-panel-resize";
+import { clampResizableWidth } from "../hooks/use-resizable-width";
+import { useRightPanelStore } from "../store/right-panel";
+import {
+  RIGHT_PANEL_DEFAULT_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
+  RIGHT_PANEL_STORAGE_KEY,
+  reclampOpenRightPanelWidth,
+  reservedOpenRightPanelWidth,
+  rightPanelRegionElement,
+} from "./right-panel-resize";
 
 const STORAGE_KEY = "cf.sidebarWidth";
 const DEFAULT_WIDTH = 16 * 16;
@@ -13,7 +22,35 @@ const MAIN_CONTENT_MIN_WIDTH = 30 * 16;
 const BOUNDS = { minWidth: MIN_WIDTH, mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH };
 
 export function useSidebarWidth() {
-  return useResizableWidth({ storageKey: STORAGE_KEY, defaultWidth: DEFAULT_WIDTH, ...BOUNDS });
+  const panelOpen = useRightPanelStore((state) => state.open);
+  const { width: windowWidth } = useWindowSize();
+  const { value: storedPanel } = useLocalStorageValue(RIGHT_PANEL_STORAGE_KEY, {
+    defaultValue: RIGHT_PANEL_DEFAULT_WIDTH,
+    initializeWithValue: true,
+  });
+  const {
+    value: storedSidebar,
+    set,
+    remove,
+  } = useLocalStorageValue(STORAGE_KEY, {
+    defaultValue: DEFAULT_WIDTH,
+    initializeWithValue: true,
+  });
+
+  const sidebarPass = clampResizableWidth(storedSidebar, windowWidth, BOUNDS);
+  const panelReserved = panelOpen
+    ? clampResizableWidth(storedPanel, windowWidth, {
+        minWidth: RIGHT_PANEL_MIN_WIDTH,
+        mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
+        reservedWidth: sidebarPass,
+      })
+    : 0;
+  const width = clampResizableWidth(storedSidebar, windowWidth, { ...BOUNDS, reservedWidth: panelReserved });
+  const setWidth = (next: number) =>
+    set(clampResizableWidth(next, windowWidth, { ...BOUNDS, reservedWidth: panelReserved }));
+  const reset = () => remove();
+
+  return { width, setWidth, reset };
 }
 
 interface DragState {
@@ -73,11 +110,10 @@ export function SidebarResizeHandle({
     const drag = dragRef.current;
     if (!drag) return;
     event.preventDefault();
-    drag.width = clampResizableWidth(
-      drag.startWidth + (event.clientX - drag.startX),
-      window.innerWidth,
-      BOUNDS,
-    );
+    drag.width = clampResizableWidth(drag.startWidth + (event.clientX - drag.startX), window.innerWidth, {
+      ...BOUNDS,
+      reservedWidth: reservedOpenRightPanelWidth(drag.wrapper),
+    });
     drag.wrapper.style.setProperty("--sidebar-width", `${drag.width}px`);
     reclampOpenRightPanelWidth(drag.wrapper);
   };
