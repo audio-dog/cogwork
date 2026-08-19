@@ -1,0 +1,34 @@
+apps/desktop/src/renderer/src/components/markdown.tsx
+  s_26550afb701170::t_ec8cd48dedf6a9 2-4,8-17,24-36,38-42,44-53,58-70
+  s_26550afb701170::t_dee16a6b197e09 72
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_26550afb701170::t_8ee02261b0d894 65-68
+  s_26550afb701170::t_78426aa85ab39f 14-21,31-58
+  s_26550afb701170::t_3d978fb0b39475 24-26
+  s_26550afb701170::t_7128d40c60750e 22
+apps/desktop/AGENTS.md
+  s_26550afb701170::t_78e6b55c5159d3 33-38
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_26550afb701170::t_7c9b26e1ace5d1 488-513
+  s_26550afb701170::t_7d65cc3a94e6e2 192-208,221,226-289,294,296-297,300-305
+apps/desktop/package.json
+  s_26550afb701170::t_e481bf121a4b19 37-38
+pnpm-lock.yaml
+  s_26550afb701170::t_b61e9fc221dca8 157-162,1850-1853,1858-1868,6159-6160,6163-6166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c2caa525521c9c6b74d3b91d1f547ff7866e68b3",
+  "prompts": {},
+  "sessions": {
+    "s_26550afb701170": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f7d1cff8-4717-4011-8dbc-dd8f9cd62d20",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
