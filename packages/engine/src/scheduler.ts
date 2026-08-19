@@ -19,7 +19,6 @@ import { branchName, ticketSlug } from "./worktree";
 export interface SchedulerConfig {
   readonly globalLimit: number;
   readonly dailyBudget: number;
-  // Whether scheduling holds at startup until something resumes it. Defaults to running.
   // The desktop launch default sets this so a laptop launch never silently spends budget;
   // the headless CLI daemon leaves it off so it schedules on its own.
   readonly startPaused?: boolean;
