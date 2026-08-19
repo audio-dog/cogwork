@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_9b460ffb4b299c::t_5d2011fdbcb4dd 37-40,71,74-77,80,82-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "72d00fd61588a867f0a95c16f834b1fb5e0f0490",
+  "prompts": {},
+  "sessions": {
+    "s_9b460ffb4b299c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fe94b1f1-4fed-4a1f-bdd5-18ddcfe343ec",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
