@@ -1,7 +1,7 @@
 import { SidebarProvider } from "@cogwork/ui/components/sidebar";
-import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
+import { RightPanelWidthProvider } from "../components/right-panel-resize";
 import { useSidebarWidth } from "../components/sidebar-resize";
 
 const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
@@ -16,11 +16,11 @@ function RootLayout() {
   } as CSSProperties;
 
   return (
-    <TooltipProvider>
-      <SidebarProvider style={providerStyle}>
+    <SidebarProvider style={providerStyle}>
+      <RightPanelWidthProvider sidebarWidth={width}>
         <Outlet />
-      </SidebarProvider>
-    </TooltipProvider>
+      </RightPanelWidthProvider>
+    </SidebarProvider>
   );
 }
 

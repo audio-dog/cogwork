@@ -83,7 +83,8 @@ These name the *meaning* of each surface; the visual layout of several is still 
 **Side panel**:
 The contextual right-hand panel of the shell — tabbed, resizable, and expandable to full window. It
 holds a couple of fixed tabs (Attention, Activity) alongside per-work-item tabs. "Tab" is the human
-word for a unit of the panel; the renderer's `SurfaceKind` is the code word for what a tab shows.
+word for a unit of the panel; the renderer's `Surface` is the code word for what a tab shows — the
+fixed `attention` / `activity` kinds, or an `item` keyed by its (workspace, work item) pair.
 _Avoid_: Right rail (the old fixed form), sidebar (that's the left nav), inspector.
 
 **Feed**:
