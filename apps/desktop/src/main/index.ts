@@ -27,26 +27,20 @@ const showMainWindow = (): void => {
 const makeSupervisor = (): EngineSupervisor => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
-  const command = resolveEngineCommand({
+  const commandInput = {
     socketPath,
     packaged: app.isPackaged,
     baseDir,
     nodeBinary: process.env.COGWORK_NODE,
     engineEntry: process.env.COGWORK_ENGINE_ENTRY,
-    startPaused: true,
-  });
-  const restartCommand = resolveEngineCommand({
-    socketPath,
-    packaged: app.isPackaged,
-    baseDir,
-    nodeBinary: process.env.COGWORK_NODE,
-    engineEntry: process.env.COGWORK_ENGINE_ENTRY,
-    startPaused: false,
-  });
+  };
 
   const supervisor = new EngineSupervisor({
-    command,
-    restartCommand,
+    resolveCommand: (restart, scheduling) =>
+      resolveEngineCommand({
+        ...commandInput,
+        startPaused: restart ? scheduling === "paused" : true,
+      }),
     socketPath,
     spawn: (engine) =>
       spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),

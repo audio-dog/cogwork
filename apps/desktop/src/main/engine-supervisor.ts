@@ -1,3 +1,4 @@
+import type { SchedulingState } from "@cogwork/contracts";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
 import { waitForDaemonListening } from "./wait-for-socket";
@@ -18,8 +19,7 @@ export interface EngineLogger {
 }
 
 export interface EngineSupervisorOptions {
-  readonly command: EngineCommand;
-  readonly restartCommand?: EngineCommand;
+  readonly resolveCommand: (restart: boolean, scheduling: SchedulingState) => EngineCommand;
   readonly socketPath: string;
   readonly spawn: SpawnEngine;
   readonly probe: (socketPath: string) => Promise<boolean>;
@@ -35,6 +35,7 @@ export class EngineSupervisor {
   #owned = false;
   #shuttingDown = false;
   #restarts = 0;
+  #scheduling: SchedulingState = "paused";
   #readyController: AbortController | null = null;
   readonly #maxRestarts: number;
   readonly #awaitReachable: (socketPath: string, signal: AbortSignal) => Promise<boolean>;
@@ -46,6 +47,10 @@ export class EngineSupervisor {
 
   get status(): EngineStatus {
     return this.#status;
+  }
+
+  setScheduling(desired: SchedulingState): void {
+    this.#scheduling = desired;
   }
 
   async start(): Promise<void> {
@@ -60,6 +65,7 @@ export class EngineSupervisor {
       return;
     }
 
+    this.#scheduling = "paused";
     this.#spawnChild(false);
   }
 
@@ -82,7 +88,7 @@ export class EngineSupervisor {
 
   #spawnChild(restart: boolean): void {
     this.#setStatus("starting");
-    const command = restart ? (this.options.restartCommand ?? this.options.command) : this.options.command;
+    const command = this.options.resolveCommand(restart, this.#scheduling);
     const child = this.options.spawn(command);
     this.#child = child;
     this.#owned = true;

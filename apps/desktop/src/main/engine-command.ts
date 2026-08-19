@@ -13,7 +13,7 @@ export interface ResolveEngineCommandInput {
   readonly drainGraceSeconds?: number;
   readonly nodeBinary?: string;
   readonly engineEntry?: string;
-  // Desktop launch default is true; supervisor retries pass false so a crash does not re-pause scheduling.
+  // Desktop launch default is true; supervisor retries honor the scheduling state the renderer last reported.
   readonly startPaused?: boolean;
 }
 

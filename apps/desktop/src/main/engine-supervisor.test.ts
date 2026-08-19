@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { SchedulingState } from "@cogwork/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
@@ -17,8 +18,11 @@ class FakeChild extends EventEmitter implements EngineChild {
   }
 }
 
-const command: EngineCommand = { command: "tsx", args: ["daemon"], cwd: "/repo" };
-const restartCommand: EngineCommand = { command: "tsx", args: ["daemon", "--resume"], cwd: "/repo" };
+const launchCommand: EngineCommand = { command: "tsx", args: ["daemon", "paused"], cwd: "/repo" };
+const liveRestartCommand: EngineCommand = { command: "tsx", args: ["daemon", "live"], cwd: "/repo" };
+
+const resolveCommand = (restart: boolean, scheduling: SchedulingState): EngineCommand =>
+  restart && scheduling === "running" ? liveRestartCommand : launchCommand;
 
 const silentLogger = { info: () => {}, warn: () => {} };
 
@@ -37,7 +41,7 @@ const makeSupervisor = (
 ) => {
   const statuses: EngineStatus[] = [];
   const supervisor = new EngineSupervisor({
-    command,
+    resolveCommand,
     socketPath: "/tmp/test.sock",
     onStatus: (status) => statuses.push(status),
     logger: silentLogger,
@@ -67,6 +71,7 @@ describe("EngineSupervisor", () => {
     await flush();
 
     expect(spawn).toHaveBeenCalledOnce();
+    expect(spawn).toHaveBeenCalledWith(launchCommand);
     expect(supervisor.status).toBe("running");
     expect(statuses).toEqual(["starting", "running"]);
   });
@@ -136,19 +141,39 @@ describe("EngineSupervisor", () => {
     expect(supervisor.status).toBe("failed");
   });
 
-  it("uses restartCommand on unexpected exit instead of the launch command", async () => {
+  it("restarts with scheduling live when the renderer last reported running", async () => {
     const children: FakeChild[] = [];
     const spawn = vi.fn((engine: EngineCommand) => {
       const child = new FakeChild();
-      const attempt = children.length;
       children.push(child);
-      expect(engine.args).toEqual(attempt === 0 ? command.args : restartCommand.args);
+      expect(engine).toEqual(children.length === 1 ? launchCommand : liveRestartCommand);
       return child;
     });
     const { supervisor } = makeSupervisor({
       probe: () => Promise.resolve(false),
       spawn,
-      restartCommand,
+      maxRestarts: 1,
+    });
+
+    await supervisor.start();
+    supervisor.setScheduling("running");
+    children[0].emit("exit", 1, null);
+    await flush();
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps scheduling paused on restart when the renderer never resumed it", async () => {
+    const children: FakeChild[] = [];
+    const spawn = vi.fn((engine: EngineCommand) => {
+      const child = new FakeChild();
+      children.push(child);
+      expect(engine).toEqual(launchCommand);
+      return child;
+    });
+    const { supervisor } = makeSupervisor({
+      probe: () => Promise.resolve(false),
+      spawn,
       maxRestarts: 1,
     });
 
