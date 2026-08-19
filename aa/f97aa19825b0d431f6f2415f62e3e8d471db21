@@ -1,0 +1,87 @@
+packages/engine/src/linear/linear.test.ts
+  s_559faf4ec417f6::t_7f6521c7105969 71
+packages/engine/src/coordination-tracker.ts
+  s_559faf4ec417f6::t_6af2ca5a7792ce 31
+  s_559faf4ec417f6::t_c682927f65d334 63
+packages/engine/src/github/github-helpers.test.ts
+  s_559faf4ec417f6::t_7173182eb0045b 3-10
+  s_559faf4ec417f6::t_30d95c8515665f 97-98,108,121,133-142
+  s_559faf4ec417f6::t_f5ce1329178321 143-145
+apps/cli/src/status.test.ts
+  s_559faf4ec417f6::t_67e7e2fa766b04 82-90
+  s_559faf4ec417f6::t_05b330eacc6bc7 54-61
+packages/engine/src/recovery.test.ts
+  s_559faf4ec417f6::t_62e0b613484413 87
+  s_559faf4ec417f6::t_3e12755eb0e4f4 117
+  s_559faf4ec417f6::t_485807619e5efa 102
+  s_559faf4ec417f6::t_f3dc696350c9bd 72
+packages/engine/src/read-model.test.ts
+  s_559faf4ec417f6::t_4839786b12d6fd 74,82
+packages/engine/src/commands.test.ts
+  s_559faf4ec417f6::t_6d977df05d5624 145
+  s_559faf4ec417f6::t_b620bbc5b1e785 175-178
+packages/engine/src/linear/host.ts
+  s_559faf4ec417f6::t_9a2b8040b82946 93
+packages/engine/src/github/host.ts
+  s_559faf4ec417f6::t_fa6b9103748944 83
+packages/engine/src/issue-tracker.ts
+  s_559faf4ec417f6::t_b1739e77b44afd 23
+packages/engine/src/github/client.ts
+  s_559faf4ec417f6::t_22ce4efc57ba48 160,163,170,172
+  s_559faf4ec417f6::t_2031ea00199556 332
+  s_559faf4ec417f6::t_859d47b9092839 29
+  s_559faf4ec417f6::t_fa7f58ad8bc172 80
+packages/engine/src/classify.ts
+  s_559faf4ec417f6::t_dd4723d2a49d2c 118
+  s_559faf4ec417f6::t_39e44823a52d28 164
+packages/engine/src/observe.ts
+  s_559faf4ec417f6::t_7d815c632d7294 12
+packages/engine/src/classify.test.ts
+  s_559faf4ec417f6::t_584953db2a9f19 13
+  s_559faf4ec417f6::t_86c9c9bf7c37b6 155-161
+packages/engine/src/event-publisher.test.ts
+  s_559faf4ec417f6::t_ea50a08f57db90 114
+packages/engine/src/commands.ts
+  s_559faf4ec417f6::t_74864c0deb4405 37
+packages/contracts/src/daemon.ts
+  s_559faf4ec417f6::t_040b726d9a5580 63-65
+packages/engine/src/coordination-tracker.test.ts
+  s_559faf4ec417f6::t_bb3d8af3336e08 120
+packages/engine/src/linear/client.ts
+  s_559faf4ec417f6::t_0d7aa35e4eb986 36
+  s_559faf4ec417f6::t_20d58d24482dec 304
+  s_559faf4ec417f6::t_b6b99203f1a3e5 188
+  s_559faf4ec417f6::t_e2662d193a3afe 88
+packages/engine/src/linear/client.test.ts
+  s_559faf4ec417f6::t_b33f0c92466035 129
+packages/contracts/src/board.test.ts
+  s_559faf4ec417f6::t_d006ff97fe6f8d 31-40,43
+  s_559faf4ec417f6::t_d60817aa23d76b 62-79
+  s_559faf4ec417f6::t_901a4bfb9f4881 44
+packages/engine/src/github/github.test.ts
+  s_559faf4ec417f6::t_22447f47cd6acc 42
+  s_559faf4ec417f6::t_1872a30f609f4f 96
+packages/engine/src/engine.test.ts
+  s_559faf4ec417f6::t_c3f2ddfcd6ac77 205
+  s_559faf4ec417f6::t_65ef654ca978f1 541
+  s_559faf4ec417f6::t_c992947e6f2328 550
+  s_559faf4ec417f6::t_79f3a57e226f8a 164
+  s_559faf4ec417f6::t_e98ce824d871ab 580
+  s_559faf4ec417f6::t_7629329605000a 514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "aaf97aa19825b0d431f6f2415f62e3e8d471db21",
+  "prompts": {},
+  "sessions": {
+    "s_559faf4ec417f6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1a648a78-726e-482e-98fd-1727b202a75f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
