@@ -60,8 +60,6 @@ export const NeedsHumanItem = Schema.Struct({
   title: TrimmedNonEmptyString,
   reason: NeedsHumanReason,
   proposal: Schema.NullOr(TrimmedNonEmptyString),
-  // The tracker ticket's own URL, so a decision row can open the ticket in one click. Null only for
-  // the synthetic hand-off item the daemon builds when the reconcile snapshot has already dropped it.
   url: Schema.NullOr(TrimmedNonEmptyString),
   pr: Schema.optionalKey(PrSummary),
 });
