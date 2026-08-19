@@ -501,6 +501,40 @@ describe("Scheduler.tick", () => {
       );
     }),
   );
+
+  it.effect("holds a resume admitted while paused and spends no budget until it is resumed", () =>
+    Effect.gen(function* () {
+      const runs = yield* Ref.make(0);
+      const ran = yield* Latch.make();
+      const execute: ExecuteFn = () =>
+        Ref.update(runs, (n) => n + 1).pipe(
+          Effect.andThen(ran.open),
+          Effect.map(() => true),
+        );
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+
+        yield* scheduler.admit(wsA, work(1));
+        const held = yield* scheduler.stats;
+        assert.strictEqual(yield* Ref.get(runs), 0);
+        assert.strictEqual(held.global, 0);
+        assert.strictEqual(held.budgetUsed, 0);
+
+        yield* scheduler.setScheduling("running");
+        yield* ran.await;
+        assert.strictEqual(yield* Ref.get(runs), 1);
+        assert.strictEqual((yield* scheduler.stats).budgetUsed, 1);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 5, dailyBudget: 100, startPaused: true },
+            { registry: [wsA], snapshots, execute },
+          ),
+        ),
+      );
+    }),
+  );
 });
 
 describe("Scheduler.drain", () => {

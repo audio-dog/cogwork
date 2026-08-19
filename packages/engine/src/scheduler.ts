@@ -34,6 +34,9 @@ export interface SchedulerState {
   readonly budgetUsed: number;
   readonly stopping: boolean;
   readonly paused: boolean;
+  // Resumes admitted while paused wait here instead of running, so a daemon that launched paused
+  // never spends budget behind the header toggle; setScheduling launches them once scheduling resumes.
+  readonly pendingResumes: ReadonlyArray<Candidate>;
 }
 
 export const initialState: SchedulerState = {
@@ -46,6 +49,7 @@ export const initialState: SchedulerState = {
   budgetUsed: 0,
   stopping: false,
   paused: false,
+  pendingResumes: [],
 };
 
 export interface DrainOptions {
@@ -244,18 +248,38 @@ export const make = (config: SchedulerConfig) =>
       return { inFlight, interrupted } satisfies DrainOutcome;
     });
 
-    // admit must not gate on fits(): a resume reclaims work already in flight and must always start.
+    // admit does not gate on the caps in fits(): a resume reclaims work already claimed, so the
+    // global, per-workspace, and budget limits do not apply. It does honor paused — a daemon that
+    // launched paused holds the resume until scheduling resumes, so recovery never spends budget
+    // behind the header toggle.
     const admit = Effect.fn("Scheduler.admit")(function* (
       workspace: RegisteredWorkspace,
       work: EligibleWork,
     ) {
       const candidate = candidateOf(workspace, work, config);
-      yield* Ref.update(stateRef, (state) => reserve(state, candidate));
-      yield* FiberSet.run(jobs, runJob(candidate));
+      const started = yield* Ref.modify(stateRef, (state): readonly [boolean, SchedulerState] =>
+        state.paused
+          ? [false, { ...state, pendingResumes: [...state.pendingResumes, candidate] }]
+          : [true, reserve(state, candidate)],
+      );
+      if (started) yield* FiberSet.run(jobs, runJob(candidate));
     });
 
     const setScheduling = Effect.fn("Scheduler.setScheduling")(function* (desired: "running" | "paused") {
-      yield* Ref.update(stateRef, (state) => ({ ...state, paused: desired === "paused" }));
+      // Unpausing reserves the held resumes in the same atomic step that clears paused, so a tick
+      // racing the resume sees their keys already in flight and cannot start them a second time.
+      const resumed = yield* Ref.modify(
+        stateRef,
+        (state): readonly [ReadonlyArray<Candidate>, SchedulerState] => {
+          if (desired === "paused") return [[], { ...state, paused: true }];
+          const running = state.pendingResumes.reduce<SchedulerState>(
+            (acc, candidate) => reserve(acc, candidate),
+            { ...state, paused: false, pendingResumes: [] },
+          );
+          return [state.pendingResumes, running];
+        },
+      );
+      yield* Effect.forEach(resumed, (candidate) => FiberSet.run(jobs, runJob(candidate)), { discard: true });
       return yield* Ref.get(stateRef);
     });
 
