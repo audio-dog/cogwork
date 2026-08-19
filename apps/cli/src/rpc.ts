@@ -28,6 +28,7 @@ export interface DaemonOptions {
   readonly dailyBudget: number;
   readonly pollIntervalMillis: number;
   readonly drainGraceMillis: number;
+  readonly startPaused: boolean;
 }
 
 const prepareSocketDir = (socketPath: string) =>
@@ -98,7 +99,11 @@ export const serverLayer = (options: DaemonOptions) =>
     registry: registryLayer(options.configHome),
     worktrees: worktreeManagerLayer,
     harnessRunners: [cursorRunner({ name: cursorName }), Provider.providerRunner({ name: providerName })],
-    scheduler: { globalLimit: options.maxConcurrency, dailyBudget: options.dailyBudget },
+    scheduler: {
+      globalLimit: options.maxConcurrency,
+      dailyBudget: options.dailyBudget,
+      startPaused: options.startPaused,
+    },
   });
 
 export const clientLayer = (socketPath: string) =>
