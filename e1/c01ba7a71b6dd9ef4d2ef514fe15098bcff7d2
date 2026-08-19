@@ -1,0 +1,42 @@
+apps/desktop/src/main/engine-command.ts
+  s_06cc6f116a0de6::t_39d704ba6e7dd2 24
+apps/desktop/CONTEXT.md
+  s_06cc6f116a0de6::t_12d4c210d84e3b 22-28
+  s_06cc6f116a0de6::t_75ec595f6051f6 70-74
+apps/desktop/src/main/index.ts
+  s_06cc6f116a0de6::t_6133db2f7058b5 95
+apps/desktop/src/main/engine-command.test.ts
+  s_06cc6f116a0de6::t_b636d16a58182d 21
+  s_06cc6f116a0de6::t_590e2927e80553 50
+  s_06cc6f116a0de6::t_4c4ef551ca1867 48-49,51
+  s_67d24b651fe6e8::t_8a4285a07dffe2 52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "e1c01ba7a71b6dd9ef4d2ef514fe15098bcff7d2",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_06cc6f116a0de6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "85bc8812-365e-497c-b21a-af007d6aad7f",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_67d24b651fe6e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1c4bd9b6-766b-4b11-8de6-23a31149786d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
