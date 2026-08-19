@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/sync-scheduling-to-main.ts
+  s_a2e09eab072b34::t_6ace672ca1ffc2 3-5,9-14,19-24
+apps/desktop/src/renderer/src/features/use-scheduling.ts
+  s_a2e09eab072b34::t_2718cf7ad175eb 4,9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "eea1c755eaa56d4c062b88c149c053d99e1d45d7",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
