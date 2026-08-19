@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_a9ff227393fed5::t_4f9b35e2b0842b 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "130b09908683e000940feb0477f015af86e905bc",
+  "prompts": {},
+  "sessions": {
+    "s_a9ff227393fed5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c4b6432c-0d32-4ca6-9b1d-4da5a844ed81",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
