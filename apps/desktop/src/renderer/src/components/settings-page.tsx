@@ -1,34 +1,58 @@
 import { Card } from "@cogwork/ui/components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupText,
+} from "@cogwork/ui/components/input-group";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
+import { Separator } from "@cogwork/ui/components/separator";
 import { Switch } from "@cogwork/ui/components/switch";
+import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiToolsLine } from "@remixicon/react";
-import { createContext, type ReactNode, use, useRef } from "react";
+import { RiAddLine, RiComputerLine, RiMoonLine, RiSubtractLine, RiSunLine } from "@remixicon/react";
+import { type ComponentType, createContext, type ReactNode, use, useRef, useState } from "react";
 import {
   findSection,
   type SettingEntry,
   type SettingsSectionId,
   settingsIndex,
 } from "../features/settings-catalog";
+import { minConcurrency, settingsOfflineFallbacks } from "../features/settings-defaults";
+import {
+  parseBudget,
+  parseCount,
+  sanitizeBudgetDraft,
+  sanitizeCountDraft,
+  seededValue,
+} from "../features/settings-values";
+import { useBoard } from "../features/use-board";
+import { useEnginePreferences } from "../store/engine-preferences";
 import { useDesktopPreferences } from "../store/preferences";
+import { type Theme, useTheme } from "./theme-provider";
 
 const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});
 
-function useFocusScroll(id: string) {
+function useFocusFlash(id: string) {
   const { focus, jump } = use(FocusedSettingContext);
-  const scrolledFor = useRef<string | undefined>(undefined);
-  const scrollToken = focus === id ? `${id}:${jump ?? 0}` : undefined;
+  const flashing = focus === id;
+  // Changing the key on each jump remounts the node so the CSS flash animation replays.
+  const flashKey = flashing ? `${id}:${jump ?? 0}` : id;
+  const scrolledNode = useRef<HTMLElement | null>(null);
 
-  // The write and the token guard both live in the ref callback, which runs at
-  // commit — never during render. `SettingRow` keys each row on its focus token,
-  // so a row remounts (with a fresh ref) whenever it gains or loses focus; the
-  // guard only has to stop a re-scroll when the same mounted row re-renders.
-  return (node: HTMLElement | null) => {
-    if (!node || !scrollToken || scrolledFor.current === scrollToken) return;
-    scrolledFor.current = scrollToken;
+  // The guard lives entirely in the ref callback (commit time) and never reads
+  // or writes `ref.current` during render. Each activation remounts the keyed
+  // node, so a fresh node means "scroll again": this re-scrolls when the same
+  // setting + jump is focused a second time (deep-link or back), while a node
+  // that stays mounted across re-renders is scrolled only once.
+  const ref = (node: HTMLElement | null) => {
+    if (!node || !flashing || scrolledNode.current === node) return;
+    scrolledNode.current = node;
     node.scrollIntoView({ block: "center" });
   };
+
+  return { ref, flashing, flashKey };
 }
 
 function settingEntry(id: string) {
@@ -43,14 +67,169 @@ function CloseToHideControl() {
   return <Switch aria-label="Close to hide" checked={closeToHide} onCheckedChange={setCloseToHide} />;
 }
 
+function NumberStepper({
+  value,
+  min,
+  label,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  label: string;
+  onChange: (value: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const commit = (next: number) => {
+    setEditing(false);
+    if (next !== value) onChange(next);
+  };
+  return (
+    <InputGroup className="w-28">
+      <InputGroupInput
+        aria-label={label}
+        inputMode="numeric"
+        value={editing ? draft : String(value)}
+        onFocus={() => {
+          setDraft(String(value));
+          setEditing(true);
+        }}
+        onBlur={() => commit(parseCount(draft, min))}
+        onChange={(event) => setDraft(sanitizeCountDraft(event.target.value))}
+        className="text-center tabular-nums"
+      />
+      <InputGroupAddon>
+        <InputGroupButton
+          size="icon-xs"
+          aria-label={`Decrease ${label}`}
+          onClick={() => commit(Math.max(min, value - 1))}
+        >
+          <RiSubtractLine />
+        </InputGroupButton>
+      </InputGroupAddon>
+      <InputGroupAddon align="inline-end">
+        <InputGroupButton size="icon-xs" aria-label={`Increase ${label}`} onClick={() => commit(value + 1)}>
+          <RiAddLine />
+        </InputGroupButton>
+      </InputGroupAddon>
+    </InputGroup>
+  );
+}
+
+function GlobalConcurrencyControl({ seed }: { seed: number | null }) {
+  const override = useEnginePreferences((state) => state.globalLimit);
+  const setValue = useEnginePreferences((state) => state.setGlobalLimit);
+  const value = seededValue(override, seed, settingsOfflineFallbacks.globalConcurrency);
+  return <NumberStepper value={value} min={minConcurrency} label="Global concurrency" onChange={setValue} />;
+}
+
+function PerWorkspaceConcurrencyControl() {
+  const override = useEnginePreferences((state) => state.perWorkspaceLimit);
+  const setValue = useEnginePreferences((state) => state.setPerWorkspaceLimit);
+  const value = seededValue(override, null, settingsOfflineFallbacks.perWorkspaceConcurrency);
+  return (
+    <NumberStepper value={value} min={minConcurrency} label="Per-workspace concurrency" onChange={setValue} />
+  );
+}
+
+function DailyBudgetControl() {
+  const override = useEnginePreferences((state) => state.dailyBudget);
+  const setValue = useEnginePreferences((state) => state.setDailyBudget);
+  const value = seededValue(override, null, settingsOfflineFallbacks.dailyBudgetDollars);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  return (
+    <InputGroup className="w-36">
+      <InputGroupInput
+        aria-label="Daily budget"
+        inputMode="decimal"
+        value={editing ? draft : String(value)}
+        onFocus={() => {
+          setDraft(String(value));
+          setEditing(true);
+        }}
+        onBlur={() => {
+          const next = parseBudget(draft);
+          setEditing(false);
+          if (next !== value) setValue(next);
+        }}
+        onChange={(event) => setDraft(sanitizeBudgetDraft(event.target.value))}
+        className="tabular-nums"
+      />
+      <InputGroupAddon>
+        <InputGroupText>$</InputGroupText>
+      </InputGroupAddon>
+      <InputGroupAddon align="inline-end">
+        <InputGroupText>/ day</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>
+  );
+}
+
+const THEME_TILES: readonly { value: Theme; label: string; icon: ComponentType }[] = [
+  { value: "system", label: "System", icon: RiComputerLine },
+  { value: "light", label: "Light", icon: RiSunLine },
+  { value: "dark", label: "Dark", icon: RiMoonLine },
+];
+
+// The tiles illustrate the light and dark colour schemes side by side, so they use fixed colours on
+// purpose — semantic tokens would flip with the active theme and make every tile look identical.
+function ThemePreview({ theme }: { theme: Theme }) {
+  const light = (
+    <div className="flex flex-1 flex-col gap-1 bg-white p-1.5">
+      <div className="h-1.5 w-8 rounded-full bg-neutral-200" />
+      <div className="h-1.5 w-10 rounded-full bg-neutral-200" />
+    </div>
+  );
+  const dark = (
+    <div className="flex flex-1 flex-col gap-1 bg-neutral-900 p-1.5">
+      <div className="h-1.5 w-8 rounded-full bg-neutral-600" />
+      <div className="h-1.5 w-10 rounded-full bg-neutral-700" />
+    </div>
+  );
+  return (
+    <div className="flex h-20 overflow-hidden rounded-lg border">
+      {theme === "dark" ? dark : light}
+      {theme === "system" && dark}
+    </div>
+  );
+}
+
+function ThemePicker() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <ToggleGroup
+      className="grid w-full grid-cols-3 gap-3"
+      value={[theme]}
+      onValueChange={(values) => {
+        const next = values[0] as Theme | undefined;
+        if (next) setTheme(next);
+      }}
+    >
+      {THEME_TILES.map(({ value, label, icon: Icon }) => (
+        <ToggleGroupItem
+          key={value}
+          value={value}
+          aria-label={label}
+          className="h-auto w-full flex-col items-stretch gap-2 rounded-xl border border-input bg-transparent p-2 hover:bg-transparent aria-pressed:bg-transparent data-pressed:border-primary data-pressed:bg-transparent data-pressed:ring-2 data-pressed:ring-primary"
+        >
+          <ThemePreview theme={value} />
+          <span className="flex items-center gap-1.5 px-1 pb-1 text-sm font-medium [&>svg]:size-4">
+            <Icon />
+            {label}
+          </span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
 function SettingRow({ entry, children }: { entry: SettingEntry; children: ReactNode }) {
-  const { focus, jump } = use(FocusedSettingContext);
-  const scrollRef = useFocusScroll(entry.id);
-  const flashing = focus === entry.id;
+  const { ref, flashing, flashKey } = useFocusFlash(entry.id);
   return (
     <Item
-      key={flashing ? `${entry.id}:${jump ?? 0}` : entry.id}
-      ref={scrollRef}
+      key={flashKey}
+      ref={ref}
       className={cn("scroll-mt-8 rounded-lg", flashing && "settings-focus-flash")}
     >
       <ItemContent>
@@ -83,17 +262,43 @@ function GeneralPage() {
   );
 }
 
-function ComingSoonPage() {
+function AppearancePage() {
+  const entry = settingEntry("theme");
+  const { ref, flashing, flashKey } = useFocusFlash(entry.id);
   return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <RiToolsLine />
-        </EmptyMedia>
-        <EmptyTitle>Coming soon</EmptyTitle>
-        <EmptyDescription>This section is on its way in a follow-up.</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    <section className="flex flex-col gap-3">
+      <h2 className="text-sm font-medium text-muted-foreground">{entry.title}</h2>
+      <div
+        key={flashKey}
+        ref={ref}
+        className={cn("scroll-mt-8 rounded-xl", flashing && "settings-focus-flash")}
+      >
+        <ThemePicker />
+      </div>
+    </section>
+  );
+}
+
+function EnginePage() {
+  const result = useBoard();
+  const scheduler = result._tag === "Success" ? result.board.scheduler : null;
+  return (
+    <>
+      <SubSectionCard label="Scheduler">
+        <SettingRow entry={settingEntry("global-limit")}>
+          <GlobalConcurrencyControl seed={scheduler?.globalLimit ?? null} />
+        </SettingRow>
+        <Separator />
+        <SettingRow entry={settingEntry("per-workspace-limit")}>
+          <PerWorkspaceConcurrencyControl />
+        </SettingRow>
+      </SubSectionCard>
+      <SubSectionCard label="Budget">
+        <SettingRow entry={settingEntry("daily-budget")}>
+          <DailyBudgetControl />
+        </SettingRow>
+      </SubSectionCard>
+    </>
   );
 }
 
@@ -102,8 +307,9 @@ function SectionBody({ sectionId }: { sectionId: SettingsSectionId }) {
     case "general":
       return <GeneralPage />;
     case "appearance":
+      return <AppearancePage />;
     case "engine":
-      return <ComingSoonPage />;
+      return <EnginePage />;
   }
 }
 

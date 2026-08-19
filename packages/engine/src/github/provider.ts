@@ -21,7 +21,7 @@ import {
   type ReviewDecision,
   reviewDecisionOf,
 } from "./client";
-import { hasCogworkMarker } from "./markers";
+import { agentNoteMarker, hasCogworkMarker } from "./markers";
 
 interface GitHubTarget extends GitHubRepoRef {
   readonly actorLogin: string | null;
@@ -196,12 +196,17 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     return trusted.reduce<RawPull | null>(better, null);
   };
 
+  // The pulls the daemon trusts to act on: those it authored or that a write-access account opened.
+  const trustedPulls = Effect.fn("github.trustedPulls")(function* (target: GitHubTarget) {
+    const pulls = yield* client.listPulls(target);
+    return pulls.filter((pull) => daemonPull(target, pull));
+  });
+
   const observeOwned = Effect.fn("github.observeOwned")(function* (
     target: GitHubTarget,
     owned: ReadonlyArray<OwnedItem>,
   ) {
-    const pulls = yield* client.listPulls(target);
-    const trusted = pulls.filter((pull) => daemonPull(target, pull));
+    const trusted = yield* trustedPulls(target);
     const matches = owned.flatMap((item) => {
       const pull = linkedPull(target, item, trusted);
       return pull ? [[item.id, pull] as const] : [];
@@ -214,6 +219,27 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     return new Map<WorkItemId, PrSignals>(entries);
   });
 
+  // The marker rides on every comment the provider posts, so it is structurally impossible to write
+  // an unmarked daemon comment here — the engine owns the marker, and the agent never touches it.
+  const markedBody = (body: string) => `${body}\n\n${agentNoteMarker}`;
+
+  const commentOnPull = Effect.fn("github.commentOnPull")(function* (
+    target: GitHubTarget,
+    item: OwnedItem,
+    body: string,
+  ) {
+    const trusted = yield* trustedPulls(target);
+    const pull = linkedPull(target, item, trusted);
+    if (!pull) {
+      return yield* Effect.logWarning("no linked pull request to comment on", {
+        owner: target.owner,
+        name: target.name,
+        item: item.id,
+      });
+    }
+    yield* client.createComment(target, pull.number, markedBody(body));
+  });
+
   const empty: ReadonlyMap<WorkItemId, PrSignals> = new Map();
 
   return {
@@ -222,6 +248,12 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
         const target = sourceControlTargetFor(workspace);
         if (!target || owned.length === 0) return empty;
         return yield* observeOwned(target, owned);
+      }),
+    comment: (workspace, item, body) =>
+      Effect.gen(function* () {
+        const target = sourceControlTargetFor(workspace);
+        if (!target) return;
+        yield* commentOnPull(target, item, body);
       }),
   };
 };

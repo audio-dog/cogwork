@@ -29,7 +29,7 @@ import {
   type RawPull,
   type RawReview,
 } from "./client";
-import { wireCodec } from "./markers";
+import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
 import { layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
@@ -295,6 +295,43 @@ describe("github work source adapter", () => {
             },
           ],
           reviews: [{ pull: 100, state: "CHANGES_REQUESTED" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("posts a round summary to the linked PR and appends the coordination marker itself", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const client = yield* GitHubClient;
+      yield* provider.comment(workspace, { id: id("#5"), title: "in review" }, "Fixed the flaky check.");
+      const comments = yield* client.listComments(repo, 100);
+      const [posted] = comments;
+      assert.include(posted?.body ?? "", "Fixed the flaky check.");
+      assert.include(posted?.body ?? "", agentNoteMarker);
+      // The marker is what keeps the daemon's own comment out of the human-feedback signal.
+      assert.isTrue(hasCogworkMarker(posted?.body ?? ""));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "in review", labels: ["ready-for-agent"] }],
+          pulls: [pull({ number: 100, headRef: "5-in-review" })],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("posts nothing when the item has no linked pull request", () =>
+    Effect.gen(function* () {
+      const provider = yield* SourceControlProvider;
+      const client = yield* GitHubClient;
+      yield* provider.comment(workspace, { id: id("#5"), title: "in review" }, "orphaned summary");
+      assert.isEmpty(yield* client.listComments(repo, 100));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "in review", labels: ["ready-for-agent"] }],
+          pulls: [],
         }),
       ),
     ),

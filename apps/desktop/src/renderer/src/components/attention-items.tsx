@@ -5,18 +5,18 @@ import { RiExternalLinkLine, RiGitPullRequestLine, RiQuestionAnswerLine } from "
 import type { FeedItem, MergeGateItem } from "../features/feed";
 import { needsHumanReasonLabel } from "../features/feed";
 import { relativeTime } from "../features/format";
-import { useChromeStore } from "../store/chrome";
+import { useRightPanelStore } from "../store/right-panel";
 import { PrChecksBadge } from "./badges";
 
 export function SelfHaltCard({ entry }: { entry: FeedItem }) {
   const { item } = entry;
-  const select = useChromeStore((state) => state.select);
+  const openSurface = useRightPanelStore((state) => state.openSurface);
   if (item._tag !== "NeedsHuman") return null;
   return (
     <Card
       className="cursor-pointer transition-colors hover:bg-muted/50"
       size="sm"
-      onClick={() => select({ workspace: entry.workspace, workItem: item.id })}
+      onClick={() => openSurface({ kind: "item", workspace: entry.workspace, workItem: item.id })}
     >
       <CardHeader>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -43,12 +43,12 @@ export function SelfHaltCard({ entry }: { entry: FeedItem }) {
 
 export function MergeGateCard({ entry }: { entry: MergeGateItem }) {
   const { item, pr } = entry;
-  const select = useChromeStore((state) => state.select);
+  const openSurface = useRightPanelStore((state) => state.openSurface);
   return (
     <Card
       className="cursor-pointer transition-colors hover:bg-muted/50"
       size="sm"
-      onClick={() => select({ workspace: entry.workspace, workItem: item.id })}
+      onClick={() => openSurface({ kind: "item", workspace: entry.workspace, workItem: item.id })}
     >
       <CardHeader>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

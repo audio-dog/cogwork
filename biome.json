@@ -32,6 +32,7 @@
     }
   },
   "plugins": [
+    "./configs/lint/no-use-effect.grit",
     "./configs/lint/no-flatmap-ladder.grit",
     "./configs/lint/no-effect-ladder.grit",
     "./configs/lint/no-nested-effect-call.grit",

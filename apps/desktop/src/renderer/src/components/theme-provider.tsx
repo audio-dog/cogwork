@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react";
 
-type Theme = "dark" | "light" | "system";
+export type Theme = "dark" | "light" | "system";
 type ResolvedTheme = "dark" | "light";
 
 type ThemeProviderProps = {
@@ -113,6 +113,7 @@ export function ThemeProvider({
     [disableTransitionOnChange],
   );
 
+  // biome-ignore lint/plugin/no-use-effect: syncs theme to the DOM and OS color-scheme changes
   React.useEffect(() => {
     applyTheme(theme);
 
@@ -145,6 +146,7 @@ export function ThemeProvider({
     setTheme(nextTheme);
   });
 
+  // biome-ignore lint/plugin/no-use-effect: registers a global keyboard shortcut listener
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) {
@@ -173,6 +175,7 @@ export function ThemeProvider({
     };
   }, []);
 
+  // biome-ignore lint/plugin/no-use-effect: syncs theme across tabs via the storage event
   React.useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
       if (event.storageArea !== localStorage) {

@@ -3,6 +3,8 @@ import {
   type Board,
   type DaemonEvent,
   DaemonRpcs,
+  defaultSchedulerDailyBudget,
+  defaultSchedulerGlobalLimit,
   initialBoard,
   type RunActivity,
   type RunEvent,
@@ -52,12 +54,12 @@ const credentialsFlag = Flag.string("credentials").pipe(
 
 const maxConcurrencyFlag = Flag.integer("max-concurrency").pipe(
   Flag.withDescription("Maximum concurrent agent sessions across all workspaces"),
-  Flag.withDefault(4),
+  Flag.withDefault(defaultSchedulerGlobalLimit),
 );
 
 const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
   Flag.withDescription("Maximum agent sessions started per UTC day across all workspaces"),
-  Flag.withDefault(50),
+  Flag.withDefault(defaultSchedulerDailyBudget),
 );
 
 const pollIntervalFlag = Flag.integer("poll-interval").pipe(

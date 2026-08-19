@@ -9,15 +9,9 @@ export interface ItemSelection {
 interface ChromeState {
   readonly workspaceFilter: WorkspaceId | null;
   readonly setWorkspaceFilter: (workspace: WorkspaceId | null) => void;
-  readonly selection: ItemSelection | null;
-  readonly select: (selection: ItemSelection) => void;
-  readonly clearSelection: () => void;
 }
 
 export const useChromeStore = create<ChromeState>((set) => ({
   workspaceFilter: null,
   setWorkspaceFilter: (workspace) => set({ workspaceFilter: workspace }),
-  selection: null,
-  select: (selection) => set({ selection }),
-  clearSelection: () => set({ selection: null }),
 }));
