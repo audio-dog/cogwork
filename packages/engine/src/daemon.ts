@@ -272,11 +272,16 @@ export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const recovery = yield* Recovery;
   const ledger = yield* RunLedger;
+  const scheduler = yield* Scheduler;
   // Captured before recover() so the runs it re-admits (started after) survive the sweep below.
   const orphanCutoffMillis = yield* Clock.currentTimeMillis;
   yield* worker.submit();
   yield* recovery.recover();
-  yield* ledger.interruptRunningBefore(orphanCutoffMillis, yield* Clock.currentTimeMillis);
+  const held = (yield* scheduler.stats).pendingResumes.map((candidate) => ({
+    workspace: candidate.workspace.config.name,
+    workItem: candidate.work.id,
+  }));
+  yield* ledger.interruptRunningBefore(orphanCutoffMillis, yield* Clock.currentTimeMillis, held);
 });
 
 const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
