@@ -11,7 +11,13 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
-import { agentFailureReason, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
+import {
+  agentFailureReason,
+  followUpNoteBody,
+  handoffNote,
+  prepareFailureReason,
+  triageProposalBody,
+} from "./comments";
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
@@ -36,6 +42,7 @@ import { RunControl } from "./run-control";
 import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
+import { SourceControlProvider } from "./source-control";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
@@ -138,6 +145,7 @@ export const make = Effect.gen(function* () {
   const assembler = yield* McpSkillAssembler;
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
+  const sourceControl = yield* SourceControlProvider;
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
@@ -389,6 +397,27 @@ export const make = Effect.gen(function* () {
     baseDivergence: context.baseDivergence,
   });
 
+  // The engine — not the agent — posts the round summary to the PR, and the provider appends the
+  // coordination marker. A failed post must not strand the follow-up marker or spin a retry, so it
+  // degrades to a warning rather than failing the round.
+  const postFollowUpSummary = Effect.fn("Executor.postFollowUpSummary")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    acc: RunAccumulator,
+  ) {
+    yield* sourceControl
+      .comment(workspace, { id: item.id, title: item.title }, followUpNoteBody(acc.text))
+      .pipe(
+        Effect.catchTag("IssueTrackerError", (error) =>
+          Effect.logWarning("failed to post follow-up summary to the pull request", {
+            workspace: workspace.config.name,
+            item: item.id,
+            message: error.message,
+          }),
+        ),
+      );
+  });
+
   const applyFollowUpSuccess = Effect.fn("Executor.applyFollowUpSuccess")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -397,6 +426,7 @@ export const make = Effect.gen(function* () {
     context: FollowUpContext,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* postFollowUpSummary(workspace, item, acc);
     yield* issueTracker.followedUp(workspace, item.id, {
       marker: followUpMarker(context),
       atMillis: endedAtMillis,
