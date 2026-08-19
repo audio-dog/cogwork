@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBudget, parseCount, seededValue } from "./settings-values";
+import { parseBudget, parseCount, sanitizeBudgetDraft, seededValue } from "./settings-values";
 
 describe("parseCount", () => {
   it("strips non-numeric characters", () => {
@@ -13,6 +13,16 @@ describe("parseCount", () => {
   it("falls back to the minimum for empty or non-numeric input", () => {
     expect(parseCount("", 1)).toBe(1);
     expect(parseCount("abc", 1)).toBe(1);
+  });
+});
+
+describe("sanitizeBudgetDraft", () => {
+  it("keeps a trailing decimal while the user is typing cents", () => {
+    expect(sanitizeBudgetDraft("25.")).toBe("25.");
+  });
+
+  it("strips currency formatting and caps cents at two digits", () => {
+    expect(sanitizeBudgetDraft("$25.999")).toBe("25.99");
   });
 });
 

@@ -12,14 +12,14 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiAddLine, RiComputerLine, RiMoonLine, RiSubtractLine, RiSunLine } from "@remixicon/react";
-import { type ComponentType, createContext, type ReactNode, use, useRef } from "react";
+import { type ComponentType, createContext, type ReactNode, use, useRef, useState } from "react";
 import {
   findSection,
   type SettingEntry,
   type SettingsSectionId,
   settingsIndex,
 } from "../features/settings-catalog";
-import { parseBudget, parseCount, seededValue } from "../features/settings-values";
+import { parseBudget, parseCount, sanitizeBudgetDraft, seededValue } from "../features/settings-values";
 import { useBoard } from "../features/use-board";
 import { useEnginePreferences } from "../store/engine-preferences";
 import { useDesktopPreferences } from "../store/preferences";
@@ -127,13 +127,23 @@ function DailyBudgetControl() {
   const override = useEnginePreferences((state) => state.dailyBudget);
   const setValue = useEnginePreferences((state) => state.setDailyBudget);
   const value = seededValue(override, null, DEFAULT_DAILY_BUDGET);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   return (
     <InputGroup className="w-36">
       <InputGroupInput
         aria-label="Daily budget"
         inputMode="decimal"
-        value={String(value)}
-        onChange={(event) => setValue(parseBudget(event.target.value))}
+        value={editing ? draft : String(value)}
+        onFocus={() => {
+          setDraft(String(value));
+          setEditing(true);
+        }}
+        onBlur={() => {
+          setValue(parseBudget(draft));
+          setEditing(false);
+        }}
+        onChange={(event) => setDraft(sanitizeBudgetDraft(event.target.value))}
         className="tabular-nums"
       />
       <InputGroupAddon>
