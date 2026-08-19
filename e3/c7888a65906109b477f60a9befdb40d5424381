@@ -1,0 +1,85 @@
+apps/cli/config/cogwork.workspace.ts
+  s_559faf4ec417f6::t_7a612a4f324c38 30-36
+apps/desktop/src/renderer/src/components/funnel-filter.test.ts
+  s_559faf4ec417f6::t_a8b9df2598531f 1-36
+apps/desktop/src/renderer/src/components/funnel-filter.tsx
+  s_559faf4ec417f6::t_7d10edb9ba3864 1-145
+packages/contracts/CONTEXT.md
+  s_559faf4ec417f6::t_689df153868e06 49-52
+packages/contracts/src/triage.test.ts
+  s_559faf4ec417f6::t_8923fe15a08678 1-32
+packages/contracts/src/triage.ts
+  s_559faf4ec417f6::t_25fe0be8447607 19-38
+packages/contracts/src/workspace.ts
+  s_559faf4ec417f6::t_d549d54d455bea 28-33,46
+packages/engine/docs/adr/0009-priority-orders-work-within-a-stage.md
+  s_559faf4ec417f6::t_31687694d49035 1-30
+packages/engine/skills/implement-agent/SKILL.md
+  s_559faf4ec417f6::t_d5c384097c12cf 68
+packages/engine/src/classify.test.ts
+  s_559faf4ec417f6::t_04b710d99f6b23 23,410-453
+packages/engine/src/classify.ts
+  s_559faf4ec417f6::t_43d26f97a57314 10,14,24,134,145
+packages/engine/src/commands.test.ts
+  s_559faf4ec417f6::t_2afe0f31dab293 156
+packages/engine/src/coordination-tracker.test.ts
+  s_559faf4ec417f6::t_27aa595c7f33d8 126
+packages/engine/src/coordination-tracker.ts
+  s_559faf4ec417f6::t_7b3a9c193e0345 1-8,44,82
+packages/engine/src/event-publisher.test.ts
+  s_559faf4ec417f6::t_94bbfdd84fab21 125
+packages/engine/src/executor.test.ts
+  s_559faf4ec417f6::t_3ca4845b68a3a4 75-81,161,222
+packages/engine/src/github/client.ts
+  s_559faf4ec417f6::t_d6d161a520d6e6 1,18-24,147-166,357-406,441
+packages/engine/src/github/github.test.ts
+  s_559faf4ec417f6::t_cba7c654e09f12 1-7,18,80-81,131-133,181-184,225-234,885-943
+packages/engine/src/github/graphql.test.ts
+  s_559faf4ec417f6::t_579a2241bae99d 1-16
+packages/engine/src/github/host.ts
+  s_559faf4ec417f6::t_53ad68709dbee1 1-7,20,49,82,97,102-118,127,130
+packages/engine/src/github/priority.test.ts
+  s_559faf4ec417f6::t_22d122a5fabc35 1-138
+packages/engine/src/github/priority.ts
+  s_559faf4ec417f6::t_fe29423501d821 1-107
+packages/engine/src/issue-tracker.ts
+  s_559faf4ec417f6::t_ed492d18101cfe 6,33
+packages/engine/src/linear/host.ts
+  s_559faf4ec417f6::t_d5ca28c3fd28e5 99
+packages/engine/src/linear/linear.test.ts
+  s_559faf4ec417f6::t_6056838c573c73 1,20,43,79,492-522
+packages/engine/src/observe.ts
+  s_559faf4ec417f6::t_25979e1fd222f6 21
+packages/engine/src/read-model.test.ts
+  s_559faf4ec417f6::t_542ee2fe2924db 38,56
+packages/engine/src/recovery.test.ts
+  s_559faf4ec417f6::t_081c4b8e89a7db 81,97,113,129
+packages/engine/src/scheduler.test.ts
+  s_559faf4ec417f6::t_36d2bbba9a241a 4,47-52,56,118-152
+packages/engine/src/scheduler.ts
+  s_559faf4ec417f6::t_3b2cdac4b9f073 2,69,140
+packages/ui/src/components/checkbox.tsx
+  s_559faf4ec417f6::t_7857c7c5fb21fe 1-25
+packages/ui/src/components/popover.tsx
+  s_559faf4ec417f6::t_840f644c799136 1-67
+packages/engine/src/engine.test.ts
+  s_559faf4ec417f6::t_256abbec0bd350 165,207,517,554,585
+packages/engine/src/linear/client.ts
+  s_559faf4ec417f6::t_dd3887a3b0fa2f 1,43,91,192,304-308,319
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "e3c7888a65906109b477f60a9befdb40d5424381",
+  "prompts": {},
+  "sessions": {
+    "s_559faf4ec417f6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1a648a78-726e-482e-98fd-1727b202a75f",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
