@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/components/run-drill-in.tsx
+  s_ab2f2430a33b1b::t_7a98a89e0304e2 15
+  s_ab2f2430a33b1b::t_83665d4e04fe83 137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "cc8da3a3931b6015d2b5119ca3d5d8ff9d96422e",
+  "prompts": {},
+  "sessions": {
+    "s_ab2f2430a33b1b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b2f4007d-be10-43a4-8e6d-c15c34aaedc6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
