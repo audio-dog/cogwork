@@ -1,0 +1,32 @@
+apps/desktop/src/main/engine-supervisor.ts
+  s_a2e09eab072b34::t_1dea2664d5dfac 22
+  s_a2e09eab072b34::t_168f54c464278d 52-55
+  s_a2e09eab072b34::t_beb3e9239a789e 38
+  s_a2e09eab072b34::t_f695c759701df8 1
+  s_a2e09eab072b34::t_e69187452eebaf 91
+  s_a2e09eab072b34::t_c505f901349c03 68
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_a2e09eab072b34::t_6b1773fc17a1c1 74
+  s_a2e09eab072b34::t_90c2c5916e122e 21-25,44,144-166,171
+  s_a2e09eab072b34::t_61306a570ed51b 2
+apps/desktop/src/main/engine-command.ts
+  s_a2e09eab072b34::t_abee9ccab15d1d 16
+apps/desktop/src/main/index.ts
+  s_a2e09eab072b34::t_1bf3cc93df4df9 30,36,39-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ce627a5aa122556c95c51bd7d19630bb3c30f6dd",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
