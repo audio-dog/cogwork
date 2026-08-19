@@ -19,6 +19,7 @@ import {
   type SettingsSectionId,
   settingsIndex,
 } from "../features/settings-catalog";
+import { minConcurrency, settingsOfflineFallbacks } from "../features/settings-defaults";
 import {
   parseBudget,
   parseCount,
@@ -30,11 +31,6 @@ import { useBoard } from "../features/use-board";
 import { useEnginePreferences } from "../store/engine-preferences";
 import { useDesktopPreferences } from "../store/preferences";
 import { type Theme, useTheme } from "./theme-provider";
-
-const DEFAULT_GLOBAL_LIMIT = 3;
-const DEFAULT_PER_WORKSPACE_LIMIT = 1;
-const DEFAULT_DAILY_BUDGET = 25;
-const MIN_CONCURRENCY = 1;
 
 const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});
 
@@ -122,28 +118,23 @@ function NumberStepper({
 function GlobalConcurrencyControl({ seed }: { seed: number | null }) {
   const override = useEnginePreferences((state) => state.globalLimit);
   const setValue = useEnginePreferences((state) => state.setGlobalLimit);
-  const value = seededValue(override, seed, DEFAULT_GLOBAL_LIMIT);
-  return <NumberStepper value={value} min={MIN_CONCURRENCY} label="Global concurrency" onChange={setValue} />;
+  const value = seededValue(override, seed, settingsOfflineFallbacks.globalConcurrency);
+  return <NumberStepper value={value} min={minConcurrency} label="Global concurrency" onChange={setValue} />;
 }
 
 function PerWorkspaceConcurrencyControl() {
   const override = useEnginePreferences((state) => state.perWorkspaceLimit);
   const setValue = useEnginePreferences((state) => state.setPerWorkspaceLimit);
-  const value = seededValue(override, null, DEFAULT_PER_WORKSPACE_LIMIT);
+  const value = seededValue(override, null, settingsOfflineFallbacks.perWorkspaceConcurrency);
   return (
-    <NumberStepper
-      value={value}
-      min={MIN_CONCURRENCY}
-      label="Per-workspace concurrency"
-      onChange={setValue}
-    />
+    <NumberStepper value={value} min={minConcurrency} label="Per-workspace concurrency" onChange={setValue} />
   );
 }
 
 function DailyBudgetControl() {
   const override = useEnginePreferences((state) => state.dailyBudget);
   const setValue = useEnginePreferences((state) => state.setDailyBudget);
-  const value = seededValue(override, null, DEFAULT_DAILY_BUDGET);
+  const value = seededValue(override, null, settingsOfflineFallbacks.dailyBudgetDollars);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   return (
