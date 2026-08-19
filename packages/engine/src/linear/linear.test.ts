@@ -241,7 +241,7 @@ const workspace: RegisteredWorkspace = {
     checkoutPath: "/repos/lin",
     issueTracker: {
       type: "linear",
-      team: "AUD",
+      teams: ["AUD"],
       actorUserId: bot.id,
     },
     harness: { preferred: "cursor" },

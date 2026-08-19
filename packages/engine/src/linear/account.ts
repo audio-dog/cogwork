@@ -1,9 +1,8 @@
 import { linearTeams, type WorkspaceConfig } from "@cogwork/contracts";
 import type { CredentialAccount } from "../credential-store";
 
-// The credential-store key for a workspace's Linear token. One team keeps using that team key, so
-// existing single-team workspaces don't have to log in again. Several teams share one token, so the
-// key falls back to the workspace name — a stable handle that doesn't favor any one team.
+// Several teams share one token, so a multi-team key can't be any single team key; it falls back to
+// the workspace name.
 const linearAccountKey = (config: WorkspaceConfig): string | null => {
   const [first, ...rest] = linearTeams(config.issueTracker);
   if (first === undefined) return null;
