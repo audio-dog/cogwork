@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/components/run-drill-in.tsx
+  s_afaa4ea4aebf3a::t_704030eb187a36 96
+packages/ui/src/components/sidebar.tsx
+  s_afaa4ea4aebf3a::t_2fa741998c6d94 168
+  s_afaa4ea4aebf3a::t_798c07e612f3ae 154-157
+  s_afaa4ea4aebf3a::t_90e5eb96318173 193
+  s_afaa4ea4aebf3a::t_cec2a69ca71f2c 238
+  s_afaa4ea4aebf3a::t_7a63c7eb2c68b6 13
+packages/ui/src/components/tooltip.tsx
+  s_afaa4ea4aebf3a::t_2fa399a46eff93 51-64
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_afaa4ea4aebf3a::t_c59a480e2bfd74 6
+  s_afaa4ea4aebf3a::t_90ea002a6ab8cd 130-137
+  s_afaa4ea4aebf3a::t_0dd149649b6e75 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c05b99a88804db4e7c377c35515430e94aa37bf0",
+  "prompts": {},
+  "sessions": {
+    "s_afaa4ea4aebf3a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "759f7888-d6e3-4d27-a6b3-6d739de3484d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
