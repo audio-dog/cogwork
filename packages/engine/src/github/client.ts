@@ -146,7 +146,21 @@ const GraphQlResponse = Schema.Struct({
   data: Schema.optional(Schema.Unknown),
   errors: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ message: Schema.String })))),
 });
+export type GraphQlPayload = typeof GraphQlResponse.Type;
 const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
+
+export const graphQlData = (
+  decoded: GraphQlPayload,
+): { readonly ok: true; readonly data: unknown } | { readonly ok: false; readonly message: string } => {
+  if (decoded.data != null) return { ok: true, data: decoded.data };
+  return {
+    ok: false,
+    message:
+      decoded.errors && decoded.errors.length > 0
+        ? `GitHub GraphQL error: ${decoded.errors.map((error) => error.message).join("; ")}`
+        : "GitHub GraphQL returned no data",
+  };
+};
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
@@ -337,7 +351,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     yield* send(repo, withBody);
   });
 
-  // Projects v2 priority isn't on the REST issue API. GraphQL returns errors in a 200 body, so treat them like HTTP failures.
+  // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
     query: string,
@@ -355,12 +369,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     });
     const json = yield* Effect.mapError(response.json, toUnavailable);
     const decoded = yield* Effect.mapError(decodeGraphQl(json), toUnavailable);
-    if (decoded.errors && decoded.errors.length > 0) {
-      return yield* unavailable(
-        `GitHub GraphQL error: ${decoded.errors.map((error) => error.message).join("; ")}`,
-      );
-    }
-    return decoded.data;
+    const result = graphQlData(decoded);
+    if (!result.ok) return yield* unavailable(result.message);
+    return result.data;
   });
 
   // One paged query so cost tracks board size, not backlog size.
