@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/funnel-filter.tsx
+  s_9fdda4d1986fe8::t_120476e6cf4b6f 106-107,109,111-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "393292c94253169af8970ba43f6f0197061c35c5",
+  "prompts": {},
+  "sessions": {
+    "s_9fdda4d1986fe8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "522a425f-ab26-45a7-a085-5a31687cb6d3",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
