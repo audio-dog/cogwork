@@ -11,18 +11,9 @@ export interface ItemStateDescriptor {
   readonly running: boolean;
 }
 
-type StageTag = Extract<ClassifiedItem["_tag"], "Eligible" | "Claimed">;
-
-const stageOfByTag: {
-  [T in StageTag]: (item: Extract<ClassifiedItem, { _tag: T }>) => LifecycleStage | null;
-} = {
-  Eligible: (item) => item.stage,
-  Claimed: (item) => item.claim.stage ?? null,
-};
-
 const stageOf = (item: ClassifiedItem): LifecycleStage | null => {
-  if (item._tag === "Eligible") return stageOfByTag.Eligible(item);
-  if (item._tag === "Claimed") return stageOfByTag.Claimed(item);
+  if (item._tag === "Eligible") return item.stage;
+  if (item._tag === "Claimed") return item.claim.stage ?? null;
   return null;
 };
 
