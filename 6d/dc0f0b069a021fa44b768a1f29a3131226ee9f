@@ -1,0 +1,50 @@
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_5a4da95521f239::t_4305a775e3fafa 3,15,65-66,75-80,84-88,91-104,107,111-126,130-131,137-154,159-162,169,180-182,200
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_5a4da95521f239::t_b63120ce855f88 6,12
+  s_5a4da95521f239::t_6138cf6b224a8a 96-121,127-135,140,145,155
+apps/desktop/src/renderer/src/components/resizable-width.ts
+  s_5a4da95521f239::t_5823c6984cbaa3 1-35
+  s_5a4da95521f239::t_b7f771f882869c 36-37
+apps/desktop/src/renderer/src/components/attention-items.tsx
+  s_5a4da95521f239::t_74cf5cd0dc1975 46,51
+  s_5a4da95521f239::t_f35a0ebed16b71 8,13,19
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_5a4da95521f239::t_d9a042373a89d8 1-2,4-13,16-21,26,28-29,33-59,61-65,68-78,80-85,88,90-94,97-98,100-101,116
+apps/desktop/CONTEXT.md
+  s_5a4da95521f239::t_6611468f559db4 80-81
+apps/desktop/src/renderer/src/components/right-panel-resize.tsx
+  s_5a4da95521f239::t_d534e8a0f85131 1,3-8,10-11,13-53,59-89
+  s_5a4da95521f239::t_8f932c8ee523f1 54-58
+  s_5a4da95521f239::t_0a150daf2688df 2,9,12
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_5a4da95521f239::t_b9ed302c3ad6d8 3,12,15
+  s_5a4da95521f239::t_4e8061c970b21e 71-75
+apps/desktop/src/renderer/src/components/item-detail.tsx
+  s_5a4da95521f239::t_558f5dfb7fb482 87
+  s_5a4da95521f239::t_c99d35be27b83f 6
+  s_5a4da95521f239::t_595521bf16231c 32
+  s_5a4da95521f239::t_1b6c0c3a0fb91e 21-22
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_5a4da95521f239::t_f293b1f5f53271 62
+  s_5a4da95521f239::t_7e02ec723bf3b3 1,4-9,11-21,26-27,31-33,40-41,45-59,61,63-65,68
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_5a4da95521f239::t_c47b579c305746 17
+  s_5a4da95521f239::t_5fae9e6cb79f28 291-292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "6ddc0f0b069a021fa44b768a1f29a3131226ee9f",
+  "prompts": {},
+  "sessions": {
+    "s_5a4da95521f239": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af8bab68-ccda-45dd-a542-33ab40167963",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
