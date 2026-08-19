@@ -66,8 +66,6 @@ export interface Candidate {
   readonly keys: ReadonlyArray<string>;
 }
 
-// Order the whole flattened candidate list by the one shared rule: stage first, then priority within
-// a stage. A stable sort keeps items of equal stage and priority in their prior order.
 const byStageThenPriority = (a: Candidate, b: Candidate) => byStageThenPriorityOf(a.work, b.work);
 
 const fits = (candidate: Candidate, state: SchedulerState, config: SchedulerConfig) =>

@@ -86,7 +86,6 @@ const IssueNode = Schema.Struct({
   id: Schema.String,
   identifier: Schema.String,
   title: Schema.String,
-  // Linear's native priority: 0 = No priority, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low.
   priority: Schema.optional(Schema.Finite),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
@@ -299,8 +298,7 @@ const openBlockersOf = (issue: typeof IssueNode.Type) => {
   return relations.length >= relationPageSize ? 1 : 0;
 };
 
-// Linear's native priority is a number; "No priority" (0) and anything outside 1-4 resolves to the
-// default. The canonical names line up one-to-one with 1-4.
+// Linear uses 0 for "No priority"; anything outside 1-4 resolves to the default.
 const linearPriorityNames: Record<number, string> = { 1: "urgent", 2: "high", 3: "medium", 4: "low" };
 export const linearPriority = (value: number | undefined): Priority =>
   resolvePriority(value === undefined ? null : linearPriorityNames[value]);

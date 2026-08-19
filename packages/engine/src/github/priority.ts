@@ -3,10 +3,6 @@ import * as Schema from "effect/Schema";
 
 export const defaultPriorityField = "Priority";
 
-// One page of a Projects v2 board read over GraphQL. Each item links to its content (we only care
-// about issues in this workspace's repo) and carries the single-select value of the named priority
-// field. Both are nullable: a card can point at a PR or draft, and the field can be unset — either
-// way the item has no readable priority and resolves to the default.
 const ItemNode = Schema.Struct({
   content: Schema.NullOr(
     Schema.Struct({
@@ -40,7 +36,7 @@ const ProjectPrioritiesPayload = Schema.Struct({
               hasNextPage: Schema.Boolean,
               endCursor: Schema.NullOr(Schema.String),
             }),
-            nodes: Schema.Array(ItemNode),
+            nodes: Schema.Array(Schema.NullOr(ItemNode)),
           }),
         }),
       ),
@@ -88,14 +84,12 @@ export interface PriorityPage {
 const matchesRepo = (repo: PriorityRepo, owner: string | undefined, name: string | undefined): boolean =>
   owner?.toLowerCase() === repo.owner.toLowerCase() && name?.toLowerCase() === repo.name.toLowerCase();
 
-// Reduce one decoded page into issue-number → priority entries for this workspace's repo only.
-// Board cards can span repos and issue numbers collide across them, so we read each issue's
-// repository and skip cards from anywhere else. Cards without an issue number are skipped; an unset
-// or unknown field value resolves to the default priority.
+// Board cards can span repos and issue numbers collide across them.
 export const pageOf = (payload: ProjectPrioritiesPayload, repo: PriorityRepo): PriorityPage => {
   const items = payload.repositoryOwner?.projectV2?.items;
   if (!items) return { entries: [], nextCursor: null };
   const entries = items.nodes.flatMap((node): ReadonlyArray<readonly [number, Priority]> => {
+    if (node === null) return [];
     const content = node.content;
     const number = content?.number;
     if (number === undefined || content === null) return [];

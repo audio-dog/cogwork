@@ -331,9 +331,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     yield* send(repo, withBody);
   });
 
-  // The one GraphQL read path in an otherwise REST-only adapter, added for the Projects v2 priority
-  // field the REST API cannot reach. A `200` carrying an `errors` array (e.g. a missing scope) is a
-  // failure just like a `4xx`.
+  // Projects v2 priority isn't on the REST issue API. GraphQL returns errors in a 200 body, so treat them like HTTP failures.
   const graphql = Effect.fn("github.graphql")(function* (
     repo: GitHubRepoRef,
     query: string,
@@ -359,8 +357,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return decoded.data;
   });
 
-  // Page through a Projects v2 board and collect issue-number → priority. One paged GraphQL query,
-  // not one per issue, so the cost tracks board size rather than backlog size.
+  // One paged query so cost tracks board size, not backlog size.
   const collectPriorities = Effect.fn("github.projectPriorities")(function* (
     repo: GitHubRepoRef,
     source: GitHubPrioritySource,

@@ -7,6 +7,7 @@ const payload = (
   nodes: ReadonlyArray<{
     readonly number?: number;
     readonly isIssue?: boolean;
+    readonly isNull?: boolean;
     readonly name?: string;
     readonly hasField?: boolean;
     readonly owner?: string;
@@ -21,19 +22,23 @@ const payload = (
     projectV2: {
       items: {
         pageInfo: page,
-        nodes: nodes.map((node) => ({
-          content:
-            node.isIssue === false
-              ? null
-              : {
-                  number: node.number,
-                  repository: {
-                    name: node.repository ?? repo.name,
-                    owner: { login: node.owner ?? repo.owner },
-                  },
-                },
-          fieldValueByName: node.hasField === false ? null : { name: node.name },
-        })),
+        nodes: nodes.map((node) =>
+          node.isNull
+            ? null
+            : {
+                content:
+                  node.isIssue === false
+                    ? null
+                    : {
+                        number: node.number,
+                        repository: {
+                          name: node.repository ?? repo.name,
+                          owner: { login: node.owner ?? repo.owner },
+                        },
+                      },
+                fieldValueByName: node.hasField === false ? null : { name: node.name },
+              },
+        ),
       },
     },
   },
@@ -106,6 +111,11 @@ describe("pageOf", () => {
   it("matches repository owner and name case-insensitively", () => {
     const page = pageOf(payload([{ number: 7, name: "Urgent", owner: "Owner", repository: "Repo" }]), repo);
     assert.deepStrictEqual([...page.entries], [[7, "urgent"]]);
+  });
+
+  it("skips null nodes from inaccessible board cards", () => {
+    const page = pageOf(payload([{ isNull: true }, { number: 5, name: "High" }]), repo);
+    assert.deepStrictEqual([...page.entries], [[5, "high"]]);
   });
 
   it("reports the next cursor only while more pages remain", () => {

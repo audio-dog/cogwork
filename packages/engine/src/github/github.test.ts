@@ -220,7 +220,6 @@ const trustsCursorBot: RegisteredWorkspace = {
   }),
 };
 
-// A workspace that reads ticket priority from a Projects v2 board.
 const prioritizedWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
   config: Schema.decodeSync(WorkspaceConfig)({

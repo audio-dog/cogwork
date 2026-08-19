@@ -29,8 +29,6 @@ interface ObservedItemBase {
   readonly attempts: ReadonlyArray<AttemptRecord>;
   readonly openBlockers: number;
   readonly proposal: string | null;
-  // The item's resolved priority, always present: each adapter maps its native source onto the
-  // canonical scale and falls back to the default when it can't read one.
   readonly priority: Priority;
 }
 

@@ -98,10 +98,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
       } satisfies ListedItem<number>;
     });
 
-  // Priority only orders work; it never gates eligibility. So a workspace with no priority board
-  // reads nothing (every item defaults), and a configured board that fails to read degrades to the
-  // same default. On failure we log a single warning for the whole board (not one per item) and let
-  // the poll continue; the warning recurs each poll the board stays unreadable.
+  // Priority never gates eligibility — a failed board read degrades to the default and logs once per poll.
   const priorityLookup = Effect.fn("github.priorityLookup")(function* (target: GitHubTarget) {
     const fallback = () => defaultPriority;
     const source = target.priority;
