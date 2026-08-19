@@ -14,6 +14,7 @@ import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
 import { useChromeStore } from "../store/chrome";
+import { TokenCount } from "./token-count";
 
 interface FeedState {
   running: ReadonlyArray<FeedRun>;
@@ -209,6 +210,7 @@ function QueuedLedgerRow({ entry }: { entry: QueuedItem }) {
         <Badge variant="outline">{entry.workspace}</Badge>
       </TableCell>
       <TableCell className="text-end text-xs text-muted-foreground tabular-nums">—</TableCell>
+      <TableCell className="text-end text-xs text-muted-foreground tabular-nums">—</TableCell>
     </TableRow>
   );
 }
@@ -230,6 +232,9 @@ function DoneLedgerRow({ entry }: { entry: FeedRun }) {
       <TableCell className="truncate text-foreground">{title ?? run.workItem}</TableCell>
       <TableCell>
         <Badge variant="outline">{run.workspace}</Badge>
+      </TableCell>
+      <TableCell className="text-end text-xs text-muted-foreground tabular-nums">
+        <TokenCount usage={run.usage} variant="compact" fallback="—" />
       </TableCell>
       <TableCell className="text-end text-xs text-muted-foreground tabular-nums">
         {run.endedAtMillis !== null ? relativeTime(run.endedAtMillis) : "—"}
@@ -261,6 +266,7 @@ function LedgerSection() {
                 <TableHead className="w-20 text-[10px] tracking-wider uppercase">Item</TableHead>
                 <TableHead className="text-[10px] tracking-wider uppercase">Title</TableHead>
                 <TableHead className="w-36 text-[10px] tracking-wider uppercase">Workspace</TableHead>
+                <TableHead className="w-20 text-end text-[10px] tracking-wider uppercase">Tokens</TableHead>
                 <TableHead className="w-24 text-end text-[10px] tracking-wider uppercase">When</TableHead>
               </TableRow>
             </TableHeader>
