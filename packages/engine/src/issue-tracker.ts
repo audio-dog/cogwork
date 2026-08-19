@@ -20,6 +20,7 @@ export type ClaimRequest = Omit<Claim, "by">;
 interface ObservedItemBase {
   readonly id: WorkItemId;
   readonly title: string;
+  readonly url: string;
   readonly roles: ReadonlyArray<TriageRole>;
   readonly assignees: ReadonlyArray<string>;
   readonly claimLabeled: boolean;

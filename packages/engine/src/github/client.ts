@@ -26,6 +26,7 @@ export type ReviewDecision = "changes-requested" | "approved" | "none";
 export interface RawIssue {
   readonly number: number;
   readonly title: string;
+  readonly url: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
@@ -76,6 +77,7 @@ const DependenciesSummarySchema = Schema.Struct({
 const IssueSchema = Schema.Struct({
   number: Schema.Finite,
   title: Schema.String,
+  html_url: Schema.optional(Schema.NullOr(Schema.String)),
   labels: Schema.Array(LabelName),
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
@@ -155,18 +157,19 @@ const millisFromIso = (value: string | null) => {
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
-const toRawIssue = (issue: typeof IssueSchema.Type): RawIssue => ({
+const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIssue => ({
   number: issue.number,
   title: issue.title,
+  url: issue.html_url || `https://github.com/${repo.owner}/${repo.name}/issues/${issue.number}`,
   labels: issue.labels.map(labelName),
   assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
 });
 
-export const parseIssues = Effect.fn("github.parseIssues")(function* (json: unknown) {
+export const parseIssues = Effect.fn("github.parseIssues")(function* (repo: GitHubRepoRef, json: unknown) {
   const issues = yield* Effect.mapError(decodeIssues(json), toUnavailable);
-  return issues.map(toRawIssue);
+  return issues.map((issue) => toRawIssue(repo, issue));
 });
 
 const defaultCooldownMillis = 60_000;
@@ -326,7 +329,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   return {
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
-      return yield* parseIssues(json);
+      return yield* parseIssues(repo, json);
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, repoPath(repo, "/pulls?state=open&per_page=100"));

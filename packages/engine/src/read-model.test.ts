@@ -71,6 +71,7 @@ const needsHumanWithPr: NeedsHumanItem = {
   title: "needs-human with pr",
   reason: "ready-for-human",
   proposal: null,
+  url: "https://github.com/owner/repo/issues/71",
   pr: prSummary,
 };
 const needsHumanNoPr: NeedsHumanItem = {
@@ -78,6 +79,7 @@ const needsHumanNoPr: NeedsHumanItem = {
   title: "needs-human",
   reason: "needs-info",
   proposal: null,
+  url: "https://github.com/owner/repo/issues/72",
 };
 
 const state: WorkspaceReconcileState = {

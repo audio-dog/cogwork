@@ -142,6 +142,7 @@ const runRecord = (over: Partial<RunRecord> = {}): RunRecord => ({
 const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   id: id("AUD-1"),
   title: "cancel me",
+  url: "https://linear.app/acme/issue/AUD-1",
   roles: ["ready-for-agent"],
   assignees: [],
   claimLabeled: true,
@@ -171,7 +172,10 @@ describe("CancelRun", () => {
       const item = yield* client.CancelRun({ runId: rid("run-1"), note: "stopping this one" });
 
       assert.strictEqual(item._tag, "NeedsHuman");
-      if (item._tag === "NeedsHuman") assert.strictEqual(item.reason, "ready-for-human");
+      if (item._tag === "NeedsHuman") {
+        assert.strictEqual(item.reason, "ready-for-human");
+        assert.strictEqual(item.url, "https://linear.app/acme/issue/AUD-1");
+      }
 
       const settled = yield* ledger.getRun(rid("run-1"));
       assert.strictEqual(settled?.status, "interrupted");

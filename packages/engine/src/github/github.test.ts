@@ -39,6 +39,7 @@ const coordinationBody = (markers: ReadonlyArray<string>) =>
 interface SeedIssue {
   readonly number: number;
   readonly title: string;
+  readonly url?: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees?: ReadonlyArray<string>;
   readonly isPullRequest?: boolean;
@@ -92,6 +93,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     seed.issues.map(
       (issue): RawIssue => ({
         ...issue,
+        url: issue.url ?? `https://github.com/owner/repo/issues/${issue.number}`,
         assignees: issue.assignees ?? [],
         isPullRequest: issue.isPullRequest ?? false,
         openBlockers: issue.openBlockers ?? 0,

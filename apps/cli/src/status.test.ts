@@ -51,8 +51,15 @@ describe("formatStatus", () => {
                 title: "waiting on details",
                 reason: "needs-info",
                 proposal: "Which auth provider should this target?",
+                url: "https://github.com/acme/repo/issues/3",
               },
-              { id: workItemId("#9"), title: "keeps failing", reason: "ready-for-human", proposal: null },
+              {
+                id: workItemId("#9"),
+                title: "keeps failing",
+                reason: "ready-for-human",
+                proposal: null,
+                url: "https://github.com/acme/repo/issues/9",
+              },
             ],
           }),
         ],
@@ -72,7 +79,15 @@ describe("formatStatus", () => {
       status({
         workspaces: [
           workspace({
-            needsHuman: [{ id: workItemId("#3"), title: "big proposal", reason: "needs-info", proposal }],
+            needsHuman: [
+              {
+                id: workItemId("#3"),
+                title: "big proposal",
+                reason: "needs-info",
+                proposal,
+                url: "https://github.com/acme/repo/issues/3",
+              },
+            ],
           }),
         ],
       }),

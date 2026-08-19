@@ -28,6 +28,7 @@ export const handoffRoleFor = (stage: LifecycleStage): TriageRole | null => {
 export interface ListedItem<CommentId> {
   readonly id: WorkItemId;
   readonly title: string;
+  readonly url: string;
   readonly roles: ReadonlyArray<TriageRole>;
   readonly assignees: ReadonlyArray<string>;
   readonly claimLabeled: boolean;
@@ -59,6 +60,7 @@ const buildItem = <CommentId>(codec: WireCodec, item: ListedItem<CommentId>): Tr
   return {
     id: item.id,
     title: item.title,
+    url: item.url,
     roles: item.roles,
     assignees: item.assignees,
     claimLabeled: item.claimLabeled,

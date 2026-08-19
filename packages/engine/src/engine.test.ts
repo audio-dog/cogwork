@@ -161,6 +161,7 @@ describe("reconcile worker", () => {
   const eligibleItem: TrackerItem = {
     id: id("AUD-1"),
     title: "first ticket",
+    url: "https://linear.app/acme/issue/AUD-1",
     roles: ["ready-for-agent"],
     assignees: [],
     claimLabeled: false,
@@ -201,6 +202,7 @@ describe("reconcile worker", () => {
   const inReviewItem: TrackerItem = {
     id: id("AUD-2"),
     title: "pr under review",
+    url: "https://linear.app/acme/issue/AUD-2",
     roles: [],
     assignees: [],
     claimLabeled: false,
@@ -509,6 +511,7 @@ describe("daemon status over rpc", () => {
   const needsInfoItem: TrackerItem = {
     id: id("AUD-7"),
     title: "waiting on details",
+    url: "https://linear.app/acme/issue/AUD-7",
     roles: ["needs-info"],
     assignees: [],
     claimLabeled: false,
@@ -535,6 +538,7 @@ describe("daemon status over rpc", () => {
             title: "waiting on details",
             reason: "needs-info",
             proposal: "Which auth provider should this target — Clerk or Auth0?",
+            url: "https://linear.app/acme/issue/AUD-7",
           },
         ]);
       }).pipe(Effect.provide(daemonLayer(observing([needsInfoItem]))), Effect.scoped),
@@ -543,6 +547,7 @@ describe("daemon status over rpc", () => {
   const blockedItem: TrackerItem = {
     id: id("AUD-8"),
     title: "waiting on a dependency",
+    url: "https://linear.app/acme/issue/AUD-8",
     roles: ["ready-for-agent"],
     assignees: [],
     claimLabeled: false,
@@ -572,6 +577,7 @@ describe("daemon status over rpc", () => {
   const inReviewOwnedItem: TrackerItem = {
     id: id("AUD-9"),
     title: "pr in review",
+    url: "https://linear.app/acme/issue/AUD-9",
     roles: ["ready-for-agent"],
     assignees: [],
     claimLabeled: false,
