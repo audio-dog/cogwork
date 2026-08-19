@@ -1,0 +1,26 @@
+packages/engine/src/executor.test.ts
+  s_e16c7cc742c1b6::t_16eb0db62e6b3d 244-250
+  s_e16c7cc742c1b6::t_c3cb31e18acbb5 251-256
+  s_e16c7cc742c1b6::t_1c698bbe19f55a 1075-1099,1121
+  s_e16c7cc742c1b6::t_aa8bc5a7bd1657 1100-1118
+  s_e16c7cc742c1b6::t_405fa4706501ef 1119-1120
+  s_e16c7cc742c1b6::t_4776def594efaf 1122
+packages/engine/src/executor.ts
+  s_e16c7cc742c1b6::t_4c6f8c4053ecbc 419
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "52f3451103d1283026c304c0783feebe5af35607",
+  "prompts": {},
+  "sessions": {
+    "s_e16c7cc742c1b6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e498215-d666-4b7b-b642-689899689195",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
