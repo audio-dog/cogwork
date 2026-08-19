@@ -43,16 +43,16 @@ export const DaemonQueries = RpcGroup.make(
   WatchEvents,
 ).middleware(PrincipalMiddleware);
 
-export class RunNotFound extends Schema.TaggedErrorClass<RunNotFound>()("RunNotFound", {
+export class RunNotFound extends Schema.TaggedError<RunNotFound>()("RunNotFound", {
   runId: RunId,
 }) {}
 
-export class RunAlreadyFinished extends Schema.TaggedErrorClass<RunAlreadyFinished>()("RunAlreadyFinished", {
+export class RunAlreadyFinished extends Schema.TaggedError<RunAlreadyFinished>()("RunAlreadyFinished", {
   runId: RunId,
   status: RunStatus,
 }) {}
 
-export class WorkItemNotFound extends Schema.TaggedErrorClass<WorkItemNotFound>()("WorkItemNotFound", {
+export class WorkItemNotFound extends Schema.TaggedError<WorkItemNotFound>()("WorkItemNotFound", {
   workspace: WorkspaceId,
   workItem: WorkItemId,
 }) {}

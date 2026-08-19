@@ -2,7 +2,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-export class GitError extends Schema.TaggedErrorClass<GitError>()("GitError", {
+export class GitError extends Schema.TaggedError<GitError>()("GitError", {
   command: Schema.String,
   message: Schema.String,
 }) {}
