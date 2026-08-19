@@ -1,0 +1,129 @@
+apps/desktop/src/main/window.ts
+  s_6077d869913ad7::t_fee87eec3112b2 10-12
+  s_6077d869913ad7::t_a9b780cb934e5e 95-100,102
+packages/engine/src/event-publisher.ts
+  s_6077d869913ad7::t_cacde249c2d796 96
+packages/engine/src/recovery.test.ts
+  s_6077d869913ad7::t_1070e1974196af 195,197
+packages/engine/src/daemon-event-bus.test.ts
+  s_6077d869913ad7::t_267d006276d884 21
+packages/engine/src/read-model.ts
+  s_6077d869913ad7::t_fa0ca72f30467c 56
+packages/engine/src/daemon-composition.test.ts
+  s_6077d869913ad7::t_d50421b7d84569 77
+packages/engine/src/scheduler.ts
+  s_6077d869913ad7::t_d6acff1d1ad32e 214
+  s_6077d869913ad7::t_eaf5f2b1518f59 1
+  s_6077d869913ad7::t_ca36ecaf6c6e03 21,25-30
+  s_6077d869913ad7::t_47c309010611a8 258,269-281
+  s_6077d869913ad7::t_9d4bfe539c2685 193-195
+  s_6077d869913ad7::t_149741d27a1fbf 170
+  s_6077d869913ad7::t_13c66b9bd7b5c8 31
+apps/desktop/src/main/window-preferences.ts
+  s_6077d869913ad7::t_8eac39823fe238 1-15,18-21,23-30,33-37,42-52
+  s_6077d869913ad7::t_2940ca1557a0ae 16-17,31-32,38-41
+  s_6077d869913ad7::t_f9b40f5c600f78 22
+apps/cli/src/commands.ts
+  s_6077d869913ad7::t_fff90873494456 257,263-273,280
+  s_6077d869913ad7::t_0f4786f62d93ce 61-65
+  s_6077d869913ad7::t_5eb09bbd339fb6 8
+packages/engine/src/event-publisher.test.ts
+  s_6077d869913ad7::t_ab63543053822e 151
+  s_6077d869913ad7::t_73b7c18e20c499 342
+  s_6077d869913ad7::t_f3727485b3862f 107-108
+apps/cli/src/watch.test.ts
+  s_6077d869913ad7::t_6187373f97878c 212
+apps/desktop/src/shared/ipc.ts
+  s_6077d869913ad7::t_81eacf0bfe540d 7-8,16-20
+  s_6077d869913ad7::t_280582acb442b4 42-43
+  s_6077d869913ad7::t_8f0734e81c2399 21
+apps/desktop/src/main/ipc.ts
+  s_6077d869913ad7::t_365e99bb632043 39-43
+  s_6077d869913ad7::t_dc64e8cd6fe459 2-7,11,16
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_6077d869913ad7::t_72055b22ee5f16 27-28
+apps/desktop/src/renderer/src/features/settings-defaults.ts
+  s_6077d869913ad7::t_e9f9b39dd34f29 1-5,7-8,11-13,17
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_6077d869913ad7::t_4cd9ee9e1720d6 59-60
+apps/desktop/src/renderer/src/features/activity-source.test.ts
+  s_6077d869913ad7::t_9543236b17de95 47
+packages/engine/src/daemon.ts
+  s_6077d869913ad7::t_f35f02a943ab24 20
+  s_6077d869913ad7::t_4ef0e7f03c1fcf 119,127
+  s_6077d869913ad7::t_b5ccc1d0273fa0 150
+  s_6077d869913ad7::t_1103d317e4230c 84,96
+packages/contracts/src/board.test.ts
+  s_6077d869913ad7::t_b083a9a82bad39 153
+apps/desktop/src/renderer/src/features/settings-values.test.ts
+  s_6077d869913ad7::t_231a10e24a40c0 2
+apps/cli/src/rpc.ts
+  s_6077d869913ad7::t_17981db4e55ffe 102-106
+  s_6077d869913ad7::t_9822c735e88629 28
+packages/engine/src/engine.test.ts
+  s_6077d869913ad7::t_dd1f6a29602e6d 417-418
+packages/contracts/src/daemon.ts
+  s_6077d869913ad7::t_5d3bcd679be588 114,128-137
+  s_6077d869913ad7::t_ef9c2f2ccba289 121-127
+  s_6077d869913ad7::t_58a9e1bb69f1a5 138
+packages/contracts/src/scheduler-defaults.ts
+  s_6077d869913ad7::t_96b80490d9dbbe 3
+packages/engine/src/commands.ts
+  s_6077d869913ad7::t_66d56ebd499ea6 137-150
+  s_6077d869913ad7::t_cbd34c99127974 6
+apps/desktop/src/renderer/src/features/use-scheduler-config.ts
+  s_6077d869913ad7::t_47fd5b5ca379df 1-4,7-11
+  s_6077d869913ad7::t_64347a1a4030d7 5-6
+apps/desktop/src/main/index.ts
+  s_6077d869913ad7::t_16ad59a86e9d69 86,89
+  s_6077d869913ad7::t_2ea303ebb95885 12-13,17-29,33
+  s_6077d869913ad7::t_c38b5e4fe54c0d 65
+apps/desktop/src/renderer/src/features/use-window-preferences.ts
+  s_6077d869913ad7::t_02aad29bffdf8a 1-37
+packages/contracts/src/scheduler-config.test.ts
+  s_6077d869913ad7::t_19e0e837d9eb7e 1-30
+packages/engine/src/scheduler.test.ts
+  s_6077d869913ad7::t_51d81e888bb54b 173,202
+  s_6077d869913ad7::t_0dab4704c7721e 76
+  s_6077d869913ad7::t_5f4b3ea7608fbe 87
+  s_6077d869913ad7::t_e4313f9d0ec287 351-354
+  s_6077d869913ad7::t_ba66171ce86df4 526-527
+  s_6077d869913ad7::t_eedd0ae205ef82 419-422
+  s_6077d869913ad7::t_5a2a992c2c1b7a 113,131,148
+  s_6077d869913ad7::t_8ddd5ab5bc5070 452-455,481-484
+  s_6077d869913ad7::t_c780b26e31f5ae 388-391
+apps/desktop/src/preload/index.ts
+  s_6077d869913ad7::t_42a858bd513756 17-18
+packages/engine/src/commands.test.ts
+  s_6077d869913ad7::t_3dc4a49fc2a726 375-399
+  s_6077d869913ad7::t_2ec6f183a8e3e5 53-58,64-72
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_6077d869913ad7::t_f49cff56cd1ca9 1
+  s_6077d869913ad7::t_dcd0190058727d 72,79,88-89
+  s_6077d869913ad7::t_298f0a5db82a60 257,268,280
+  s_6077d869913ad7::t_fa039b83b659ca 22-23,25-26
+  s_6077d869913ad7::t_72ccc7f3098a9d 246-249,254-256,258-261,265-267,269-272,277-279,281-284
+  s_6077d869913ad7::t_5488d25a05964b 58-66,74,81,96,109,117-122
+packages/contracts/src/rpc.ts
+  s_6077d869913ad7::t_cd32d351bf2187 5
+  s_6077d869913ad7::t_16d34b7813920e 82-92
+apps/cli/src/status.test.ts
+  s_6077d869913ad7::t_4f9adf0dd3faae 33
+  s_6077d869913ad7::t_33e05225e63e24 158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "bf6d138a998632e7b3b307f01532f507f81b97f8",
+  "prompts": {},
+  "sessions": {
+    "s_6077d869913ad7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5de3c541-3e28-40c9-8f75-c9fe065b190e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
