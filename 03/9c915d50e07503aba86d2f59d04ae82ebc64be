@@ -1,0 +1,14 @@
+packages/engine/skills/follow-up-agent/SKILL.md
+  h_46518a29d4dd91 69,74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "039c915d50e07503aba86d2f59d04ae82ebc64be",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
