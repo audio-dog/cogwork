@@ -85,7 +85,7 @@ function NumberStepper({
   const [draft, setDraft] = useState("");
   const commit = (next: number) => {
     setEditing(false);
-    onChange(next);
+    if (next !== value) onChange(next);
   };
   return (
     <InputGroup className="w-28">
@@ -157,8 +157,9 @@ function DailyBudgetControl() {
           setEditing(true);
         }}
         onBlur={() => {
-          setValue(parseBudget(draft));
+          const next = parseBudget(draft);
           setEditing(false);
+          if (next !== value) setValue(next);
         }}
         onChange={(event) => setDraft(sanitizeBudgetDraft(event.target.value))}
         className="tabular-nums"
