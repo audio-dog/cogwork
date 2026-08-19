@@ -161,6 +161,7 @@ describe("reconcile worker", () => {
   const eligibleItem: TrackerItem = {
     id: id("AUD-1"),
     title: "first ticket",
+    priority: "medium",
     roles: ["ready-for-agent"],
     assignees: [],
     claimLabeled: false,
@@ -201,6 +202,7 @@ describe("reconcile worker", () => {
   const inReviewItem: TrackerItem = {
     id: id("AUD-2"),
     title: "pr under review",
+    priority: "medium",
     roles: [],
     assignees: [],
     claimLabeled: false,
@@ -509,6 +511,7 @@ describe("daemon status over rpc", () => {
   const needsInfoItem: TrackerItem = {
     id: id("AUD-7"),
     title: "waiting on details",
+    priority: "medium",
     roles: ["needs-info"],
     assignees: [],
     claimLabeled: false,
@@ -543,6 +546,7 @@ describe("daemon status over rpc", () => {
   const blockedItem: TrackerItem = {
     id: id("AUD-8"),
     title: "waiting on a dependency",
+    priority: "medium",
     roles: ["ready-for-agent"],
     assignees: [],
     claimLabeled: false,
@@ -572,6 +576,7 @@ describe("daemon status over rpc", () => {
   const inReviewOwnedItem: TrackerItem = {
     id: id("AUD-9"),
     title: "pr in review",
+    priority: "medium",
     roles: ["ready-for-agent"],
     assignees: [],
     claimLabeled: false,

@@ -1,4 +1,11 @@
-import type { AttemptRecord, Claim, LifecycleStage, TriageRole, WorkItemId } from "@cogwork/contracts";
+import type {
+  AttemptRecord,
+  Claim,
+  LifecycleStage,
+  Priority,
+  TriageRole,
+  WorkItemId,
+} from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
 import * as Coordination from "./coordination";
@@ -33,6 +40,7 @@ export interface ListedItem<CommentId> {
   readonly claimLabeled: boolean;
   readonly openBlockers: number;
   readonly claimIdentity: string;
+  readonly priority: Priority;
   readonly comments: ReadonlyArray<CoordinationComment<CommentId>>;
 }
 
@@ -69,6 +77,7 @@ const buildItem = <CommentId>(codec: WireCodec, item: ListedItem<CommentId>): Tr
     followUp: Coordination.parseFollowUp(codec, body),
     openBlockers: item.openBlockers,
     proposal: Coordination.selectTriageProposal(item.comments),
+    priority: item.priority,
   };
 };
 

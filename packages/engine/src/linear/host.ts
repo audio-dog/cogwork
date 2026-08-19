@@ -95,6 +95,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
         claimLabeled: hasClaimLabel(issue.labels),
         openBlockers: issue.openBlockers,
         claimIdentity: Coordination.defaultClaimant,
+        priority: issue.priority,
         comments: issue.coordinationComments.map(toCoordinationComment(target.actorUserId)),
       } satisfies ListedItem<string>;
     });

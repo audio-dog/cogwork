@@ -121,6 +121,7 @@ const eligibleItem = (title: string): TrackerItem => ({
   followUp: null,
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
 });
 
 const parkedItem = (title: string): TrackerItem => ({ ...eligibleItem(title), roles: ["needs-info"] });

@@ -3,6 +3,7 @@ import {
   type Claim,
   IssueTrackerError,
   type LifecycleStage,
+  type Priority,
   type TriageRole,
   type WorkItemId,
 } from "@cogwork/contracts";
@@ -28,6 +29,7 @@ interface ObservedItemBase {
   readonly attempts: ReadonlyArray<AttemptRecord>;
   readonly openBlockers: number;
   readonly proposal: string | null;
+  readonly priority: Priority;
 }
 
 // What an issue tracker observes on its own: backlog state plus the coordination it owns. It no

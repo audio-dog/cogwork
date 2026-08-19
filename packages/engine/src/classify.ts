@@ -7,10 +7,11 @@ import type {
   LifecycleStage,
   NeedsHumanItem,
   NeedsHumanReason,
+  Priority,
   PrSummary,
   SessionId,
 } from "@cogwork/contracts";
-import { stagePriority } from "@cogwork/contracts";
+import { byStageThenPriority } from "@cogwork/contracts";
 import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./follow-up";
 import type { ObservedItem } from "./issue-tracker";
 
@@ -20,6 +21,7 @@ export interface ResumeContext {
 }
 
 export interface EligibleWork extends ActionableItem {
+  readonly priority: Priority;
   readonly priorFailures: number;
   readonly followUp?: FollowUpContext;
   readonly resume?: ResumeContext;
@@ -121,9 +123,6 @@ export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
   return null;
 };
 
-const byStagePriority = (a: EligibleWork, b: EligibleWork) =>
-  stagePriority.indexOf(a.stage) - stagePriority.indexOf(b.stage);
-
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   const priorFailures = consecutiveFailures(item, stage);
   const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
@@ -131,6 +130,7 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
     id: item.id,
     title: item.title,
     stage,
+    priority: item.priority,
     priorFailures,
     ...(followUp ? { followUp } : {}),
     ...prFields(item),
@@ -141,7 +141,7 @@ export const classify = (items: ReadonlyArray<ObservedItem>, allowlist?: Readonl
   const outcomes = items.map((item) => ({ item, outcome: classifyOne(item, allowlist) }));
   const eligible = outcomes
     .flatMap(({ item, outcome }) => (outcome.kind === "eligible" ? [eligibleWork(item, outcome.stage)] : []))
-    .sort(byStagePriority);
+    .sort(byStageThenPriority);
   const claimed = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "claimed"
       ? [{ id: item.id, title: item.title, claim: outcome.claim, ...prFields(item) }]

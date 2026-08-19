@@ -1,3 +1,4 @@
+import { type Priority, resolvePriority } from "@cogwork/contracts";
 import { LinearError, LinearClient as LinearSdk, RatelimitedLinearError } from "@linear/sdk";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -38,6 +39,7 @@ export interface RawIssue {
   readonly stateName: string;
   readonly stateType: string;
   readonly openBlockers: number;
+  readonly priority: Priority;
 }
 
 export interface ObservedRawIssue extends RawIssue {
@@ -84,6 +86,7 @@ const IssueNode = Schema.Struct({
   id: Schema.String,
   identifier: Schema.String,
   title: Schema.String,
+  priority: Schema.optional(Schema.Finite),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
   }),
@@ -183,6 +186,7 @@ const issueFields = `
       id
       identifier
       title
+      priority
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
       state { name type }
@@ -294,6 +298,11 @@ const openBlockersOf = (issue: typeof IssueNode.Type) => {
   return relations.length >= relationPageSize ? 1 : 0;
 };
 
+// Linear uses 0 for "No priority"; anything outside 1-4 resolves to the default.
+const linearPriorityNames: Record<number, string> = { 1: "urgent", 2: "high", 3: "medium", 4: "low" };
+export const linearPriority = (value: number | undefined): Priority =>
+  resolvePriority(value === undefined ? null : linearPriorityNames[value]);
+
 const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   id: issue.id,
   identifier: issue.identifier,
@@ -303,6 +312,7 @@ const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   stateName: issue.state.name,
   stateType: issue.state.type,
   openBlockers: openBlockersOf(issue),
+  priority: linearPriority(issue.priority),
 });
 
 const toRawComment = (comment: typeof CommentNode.Type): ReadonlyArray<RawComment> =>
