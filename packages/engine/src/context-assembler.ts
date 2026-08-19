@@ -30,7 +30,7 @@ export interface ContextAssemblerConfig {
   readonly skillsDir: string;
 }
 
-export class ContextAssemblerError extends Schema.TaggedErrorClass<ContextAssemblerError>()(
+export class ContextAssemblerError extends Schema.TaggedError<ContextAssemblerError>()(
   "ContextAssemblerError",
   {
     skill: Schema.String,
