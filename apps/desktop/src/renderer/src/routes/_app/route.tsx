@@ -1,14 +1,15 @@
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@cogwork/ui/components/resizable";
 import { SidebarInset, SidebarTrigger } from "@cogwork/ui/components/sidebar";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
+import { cn } from "@cogwork/ui/lib/utils";
 import { RiLayoutRightLine } from "@remixicon/react";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
 import { AppSidebar } from "../../components/nav-sidebar";
 import { RightPanel } from "../../components/right-panel";
+import { RightPanelResizeHandle, useRightPanelWidthActions } from "../../components/right-panel-resize";
 import { PausedBanner, SchedulerControls } from "../../components/scheduler-gauges";
 import { SidebarResizeHandle, useSidebarWidth } from "../../components/sidebar-resize";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../../features/use-engine-status";
@@ -89,36 +90,59 @@ function MainColumn() {
   );
 }
 
-function ContentArea() {
+// Always mounted so opening and closing animates its width, like the left sidebar's
+// offcanvas slide. Collapsed to zero width when closed; the inner column keeps a
+// fixed width so the content does not reflow mid-slide.
+function RightPanelRegion({ open }: { open: boolean }) {
+  return (
+    <div
+      data-slot="right-panel-region"
+      inert={!open ? true : undefined}
+      aria-hidden={!open ? true : undefined}
+      className={cn(
+        "h-full shrink-0 overflow-hidden transition-[width] duration-200 ease-linear",
+        open ? "w-[var(--right-panel-width)] border-l" : "w-0",
+      )}
+    >
+      <div className="h-full w-[var(--right-panel-width)]">
+        <RightPanel />
+      </div>
+    </div>
+  );
+}
+
+function ContentArea({
+  onRightPanelCommit,
+  onRightPanelReset,
+}: {
+  onRightPanelCommit: (width: number) => void;
+  onRightPanelReset: () => void;
+}) {
   const panelOpen = useRightPanelStore((store) => store.open);
   const maximized = useRightPanelStore((store) => store.maximized);
 
   if (panelOpen && maximized) return <RightPanel />;
 
-  if (panelOpen) {
-    return (
-      <ResizablePanelGroup orientation="horizontal">
-        <ResizablePanel defaultSize="64%" minSize="30%">
-          <MainColumn />
-        </ResizablePanel>
-        <ResizableHandle />
-        <ResizablePanel defaultSize="36%" minSize="24%" maxSize="55%">
-          <RightPanel />
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    );
-  }
-
-  return <MainColumn />;
+  return (
+    <div className="flex h-full min-h-0">
+      <div className="min-w-0 flex-1">
+        <MainColumn />
+      </div>
+      {panelOpen && <RightPanelResizeHandle onCommit={onRightPanelCommit} onReset={onRightPanelReset} />}
+      <RightPanelRegion open={panelOpen} />
+    </div>
+  );
 }
 
 function AppShell() {
   const { setWidth, reset } = useSidebarWidth();
+  const rightPanel = useRightPanelWidthActions();
+
   return (
     <>
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden">
-        <ContentArea />
+        <ContentArea onRightPanelCommit={rightPanel.setWidth} onRightPanelReset={rightPanel.reset} />
       </SidebarInset>
       <SidebarControl />
       <SidebarResizeHandle onCommit={setWidth} onReset={reset} />

@@ -1,53 +1,104 @@
+import { WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { Schema } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
-import { useRightPanelStore } from "./right-panel";
+import { FIXED_SURFACES, type Surface, surfaceId, useRightPanelStore } from "./right-panel";
+
+const workspace = Schema.decodeSync(WorkspaceId);
+const workItem = Schema.decodeSync(WorkItemId);
+
+const item = (ws: string, id: string): Surface => ({
+  kind: "item",
+  workspace: workspace(ws),
+  workItem: workItem(id),
+});
 
 const reset = () =>
-  useRightPanelStore.setState({ open: false, maximized: false, surfaces: [], active: null });
+  useRightPanelStore.setState({
+    open: false,
+    maximized: false,
+    surfaces: FIXED_SURFACES,
+    active: surfaceId({ kind: "attention" }),
+  });
 
 describe("right-panel store", () => {
   beforeEach(reset);
 
-  it("opens the panel and activates a surface when a surface opens", () => {
-    useRightPanelStore.getState().openSurface("attention");
+  it("starts with the fixed Attention and Activity tabs, closed", () => {
+    const state = useRightPanelStore.getState();
+    expect(state.open).toBe(false);
+    expect(state.surfaces).toEqual(FIXED_SURFACES);
+    expect(state.active).toBe("attention");
+  });
+
+  it("identifies an item tab by its workspace and work item", () => {
+    expect(surfaceId(item("acme", "#50"))).toBe("item:acme:#50");
+    expect(surfaceId(item("beta", "#50"))).not.toBe(surfaceId(item("acme", "#50")));
+    expect(surfaceId({ kind: "attention" })).toBe("attention");
+    expect(surfaceId({ kind: "activity" })).toBe("activity");
+  });
+
+  it("opens the panel and focuses an item tab when the item opens", () => {
+    useRightPanelStore.getState().openSurface(item("acme", "#50"));
     const state = useRightPanelStore.getState();
     expect(state.open).toBe(true);
-    expect(state.active).toBe("attention");
-    expect(state.surfaces).toEqual(["attention"]);
+    expect(state.active).toBe("item:acme:#50");
+    expect(state.surfaces).toEqual([...FIXED_SURFACES, item("acme", "#50")]);
   });
 
-  it("does not duplicate a surface that is already open", () => {
+  it("focuses the existing tab on a second open of the same item", () => {
+    const { openSurface, setActive } = useRightPanelStore.getState();
+    openSurface(item("acme", "#50"));
+    openSurface(item("acme", "#51"));
+    setActive("item:acme:#51");
+    openSurface(item("acme", "#50"));
+    const state = useRightPanelStore.getState();
+    expect(state.surfaces).toEqual([...FIXED_SURFACES, item("acme", "#50"), item("acme", "#51")]);
+    expect(state.active).toBe("item:acme:#50");
+  });
+
+  it("tells apart the same work item id in different workspaces", () => {
     const { openSurface } = useRightPanelStore.getState();
-    openSurface("attention");
-    openSurface("detail");
-    openSurface("attention");
-    expect(useRightPanelStore.getState().surfaces).toEqual(["attention", "detail"]);
-    expect(useRightPanelStore.getState().active).toBe("attention");
+    openSurface(item("acme", "#50"));
+    openSurface(item("beta", "#50"));
+    const state = useRightPanelStore.getState();
+    expect(state.surfaces).toEqual([...FIXED_SURFACES, item("acme", "#50"), item("beta", "#50")]);
+    expect(state.active).toBe("item:beta:#50");
   });
 
-  it("falls back to the last remaining surface when the active one closes", () => {
-    const { openSurface, closeSurface } = useRightPanelStore.getState();
-    openSurface("attention");
-    openSurface("detail");
-    closeSurface("detail");
-    expect(useRightPanelStore.getState().surfaces).toEqual(["attention"]);
-    expect(useRightPanelStore.getState().active).toBe("attention");
-  });
-
-  it("keeps the active surface when a different one closes", () => {
+  it("keeps item tabs open until they are closed", () => {
     const { openSurface, setActive, closeSurface } = useRightPanelStore.getState();
-    openSurface("attention");
-    openSurface("detail");
-    setActive("attention");
-    closeSurface("detail");
-    expect(useRightPanelStore.getState().active).toBe("attention");
+    openSurface(item("acme", "#50"));
+    setActive("activity");
+    // Focusing another tab must not drop the item tab.
+    expect(useRightPanelStore.getState().surfaces).toContainEqual(item("acme", "#50"));
+    closeSurface("item:acme:#50");
+    expect(useRightPanelStore.getState().surfaces).toEqual(FIXED_SURFACES);
   });
 
-  it("clears the active surface when the last one closes", () => {
+  it("falls back to the last remaining tab when the active item closes", () => {
     const { openSurface, closeSurface } = useRightPanelStore.getState();
-    openSurface("attention");
+    openSurface(item("acme", "#50"));
+    openSurface(item("acme", "#51"));
+    closeSurface("item:acme:#51");
+    const state = useRightPanelStore.getState();
+    expect(state.surfaces).toEqual([...FIXED_SURFACES, item("acme", "#50")]);
+    expect(state.active).toBe("item:acme:#50");
+  });
+
+  it("keeps the active tab when a different item closes", () => {
+    const { openSurface, setActive, closeSurface } = useRightPanelStore.getState();
+    openSurface(item("acme", "#50"));
+    openSurface(item("acme", "#51"));
+    setActive("item:acme:#50");
+    closeSurface("item:acme:#51");
+    expect(useRightPanelStore.getState().active).toBe("item:acme:#50");
+  });
+
+  it("never closes a fixed tab", () => {
+    const { closeSurface } = useRightPanelStore.getState();
     closeSurface("attention");
-    expect(useRightPanelStore.getState().surfaces).toEqual([]);
-    expect(useRightPanelStore.getState().active).toBeNull();
+    closeSurface("activity");
+    expect(useRightPanelStore.getState().surfaces).toEqual(FIXED_SURFACES);
   });
 
   it("toggling the panel clears the maximized state", () => {
@@ -62,7 +113,7 @@ describe("right-panel store", () => {
 
   it("closing the panel resets open and maximized", () => {
     const { openSurface, toggleMaximized, closePanel } = useRightPanelStore.getState();
-    openSurface("activity");
+    openSurface(item("acme", "#50"));
     toggleMaximized();
     closePanel();
     const state = useRightPanelStore.getState();
