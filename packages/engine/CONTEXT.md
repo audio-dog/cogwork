@@ -46,7 +46,7 @@ The startup pass that makes this daemon's claims consistent again after it stopp
 _Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
 
 **Admit**:
-The one narrow capability the scheduler hands claim recovery: reserve capacity for a resumed run and start it. It keeps in-flight counts and reservations inside the scheduler even when recovery is the one asking, and it always launches — a resume is picking up work this daemon already claimed, so it skips the fit checks a fresh candidate goes through.
+The one narrow capability the scheduler hands claim recovery: reserve capacity for a resumed run and start it. It keeps in-flight counts and reservations inside the scheduler even when recovery is the one asking, and it skips the fit checks a fresh candidate goes through — a resume is picking up work this daemon already claimed, so the caps do not apply. It still honors paused: a daemon that launched paused holds each admitted resume until scheduling resumes rather than starting it, so recovery never spends budget behind the header toggle.
 _Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue
 
 **Snapshot generation**:
