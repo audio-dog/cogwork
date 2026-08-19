@@ -1,0 +1,28 @@
+packages/engine/src/run-ledger.test.ts
+  s_a2e09eab072b34::t_4bb4bd4323ab64 367
+  s_a2e09eab072b34::t_4628fcf9ae93b3 323-334
+  s_a2e09eab072b34::t_13691ad01330ab 363-366,368-378
+  s_a2e09eab072b34::t_8c78cf861f41b5 322,362
+packages/engine/src/run-ledger.ts
+  s_a2e09eab072b34::t_b09e9ffd3714a8 173-177,181
+  s_a2e09eab072b34::t_ca6bc61664660d 195-198
+  s_a2e09eab072b34::t_b69ef2d79f3d3f 285-286
+  s_a2e09eab072b34::t_9de59a418ea05a 78
+  s_a2e09eab072b34::t_bff70857d83b96 79-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fe9c6a2c6ac177961458a2efeb4896c6fc7eaf23",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
