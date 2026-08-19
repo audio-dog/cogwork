@@ -1,0 +1,61 @@
+apps/cli/src/login-commands.ts
+  s_b156ca45065f7c::t_073ae6a223141b 15
+apps/cli/src/worktree-commands.ts
+  s_b156ca45065f7c::t_aa4a41ddf926ce 11
+packages/engine/src/context-fs.ts
+  s_b156ca45065f7c::t_cf668a2a0ef96e 5
+packages/engine/src/credential-store.ts
+  s_b156ca45065f7c::t_2eb3338b4be504 27
+packages/engine/src/utility-call.ts
+  s_b156ca45065f7c::t_98a6634572056c 19
+packages/engine/src/worktree.ts
+  s_b156ca45065f7c::t_59dae270063b5d 9
+apps/cli/src/login.ts
+  s_b156ca45065f7c::t_2d079559e6ad99 137
+packages/engine/src/model-catalog.ts
+  s_b156ca45065f7c::t_0715569b729852 36
+packages/engine/src/git.ts
+  s_b156ca45065f7c::t_eeb475d1f34beb 5
+packages/contracts/src/issue-tracker.ts
+  s_b156ca45065f7c::t_37b7e35b0fd2fd 4
+apps/cli/src/loader.ts
+  s_b156ca45065f7c::t_c997888ddb434a 12
+pnpm-workspace.yaml
+  s_b156ca45065f7c::t_a3b90399608fb6 27-31
+packages/engine/src/run-recorder.ts
+  s_b156ca45065f7c::t_bfca9a87c96cc2 21
+packages/engine/src/provider-runner.test.ts
+  s_b156ca45065f7c::t_189ce43e2563a1 157
+packages/engine/src/worktree-fs.ts
+  s_b156ca45065f7c::t_006aae4f5a76fb 5
+packages/engine/src/linear/oauth.ts
+  s_b156ca45065f7c::t_ef0ea09f1b1e34 222
+packages/engine/src/harness.ts
+  s_b156ca45065f7c::t_a624c07a09b7f1 31
+packages/contracts/src/rpc.ts
+  s_b156ca45065f7c::t_203fa519763d39 46,50,55
+packages/engine/src/tools/errors.ts
+  s_b156ca45065f7c::t_5d17822960b303 3
+packages/engine/src/provider-resolve.ts
+  s_b156ca45065f7c::t_dec25e792790e3 7
+packages/engine/src/context-assembler.ts
+  s_b156ca45065f7c::t_e1bfd789f1db62 33
+pnpm-lock.yaml
+  s_b156ca45065f7c::t_bbf51b9465eeef 38-39,41-42,44-45,47-48,50-51,89,92,110,113,117,141,144,162,247,254,287,330,337,778-779,781-783,785-786,789,791,793-798,817-818,821,823-824,827-828,869-870,872-873,1509-1544,2455-2456,2788-2789,4211-4213,5289,5291,5295,5298,5308,5311,5317,5319-5320,5322,5359,5361,5918-5939,6789,6955,6958,6977,8302,8304-8311,8890-8891
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c55a92eca5b6ed78e44eefdb1016384c202195db",
+  "prompts": {},
+  "sessions": {
+    "s_b156ca45065f7c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "123514e1-5b03-4499-bb03-1a01205860c4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
