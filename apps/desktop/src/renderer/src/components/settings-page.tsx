@@ -19,7 +19,13 @@ import {
   type SettingsSectionId,
   settingsIndex,
 } from "../features/settings-catalog";
-import { parseBudget, parseCount, sanitizeBudgetDraft, seededValue } from "../features/settings-values";
+import {
+  parseBudget,
+  parseCount,
+  sanitizeBudgetDraft,
+  sanitizeCountDraft,
+  seededValue,
+} from "../features/settings-values";
 import { useBoard } from "../features/use-board";
 import { useEnginePreferences } from "../store/engine-preferences";
 import { useDesktopPreferences } from "../store/preferences";
@@ -75,26 +81,37 @@ function NumberStepper({
   label: string;
   onChange: (value: number) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const commit = (next: number) => {
+    setEditing(false);
+    onChange(next);
+  };
   return (
     <InputGroup className="w-28">
       <InputGroupInput
         aria-label={label}
         inputMode="numeric"
-        value={String(value)}
-        onChange={(event) => onChange(parseCount(event.target.value, min))}
+        value={editing ? draft : String(value)}
+        onFocus={() => {
+          setDraft(String(value));
+          setEditing(true);
+        }}
+        onBlur={() => commit(parseCount(draft, min))}
+        onChange={(event) => setDraft(sanitizeCountDraft(event.target.value))}
         className="text-center tabular-nums"
       />
       <InputGroupAddon>
         <InputGroupButton
           size="icon-xs"
           aria-label={`Decrease ${label}`}
-          onClick={() => onChange(Math.max(min, value - 1))}
+          onClick={() => commit(Math.max(min, value - 1))}
         >
           <RiSubtractLine />
         </InputGroupButton>
       </InputGroupAddon>
       <InputGroupAddon align="inline-end">
-        <InputGroupButton size="icon-xs" aria-label={`Increase ${label}`} onClick={() => onChange(value + 1)}>
+        <InputGroupButton size="icon-xs" aria-label={`Increase ${label}`} onClick={() => commit(value + 1)}>
           <RiAddLine />
         </InputGroupButton>
       </InputGroupAddon>

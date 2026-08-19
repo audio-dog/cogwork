@@ -13,6 +13,10 @@ export function parseCount(raw: string, min: number): number {
   return Math.max(min, Number(digits) || min);
 }
 
+export function sanitizeCountDraft(raw: string): string {
+  return raw.replace(/\D/g, "");
+}
+
 export function sanitizeBudgetDraft(raw: string): string {
   return normalizeBudgetRaw(raw);
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseBudget, parseCount, sanitizeBudgetDraft, seededValue } from "./settings-values";
+import {
+  parseBudget,
+  parseCount,
+  sanitizeBudgetDraft,
+  sanitizeCountDraft,
+  seededValue,
+} from "./settings-values";
 
 describe("parseCount", () => {
   it("strips non-numeric characters", () => {
@@ -13,6 +19,16 @@ describe("parseCount", () => {
   it("falls back to the minimum for empty or non-numeric input", () => {
     expect(parseCount("", 1)).toBe(1);
     expect(parseCount("abc", 1)).toBe(1);
+  });
+});
+
+describe("sanitizeCountDraft", () => {
+  it("strips non-numeric characters", () => {
+    expect(sanitizeCountDraft("1a2b")).toBe("12");
+  });
+
+  it("allows an empty draft while the user is replacing the value", () => {
+    expect(sanitizeCountDraft("")).toBe("");
   });
 });
 
