@@ -102,18 +102,16 @@ function FunnelFilterControl() {
           <Separator className="my-0.5" />
           {state.options.map((opt) => {
             const checked = state.selected.has(opt.key);
-            const inputId = `funnel-filter-${opt.key}`;
             return (
-              <div
+              // biome-ignore lint/a11y/noLabelWithoutControl: Base UI Checkbox wraps a hidden input; biome does not see it through the component boundary
+              <label
                 key={opt.key}
-                className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-accent"
+                className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-accent"
               >
-                <Checkbox id={inputId} checked={checked} onCheckedChange={() => actions.toggle(opt.key)} />
-                <label htmlFor={inputId} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                  <span className="flex-1 truncate">{opt.label}</span>
-                  <span className="text-xs text-muted-foreground">{opt.count}</span>
-                </label>
-              </div>
+                <Checkbox checked={checked} onCheckedChange={() => actions.toggle(opt.key)} />
+                <span className="flex-1 truncate">{opt.label}</span>
+                <span className="text-xs text-muted-foreground">{opt.count}</span>
+              </label>
             );
           })}
         </div>
