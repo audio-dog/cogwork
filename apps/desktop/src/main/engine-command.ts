@@ -13,22 +13,23 @@ export interface ResolveEngineCommandInput {
   readonly drainGraceSeconds?: number;
   readonly nodeBinary?: string;
   readonly engineEntry?: string;
+  // Desktop launch default is true; supervisor retries pass false so a crash does not re-pause scheduling.
+  readonly startPaused?: boolean;
 }
 
-// The desktop launch default: the engine starts on, but scheduling holds paused until the person
-// presses the header toggle, so a laptop launch never silently spends budget.
-const daemonArgs = (socketPath: string, drainGraceSeconds: number): readonly string[] => [
-  "daemon",
-  "--socket",
-  socketPath,
-  "--drain-grace",
-  String(drainGraceSeconds),
-  "--start-paused",
-];
+const daemonArgs = (
+  socketPath: string,
+  drainGraceSeconds: number,
+  startPaused: boolean,
+): readonly string[] => {
+  const args: string[] = ["daemon", "--socket", socketPath, "--drain-grace", String(drainGraceSeconds)];
+  if (startPaused) args.push("--start-paused");
+  return args;
+};
 
 export const resolveEngineCommand = (input: ResolveEngineCommandInput): EngineCommand => {
   const drainGraceSeconds = input.drainGraceSeconds ?? 5;
-  const args = daemonArgs(input.socketPath, drainGraceSeconds);
+  const args = daemonArgs(input.socketPath, drainGraceSeconds, input.startPaused ?? true);
 
   if (input.packaged) {
     const entry = input.engineEntry ?? join(input.baseDir, "engine", "index.js");

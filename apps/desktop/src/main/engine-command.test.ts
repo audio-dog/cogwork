@@ -50,6 +50,16 @@ describe("resolveEngineCommand", () => {
     expect(command.args).toContain("--start-paused");
   });
 
+  it("omits --start-paused when startPaused is false", () => {
+    const command = resolveEngineCommand({
+      socketPath,
+      packaged: false,
+      baseDir: "/repo",
+      startPaused: false,
+    });
+    expect(command.args).not.toContain("--start-paused");
+  });
+
   it("passes a custom drain grace through to the daemon", () => {
     const command = resolveEngineCommand({
       socketPath,
