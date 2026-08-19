@@ -1,0 +1,24 @@
+packages/engine/src/github/graphql.test.ts
+  s_493e0803232299::t_8389ae6bdf2be9 1-16
+packages/engine/src/github/client.ts
+  s_493e0803232299::t_b948a3372d4441 354
+  s_493e0803232299::t_32e7e9206d9159 372-374
+  s_493e0803232299::t_d681c5da400f7e 149,152-163
+  s_493e0803232299::t_45ca70bc0a2514 164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "816264e0eb54b63ffeb817d6d8b095619040eef3",
+  "prompts": {},
+  "sessions": {
+    "s_493e0803232299": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21d42f45-fb94-48ab-a2dd-587135f75789",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
