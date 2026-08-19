@@ -1,3 +1,4 @@
+import type { GitHubPrioritySource, Priority } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -14,6 +15,13 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
 import { IssueTrackerError } from "../issue-tracker";
+import {
+  boardMissing,
+  decodeProjectPriorities,
+  defaultPriorityField,
+  pageOf,
+  priorityQuery,
+} from "./priority";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -26,6 +34,7 @@ export type ReviewDecision = "changes-requested" | "approved" | "none";
 export interface RawIssue {
   readonly number: number;
   readonly title: string;
+  readonly url: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees: ReadonlyArray<string>;
   readonly isPullRequest: boolean;
@@ -76,6 +85,7 @@ const DependenciesSummarySchema = Schema.Struct({
 const IssueSchema = Schema.Struct({
   number: Schema.Finite,
   title: Schema.String,
+  html_url: Schema.optional(Schema.NullOr(Schema.String)),
   labels: Schema.Array(LabelName),
   assignees: Schema.optional(Schema.Array(Schema.Struct({ login: Schema.String }))),
   pull_request: Schema.optional(Schema.Unknown),
@@ -134,6 +144,26 @@ const CheckRunSchema = Schema.Struct({
 
 const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema) });
 
+const GraphQlResponse = Schema.Struct({
+  data: Schema.optional(Schema.Unknown),
+  errors: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ message: Schema.String })))),
+});
+export type GraphQlPayload = typeof GraphQlResponse.Type;
+const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
+
+export const graphQlData = (
+  decoded: GraphQlPayload,
+): { readonly ok: true; readonly data: unknown } | { readonly ok: false; readonly message: string } => {
+  if (decoded.data != null) return { ok: true, data: decoded.data };
+  return {
+    ok: false,
+    message:
+      decoded.errors && decoded.errors.length > 0
+        ? `GitHub GraphQL error: ${decoded.errors.map((error) => error.message).join("; ")}`
+        : "GitHub GraphQL returned no data",
+  };
+};
+
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 const decodePulls = Schema.decodeUnknownEffect(Schema.Array(PullSchema));
 const decodePullDetail = Schema.decodeUnknownEffect(PullDetailSchema);
@@ -155,18 +185,19 @@ const millisFromIso = (value: string | null) => {
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
-const toRawIssue = (issue: typeof IssueSchema.Type): RawIssue => ({
+const toRawIssue = (repo: GitHubRepoRef, issue: typeof IssueSchema.Type): RawIssue => ({
   number: issue.number,
   title: issue.title,
+  url: issue.html_url || `https://github.com/${repo.owner}/${repo.name}/issues/${issue.number}`,
   labels: issue.labels.map(labelName),
   assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
   isPullRequest: issue.pull_request !== undefined,
   openBlockers: issue.issue_dependencies_summary?.blocked_by ?? 0,
 });
 
-export const parseIssues = Effect.fn("github.parseIssues")(function* (json: unknown) {
+export const parseIssues = Effect.fn("github.parseIssues")(function* (repo: GitHubRepoRef, json: unknown) {
   const issues = yield* Effect.mapError(decodeIssues(json), toUnavailable);
-  return issues.map(toRawIssue);
+  return issues.map((issue) => toRawIssue(repo, issue));
 });
 
 const defaultCooldownMillis = 60_000;
@@ -323,10 +354,60 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     yield* send(repo, withBody);
   });
 
+  // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
+  const graphql = Effect.fn("github.graphql")(function* (
+    repo: GitHubRepoRef,
+    query: string,
+    variables: Record<string, unknown>,
+  ) {
+    const request = HttpClientRequest.post("https://api.github.com/graphql");
+    const withBody = yield* Effect.mapError(
+      HttpClientRequest.bodyJson(request, { query, variables }),
+      toUnavailable,
+    );
+    const response = yield* Effect.retry(send(repo, withBody), {
+      while: isTransient,
+      schedule: transientBackoff,
+      times: 3,
+    });
+    const json = yield* Effect.mapError(response.json, toUnavailable);
+    const decoded = yield* Effect.mapError(decodeGraphQl(json), toUnavailable);
+    const result = graphQlData(decoded);
+    if (!result.ok) return yield* unavailable(result.message);
+    return result.data;
+  });
+
+  // One paged query so cost tracks board size, not backlog size.
+  const collectPriorities = Effect.fn("github.projectPriorities")(function* (
+    repo: GitHubRepoRef,
+    source: GitHubPrioritySource,
+  ) {
+    const field = source.field ?? defaultPriorityField;
+    const byNumber = new Map<number, Priority>();
+    let cursor: string | null = null;
+    do {
+      const data = yield* graphql(repo, priorityQuery, {
+        owner: repo.owner,
+        number: source.project,
+        field,
+        cursor,
+      });
+      const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
+      if (cursor === null && boardMissing(payload)) {
+        return yield* unavailable(`GitHub project ${source.project} not found for ${repo.owner}`);
+      }
+      const page = pageOf(payload, repo);
+      for (const [number, priority] of page.entries) byNumber.set(number, priority);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    const result: ReadonlyMap<number, Priority> = byNumber;
+    return result;
+  });
+
   return {
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
-      return yield* parseIssues(json);
+      return yield* parseIssues(repo, json);
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, repoPath(repo, "/pulls?state=open&per_page=100"));
@@ -357,6 +438,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     }),
     listReviewComments,
     listReviews,
+    projectPriorities: collectPriorities,
     listCheckRuns: (repo: GitHubRepoRef, sha: string) =>
       Effect.gen(function* () {
         const json = yield* fetchJson(repo, repoPath(repo, `/commits/${sha}/check-runs?per_page=100`));

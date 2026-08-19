@@ -1,4 +1,4 @@
-import { type AttemptRecord, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
+import { type AttemptRecord, type Priority, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -17,6 +17,7 @@ import {
   LinearClient,
   type LinearClientService,
   type LinearTeamRef,
+  linearPriority,
   type ObservedRawIssue,
   type RawComment,
   type RawIssue,
@@ -39,6 +40,7 @@ interface SeedIssue {
   readonly stateName?: string;
   readonly stateType?: string;
   readonly openBlockers?: number;
+  readonly priority?: Priority;
 }
 
 interface Seed {
@@ -68,11 +70,13 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         id: `uuid-${issue.identifier}`,
         identifier: issue.identifier,
         title: issue.title,
+        url: `https://linear.app/acme/issue/${issue.identifier}`,
         labels: issue.labels,
         assignees: issue.assignees ?? [],
         stateName: issue.stateName ?? "Todo",
         stateType: issue.stateType ?? "unstarted",
         openBlockers: issue.openBlockers ?? 0,
+        priority: issue.priority ?? "medium",
       }),
     ),
   );
@@ -483,6 +487,37 @@ describe("linear work source adapter", () => {
       const source = yield* IssueTracker;
       assert.strictEqual(source.rateLimitScope(workspace), "linear:LINEAR_API_KEY");
     }).pipe(Effect.provide(withClient({ issues: [] }))),
+  );
+
+  it("maps Linear's native priority enum onto the canonical scale, No priority to medium", () => {
+    assert.strictEqual(linearPriority(1), "urgent");
+    assert.strictEqual(linearPriority(2), "high");
+    assert.strictEqual(linearPriority(3), "medium");
+    assert.strictEqual(linearPriority(4), "low");
+    // 0 is Linear's "No priority"; undefined is an issue that never carried the field.
+    assert.strictEqual(linearPriority(0), "medium");
+    assert.strictEqual(linearPriority(undefined), "medium");
+  });
+
+  it.effect("carries each item's priority onto observed items and orders eligible work by it", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      assert.strictEqual(items.find((item) => item.id === "AUD-50")?.priority, "urgent");
+      assert.strictEqual(items.find((item) => item.id === "AUD-51")?.priority, "low");
+      assert.deepStrictEqual(
+        classify(items).eligible.map((entry) => entry.id),
+        [id("AUD-50"), id("AUD-51")],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { identifier: "AUD-51", title: "low", labels: ["state:ready-for-agent"], priority: "low" },
+            { identifier: "AUD-50", title: "urgent", labels: ["state:ready-for-agent"], priority: "urgent" },
+          ],
+        }),
+      ),
+    ),
   );
 
   it.effect("surfaces auth failure as IssueTrackerError reason auth", () =>

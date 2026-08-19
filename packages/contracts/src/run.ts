@@ -47,6 +47,7 @@ export const TokenUsage = Schema.Struct({
   inputTokens: Schema.optional(Schema.Natural),
   outputTokens: Schema.optional(Schema.Natural),
   totalTokens: Schema.optional(Schema.Natural),
+  estimated: Schema.optional(Schema.Boolean),
 });
 export type TokenUsage = typeof TokenUsage.Type;
 

@@ -35,6 +35,7 @@ const eligibleWithPr: EligibleWork = {
   id: id("e-pr"),
   title: "eligible with pr",
   stage: "follow-up",
+  priority: "medium",
   priorFailures: 2,
   followUp: {
     checks: "failing",
@@ -52,6 +53,7 @@ const eligibleNoPr: EligibleWork = {
   id: id("e"),
   title: "eligible",
   stage: "implement",
+  priority: "medium",
   priorFailures: 0,
 };
 
@@ -71,6 +73,7 @@ const needsHumanWithPr: NeedsHumanItem = {
   title: "needs-human with pr",
   reason: "ready-for-human",
   proposal: null,
+  url: "https://github.com/owner/repo/issues/71",
   pr: prSummary,
 };
 const needsHumanNoPr: NeedsHumanItem = {
@@ -78,6 +81,7 @@ const needsHumanNoPr: NeedsHumanItem = {
   title: "needs-human",
   reason: "needs-info",
   proposal: null,
+  url: "https://github.com/owner/repo/issues/72",
 };
 
 const state: WorkspaceReconcileState = {

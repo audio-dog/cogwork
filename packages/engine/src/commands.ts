@@ -34,6 +34,7 @@ const parkedNeedsHuman = (id: WorkItemId, title: string): ClassifiedItem => ({
   title,
   reason: "ready-for-human",
   proposal: null,
+  url: null,
 });
 
 const parkedItem = (observed: ObservedItem | null) => {

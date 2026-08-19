@@ -63,6 +63,52 @@ anywhere in the stream: `session_info_update` carries only `{ title }`,
 Consequence: reading `usage.inputTokens` (from `@cursor/sdk`) to
 detect near-context-limit staleness has **no equivalent over Cursor ACP today**.
 
+**Re-verified 2026-08-18 on the same CLI build (`2026.07.23-e383d2b`), still true.** The probe's
+prompt response is still `{"stopReason":"end_turn"}`. `@tanstack/ai-acp@0.2.6` reads `usage` from
+exactly one place — `response.usage` on the ACP prompt response — so with that empty, the whole
+cogwork pipeline (which is otherwise fully wired: `agUiUsage` → executor accumulator → run ledger
+token columns → `cogwork runs`) records nothing. The counts **do** exist in the CLI's non-ACP
+`agent --print --output-format json` mode (`"usage":{"inputTokens":…,"outputTokens":…,
+"cacheReadTokens":…,"cacheWriteTokens":…}`), but the harness is deliberately built on ACP
+(ADR-0004) and swapping modes to harvest usage isn't worth losing ACP session/resume + telemetry.
+
+**Resolution (issue #2): a documented best-guess estimate at the harness seam.** `withEstimatedUsage`
+in `harness.ts` attaches an `estimated`-flagged `usage` (`chars/4` over the prompt + streamed
+assistant/reasoning text) whenever the real `RUN_FINISHED` carries none. The flag is honest end to
+end (`tokens=~N` in the CLI, a tooltip in the desktop drill-in) so it is never read as metered cost;
+it undercounts the hidden system prompt / tools / resumed context. Prior art for a Cursor CLI
+token-usage shim: <https://github.com/Strus/pi-cursor-cli-provider>. When Cursor adds `usage` to the
+ACP prompt response, the real counts flow through unchanged and the estimate steps aside.
+
+### Q2a — How accurate is `chars/4`? **Within ~3% of a real tokenizer on representative text.**
+
+Two things to keep separate:
+
+- **Billed usage** (what `agent --print` reports) is *not* a yardstick for the estimate. A trivial
+  30-char prompt reports `inputTokens: 15473` — almost all of it Cursor's hidden system prompt, tool
+  schemas, and cached workspace context that never cross the ACP wire (`outputTokens` is likewise
+  inflated by hidden reasoning). The estimate deliberately does not model any of that; it is a floor
+  on the *conversation-visible* text.
+- **Heuristic quality** — does `chars/4` track a real tokenizer on the text the estimator actually
+  sees? — is what we validate, offline and deterministically, in `estimate-accuracy.test.ts` against
+  gpt-4o's o200k tokenizer (a stable proxy; token density is close across modern BPE tokenizers).
+
+Measured `est/real` over a representative corpus (2026-08-18, o200k):
+
+| sample          | est/real |
+|-----------------|----------|
+| issue prose     | 1.22     |
+| markdown issue  | 0.99     |
+| typescript code | 0.94     |
+| json payload    | 0.87     |
+| agent output    | 1.12     |
+| **corpus total**| **1.03** |
+
+Prose runs slightly hot, code and JSON slightly cold, and they roughly cancel — the whole-corpus
+estimate lands within 3% of the tokenizer. The test guards this with generous bands (each sample
+within ±40%, the corpus within ±25%) so a regression like changing the divisor trips it, without
+being brittle to tokenizer-version drift.
+
 ## Q3 — Blocking extension methods to a non-answering client: **clean refusal, gracefully handled**
 
 Cursor **does** send `cursor/create_plan` as a *blocking* JSON-RPC request (observed in

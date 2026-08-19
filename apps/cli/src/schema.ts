@@ -11,6 +11,7 @@ export const runs = sqliteTable("runs", {
   inputTokens: integer("input_tokens"),
   outputTokens: integer("output_tokens"),
   totalTokens: integer("total_tokens"),
+  estimated: integer("estimated", { mode: "boolean" }),
   status: text("status").notNull(),
   startedAt: integer("started_at").notNull(),
   endedAt: integer("ended_at"),

@@ -1,6 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { parseIssues, type RawComment, type RawPull, type RawReview, reviewDecisionOf } from "./client";
+import {
+  type GitHubRepoRef,
+  parseIssues,
+  type RawComment,
+  type RawPull,
+  type RawReview,
+  reviewDecisionOf,
+} from "./client";
 import { ledgerMarker } from "./markers";
 import {
   baseDivergenceOf,
@@ -87,6 +94,8 @@ describe("reviewDecisionOf", () => {
 });
 
 describe("parseIssues", () => {
+  const repo: GitHubRepoRef = { owner: "owner", name: "repo", tokenEnv: "GITHUB_TOKEN" };
+
   const issue = (over: Record<string, unknown>) => ({
     number: 1,
     title: "an issue",
@@ -96,7 +105,7 @@ describe("parseIssues", () => {
 
   it.effect("reads open blockers from the dependency summary GitHub sends with the listing", () =>
     Effect.gen(function* () {
-      const issues = yield* parseIssues([
+      const issues = yield* parseIssues(repo, [
         issue({ number: 1, issue_dependencies_summary: { blocked_by: 2, total_blocked_by: 5 } }),
         issue({ number: 2, issue_dependencies_summary: { blocked_by: 0 } }),
       ]);
@@ -109,7 +118,7 @@ describe("parseIssues", () => {
 
   it.effect("treats a null, absent, or countless dependency summary as no open blockers", () =>
     Effect.gen(function* () {
-      const issues = yield* parseIssues([
+      const issues = yield* parseIssues(repo, [
         issue({ number: 1, issue_dependencies_summary: null }),
         issue({ number: 2 }),
         issue({ number: 3, issue_dependencies_summary: { total_blocked_by: 4 } }),
@@ -118,6 +127,19 @@ describe("parseIssues", () => {
       assert.deepStrictEqual(
         issues.map((raw) => raw.openBlockers),
         [0, 0, 0, 0],
+      );
+    }),
+  );
+
+  it.effect("takes the issue's html_url and falls back to the canonical issue URL", () =>
+    Effect.gen(function* () {
+      const issues = yield* parseIssues(repo, [
+        issue({ number: 1, html_url: "https://github.com/owner/repo/issues/1" }),
+        issue({ number: 2 }),
+      ]);
+      assert.deepStrictEqual(
+        issues.map((raw) => raw.url),
+        ["https://github.com/owner/repo/issues/1", "https://github.com/owner/repo/issues/2"],
       );
     }),
   );

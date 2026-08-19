@@ -60,6 +60,7 @@ export const NeedsHumanItem = Schema.Struct({
   title: TrimmedNonEmptyString,
   reason: NeedsHumanReason,
   proposal: Schema.NullOr(TrimmedNonEmptyString),
+  url: Schema.NullOr(TrimmedNonEmptyString),
   pr: Schema.optionalKey(PrSummary),
 });
 export type NeedsHumanItem = typeof NeedsHumanItem.Type;

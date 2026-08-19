@@ -1,4 +1,10 @@
-import { type AttemptRecord, type Claim, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
+import {
+  type AttemptRecord,
+  type Claim,
+  type Priority,
+  WorkItemId,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -9,7 +15,7 @@ import { classify } from "../classify";
 import { triageProposalBody } from "../comments";
 import * as Coordination from "../coordination";
 import type { FollowUpMarker } from "../follow-up";
-import { IssueTracker } from "../issue-tracker";
+import { IssueTracker, IssueTrackerError } from "../issue-tracker";
 import { observeWorkspace } from "../observe";
 import type { RegisteredWorkspace } from "../projector";
 import { SourceControlProvider } from "../source-control";
@@ -39,6 +45,7 @@ const coordinationBody = (markers: ReadonlyArray<string>) =>
 interface SeedIssue {
   readonly number: number;
   readonly title: string;
+  readonly url?: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees?: ReadonlyArray<string>;
   readonly isPullRequest?: boolean;
@@ -70,6 +77,8 @@ interface Seed {
   readonly reviews?: ReadonlyArray<SeedReview>;
   readonly checks?: ReadonlyArray<{ readonly sha: string } & CheckRun>;
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
+  readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
+  readonly priorityError?: boolean;
 }
 
 const bot = { login: "cogwork[bot]" } as const;
@@ -92,6 +101,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
     seed.issues.map(
       (issue): RawIssue => ({
         ...issue,
+        url: issue.url ?? `https://github.com/owner/repo/issues/${issue.number}`,
         assignees: issue.assignees ?? [],
         isPullRequest: issue.isPullRequest ?? false,
         openBlockers: issue.openBlockers ?? 0,
@@ -118,6 +128,9 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
   );
   const pulls = seed.pulls ?? [];
   const mergeableByPull = new Map((seed.mergeable ?? []).map(({ pull, state }) => [pull, state]));
+  const prioritiesByNumber: ReadonlyMap<number, Priority> = new Map(
+    (seed.priorities ?? []).map(({ issue, priority }) => [issue, priority]),
+  );
   const patch = (number: number, update: (issue: RawIssue) => RawIssue) =>
     Ref.update(issuesRef, (issues) =>
       issues.map((issue) => (issue.number === number ? update(issue) : issue)),
@@ -165,6 +178,10 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
           ),
       ),
     listCheckRuns: (_repo, sha) => Effect.succeed([...(checksBySha.get(sha) ?? [])]),
+    projectPriorities: () =>
+      seed.priorityError
+        ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "missing read:project scope" }))
+        : Effect.succeed(prioritiesByNumber),
   } satisfies GitHubClientService;
 });
 
@@ -201,6 +218,16 @@ const trustsCursorBot: RegisteredWorkspace = {
       actorLogin: bot.login,
       botAllowlist: ["cursor[bot]"],
     },
+    harness: { preferred: "cursor" },
+  }),
+};
+
+const prioritizedWorkspace: RegisteredWorkspace = {
+  source: "gh.workspace.ts",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "gh-priority",
+    checkoutPath: "/repos/gh",
+    issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login, priority: { project: 1 } },
     harness: { preferred: "cursor" },
   }),
 };
@@ -850,6 +877,65 @@ describe("github work source adapter", () => {
               createdAtMillis: 2,
             },
           ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("resolves priority from the configured board and defaults an off-board issue to medium", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(prioritizedWorkspace);
+      assert.strictEqual(items.find((item) => item.id === "#5")?.priority, "urgent");
+      assert.strictEqual(items.find((item) => item.id === "#6")?.priority, "medium");
+      assert.deepStrictEqual(
+        classify(items).eligible.map((entry) => entry.id),
+        [id("#5"), id("#6")],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 6, title: "off the board", labels: ["ready-for-agent"] },
+            { number: 5, title: "urgent", labels: ["ready-for-agent"] },
+          ],
+          priorities: [{ issue: 5, priority: "urgent" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("defaults every item to medium and still completes when the board read fails", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(prioritizedWorkspace);
+      assert.strictEqual(items.length, 2);
+      assert.deepStrictEqual(
+        items.map((item) => item.priority),
+        ["medium", "medium"],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 5, title: "one", labels: ["ready-for-agent"] },
+            { number: 6, title: "two", labels: ["ready-for-agent"] },
+          ],
+          priorityError: true,
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reads no priority board when none is configured, defaulting every item to medium", () =>
+    Effect.gen(function* () {
+      // The default workspace names no priority board, so the board is never consulted even though
+      // one is seeded — every item lands on the default.
+      const items = yield* observeItems(workspace);
+      assert.strictEqual(items.find((item) => item.id === "#5")?.priority, "medium");
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 5, title: "urgent on the board", labels: ["ready-for-agent"] }],
+          priorities: [{ issue: 5, priority: "urgent" }],
         }),
       ),
     ),

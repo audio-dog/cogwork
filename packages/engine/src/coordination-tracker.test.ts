@@ -117,11 +117,13 @@ const makeFakeHost = Effect.fn("fakeHost")(function* (seed: ReadonlyArray<SeedIt
   const toListed = (item: FakeItem): ListedItem<number> => ({
     id: decodeId(`#${item.number}`),
     title: item.title,
+    url: `https://github.com/owner/repo/issues/${item.number}`,
     roles: item.labels.filter(isRole),
     assignees: item.assignees,
     claimLabeled: item.labels.includes(claimLabel),
     openBlockers: item.openBlockers,
     claimIdentity: claimant,
+    priority: "medium",
     comments: item.comments,
   });
 

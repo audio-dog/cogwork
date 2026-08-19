@@ -72,7 +72,13 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 
-const triageItem = { id: id("#7"), title: "broken export", stage: "triage" as const, priorFailures: 0 };
+const triageItem = {
+  id: id("#7"),
+  title: "broken export",
+  stage: "triage" as const,
+  priority: "medium" as const,
+  priorFailures: 0,
+};
 
 const usage: TokenUsage = { inputTokens: 12, outputTokens: 34, totalTokens: 46 };
 
@@ -152,6 +158,7 @@ const implementItem = {
   id: id("#15"),
   title: "Implement playbook",
   stage: "implement" as const,
+  priority: "medium" as const,
   priorFailures: 0,
 };
 
@@ -212,6 +219,7 @@ const followUpItem = {
   id: id("#5"),
   title: "PR follow-up playbook",
   stage: "follow-up" as const,
+  priority: "medium" as const,
   priorFailures: 0,
   followUp: {
     checks: "failing" as const,
@@ -1199,4 +1207,19 @@ describe("Executor.execute", () => {
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
+});
+
+describe("meteredTotalTokens", () => {
+  it("passes a metered total straight through to the resume cap", () => {
+    assert.strictEqual(Executor.meteredTotalTokens({ totalTokens: 5_000 }), 5_000);
+  });
+
+  it("withholds a best-guess estimate so it can never trip the resume cap", () => {
+    assert.isNull(Executor.meteredTotalTokens({ totalTokens: 5_000, estimated: true }));
+  });
+
+  it("reports no total when usage is absent", () => {
+    assert.isNull(Executor.meteredTotalTokens(null));
+    assert.isNull(Executor.meteredTotalTokens(undefined));
+  });
 });

@@ -69,6 +69,7 @@ const crashedRun = (idStr: string, startedAtMillis: number, status: RunRecord["s
 const claimedByUs: ObservedItem = {
   id: id("#1"),
   title: "ours",
+  url: "https://github.com/owner/repo/issues/1",
   roles: ["ready-for-agent"],
   assignees: [],
   claimLabeled: true,
@@ -77,12 +78,14 @@ const claimedByUs: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 
 const claimedByOther: ObservedItem = {
   id: id("#2"),
   title: "theirs",
+  url: "https://github.com/owner/repo/issues/2",
   roles: [],
   assignees: [],
   claimLabeled: true,
@@ -91,12 +94,14 @@ const claimedByOther: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 
 const unclaimed: ObservedItem = {
   id: id("#3"),
   title: "free",
+  url: "https://github.com/owner/repo/issues/3",
   roles: ["needs-triage"],
   assignees: [],
   claimLabeled: false,
@@ -105,12 +110,14 @@ const unclaimed: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 
 const staleNoStage: ObservedItem = {
   id: id("#4"),
   title: "stale",
+  url: "https://github.com/owner/repo/issues/4",
   roles: [],
   assignees: [],
   claimLabeled: true,
@@ -119,6 +126,7 @@ const staleNoStage: ObservedItem = {
   attempts: [],
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   pr: null,
 };
 
