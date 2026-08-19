@@ -126,13 +126,6 @@ function ItemTab({
   onSelect: () => void;
   onClose: () => void;
 }) {
-  const trigger = (
-    <button type="button" className="flex min-w-0 cursor-pointer items-center gap-1.5" onClick={onSelect}>
-      <RiFileList2Line className="size-3.5 shrink-0" />
-      <span className="truncate">{workItem}</span>
-    </button>
-  );
-
   return (
     <div
       className={cn(
@@ -143,7 +136,18 @@ function ItemTab({
       )}
     >
       <Tooltip>
-        <TooltipTrigger render={trigger} />
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className="flex min-w-0 cursor-pointer items-center gap-1.5"
+              onClick={onSelect}
+            >
+              <RiFileList2Line className="size-3.5 shrink-0" />
+              <span className="truncate">{workItem}</span>
+            </button>
+          }
+        />
         <TooltipContent side="bottom">{workspace}</TooltipContent>
       </Tooltip>
       <button
@@ -158,31 +162,6 @@ function ItemTab({
   );
 }
 
-function SurfaceTab({ surface }: { surface: Surface }) {
-  const active = useRightPanelStore((state) => state.active);
-  const setActive = useRightPanelStore((state) => state.setActive);
-  const closeSurface = useRightPanelStore((state) => state.closeSurface);
-  const id = surfaceId(surface);
-  const isActive = id === active;
-  const select = () => setActive(id);
-
-  if (surface.kind === "attention") {
-    return <AttentionTab active={isActive} onSelect={select} />;
-  }
-  if (surface.kind === "activity") {
-    return <ActivityTab active={isActive} onSelect={select} />;
-  }
-  return (
-    <ItemTab
-      workspace={surface.workspace}
-      workItem={surface.workItem}
-      active={isActive}
-      onSelect={select}
-      onClose={() => closeSurface(id)}
-    />
-  );
-}
-
 function activeSurface(surfaces: readonly Surface[], active: SurfaceId): Surface {
   return surfaces.find((surface) => surfaceId(surface) === active) ?? surfaces[0];
 }
@@ -193,7 +172,12 @@ export function RightPanel() {
   const maximized = useRightPanelStore((state) => state.maximized);
   const closePanel = useRightPanelStore((state) => state.closePanel);
   const toggleMaximized = useRightPanelStore((state) => state.toggleMaximized);
+  const setActive = useRightPanelStore((state) => state.setActive);
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
   const current = activeSurface(surfaces, active);
+  const itemSurfaces = surfaces.filter(
+    (surface): surface is Extract<Surface, { kind: "item" }> => surface.kind === "item",
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -205,9 +189,21 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          {surfaces.map((surface) => (
-            <SurfaceTab key={surfaceId(surface)} surface={surface} />
-          ))}
+          <AttentionTab active={active === "attention"} onSelect={() => setActive("attention")} />
+          <ActivityTab active={active === "activity"} onSelect={() => setActive("activity")} />
+          {itemSurfaces.map((surface) => {
+            const id = surfaceId(surface);
+            return (
+              <ItemTab
+                key={id}
+                workspace={surface.workspace}
+                workItem={surface.workItem}
+                active={active === id}
+                onSelect={() => setActive(id)}
+                onClose={() => closeSurface(id)}
+              />
+            );
+          })}
         </div>
         <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
           <Button

@@ -97,10 +97,19 @@ Then end the turn. Do not sit polling CI — the engine picks up the next round 
 The engine reads one machine sentinel to decide what happens next, so your final message must end with exactly one line, and nothing after it:
 
 ```
-FOLLOWUP-RESULT: <pushed | stuck>
+FOLLOWUP-RESULT: <pushed | noop | stuck>
 ```
 
-- `pushed` — you pushed a fix to the PR's branch. This is the only success.
-- `stuck` — you stopped without pushing and left a comment saying why (per the [authority boundary](#authority-boundary)). The engine hands the PR to a human.
+- `pushed` — you pushed a fix to the PR's branch. The PR moves forward for review.
+- `noop` — the PR is already healthy and there was nothing to do (see [Nothing to do](#nothing-to-do)). The engine records no failure, spends none of the retry budget, and hands the PR back for review. Reserve this for a genuinely healthy PR, not for a block you couldn't solve.
+- `stuck` — you stopped without pushing because something genuinely blocks you, and you left a comment saying why (per the [authority boundary](#authority-boundary)). The engine hands the PR to a human.
 
-Omitting the line is treated as an incomplete run and retried, so always emit it.
+`pushed` and `noop` are both successes; `stuck` is the only hand-off. Omitting the line is treated as an incomplete run and retried, so always emit it.
+
+## Nothing to do
+
+A follow-up wakes on any trigger — a failing check, a changes-requested review, a base conflict, or a plain human or bot comment. Not every trigger needs a code change. A comment can be a question you answer in a reply, or a remark that asks for nothing at all; a check can have gone green again on its own between the trigger and your turn.
+
+When you look and the PR is genuinely healthy — checks passing, no base conflict, and no review feedback that calls for a code change — there is nothing to push. That is a `noop`, not a `stuck`. Reply to any comment that deserves a reply (marked per [step 5](#5-push-and-summarize)), then end with `FOLLOWUP-RESULT: noop`. Do not invent a change to look busy, and do not report `stuck` — a healthy PR is not a block, and `stuck` would park it under a human for no reason.
+
+Reserve `stuck` for a real block: feedback you cannot reconcile, or a gate that will not go green after a genuine effort.
