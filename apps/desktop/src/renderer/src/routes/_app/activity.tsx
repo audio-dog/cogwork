@@ -73,11 +73,18 @@ function LiveActivity() {
 
 function ActivityPage() {
   return (
-    <EngineGate skeleton={<ActivitySkeleton />}>
-      <div className="p-6">
-        <LiveActivity />
-      </div>
-    </EngineGate>
+    <EngineGate.Provider>
+      <EngineGate.Live>
+        <div className="p-6">
+          <LiveActivity />
+        </div>
+      </EngineGate.Live>
+      <EngineGate.Connecting>
+        <ActivitySkeleton />
+      </EngineGate.Connecting>
+      <EngineGate.Off />
+      <EngineGate.Broken />
+    </EngineGate.Provider>
   );
 }
 

@@ -4,9 +4,16 @@ import { Feed, FeedSkeleton } from "../../components/feed";
 
 function HomePage() {
   return (
-    <EngineGate skeleton={<FeedSkeleton />}>
-      <Feed />
-    </EngineGate>
+    <EngineGate.Provider>
+      <EngineGate.Live>
+        <Feed />
+      </EngineGate.Live>
+      <EngineGate.Connecting>
+        <FeedSkeleton />
+      </EngineGate.Connecting>
+      <EngineGate.Off />
+      <EngineGate.Broken />
+    </EngineGate.Provider>
   );
 }
 

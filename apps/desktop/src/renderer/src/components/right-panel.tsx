@@ -230,13 +230,20 @@ export function RightPanel() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <CompactEngineGate skeleton={<PanelSkeleton />}>
-          {current.kind === "attention" && <AttentionPanelBody />}
-          {current.kind === "activity" && <ActivityPanelBody />}
-          {current.kind === "item" && (
-            <ItemPanelBody workspace={current.workspace} workItem={current.workItem} />
-          )}
-        </CompactEngineGate>
+        <CompactEngineGate.Provider>
+          <CompactEngineGate.Live>
+            {current.kind === "attention" && <AttentionPanelBody />}
+            {current.kind === "activity" && <ActivityPanelBody />}
+            {current.kind === "item" && (
+              <ItemPanelBody workspace={current.workspace} workItem={current.workItem} />
+            )}
+          </CompactEngineGate.Live>
+          <CompactEngineGate.Connecting>
+            <PanelSkeleton />
+          </CompactEngineGate.Connecting>
+          <CompactEngineGate.Off />
+          <CompactEngineGate.Broken />
+        </CompactEngineGate.Provider>
       </div>
     </div>
   );

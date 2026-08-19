@@ -32,6 +32,13 @@ export default defineWorkspace({
     botAllowlist: ["cursor[bot]"],
   },
   harness: { preferred: "cursor" },
+  mcpSkills: [
+    {
+      name: "linear",
+      endpoint: "https://mcp.linear.app/mcp/readonly",
+      auth: { type: "credential-store" },
+    },
+  ],
   concurrency: 3,
   playbook: {
     triage: { enabled: true, model: triageModel },
