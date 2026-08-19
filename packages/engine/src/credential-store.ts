@@ -24,7 +24,7 @@ export interface CredentialAccount {
   readonly oauthClientId: string | null;
 }
 
-export class CredentialError extends Schema.TaggedErrorClass<CredentialError>()("CredentialError", {
+export class CredentialError extends Schema.TaggedError<CredentialError>()("CredentialError", {
   account: Schema.String,
   message: Schema.String,
 }) {}

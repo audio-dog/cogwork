@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-export class ToolError extends Schema.TaggedErrorClass<ToolError>()("ToolError", {
+export class ToolError extends Schema.TaggedError<ToolError>()("ToolError", {
   reason: Schema.Literals([
     "invalid-args",
     "out-of-bounds",
