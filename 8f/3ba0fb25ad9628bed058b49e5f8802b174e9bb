@@ -1,0 +1,54 @@
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_9b460ffb4b299c::t_544381bed224bb 233
+  s_9b460ffb4b299c::t_54c38ea6190ca8 3
+  s_9b460ffb4b299c::t_7e252d107b3e1e 17
+  s_9b460ffb4b299c::t_c8633d55b74a52 43
+  s_9b460ffb4b299c::t_f6983ba1d017eb 169-178
+  s_9b460ffb4b299c::t_fb3aea2de2adaf 234-239
+apps/desktop/src/renderer/src/features/engine-gate.ts
+  s_9b460ffb4b299c::t_7e1ea3c5cc4315 1,4-25,28-31
+apps/desktop/src/renderer/src/features/engine-gate.test.ts
+  s_9b460ffb4b299c::t_4c766d1839a9fc 2-3,5-28,30-31,34-35,38-47,50-54
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_9b460ffb4b299c::t_c10a37b559cf61 24
+  s_9b460ffb4b299c::t_3159d012419479 25
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_9b460ffb4b299c::t_04ca72bbc64e84 27
+apps/desktop/src/renderer/src/components/engine-gate.tsx
+  s_9b460ffb4b299c::t_3152693bb85210 33
+  s_9b460ffb4b299c::t_5006a7d05ed460 14
+  s_9b460ffb4b299c::t_9b88000ef0b344 1,72,103,146,154,160,168
+  s_9b460ffb4b299c::t_11b12c4f1dfd08 2-13,15-32,34-71,73-102,104-145,147-153,155-159,161-167,169-172
+apps/desktop/src/renderer/src/routes/_app/activity.tsx
+  s_9b460ffb4b299c::t_911dfb41a5959e 31,33-46
+  s_9b460ffb4b299c::t_0cdef6cb192feb 4
+  s_9b460ffb4b299c::t_2ad299176243d4 76
+  s_9b460ffb4b299c::t_0899f42219c3fb 6,53,77-80
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_9b460ffb4b299c::t_de880d77118dfa 54
+  s_9b460ffb4b299c::t_52028b3eca9712 43-52
+  s_9b460ffb4b299c::t_27a876e7b94204 3
+apps/desktop/src/renderer/src/routes/_app/index.tsx
+  s_9b460ffb4b299c::t_86d577d1cc8a40 3,7
+  s_9b460ffb4b299c::t_031ad1adfc660b 2,5,8-9
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_9b460ffb4b299c::t_c7695310fab977 4
+  s_9b460ffb4b299c::t_f2f5644a0cb443 303-325
+  s_9b460ffb4b299c::t_560646f3a3a377 330
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "8f3ba0fb25ad9628bed058b49e5f8802b174e9bb",
+  "prompts": {},
+  "sessions": {
+    "s_9b460ffb4b299c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fe94b1f1-4fed-4a1f-bdd5-18ddcfe343ec",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
