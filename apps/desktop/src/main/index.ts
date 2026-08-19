@@ -92,8 +92,6 @@ const bootstrap = (): void => {
       });
     });
 
-    // Launch starts the engine (adopt-or-spawn). Scheduling itself starts paused — the spawned
-    // daemon runs with --start-paused — so the person presses the header toggle to start it.
     await supervisor.start();
   });
 };
