@@ -15,7 +15,13 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
 import { IssueTrackerError } from "../issue-tracker";
-import { decodeProjectPriorities, defaultPriorityField, pageOf, priorityQuery } from "./priority";
+import {
+  boardMissing,
+  decodeProjectPriorities,
+  defaultPriorityField,
+  pageOf,
+  priorityQuery,
+} from "./priority";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -373,6 +379,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         cursor,
       });
       const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
+      if (cursor === null && boardMissing(payload)) {
+        return yield* unavailable(`GitHub project ${source.project} not found for ${repo.owner}`);
+      }
       const page = pageOf(payload, repo);
       for (const [number, priority] of page.entries) byNumber.set(number, priority);
       cursor = page.nextCursor;

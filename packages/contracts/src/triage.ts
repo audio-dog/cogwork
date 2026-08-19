@@ -32,7 +32,6 @@ export const resolvePriority = (value: string | null | undefined): Priority => {
 };
 
 // Lives beside stagePriority so classifier and scheduler cannot drift to different ordering rules.
-// Priority never lets a ticket jump its stage.
 export const byStageThenPriority = (
   a: { readonly stage: LifecycleStage; readonly priority: Priority },
   b: { readonly stage: LifecycleStage; readonly priority: Priority },

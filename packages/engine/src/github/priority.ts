@@ -84,6 +84,9 @@ export interface PriorityPage {
 const matchesRepo = (repo: PriorityRepo, owner: string | undefined, name: string | undefined): boolean =>
   owner?.toLowerCase() === repo.owner.toLowerCase() && name?.toLowerCase() === repo.name.toLowerCase();
 
+export const boardMissing = (payload: ProjectPrioritiesPayload): boolean =>
+  payload.repositoryOwner?.projectV2 == null;
+
 // Board cards can span repos and issue numbers collide across them.
 export const pageOf = (payload: ProjectPrioritiesPayload, repo: PriorityRepo): PriorityPage => {
   const items = payload.repositoryOwner?.projectV2?.items;

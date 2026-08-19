@@ -98,7 +98,6 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
       } satisfies ListedItem<number>;
     });
 
-  // Priority never gates eligibility — a failed board read degrades to the default and logs once per poll.
   const priorityLookup = Effect.fn("github.priorityLookup")(function* (target: GitHubTarget) {
     const fallback = () => defaultPriority;
     const source = target.priority;

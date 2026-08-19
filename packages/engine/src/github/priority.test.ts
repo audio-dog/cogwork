@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { type PriorityRepo, type ProjectPrioritiesPayload, pageOf } from "./priority";
+import { boardMissing, type PriorityRepo, type ProjectPrioritiesPayload, pageOf } from "./priority";
 
 const repo: PriorityRepo = { owner: "owner", name: "repo" };
 
@@ -42,6 +42,14 @@ const payload = (
       },
     },
   },
+});
+
+describe("boardMissing", () => {
+  it("is true when the owner or project is absent from a successful GraphQL body", () => {
+    assert.strictEqual(boardMissing({ repositoryOwner: null }), true);
+    assert.strictEqual(boardMissing({ repositoryOwner: { projectV2: null } }), true);
+    assert.strictEqual(boardMissing(payload([])), false);
+  });
 });
 
 describe("pageOf", () => {
