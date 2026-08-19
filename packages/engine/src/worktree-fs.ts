@@ -2,7 +2,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-export class WorktreeFsError extends Schema.TaggedErrorClass<WorktreeFsError>()("WorktreeFsError", {
+export class WorktreeFsError extends Schema.TaggedError<WorktreeFsError>()("WorktreeFsError", {
   operation: Schema.String,
   message: Schema.String,
 }) {}

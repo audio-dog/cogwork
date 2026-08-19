@@ -33,7 +33,7 @@ export interface CatalogModel {
   readonly name: string;
 }
 
-export class CatalogError extends Schema.TaggedErrorClass<CatalogError>()("CatalogError", {
+export class CatalogError extends Schema.TaggedError<CatalogError>()("CatalogError", {
   message: Schema.String,
 }) {}
 
