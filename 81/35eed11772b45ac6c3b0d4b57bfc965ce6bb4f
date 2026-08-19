@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_ab2f2430a33b1b::t_124d2b93be31be 269
+  s_ab2f2430a33b1b::t_2bfcc0f2e3fc51 17
+  s_ab2f2430a33b1b::t_0065b7ff444b9a 237
+  s_ab2f2430a33b1b::t_cbf9cb1da55a17 213,236
+  s_ab2f2430a33b1b::t_65cf4979020988 238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "8135eed11772b45ac6c3b0d4b57bfc965ce6bb4f",
+  "prompts": {},
+  "sessions": {
+    "s_ab2f2430a33b1b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b2f4007d-be10-43a4-8e6d-c15c34aaedc6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
