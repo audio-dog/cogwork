@@ -38,6 +38,8 @@
     "effect": "catalog:effect",
     "electron-log": "^5.2.0",
     "electron-window-state": "^5.0.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

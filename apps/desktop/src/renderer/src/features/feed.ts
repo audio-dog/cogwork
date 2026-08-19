@@ -86,10 +86,11 @@ export const selfHalts = (board: Board, filter: WorkspaceId | null): FeedItem[] 
 export const boardItem = (board: Board, workspace: WorkspaceId, workItem: WorkItemId) =>
   board.items.get(itemKey(workspace, workItem)) ?? null;
 
+export const runsForItem = (board: Board, workspace: WorkspaceId, workItem: WorkItemId): RunSummary[] =>
+  [...board.runs.values()].filter((run) => run.workspace === workspace && run.workItem === workItem);
+
 export const runForItem = (board: Board, workspace: WorkspaceId, workItem: WorkItemId) => {
-  const forItem = [...board.runs.values()].filter(
-    (run) => run.workspace === workspace && run.workItem === workItem,
-  );
+  const forItem = runsForItem(board, workspace, workItem);
   const live = forItem.find((run) => run.status === "running");
   if (live) return live;
   return forItem.sort((a, b) => b.startedAtMillis - a.startedAtMillis)[0] ?? null;

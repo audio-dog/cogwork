@@ -15,7 +15,7 @@ import { useLiveEvents } from "../features/use-live-events";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { AttentionList } from "./attention-rail";
 import { CompactEngineGate } from "./engine-gate";
-import { ItemDetail } from "./item-detail";
+import { ItemTab as ItemTabView } from "./item-tab";
 
 function SurfaceFill({ children }: { children: React.ReactNode }) {
   return (
@@ -70,11 +70,7 @@ function AttentionPanelBody() {
 }
 
 function ItemPanelBody({ workspace, workItem }: { workspace: WorkspaceId; workItem: WorkItemId }) {
-  return (
-    <SurfaceFill>
-      <ItemDetail selection={{ workspace, workItem }} />
-    </SurfaceFill>
-  );
+  return <ItemTabView selection={{ workspace, workItem }} />;
 }
 
 function AttentionTab({ active, onSelect }: { active: boolean; onSelect: () => void }) {
@@ -235,7 +231,11 @@ export function RightPanel() {
             {current.kind === "attention" && <AttentionPanelBody />}
             {current.kind === "activity" && <ActivityPanelBody />}
             {current.kind === "item" && (
-              <ItemPanelBody workspace={current.workspace} workItem={current.workItem} />
+              <ItemPanelBody
+                key={surfaceId(current)}
+                workspace={current.workspace}
+                workItem={current.workItem}
+              />
             )}
           </CompactEngineGate.Live>
           <CompactEngineGate.Connecting>
