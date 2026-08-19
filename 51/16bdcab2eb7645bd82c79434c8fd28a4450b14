@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_925cdfc728f903::t_db486294a6c40e 1-2,4-5,10,21
+apps/desktop/src/renderer/src/routes/_app/activity.tsx
+  s_925cdfc728f903::t_8f432792fac0de 7-10,100
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_925cdfc728f903::t_916c043b58215a 1-131
+apps/desktop/src/renderer/src/routes/settings/route.tsx
+  s_925cdfc728f903::t_4f15a9f1922fd3 2,4,7,10,12-21,23-24
+apps/desktop/src/renderer/src/routes/_app/index.tsx
+  s_925cdfc728f903::t_836a96565586e0 3-5,32
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_925cdfc728f903::t_e17dfab9505d31 121
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_925cdfc728f903::t_ee763052acbaa8 12,14-15,19-20,28-37,50,52,57,59,64,66,68,76,79,81,83,88,94-96,98,108-121,139-152,168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "5116bdcab2eb7645bd82c79434c8fd28a4450b14",
+  "prompts": {},
+  "sessions": {
+    "s_925cdfc728f903": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b5732493-cc82-454d-a443-cf16a29089d4",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
