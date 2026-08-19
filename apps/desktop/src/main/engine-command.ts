@@ -15,12 +15,15 @@ export interface ResolveEngineCommandInput {
   readonly engineEntry?: string;
 }
 
+// The desktop launch default: the engine starts on, but scheduling holds paused until the person
+// presses the header toggle, so a laptop launch never silently spends budget.
 const daemonArgs = (socketPath: string, drainGraceSeconds: number): readonly string[] => [
   "daemon",
   "--socket",
   socketPath,
   "--drain-grace",
   String(drainGraceSeconds),
+  "--start-paused",
 ];
 
 export const resolveEngineCommand = (input: ResolveEngineCommandInput): EngineCommand => {

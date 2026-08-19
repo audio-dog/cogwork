@@ -19,10 +19,12 @@ it is the primary daemon host; the CLI stays the headless host for CI/SSH.
 _Avoid_: App (ambiguous with the whole product), frontend (the renderer is only one third)
 
 **Engine supervisor**:
-The `main`-side owner of the engine's lifecycle. It stays idle at launch by default (set
-`COGWORK_ENGINE_AUTOSTART=1` to start on boot); once started it probes the socket and either
-**adopts** a daemon already listening or **spawns** one; it pipes the child's output to the log,
-restarts it a bounded number of times on unexpected exit, and stops it on Quit. The child is a real
+The `main`-side owner of the engine's lifecycle. It starts the engine at launch: it probes the
+socket and either **adopts** a daemon already listening or **spawns** one; it pipes the child's
+output to the log, restarts it a bounded number of times on unexpected exit, and stops it on Quit.
+Starting the engine is not the same as starting scheduling — a spawned daemon runs with
+`--start-paused`, so scheduling holds until the person presses the header scheduling toggle. The
+child is a real
 Node process (`electron-vite` dev runs the CLI `daemon` through tsx; a packaged build runs a bundled
 engine entry), never `ELECTRON_RUN_AS_NODE` or `utilityProcess`. Not needing that env var at runtime
 is what lets us flip the RunAsNode fuse **off** at build time — the packaged binary sets
@@ -64,9 +66,11 @@ _Avoid_: Decoding or interpreting RPC in `main`, a second transport for read-mod
 **Engine toggle**:
 Runtime start/stop of the engine from the renderer, through the seam (`setEngineEnabled`) and shown
 as a switch in the header. On drives the supervisor's adopt-or-spawn; off stops a spawned engine.
-Because the engine is idle at launch (unless `COGWORK_ENGINE_AUTOSTART=1`), debugging the app
-never accidentally starts a daemon. The switch reflects real engine status, not a local guess — it
-follows the same status broadcasts as the rest of the UI.
+The engine starts on at launch, so the switch reads On when the app opens; it is the way to stop the
+engine, not the way to start it for the first time. The switch reflects real engine status, not a
+local guess — it follows the same status broadcasts as the rest of the UI. Do not confuse it with
+the header scheduling toggle: this switch runs the engine, the scheduling toggle starts and pauses
+the work scheduler (paused at launch).
 _Avoid_: A separate "enabled" preference that can drift from the supervisor's actual state
 
 ### Shell surfaces

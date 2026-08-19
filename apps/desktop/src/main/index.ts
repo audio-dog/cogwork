@@ -92,11 +92,9 @@ const bootstrap = (): void => {
       });
     });
 
-    if (process.env.COGWORK_ENGINE_AUTOSTART === "1") {
-      await supervisor.start();
-    } else {
-      engineLogger.info("Engine idle at launch; toggle it on from the app or set COGWORK_ENGINE_AUTOSTART=1");
-    }
+    // Launch starts the engine (adopt-or-spawn). Scheduling itself starts paused — the spawned
+    // daemon runs with --start-paused — so the person presses the header toggle to start it.
+    await supervisor.start();
   });
 };
 
