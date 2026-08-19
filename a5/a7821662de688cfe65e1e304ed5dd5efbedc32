@@ -1,0 +1,49 @@
+packages/engine/src/linear/linear.test.ts
+  s_2ce66007d4ab33::t_ea8b77d9b271a7 244
+packages/engine/src/mcp-skill.test.ts
+  s_2ce66007d4ab33::t_bfc36a7695e11b 48
+  s_2ce66007d4ab33::t_8536b33abbf9d5 17
+apps/cli/feldspar.workspace.ts
+  s_2ce66007d4ab33::t_b10d4f88a2ff91 13
+packages/engine/src/linear/host.ts
+  s_2ce66007d4ab33::t_9c6bc356cb0ec6 144
+packages/engine/src/linear/account.ts
+  s_67d24b651fe6e8::t_2aba7784d152f1 4-5
+packages/contracts/src/workspace.ts
+  s_2ce66007d4ab33::t_5ccdf67df3a0c6 52
+  s_2ce66007d4ab33::t_7842ecff63ad82 50
+packages/contracts/src/workspace.test.ts
+  s_67d24b651fe6e8::t_3322064544480d 9-10,13,17-18
+packages/engine/src/issue-tracker-router.test.ts
+  s_2ce66007d4ab33::t_ba7ecf3fea14f0 25
+  s_2ce66007d4ab33::t_f3d692e33b0146 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "a5a7821662de688cfe65e1e304ed5dd5efbedc32",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_2ce66007d4ab33": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c676a980-cbc1-4e07-9eea-b090ccd52cf6",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_67d24b651fe6e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1c4bd9b6-766b-4b11-8de6-23a31149786d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
