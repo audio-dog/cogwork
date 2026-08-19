@@ -24,43 +24,43 @@ export type ActivitySeverity = "info" | "success" | "warn" | "error";
 export type ConnectionState = "live" | "connecting" | "lost";
 
 export interface ActivityEntity {
-  readonly type: "run" | "item";
-  readonly id: string;
-  readonly workspace: string;
+  type: "run" | "item";
+  id: string;
+  workspace: string;
 }
 
 export interface ActivityRow {
-  readonly id: string;
-  readonly kind: ActivityKind;
-  readonly atMillis: number;
-  readonly label: string;
-  readonly summary: string;
-  readonly severity: ActivitySeverity;
-  readonly entity: ActivityEntity | null;
-  readonly raw: string;
-  readonly lowSignal: boolean;
+  id: string;
+  kind: ActivityKind;
+  atMillis: number;
+  label: string;
+  summary: string;
+  severity: ActivitySeverity;
+  entity: ActivityEntity | null;
+  raw: string;
+  lowSignal: boolean;
 }
 
 export interface ActiveRun {
-  readonly runId: RunSummary["id"];
-  readonly workspace: RunSummary["workspace"];
-  readonly workItem: RunSummary["workItem"];
-  readonly stage: RunSummary["stage"];
-  readonly status: RunStatus;
-  readonly preview: RunActivityPreview | null;
+  runId: RunSummary["id"];
+  workspace: RunSummary["workspace"];
+  workItem: RunSummary["workItem"];
+  stage: RunSummary["stage"];
+  status: RunStatus;
+  preview: RunActivityPreview | null;
 }
 
 export interface NowState {
-  readonly engine: EnginePhase;
-  readonly connection: ConnectionState;
-  readonly scheduler: SchedulerStats | null;
-  readonly runs: ReadonlyArray<ActiveRun>;
+  engine: EnginePhase;
+  connection: ConnectionState;
+  scheduler: SchedulerStats | null;
+  runs: ActiveRun[];
 }
 
 export interface ActivityFeed {
-  readonly now: NowState;
-  readonly log: ReadonlyArray<ActivityRow>;
-  readonly total: number;
+  now: NowState;
+  log: ActivityRow[];
+  total: number;
 }
 
 export const activityLabels: Record<ActivityKind, string> = {
@@ -243,14 +243,14 @@ const connectionRow = (connection: ConnectionState, atMillis: number): ActivityR
 };
 
 export interface LifecycleSample {
-  readonly engine: EnginePhase;
-  readonly connection: ConnectionState;
-  readonly atMillis: number;
+  engine: EnginePhase;
+  connection: ConnectionState;
+  atMillis: number;
 }
 
 export interface LifecycleState {
-  readonly engine: EnginePhase | null;
-  readonly connection: ConnectionState;
+  engine: EnginePhase | null;
+  connection: ConnectionState;
 }
 
 // A fresh session has not seen an engine phase and starts out connecting, so
@@ -268,8 +268,8 @@ export const stepLifecycle = (prev: LifecycleState, sample: LifecycleSample) => 
   };
 };
 
-export const synthesizeLifecycle = (samples: ReadonlyArray<LifecycleSample>) =>
-  samples.reduce<{ state: LifecycleState; rows: ReadonlyArray<ActivityRow> }>(
+export const synthesizeLifecycle = (samples: ReadonlyArray<LifecycleSample>): ActivityRow[] =>
+  samples.reduce<{ state: LifecycleState; rows: ActivityRow[] }>(
     (acc, sample) => {
       const step = stepLifecycle(acc.state, sample);
       return { state: step.state, rows: [...acc.rows, ...step.rows] };
@@ -278,7 +278,7 @@ export const synthesizeLifecycle = (samples: ReadonlyArray<LifecycleSample>) =>
   ).rows;
 
 interface NowFold {
-  readonly runs: Map<string, RunSummary>;
+  runs: Map<string, RunSummary>;
   scheduler: SchedulerStats | null;
 }
 
@@ -309,18 +309,18 @@ export const activeRuns = (events: ReadonlyArray<DaemonEvent>) => {
 
 export const defaultActivityLimit = 500;
 
-export const boundLog = (rows: ReadonlyArray<ActivityRow>, limit: number = defaultActivityLimit) => {
+export const boundLog = (rows: ReadonlyArray<ActivityRow>, limit: number = defaultActivityLimit): ActivityRow[] => {
   if (limit <= 0) return [];
-  return rows.length <= limit ? rows : rows.slice(rows.length - limit);
+  return rows.length <= limit ? [...rows] : rows.slice(rows.length - limit);
 };
 
 export interface ActivityInputs {
-  readonly events: ReadonlyArray<DaemonEvent>;
-  readonly arrivals: ReadonlyArray<number>;
-  readonly synthesized: ReadonlyArray<ActivityRow>;
-  readonly engine: EnginePhase;
-  readonly connection: ConnectionState;
-  readonly limit?: number;
+  events: DaemonEvent[];
+  arrivals: number[];
+  synthesized: ActivityRow[];
+  engine: EnginePhase;
+  connection: ConnectionState;
+  limit?: number;
 }
 
 export const deriveActivityFeed = (inputs: ActivityInputs): ActivityFeed => {
