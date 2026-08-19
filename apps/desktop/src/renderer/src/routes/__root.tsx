@@ -1,5 +1,4 @@
 import { SidebarProvider } from "@cogwork/ui/components/sidebar";
-import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { useSidebarWidth } from "../components/sidebar-resize";
@@ -16,11 +15,9 @@ function RootLayout() {
   } as CSSProperties;
 
   return (
-    <TooltipProvider>
-      <SidebarProvider style={providerStyle}>
-        <Outlet />
-      </SidebarProvider>
-    </TooltipProvider>
+    <SidebarProvider style={providerStyle}>
+      <Outlet />
+    </SidebarProvider>
   );
 }
 

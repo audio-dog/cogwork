@@ -47,6 +47,7 @@ function SidebarControl() {
     <div className="pointer-events-none fixed top-0 left-[var(--workspace-controls-left)] z-50 flex h-11 items-center">
       <Tooltip>
         <TooltipTrigger
+          delay={0}
           render={<SidebarTrigger className="pointer-events-auto [-webkit-app-region:no-drag]" />}
         />
         <TooltipContent side="bottom">Toggle sidebar</TooltipContent>
