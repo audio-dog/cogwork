@@ -471,6 +471,36 @@ describe("Scheduler.tick", () => {
       );
     }),
   );
+
+  it.effect("starts paused when configured and picks nothing until it is resumed", () =>
+    Effect.gen(function* () {
+      const runs = yield* Ref.make(0);
+      const execute: ExecuteFn = () => Ref.update(runs, (n) => n + 1).pipe(Effect.map(() => true));
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+
+        assert.isTrue((yield* scheduler.stats).paused);
+        const held = yield* scheduler.tick();
+        assert.strictEqual(held.length, 0);
+        assert.strictEqual(yield* Ref.get(runs), 0);
+
+        yield* scheduler.setScheduling("running");
+        yield* republish(snapshots);
+        const resumed = yield* scheduler.tick();
+        yield* Fiber.awaitAll(resumed);
+        assert.strictEqual(resumed.length, 1);
+        assert.strictEqual(yield* Ref.get(runs), 1);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 5, dailyBudget: 100, startPaused: true },
+            { registry: [wsA], snapshots, execute },
+          ),
+        ),
+      );
+    }),
+  );
 });
 
 describe("Scheduler.drain", () => {

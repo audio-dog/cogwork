@@ -19,6 +19,10 @@ import { branchName, ticketSlug } from "./worktree";
 export interface SchedulerConfig {
   readonly globalLimit: number;
   readonly dailyBudget: number;
+  // Whether scheduling holds at startup until something resumes it. Defaults to running.
+  // The desktop launch default sets this so a laptop launch never silently spends budget;
+  // the headless CLI daemon leaves it off so it schedules on its own.
+  readonly startPaused?: boolean;
 }
 
 export interface SchedulerState {
@@ -181,7 +185,10 @@ export const make = (config: SchedulerConfig) =>
     const executor = yield* Executor;
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
-    const stateRef = yield* Ref.make(initialState);
+    const stateRef = yield* Ref.make<SchedulerState>({
+      ...initialState,
+      paused: config.startPaused ?? false,
+    });
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
     const runJob = (candidate: Candidate) =>
