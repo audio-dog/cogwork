@@ -134,7 +134,7 @@ const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
     ),
 );
 
-export class ProviderKeyError extends Schema.TaggedErrorClass<ProviderKeyError>()("ProviderKeyError", {
+export class ProviderKeyError extends Schema.TaggedError<ProviderKeyError>()("ProviderKeyError", {
   message: Schema.String,
 }) {}
 

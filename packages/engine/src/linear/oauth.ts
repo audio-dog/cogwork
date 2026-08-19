@@ -219,7 +219,7 @@ export const makeTokenRefresh = (client: HttpClient.HttpClient): TokenRefresh =>
     return storedTokenFrom(decoded, now);
   });
 
-export class LinearOAuthError extends Schema.TaggedErrorClass<LinearOAuthError>()("LinearOAuthError", {
+export class LinearOAuthError extends Schema.TaggedError<LinearOAuthError>()("LinearOAuthError", {
   message: Schema.String,
 }) {}
 

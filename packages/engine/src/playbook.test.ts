@@ -158,7 +158,13 @@ describe("buildFollowUpPrompt", () => {
     const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, false);
     assert.include(prompt, "`follow-up-agent`");
     assert.include(prompt, "Never merge");
-    assert.include(prompt, "FOLLOWUP-RESULT: <pushed | stuck>");
+    assert.include(prompt, "FOLLOWUP-RESULT: <pushed | noop | stuck>");
+  });
+
+  it("explains that a healthy PR with nothing to do is a noop, not a failure", () => {
+    const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, false);
+    assert.include(prompt, "Use `noop` when the PR is already healthy");
+    assert.include(prompt, "it is not a failure");
   });
 
   it("states linear history is not required by default", () => {
@@ -173,8 +179,9 @@ describe("buildFollowUpPrompt", () => {
 });
 
 describe("parseFollowUpResult", () => {
-  it("reads the last pushed/stuck sentinel", () => {
+  it("reads the last pushed/noop/stuck sentinel", () => {
     assert.strictEqual(parseFollowUpResult("work\nFOLLOWUP-RESULT: pushed"), "pushed");
+    assert.strictEqual(parseFollowUpResult("nothing to do\nFOLLOWUP-RESULT: noop"), "noop");
     assert.strictEqual(parseFollowUpResult("FOLLOWUP-RESULT: pushed\nFOLLOWUP-RESULT: stuck"), "stuck");
     assert.isNull(parseFollowUpResult("FOLLOWUP-RESULT: banana"));
   });

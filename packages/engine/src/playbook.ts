@@ -227,15 +227,19 @@ export const buildContinuationNudge = (worktreePath: string) =>
 export const parseImplementResult = (text: string) =>
   parseLastSentinel(implementResultPattern, implementResults, text);
 
-export type FollowUpResult = "pushed" | "stuck";
+export type FollowUpResult = "pushed" | "noop" | "stuck";
 
-const followUpResults: ReadonlyArray<FollowUpResult> = ["pushed", "stuck"];
+const followUpResults: ReadonlyArray<FollowUpResult> = ["pushed", "noop", "stuck"];
 
 const followUpFooter = [
   "",
   "End your final message with exactly one line, and nothing after it:",
-  "FOLLOWUP-RESULT: <pushed | stuck>",
-  "Use `pushed` only when you pushed a fix to the PR's branch; otherwise use `stuck`.",
+  "FOLLOWUP-RESULT: <pushed | noop | stuck>",
+  "Use `pushed` when you pushed a fix to the PR's branch.",
+  "Use `noop` when the PR is already healthy and there is nothing to do — no failing checks, no",
+  "base conflict, and no review feedback that needs a code change. This hands the PR back for review;",
+  "it is not a failure.",
+  "Use `stuck` only when something genuinely blocks you and a human needs to step in.",
 ].join("\n");
 
 const followUpResultPattern = /FOLLOWUP-RESULT:\s*([a-z-]+)/gi;
