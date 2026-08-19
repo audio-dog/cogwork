@@ -1,0 +1,89 @@
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_5a4da95521f239::t_ce68b320597ff0 20-22
+  s_5a4da95521f239::t_1dcd879baa02fa 19
+  s_5a4da95521f239::t_6130cae84f23d4 23
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_5a4da95521f239::t_26678f618e1d3e 139-146
+  s_5a4da95521f239::t_73246dd49ce9d5 192-199
+  s_5a4da95521f239::t_b1e8613c47379c 147-150,175-176,178-180,200-206
+apps/cli/src/loader.ts
+  s_5a4da95521f239::t_d12cab9ce4c039 12
+apps/cli/src/login-commands.ts
+  s_5a4da95521f239::t_25a8f2db61f092 15
+apps/cli/src/login.ts
+  s_5a4da95521f239::t_e04f0df7c40b81 137
+apps/cli/src/worktree-commands.ts
+  s_5a4da95521f239::t_a111bde378463a 11
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_5a4da95521f239::t_64cbc7c007c856 23,124-157
+apps/desktop/src/renderer/src/components/settings-sidebar.tsx
+  s_5a4da95521f239::t_c4d7bd763145dd 18,102-123,125-143
+apps/desktop/src/renderer/src/features/activity-source.test.ts
+  s_5a4da95521f239::t_09296a56ad0fe3 1-397
+apps/desktop/src/renderer/src/features/activity-source.ts
+  s_5a4da95521f239::t_2fa7dcf866c499 1-346
+packages/contracts/src/issue-tracker.ts
+  s_5a4da95521f239::t_7dd1caf426d20a 4
+packages/contracts/src/rpc.ts
+  s_5a4da95521f239::t_f0e6ba4368c1f2 46,50,55
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_5a4da95521f239::t_85f81df53b1f60 100,103-105,107-115
+packages/engine/src/context-assembler.ts
+  s_5a4da95521f239::t_a029f90fb5374c 33
+packages/engine/src/context-fs.ts
+  s_5a4da95521f239::t_1ae4b3c57d3da8 5
+packages/engine/src/credential-store.ts
+  s_5a4da95521f239::t_1525f3dfd61044 27
+packages/engine/src/executor.test.ts
+  s_5a4da95521f239::t_e71794cd25cafa 244-256,1075-1122
+packages/engine/src/executor.ts
+  s_5a4da95521f239::t_8568a03966fa74 419
+packages/engine/src/git.ts
+  s_5a4da95521f239::t_5847f3956ad466 5
+packages/engine/src/harness.ts
+  s_5a4da95521f239::t_dc06cec9ccb361 31
+packages/engine/src/linear/oauth.ts
+  s_5a4da95521f239::t_ccd5db111cc8a7 222
+packages/engine/src/model-catalog.ts
+  s_5a4da95521f239::t_7257249c183f43 36
+packages/engine/src/playbook.test.ts
+  s_5a4da95521f239::t_fec2f75d600de3 161-167,182,184
+packages/engine/src/playbook.ts
+  s_5a4da95521f239::t_5214a6895a45ab 230,232,237-242
+packages/engine/src/provider-resolve.ts
+  s_5a4da95521f239::t_da91039e287d9d 7
+packages/engine/src/provider-runner.test.ts
+  s_5a4da95521f239::t_9456e2c6fcf39c 157
+packages/engine/src/run-recorder.ts
+  s_5a4da95521f239::t_9dce2a8480c97b 21
+packages/engine/src/tools/errors.ts
+  s_5a4da95521f239::t_c3c18a368c7a82 3
+packages/engine/src/utility-call.ts
+  s_5a4da95521f239::t_8381c8a5dcf52d 19
+packages/engine/src/worktree-fs.ts
+  s_5a4da95521f239::t_18e47a8a7c8e94 5
+packages/engine/src/worktree.ts
+  s_5a4da95521f239::t_756c597390fbc7 9
+packages/ui/src/components/tooltip.tsx
+  s_5a4da95521f239::t_ce807841c3cbb3 5-6,51-64
+pnpm-lock.yaml
+  s_5a4da95521f239::t_6712bca70065b2 38-39,41-42,44-45,47-48,50-51,89,92,110,113,117,141,144,162,247,254,287,330,337,778-779,781-783,785-786,789,791,793-798,817-818,821,823-824,827-828,869-870,872-873,1509-1544,2455-2456,2788-2789,4211-4213,5289,5291,5295,5298,5308,5311,5317,5319-5320,5322,5359,5361,5918-5939,6789,6955,6958,6977,8302,8304-8311,8890-8891
+pnpm-workspace.yaml
+  s_5a4da95521f239::t_e1d3303b89743c 27-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d2c7f26408ae93e69e5f1b6fe2647d33ed48ec52",
+  "prompts": {},
+  "sessions": {
+    "s_5a4da95521f239": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af8bab68-ccda-45dd-a542-33ab40167963",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
