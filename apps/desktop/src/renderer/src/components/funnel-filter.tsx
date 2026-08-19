@@ -6,30 +6,30 @@ import { RiCheckLine, RiFilter3Line } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
 
 export interface FunnelOption {
-  readonly key: string;
-  readonly label: string;
-  readonly count: number;
+  key: string;
+  label: string;
+  count: number;
 }
 
 export interface FunnelFilterState {
-  readonly options: readonly FunnelOption[];
-  readonly selected: ReadonlySet<string>;
+  options: FunnelOption[];
+  selected: ReadonlySet<string>;
 }
 
 export interface FunnelFilterActions {
-  readonly toggle: (key: string) => void;
-  readonly clear: () => void;
+  toggle: (key: string) => void;
+  clear: () => void;
 }
 
 export interface FunnelFilterMeta {
-  readonly ariaLabel: string;
-  readonly resetLabel: string;
+  ariaLabel: string;
+  resetLabel: string;
 }
 
 export interface FunnelFilterContextValue {
-  readonly state: FunnelFilterState;
-  readonly actions: FunnelFilterActions;
-  readonly meta: FunnelFilterMeta;
+  state: FunnelFilterState;
+  actions: FunnelFilterActions;
+  meta: FunnelFilterMeta;
 }
 
 const FunnelFilterContext = createContext<FunnelFilterContextValue | null>(null);
@@ -56,9 +56,9 @@ export function toggleFunnelKey(selected: ReadonlySet<string>, key: string) {
 }
 
 export interface FunnelSelection {
-  readonly selected: ReadonlySet<string>;
-  readonly toggle: (key: string) => void;
-  readonly clear: () => void;
+  selected: ReadonlySet<string>;
+  toggle: (key: string) => void;
+  clear: () => void;
 }
 
 export function useFunnelSelection() {
@@ -100,18 +100,22 @@ function FunnelFilterControl() {
             {state.selected.size === 0 && <RiCheckLine className="size-4 text-muted-foreground" />}
           </button>
           <Separator className="my-0.5" />
-          {state.options.map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => actions.toggle(opt.key)}
-              className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-start text-sm hover:bg-accent"
-            >
-              <Checkbox checked={state.selected.has(opt.key)} tabIndex={-1} className="pointer-events-none" />
-              <span className="flex-1 truncate">{opt.label}</span>
-              <span className="text-xs text-muted-foreground">{opt.count}</span>
-            </button>
-          ))}
+          {state.options.map((opt) => {
+            const checked = state.selected.has(opt.key);
+            const inputId = `funnel-filter-${opt.key}`;
+            return (
+              <div
+                key={opt.key}
+                className="flex items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-accent"
+              >
+                <Checkbox id={inputId} checked={checked} onCheckedChange={() => actions.toggle(opt.key)} />
+                <label htmlFor={inputId} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                  <span className="flex-1 truncate">{opt.label}</span>
+                  <span className="text-xs text-muted-foreground">{opt.count}</span>
+                </label>
+              </div>
+            );
+          })}
         </div>
       </PopoverContent>
     </Popover>
