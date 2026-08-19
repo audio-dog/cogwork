@@ -93,7 +93,6 @@ function TokenCount({ usage }: { usage: NonNullable<RunSummary["usage"]> }) {
   return (
     <Tooltip>
       <TooltipTrigger
-        delay={0}
         render={
           <span className="cursor-help underline decoration-dotted underline-offset-2">
             ~{usage.totalTokens} tokens
