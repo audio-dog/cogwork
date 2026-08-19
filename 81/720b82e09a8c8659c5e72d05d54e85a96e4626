@@ -1,0 +1,99 @@
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_afaa4ea4aebf3a::t_9aabf3c0c1cb6f 19
+  s_afaa4ea4aebf3a::t_b955c05c836575 1,3-4,9
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_afaa4ea4aebf3a::t_1830a9b20a7111 50
+  s_afaa4ea4aebf3a::t_decc63eb79fcb6 47-49
+  s_afaa4ea4aebf3a::t_e82405cfd04412 51-53
+  s_afaa4ea4aebf3a::t_8c5881211ddf29 1-46,54-132
+apps/cli/src/status.test.ts
+  s_afaa4ea4aebf3a::t_c070c4f7d5ce62 54-61,82-90
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_afaa4ea4aebf3a::t_b408c6d3bdf312 101,103,121
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_afaa4ea4aebf3a::t_726c419b79cb8f 1-129
+apps/desktop/src/renderer/src/components/settings-sidebar.tsx
+  s_afaa4ea4aebf3a::t_d2958062001629 1-142
+apps/desktop/src/renderer/src/features/settings-catalog.test.ts
+  s_afaa4ea4aebf3a::t_8e7b290b18840b 1-58
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_afaa4ea4aebf3a::t_3727e70ddae4db 1-82
+apps/desktop/src/renderer/src/features/use-settings-route.ts
+  s_afaa4ea4aebf3a::t_a0d0ffef6f4d95 1-7
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_afaa4ea4aebf3a::t_54da5356bf452a 12-17,19-28,31,33,36-46,50-54,57-60,64-69,73-74,76-84,88-89,94-96,98,101-116,119-134,139-166,168-169
+apps/desktop/src/renderer/src/routes/_app/activity.tsx
+  s_afaa4ea4aebf3a::t_e725fa5bd7af40 7-10,100
+apps/desktop/src/renderer/src/routes/_app/index.tsx
+  s_afaa4ea4aebf3a::t_aaefb1417ca08f 3-5,32
+apps/desktop/src/renderer/src/routes/settings/$section.tsx
+  s_afaa4ea4aebf3a::t_860c8ef1e996a7 1-28
+apps/desktop/src/renderer/src/routes/settings/index.tsx
+  s_afaa4ea4aebf3a::t_f5f55f8c609c30 1-7
+apps/desktop/src/renderer/src/routes/settings/route.tsx
+  s_afaa4ea4aebf3a::t_eb4fcb2bae3867 1-26
+apps/desktop/src/renderer/src/store/preferences.ts
+  s_afaa4ea4aebf3a::t_dec38feb429726 1-19
+packages/contracts/src/board.test.ts
+  s_afaa4ea4aebf3a::t_f7748842f0c785 31-40,43-44,62-79
+packages/contracts/src/daemon.ts
+  s_afaa4ea4aebf3a::t_0c23dd4c4f0407 63
+packages/engine/src/classify.test.ts
+  s_afaa4ea4aebf3a::t_c6f3aa93d90b28 13,156-162
+packages/engine/src/classify.ts
+  s_afaa4ea4aebf3a::t_218d2f906f2774 120,164
+packages/engine/src/commands.test.ts
+  s_afaa4ea4aebf3a::t_6a5485d5139468 145,176-179
+packages/engine/src/commands.ts
+  s_afaa4ea4aebf3a::t_7be5e2d2f9ec4d 37
+packages/engine/src/coordination-tracker.test.ts
+  s_afaa4ea4aebf3a::t_9f2f7650144822 120
+packages/engine/src/coordination-tracker.ts
+  s_afaa4ea4aebf3a::t_4707598d5ae285 38,71
+packages/engine/src/engine.test.ts
+  s_afaa4ea4aebf3a::t_9369a87554c70f 164,206,516,544,553,584
+packages/engine/src/event-publisher.test.ts
+  s_afaa4ea4aebf3a::t_13dd4fd9275a36 114
+packages/engine/src/github/client.ts
+  s_afaa4ea4aebf3a::t_114118b6cb2632 37,88,188,191,198,200,410
+packages/engine/src/github/github-helpers.test.ts
+  s_afaa4ea4aebf3a::t_9387654113604d 3-10,97-98,108,121,133-145
+packages/engine/src/github/github.test.ts
+  s_afaa4ea4aebf3a::t_c704a548527a2f 48,104
+packages/engine/src/github/host.ts
+  s_afaa4ea4aebf3a::t_457b4dc6c27759 91
+packages/engine/src/issue-tracker.ts
+  s_afaa4ea4aebf3a::t_0b5b8d682a6a9e 24
+packages/engine/src/linear/client.test.ts
+  s_afaa4ea4aebf3a::t_9392061d6860bb 129
+packages/engine/src/linear/client.ts
+  s_afaa4ea4aebf3a::t_b0f76fc03eb41a 37,90,191,313
+packages/engine/src/linear/host.ts
+  s_afaa4ea4aebf3a::t_538618e5f02759 93
+packages/engine/src/linear/linear.test.ts
+  s_afaa4ea4aebf3a::t_6b8694e5dd2d94 73
+packages/engine/src/observe.ts
+  s_afaa4ea4aebf3a::t_ede19789e5d6ae 12
+packages/engine/src/read-model.test.ts
+  s_afaa4ea4aebf3a::t_2e47c53df088c2 76,84
+packages/engine/src/recovery.test.ts
+  s_afaa4ea4aebf3a::t_42c132ffe44de9 72,88,104,120
+packages/ui/src/styles/globals.css
+  s_afaa4ea4aebf3a::t_77009dc5ecb673 135-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "81720b82e09a8c8659c5e72d05d54e85a96e4626",
+  "prompts": {},
+  "sessions": {
+    "s_afaa4ea4aebf3a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "759f7888-d6e3-4d27-a6b3-6d739de3484d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
