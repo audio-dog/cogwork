@@ -18,6 +18,7 @@ describe("resolveEngineCommand", () => {
       socketPath,
       "--drain-grace",
       "5",
+      "--start-paused",
     ]);
     expect(command.cwd).toBe(cliDir);
   });
@@ -42,6 +43,12 @@ describe("resolveEngineCommand", () => {
 
     expect(command.command).toBe("/opt/node/bin/node");
     expect(command.args[0]).toBe("/opt/engine/main.js");
+  });
+
+  it("spawns the packaged daemon with scheduling paused so launch never starts spending budget", () => {
+    const command = resolveEngineCommand({ socketPath, packaged: true, baseDir: "/res" });
+
+    expect(command.args).toContain("--start-paused");
   });
 
   it("passes a custom drain grace through to the daemon", () => {

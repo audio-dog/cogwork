@@ -92,11 +92,7 @@ const bootstrap = (): void => {
       });
     });
 
-    if (process.env.COGWORK_ENGINE_AUTOSTART === "1") {
-      await supervisor.start();
-    } else {
-      engineLogger.info("Engine idle at launch; toggle it on from the app or set COGWORK_ENGINE_AUTOSTART=1");
-    }
+    await supervisor.start();
   });
 };
 

@@ -271,17 +271,15 @@ const reconcileHeartbeat = (pollIntervalMillis: number) =>
 export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const recovery = yield* Recovery;
-  const ledger = yield* RunLedger;
-  // Captured before recover() so the runs it re-admits (started after) survive the sweep below.
-  const orphanCutoffMillis = yield* Clock.currentTimeMillis;
   yield* worker.submit();
-  yield* recovery.recover();
-  yield* ledger.interruptRunningBefore(orphanCutoffMillis, yield* Clock.currentTimeMillis);
+  yield* recovery.recoverWhenLive();
 });
 
 const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
+  const recovery = yield* Recovery;
   const scheduler = yield* Scheduler;
   const publisher = yield* DaemonEventPublisher;
+  yield* recovery.recoverWhenLive();
   yield* scheduler.tick();
   yield* publisher.publishScheduler();
 });

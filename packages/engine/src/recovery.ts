@@ -3,6 +3,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
 import {
   consecutiveFailures,
   type EligibleWork,
@@ -27,6 +28,7 @@ export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
   const scheduler = yield* Scheduler;
   const releaseClaim = makeReleaseClaim(issueTracker);
+  const recovered = yield* Ref.make(false);
 
   const handOffExhausted = Effect.fn("Recovery.handOffExhausted")(function* (
     workspace: RegisteredWorkspace,
@@ -213,7 +215,17 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  return { recover } as const;
+  const recoverWhenLive = Effect.fn("Recovery.recoverWhenLive")(function* () {
+    const { paused } = yield* scheduler.stats;
+    if (paused) return;
+    if (yield* Ref.getAndSet(recovered, true)) return;
+    // Captured before recover() so the runs it re-admits (started after) survive the sweep below.
+    const orphanCutoffMillis = yield* Clock.currentTimeMillis;
+    yield* recover();
+    yield* ledger.interruptRunningBefore(orphanCutoffMillis, yield* Clock.currentTimeMillis);
+  });
+
+  return { recover, recoverWhenLive };
 });
 
 export class Recovery extends Context.Service<Recovery, Effect.Success<typeof make>>()(

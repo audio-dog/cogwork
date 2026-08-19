@@ -74,6 +74,11 @@ const drainGraceFlag = Flag.integer("drain-grace").pipe(
   Flag.withDefault(300),
 );
 
+const startPausedFlag = Flag.boolean("start-paused").pipe(
+  Flag.withDescription("Start with scheduling paused until it is resumed (the desktop launch default)"),
+  Flag.withDefault(false),
+);
+
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
 
 const watchIdFlag = Flag.string("id").pipe(
@@ -251,9 +256,20 @@ export const daemonCommand = Command.make("daemon", {
   dailyBudget: dailyBudgetFlag,
   pollInterval: pollIntervalFlag,
   drainGrace: drainGraceFlag,
+  startPaused: startPausedFlag,
 }).pipe(
   Command.withHandler(
-    ({ socket, configHome, ledger, credentials, maxConcurrency, dailyBudget, pollInterval, drainGrace }) =>
+    ({
+      socket,
+      configHome,
+      ledger,
+      credentials,
+      maxConcurrency,
+      dailyBudget,
+      pollInterval,
+      drainGrace,
+      startPaused,
+    }) =>
       runDaemon({
         socketPath: socket,
         configHome,
@@ -263,6 +279,7 @@ export const daemonCommand = Command.make("daemon", {
         dailyBudget,
         pollIntervalMillis: pollInterval * 1000,
         drainGraceMillis: drainGrace * 1000,
+        startPaused,
       }),
   ),
 );
