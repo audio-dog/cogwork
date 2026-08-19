@@ -79,7 +79,10 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
   reclassify: () => Effect.void,
 });
 
-const providerStub = Layer.succeed(SourceControlProvider, { observe: () => Effect.succeed(new Map()) });
+const providerStub = Layer.succeed(SourceControlProvider, {
+  observe: () => Effect.succeed(new Map()),
+  comment: () => Effect.void,
+});
 
 const observing = (itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>) =>
   Layer.mergeAll(

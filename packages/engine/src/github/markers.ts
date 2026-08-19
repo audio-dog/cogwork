@@ -33,6 +33,11 @@ export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(
 
 export const ledgerMarker = "<!-- cogwork:ledger -->";
 
+// The coordination marker the engine appends to a round summary it posts on a pull request. It is a
+// `cogwork:` marker, so `hasCogworkMarker` keeps the daemon's own comment out of the human-feedback
+// and bot-trigger signals — the whole point being that the agent never writes this itself.
+export const agentNoteMarker = "<!-- cogwork:agent-note -->";
+
 // GitHub renders HTML comments invisibly, so markers can sit inline without a reader ever seeing them.
 const scanPattern = /<!--\s*cogwork:([^>]*)-->/g;
 
