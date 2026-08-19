@@ -1,8 +1,8 @@
 import type { CursorModel } from "@cogwork/cursor-acp";
 import { defineWorkspace } from "@cogwork/engine";
 
-const triageModel = "composer-2.5" satisfies CursorModel;
-const implementModel = "claude-opus-4-8-thinking-medium" satisfies CursorModel;
+const triageModel = "claude-opus-4-8-thinking-medium" satisfies CursorModel;
+const implementModel = "claude-opus-4-8-thinking-high" satisfies CursorModel;
 const followUpModel = "composer-2.5" satisfies CursorModel;
 
 export default defineWorkspace({
