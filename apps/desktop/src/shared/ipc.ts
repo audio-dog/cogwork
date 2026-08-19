@@ -4,12 +4,20 @@ export const IpcChannel = {
   getEngineStatus: "cogwork:get-engine-status",
   setEngineEnabled: "cogwork:set-engine-enabled",
   engineStatusChanged: "cogwork:engine-status-changed",
+  getWindowPreferences: "cogwork:get-window-preferences",
+  setWindowPreferences: "cogwork:set-window-preferences",
   rpcConnect: "cogwork:rpc-connect",
   rpcSend: "cogwork:rpc-send",
   rpcData: "cogwork:rpc-data",
   rpcClosed: "cogwork:rpc-closed",
   rendererError: "cogwork:renderer-error",
 } as const;
+
+// The window behavior the main process owns and persists across restarts. `closeToHide` on means
+// closing the window hides it and leaves the engine running; off means closing quits the app.
+export interface WindowPreferences {
+  readonly closeToHide: boolean;
+}
 
 // A renderer-side failure (router error boundary, unhandled rejection) forwarded to `main`
 // so it lands in the same node logs as engine and IPC failures.
@@ -31,6 +39,8 @@ export interface CogworkBridge {
   readonly getEngineStatus: () => Promise<EngineStatus>;
   readonly setEngineEnabled: (enabled: boolean) => Promise<EngineStatus>;
   readonly onEngineStatus: (listener: (status: EngineStatus) => void) => () => void;
+  readonly getWindowPreferences: () => Promise<WindowPreferences>;
+  readonly setWindowPreferences: (preferences: WindowPreferences) => Promise<WindowPreferences>;
   readonly rpc: DaemonRpcBridge;
   readonly reportError: (report: RendererErrorReport) => void;
 }

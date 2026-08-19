@@ -7,6 +7,9 @@ import { mainLogger } from "./logger";
 
 export interface MainWindowDeps {
   readonly shouldQuit: () => boolean;
+  // Read live on each close so a Settings toggle takes effect without recreating the window.
+  readonly closeToHide: () => boolean;
+  readonly requestQuit: () => void;
 }
 
 const loadRenderer = (window: BrowserWindow): void => {
@@ -89,8 +92,14 @@ export const createMainWindow = (deps: MainWindowDeps): BrowserWindow => {
 
   window.on("close", (event) => {
     if (deps.shouldQuit()) return;
+    if (deps.closeToHide()) {
+      event.preventDefault();
+      window.hide();
+      return;
+    }
+    // Close-to-hide is off: closing the window quits the app, which stops a spawned engine.
     event.preventDefault();
-    window.hide();
+    deps.requestQuit();
   });
 
   loadRenderer(window);

@@ -3,6 +3,7 @@ import {
   RunAlreadyFinished,
   type RunId,
   RunNotFound,
+  type SchedulerConfigUpdate,
   type TriageRole,
   type WorkItemId,
   WorkItemNotFound,
@@ -133,7 +134,20 @@ export const setScheduling = Effect.fn("Daemon.SetScheduling")(function* (payloa
 }) {
   const scheduler = yield* Scheduler;
   const state = yield* scheduler.setScheduling(payload.desired);
-  const stats = schedulerStatsOf(scheduler.config, state);
+  const config = yield* scheduler.config;
+  const stats = schedulerStatsOf(config, state);
+  const bus = yield* DaemonEventBus;
+  yield* bus.publish({ _tag: "SchedulerChanged", scheduler: stats });
+  return stats;
+});
+
+export const setSchedulerConfig = Effect.fn("Daemon.SetSchedulerConfig")(function* (payload: {
+  readonly update: SchedulerConfigUpdate;
+}) {
+  const scheduler = yield* Scheduler;
+  const config = yield* scheduler.setConfig(payload.update);
+  const state = yield* scheduler.stats;
+  const stats = schedulerStatsOf(config, state);
   const bus = yield* DaemonEventBus;
   yield* bus.publish({ _tag: "SchedulerChanged", scheduler: stats });
   return stats;

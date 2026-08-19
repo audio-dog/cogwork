@@ -107,7 +107,8 @@ const schedulerStub = (statsRef: Ref.Ref<Scheduler.SchedulerState>) =>
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: () => Effect.void,
     setScheduling: () => Ref.get(statsRef),
-    config: { globalLimit: 4, dailyBudget: 50 },
+    setConfig: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
+    config: Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
     stats: Ref.get(statsRef),
   });
 
@@ -150,6 +151,7 @@ const schedulerSentinel = {
     scheduling: "running",
     globalInFlight: 99,
     globalLimit: 4,
+    perWorkspaceLimit: 4,
     dailyBudgetUsed: 0,
     dailyBudgetLimit: 10,
     perWorkspace: [],
@@ -340,7 +342,7 @@ describe("DaemonEventPublisher", () => {
           ),
         );
         const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
-        const expectedScheduler = schedulerStatsOf(scheduler.config, yield* scheduler.stats);
+        const expectedScheduler = schedulerStatsOf(yield* scheduler.config, yield* scheduler.stats);
 
         const status = yield* client.GetStatus();
         const expectedWorkspaces = new Map(

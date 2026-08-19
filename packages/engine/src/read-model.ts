@@ -53,6 +53,7 @@ export const schedulerStatsOf = (config: SchedulerConfig, state: SchedulerState)
   scheduling: state.paused ? "paused" : "running",
   globalInFlight: state.global,
   globalLimit: config.globalLimit,
+  perWorkspaceLimit: config.perWorkspaceLimit,
   dailyBudgetUsed: state.budgetUsed,
   dailyBudgetLimit: config.dailyBudget,
   perWorkspace: [...state.perWorkspace].map(([name, inFlight]) => ({ name, inFlight })),

@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
-import { DaemonStatus, SchedulerStats, SchedulingState } from "./daemon";
+import { DaemonStatus, SchedulerConfigUpdate, SchedulerStats, SchedulingState } from "./daemon";
 import { ClassifiedItem, DaemonEvent } from "./daemon-event";
 import { IssueTrackerError } from "./issue-tracker";
 import { PrincipalMiddleware } from "./principal";
@@ -79,8 +79,16 @@ export const SetScheduling = Rpc.make("SetScheduling", {
   success: SchedulerStats,
 });
 
-export const DaemonCommands = RpcGroup.make(CancelRun, Reclassify, SetScheduling).middleware(
-  PrincipalMiddleware,
-);
+export const SetSchedulerConfig = Rpc.make("SetSchedulerConfig", {
+  payload: { update: SchedulerConfigUpdate },
+  success: SchedulerStats,
+});
+
+export const DaemonCommands = RpcGroup.make(
+  CancelRun,
+  Reclassify,
+  SetScheduling,
+  SetSchedulerConfig,
+).middleware(PrincipalMiddleware);
 
 export const DaemonRpcs = DaemonQueries.merge(DaemonCommands);

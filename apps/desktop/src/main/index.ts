@@ -9,14 +9,28 @@ import { broadcastEngineStatus, registerIpc } from "./ipc";
 import { engineLogger, mainLogger } from "./logger";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
-import { createMainWindow } from "./window";
+import { createMainWindow, type MainWindowDeps } from "./window";
+import { createWindowPreferencesStore } from "./window-preferences";
 
 const control = { quitting: false, engineStopped: false };
+
+const requestQuit = (): void => {
+  control.quitting = true;
+  app.quit();
+};
+
+const windowPreferences = createWindowPreferencesStore();
+
+const windowDeps: MainWindowDeps = {
+  shouldQuit: () => control.quitting,
+  closeToHide: () => windowPreferences.get().closeToHide,
+  requestQuit,
+};
 
 const showMainWindow = (): void => {
   const [window] = BrowserWindow.getAllWindows();
   if (!window) {
-    createMainWindow({ shouldQuit: () => control.quitting });
+    createMainWindow(windowDeps);
     return;
   }
   if (window.isMinimized()) window.restore();
@@ -48,7 +62,7 @@ const makeSupervisor = (): EngineSupervisor => {
     },
   });
 
-  registerIpc({ socketPath, supervisor });
+  registerIpc({ socketPath, supervisor, windowPreferences });
   return supervisor;
 };
 
@@ -69,13 +83,10 @@ const bootstrap = (): void => {
 
     const supervisor = makeSupervisor();
 
-    createMainWindow({ shouldQuit: () => control.quitting });
+    createMainWindow(windowDeps);
     createTray({
       onShow: showMainWindow,
-      onQuit: () => {
-        control.quitting = true;
-        app.quit();
-      },
+      onQuit: requestQuit,
     });
 
     app.on("activate", showMainWindow);

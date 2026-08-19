@@ -5,6 +5,7 @@ import {
   DaemonRpcs,
   defaultSchedulerDailyBudget,
   defaultSchedulerGlobalLimit,
+  defaultSchedulerPerWorkspaceLimit,
   initialBoard,
   type RunActivity,
   type RunEvent,
@@ -55,6 +56,11 @@ const credentialsFlag = Flag.string("credentials").pipe(
 const maxConcurrencyFlag = Flag.integer("max-concurrency").pipe(
   Flag.withDescription("Maximum concurrent agent sessions across all workspaces"),
   Flag.withDefault(defaultSchedulerGlobalLimit),
+);
+
+const maxPerWorkspaceFlag = Flag.integer("max-per-workspace").pipe(
+  Flag.withDescription("Maximum concurrent agent sessions inside a single workspace"),
+  Flag.withDefault(defaultSchedulerPerWorkspaceLimit),
 );
 
 const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
@@ -253,6 +259,7 @@ export const daemonCommand = Command.make("daemon", {
   ledger: ledgerFlag,
   credentials: credentialsFlag,
   maxConcurrency: maxConcurrencyFlag,
+  maxPerWorkspace: maxPerWorkspaceFlag,
   dailyBudget: dailyBudgetFlag,
   pollInterval: pollIntervalFlag,
   drainGrace: drainGraceFlag,
@@ -265,6 +272,7 @@ export const daemonCommand = Command.make("daemon", {
       ledger,
       credentials,
       maxConcurrency,
+      maxPerWorkspace,
       dailyBudget,
       pollInterval,
       drainGrace,
@@ -276,6 +284,7 @@ export const daemonCommand = Command.make("daemon", {
         ledgerPath: ledger,
         credentialsPath: credentials,
         maxConcurrency,
+        maxPerWorkspace,
         dailyBudget,
         pollIntervalMillis: pollInterval * 1000,
         drainGraceMillis: drainGrace * 1000,

@@ -1,12 +1,19 @@
 import { type BrowserWindow, ipcMain, type WebContents } from "electron";
-import { type EngineStatus, IpcChannel, type RendererErrorReport } from "../shared/ipc";
+import {
+  type EngineStatus,
+  IpcChannel,
+  type RendererErrorReport,
+  type WindowPreferences,
+} from "../shared/ipc";
 import { createDaemonBridgePort, type DaemonBridgePort } from "./daemon-bridge";
 import type { EngineSupervisor } from "./engine-supervisor";
 import { mainLogger, rendererLogger } from "./logger";
+import type { WindowPreferencesStore } from "./window-preferences";
 
 export interface IpcDeps {
   readonly socketPath: string;
   readonly supervisor: EngineSupervisor;
+  readonly windowPreferences: WindowPreferencesStore;
 }
 
 // `WebContents.isDestroyed()` stays false after a GPU/renderer crash or during a reload, yet the
@@ -28,6 +35,11 @@ export const registerIpc = (deps: IpcDeps) => {
     await (enabled ? deps.supervisor.start() : deps.supervisor.stop());
     return deps.supervisor.status;
   });
+
+  ipcMain.handle(IpcChannel.getWindowPreferences, () => deps.windowPreferences.get());
+  ipcMain.handle(IpcChannel.setWindowPreferences, (_event, preferences: WindowPreferences) =>
+    deps.windowPreferences.set(preferences),
+  );
 
   const ports = new Map<number, DaemonBridgePort>();
 

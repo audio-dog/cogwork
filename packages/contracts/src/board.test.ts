@@ -150,6 +150,7 @@ describe("applyDaemonEvent", () => {
       scheduling: "running",
       globalInFlight: 1,
       globalLimit: 4,
+      perWorkspaceLimit: 4,
       dailyBudgetUsed: 2,
       dailyBudgetLimit: 10,
       perWorkspace: [{ name: "acme", inFlight: 1 }],

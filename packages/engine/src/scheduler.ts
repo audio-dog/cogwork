@@ -1,4 +1,4 @@
-import type { WorkspaceId } from "@cogwork/contracts";
+import type { SchedulerConfigUpdate, WorkspaceId } from "@cogwork/contracts";
 import { byStageThenPriority as byStageThenPriorityOf } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -18,9 +18,17 @@ import { branchName, ticketSlug } from "./worktree";
 
 export interface SchedulerConfig {
   readonly globalLimit: number;
+  readonly perWorkspaceLimit: number;
   readonly dailyBudget: number;
   readonly startPaused?: boolean;
 }
+
+// Apply a partial config write, leaving any absent field at its current value.
+const applyConfigUpdate = (config: SchedulerConfig, update: SchedulerConfigUpdate): SchedulerConfig => ({
+  globalLimit: update.globalLimit ?? config.globalLimit,
+  perWorkspaceLimit: update.perWorkspaceLimit ?? config.perWorkspaceLimit,
+  dailyBudget: update.dailyBudget ?? config.dailyBudget,
+});
 
 export interface SchedulerState {
   readonly global: number;
@@ -163,7 +171,7 @@ const candidateOf = (
 ): Candidate => ({
   workspace,
   work,
-  workspaceLimit: workspace.config.concurrency ?? config.globalLimit,
+  workspaceLimit: workspace.config.concurrency ?? config.perWorkspaceLimit,
   keys: keysFor(workspace, work),
 });
 
@@ -186,6 +194,9 @@ export const make = (config: SchedulerConfig) =>
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(seedState(config));
+    // The limits and budget are writable at runtime (the config-write RPC), so they live in a Ref
+    // rather than the closure — every tick and admit reads the current value.
+    const configRef = yield* Ref.make(config);
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
     const runJob = (candidate: Candidate) =>
@@ -204,6 +215,7 @@ export const make = (config: SchedulerConfig) =>
       );
 
     const tick = Effect.fn("Scheduler.tick")(function* () {
+      const config = yield* Ref.get(configRef);
       const snapshot = yield* worker.snapshot;
       const candidates = candidatesOf(registry, snapshot, config);
       const day = utcDay(yield* Clock.currentTimeMillis);
@@ -247,6 +259,7 @@ export const make = (config: SchedulerConfig) =>
       workspace: RegisteredWorkspace,
       work: EligibleWork,
     ) {
+      const config = yield* Ref.get(configRef);
       const candidate = candidateOf(workspace, work, config);
       yield* Ref.update(stateRef, (state) => reserve(state, candidate));
       yield* FiberSet.run(jobs, runJob(candidate));
@@ -257,7 +270,19 @@ export const make = (config: SchedulerConfig) =>
       return yield* Ref.get(stateRef);
     });
 
-    return { tick, drain, admit, setScheduling, stats: Ref.get(stateRef), config } as const;
+    const setConfig = Effect.fn("Scheduler.setConfig")(function* (update: SchedulerConfigUpdate) {
+      return yield* Ref.updateAndGet(configRef, (current) => applyConfigUpdate(current, update));
+    });
+
+    return {
+      tick,
+      drain,
+      admit,
+      setScheduling,
+      setConfig,
+      stats: Ref.get(stateRef),
+      config: Ref.get(configRef),
+    } as const;
   });
 
 export class Scheduler extends Context.Service<Scheduler, Effect.Success<ReturnType<typeof make>>>()(
