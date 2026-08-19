@@ -1,3 +1,4 @@
+import type { SchedulingState } from "@cogwork/contracts";
 import { type BrowserWindow, ipcMain, type WebContents } from "electron";
 import { type EngineStatus, IpcChannel, type RendererErrorReport } from "../shared/ipc";
 import { createDaemonBridgePort, type DaemonBridgePort } from "./daemon-bridge";
@@ -27,6 +28,9 @@ export const registerIpc = (deps: IpcDeps) => {
   ipcMain.handle(IpcChannel.setEngineEnabled, async (_event, enabled: boolean) => {
     await (enabled ? deps.supervisor.start() : deps.supervisor.stop());
     return deps.supervisor.status;
+  });
+  ipcMain.on(IpcChannel.setSchedulingState, (_event, desired: SchedulingState) => {
+    deps.supervisor.setScheduling(desired);
   });
 
   const ports = new Map<number, DaemonBridgePort>();

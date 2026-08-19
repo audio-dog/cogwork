@@ -1,8 +1,11 @@
+import type { SchedulingState } from "@cogwork/contracts";
+
 export type EngineStatus = "starting" | "running" | "adopted" | "stopped" | "failed";
 
 export const IpcChannel = {
   getEngineStatus: "cogwork:get-engine-status",
   setEngineEnabled: "cogwork:set-engine-enabled",
+  setSchedulingState: "cogwork:set-scheduling-state",
   engineStatusChanged: "cogwork:engine-status-changed",
   rpcConnect: "cogwork:rpc-connect",
   rpcSend: "cogwork:rpc-send",
@@ -30,6 +33,7 @@ export interface DaemonRpcBridge {
 export interface CogworkBridge {
   readonly getEngineStatus: () => Promise<EngineStatus>;
   readonly setEngineEnabled: (enabled: boolean) => Promise<EngineStatus>;
+  readonly setSchedulingState: (desired: SchedulingState) => void;
   readonly onEngineStatus: (listener: (status: EngineStatus) => void) => () => void;
   readonly rpc: DaemonRpcBridge;
   readonly reportError: (report: RendererErrorReport) => void;

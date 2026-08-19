@@ -13,6 +13,7 @@ const subscribe = <T>(channel: string, listener: (value: T) => void) => {
 const bridge: CogworkBridge = {
   getEngineStatus: () => ipcRenderer.invoke(IpcChannel.getEngineStatus),
   setEngineEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.setEngineEnabled, enabled),
+  setSchedulingState: (desired) => ipcRenderer.send(IpcChannel.setSchedulingState, desired),
   onEngineStatus: (listener) => subscribe(IpcChannel.engineStatusChanged, listener),
   rpc: {
     connect: () => ipcRenderer.invoke(IpcChannel.rpcConnect),

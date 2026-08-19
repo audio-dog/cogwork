@@ -2,6 +2,7 @@ import type { SchedulerStats } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { cn } from "@cogwork/ui/lib/utils";
+import { useEffect } from "react";
 import { useBoard } from "../features/use-board";
 import { useScheduling } from "../features/use-scheduling";
 
@@ -49,17 +50,24 @@ function SchedulerSummary({ scheduler }: { scheduler: SchedulerStats }) {
   );
 }
 
-export function SchedulerControls() {
-  const result = useBoard();
-  if (result._tag !== "Success" || result.board.scheduler === null) return null;
+function SchedulerControlsBody({ scheduler }: { scheduler: SchedulerStats }) {
+  useEffect(() => {
+    window.cogwork.setSchedulingState(scheduler.scheduling);
+  }, [scheduler.scheduling]);
 
-  const scheduler = result.board.scheduler;
   return (
     <div className="flex flex-wrap items-center gap-4">
       <SchedulerSummary scheduler={scheduler} />
       <SchedulingToggle scheduler={scheduler} />
     </div>
   );
+}
+
+export function SchedulerControls() {
+  const result = useBoard();
+  if (result._tag !== "Success" || result.board.scheduler === null) return null;
+
+  return <SchedulerControlsBody scheduler={result.board.scheduler} />;
 }
 
 export function PausedBanner() {
