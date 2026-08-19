@@ -527,6 +527,41 @@ describe("Recovery.recover", () => {
     }),
   );
 
+  it.effect("caps a crash loop while paused, escalating without rescheduling", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const handoffs = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const running = crashedRun("crash-c", 3, "running");
+      yield* ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* ledger.insertRun(running);
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+        handOff: (_workspace, itemId) => Ref.update(handoffs, (xs) => [...xs, itemId]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+        assert.deepStrictEqual(yield* Ref.get(admitted), []);
+        assert.deepStrictEqual(yield* Ref.get(handoffs), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+        assert.strictEqual((yield* ledger.getRun(running.id))?.status, "crashed");
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({
+            observed: [claimedByUs],
+            issueTracker,
+            ledger,
+            admitted,
+            startPaused: true,
+          }),
+        ),
+      );
+    }),
+  );
+
   it.effect("defers crashRunning while paused so a restart still reschedules the crash", () =>
     Effect.gen(function* () {
       const released = yield* Ref.make<ReadonlyArray<string>>([]);
