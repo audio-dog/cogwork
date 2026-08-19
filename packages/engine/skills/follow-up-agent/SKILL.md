@@ -66,11 +66,12 @@ Completion: every failing check has a fix and every review request is addressed 
 
 ## 4. Local gate (hard)
 
-Before pushing, all three must be green from a clean run:
+Before pushing, all four must be green from a clean run:
 
 1. Typecheck — no errors and no suppressions (`as any` / `@ts-ignore` / `@ts-expect-error` defeat the point).
 2. Full build.
 3. Full test suite.
+4. Full linting and formatting.
 
 If any fails, fix and re-run. Do not push on a red gate. If it will not go green after a genuine effort, escalate per the [authority boundary](#authority-boundary).
 
