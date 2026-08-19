@@ -35,7 +35,7 @@ function EngineOfflineEmpty({ phase }: { phase: Exclude<EnginePhase, "up"> }) {
   return (
     <Empty>
       <EmptyHeader>
-        <EmptyTitle>Engine is off</EmptyTitle>
+        <EmptyTitle>Activity</EmptyTitle>
         <EmptyDescription>
           <EngineOfflineMessage phase={phase} />
         </EmptyDescription>
