@@ -1,0 +1,29 @@
+packages/engine/src/scheduler.ts
+  s_a2e09eab072b34::t_78a5e522f4985e 267,269-278,293
+  s_a2e09eab072b34::t_c8543539feb0f8 268
+packages/engine/src/recovery.test.ts
+  s_a2e09eab072b34::t_f25283c676d680 199-208,229
+  s_a2e09eab072b34::t_75bea1e207f2df 215
+  s_a2e09eab072b34::t_c38a3ad8d8d7c4 530-562
+packages/engine/src/scheduler.test.ts
+  s_a2e09eab072b34::t_27fbda104792e3 539-542,545,549,564,566,576-577
+  s_a2e09eab072b34::t_bd57a0d60fbbaa 538,543-544,546-548,550-563,565,567-575
+packages/engine/src/recovery.ts
+  s_a2e09eab072b34::t_094abbda85fd68 154,156-161,165-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "82d4ab033b839043a811d80fc511022432a7baf7",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
