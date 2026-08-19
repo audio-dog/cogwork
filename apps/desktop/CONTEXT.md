@@ -22,8 +22,9 @@ _Avoid_: App (ambiguous with the whole product), frontend (the renderer is only 
 The `main`-side owner of the engine's lifecycle. It starts the engine at launch: it probes the
 socket and either **adopts** a daemon already listening or **spawns** one; it pipes the child's
 output to the log, restarts it a bounded number of times on unexpected exit, and stops it on Quit.
-Starting the engine is not the same as starting scheduling — a spawned daemon runs with
-`--start-paused`, so scheduling holds until the person presses the header scheduling toggle. The
+Starting the engine is not the same as starting scheduling — the first spawn runs with
+`--start-paused`, so scheduling holds until the person presses the header scheduling toggle; supervisor
+retries omit that flag so a crash does not re-pause active scheduling. The
 child is a real
 Node process (`electron-vite` dev runs the CLI `daemon` through tsx; a packaged build runs a bundled
 engine entry), never `ELECTRON_RUN_AS_NODE` or `utilityProcess`. Not needing that env var at runtime
