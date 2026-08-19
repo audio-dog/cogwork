@@ -1,0 +1,19 @@
+packages/ui/src/components/tooltip.tsx
+  s_6f33c4dfa08eec::t_481c55f2e00c47 51-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "50ac7bdc383ab9c91e81319a5cec2330ad2d798b",
+  "prompts": {},
+  "sessions": {
+    "s_6f33c4dfa08eec": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61e285a3-ad33-4bfe-9c2b-ca437a7ab042",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
