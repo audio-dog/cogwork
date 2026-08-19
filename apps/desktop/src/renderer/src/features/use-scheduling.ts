@@ -1,9 +1,13 @@
 import type { SchedulingState } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
 import { setSchedulingAtom } from "../daemon/atoms";
+import { syncSchedulingToMain } from "./sync-scheduling-to-main";
 
 export function useScheduling() {
   const [result, run] = useAtom(setSchedulingAtom);
-  const setScheduling = (desired: SchedulingState) => run({ payload: { desired } });
+  const setScheduling = (desired: SchedulingState) => {
+    syncSchedulingToMain(desired);
+    run({ payload: { desired } });
+  };
   return { result, setScheduling };
 }
