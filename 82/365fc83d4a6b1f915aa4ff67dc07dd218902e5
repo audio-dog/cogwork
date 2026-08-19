@@ -1,0 +1,96 @@
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_67d24b651fe6e8::t_5e076e59f48ee3 42-51
+  s_67d24b651fe6e8::t_2e57a13acaaf77 39-41
+apps/cli/src/commands.ts
+  s_67d24b651fe6e8::t_1ee393870951f0 6-7,57,62
+apps/desktop/CONTEXT.md
+  s_67d24b651fe6e8::t_621b82275809bb 80-81
+apps/desktop/src/renderer/src/components/attention-items.tsx
+  s_67d24b651fe6e8::t_574db4cc7d9a56 8,13,19,46,51
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_67d24b651fe6e8::t_22768d9d52c16e 72-79
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_67d24b651fe6e8::t_17309cab6fd63e 17,291-292
+apps/desktop/src/renderer/src/components/item-detail.tsx
+  s_67d24b651fe6e8::t_80c8010fccb869 6,21-22,32-44,92-103,106-126
+apps/desktop/src/renderer/src/components/rail-shell.tsx
+  s_67d24b651fe6e8::t_3812f5f6b354da 4-12,14-16,19-24
+apps/desktop/src/renderer/src/components/right-panel-resize.tsx
+  s_67d24b651fe6e8::t_f6125696a1aa34 1-202
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_67d24b651fe6e8::t_003d6f74462fbf 1,3,14,18,39,64-69,72,74-93,98,100-112,116-128,133,138-152,155,157,165-168,175-180,191-206,223-227
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_67d24b651fe6e8::t_27c315d7fb47ea 4-13,22,25-27,29-32,34,42-52,55,64,94-95,107,115-118,120,129
+apps/desktop/src/renderer/src/features/settings-defaults.ts
+  s_67d24b651fe6e8::t_4f9cf6b7c16857 1-11
+apps/desktop/src/renderer/src/features/settings-values.test.ts
+  s_67d24b651fe6e8::t_7c26da4d1e8d33 1-81
+apps/desktop/src/renderer/src/features/settings-values.ts
+  s_67d24b651fe6e8::t_783f4dac482a4c 1-33
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_67d24b651fe6e8::t_2434cd6aca6b2b 1,6-18,20-22,24-40
+apps/desktop/src/renderer/src/hooks/use-resizable-width.tsx
+  s_67d24b651fe6e8::t_6788f3f895270f 1-41
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_67d24b651fe6e8::t_faace0c0282805 4,20-22
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_67d24b651fe6e8::t_cd787185cd35e5 6,12,93-120,126-134,139-140,145
+apps/desktop/src/renderer/src/store/engine-preferences.ts
+  s_67d24b651fe6e8::t_8e10476838ac55 1-29
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_67d24b651fe6e8::t_3365ea062eb161 1-2,4-13,16-21,26,28-29,33-59,61-65,68-78,80-85,88,90-94,97-98,100-101,116
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_67d24b651fe6e8::t_e02f4c439f71e9 1,4-9,11-21,26-27,31-33,40-41,45-55,57-61,64
+biome.json
+  s_67d24b651fe6e8::t_d5d29eacf80e6f 35
+configs/lint/no-use-effect.grit
+  s_67d24b651fe6e8::t_c7d88edc3222d3 1-8
+packages/contracts/src/index.ts
+  s_67d24b651fe6e8::t_b9dfe3e90d3248 13
+packages/contracts/src/scheduler-defaults.ts
+  s_67d24b651fe6e8::t_502d87a5e3e01f 1-3
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_67d24b651fe6e8::t_b775f9c2187bae 19,49,69,74,84,86,88,110
+packages/engine/src/commands.test.ts
+  s_67d24b651fe6e8::t_4f82db6fd49b6e 73
+packages/engine/src/comments.test.ts
+  s_67d24b651fe6e8::t_d9c96d7ceece69 7,151-167
+packages/engine/src/comments.ts
+  s_67d24b651fe6e8::t_09feb544bea576 11-16,37-41
+packages/engine/src/engine.test.ts
+  s_67d24b651fe6e8::t_8565d3a8ab476a 65-68
+packages/engine/src/event-publisher.test.ts
+  s_67d24b651fe6e8::t_7a373fe413da4d 82-85
+packages/engine/src/executor.test.ts
+  s_67d24b651fe6e8::t_957cd539dfbdae 40,391-405,410,421,1093-1134
+packages/engine/src/executor.ts
+  s_67d24b651fe6e8::t_8a3b61fc1357f2 14-20,45,148,400-420,429
+packages/engine/src/github/github.test.ts
+  s_67d24b651fe6e8::t_55a6a4388a5e34 32,303-339
+packages/engine/src/github/markers.ts
+  s_67d24b651fe6e8::t_12a4cdffb0c97c 36-40
+packages/engine/src/github/provider.ts
+  s_67d24b651fe6e8::t_f42b5f6fecb36d 24,199-204,209,222-242,252-257
+packages/engine/src/source-control.ts
+  s_67d24b651fe6e8::t_714cfc8bfdad49 27-35,45
+packages/ui/src/components/sidebar.tsx
+  s_67d24b651fe6e8::t_e7ebe7add87eb2 86
+packages/ui/src/hooks/use-mobile.ts
+  s_67d24b651fe6e8::t_2c1c4a36a77a25 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "82365fc83d4a6b1f915aa4ff67dc07dd218902e5",
+  "prompts": {},
+  "sessions": {
+    "s_67d24b651fe6e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1c4bd9b6-766b-4b11-8de6-23a31149786d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
