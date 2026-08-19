@@ -141,8 +141,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       if (first === undefined) {
         return yield* notLinear(workspace);
       }
-      // A single-team workspace resolves to its one target regardless of the identifier, exactly as
-      // before. With several teams, the identifier prefix picks the team that owns the write.
+      // Single-team skips prefix routing, so a UUID-keyed or off-prefix identifier still resolves.
       if (rest.length === 0) {
         return { target: first, issueId: id } satisfies LinearRef;
       }

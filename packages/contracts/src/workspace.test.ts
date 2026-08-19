@@ -6,16 +6,16 @@ const tracker = (over: Partial<typeof IssueTrackerConfig.Encoded>) =>
   Schema.decodeSync(IssueTrackerConfig)({ type: "linear", ...over });
 
 describe("linearTeams", () => {
-  it("reads the single-team shorthand", () => {
-    assert.deepStrictEqual([...linearTeams(tracker({ team: "GRO" }))], ["GRO"]);
+  it("reads a single configured team", () => {
+    assert.deepStrictEqual([...linearTeams(tracker({ teams: ["GRO"] }))], ["GRO"]);
   });
 
-  it("reads the multi-team list", () => {
+  it("reads the multi-team list in order", () => {
     assert.deepStrictEqual([...linearTeams(tracker({ teams: ["GRO", "BIL"] }))], ["GRO", "BIL"]);
   });
 
-  it("merges the shorthand and the list, shorthand first, without duplicates", () => {
-    assert.deepStrictEqual([...linearTeams(tracker({ team: "GRO", teams: ["BIL", "GRO"] }))], ["GRO", "BIL"]);
+  it("drops duplicate teams, keeping first-seen order", () => {
+    assert.deepStrictEqual([...linearTeams(tracker({ teams: ["GRO", "BIL", "GRO"] }))], ["GRO", "BIL"]);
   });
 
   it("is empty when a Linear tracker names no team", () => {

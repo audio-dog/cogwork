@@ -14,7 +14,7 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded>) =>
     checkoutPath: "/repos/lin",
     issueTracker: {
       type: "linear",
-      team: "ENG",
+      teams: ["ENG"],
       oauth: { clientId: "cid", clientSecretEnv: "LINEAR_CLIENT_SECRET" },
     },
     harness: { preferred: "cursor" },
@@ -45,7 +45,7 @@ const storeStub = (calls: Ref.Ref<ReadonlyArray<string>>): CredentialStoreServic
 
 describe("credentialAccountFor", () => {
   it("derives the Linear account from a Linear workspace, borrowing its client credentials", () => {
-    const account = credentialAccountFor(config({ issueTracker: { type: "linear", team: "ENG" } }));
+    const account = credentialAccountFor(config({ issueTracker: { type: "linear", teams: ["ENG"] } }));
     assert.strictEqual(account?.issueTracker, "linear");
     assert.strictEqual(account?.key, "ENG");
     assert.strictEqual(account?.tokenEnv, "LINEAR_API_KEY");

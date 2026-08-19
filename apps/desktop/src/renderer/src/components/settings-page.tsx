@@ -36,18 +36,19 @@ const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({
 
 function useFocusFlash(id: string) {
   const { focus, jump } = use(FocusedSettingContext);
-  const scrolledFor = useRef<string | undefined>(undefined);
   const flashing = focus === id;
   // Changing the key on each jump remounts the node so the CSS flash animation replays.
   const flashKey = flashing ? `${id}:${jump ?? 0}` : id;
+  const scrolledNode = useRef<HTMLElement | null>(null);
 
-  if (!flashing) {
-    scrolledFor.current = undefined;
-  }
-
+  // The guard lives entirely in the ref callback (commit time) and never reads
+  // or writes `ref.current` during render. Each activation remounts the keyed
+  // node, so a fresh node means "scroll again": this re-scrolls when the same
+  // setting + jump is focused a second time (deep-link or back), while a node
+  // that stays mounted across re-renders is scrolled only once.
   const ref = (node: HTMLElement | null) => {
-    if (!node || !flashing || scrolledFor.current === flashKey) return;
-    scrolledFor.current = flashKey;
+    if (!node || !flashing || scrolledNode.current === node) return;
+    scrolledNode.current = node;
     node.scrollIntoView({ block: "center" });
   };
 
