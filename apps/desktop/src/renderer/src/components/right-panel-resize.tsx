@@ -1,18 +1,17 @@
-import { useSidebar } from "@cogwork/ui/components/sidebar";
-import { useEffect, useRef } from "react";
+import { createContext, use, useRef } from "react";
 import { clampResizableWidth, useResizableWidth } from "./resizable-width";
 
 const STORAGE_KEY = "cf.rightPanelWidth";
-const DEFAULT_WIDTH = 30 * 16;
+export const DEFAULT_WIDTH = 30 * 16;
 const MIN_WIDTH = 22 * 16;
 // Keep the main column usable no matter how wide the panel is dragged.
 const MAIN_CONTENT_MIN_WIDTH = 30 * 16;
 
-function rightPanelBounds(sidebarWidth: number, sidebarExpanded: boolean) {
+function storedPanelBounds(sidebarWidth: number) {
   return {
     minWidth: MIN_WIDTH,
     mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
-    reservedWidth: sidebarExpanded ? sidebarWidth : 0,
+    reservedWidth: sidebarWidth,
   };
 }
 
@@ -21,20 +20,26 @@ function insetWidth(wrapper: HTMLElement): number {
   return inset?.getBoundingClientRect().width ?? window.innerWidth;
 }
 
-export function useRightPanelWidth(sidebarWidth: number) {
-  const { state } = useSidebar();
-  const bounds = rightPanelBounds(sidebarWidth, state === "expanded");
-  const panel = useResizableWidth({ storageKey: STORAGE_KEY, defaultWidth: DEFAULT_WIDTH, ...bounds });
+interface RightPanelWidthActions {
+  readonly setWidth: (width: number) => void;
+  readonly reset: () => void;
+}
 
-  // The CSS var lives on SidebarProvider in __root__; sync it from here where we
-  // know the clamped width (inside the provider tree).
-  useEffect(() => {
-    document
-      .querySelector<HTMLElement>("[data-slot='sidebar-wrapper']")
-      ?.style.setProperty("--right-panel-width", `${panel.width}px`);
-  }, [panel.width]);
+export const RightPanelWidthContext = createContext<RightPanelWidthActions | null>(null);
 
-  return panel;
+export function useRightPanelWidthActions(): RightPanelWidthActions {
+  const actions = use(RightPanelWidthContext);
+  if (!actions) throw new Error("Right panel width actions must render inside RootLayout");
+  return actions;
+}
+
+// Read and clamp the persisted width for __root__'s SidebarProvider style prop.
+export function useStoredRightPanelWidth(sidebarWidth: number) {
+  return useResizableWidth({
+    storageKey: STORAGE_KEY,
+    defaultWidth: DEFAULT_WIDTH,
+    ...storedPanelBounds(sidebarWidth),
+  });
 }
 
 interface DragState {

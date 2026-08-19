@@ -9,7 +9,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps } from "react";
 import { AppSidebar } from "../../components/nav-sidebar";
 import { RightPanel } from "../../components/right-panel";
-import { RightPanelResizeHandle, useRightPanelWidth } from "../../components/right-panel-resize";
+import { RightPanelResizeHandle, useRightPanelWidthActions } from "../../components/right-panel-resize";
 import { PausedBanner, SchedulerControls } from "../../components/scheduler-gauges";
 import { SidebarResizeHandle, useSidebarWidth } from "../../components/sidebar-resize";
 import { type EngineStatusValue, engineIsOn, useEngineStatus } from "../../features/use-engine-status";
@@ -135,8 +135,8 @@ function ContentArea({
 }
 
 function AppShell() {
-  const { width: sidebarWidth, setWidth, reset } = useSidebarWidth();
-  const rightPanel = useRightPanelWidth(sidebarWidth);
+  const { setWidth, reset } = useSidebarWidth();
+  const rightPanel = useRightPanelWidthActions();
 
   return (
     <>
