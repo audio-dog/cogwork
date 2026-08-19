@@ -1,4 +1,5 @@
-import { createContext, use, useRef } from "react";
+import { useSidebar } from "@cogwork/ui/components/sidebar";
+import { createContext, use, useLayoutEffect, useRef } from "react";
 import { clampResizableWidth, useResizableWidth } from "./resizable-width";
 
 const STORAGE_KEY = "cf.rightPanelWidth";
@@ -7,11 +8,11 @@ const MIN_WIDTH = 22 * 16;
 // Keep the main column usable no matter how wide the panel is dragged.
 const MAIN_CONTENT_MIN_WIDTH = 30 * 16;
 
-function storedPanelBounds(sidebarWidth: number) {
+function storedPanelBounds(sidebarWidth: number, sidebarExpanded: boolean) {
   return {
     minWidth: MIN_WIDTH,
     mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
-    reservedWidth: sidebarWidth,
+    reservedWidth: sidebarExpanded ? sidebarWidth : 0,
   };
 }
 
@@ -29,17 +30,45 @@ export const RightPanelWidthContext = createContext<RightPanelWidthActions | nul
 
 export function useRightPanelWidthActions(): RightPanelWidthActions {
   const actions = use(RightPanelWidthContext);
-  if (!actions) throw new Error("Right panel width actions must render inside RootLayout");
+  if (!actions) throw new Error("Right panel width actions must render inside RightPanelWidthProvider");
   return actions;
 }
 
-// Read and clamp the persisted width for __root__'s SidebarProvider style prop.
-export function useStoredRightPanelWidth(sidebarWidth: number) {
+function useStoredRightPanelWidth(sidebarWidth: number, sidebarExpanded: boolean) {
   return useResizableWidth({
     storageKey: STORAGE_KEY,
     defaultWidth: DEFAULT_WIDTH,
-    ...storedPanelBounds(sidebarWidth),
+    ...storedPanelBounds(sidebarWidth, sidebarExpanded),
   });
+}
+
+// Lives inside SidebarProvider so it can read collapsed state for clamp bounds.
+// Writes --right-panel-width directly on the wrapper so __root__'s style prop
+// (which only tracks sidebar width) never stomps the persisted value on re-render.
+export function RightPanelWidthProvider({
+  sidebarWidth,
+  children,
+}: {
+  sidebarWidth: number;
+  children: React.ReactNode;
+}) {
+  const { state } = useSidebar();
+  const expanded = state === "expanded";
+  const rightPanel = useStoredRightPanelWidth(sidebarWidth, expanded);
+  const widthRef = useRef(rightPanel.width);
+  widthRef.current = rightPanel.width;
+
+  useLayoutEffect(() => {
+    document
+      .querySelector<HTMLElement>("[data-slot='sidebar-wrapper']")
+      ?.style.setProperty("--right-panel-width", `${widthRef.current}px`);
+  }, [rightPanel.width]);
+
+  return (
+    <RightPanelWidthContext value={{ setWidth: rightPanel.setWidth, reset: rightPanel.reset }}>
+      {children}
+    </RightPanelWidthContext>
+  );
 }
 
 interface DragState {
