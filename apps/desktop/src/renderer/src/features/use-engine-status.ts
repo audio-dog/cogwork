@@ -34,6 +34,10 @@ function setRestarting(next: boolean) {
   notifyListeners();
 }
 
+function syncStatus() {
+  return window.cogwork.getEngineStatus().then(setStatus);
+}
+
 function subscribe(onStoreChange: () => void): () => void {
   listeners.add(onStoreChange);
   if (listeners.size === 1) {
@@ -64,16 +68,28 @@ export function useEngineStatus() {
   const applyStatus = (transition: Promise<EngineStatus>) =>
     transition.then(setStatus).catch((error) => {
       reportRendererError(error, "engine-toggle");
-      return window.cogwork.getEngineStatus().then(setStatus);
+      return syncStatus();
     });
 
-  const setEnabled = (enabled: boolean) => applyStatus(window.cogwork.setEngineEnabled(enabled));
+  const setEnabled = (enabled: boolean) => {
+    if (restarting) return;
+    return applyStatus(window.cogwork.setEngineEnabled(enabled));
+  };
 
   const restart = () => {
+    if (restarting) return;
     setRestarting(true);
-    return applyStatus(
-      window.cogwork.setEngineEnabled(false).then(() => window.cogwork.setEngineEnabled(true)),
-    ).finally(() => setRestarting(false));
+    return window.cogwork
+      .setEngineEnabled(false)
+      .then(() => window.cogwork.setEngineEnabled(true))
+      .then(setStatus)
+      .catch((error) => {
+        reportRendererError(error, "engine-restart");
+      })
+      .finally(() => {
+        setRestarting(false);
+        return syncStatus();
+      });
   };
 
   return { status, isRestarting, setEnabled, restart };
