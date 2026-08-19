@@ -3,11 +3,13 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { RightPanelWidthProvider } from "../components/right-panel-resize";
 import { useSidebarWidth } from "../components/sidebar-resize";
+import { useSchedulingMainSync } from "../features/use-scheduling-main-sync";
 
 const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
 
 function RootLayout() {
   const { width } = useSidebarWidth();
+  useSchedulingMainSync();
   const controlsLeft = isMac ? "90px" : "0.75rem";
   const providerStyle = {
     "--sidebar-width": `${width}px`,
