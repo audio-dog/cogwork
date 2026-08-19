@@ -16,7 +16,7 @@ export interface UtilityCall {
   readonly prompt: string;
 }
 
-export class UtilityCallError extends Schema.TaggedErrorClass<UtilityCallError>()("UtilityCallError", {
+export class UtilityCallError extends Schema.TaggedError<UtilityCallError>()("UtilityCallError", {
   model: Schema.String,
   message: Schema.String,
 }) {}

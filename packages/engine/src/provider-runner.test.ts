@@ -154,7 +154,7 @@ describe("providerRunner", () => {
           ),
         );
 
-        const serialized = yield* Schema.encodeEffect(Schema.UnknownFromJsonString)(events);
+        const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(events);
         assert.include(serialized, "hello world");
         assert.notInclude(serialized, SECRET);
         assert.isTrue(events.some((event) => agUiTextDelta(event) === "hello world"));

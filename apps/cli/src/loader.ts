@@ -9,7 +9,7 @@ const configSuffixes = [".workspace.ts", ".workspace.mts", ".workspace.cts"];
 
 const isConfigFile = (name: string) => configSuffixes.some((suffix) => name.endsWith(suffix));
 
-class WorkspaceLoadError extends Schema.TaggedErrorClass<WorkspaceLoadError>()("WorkspaceLoadError", {
+class WorkspaceLoadError extends Schema.TaggedError<WorkspaceLoadError>()("WorkspaceLoadError", {
   detail: Schema.String,
 }) {
   override get message() {

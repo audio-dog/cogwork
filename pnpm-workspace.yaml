@@ -24,11 +24,11 @@ catalog:
 
 catalogs:
   effect:
-    effect: '4.0.0-beta.102'
-    '@effect/atom-react': '4.0.0-beta.102'
-    '@effect/opentelemetry': '4.0.0-beta.102'
-    '@effect/platform-node': '4.0.0-beta.102'
-    '@effect/vitest': '4.0.0-beta.102'
+    effect: '4.0.0-rc.110'
+    '@effect/atom-react': '4.0.0-rc.110'
+    '@effect/opentelemetry': '4.0.0-rc.110'
+    '@effect/platform-node': '4.0.0-rc.110'
+    '@effect/vitest': '4.0.0-rc.110'
 
 minimumReleaseAgeExclude:
   - '@tanstack/ai-acp@0.2.6'

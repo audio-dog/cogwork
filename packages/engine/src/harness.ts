@@ -28,7 +28,7 @@ export interface HarnessRequest {
 // so the provider runner can assemble context and resolve its provider key.
 export type HarnessRunnerEnv = SessionStore | ContextAssembler | CredentialStore;
 
-export class HarnessError extends Schema.TaggedErrorClass<HarnessError>()("HarnessError", {
+export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessError", {
   reason: Schema.Literals(["unknown-harness", "launch", "turn"]),
   retryable: Schema.Boolean,
   message: Schema.String,

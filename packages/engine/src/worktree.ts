@@ -6,7 +6,7 @@ import { type BranchDivergence, Git, GitError, type WorktreeEntry } from "./git"
 import type { RegisteredWorkspace } from "./projector";
 import { WorktreeFs } from "./worktree-fs";
 
-export class WorktreeDivergedError extends Schema.TaggedErrorClass<WorktreeDivergedError>()(
+export class WorktreeDivergedError extends Schema.TaggedError<WorktreeDivergedError>()(
   "WorktreeDivergedError",
   {
     remote: Schema.String,
