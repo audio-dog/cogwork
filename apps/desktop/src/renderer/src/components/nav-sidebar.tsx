@@ -20,6 +20,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
+import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
@@ -120,37 +121,39 @@ function UserButton() {
 
 export function AppSidebar() {
   return (
-    <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="@container/sidebar-header h-11 shrink-0 flex-row items-center px-3 py-0 [-webkit-app-region:drag]">
-        <Link
-          aria-label="cogwork home"
-          to="/"
-          className="ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
-        >
-          <span className="truncate text-sm font-semibold">cog</span>
-          <span className="truncate text-sm font-medium text-muted-foreground">work</span>
-        </Link>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Views</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {views.map((view) => (
-                <ViewItem key={view.label} view={view} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <WorkspaceFilter />
-      </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <UserButton />
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
-    </Sidebar>
+    <TooltipProvider>
+      <Sidebar collapsible="offcanvas">
+        <SidebarHeader className="@container/sidebar-header h-11 shrink-0 flex-row items-center px-3 py-0 [-webkit-app-region:drag]">
+          <Link
+            aria-label="cogwork home"
+            to="/"
+            className="ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
+          >
+            <span className="truncate text-sm font-semibold">cog</span>
+            <span className="truncate text-sm font-medium text-muted-foreground">work</span>
+          </Link>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Views</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {views.map((view) => (
+                  <ViewItem key={view.label} view={view} />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <WorkspaceFilter />
+        </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <UserButton />
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
+    </TooltipProvider>
   );
 }
