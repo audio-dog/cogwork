@@ -10,7 +10,7 @@ export default defineWorkspace({
   checkoutPath: "/Users/taylorsteele/sites/feldspar",
   issueTracker: {
     type: "linear",
-    team: "FEL",
+    teams: ["FEL"],
     tokenEnv: "LINEAR_API_KEY",
     actorUserId: "02051c43-a071-42bd-9bae-8f6ede983375",
     roleLabels: {

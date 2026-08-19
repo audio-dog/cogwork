@@ -34,7 +34,7 @@ export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   repo: Schema.optional(TrimmedNonEmptyString),
-  team: Schema.optional(TrimmedNonEmptyString),
+  teams: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   organization: Schema.optional(TrimmedNonEmptyString),
   tokenEnv: Schema.optional(TrimmedNonEmptyString),
   oauth: Schema.optional(OAuthAppConfig),
@@ -46,6 +46,11 @@ export const IssueTrackerConfig = Schema.Struct({
   priority: Schema.optional(GitHubPrioritySource),
 });
 export type IssueTrackerConfig = typeof IssueTrackerConfig.Type;
+
+export const linearTeams = (source: IssueTrackerConfig) => {
+  if (source.type !== "linear") return [];
+  return [...new Set(source.teams ?? [])];
+};
 
 export const SourceControlConfig = Schema.Struct({
   type: SourceControlType,

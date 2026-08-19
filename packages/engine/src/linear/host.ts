@@ -1,4 +1,4 @@
-import { type OAuthAppConfig, type TriageRole, WorkItemId } from "@cogwork/contracts";
+import { linearTeams, type TriageRole, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { triageProposalAttribution } from "../comments";
@@ -7,6 +7,7 @@ import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace } from "../projector";
+import { credentialAccountFor } from "./account";
 import {
   type LinearClientService,
   type LinearTeamRef,
@@ -49,21 +50,25 @@ const toCoordinationComment =
 const coordinationScope = ({ actorUserId }: LinearTarget) =>
   actorUserId === null ? null : { actorUserId, ledgerMarker, proposalMarker: triageProposalAttribution };
 
-const clientCredentialsFor = (oauth: OAuthAppConfig | undefined) =>
-  oauth?.clientSecretEnv ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null;
-
-const targetFor = (workspace: RegisteredWorkspace) => {
+// One target per configured team, all sharing one credential account so a single token covers the
+// whole workspace; only the team key differs, which is what routes a write to its owning team.
+const targetsFor = (workspace: RegisteredWorkspace): ReadonlyArray<LinearTarget> => {
   const source = workspace.config.issueTracker;
-  if (source.type !== "linear" || !source.team) return null;
-  return {
-    team: source.team,
-    tokenEnv: source.tokenEnv ?? "LINEAR_API_KEY",
-    organization: source.organization ?? null,
-    clientCredentials: clientCredentialsFor(source.oauth),
-    oauthClientId: source.oauth?.clientId ?? null,
+  const account = credentialAccountFor(workspace.config);
+  if (account === null) return [];
+  const base = {
+    account,
     actorUserId: source.actorUserId ?? null,
     roleLabels: roleLabelsFor(source.roleLabels),
-  } satisfies LinearTarget;
+  };
+  return linearTeams(source).map((team) => ({ team, ...base }) satisfies LinearTarget);
+};
+
+// A Linear identifier is `<TEAM-KEY>-<number>` (e.g. `BIL-42`), and team keys never contain a dash,
+// so the text before the first dash is the team key that owns the issue.
+const teamKeyOf = (identifier: string) => {
+  const dash = identifier.indexOf("-");
+  return dash === -1 ? identifier : identifier.slice(0, dash);
 };
 
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
@@ -118,21 +123,37 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
   return {
     codec: wireCodec,
     rateLimitScope: (workspace: RegisteredWorkspace) => {
-      const target = targetFor(workspace);
-      return target === null ? null : rateLimitScopeOf(target.tokenEnv);
+      // Every team shares one token, so the whole workspace backs off on one scope.
+      const [target] = targetsFor(workspace);
+      return target === undefined ? null : rateLimitScopeOf(target.account.tokenEnv);
     },
     list: Effect.fn("linear.list")(function* (workspace: RegisteredWorkspace) {
-      const target = targetFor(workspace);
-      if (!target) {
-        return [];
-      }
-      const issues = yield* client.observeIssues(target, coordinationScope(target));
-      return yield* Effect.forEach(issues, listItem(target));
+      const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
+        Effect.flatMap(client.observeIssues(target, coordinationScope(target)), (issues) =>
+          Effect.forEach(issues, listItem(target)),
+        ),
+      );
+      return perTeam.flat();
     }),
     resolve: Effect.fn("linear.resolve")(function* (workspace: RegisteredWorkspace, id: WorkItemId) {
-      const target = targetFor(workspace);
-      if (!target) {
+      const targets = targetsFor(workspace);
+      const [first, ...rest] = targets;
+      if (first === undefined) {
         return yield* notLinear(workspace);
+      }
+      // Single-team skips prefix routing, so a UUID-keyed or off-prefix identifier still resolves.
+      if (rest.length === 0) {
+        return { target: first, issueId: id } satisfies LinearRef;
+      }
+      const key = teamKeyOf(id);
+      const target = targets.find((candidate) => candidate.team === key);
+      if (target === undefined) {
+        return yield* new IssueTrackerError({
+          reason: "unavailable",
+          message: `Linear item ${id} does not belong to any configured team (${targets
+            .map((candidate) => candidate.team)
+            .join(", ")})`,
+        });
       }
       return { target, issueId: id } satisfies LinearRef;
     }),

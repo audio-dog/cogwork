@@ -12,7 +12,7 @@ export default defineWorkspace({
   checkoutPath: "/Users/taylorsteele/sites/colony",
   issueTracker: {
     type: "linear",
-    team: "GRO",
+    teams: ["GRO", "BIL"],
     tokenEnv: "LINEAR_API_KEY",
     actorUserId: taylor,
     assigneeAllowlist: [taylor],
