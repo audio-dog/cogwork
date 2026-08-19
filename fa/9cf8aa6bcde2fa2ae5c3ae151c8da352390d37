@@ -1,0 +1,32 @@
+apps/desktop/src/renderer/src/routes/_app/activity.tsx
+  s_9b460ffb4b299c::t_31297480a37433 76-87
+apps/desktop/src/renderer/src/components/engine-gate.tsx
+  s_9b460ffb4b299c::t_e3312a74976b78 13,18-21,30-35,38,41-50,53-58,62-64,68,74-76,85,90,108-109,137,140-142,147,149-153,157-160,163-166,168-219
+apps/desktop/src/renderer/src/routes/_app/index.tsx
+  s_9b460ffb4b299c::t_2b2d401d980fb0 7-16
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_9b460ffb4b299c::t_5aa7ceef8512fd 233-246
+apps/desktop/src/renderer/src/features/engine-gate.ts
+  s_9b460ffb4b299c::t_30c137deabc8f0 8-11,14-21
+  s_9b460ffb4b299c::t_4d68f589476f80 22
+apps/cli/config/colony.workspace.ts
+  s_9b460ffb4b299c::t_78b466d5fe8aad 35-41
+apps/desktop/CONTEXT.md
+  s_9b460ffb4b299c::t_e9320ba0cc01bd 68-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "fa9cf8aa6bcde2fa2ae5c3ae151c8da352390d37",
+  "prompts": {},
+  "sessions": {
+    "s_9b460ffb4b299c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fe94b1f1-4fed-4a1f-bdd5-18ddcfe343ec",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
