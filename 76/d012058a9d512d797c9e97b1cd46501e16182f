@@ -1,0 +1,56 @@
+packages/engine/src/linear/linear.test.ts
+  s_15bcbcc95b374d::t_e0c30b6b40be5c 30-36
+  s_15bcbcc95b374d::t_3acdd27c0ecc13 206-219
+  s_15bcbcc95b374d::t_211a273fcdae8f 114
+  s_15bcbcc95b374d::t_0ab95baf27517a 119-128
+  s_15bcbcc95b374d::t_527243bd0db17f 262-275
+  s_15bcbcc95b374d::t_58ec5a4fb57a85 67-74
+  s_15bcbcc95b374d::t_8ccf194a0f6e0e 147,153-160,166,168-170,174,176-179,181-183,185,187-205
+  s_15bcbcc95b374d::t_62946ef8faedcf 578-633
+  s_15bcbcc95b374d::t_3c4be6eaa1d0a7 171-172
+packages/engine/src/linear/host.ts
+  s_15bcbcc95b374d::t_2e0bbb5149c366 53-54,57-58,60
+  s_15bcbcc95b374d::t_591b60ed7e432d 128,136
+  s_15bcbcc95b374d::t_a7fd9195ef6f90 1,10
+  s_15bcbcc95b374d::t_efbec3eb9c6fe2 126-127,131-135,139-141,144-149,151-158
+  s_15bcbcc95b374d::t_09cbb5ce7a129f 150
+  s_15bcbcc95b374d::t_660870c7525e6e 55,59,63-71
+apps/cli/config/colony.workspace.ts
+  s_15bcbcc95b374d::t_8e5dc0f1c9da24 15
+packages/engine/src/issue-tracker.ts
+  s_15bcbcc95b374d::t_810ab033204c1e 99-100
+  s_15bcbcc95b374d::t_fbe5697cbc4026 6
+packages/contracts/src/workspace.test.ts
+  s_15bcbcc95b374d::t_a8bb485f4a55af 1-28
+packages/engine/src/mcp-skill.test.ts
+  s_15bcbcc95b374d::t_015b3c62dcc287 54-58
+packages/engine/src/linear/account.ts
+  s_15bcbcc95b374d::t_13cd098291fa92 15
+  s_15bcbcc95b374d::t_21f89b15e8ceff 1,4-6,8-12,14,19
+  s_15bcbcc95b374d::t_adc9119e211770 7
+packages/contracts/src/workspace.ts
+  s_15bcbcc95b374d::t_2fea9a9d0c5836 37-38,40,53-57
+  s_15bcbcc95b374d::t_4c7d1a6abc500e 58
+packages/engine/src/linear/client.test.ts
+  s_15bcbcc95b374d::t_713229cbd6275c 14-21
+packages/engine/src/linear/client.ts
+  s_15bcbcc95b374d::t_1a86bbb37dcaea 383
+  s_15bcbcc95b374d::t_a09e051eb85d27 15,23-25
+  s_15bcbcc95b374d::t_b77c61f3fccbd6 355,362,374
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "76d012058a9d512d797c9e97b1cd46501e16182f",
+  "prompts": {},
+  "sessions": {
+    "s_15bcbcc95b374d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "66a72c6c-6af4-4487-9aeb-1f6825c2b026",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
