@@ -1,0 +1,22 @@
+apps/desktop/src/main/engine-command.ts
+  s_a2e09eab072b34::t_7b1d097e271c3c 16-17,20-28
+  s_a2e09eab072b34::t_05ebab7518b790 32
+apps/desktop/src/main/engine-command.test.ts
+  s_a2e09eab072b34::t_02169dd48e0a00 53-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "8df0f19e2204c254825c1d6d1e13fd7b0f3cd384",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
