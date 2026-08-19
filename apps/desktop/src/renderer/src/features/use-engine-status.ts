@@ -1,15 +1,43 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import type { EngineStatus } from "../../../shared/ipc";
 
 export type EngineStatusValue = EngineStatus | "unknown";
 
-export function useEngineStatus() {
-  const [status, setStatus] = useState<EngineStatusValue>("unknown");
+let currentStatus: EngineStatusValue = "unknown";
+let unsubscribeIpc: (() => void) | null = null;
+const listeners = new Set<() => void>();
 
-  useEffect(() => {
+function setStatus(next: EngineStatusValue) {
+  if (next === currentStatus) {
+    return;
+  }
+  currentStatus = next;
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+function subscribe(onStoreChange: () => void): () => void {
+  listeners.add(onStoreChange);
+  if (listeners.size === 1) {
     window.cogwork.getEngineStatus().then(setStatus);
-    return window.cogwork.onEngineStatus(setStatus);
-  }, []);
+    unsubscribeIpc = window.cogwork.onEngineStatus(setStatus);
+  }
+  return () => {
+    listeners.delete(onStoreChange);
+    if (listeners.size === 0 && unsubscribeIpc) {
+      unsubscribeIpc();
+      unsubscribeIpc = null;
+    }
+  };
+}
+
+function getSnapshot(): EngineStatusValue {
+  return currentStatus;
+}
+
+export function useEngineStatus() {
+  const status = useSyncExternalStore(subscribe, getSnapshot);
 
   const setEnabled = (enabled: boolean) => {
     window.cogwork.setEngineEnabled(enabled).then(setStatus);
