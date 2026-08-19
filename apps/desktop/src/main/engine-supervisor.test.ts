@@ -18,6 +18,7 @@ class FakeChild extends EventEmitter implements EngineChild {
 }
 
 const command: EngineCommand = { command: "tsx", args: ["daemon"], cwd: "/repo" };
+const restartCommand: EngineCommand = { command: "tsx", args: ["daemon", "--resume"], cwd: "/repo" };
 
 const silentLogger = { info: () => {}, warn: () => {} };
 
@@ -133,6 +134,29 @@ describe("EngineSupervisor", () => {
 
     expect(spawn).toHaveBeenCalledTimes(3);
     expect(supervisor.status).toBe("failed");
+  });
+
+  it("uses restartCommand on unexpected exit instead of the launch command", async () => {
+    const children: FakeChild[] = [];
+    const spawn = vi.fn((engine: EngineCommand) => {
+      const child = new FakeChild();
+      const attempt = children.length;
+      children.push(child);
+      expect(engine.args).toEqual(attempt === 0 ? command.args : restartCommand.args);
+      return child;
+    });
+    const { supervisor } = makeSupervisor({
+      probe: () => Promise.resolve(false),
+      spawn,
+      restartCommand,
+      maxRestarts: 1,
+    });
+
+    await supervisor.start();
+    children[0].emit("exit", 1, null);
+    await flush();
+
+    expect(spawn).toHaveBeenCalledTimes(2);
   });
 
   it("stops an owned engine by terminating the child", async () => {

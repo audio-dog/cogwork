@@ -33,10 +33,20 @@ const makeSupervisor = (): EngineSupervisor => {
     baseDir,
     nodeBinary: process.env.COGWORK_NODE,
     engineEntry: process.env.COGWORK_ENGINE_ENTRY,
+    startPaused: true,
+  });
+  const restartCommand = resolveEngineCommand({
+    socketPath,
+    packaged: app.isPackaged,
+    baseDir,
+    nodeBinary: process.env.COGWORK_NODE,
+    engineEntry: process.env.COGWORK_ENGINE_ENTRY,
+    startPaused: false,
   });
 
   const supervisor = new EngineSupervisor({
     command,
+    restartCommand,
     socketPath,
     spawn: (engine) =>
       spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),

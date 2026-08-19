@@ -19,6 +19,7 @@ export interface EngineLogger {
 
 export interface EngineSupervisorOptions {
   readonly command: EngineCommand;
+  readonly restartCommand?: EngineCommand;
   readonly socketPath: string;
   readonly spawn: SpawnEngine;
   readonly probe: (socketPath: string) => Promise<boolean>;
@@ -59,7 +60,7 @@ export class EngineSupervisor {
       return;
     }
 
-    this.#spawnChild();
+    this.#spawnChild(false);
   }
 
   async stop(): Promise<void> {
@@ -79,9 +80,10 @@ export class EngineSupervisor {
     });
   }
 
-  #spawnChild(): void {
+  #spawnChild(restart: boolean): void {
     this.#setStatus("starting");
-    const child = this.options.spawn(this.options.command);
+    const command = restart ? (this.options.restartCommand ?? this.options.command) : this.options.command;
+    const child = this.options.spawn(command);
     this.#child = child;
     this.#owned = true;
     const controller = new AbortController();
@@ -118,7 +120,7 @@ export class EngineSupervisor {
 
     this.#restarts += 1;
     this.options.logger.info(`Restarting engine (attempt ${this.#restarts})`);
-    this.#spawnChild();
+    this.#spawnChild(true);
   }
 
   #pipe(child: EngineChild): void {
