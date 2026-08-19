@@ -10,7 +10,7 @@ import { Input } from "#components/input";
 import { Separator } from "#components/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "#components/sheet";
 import { Skeleton } from "#components/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "#components/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "#components/tooltip";
 import { useIsMobile } from "#hooks/use-mobile";
 import { cn } from "#lib/utils";
 
@@ -151,6 +151,10 @@ function Sidebar({
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
+  // Scope the shared tooltip delay group to the sidebar. Collapsed menu-button
+  // labels form one group, so after the first opens the rest follow instantly.
+  const scopedChildren = <TooltipProvider delay={0}>{children}</TooltipProvider>;
+
   if (collapsible === "none") {
     return (
       <div
@@ -161,7 +165,7 @@ function Sidebar({
         )}
         {...props}
       >
-        {children}
+        {scopedChildren}
       </div>
     );
   }
@@ -186,7 +190,7 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div className="flex h-full w-full flex-col">{scopedChildren}</div>
         </SheetContent>
       </Sheet>
     );
@@ -231,7 +235,7 @@ function Sidebar({
           data-slot="sidebar-inner"
           className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
         >
-          {children}
+          {scopedChildren}
         </div>
       </div>
     </div>

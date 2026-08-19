@@ -3,7 +3,7 @@ import { Button } from "@cogwork/ui/components/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@cogwork/ui/components/resizable";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@cogwork/ui/components/sidebar";
 import { Switch } from "@cogwork/ui/components/switch";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwork/ui/components/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiLayoutRightLine } from "@remixicon/react";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { ComponentProps, CSSProperties } from "react";
@@ -50,6 +50,7 @@ function SidebarControl() {
     <div className="pointer-events-none fixed top-0 left-[var(--workspace-controls-left)] z-50 flex h-11 items-center">
       <Tooltip>
         <TooltipTrigger
+          delay={0}
           render={<SidebarTrigger className="pointer-events-auto [-webkit-app-region:no-drag]" />}
         />
         <TooltipContent side="bottom">Toggle sidebar</TooltipContent>
@@ -126,16 +127,14 @@ function RootLayout() {
   } as CSSProperties;
 
   return (
-    <TooltipProvider>
-      <SidebarProvider style={providerStyle}>
-        <NavSidebar />
-        <SidebarInset className="h-svh overflow-hidden">
-          <ContentArea />
-        </SidebarInset>
-        <SidebarControl />
-        <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
-      </SidebarProvider>
-    </TooltipProvider>
+    <SidebarProvider style={providerStyle}>
+      <NavSidebar />
+      <SidebarInset className="h-svh overflow-hidden">
+        <ContentArea />
+      </SidebarInset>
+      <SidebarControl />
+      <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
+    </SidebarProvider>
   );
 }
 
