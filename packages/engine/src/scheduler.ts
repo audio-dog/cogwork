@@ -34,8 +34,7 @@ export interface SchedulerState {
   readonly budgetUsed: number;
   readonly stopping: boolean;
   readonly paused: boolean;
-  // Resumes admitted while paused wait here instead of running, so a daemon that launched paused
-  // never spends budget behind the header toggle; setScheduling launches them once scheduling resumes.
+  // A daemon that launched paused must not spend budget behind the header toggle.
   readonly pendingResumes: ReadonlyArray<Candidate>;
 }
 
