@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/components/engine-gate.tsx
+  s_9b460ffb4b299c::t_72ffa3331f9435 38
+  s_9b460ffb4b299c::t_fb3f411f98bfdd 51,56
+  s_9b460ffb4b299c::t_0f3a00d7904d31 64,68,77,81
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_9b460ffb4b299c::t_fc5c6fda624486 8,12-17,19-21,26-31,33-34
+  s_9b460ffb4b299c::t_cdae68d8aed3a6 56-59
+  s_9b460ffb4b299c::t_d0599ea7af757f 62,72-77,79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "9e46d16b64fc724836c0f8a19bf43a4e63b733d2",
+  "prompts": {},
+  "sessions": {
+    "s_9b460ffb4b299c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fe94b1f1-4fed-4a1f-bdd5-18ddcfe343ec",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
