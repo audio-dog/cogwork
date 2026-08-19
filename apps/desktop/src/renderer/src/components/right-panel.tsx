@@ -1,5 +1,6 @@
 import type { DaemonEvent, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Button } from "@cogwork/ui/components/button";
+import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import {
@@ -13,6 +14,7 @@ import {
 import { useLiveEvents } from "../features/use-live-events";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { AttentionList } from "./attention-rail";
+import { CompactEngineGate } from "./engine-gate";
 import { ItemDetail } from "./item-detail";
 
 function SurfaceFill({ children }: { children: React.ReactNode }) {
@@ -38,9 +40,7 @@ function describeLiveEvent(event: DaemonEvent): string {
 
 function ActivityPanelBody() {
   const result = useLiveEvents();
-  if (result._tag !== "Success") {
-    return <p className="p-4 text-xs text-muted-foreground">Waiting for daemon events…</p>;
-  }
+  if (result._tag !== "Success") return null;
   const { items } = result.value;
   const start = Math.max(0, items.length - 40);
   const recent = items.slice(start);
@@ -166,6 +166,16 @@ function activeSurface(surfaces: readonly Surface[], active: SurfaceId): Surface
   return surfaces.find((surface) => surfaceId(surface) === active) ?? surfaces[0];
 }
 
+function PanelSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 p-3">
+      {[0, 1, 2, 3, 4].map((row) => (
+        <Skeleton key={row} className="h-10 w-full rounded-lg" />
+      ))}
+    </div>
+  );
+}
+
 export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
   const active = useRightPanelStore((state) => state.active);
@@ -220,11 +230,20 @@ export function RightPanel() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {current.kind === "attention" && <AttentionPanelBody />}
-        {current.kind === "activity" && <ActivityPanelBody />}
-        {current.kind === "item" && (
-          <ItemPanelBody workspace={current.workspace} workItem={current.workItem} />
-        )}
+        <CompactEngineGate.Provider>
+          <CompactEngineGate.Live>
+            {current.kind === "attention" && <AttentionPanelBody />}
+            {current.kind === "activity" && <ActivityPanelBody />}
+            {current.kind === "item" && (
+              <ItemPanelBody workspace={current.workspace} workItem={current.workItem} />
+            )}
+          </CompactEngineGate.Live>
+          <CompactEngineGate.Connecting>
+            <PanelSkeleton />
+          </CompactEngineGate.Connecting>
+          <CompactEngineGate.Off />
+          <CompactEngineGate.Broken />
+        </CompactEngineGate.Provider>
       </div>
     </div>
   );

@@ -1,12 +1,9 @@
 import type { DaemonEvent } from "@cogwork/contracts";
-import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@cogwork/ui/components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { createFileRoute } from "@tanstack/react-router";
-import { daemonErrorMessage } from "../../features/daemon-error";
-import { EngineOfflineMessage } from "../../features/engine-offline";
-import { type EnginePhase, enginePhase, useEngineStatus } from "../../features/use-engine-status";
+import { EngineGate } from "../../components/engine-gate";
 import { useLiveEvents } from "../../features/use-live-events";
 
 const describeEvent = (event: DaemonEvent) => {
@@ -31,43 +28,29 @@ function EventRow({ event }: { event: DaemonEvent }) {
   );
 }
 
-function EngineOfflineEmpty({ phase }: { phase: Exclude<EnginePhase, "up"> }) {
+function ActivitySkeleton() {
   return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyTitle>Activity</EmptyTitle>
-        <EmptyDescription>
-          <EngineOfflineMessage phase={phase} />
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    <div className="p-6">
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-5 w-28" />
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2, 3, 4].map((row) => (
+              <Skeleton key={row} className="h-5 w-full" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
 function LiveActivity() {
   const result = useLiveEvents();
 
-  if (result._tag === "Failure") {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>Event stream disconnected</AlertTitle>
-        <AlertDescription>{daemonErrorMessage(result.cause)}</AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (result._tag === "Initial") {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>Waiting for daemon events</EmptyTitle>
-          <EmptyDescription>
-            The stream is live over an AtomRpc pull atom; events appear here as they arrive.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
+  if (result._tag !== "Success") return null;
 
   const { items } = result.value;
   const start = Math.max(0, items.length - 8);
@@ -89,11 +72,19 @@ function LiveActivity() {
 }
 
 function ActivityPage() {
-  const { status } = useEngineStatus();
-  const phase = enginePhase(status);
-
   return (
-    <div className="p-6">{phase === "up" ? <LiveActivity /> : <EngineOfflineEmpty phase={phase} />}</div>
+    <EngineGate.Provider>
+      <EngineGate.Live>
+        <div className="p-6">
+          <LiveActivity />
+        </div>
+      </EngineGate.Live>
+      <EngineGate.Connecting>
+        <ActivitySkeleton />
+      </EngineGate.Connecting>
+      <EngineGate.Off />
+      <EngineGate.Broken />
+    </EngineGate.Provider>
   );
 }
 
