@@ -26,11 +26,11 @@ language js(typescript, jsx)
       `globalThis.localStorage`,
       `globalThis.sessionStorage`
     },
-    $method <: or { `setItem`, `removeItem`, `clear` }
+    $method <: or {
+      `setItem`,
+      `removeItem`,
+      `clear`
+    }
   },
-  register_diagnostic(
-    span=$updater,
-    message="Rule: no side effect inside a React state updater. Why: React may run the updater more than once (StrictMode double-invoke, concurrent replay), so a browser-storage write here can run twice or observe stale external state. Fix: compute the next state and return it; write to storage in the event handler or effect (reuse the setter that persists + sets state).",
-    severity="error"
-  )
+  register_diagnostic(span=$updater, message="Rule: no side effect inside a React state updater. Why: React may run the updater more than once (StrictMode double-invoke, concurrent replay), so a browser-storage write here can run twice or observe stale external state. Fix: compute the next state and return it; write to storage in the event handler or effect (reuse the setter that persists + sets state).", severity="error")
 }
