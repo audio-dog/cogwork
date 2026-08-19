@@ -1,0 +1,22 @@
+packages/ui/src/components/sidebar.tsx
+  s_afaa4ea4aebf3a::t_00379a87af6713 164
+  s_afaa4ea4aebf3a::t_15898e625cc87d 189,191
+  s_afaa4ea4aebf3a::t_9f0c95d71b1234 236
+  s_afaa4ea4aebf3a::t_bf40240694a126 190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "22dfde76217a19d533d1d2160f9dfed28377cbcc",
+  "prompts": {},
+  "sessions": {
+    "s_afaa4ea4aebf3a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "759f7888-d6e3-4d27-a6b3-6d739de3484d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
