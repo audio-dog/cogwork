@@ -11,18 +11,50 @@ export interface ItemStateDescriptor {
   readonly running: boolean;
 }
 
+type StageTag = Extract<ClassifiedItem["_tag"], "Eligible" | "Claimed">;
+
+const stageOfByTag: {
+  [T in StageTag]: (item: Extract<ClassifiedItem, { _tag: T }>) => LifecycleStage | null;
+} = {
+  Eligible: (item) => item.stage,
+  Claimed: (item) => item.claim.stage ?? null,
+};
+
 const stageOf = (item: ClassifiedItem): LifecycleStage | null => {
-  switch (item._tag) {
-    case "Eligible":
-      return item.stage;
-    case "Claimed":
-      return item.claim.stage ?? null;
-    default:
-      return null;
-  }
+  if (item._tag === "Eligible") return stageOfByTag.Eligible(item);
+  if (item._tag === "Claimed") return stageOfByTag.Claimed(item);
+  return null;
 };
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+const calmDescriptor = (
+  item: Extract<ClassifiedItem, { _tag: "Eligible" | "Claimed" }>,
+  verb: "Queued" | "Working",
+): ItemStateDescriptor => {
+  if (item.pr?.review === "ready") {
+    return { label: "Ready to merge", tone: "ready", running: false };
+  }
+  const stage = stageOf(item);
+  return { label: stage ? `${verb} · ${stage}` : verb, tone: "muted", running: false };
+};
+
+const restingDescriptor: {
+  [T in ClassifiedItem["_tag"]]: (item: Extract<ClassifiedItem, { _tag: T }>) => ItemStateDescriptor;
+} = {
+  NeedsHuman: (item) => ({
+    label: `Needs a decision · ${item.reason}`,
+    tone: "attention",
+    running: false,
+  }),
+  Blocked: (item) => ({
+    label: `Blocked · ${plural(item.openBlockers, "open blocker")}`,
+    tone: "muted",
+    running: false,
+  }),
+  Eligible: (item) => calmDescriptor(item, "Queued"),
+  Claimed: (item) => calmDescriptor(item, "Working"),
+};
 
 // A live run wins over the item's resting classification — a running item reads
 // "Running · {stage}" whatever its tag. Otherwise the tag decides the chip.
@@ -30,24 +62,10 @@ export function describeItemState(item: ClassifiedItem, run: RunSummary | null):
   if (run?.status === "running") {
     return { label: `Running · ${run.stage}`, tone: "live", running: true };
   }
-  switch (item._tag) {
-    case "NeedsHuman":
-      return { label: `Needs a decision · ${item.reason}`, tone: "attention", running: false };
-    case "Blocked":
-      return {
-        label: `Blocked · ${plural(item.openBlockers, "open blocker")}`,
-        tone: "muted",
-        running: false,
-      };
-    default: {
-      if (item.pr?.review === "ready") {
-        return { label: "Ready to merge", tone: "ready", running: false };
-      }
-      const stage = stageOf(item);
-      const verb = item._tag === "Eligible" ? "Queued" : "Working";
-      return { label: stage ? `${verb} · ${stage}` : verb, tone: "muted", running: false };
-    }
-  }
+  if (item._tag === "NeedsHuman") return restingDescriptor.NeedsHuman(item);
+  if (item._tag === "Blocked") return restingDescriptor.Blocked(item);
+  if (item._tag === "Eligible") return restingDescriptor.Eligible(item);
+  return restingDescriptor.Claimed(item);
 }
 
 // The sub-tab strip. Live run is always present (it holds the transcript, live

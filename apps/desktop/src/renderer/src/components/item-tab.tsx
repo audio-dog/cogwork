@@ -24,13 +24,11 @@ import { cancelRunAtom, reclassifyAtom } from "../daemon/atoms";
 import { boardItem, needsHumanReasonLabel, runForItem, runsForItem } from "../features/feed";
 import { relativeTime } from "../features/format";
 import {
-  type AttemptTone,
   attemptTone,
   describeItemState,
   type ItemStateDescriptor,
   previousAttempts,
   resolveSubTab,
-  type StateTone,
   type SubTab,
   type SubTabKey,
   subTabs,
@@ -147,13 +145,6 @@ function ItemTabProvider({
 
 // --- Sub-tab strip -------------------------------------------------------
 
-const toneClass: Record<StateTone, string> = {
-  live: "bg-primary/15 text-primary",
-  attention: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  ready: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  muted: "bg-muted text-muted-foreground",
-};
-
 function SubTabStrip() {
   const {
     state: { tabs, subTab, descriptor },
@@ -198,6 +189,23 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+function StateBadge({ descriptor }: { descriptor: ItemStateDescriptor }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex w-fit items-center gap-1.5 self-start rounded-full px-2 py-0.5 text-xs font-medium",
+        descriptor.tone === "live" && "bg-primary/15 text-primary",
+        descriptor.tone === "attention" && "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+        descriptor.tone === "ready" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+        descriptor.tone === "muted" && "bg-muted text-muted-foreground",
+      )}
+    >
+      {descriptor.running && <RiPulseLine className="size-3.5 animate-pulse" />}
+      {descriptor.label}
+    </span>
+  );
+}
+
 function Header() {
   const {
     state: { workspace, item, descriptor },
@@ -210,16 +218,72 @@ function Header() {
         <span>{workspace}</span>
       </div>
       <h1 className="text-base font-semibold">{item.title}</h1>
-      <span
-        className={cn(
-          "inline-flex w-fit items-center gap-1.5 self-start rounded-full px-2 py-0.5 text-xs font-medium",
-          toneClass[descriptor.tone],
-        )}
-      >
-        {descriptor.running && <RiPulseLine className="size-3.5 animate-pulse" />}
-        {descriptor.label}
-      </span>
+      <StateBadge descriptor={descriptor} />
     </div>
+  );
+}
+
+function CancelParkButton() {
+  const {
+    state: { descriptor },
+    actions: { cancel },
+    meta: { cancelPending },
+  } = useItemTab();
+  if (!descriptor.running) return null;
+  return (
+    <Button size="sm" variant="outline" disabled={cancelPending} onClick={cancel}>
+      {cancelPending ? <Spinner data-icon="inline-start" /> : <RiStopCircleLine data-icon="inline-start" />}
+      Cancel &amp; park
+    </Button>
+  );
+}
+
+function ApproveButton() {
+  const {
+    state: { item },
+    actions: { reclassify },
+    meta: { reclassifyPending },
+  } = useItemTab();
+  if (item._tag !== "NeedsHuman") return null;
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={reclassifyPending}
+      onClick={() => reclassify("ready-for-agent")}
+    >
+      Approve
+    </Button>
+  );
+}
+
+function ReclassifyButton() {
+  const {
+    state: { item },
+    meta: { triageRef },
+  } = useItemTab();
+  if (item._tag !== "NeedsHuman") return null;
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      onClick={() => triageRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })}
+    >
+      Reclassify
+    </Button>
+  );
+}
+
+function OpenOnGitHubButton() {
+  const {
+    state: { item },
+  } = useItemTab();
+  if (!item.pr) return null;
+  return (
+    <Button size="sm" variant="outline" render={<a href={item.pr.url} rel="noreferrer" target="_blank" />}>
+      Open on GitHub
+      <RiExternalLinkLine data-icon="inline-end" />
+    </Button>
   );
 }
 
@@ -227,58 +291,18 @@ function Header() {
 function ActionBar() {
   const {
     state: { item, descriptor },
-    actions: { cancel, reclassify },
-    meta: { cancelPending, cancelError, reclassifyPending, triageRef },
+    meta: { cancelError },
   } = useItemTab();
-
-  const buttons: ReactNode[] = [];
-  if (descriptor.running) {
-    buttons.push(
-      <Button key="cancel" size="sm" variant="outline" disabled={cancelPending} onClick={cancel}>
-        {cancelPending ? <Spinner data-icon="inline-start" /> : <RiStopCircleLine data-icon="inline-start" />}
-        Cancel &amp; park
-      </Button>,
-    );
-  }
-  if (item._tag === "NeedsHuman") {
-    buttons.push(
-      <Button
-        key="approve"
-        size="sm"
-        variant="outline"
-        disabled={reclassifyPending}
-        onClick={() => reclassify("ready-for-agent")}
-      >
-        Approve
-      </Button>,
-      <Button
-        key="reclassify"
-        size="sm"
-        variant="outline"
-        onClick={() => triageRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })}
-      >
-        Reclassify
-      </Button>,
-    );
-  }
-  if (item.pr) {
-    buttons.push(
-      <Button
-        key="pr"
-        size="sm"
-        variant="outline"
-        render={<a href={item.pr.url} rel="noreferrer" target="_blank" />}
-      >
-        Open on GitHub
-        <RiExternalLinkLine data-icon="inline-end" />
-      </Button>,
-    );
-  }
-
-  if (buttons.length === 0) return null;
+  const hasActions = descriptor.running || item._tag === "NeedsHuman" || item.pr !== undefined;
+  if (!hasActions) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">{buttons}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <CancelParkButton />
+        <ApproveButton />
+        <ReclassifyButton />
+        <OpenOnGitHubButton />
+      </div>
       {cancelError && <span className="text-xs text-destructive">{cancelError}</span>}
     </div>
   );
@@ -440,12 +464,6 @@ function PullRequestSummary({ pr }: { pr: PrSummary }) {
   );
 }
 
-const attemptToneClass: Record<AttemptTone, string> = {
-  succeeded: "text-emerald-600 dark:text-emerald-400",
-  failed: "text-destructive",
-  abandoned: "text-muted-foreground",
-};
-
 function PreviousAttempts() {
   const {
     state: { attempts },
@@ -467,24 +485,32 @@ function PreviousAttempts() {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <ul className="mt-2 flex flex-col gap-2">
-            {attempts.map((attempt) => (
-              <li key={attempt.id} className="flex flex-col gap-0.5 text-xs">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn("font-medium capitalize", attemptToneClass[attemptTone[attempt.status]])}
-                  >
-                    {attempt.status}
-                  </span>
-                  <span className="text-muted-foreground">{attempt.stage}</span>
-                  <span aria-hidden className="text-muted-foreground">
-                    ·
-                  </span>
-                  <span className="text-muted-foreground">
-                    {relativeTime(attempt.endedAtMillis ?? attempt.startedAtMillis, now)}
-                  </span>
-                </div>
-              </li>
-            ))}
+            {attempts.map((attempt) => {
+              const tone = attemptTone[attempt.status];
+              return (
+                <li key={attempt.id} className="flex flex-col gap-0.5 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "font-medium capitalize",
+                        tone === "succeeded" && "text-emerald-600 dark:text-emerald-400",
+                        tone === "failed" && "text-destructive",
+                        tone === "abandoned" && "text-muted-foreground",
+                      )}
+                    >
+                      {attempt.status}
+                    </span>
+                    <span className="text-muted-foreground">{attempt.stage}</span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span className="text-muted-foreground">
+                      {relativeTime(attempt.endedAtMillis ?? attempt.startedAtMillis, now)}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </CollapsibleContent>
       </Collapsible>
