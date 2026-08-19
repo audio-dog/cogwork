@@ -5,7 +5,6 @@ import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { Separator } from "@cogwork/ui/components/separator";
 import { Spinner } from "@cogwork/ui/components/spinner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { useAtom } from "@effect/atom-react";
 import { RiStopCircleLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
@@ -13,6 +12,7 @@ import { cancelRunAtom } from "../daemon/atoms";
 import { elapsed } from "../features/format";
 import { foldTranscript, type TranscriptEntry, useRunActivity } from "../features/run-activity";
 import { RunStatusBadge } from "./badges";
+import { TokenCount } from "./token-count";
 
 function TextBlock({ entry }: { entry: Extract<TranscriptEntry, { kind: "text" }> }) {
   return <p className="text-sm whitespace-pre-wrap">{entry.text}</p>;
@@ -87,26 +87,6 @@ function CancelButton({ runId }: { runId: RunSummary["id"] }) {
   );
 }
 
-function TokenCount({ usage }: { usage: NonNullable<RunSummary["usage"]> }) {
-  if (usage.totalTokens === undefined) return null;
-  if (usage.estimated !== true) return <span>{usage.totalTokens} tokens</span>;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span className="cursor-help underline decoration-dotted underline-offset-2">
-            ~{usage.totalTokens} tokens
-          </span>
-        }
-      />
-      <TooltipContent>
-        Best-guess estimate. Cursor's ACP mode doesn't report token usage, so this is derived from the prompt
-        and streamed text length.
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 export function RunDrillIn({ run }: { run: RunSummary }) {
   const result = useRunActivity(run.id);
   const running = run.status === "running";
@@ -154,7 +134,7 @@ export function RunDrillIn({ run }: { run: RunSummary }) {
         <Badge variant="secondary">{run.stage}</Badge>
         <span>{run.harness}</span>
         {running && <span>running {elapsed(run.startedAtMillis)}</span>}
-        {run.usage && <TokenCount usage={run.usage} />}
+        <TokenCount usage={run.usage} />
       </div>
       {running && <CancelButton runId={run.id} />}
       <Separator />
