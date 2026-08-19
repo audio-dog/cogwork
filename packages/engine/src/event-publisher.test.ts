@@ -111,6 +111,7 @@ const schedulerStub = (statsRef: Ref.Ref<Scheduler.SchedulerState>) =>
 const eligibleItem = (title: string): TrackerItem => ({
   id: id("AUD-1"),
   title,
+  url: "https://linear.app/acme/issue/AUD-1",
   roles: ["ready-for-agent"],
   assignees: [],
   claimLabeled: false,
@@ -121,6 +122,7 @@ const eligibleItem = (title: string): TrackerItem => ({
   followUp: null,
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
 });
 
 const parkedItem = (title: string): TrackerItem => ({ ...eligibleItem(title), roles: ["needs-info"] });

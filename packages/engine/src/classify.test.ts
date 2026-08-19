@@ -10,6 +10,7 @@ const id = Schema.decodeSync(WorkItemId);
 const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string }) => ({
   id: id(over.id),
   title: over.title ?? `item ${over.id}`,
+  url: over.url ?? `https://github.com/owner/repo/issues/${over.id}`,
   roles: over.roles ?? [],
   assignees: over.assignees ?? [],
   claimLabeled: over.claimLabeled ?? false,
@@ -19,6 +20,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
   proposal: over.proposal ?? null,
+  priority: over.priority ?? "medium",
 });
 
 const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"] => ({
@@ -149,6 +151,13 @@ describe("classify", () => {
     const reasons = Object.fromEntries(needsHuman.map((entry) => [entry.id, entry.reason]));
     assert.strictEqual(reasons["1"], "needs-info");
     assert.strictEqual(reasons["2"], "ready-for-human");
+  });
+
+  it("carries the tracker ticket URL onto a needs-human item", () => {
+    const { needsHuman } = classify([
+      item({ id: "1", roles: ["needs-info"], url: "https://linear.app/acme/issue/AUD-1" }),
+    ]);
+    assert.strictEqual(needsHuman[0]?.url, "https://linear.app/acme/issue/AUD-1");
   });
 
   it("carries the triage proposal onto a self-halted item and null when there is none", () => {
@@ -397,5 +406,49 @@ describe("classify", () => {
       eligible.map((e) => e.stage),
       ["follow-up", "triage", "implement", "verify"],
     );
+  });
+
+  it("breaks a within-stage tie by priority, highest first", () => {
+    const { eligible } = classify([
+      item({ id: "low", roles: ["ready-for-agent"], priority: "low" }),
+      item({ id: "urgent", roles: ["ready-for-agent"], priority: "urgent" }),
+      item({ id: "medium", roles: ["ready-for-agent"], priority: "medium" }),
+      item({ id: "high", roles: ["ready-for-agent"], priority: "high" }),
+    ]);
+    assert.deepStrictEqual(
+      eligible.map((e) => e.id),
+      [id("urgent"), id("high"), id("medium"), id("low")],
+    );
+  });
+
+  it("never lets priority jump a stage: a high implement stays behind a low follow-up", () => {
+    const { eligible } = classify([
+      item({ id: "impl", roles: ["ready-for-agent"], priority: "high" }),
+      item({ id: "fu", roles: ["ready-for-agent"], pr: pr("changes-requested"), priority: "low" }),
+    ]);
+    assert.deepStrictEqual(
+      eligible.map((e) => [e.stage, e.priority]),
+      [
+        ["follow-up", "low"],
+        ["implement", "high"],
+      ],
+    );
+  });
+
+  it("keeps items of equal stage and priority in their prior tracker order", () => {
+    const { eligible } = classify([
+      item({ id: "first", roles: ["ready-for-agent"], priority: "medium" }),
+      item({ id: "second", roles: ["ready-for-agent"], priority: "medium" }),
+      item({ id: "third", roles: ["ready-for-agent"], priority: "medium" }),
+    ]);
+    assert.deepStrictEqual(
+      eligible.map((e) => e.id),
+      [id("first"), id("second"), id("third")],
+    );
+  });
+
+  it("carries the resolved priority onto eligible work", () => {
+    const { eligible } = classify([item({ id: "1", roles: ["ready-for-agent"], priority: "urgent" })]);
+    assert.strictEqual(eligible[0]?.priority, "urgent");
   });
 });

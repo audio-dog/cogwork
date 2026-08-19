@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useSidebar } from "@cogwork/ui/components/sidebar";
+import { useEffect, useRef } from "react";
 import { clampResizableWidth, useResizableWidth } from "./resizable-width";
 
 const STORAGE_KEY = "cf.rightPanelWidth";
@@ -6,10 +7,34 @@ const DEFAULT_WIDTH = 30 * 16;
 const MIN_WIDTH = 22 * 16;
 // Keep the main column usable no matter how wide the panel is dragged.
 const MAIN_CONTENT_MIN_WIDTH = 30 * 16;
-const BOUNDS = { minWidth: MIN_WIDTH, mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH };
 
-export function useRightPanelWidth() {
-  return useResizableWidth({ storageKey: STORAGE_KEY, defaultWidth: DEFAULT_WIDTH, ...BOUNDS });
+function rightPanelBounds(sidebarWidth: number, sidebarExpanded: boolean) {
+  return {
+    minWidth: MIN_WIDTH,
+    mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
+    reservedWidth: sidebarExpanded ? sidebarWidth : 0,
+  };
+}
+
+function insetWidth(wrapper: HTMLElement): number {
+  const inset = wrapper.querySelector<HTMLElement>("[data-slot='sidebar-inset']");
+  return inset?.getBoundingClientRect().width ?? window.innerWidth;
+}
+
+export function useRightPanelWidth(sidebarWidth: number) {
+  const { state } = useSidebar();
+  const bounds = rightPanelBounds(sidebarWidth, state === "expanded");
+  const panel = useResizableWidth({ storageKey: STORAGE_KEY, defaultWidth: DEFAULT_WIDTH, ...bounds });
+
+  // The CSS var lives on SidebarProvider in __root__; sync it from here where we
+  // know the clamped width (inside the provider tree).
+  useEffect(() => {
+    document
+      .querySelector<HTMLElement>("[data-slot='sidebar-wrapper']")
+      ?.style.setProperty("--right-panel-width", `${panel.width}px`);
+  }, [panel.width]);
+
+  return panel;
 }
 
 interface DragState {
@@ -43,18 +68,28 @@ export function RightPanelResizeHandle({
     handle.setPointerCapture(event.pointerId);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    dragRef.current = { startX: event.clientX, startWidth, width: startWidth, wrapper, region };
+    dragRef.current = {
+      startX: event.clientX,
+      startWidth,
+      width: startWidth,
+      wrapper,
+      region,
+    };
   };
 
   const updateDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current;
     if (!drag) return;
     event.preventDefault();
-    // Dragging the left edge leftward widens the panel.
+    // Dragging the left edge leftward widens the panel. Clamp against the inset
+    // width so an expanded left sidebar is accounted for.
     drag.width = clampResizableWidth(
       drag.startWidth - (event.clientX - drag.startX),
-      window.innerWidth,
-      BOUNDS,
+      insetWidth(drag.wrapper),
+      {
+        minWidth: MIN_WIDTH,
+        mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
+      },
     );
     drag.wrapper.style.setProperty("--right-panel-width", `${drag.width}px`);
   };

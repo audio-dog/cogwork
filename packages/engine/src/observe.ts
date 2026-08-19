@@ -9,6 +9,7 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
   return {
     id: item.id,
     title: item.title,
+    url: item.url,
     roles: item.roles,
     assignees: item.assignees,
     claimLabeled: item.claimLabeled,
@@ -17,6 +18,7 @@ const composed = (item: TrackerItem, signals: ReadonlyMap<WorkItemId, PrSignals>
     attempts: item.attempts,
     openBlockers: item.openBlockers,
     proposal: item.proposal,
+    priority: item.priority,
     pr: pr ? { ...pr, followUp: item.followUp } : null,
   };
 };

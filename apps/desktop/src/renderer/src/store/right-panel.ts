@@ -42,8 +42,6 @@ export const useRightPanelStore = create<RightPanelState>((set) => ({
   openPanel: () => set({ open: true }),
   closePanel: () => set({ open: false, maximized: false }),
   togglePanel: () => set((state) => ({ open: !state.open, maximized: false })),
-  // Open (or focus, if already open) a surface, revealing the panel. A repeat
-  // open of the same identity focuses the existing tab rather than duplicating it.
   openSurface: (surface) =>
     set((state) => {
       const id = surfaceId(surface);
@@ -54,8 +52,6 @@ export const useRightPanelStore = create<RightPanelState>((set) => ({
         surfaces: exists ? state.surfaces : [...state.surfaces, surface],
       };
     }),
-  // Close an item tab. Fixed tabs stay put. When the closed tab was active, focus
-  // falls back to the last remaining tab.
   closeSurface: (id) =>
     set((state) => {
       const target = state.surfaces.find((entry) => surfaceId(entry) === id);

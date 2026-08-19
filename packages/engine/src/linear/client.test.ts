@@ -126,6 +126,7 @@ const teamBundle = {
         id: "issue-uuid",
         identifier: "AUD-1",
         title: "ship it",
+        url: "https://linear.app/acme/issue/AUD-1",
         labels: { nodes: [{ name: "state:ready-for-agent" }] },
         assignee: { id: "assignee-user" },
         state: { name: "Todo", type: "unstarted" },

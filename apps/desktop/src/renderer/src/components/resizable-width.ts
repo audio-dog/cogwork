@@ -4,14 +4,17 @@ export interface ResizableWidthBounds {
   readonly minWidth: number;
   // Width the neighbouring column must always keep, so the panel never eats the whole window.
   readonly mainContentMinWidth: number;
+  // Chrome already occupying horizontal space (e.g. an expanded left sidebar).
+  readonly reservedWidth?: number;
 }
 
 export function clampResizableWidth(
   width: number,
-  viewportWidth: number,
+  containerWidth: number,
   bounds: ResizableWidthBounds,
 ): number {
-  const max = Math.max(bounds.minWidth, Math.floor(viewportWidth) - bounds.mainContentMinWidth);
+  const reserved = bounds.reservedWidth ?? 0;
+  const max = Math.max(bounds.minWidth, Math.floor(containerWidth) - reserved - bounds.mainContentMinWidth);
   return Math.min(Math.max(width, bounds.minWidth), max);
 }
 
@@ -30,8 +33,9 @@ export function useResizableWidth(
     initializeWithValue: true,
   });
 
-  const setWidth = (next: number) => set(clampResizableWidth(next, window.innerWidth, config));
+  const containerWidth = windowWidth;
+  const setWidth = (next: number) => set(clampResizableWidth(next, containerWidth, config));
   const reset = () => remove();
 
-  return { width: clampResizableWidth(storedWidth, windowWidth, config), setWidth, reset };
+  return { width: clampResizableWidth(storedWidth, containerWidth, config), setWidth, reset };
 }

@@ -132,3 +132,18 @@
     cursor: pointer;
   }
 }
+
+@keyframes settings-focus-flash {
+  from {
+    background-color: color-mix(in oklab, var(--primary) 18%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@layer components {
+  .settings-focus-flash {
+    animation: settings-focus-flash 1.6s ease-out;
+  }
+}
