@@ -53,11 +53,12 @@ Completion: every acceptance criterion from [step 1](#1-read-the-brief) is met i
 
 ## 3. Local gate (hard)
 
-Before opening a PR, all three must be green from a clean run:
+Before opening a PR, all four must be green from a clean run:
 
 1. Typecheck — no errors and no suppressions (`as any` / `@ts-ignore` / `@ts-expect-error` defeat the point of a clean typecheck).
 2. Full build.
 3. Full test suite.
+4. Full lint and formatting suite.
 
 If any fails, fix and re-run. Do not open a PR on a red gate. If it will not go green after a genuine effort, escalate per the [authority boundary](#authority-boundary).
 
