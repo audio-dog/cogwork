@@ -15,6 +15,7 @@ import * as EventPublisher from "./event-publisher";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import * as Reconcile from "./reconcile";
+import * as Recovery from "./recovery";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
@@ -468,6 +469,10 @@ describe("daemon heartbeats", () => {
                 schedulerStub,
                 worktreeStub,
                 DaemonEventBus.layer,
+                Layer.succeed(Recovery.Recovery, {
+                  recover: () => Effect.void,
+                  recoverWhenLive: () => Effect.void,
+                }),
               ),
             ),
           ),
