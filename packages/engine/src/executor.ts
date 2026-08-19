@@ -416,7 +416,7 @@ export const make = Effect.gen(function* () {
     context: FollowUpContext,
   ) {
     const result = parseFollowUpResult(acc.text);
-    if (result === "pushed") {
+    if (result === "pushed" || result === "noop") {
       return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
     }
     const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
