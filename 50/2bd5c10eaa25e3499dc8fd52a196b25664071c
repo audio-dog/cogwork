@@ -1,0 +1,29 @@
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_a2e09eab072b34::t_e132ef37487236 21
+  s_a2e09eab072b34::t_7ac45b926dca6c 143,145
+  s_a2e09eab072b34::t_36b9989c83e325 139-142,144,146-159
+  s_a2e09eab072b34::t_9397c09af51865 160-161
+apps/desktop/src/main/index.ts
+  s_a2e09eab072b34::t_64e240db377c99 36-44,49
+apps/desktop/src/main/engine-supervisor.ts
+  s_a2e09eab072b34::t_d6ecc23a198dcf 123
+  s_a2e09eab072b34::t_a286d7ec74bd9f 63
+  s_a2e09eab072b34::t_c1c28ee79cd94b 83,85-86
+  s_a2e09eab072b34::t_55cd7bda7c0577 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "502bd5c10eaa25e3499dc8fd52a196b25664071c",
+  "prompts": {},
+  "sessions": {
+    "s_a2e09eab072b34": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c57a3d2c-c580-4447-a727-76944151854d",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
