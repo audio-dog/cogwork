@@ -1,0 +1,24 @@
+biome.json
+  s_67d24b651fe6e8::t_be93d2432ff311 55-56
+configs/lint/no-side-effect-in-state-updater.grit
+  s_67d24b651fe6e8::t_2f6b9915b40735 14-30
+  s_67d24b651fe6e8::t_7a8527decb9a2e 1-2,12,31-32,34-36
+  s_67d24b651fe6e8::t_4cda6c3f2c760a 3-11,33
+  s_67d24b651fe6e8::t_b1603142e8c17f 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b6ee2443c5c97b554153925d350186dfeb824471",
+  "prompts": {},
+  "sessions": {
+    "s_67d24b651fe6e8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1c4bd9b6-766b-4b11-8de6-23a31149786d",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
