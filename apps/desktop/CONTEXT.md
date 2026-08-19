@@ -24,7 +24,8 @@ socket and either **adopts** a daemon already listening or **spawns** one; it pi
 output to the log, restarts it a bounded number of times on unexpected exit, and stops it on Quit.
 Starting the engine is not the same as starting scheduling — the first spawn runs with
 `--start-paused`, so scheduling holds until the person presses the header scheduling toggle; supervisor
-retries omit that flag so a crash does not re-pause active scheduling. The
+retries match the last reported scheduling state so a crash neither re-pauses active work nor unpauses
+a launch still waiting on the toggle. The
 child is a real
 Node process (`electron-vite` dev runs the CLI `daemon` through tsx; a packaged build runs a bundled
 engine entry), never `ELECTRON_RUN_AS_NODE` or `utilityProcess`. Not needing that env var at runtime
