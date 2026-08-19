@@ -25,7 +25,6 @@ export const OAuthAppConfig = Schema.Struct({
 });
 export type OAuthAppConfig = typeof OAuthAppConfig.Type;
 
-// Mirrors the optional `roleLabels` precedent — absent keeps priority off and every item uses the default.
 export const GitHubPrioritySource = Schema.Struct({
   project: Schema.Int.check(Schema.isGreaterThan(0)),
   field: Schema.optional(TrimmedNonEmptyString),

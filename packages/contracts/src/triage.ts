@@ -22,7 +22,6 @@ export type Priority = typeof Priority.Type;
 
 export const priorityRank: ReadonlyArray<Priority> = ["urgent", "high", "medium", "low"];
 
-// Priority orders work; it never gates eligibility, so a value we can't read must never drop an item.
 export const defaultPriority: Priority = "medium";
 
 export const resolvePriority = (value: string | null | undefined): Priority => {
@@ -31,7 +30,6 @@ export const resolvePriority = (value: string | null | undefined): Priority => {
   return priorityRank.find((priority) => priority === normalized) ?? defaultPriority;
 };
 
-// Lives beside stagePriority so classifier and scheduler cannot drift to different ordering rules.
 export const byStageThenPriority = (
   a: { readonly stage: LifecycleStage; readonly priority: Priority },
   b: { readonly stage: LifecycleStage; readonly priority: Priority },
