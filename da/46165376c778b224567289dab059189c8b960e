@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_e9253d3da6e61b::t_8beb5cf7be5903 1,6-18,20-22,24-40
+packages/ui/src/components/sidebar.tsx
+  s_e9253d3da6e61b::t_1b88504d9db7f9 86
+configs/lint/no-use-effect.grit
+  s_e9253d3da6e61b::t_8dcfc98061deaf 1-8
+biome.json
+  s_e9253d3da6e61b::t_f3ae233c23ef84 35
+packages/ui/src/hooks/use-mobile.ts
+  s_e9253d3da6e61b::t_af3964937ba929 8
+apps/desktop/src/renderer/src/components/theme-provider.tsx
+  s_e9253d3da6e61b::t_c050ddc57ffca6 136
+  s_e9253d3da6e61b::t_b4310cf94e5895 177
+  s_e9253d3da6e61b::t_a7a9da73cb879e 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "da46165376c778b224567289dab059189c8b960e",
+  "prompts": {},
+  "sessions": {
+    "s_e9253d3da6e61b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7170789e-4e14-4d43-8010-2931a41800d0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
