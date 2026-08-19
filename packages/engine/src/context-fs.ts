@@ -2,7 +2,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-export class ContextFsError extends Schema.TaggedErrorClass<ContextFsError>()("ContextFsError", {
+export class ContextFsError extends Schema.TaggedError<ContextFsError>()("ContextFsError", {
   operation: Schema.String,
   message: Schema.String,
 }) {}

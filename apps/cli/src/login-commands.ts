@@ -12,7 +12,7 @@ import { loadFromDisk } from "./loader";
 import { browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear, ProviderKeyError } from "./login";
 import { defaultConfigHome, defaultCredentialsPath } from "./paths";
 
-class LoginConfigError extends Schema.TaggedErrorClass<LoginConfigError>()("LoginConfigError", {
+class LoginConfigError extends Schema.TaggedError<LoginConfigError>()("LoginConfigError", {
   detail: Schema.String,
 }) {
   override get message() {

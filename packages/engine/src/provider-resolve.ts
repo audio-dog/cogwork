@@ -4,7 +4,7 @@ import type { CredentialStoreService } from "./credential-store";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
 import { accountFor, findProvider } from "./providers";
 
-export class ProviderResolutionError extends Schema.TaggedErrorClass<ProviderResolutionError>()(
+export class ProviderResolutionError extends Schema.TaggedError<ProviderResolutionError>()(
   "ProviderResolutionError",
   {
     reason: Schema.Literals(["unknown-model", "no-key"]),
