@@ -111,11 +111,30 @@ export const SchedulerStats = Schema.Struct({
   scheduling: SchedulingState,
   globalInFlight: Schema.Natural,
   globalLimit: Schema.Natural,
+  perWorkspaceLimit: Schema.Natural,
   dailyBudgetUsed: Schema.Natural,
   dailyBudgetLimit: Schema.Natural,
   perWorkspace: Schema.Array(WorkspaceLoad),
 });
 export type SchedulerStats = typeof SchedulerStats.Type;
+
+// A scheduler limit or daily budget is at least one run, and capped so a stray or hostile write
+// can't set an absurd value that removes the concurrency and cost guardrails entirely.
+export const maxSchedulerLimit = 1000;
+export const SchedulerLimit = Schema.Int.check(
+  Schema.isGreaterThan(0),
+  Schema.isLessThanOrEqualTo(maxSchedulerLimit),
+);
+export type SchedulerLimit = typeof SchedulerLimit.Type;
+
+// A write to the scheduler's limits and daily budget. Every field is optional, so a caller can
+// edit one setting without resending the rest; an absent field leaves that limit untouched.
+export const SchedulerConfigUpdate = Schema.Struct({
+  globalLimit: Schema.optional(SchedulerLimit),
+  perWorkspaceLimit: Schema.optional(SchedulerLimit),
+  dailyBudget: Schema.optional(SchedulerLimit),
+});
+export type SchedulerConfigUpdate = typeof SchedulerConfigUpdate.Type;
 
 export const DaemonStatus = Schema.Struct({
   health: DaemonHealth,

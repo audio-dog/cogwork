@@ -17,7 +17,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import { cancelRun, reclassify, setScheduling } from "./commands";
+import { cancelRun, reclassify, setSchedulerConfig, setScheduling } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
@@ -81,6 +81,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const scheduler = yield* Scheduler;
   const ledger = yield* RunLedger;
   const snapshot = yield* worker.snapshot;
+  const config = yield* scheduler.config;
   const stats = yield* scheduler.stats;
   const running = yield* ledger.runningRuns;
   const items = snapshot.workspaces.flatMap((state) =>
@@ -92,7 +93,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const runs = running.map((run) => ({ _tag: "RunChanged", run }) as const);
   const scheduling = {
     _tag: "SchedulerChanged",
-    scheduler: schedulerStatsOf(scheduler.config, stats),
+    scheduler: schedulerStatsOf(config, stats),
   } as const;
   return [...items, ...workspaces, ...runs, scheduling];
 });
@@ -115,6 +116,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const worker = yield* ReconcileWorker;
     const scheduler = yield* Scheduler;
     const snapshot = yield* worker.snapshot;
+    const config = yield* scheduler.config;
     const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
     const stateByName = statesByName(snapshot);
@@ -122,7 +124,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       health: "running" as const,
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
-      scheduler: schedulerStatsOf(scheduler.config, stats),
+      scheduler: schedulerStatsOf(config, stats),
       workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
       failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
     };
@@ -145,6 +147,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   CancelRun: cancelRun,
   Reclassify: reclassify,
   SetScheduling: setScheduling,
+  SetSchedulerConfig: setSchedulerConfig,
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;

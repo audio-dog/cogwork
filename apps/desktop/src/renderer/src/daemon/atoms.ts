@@ -24,3 +24,5 @@ export const cancelRunAtom = DaemonAtomRpc.mutation("CancelRun");
 export const reclassifyAtom = DaemonAtomRpc.mutation("Reclassify");
 
 export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");
+
+export const setSchedulerConfigAtom = DaemonAtomRpc.mutation("SetSchedulerConfig");

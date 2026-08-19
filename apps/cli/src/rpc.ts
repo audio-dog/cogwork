@@ -25,6 +25,7 @@ export interface DaemonOptions {
   readonly ledgerPath: string;
   readonly credentialsPath: string;
   readonly maxConcurrency: number;
+  readonly maxPerWorkspace: number;
   readonly dailyBudget: number;
   readonly pollIntervalMillis: number;
   readonly drainGraceMillis: number;
@@ -101,6 +102,7 @@ export const serverLayer = (options: DaemonOptions) =>
     harnessRunners: [cursorRunner({ name: cursorName }), Provider.providerRunner({ name: providerName })],
     scheduler: {
       globalLimit: options.maxConcurrency,
+      perWorkspaceLimit: options.maxPerWorkspace,
       dailyBudget: options.dailyBudget,
       startPaused: options.startPaused,
     },

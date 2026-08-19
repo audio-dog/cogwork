@@ -1,10 +1,10 @@
+import { maxSchedulerLimit } from "@cogwork/contracts";
 import { Card } from "@cogwork/ui/components/card";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupInput,
-  InputGroupText,
 } from "@cogwork/ui/components/input-group";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Separator } from "@cogwork/ui/components/separator";
@@ -19,17 +19,11 @@ import {
   type SettingsSectionId,
   settingsIndex,
 } from "../features/settings-catalog";
-import { minConcurrency, settingsOfflineFallbacks } from "../features/settings-defaults";
-import {
-  parseBudget,
-  parseCount,
-  sanitizeBudgetDraft,
-  sanitizeCountDraft,
-  seededValue,
-} from "../features/settings-values";
+import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../features/settings-defaults";
+import { parseCount, sanitizeCountDraft } from "../features/settings-values";
 import { useBoard } from "../features/use-board";
-import { useEnginePreferences } from "../store/engine-preferences";
-import { useDesktopPreferences } from "../store/preferences";
+import { useSchedulerConfig } from "../features/use-scheduler-config";
+import { useWindowPreferences } from "../features/use-window-preferences";
 import { type Theme, useTheme } from "./theme-provider";
 
 const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});
@@ -62,33 +56,45 @@ function settingEntry(id: string) {
 }
 
 function CloseToHideControl() {
-  const closeToHide = useDesktopPreferences((state) => state.closeToHide);
-  const setCloseToHide = useDesktopPreferences((state) => state.setCloseToHide);
-  return <Switch aria-label="Close to hide" checked={closeToHide} onCheckedChange={setCloseToHide} />;
+  const { preferences, setCloseToHide } = useWindowPreferences();
+  return (
+    <Switch
+      aria-label="Close to hide"
+      checked={preferences?.closeToHide ?? true}
+      disabled={preferences === null}
+      onCheckedChange={setCloseToHide}
+    />
+  );
 }
 
 function NumberStepper({
   value,
   min,
+  max,
   label,
+  disabled,
   onChange,
 }: {
   value: number;
   min: number;
+  max: number;
   label: string;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const commit = (next: number) => {
     setEditing(false);
-    if (next !== value) onChange(next);
+    const clamped = Math.min(max, Math.max(min, next));
+    if (clamped !== value) onChange(clamped);
   };
   return (
     <InputGroup className="w-28">
       <InputGroupInput
         aria-label={label}
         inputMode="numeric"
+        disabled={disabled}
         value={editing ? draft : String(value)}
         onFocus={() => {
           setDraft(String(value));
@@ -101,6 +107,7 @@ function NumberStepper({
       <InputGroupAddon>
         <InputGroupButton
           size="icon-xs"
+          disabled={disabled}
           aria-label={`Decrease ${label}`}
           onClick={() => commit(Math.max(min, value - 1))}
         >
@@ -108,59 +115,14 @@ function NumberStepper({
         </InputGroupButton>
       </InputGroupAddon>
       <InputGroupAddon align="inline-end">
-        <InputGroupButton size="icon-xs" aria-label={`Increase ${label}`} onClick={() => commit(value + 1)}>
+        <InputGroupButton
+          size="icon-xs"
+          disabled={disabled}
+          aria-label={`Increase ${label}`}
+          onClick={() => commit(value + 1)}
+        >
           <RiAddLine />
         </InputGroupButton>
-      </InputGroupAddon>
-    </InputGroup>
-  );
-}
-
-function GlobalConcurrencyControl({ seed }: { seed: number | null }) {
-  const override = useEnginePreferences((state) => state.globalLimit);
-  const setValue = useEnginePreferences((state) => state.setGlobalLimit);
-  const value = seededValue(override, seed, settingsOfflineFallbacks.globalConcurrency);
-  return <NumberStepper value={value} min={minConcurrency} label="Global concurrency" onChange={setValue} />;
-}
-
-function PerWorkspaceConcurrencyControl() {
-  const override = useEnginePreferences((state) => state.perWorkspaceLimit);
-  const setValue = useEnginePreferences((state) => state.setPerWorkspaceLimit);
-  const value = seededValue(override, null, settingsOfflineFallbacks.perWorkspaceConcurrency);
-  return (
-    <NumberStepper value={value} min={minConcurrency} label="Per-workspace concurrency" onChange={setValue} />
-  );
-}
-
-function DailyBudgetControl() {
-  const override = useEnginePreferences((state) => state.dailyBudget);
-  const setValue = useEnginePreferences((state) => state.setDailyBudget);
-  const value = seededValue(override, null, settingsOfflineFallbacks.dailyBudgetDollars);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  return (
-    <InputGroup className="w-36">
-      <InputGroupInput
-        aria-label="Daily budget"
-        inputMode="decimal"
-        value={editing ? draft : String(value)}
-        onFocus={() => {
-          setDraft(String(value));
-          setEditing(true);
-        }}
-        onBlur={() => {
-          const next = parseBudget(draft);
-          setEditing(false);
-          if (next !== value) setValue(next);
-        }}
-        onChange={(event) => setDraft(sanitizeBudgetDraft(event.target.value))}
-        className="tabular-nums"
-      />
-      <InputGroupAddon>
-        <InputGroupText>$</InputGroupText>
-      </InputGroupAddon>
-      <InputGroupAddon align="inline-end">
-        <InputGroupText>/ day</InputGroupText>
       </InputGroupAddon>
     </InputGroup>
   );
@@ -282,20 +244,45 @@ function AppearancePage() {
 function EnginePage() {
   const result = useBoard();
   const scheduler = result._tag === "Success" ? result.board.scheduler : null;
+  const { setConfig, result: write } = useSchedulerConfig();
+  // Without a connected scheduler there is nothing real to seed from or write to, so the controls
+  // show the offline fallbacks read-only until the daemon is up.
+  const disabled = scheduler === null || write.waiting;
   return (
     <>
       <SubSectionCard label="Scheduler">
         <SettingRow entry={settingEntry("global-limit")}>
-          <GlobalConcurrencyControl seed={scheduler?.globalLimit ?? null} />
+          <NumberStepper
+            value={scheduler?.globalLimit ?? settingsOfflineFallbacks.globalConcurrency}
+            min={minConcurrency}
+            max={maxSchedulerLimit}
+            label="Global concurrency"
+            disabled={disabled}
+            onChange={(globalLimit) => setConfig({ globalLimit })}
+          />
         </SettingRow>
         <Separator />
         <SettingRow entry={settingEntry("per-workspace-limit")}>
-          <PerWorkspaceConcurrencyControl />
+          <NumberStepper
+            value={scheduler?.perWorkspaceLimit ?? settingsOfflineFallbacks.perWorkspaceConcurrency}
+            min={minConcurrency}
+            max={maxSchedulerLimit}
+            label="Per-workspace concurrency"
+            disabled={disabled}
+            onChange={(perWorkspaceLimit) => setConfig({ perWorkspaceLimit })}
+          />
         </SettingRow>
       </SubSectionCard>
       <SubSectionCard label="Budget">
         <SettingRow entry={settingEntry("daily-budget")}>
-          <DailyBudgetControl />
+          <NumberStepper
+            value={scheduler?.dailyBudgetLimit ?? settingsOfflineFallbacks.dailyBudgetRuns}
+            min={minDailyBudget}
+            max={maxSchedulerLimit}
+            label="Daily budget"
+            disabled={disabled}
+            onChange={(dailyBudget) => setConfig({ dailyBudget })}
+          />
         </SettingRow>
       </SubSectionCard>
     </>

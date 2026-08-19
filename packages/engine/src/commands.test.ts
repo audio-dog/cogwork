@@ -50,13 +50,26 @@ const registryLayer = Layer.succeed(
   Registry.buildRegistry({ loaded: [registered], failures: [] }),
 );
 
-const schedulerStub = (setScheduling?: Scheduler.Scheduler["Service"]["setScheduling"]) =>
+const stubConfig: Scheduler.SchedulerConfig = { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 };
+
+const schedulerStub = (
+  setScheduling?: Scheduler.Scheduler["Service"]["setScheduling"],
+  setConfig?: Scheduler.Scheduler["Service"]["setConfig"],
+) =>
   Layer.succeed(Scheduler.Scheduler, {
     tick: () => Effect.succeed([]),
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: () => Effect.void,
     setScheduling: setScheduling ?? (() => Effect.succeed(Scheduler.initialState)),
-    config: { globalLimit: 4, dailyBudget: 50 },
+    setConfig:
+      setConfig ??
+      ((update) =>
+        Effect.succeed({
+          globalLimit: update.globalLimit ?? stubConfig.globalLimit,
+          perWorkspaceLimit: update.perWorkspaceLimit ?? stubConfig.perWorkspaceLimit,
+          dailyBudget: update.dailyBudget ?? stubConfig.dailyBudget,
+        })),
+    config: Effect.succeed(stubConfig),
     stats: Effect.succeed(Scheduler.initialState),
   });
 
@@ -358,5 +371,30 @@ describe("SetScheduling", () => {
       const running = yield* client.SetScheduling({ desired: "running" });
       assert.strictEqual(running.scheduling, "running");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}), pausableScheduler())), Effect.scoped),
+  );
+});
+
+describe("SetSchedulerConfig", () => {
+  it.effect("writes the new limits and budget and reports them back", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const stats = yield* client.SetSchedulerConfig({
+        update: { globalLimit: 8, perWorkspaceLimit: 3, dailyBudget: 20 },
+      });
+      assert.strictEqual(stats.globalLimit, 8);
+      assert.strictEqual(stats.perWorkspaceLimit, 3);
+      assert.strictEqual(stats.dailyBudgetLimit, 20);
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("leaves an unsent field untouched", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const stats = yield* client.SetSchedulerConfig({ update: { globalLimit: 9 } });
+      assert.strictEqual(stats.globalLimit, 9);
+      // perWorkspaceLimit and dailyBudget keep the stub's seeded values.
+      assert.strictEqual(stats.perWorkspaceLimit, 4);
+      assert.strictEqual(stats.dailyBudgetLimit, 50);
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 });

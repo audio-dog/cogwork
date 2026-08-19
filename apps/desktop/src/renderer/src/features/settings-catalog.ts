@@ -56,8 +56,8 @@ export const settingsIndex = [
     id: "daily-budget",
     sectionId: "engine",
     title: "Daily budget",
-    description: "Spend ceiling per day before the engine pauses new work.",
-    keywords: ["budget", "spend", "cost", "money", "daily", "cap"],
+    description: "How many runs the scheduler starts per day before it pauses new work.",
+    keywords: ["budget", "spend", "cost", "runs", "daily", "cap"],
   },
 ] as const satisfies readonly SettingEntry[];
 

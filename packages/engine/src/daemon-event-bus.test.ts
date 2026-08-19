@@ -18,6 +18,7 @@ const schedulerEvent = (globalInFlight: number) =>
       scheduling: "running",
       globalInFlight,
       globalLimit: 4,
+      perWorkspaceLimit: 4,
       dailyBudgetUsed: 0,
       dailyBudgetLimit: 10,
       perWorkspace: [],

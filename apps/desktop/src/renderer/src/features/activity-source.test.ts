@@ -44,6 +44,7 @@ const scheduler = (over: Partial<Parameters<typeof schedulerStats>[0]> = {}) =>
     scheduling: "running",
     globalInFlight: 2,
     globalLimit: 4,
+    perWorkspaceLimit: 4,
     dailyBudgetUsed: 37,
     dailyBudgetLimit: 100,
     perWorkspace: [],

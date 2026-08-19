@@ -71,7 +71,7 @@ const candidate = (
 const stamp = (day: number, generation = 1): Scheduler.TickStamp => ({ day, generation });
 
 describe("Scheduler.seedState", () => {
-  const base = { globalLimit: 10, dailyBudget: 100 };
+  const base = { globalLimit: 10, perWorkspaceLimit: 10, dailyBudget: 100 };
 
   it("starts running by default so the headless daemon schedules immediately", () => {
     assert.strictEqual(Scheduler.seedState(base).paused, false);
@@ -85,7 +85,7 @@ describe("Scheduler.seedState", () => {
 describe("Scheduler.plan", () => {
   const wsA = workspaceOf("a");
   const wsB = workspaceOf("b");
-  const config = { globalLimit: 10, dailyBudget: 100 };
+  const config = { globalLimit: 10, perWorkspaceLimit: 10, dailyBudget: 100 };
 
   it("caps total picks at the global limit", () => {
     const candidates = [
@@ -96,7 +96,7 @@ describe("Scheduler.plan", () => {
     const result = Scheduler.plan(
       candidates,
       Scheduler.initialState,
-      { globalLimit: 2, dailyBudget: 100 },
+      { globalLimit: 2, perWorkspaceLimit: 2, dailyBudget: 100 },
       stamp(0),
     );
     assert.strictEqual(result.picks.length, 2);
@@ -122,7 +122,7 @@ describe("Scheduler.plan", () => {
     const result = Scheduler.plan(
       candidates,
       Scheduler.initialState,
-      { globalLimit: 1, dailyBudget: 100 },
+      { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 100 },
       stamp(0),
     );
     assert.deepStrictEqual(
@@ -140,7 +140,7 @@ describe("Scheduler.plan", () => {
     const result = Scheduler.plan(
       candidates,
       Scheduler.initialState,
-      { globalLimit: 1, dailyBudget: 100 },
+      { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 100 },
       stamp(0),
     );
     assert.deepStrictEqual(
@@ -157,7 +157,7 @@ describe("Scheduler.plan", () => {
     const result = Scheduler.plan(
       candidates,
       Scheduler.initialState,
-      { globalLimit: 1, dailyBudget: 100 },
+      { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 100 },
       stamp(0),
     );
     assert.deepStrictEqual(
@@ -182,7 +182,7 @@ describe("Scheduler.plan", () => {
     const result = Scheduler.plan(
       candidates,
       Scheduler.initialState,
-      { globalLimit: 10, dailyBudget: 2 },
+      { globalLimit: 10, perWorkspaceLimit: 10, dailyBudget: 2 },
       stamp(0),
     );
     assert.strictEqual(result.picks.length, 2);
@@ -211,7 +211,7 @@ describe("Scheduler.plan", () => {
     const result = Scheduler.plan(
       [candidate(wsA, work(1), 10)],
       spent,
-      { globalLimit: 10, dailyBudget: 2 },
+      { globalLimit: 10, perWorkspaceLimit: 10, dailyBudget: 2 },
       stamp(1),
     );
     assert.strictEqual(result.picks.length, 1);
@@ -360,7 +360,10 @@ describe("Scheduler.tick", () => {
         assert.strictEqual(drained.global, 0);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 3, dailyBudget: 100 }, { registry: [wsA, wsB], snapshots, execute }),
+          schedulerLayer(
+            { globalLimit: 3, perWorkspaceLimit: 3, dailyBudget: 100 },
+            { registry: [wsA, wsB], snapshots, execute },
+          ),
         ),
       );
     }),
@@ -394,7 +397,10 @@ describe("Scheduler.tick", () => {
         assert.strictEqual(again.length, 2);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 4, dailyBudget: 100 }, { registry: [wsA, wsB], snapshots, execute }),
+          schedulerLayer(
+            { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 100 },
+            { registry: [wsA, wsB], snapshots, execute },
+          ),
         ),
       );
     }),
@@ -422,7 +428,10 @@ describe("Scheduler.tick", () => {
         assert.strictEqual(nextDay.length, 1);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 5, dailyBudget: 1 }, { registry: [wsA], snapshots, execute }),
+          schedulerLayer(
+            { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 1 },
+            { registry: [wsA], snapshots, execute },
+          ),
         ),
       );
     }),
@@ -452,7 +461,10 @@ describe("Scheduler.tick", () => {
         assert.strictEqual(yield* Ref.get(runs), 2);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 5, dailyBudget: 100 }, { registry: [wsA], snapshots, execute }),
+          schedulerLayer(
+            { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute },
+          ),
         ),
       );
     }),
@@ -478,7 +490,10 @@ describe("Scheduler.tick", () => {
         yield* Fiber.awaitAll(first);
       }).pipe(
         Effect.provide(
-          schedulerLayer({ globalLimit: 5, dailyBudget: 100 }, { registry: [wsA], snapshots, execute }),
+          schedulerLayer(
+            { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
+            { registry: [wsA], snapshots, execute },
+          ),
         ),
       );
     }),
@@ -520,7 +535,8 @@ describe("Scheduler.drain", () => {
     readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
     readonly execute: ExecuteFn;
     readonly ledger?: RunLedger.RunLedgerService;
-  }) => schedulerLayer({ globalLimit: 5, dailyBudget: 100 }, { registry: [wsA], ...deps });
+  }) =>
+    schedulerLayer({ globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 }, { registry: [wsA], ...deps });
 
   it.effect("lets a run that finishes inside the grace window record its own outcome", () =>
     Effect.gen(function* () {
