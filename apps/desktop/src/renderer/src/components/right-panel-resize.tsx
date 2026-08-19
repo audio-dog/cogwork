@@ -27,11 +27,26 @@ const RIGHT_PANEL_CLAMP = {
   mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
 };
 
+const RIGHT_PANEL_WIDTH_HOST = "right-panel-width-host";
+
+function rightPanelWidthHost(wrapper: HTMLElement): HTMLElement | null {
+  return wrapper.querySelector<HTMLElement>(`[data-slot='${RIGHT_PANEL_WIDTH_HOST}']`);
+}
+
 function readRightPanelWidth(wrapper: HTMLElement): number {
-  const parsed = Number.parseFloat(wrapper.style.getPropertyValue("--right-panel-width"));
-  if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+  const host = rightPanelWidthHost(wrapper);
+  if (host) {
+    const inline = Number.parseFloat(host.style.getPropertyValue("--right-panel-width"));
+    if (!Number.isNaN(inline) && inline > 0) return inline;
+    const computed = Number.parseFloat(getComputedStyle(host).getPropertyValue("--right-panel-width"));
+    if (!Number.isNaN(computed) && computed > 0) return computed;
+  }
   const region = wrapper.querySelector<HTMLElement>("[data-slot='right-panel-region']");
   return region?.getBoundingClientRect().width ?? RIGHT_PANEL_DEFAULT_WIDTH;
+}
+
+function setRightPanelWidth(wrapper: HTMLElement, width: number): void {
+  rightPanelWidthHost(wrapper)?.style.setProperty("--right-panel-width", `${width}px`);
 }
 
 function rightPanelIsOpen(wrapper: HTMLElement): boolean {
@@ -49,7 +64,7 @@ export function reservedOpenRightPanelWidth(wrapper: HTMLElement): number {
 export function reclampOpenRightPanelWidth(wrapper: HTMLElement): void {
   if (!rightPanelIsOpen(wrapper)) return;
   const clamped = clampResizableWidth(readRightPanelWidth(wrapper), insetWidth(wrapper), RIGHT_PANEL_CLAMP);
-  wrapper.style.setProperty("--right-panel-width", `${clamped}px`);
+  setRightPanelWidth(wrapper, clamped);
 }
 
 export function rightPanelRegionElement(wrapper: HTMLElement): HTMLElement | null {
@@ -96,7 +111,7 @@ export function RightPanelWidthProvider({
 
   return (
     <RightPanelWidthContext value={{ setWidth: rightPanel.setWidth, reset: rightPanel.reset }}>
-      <div className="contents" style={panelStyle}>
+      <div data-slot={RIGHT_PANEL_WIDTH_HOST} className="contents" style={panelStyle}>
         {children}
       </div>
     </RightPanelWidthContext>
@@ -154,7 +169,7 @@ export function RightPanelResizeHandle({
       insetWidth(drag.wrapper),
       RIGHT_PANEL_CLAMP,
     );
-    drag.wrapper.style.setProperty("--right-panel-width", `${drag.width}px`);
+    setRightPanelWidth(drag.wrapper, drag.width);
   };
 
   const endDrag = (event: React.PointerEvent<HTMLButtonElement>) => {

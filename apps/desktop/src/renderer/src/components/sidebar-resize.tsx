@@ -23,6 +23,8 @@ const BOUNDS = { minWidth: MIN_WIDTH, mainContentMinWidth: MAIN_CONTENT_MIN_WIDT
 
 export function useSidebarWidth() {
   const panelOpen = useRightPanelStore((state) => state.open);
+  const maximized = useRightPanelStore((state) => state.maximized);
+  const panelDocked = panelOpen && !maximized;
   const { width: windowWidth } = useWindowSize();
   const { value: storedPanel } = useLocalStorageValue(RIGHT_PANEL_STORAGE_KEY, {
     defaultValue: RIGHT_PANEL_DEFAULT_WIDTH,
@@ -38,7 +40,7 @@ export function useSidebarWidth() {
   });
 
   const sidebarPass = clampResizableWidth(storedSidebar, windowWidth, BOUNDS);
-  const panelReserved = panelOpen
+  const panelReserved = panelDocked
     ? clampResizableWidth(storedPanel, windowWidth, {
         minWidth: RIGHT_PANEL_MIN_WIDTH,
         mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
