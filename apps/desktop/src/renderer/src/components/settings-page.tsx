@@ -18,13 +18,12 @@ const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({
 function useFocusScroll(id: string) {
   const { focus, jump } = use(FocusedSettingContext);
   const scrolledFor = useRef<string | undefined>(undefined);
-  const active = focus === id;
-  const scrollToken = active ? `${id}:${jump ?? 0}` : undefined;
+  const scrollToken = focus === id ? `${id}:${jump ?? 0}` : undefined;
 
-  if (!active) {
-    scrolledFor.current = undefined;
-  }
-
+  // The write and the token guard both live in the ref callback, which runs at
+  // commit — never during render. `SettingRow` keys each row on its focus token,
+  // so a row remounts (with a fresh ref) whenever it gains or loses focus; the
+  // guard only has to stop a re-scroll when the same mounted row re-renders.
   return (node: HTMLElement | null) => {
     if (!node || !scrollToken || scrolledFor.current === scrollToken) return;
     scrolledFor.current = scrollToken;
