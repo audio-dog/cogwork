@@ -1,0 +1,19 @@
+packages/engine/skills/follow-up-agent/SKILL.md
+  s_e16c7cc742c1b6::t_0c34327db6d648 100,103-105,107-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "73f486927c66bbe2e9888a8683614e652ba85f87",
+  "prompts": {},
+  "sessions": {
+    "s_e16c7cc742c1b6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e498215-d666-4b7b-b642-689899689195",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
