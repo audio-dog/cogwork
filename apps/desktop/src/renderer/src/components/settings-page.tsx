@@ -131,7 +131,7 @@ function DailyBudgetControl() {
     <InputGroup className="w-36">
       <InputGroupInput
         aria-label="Daily budget"
-        inputMode="numeric"
+        inputMode="decimal"
         value={String(value)}
         onChange={(event) => setValue(parseBudget(event.target.value))}
         className="tabular-nums"

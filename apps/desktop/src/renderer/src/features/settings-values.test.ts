@@ -17,8 +17,17 @@ describe("parseCount", () => {
 });
 
 describe("parseBudget", () => {
-  it("strips non-numeric characters", () => {
+  it("strips currency formatting and keeps whole dollars", () => {
     expect(parseBudget("$25 / day")).toBe(25);
+  });
+
+  it("keeps a single decimal point for dollar amounts", () => {
+    expect(parseBudget("$25.50")).toBe(25.5);
+  });
+
+  it("ignores extra decimal points and caps cents at two digits", () => {
+    expect(parseBudget("25.5.5")).toBe(25.55);
+    expect(parseBudget("25.999")).toBe(25.99);
   });
 
   it("reads empty or non-numeric input as zero", () => {
