@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_5a4da95521f239::t_84f1a3a93777ce 55-56
+  s_5a4da95521f239::t_3fa75d2ad0c1f6 4
+  s_5a4da95521f239::t_72b79fb2bbe1e3 68,82,91
+  s_5a4da95521f239::t_c1802c1b6d12bb 25
+apps/desktop/src/renderer/src/components/right-panel-resize.tsx
+  s_5a4da95521f239::t_1ca41b9ffd7eb4 152
+  s_5a4da95521f239::t_a4c9eec71ce5f9 24-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "2b7c55c24c17e9b8ae0b753175ab38fd2f01c6ba",
+  "prompts": {},
+  "sessions": {
+    "s_5a4da95521f239": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af8bab68-ccda-45dd-a542-33ab40167963",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
