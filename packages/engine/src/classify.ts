@@ -117,6 +117,7 @@ export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
       title: item.title,
       reason: outcome.reason,
       proposal: item.proposal,
+      url: item.url,
       ...prFields(item),
     };
   }
@@ -160,6 +161,7 @@ export const classify = (items: ReadonlyArray<ObservedItem>, allowlist?: Readonl
             title: item.title,
             reason: outcome.reason,
             proposal: item.proposal,
+            url: item.url,
             ...prFields(item),
           },
         ]

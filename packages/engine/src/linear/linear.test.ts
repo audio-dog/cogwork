@@ -70,6 +70,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         id: `uuid-${issue.identifier}`,
         identifier: issue.identifier,
         title: issue.title,
+        url: `https://linear.app/acme/issue/${issue.identifier}`,
         labels: issue.labels,
         assignees: issue.assignees ?? [],
         stateName: issue.stateName ?? "Todo",

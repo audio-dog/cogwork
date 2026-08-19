@@ -8,7 +8,7 @@ import { loadFromDisk } from "./loader";
 import { defaultConfigHome } from "./paths";
 import { worktreeManagerLayer } from "./platform";
 
-class WorkspaceNotFound extends Schema.TaggedErrorClass<WorkspaceNotFound>()("WorkspaceNotFound", {
+class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()("WorkspaceNotFound", {
   detail: Schema.String,
 }) {
   override get message() {

@@ -28,7 +28,19 @@ type Stage = "triage" | "implement" | "follow-up" | "verify";
 const eligible = (id: string, stage: Stage) =>
   classifiedItem({ _tag: "Eligible", id, title: `Item ${id}`, stage });
 
+const needsHuman = (id: string, url: string | null) =>
+  classifiedItem({
+    _tag: "NeedsHuman",
+    id,
+    title: `Item ${id}`,
+    reason: "ready-for-human",
+    proposal: null,
+    url,
+  });
+
 const stageOf = (item: ClassifiedItem | undefined) => (item?._tag === "Eligible" ? item.stage : null);
+
+const urlOf = (item: ClassifiedItem | undefined) => (item?._tag === "NeedsHuman" ? item.url : null);
 
 const fold = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
@@ -45,6 +57,24 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(first?.item._tag, "Eligible");
     assert.strictEqual(stageOf(first?.item), "implement");
     assert.strictEqual(first?.workspace, workspace("acme"));
+  });
+
+  it("folds a needs-human item carrying its tracker ticket URL", () => {
+    const board = fold([
+      event({
+        _tag: "ItemChanged",
+        workspace: "acme",
+        item: needsHuman("1", "https://github.com/acme/repo/issues/1"),
+      }),
+    ]);
+
+    assert.strictEqual(urlOf(board.items.get("acme::1")?.item), "https://github.com/acme/repo/issues/1");
+  });
+
+  it("folds a needs-human item with no tracker ticket URL", () => {
+    const board = fold([event({ _tag: "ItemChanged", workspace: "acme", item: needsHuman("1", null) })]);
+
+    assert.isNull(urlOf(board.items.get("acme::1")?.item));
   });
 
   it("removes an item and leaves the rest of the board alone", () => {

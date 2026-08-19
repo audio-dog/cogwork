@@ -241,6 +241,19 @@ const followUpEvents: ReadonlyArray<AgUiEvent> = [
   finished,
 ];
 
+const noopFollowUpEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  sessionEvent("sess-42"),
+  text("The PR is green and the comment needed no code change.\nFOLLOWUP-RESULT: noop"),
+  finished,
+];
+
+const stuckFollowUpEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  text("The review feedback contradicts the checks; leaving for a human.\nFOLLOWUP-RESULT: stuck"),
+  finished,
+];
+
 // An owned-transcript run never hands back a session handle — its conversation
 // lives in the run ledger — so these events carry no session id.
 const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
@@ -1055,6 +1068,54 @@ describe("Executor.execute", () => {
         assert.strictEqual(run?.stage, "follow-up");
         assert.strictEqual(run?.branch, followUpBranch);
         assert.strictEqual(run?.status, "succeeded");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect(
+    "treats a noop follow-up as a non-failure that records the marker and hands back for review",
+    () =>
+      Effect.gen(function* () {
+        const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+        const layer = provide(recorder(calls), [runner(noopFollowUpEvents)], worktreeStubCreated(false));
+        yield* Effect.gen(function* () {
+          const executor = yield* Executor.Executor;
+          yield* executor.execute(followUpWorkspace, followUpItem);
+
+          const log = yield* Ref.get(calls);
+          const followedUp = log.find((c) => c.method === "followedUp");
+          assert.strictEqual(followedUp?.checks, "failing");
+          assert.isFalse(log.some((c) => c.method === "attemptFailed"));
+          assert.isFalse(log.some((c) => c.method === "handOff"));
+          assert.isTrue(log.some((c) => c.method === "release"));
+
+          const ledger = yield* RunLedger.RunLedger;
+          const [run] = yield* ledger.listRuns(10);
+          assert.strictEqual(run?.stage, "follow-up");
+          assert.strictEqual(run?.status, "succeeded");
+        }).pipe(Effect.provide(layer));
+      }),
+  );
+
+  it.effect("hands a self-reported stuck follow-up to a human without retrying", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(recorder(calls), [runner(stuckFollowUpEvents)], worktreeStubCreated(false));
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const log = yield* Ref.get(calls);
+        const attempt = log.find((c) => c.method === "attemptFailed");
+        assert.strictEqual(attempt?.stage, "follow-up");
+        assert.include(attempt?.reason ?? "", "review feedback contradicts the checks");
+        const handOff = log.find((c) => c.method === "handOff");
+        assert.strictEqual(handOff?.stage, "follow-up");
+        assert.isFalse(log.some((c) => c.method === "followedUp"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "exhausted");
       }).pipe(Effect.provide(layer));
     }),
   );

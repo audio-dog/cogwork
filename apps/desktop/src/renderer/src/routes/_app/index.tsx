@@ -1,8 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { createFileRoute } from "@tanstack/react-router";
-import { Feed } from "../components/feed";
-import { EngineOfflineMessage } from "../features/engine-offline";
-import { type EnginePhase, enginePhase, useEngineStatus } from "../features/use-engine-status";
+import { Feed } from "../../components/feed";
+import { EngineOfflineMessage } from "../../features/engine-offline";
+import { type EnginePhase, enginePhase, useEngineStatus } from "../../features/use-engine-status";
 
 function EngineOfflineCard({ phase }: { phase: Exclude<EnginePhase, "up"> }) {
   return (
@@ -29,6 +29,6 @@ function HomePage() {
   return <EngineOfflineCard phase={phase} />;
 }
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_app/")({
   component: HomePage,
 });

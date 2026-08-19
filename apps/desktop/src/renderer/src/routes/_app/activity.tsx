@@ -4,10 +4,10 @@ import { Badge } from "@cogwork/ui/components/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { createFileRoute } from "@tanstack/react-router";
-import { daemonErrorMessage } from "../features/daemon-error";
-import { EngineOfflineMessage } from "../features/engine-offline";
-import { type EnginePhase, enginePhase, useEngineStatus } from "../features/use-engine-status";
-import { useLiveEvents } from "../features/use-live-events";
+import { daemonErrorMessage } from "../../features/daemon-error";
+import { EngineOfflineMessage } from "../../features/engine-offline";
+import { type EnginePhase, enginePhase, useEngineStatus } from "../../features/use-engine-status";
+import { useLiveEvents } from "../../features/use-live-events";
 
 const describeEvent = (event: DaemonEvent) => {
   switch (event._tag) {
@@ -97,6 +97,6 @@ function ActivityPage() {
   );
 }
 
-export const Route = createFileRoute("/activity")({
+export const Route = createFileRoute("/_app/activity")({
   component: ActivityPage,
 });

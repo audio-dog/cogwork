@@ -10,6 +10,7 @@ const id = Schema.decodeSync(WorkItemId);
 const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string }) => ({
   id: id(over.id),
   title: over.title ?? `item ${over.id}`,
+  url: over.url ?? `https://github.com/owner/repo/issues/${over.id}`,
   roles: over.roles ?? [],
   assignees: over.assignees ?? [],
   claimLabeled: over.claimLabeled ?? false,
@@ -150,6 +151,13 @@ describe("classify", () => {
     const reasons = Object.fromEntries(needsHuman.map((entry) => [entry.id, entry.reason]));
     assert.strictEqual(reasons["1"], "needs-info");
     assert.strictEqual(reasons["2"], "ready-for-human");
+  });
+
+  it("carries the tracker ticket URL onto a needs-human item", () => {
+    const { needsHuman } = classify([
+      item({ id: "1", roles: ["needs-info"], url: "https://linear.app/acme/issue/AUD-1" }),
+    ]);
+    assert.strictEqual(needsHuman[0]?.url, "https://linear.app/acme/issue/AUD-1");
   });
 
   it("carries the triage proposal onto a self-halted item and null when there is none", () => {

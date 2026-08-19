@@ -34,6 +34,7 @@ export interface RawIssue {
   readonly id: string;
   readonly identifier: string;
   readonly title: string;
+  readonly url: string;
   readonly labels: ReadonlyArray<string>;
   readonly assignees: ReadonlyArray<string>;
   readonly stateName: string;
@@ -86,6 +87,7 @@ const IssueNode = Schema.Struct({
   id: Schema.String,
   identifier: Schema.String,
   title: Schema.String,
+  url: Schema.String,
   priority: Schema.optional(Schema.Finite),
   labels: Schema.Struct({
     nodes: Schema.Array(Schema.Struct({ name: Schema.String })),
@@ -186,6 +188,7 @@ const issueFields = `
       id
       identifier
       title
+      url
       priority
       labels(first: ${labelPageSize}) { nodes { name } }
       assignee { id }
@@ -307,6 +310,7 @@ const toRawIssue = (issue: typeof IssueNode.Type): RawIssue => ({
   id: issue.id,
   identifier: issue.identifier,
   title: issue.title,
+  url: issue.url,
   labels: issue.labels.nodes.map((label) => label.name),
   assignees: issue.assignee ? [issue.assignee.id] : [],
   stateName: issue.state.name,

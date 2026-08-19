@@ -18,7 +18,7 @@ const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : n
 // The encode/decode between a harness event and a run event's stored payload is the recorder's
 // private detail. Nothing outside this module touches it, so live and replayed activity can only
 // ever agree.
-const encodeJson = Schema.encodeEffect(Schema.UnknownFromJsonString);
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
 
 interface RunTrack {
