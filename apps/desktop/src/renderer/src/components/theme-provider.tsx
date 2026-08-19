@@ -132,6 +132,19 @@ export function ThemeProvider({
     };
   }, [theme, applyTheme]);
 
+  const toggleTheme = React.useEffectEvent(() => {
+    const nextTheme =
+      theme === "dark"
+        ? "light"
+        : theme === "light"
+          ? "dark"
+          : getSystemTheme() === "dark"
+            ? "light"
+            : "dark";
+
+    setTheme(nextTheme);
+  });
+
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) {
@@ -150,19 +163,7 @@ export function ThemeProvider({
         return;
       }
 
-      setThemeState((currentTheme) => {
-        const nextTheme =
-          currentTheme === "dark"
-            ? "light"
-            : currentTheme === "light"
-              ? "dark"
-              : getSystemTheme() === "dark"
-                ? "light"
-                : "dark";
-
-        localStorage.setItem(storageKey, nextTheme);
-        return nextTheme;
-      });
+      toggleTheme();
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -170,7 +171,7 @@ export function ThemeProvider({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [storageKey]);
+  }, []);
 
   React.useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
