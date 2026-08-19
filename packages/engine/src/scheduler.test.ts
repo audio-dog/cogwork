@@ -535,6 +535,46 @@ describe("Scheduler.tick", () => {
       );
     }),
   );
+
+  it.effect("marks a held crash recovery crashed when scheduling resumes", () => {
+    const liveRunId = Schema.decodeSync(RunId)("run-live");
+    const cursorHarness = Schema.decodeSync(HarnessName)("cursor");
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun({
+        id: liveRunId,
+        workspace: wsA.config.name,
+        workItem: id("#1"),
+        stage: "triage",
+        harness: cursorHarness,
+        branch: null,
+        session: null,
+        usage: null,
+        status: "running",
+        startedAtMillis: 1,
+        endedAtMillis: null,
+      });
+      const runs = yield* Ref.make(0);
+      const execute: ExecuteFn = () => Ref.update(runs, (n) => n + 1).pipe(Effect.map(() => true));
+      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [] }]);
+      yield* Effect.gen(function* () {
+        const scheduler = yield* Scheduler.Scheduler;
+
+        yield* scheduler.admit(wsA, work(1));
+        assert.strictEqual((yield* ledger.getRun(liveRunId))?.status, "running");
+        yield* scheduler.setScheduling("running");
+        assert.strictEqual((yield* ledger.getRun(liveRunId))?.status, "crashed");
+        assert.strictEqual(yield* Ref.get(runs), 1);
+      }).pipe(
+        Effect.provide(
+          schedulerLayer(
+            { globalLimit: 5, dailyBudget: 100, startPaused: true },
+            { registry: [wsA], snapshots, execute, ledger },
+          ),
+        ),
+      );
+    });
+  });
 });
 
 describe("Scheduler.drain", () => {

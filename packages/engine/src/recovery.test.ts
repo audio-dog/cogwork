@@ -196,12 +196,23 @@ const schedulerStub = (admitted: Ref.Ref<ReadonlyArray<EligibleWork>>) =>
     config: { globalLimit: 4, dailyBudget: 100 },
   });
 
+const pausedSchedulerStub = (admitted: Ref.Ref<ReadonlyArray<EligibleWork>>) =>
+  Layer.succeed(Scheduler.Scheduler, {
+    tick: () => Effect.succeed([]),
+    drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
+    admit: (_workspace, work) => Ref.update(admitted, (xs) => [...xs, work]),
+    setScheduling: () => Effect.succeed({ ...Scheduler.initialState, paused: false }),
+    stats: Effect.succeed({ ...Scheduler.initialState, paused: true }),
+    config: { globalLimit: 4, dailyBudget: 100, startPaused: true },
+  });
+
 interface RecoveryDeps {
   readonly observed: ReadonlyArray<ObservedItem>;
   readonly issueTracker?: Partial<IssueTrackerService>;
   readonly ledger: RunLedger.RunLedgerService;
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
   readonly poll?: PollState;
+  readonly startPaused?: boolean;
 }
 
 const recoveryLayer = (deps: RecoveryDeps) => {
@@ -215,7 +226,7 @@ const recoveryLayer = (deps: RecoveryDeps) => {
       Layer.mergeAll(
         registryLayer,
         workerLayer(deps.observed, deps.poll ?? okPoll),
-        schedulerStub(deps.admitted),
+        deps.startPaused ? pausedSchedulerStub(deps.admitted) : schedulerStub(deps.admitted),
         issueTrackerStub(deps.issueTracker ?? {}),
         runLedger,
       ),
@@ -513,6 +524,39 @@ describe("Recovery.recover", () => {
         assert.deepStrictEqual(yield* Ref.get(admitted), []);
         assert.strictEqual((yield* ledger.getRun(running.id))?.status, "crashed");
       }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+    }),
+  );
+
+  it.effect("defers crashRunning while paused so a restart still reschedules the crash", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interruptedRun);
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
+      };
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+
+        yield* recovery.recover();
+        assert.strictEqual((yield* ledger.getRun(interruptedRun.id))?.status, "running");
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+
+        yield* recovery.recover();
+        assert.strictEqual((yield* ledger.getRun(interruptedRun.id))?.status, "running");
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({
+            observed: [claimedByUs],
+            issueTracker,
+            ledger,
+            admitted,
+            startPaused: true,
+          }),
+        ),
+      );
     }),
   );
 

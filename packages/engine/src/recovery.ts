@@ -151,11 +151,19 @@ export const make = Effect.gen(function* () {
     stage: LifecycleStage,
     session: SessionId | null,
   ) {
+    const paused = (yield* scheduler.stats).paused;
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
-    const crashes = yield* ledger.consecutiveCrashes(workspace.config.name, item.id);
+    if (!paused) {
+      yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
+    }
+    const crashes = paused
+      ? (yield* ledger.consecutiveCrashes(workspace.config.name, item.id)) + 1
+      : yield* ledger.consecutiveCrashes(workspace.config.name, item.id);
     if (crashes < maxCrashesPerItem) {
       return yield* reschedule(workspace, item, stage, "crashed", session);
+    }
+    if (paused) {
+      yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
     }
     yield* handoffCrashLoop(workspace, item, stage, crashes, session);
   });

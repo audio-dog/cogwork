@@ -264,6 +264,18 @@ export const make = (config: SchedulerConfig) =>
       if (started) yield* FiberSet.run(jobs, runJob(candidate));
     });
 
+    const launchPending = Effect.fn("Scheduler.launchPending")(function* (candidate: Candidate) {
+      const latest = yield* ledger.latestRunForItem(candidate.workspace.config.name, candidate.work.id);
+      if (latest?.status === "running") {
+        yield* ledger.crashRunning(
+          candidate.workspace.config.name,
+          candidate.work.id,
+          yield* Clock.currentTimeMillis,
+        );
+      }
+      yield* FiberSet.run(jobs, runJob(candidate));
+    });
+
     const setScheduling = Effect.fn("Scheduler.setScheduling")(function* (desired: "running" | "paused") {
       // Unpausing reserves the held resumes in the same atomic step that clears paused, so a tick
       // racing the resume sees their keys already in flight and cannot start them a second time.
@@ -278,7 +290,7 @@ export const make = (config: SchedulerConfig) =>
           return [state.pendingResumes, running];
         },
       );
-      yield* Effect.forEach(resumed, (candidate) => FiberSet.run(jobs, runJob(candidate)), { discard: true });
+      yield* Effect.forEach(resumed, launchPending, { discard: true });
       return yield* Ref.get(stateRef);
     });
 
