@@ -309,7 +309,10 @@ export const activeRuns = (events: ReadonlyArray<DaemonEvent>) => {
 
 export const defaultActivityLimit = 500;
 
-export const boundLog = (rows: ReadonlyArray<ActivityRow>, limit: number = defaultActivityLimit): ActivityRow[] => {
+export const boundLog = (
+  rows: ReadonlyArray<ActivityRow>,
+  limit: number = defaultActivityLimit,
+): ActivityRow[] => {
   if (limit <= 0) return [];
   return rows.length <= limit ? [...rows] : rows.slice(rows.length - limit);
 };

@@ -106,6 +106,7 @@ describe("decodeEvent — human summaries", () => {
           title: "Emoji picker",
           reason: "needs-info",
           proposal: null,
+          url: null,
         }),
       }),
       1_000,
