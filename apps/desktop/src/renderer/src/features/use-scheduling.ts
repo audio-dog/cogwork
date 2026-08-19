@@ -1,12 +1,18 @@
 import type { SchedulingState } from "@cogwork/contracts";
-import { useAtom } from "@effect/atom-react";
+import { useAtom, useAtomSubscribe } from "@effect/atom-react";
 import { setSchedulingAtom } from "../daemon/atoms";
-import { syncSchedulingFromToggle } from "./sync-scheduling-to-main";
+import { abortSchedulingToggle, syncSchedulingFromToggle } from "./sync-scheduling-to-main";
 
 export function useScheduling() {
   const [result, run] = useAtom(setSchedulingAtom);
+
+  useAtomSubscribe(setSchedulingAtom, (current) => {
+    if (current._tag === "Failure") abortSchedulingToggle();
+  });
+
   const setScheduling = (desired: SchedulingState) => {
-    syncSchedulingFromToggle(desired);
+    const stale: SchedulingState = desired === "running" ? "paused" : "running";
+    syncSchedulingFromToggle(desired, stale);
     run({ payload: { desired } });
   };
   return { result, setScheduling };
