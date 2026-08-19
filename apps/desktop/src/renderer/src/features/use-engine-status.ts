@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { EngineStatus } from "../../../shared/ipc";
+import { reportRendererError } from "./report-error";
 
 export type EngineStatusValue = EngineStatus | "unknown";
 
@@ -39,11 +40,18 @@ function getSnapshot(): EngineStatusValue {
 export function useEngineStatus() {
   const status = useSyncExternalStore(subscribe, getSnapshot);
 
-  const setEnabled = (enabled: boolean) => {
-    window.cogwork.setEngineEnabled(enabled).then(setStatus);
-  };
+  const applyStatus = (transition: Promise<EngineStatus>) =>
+    transition.then(setStatus).catch((error) => {
+      reportRendererError(error, "engine-toggle");
+      return window.cogwork.getEngineStatus().then(setStatus);
+    });
 
-  return { status, setEnabled };
+  const setEnabled = (enabled: boolean) => applyStatus(window.cogwork.setEngineEnabled(enabled));
+
+  const restart = () =>
+    applyStatus(window.cogwork.setEngineEnabled(false).then(() => window.cogwork.setEngineEnabled(true)));
+
+  return { status, setEnabled, restart };
 }
 
 export type EnginePhase = "off" | "starting" | "up" | "failed";

@@ -24,9 +24,7 @@ function RailBody() {
   const result = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
 
-  if (result._tag !== "Success") {
-    return <p className="text-xs text-muted-foreground">Waiting for the daemon…</p>;
-  }
+  if (result._tag !== "Success") return null;
 
   const halts = selfHalts(result.board, filter);
   const gate = mergeGate(result.board, filter);

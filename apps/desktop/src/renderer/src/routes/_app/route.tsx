@@ -21,7 +21,8 @@ const engineBadge: Record<EngineStatusValue, { label: string; variant: BadgeVari
   unknown: { label: "…", variant: "outline" },
   starting: { label: "Starting", variant: "secondary" },
   running: { label: "Running", variant: "default" },
-  adopted: { label: "Adopted", variant: "default" },
+  // Adopted is a supervisor-internal distinction; never surface "Adopted" to a person.
+  adopted: { label: "Running", variant: "default" },
   stopped: { label: "Stopped", variant: "outline" },
   failed: { label: "Failed", variant: "destructive" },
 };

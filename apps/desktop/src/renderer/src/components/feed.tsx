@@ -1,11 +1,10 @@
-import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
+import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
 import { RiCheckLine, RiTimeLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use } from "react";
-import { daemonErrorMessage } from "../features/daemon-error";
 import type { FeedRun, QueuedItem } from "../features/feed";
 import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
@@ -301,31 +300,34 @@ function FeedContent({ running, queued, done, previews }: FeedState) {
   );
 }
 
+export function FeedSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 p-6">
+      <section className="flex flex-col gap-3">
+        <Skeleton className="h-4 w-24" />
+        <div className="flex flex-col gap-2 overflow-hidden rounded-xl border">
+          {[0, 1].map((row) => (
+            <Skeleton key={row} className="h-14 w-full rounded-none" />
+          ))}
+        </div>
+      </section>
+      <section className="flex flex-col gap-2">
+        <Skeleton className="h-4 w-20" />
+        <div className="flex flex-col gap-px overflow-hidden rounded-xl border">
+          {[0, 1, 2, 3].map((row) => (
+            <Skeleton key={row} className="h-11 w-full rounded-none" />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function Feed() {
   const result = useBoard();
   const filter = useChromeStore((state) => state.workspaceFilter);
 
-  if (result._tag === "Failure") {
-    return (
-      <div className="p-6">
-        <Alert variant="destructive">
-          <AlertTitle>Could not reach the daemon</AlertTitle>
-          <AlertDescription>{daemonErrorMessage(result.cause)}</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
-  if (result._tag === "Initial") {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>Connecting to the daemon…</EmptyTitle>
-          <EmptyDescription>The feed fills in as the event stream self-seeds.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
+  if (result._tag !== "Success") return null;
 
   const { board, previews } = result;
   const running = runningRuns(board, filter);
