@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/components/right-panel-resize.tsx
+  s_5a4da95521f239::t_b06557fd871dc3 1-2,11,15,33,37,41,45-71
+  s_5a4da95521f239::t_12495c468723ef 72-73
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_5a4da95521f239::t_8ed22db3a91454 5
+  s_5a4da95521f239::t_e95b41930f6bb0 21-22,24-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "099e9598bd26b70294613dba3dd6a92db9806b1b",
+  "prompts": {},
+  "sessions": {
+    "s_5a4da95521f239": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af8bab68-ccda-45dd-a542-33ab40167963",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
