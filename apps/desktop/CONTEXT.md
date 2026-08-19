@@ -65,14 +65,16 @@ later requests until a reconnect lands.
 _Avoid_: Decoding or interpreting RPC in `main`, a second transport for read-model state (use AtomRpc)
 
 **Engine toggle**:
-Runtime start/stop of the engine from the renderer, through the seam (`setEngineEnabled`) and shown
-as a switch in the header. On drives the supervisor's adopt-or-spawn; off stops a spawned engine.
-The engine starts at launch, so the toggle is normally already on; it is the way to stop and restart
-the engine, not the way to boot it. Do not confuse it with the header **scheduling** toggle: the
-engine being on means the daemon runs, while scheduling being live means it starts new runs — launch
-leaves the engine on but scheduling paused. The switch reflects real engine status, not a local
-guess — it follows the same status broadcasts as the rest of the UI.
-_Avoid_: A separate "enabled" preference that can drift from the supervisor's actual state
+The seam for runtime start/stop of the engine from the renderer (`setEngineEnabled`): on drives the
+supervisor's adopt-or-spawn, off stops a spawned engine. The engine starts at launch and the
+supervisor keeps it running, so the header shows no engine switch or status badge — it carries only
+the **scheduling** toggle. Do not confuse the two: the engine being on means the daemon runs, while
+scheduling being live means it starts new runs — launch leaves the engine on but scheduling paused.
+The start/stop seam and its status broadcasts stay wired: the feed and activity views use the status
+to show an "engine is off" card, and the planned degraded-state "turn on engine" action (issue #7)
+will call the seam. It is not surfaced as a header control today.
+_Avoid_: A separate "enabled" preference that can drift from the supervisor's actual state;
+re-adding an always-on engine switch or status badge to the header
 
 ### Shell surfaces
 
