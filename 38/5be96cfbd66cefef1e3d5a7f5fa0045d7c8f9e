@@ -1,0 +1,39 @@
+apps/desktop/src/renderer/src/components/right-panel-resize.tsx
+  s_5a4da95521f239::t_90f6db55a3ec35 2
+  s_5a4da95521f239::t_58a994635fd6e6 3-4,6-8,14,26,34,42-46,60-61,74-75,81-82,93-95,99-100
+  s_5a4da95521f239::t_eaddd8be7cff82 101,129
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_5a4da95521f239::t_27fe2962e65602 123-124
+  s_5a4da95521f239::t_6900d47fd6fae6 1
+  s_5a4da95521f239::t_3e7be38c85b64b 18,39,64-69,73-77,80-95,98-114,116-122,125-128,130-132,139-140,145-156,161-185,227-231
+  s_5a4da95521f239::t_ec6183a5646fb9 72
+apps/desktop/src/renderer/src/components/item-detail.tsx
+  s_5a4da95521f239::t_5c512de150f8af 32-44
+  s_5a4da95521f239::t_f8cb425829c96f 92-103,106-126
+apps/desktop/src/renderer/src/hooks/use-resizable-width.tsx
+  s_5a4da95521f239::t_5c95bdaac522ca 4,6-8
+apps/desktop/src/renderer/src/components/rail-shell.tsx
+  s_5a4da95521f239::t_f8e44d8d1f2baa 4-12,14-16,19-24
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_5a4da95521f239::t_ea867e6edc2e95 4
+  s_5a4da95521f239::t_2008c5d7dcf045 5-13,25-47
+  s_5a4da95521f239::t_7a52ae3cb9a3bc 2,48-53,113-116
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_5a4da95521f239::t_6710c853bb6fa3 72-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "385be96cfbd66cefef1e3d5a7f5fa0045d7c8f9e",
+  "prompts": {},
+  "sessions": {
+    "s_5a4da95521f239": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "af8bab68-ccda-45dd-a542-33ab40167963",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
