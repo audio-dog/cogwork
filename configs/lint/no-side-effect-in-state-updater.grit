@@ -1,0 +1,36 @@
+language js(typescript, jsx)
+
+// A React state updater must be a pure function of the previous state.
+// React can run an updater more than once (StrictMode double-invoke,
+// concurrent render/replay), so a browser-storage write inside it may run
+// twice or observe stale external state. Compute the next state and return
+// it; do the storage write in the event handler or effect that queues the
+// update (reuse the setter that persists + sets state).
+// Mirrors React Doctor react-doctor/no-impure-state-updater (error) and
+// react-doctor/no-side-effect-in-state-updater-function (warn).
+
+`$setter($updater)` where {
+  $setter <: r"set[A-Z][A-Za-z0-9_]*",
+  $updater <: or {
+    `$single_param => $arrow_body`,
+    `($params) => $arrow_body`,
+    `function ($params) { $fn_body }`,
+    `function $fn_name($params) { $fn_body }`
+  },
+  $updater <: contains `$storage.$method($args)` where {
+    $storage <: or {
+      `localStorage`,
+      `sessionStorage`,
+      `window.localStorage`,
+      `window.sessionStorage`,
+      `globalThis.localStorage`,
+      `globalThis.sessionStorage`
+    },
+    $method <: or { `setItem`, `removeItem`, `clear` }
+  },
+  register_diagnostic(
+    span=$updater,
+    message="Rule: no side effect inside a React state updater. Why: React may run the updater more than once (StrictMode double-invoke, concurrent replay), so a browser-storage write here can run twice or observe stale external state. Fix: compute the next state and return it; write to storage in the event handler or effect (reuse the setter that persists + sets state).",
+    severity="error"
+  )
+}
