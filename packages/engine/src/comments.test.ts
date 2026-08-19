@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import {
   agentFailureReason,
   attachCommand,
+  followUpNoteBody,
   handoffComment,
   handoffNote,
   oneLine,
@@ -145,6 +146,23 @@ describe("comments", () => {
     assert.isNull(parseTriageProposal("> *This was posted by cogwork.*\n\nExhausted after 3 attempts."));
     assert.isNull(parseTriageProposal("just a human comment"));
     assert.isNull(parseTriageProposal(triageProposalBody("")));
+  });
+
+  it("attributes a follow-up summary and drops the result line and any marker the agent still wrote", () => {
+    const body = followUpNoteBody(
+      "Merged main and fixed the type error.\n<!-- cogwork:agent-note -->\nFOLLOWUP-RESULT: pushed",
+    );
+    assert.include(body, "This was posted by cogwork.");
+    assert.include(body, "Merged main and fixed the type error.");
+    assert.notInclude(body, "FOLLOWUP-RESULT");
+    // The engine owns the marker now — anything the agent stamps in is stripped before we post.
+    assert.notInclude(body, "agent-note");
+  });
+
+  it("strips a nested marker gadget from a follow-up summary to a fixpoint", () => {
+    // Deleting the inner marker splices a fresh `cogwork:ledger` a single pass would miss.
+    const body = followUpNoteBody("done <!-- cog<!-- cogwork:z -->work:ledger --> here");
+    assert.notInclude(body, "cogwork:");
   });
 
   it("builds a hand-off note with a resume command when the run left a session", () => {

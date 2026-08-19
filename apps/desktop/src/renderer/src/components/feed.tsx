@@ -14,6 +14,7 @@ import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
 import { useChromeStore } from "../store/chrome";
+import { useRightPanelStore } from "../store/right-panel";
 
 interface FeedState {
   running: ReadonlyArray<FeedRun>;
@@ -287,7 +288,8 @@ const FeedCompound = {
 };
 
 function FeedContent({ running, queued, done, previews }: FeedState) {
-  const select = useChromeStore((state) => state.select);
+  const openSurface = useRightPanelStore((state) => state.openSurface);
+  const select = (selection: ItemSelection) => openSurface({ kind: "item", ...selection });
   const now = useNow();
   return (
     <FeedCompound.Provider state={{ running, queued, done, previews }} actions={{ select }} meta={{ now }}>

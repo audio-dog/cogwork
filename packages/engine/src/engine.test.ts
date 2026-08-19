@@ -62,7 +62,10 @@ const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.
 });
 
 const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = []) =>
-  Layer.succeed(SourceControlProvider, { observe: () => Effect.succeed(new Map(prs)) });
+  Layer.succeed(SourceControlProvider, {
+    observe: () => Effect.succeed(new Map(prs)),
+    comment: () => Effect.void,
+  });
 
 const sources = (
   issueTrackerLayer: Layer.Layer<IssueTracker.IssueTracker>,

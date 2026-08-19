@@ -37,6 +37,7 @@ import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import { layer as runRecorderLayer } from "./run-recorder";
 import * as SessionStore from "./session-store";
+import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
@@ -387,10 +388,26 @@ const successEvents: ReadonlyArray<AgUiEvent> = [
   finished,
 ];
 
+interface PostedComment {
+  readonly item: string;
+  readonly body: string;
+}
+
+const noopProvider: SourceControlProviderService = {
+  observe: () => Effect.succeed(new Map()),
+  comment: () => Effect.void,
+};
+
+const recordingProvider = (posted: Ref.Ref<ReadonlyArray<PostedComment>>): SourceControlProviderService => ({
+  observe: () => Effect.succeed(new Map()),
+  comment: (_workspace, item, body) => Ref.update(posted, (xs) => [...xs, { item: item.id, body }]),
+});
+
 const provide = (
   ws: IssueTrackerService,
   runners: ReadonlyArray<HarnessRunner>,
   worktree: WorktreeManagerService = worktreeStub,
+  sourceControl: SourceControlProviderService = noopProvider,
 ) => {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -401,6 +418,7 @@ const provide = (
     Layer.provideMerge(
       Layer.mergeAll(
         Layer.succeed(IssueTracker, ws),
+        Layer.succeed(SourceControlProvider, sourceControl),
         sessionStore,
         harnessLayer(runners).pipe(Layer.provide(runnerServices)),
         runLedger,
@@ -1068,6 +1086,48 @@ describe("Executor.execute", () => {
         assert.strictEqual(run?.stage, "follow-up");
         assert.strictEqual(run?.branch, followUpBranch);
         assert.strictEqual(run?.status, "succeeded");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("posts the round summary to the pull request with the result line stripped", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const posted = yield* Ref.make<ReadonlyArray<PostedComment>>([]);
+      const layer = provide(
+        recorder(calls),
+        [runner(followUpEvents)],
+        worktreeStubCreated(false),
+        recordingProvider(posted),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const [comment] = yield* Ref.get(posted);
+        assert.strictEqual(comment?.item, "#5");
+        assert.include(comment?.body ?? "", "Fixed the failing check and pushed");
+        assert.include(comment?.body ?? "", "posted by cogwork");
+        assert.notInclude(comment?.body ?? "", "FOLLOWUP-RESULT");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("posts no pull request summary when a follow-up hands itself off as stuck", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const posted = yield* Ref.make<ReadonlyArray<PostedComment>>([]);
+      const layer = provide(
+        recorder(calls),
+        [runner(stuckFollowUpEvents)],
+        worktreeStubCreated(false),
+        recordingProvider(posted),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        assert.isEmpty(yield* Ref.get(posted));
       }).pipe(Effect.provide(layer));
     }),
   );

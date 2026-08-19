@@ -1,6 +1,16 @@
 import { useSidebar } from "@cogwork/ui/components/sidebar";
 import { useLocalStorageValue, useWindowSize } from "@react-hookz/web";
 import { useRef } from "react";
+import { clampResizableWidth } from "../hooks/use-resizable-width";
+import { useRightPanelStore } from "../store/right-panel";
+import {
+  RIGHT_PANEL_DEFAULT_WIDTH,
+  RIGHT_PANEL_MIN_WIDTH,
+  RIGHT_PANEL_STORAGE_KEY,
+  reclampOpenRightPanelWidth,
+  reservedOpenRightPanelWidth,
+  rightPanelRegionElement,
+} from "./right-panel-resize";
 
 const STORAGE_KEY = "cf.sidebarWidth";
 const DEFAULT_WIDTH = 16 * 16;
@@ -9,19 +19,19 @@ const DEFAULT_WIDTH = 16 * 16;
 // so the sidebar can shrink past it without the wordmark overflowing the edge.
 const MIN_WIDTH = 13 * 16;
 const MAIN_CONTENT_MIN_WIDTH = 30 * 16;
-
-function resolveMaxWidth(viewportWidth: number) {
-  return Math.max(MIN_WIDTH, Math.floor(viewportWidth) - MAIN_CONTENT_MIN_WIDTH);
-}
-
-function clampWidth(width: number, viewportWidth: number) {
-  return Math.min(Math.max(width, MIN_WIDTH), resolveMaxWidth(viewportWidth));
-}
+const BOUNDS = { minWidth: MIN_WIDTH, mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH };
 
 export function useSidebarWidth() {
+  const panelOpen = useRightPanelStore((state) => state.open);
+  const maximized = useRightPanelStore((state) => state.maximized);
+  const panelDocked = panelOpen && !maximized;
   const { width: windowWidth } = useWindowSize();
+  const { value: storedPanel } = useLocalStorageValue(RIGHT_PANEL_STORAGE_KEY, {
+    defaultValue: RIGHT_PANEL_DEFAULT_WIDTH,
+    initializeWithValue: true,
+  });
   const {
-    value: storedWidth,
+    value: storedSidebar,
     set,
     remove,
   } = useLocalStorageValue(STORAGE_KEY, {
@@ -29,10 +39,20 @@ export function useSidebarWidth() {
     initializeWithValue: true,
   });
 
-  const setWidth = (next: number) => set(clampWidth(next, window.innerWidth));
+  const sidebarPass = clampResizableWidth(storedSidebar, windowWidth, BOUNDS);
+  const panelReserved = panelDocked
+    ? clampResizableWidth(storedPanel, windowWidth, {
+        minWidth: RIGHT_PANEL_MIN_WIDTH,
+        mainContentMinWidth: MAIN_CONTENT_MIN_WIDTH,
+        reservedWidth: sidebarPass,
+      })
+    : 0;
+  const width = clampResizableWidth(storedSidebar, windowWidth, { ...BOUNDS, reservedWidth: panelReserved });
+  const setWidth = (next: number) =>
+    set(clampResizableWidth(next, windowWidth, { ...BOUNDS, reservedWidth: panelReserved }));
   const reset = () => remove();
 
-  return { width: clampWidth(storedWidth, windowWidth), setWidth, reset };
+  return { width, setWidth, reset };
 }
 
 interface DragState {
@@ -41,6 +61,7 @@ interface DragState {
   width: number;
   wrapper: HTMLElement;
   transitionTargets: HTMLElement[];
+  rightPanelRegion: HTMLElement | null;
 }
 
 export function SidebarResizeHandle({
@@ -70,6 +91,8 @@ export function SidebarResizeHandle({
     for (const element of transitionTargets) {
       element.style.setProperty("transition-duration", "0ms");
     }
+    const rightPanelRegion = rightPanelRegionElement(wrapper);
+    rightPanelRegion?.style.setProperty("transition-duration", "0ms");
 
     event.preventDefault();
     rail.setPointerCapture(event.pointerId);
@@ -81,6 +104,7 @@ export function SidebarResizeHandle({
       width: startWidth,
       wrapper,
       transitionTargets,
+      rightPanelRegion,
     };
   };
 
@@ -88,8 +112,12 @@ export function SidebarResizeHandle({
     const drag = dragRef.current;
     if (!drag) return;
     event.preventDefault();
-    drag.width = clampWidth(drag.startWidth + (event.clientX - drag.startX), window.innerWidth);
+    drag.width = clampResizableWidth(drag.startWidth + (event.clientX - drag.startX), window.innerWidth, {
+      ...BOUNDS,
+      reservedWidth: reservedOpenRightPanelWidth(drag.wrapper),
+    });
     drag.wrapper.style.setProperty("--sidebar-width", `${drag.width}px`);
+    reclampOpenRightPanelWidth(drag.wrapper);
   };
 
   const endDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -98,6 +126,7 @@ export function SidebarResizeHandle({
     for (const element of drag.transitionTargets) {
       element.style.removeProperty("transition-duration");
     }
+    drag.rightPanelRegion?.style.removeProperty("transition-duration");
     document.body.style.removeProperty("cursor");
     document.body.style.removeProperty("user-select");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {

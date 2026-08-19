@@ -24,6 +24,15 @@ export interface SourceControlProviderService {
     workspace: RegisteredWorkspace,
     owned: ReadonlyArray<OwnedItem>,
   ) => Effect.Effect<ReadonlyMap<WorkItemId, PrSignals>, IssueTrackerError>;
+
+  // Post the daemon's round summary as a comment on the item's pull request. The provider appends
+  // its own coordination marker, so the engine — never the agent — owns the marker, and a comment
+  // written here is never read back as human feedback. A no-op when the item has no linked PR.
+  readonly comment: (
+    workspace: RegisteredWorkspace,
+    item: OwnedItem,
+    body: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
 }
 
 export class SourceControlProvider extends Context.Service<
@@ -33,6 +42,7 @@ export class SourceControlProvider extends Context.Service<
 
 const noProvider: SourceControlProviderService = {
   observe: () => Effect.succeed(new Map()),
+  comment: () => Effect.void,
 };
 
 // The binding for a workspace with no source control provider — a Linear tracker with no

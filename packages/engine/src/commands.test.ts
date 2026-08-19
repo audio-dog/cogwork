@@ -70,6 +70,7 @@ const emptyCalls: TrackerCalls = { reclassify: [], handOff: [], released: [] };
 
 const providerStub = Layer.succeed(SourceControlProvider, {
   observe: () => Effect.succeed(new Map<WorkItemId, PrSignals>()),
+  comment: () => Effect.void,
 });
 
 const trackerLayer = (

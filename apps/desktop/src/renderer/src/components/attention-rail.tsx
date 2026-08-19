@@ -69,8 +69,13 @@ function RailBody() {
 
 export function AttentionList() {
   return (
-    <RailShell header={<h2 className="text-sm font-semibold">Attention</h2>}>
-      <RailBody />
-    </RailShell>
+    <RailShell.Frame>
+      <RailShell.Header>
+        <h2 className="text-sm font-semibold">Attention</h2>
+      </RailShell.Header>
+      <RailShell.Body>
+        <RailBody />
+      </RailShell.Body>
+    </RailShell.Frame>
   );
 }

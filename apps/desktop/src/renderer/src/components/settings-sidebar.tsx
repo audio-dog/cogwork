@@ -15,6 +15,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
+import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftLine, RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -98,45 +99,47 @@ export function SettingsSidebar() {
   };
 
   return (
-    <Sidebar collapsible="none">
-      <SidebarHeader className="h-11 shrink-0 [-webkit-app-region:drag]" />
-      <SidebarContent>
-        <div className="flex flex-col gap-2 px-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-fit justify-start [-webkit-app-region:no-drag]"
-            onClick={() => navigate({ to: "/" })}
-          >
-            <RiArrowLeftLine data-icon="inline-start" />
-            Back to app
-          </Button>
-          <InputGroup>
-            <InputGroupInput
-              placeholder="Search settings…"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <InputGroupAddon>
-              <RiSearchLine />
-            </InputGroupAddon>
-            {searching ? (
-              <InputGroupAddon align="inline-end">
-                <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => setQuery("")}>
-                  <RiCloseLine />
-                </InputGroupButton>
+    <TooltipProvider>
+      <Sidebar collapsible="none">
+        <SidebarHeader className="h-11 shrink-0 [-webkit-app-region:drag]" />
+        <SidebarContent>
+          <div className="flex flex-col gap-2 px-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-fit justify-start [-webkit-app-region:no-drag]"
+              onClick={() => navigate({ to: "/" })}
+            >
+              <RiArrowLeftLine data-icon="inline-start" />
+              Back to app
+            </Button>
+            <InputGroup>
+              <InputGroupInput
+                placeholder="Search settings…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              <InputGroupAddon>
+                <RiSearchLine />
               </InputGroupAddon>
-            ) : null}
-          </InputGroup>
-        </div>
-        <SidebarGroup className="pt-2">
-          {searching ? (
-            <SearchResults query={query} onSelect={openSetting} />
-          ) : (
-            <SectionNav activeSectionId={activeSectionId} />
-          )}
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
+              {searching ? (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => setQuery("")}>
+                    <RiCloseLine />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              ) : null}
+            </InputGroup>
+          </div>
+          <SidebarGroup className="pt-2">
+            {searching ? (
+              <SearchResults query={query} onSelect={openSetting} />
+            ) : (
+              <SectionNav activeSectionId={activeSectionId} />
+            )}
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+    </TooltipProvider>
   );
 }
