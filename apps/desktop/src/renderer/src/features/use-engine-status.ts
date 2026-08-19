@@ -79,16 +79,20 @@ export function useEngineStatus() {
   const restart = () => {
     if (restarting) return;
     setRestarting(true);
+    let failed = false;
     return window.cogwork
       .setEngineEnabled(false)
       .then(() => window.cogwork.setEngineEnabled(true))
       .then(setStatus)
       .catch((error) => {
+        failed = true;
         reportRendererError(error, "engine-restart");
       })
       .finally(() => {
         setRestarting(false);
-        return syncStatus();
+      })
+      .then(() => {
+        if (failed) return syncStatus();
       });
   };
 
