@@ -1,4 +1,10 @@
-import { type TriageRole, WorkItemId } from "@cogwork/contracts";
+import {
+  defaultPriority,
+  type GitHubPrioritySource,
+  type Priority,
+  type TriageRole,
+  WorkItemId,
+} from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { CommentHost, CoordinationComment } from "../coordination";
@@ -11,6 +17,7 @@ import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from
 
 interface GitHubTarget extends GitHubRepoRef {
   readonly actorLogin: string | null;
+  readonly priority: GitHubPrioritySource | null;
 }
 
 interface GitHubRef {
@@ -39,6 +46,7 @@ const targetFor = (workspace: RegisteredWorkspace) => {
     name,
     tokenEnv: source.tokenEnv ?? "GITHUB_TOKEN",
     actorLogin: source.actorLogin ?? null,
+    priority: source.priority ?? null,
   } satisfies GitHubTarget;
 };
 
@@ -71,7 +79,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
     create: (body) => client.createComment(target, number, body),
   });
 
-  const listItem = (target: GitHubTarget) =>
+  const listItem = (target: GitHubTarget, priorityFor: (issueNumber: number) => Priority) =>
     Effect.fn("github.listItem")(function* (issue: RawIssue) {
       // With no configured bot login the daemon cannot tell its own comments apart, so it reads no
       // coordination state at all rather than trusting an unattributable comment.
@@ -86,9 +94,27 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
         claimLabeled: hasClaimLabel(issue.labels),
         openBlockers: issue.openBlockers,
         claimIdentity: claimIdentity(target),
+        priority: priorityFor(issue.number),
         comments: rawComments.map(toCoordinationComment(target.actorLogin)),
       } satisfies ListedItem<number>;
     });
+
+  const priorityLookup = Effect.fn("github.priorityLookup")(function* (target: GitHubTarget) {
+    const fallback = () => defaultPriority;
+    const source = target.priority;
+    if (!source) return fallback;
+    return yield* client.projectPriorities(target, source).pipe(
+      Effect.map((byNumber) => (issueNumber: number) => byNumber.get(issueNumber) ?? defaultPriority),
+      Effect.catchTag("IssueTrackerError", (error) =>
+        Effect.logWarning("priority board read failed; defaulting every item to medium", {
+          owner: target.owner,
+          name: target.name,
+          project: source.project,
+          message: error.message,
+        }).pipe(Effect.map(() => fallback)),
+      ),
+    );
+  });
 
   return {
     codec: wireCodec,
@@ -98,10 +124,10 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
       if (!target) {
         return [];
       }
-      const issues = yield* client.listIssues(target);
+      const [issues, priorityFor] = yield* Effect.all([client.listIssues(target), priorityLookup(target)]);
       return yield* Effect.forEach(
         issues.filter((issue) => !issue.isPullRequest),
-        listItem(target),
+        listItem(target, priorityFor),
         { concurrency: 10 },
       );
     }),

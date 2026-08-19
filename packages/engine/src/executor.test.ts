@@ -72,7 +72,13 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 
-const triageItem = { id: id("#7"), title: "broken export", stage: "triage" as const, priorFailures: 0 };
+const triageItem = {
+  id: id("#7"),
+  title: "broken export",
+  stage: "triage" as const,
+  priority: "medium" as const,
+  priorFailures: 0,
+};
 
 const usage: TokenUsage = { inputTokens: 12, outputTokens: 34, totalTokens: 46 };
 
@@ -152,6 +158,7 @@ const implementItem = {
   id: id("#15"),
   title: "Implement playbook",
   stage: "implement" as const,
+  priority: "medium" as const,
   priorFailures: 0,
 };
 
@@ -212,6 +219,7 @@ const followUpItem = {
   id: id("#5"),
   title: "PR follow-up playbook",
   stage: "follow-up" as const,
+  priority: "medium" as const,
   priorFailures: 0,
   followUp: {
     checks: "failing" as const,

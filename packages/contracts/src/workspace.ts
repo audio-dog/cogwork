@@ -25,6 +25,12 @@ export const OAuthAppConfig = Schema.Struct({
 });
 export type OAuthAppConfig = typeof OAuthAppConfig.Type;
 
+export const GitHubPrioritySource = Schema.Struct({
+  project: Schema.Int.check(Schema.isGreaterThan(0)),
+  field: Schema.optional(TrimmedNonEmptyString),
+});
+export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
+
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   repo: Schema.optional(TrimmedNonEmptyString),
@@ -37,6 +43,7 @@ export const IssueTrackerConfig = Schema.Struct({
   assigneeAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   roleLabels: Schema.optional(TriageRoleLabels),
+  priority: Schema.optional(GitHubPrioritySource),
 });
 export type IssueTrackerConfig = typeof IssueTrackerConfig.Type;
 

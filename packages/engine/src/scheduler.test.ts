@@ -1,6 +1,7 @@
 import {
   HarnessName,
   type LifecycleStage,
+  type Priority,
   RunId,
   type RunRecord,
   WorkItemId,
@@ -43,10 +44,16 @@ const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace =>
   }),
 });
 
-const work = (n: number, stage: LifecycleStage = "triage", priorFailures = 0): EligibleWork => ({
+const work = (
+  n: number,
+  stage: LifecycleStage = "triage",
+  priorFailures = 0,
+  priority: Priority = "medium",
+): EligibleWork => ({
   id: id(`#${n}`),
   title: `item ${n}`,
   stage,
+  priority,
   priorFailures,
 });
 
@@ -99,6 +106,41 @@ describe("Scheduler.plan", () => {
       candidate(wsA, work(1, "verify"), 10),
       candidate(wsA, work(2, "triage"), 10),
       candidate(wsA, work(3, "follow-up"), 10),
+    ];
+    const result = Scheduler.plan(
+      candidates,
+      Scheduler.initialState,
+      { globalLimit: 1, dailyBudget: 100 },
+      stamp(0),
+    );
+    assert.deepStrictEqual(
+      result.picks.map((pick) => pick.work.stage),
+      ["follow-up"],
+    );
+  });
+
+  it("breaks a within-stage tie by priority across workspaces", () => {
+    const candidates = [
+      candidate(wsA, work(1, "triage", 0, "low"), 10),
+      candidate(wsB, work(2, "triage", 0, "urgent"), 10),
+      candidate(wsA, work(3, "triage", 0, "medium"), 10),
+    ];
+    const result = Scheduler.plan(
+      candidates,
+      Scheduler.initialState,
+      { globalLimit: 1, dailyBudget: 100 },
+      stamp(0),
+    );
+    assert.deepStrictEqual(
+      result.picks.map((pick) => pick.work.id),
+      [id("#2")],
+    );
+  });
+
+  it("keeps stage primary: a low follow-up outranks an urgent implement", () => {
+    const candidates = [
+      candidate(wsA, work(1, "implement", 0, "urgent"), 10),
+      candidate(wsB, work(2, "follow-up", 0, "low"), 10),
     ];
     const result = Scheduler.plan(
       candidates,

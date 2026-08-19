@@ -153,6 +153,7 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   followUp: null,
   openBlockers: 0,
   proposal: null,
+  priority: "medium",
   ...over,
 });
 

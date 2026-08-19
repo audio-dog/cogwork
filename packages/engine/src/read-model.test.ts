@@ -35,6 +35,7 @@ const eligibleWithPr: EligibleWork = {
   id: id("e-pr"),
   title: "eligible with pr",
   stage: "follow-up",
+  priority: "medium",
   priorFailures: 2,
   followUp: {
     checks: "failing",
@@ -52,6 +53,7 @@ const eligibleNoPr: EligibleWork = {
   id: id("e"),
   title: "eligible",
   stage: "implement",
+  priority: "medium",
   priorFailures: 0,
 };
 

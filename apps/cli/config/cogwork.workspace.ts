@@ -27,4 +27,11 @@ export default defineWorkspace({
     setup: ["pnpm install", "pnpm setup-worktree"],
     reapAfterMillis: 604_800_000,
   },
+  sourceControl: {
+    type: "github",
+    repo: "colonylabs/cogwork",
+    tokenEnv: "GITHUB_TOKEN",
+    actorLogin: "taylorfsteele",
+    botAllowlist: ["cursor[bot]"],
+  },
 });
