@@ -75,6 +75,23 @@ const consecutiveCrashesOf = (runs: ReadonlyArray<RunRecord>) => {
   return ordered.length - (lastNonCrash + 1);
 };
 
+export const consecutiveCrashesForRecoveryOf = (runs: ReadonlyArray<RunRecord>) => {
+  const ordered = [...runs].sort((a, b) => a.startedAtMillis - b.startedAtMillis);
+  const latest = ordered.at(-1);
+  if (latest?.status === "running") {
+    return consecutiveCrashesOf(ordered.slice(0, -1)) + 1;
+  }
+  return consecutiveCrashesOf(ordered);
+};
+
+export interface HeldRun {
+  readonly workspace: string;
+  readonly workItem: string;
+}
+
+const isHeldRun = (run: RunRecord, held: ReadonlyArray<HeldRun>) =>
+  held.some((item) => item.workspace === run.workspace && item.workItem === run.workItem);
+
 const latestRunWhere = (runs: ReadonlyArray<RunRecord>, match: (run: RunRecord) => boolean) =>
   [...runs]
     .filter(match)
@@ -153,11 +170,15 @@ export const makeMemory = Effect.gen(function* () {
           (run) => interrupted(run, endedAtMillis),
         ),
       ),
-    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
+    interruptRunningBefore: (
+      beforeMillis: number,
+      endedAtMillis: number,
+      held: ReadonlyArray<HeldRun> = [],
+    ) =>
       Ref.modify(runsRef, (runs) =>
         transition(
           runs,
-          (run) => runningBefore(run, beforeMillis),
+          (run) => runningBefore(run, beforeMillis) && !isHeldRun(run, held),
           (run) => interrupted(run, endedAtMillis),
         ),
       ),
@@ -171,6 +192,10 @@ export const makeMemory = Effect.gen(function* () {
       ),
     consecutiveCrashes: (workspace: string, workItem: string) =>
       Effect.map(Ref.get(runsRef), (runs) => consecutiveCrashesOf(runs.filter(forItem(workspace, workItem)))),
+    consecutiveCrashesForRecovery: (workspace: string, workItem: string) =>
+      Effect.map(Ref.get(runsRef), (runs) =>
+        consecutiveCrashesForRecoveryOf(runs.filter(forItem(workspace, workItem))),
+      ),
     insertSession: (session: Session) =>
       Ref.update(sessionsRef, (sessions) => new Map(sessions).set(session.id, session)),
     getSession,
@@ -257,8 +282,8 @@ const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusSer
       Effect.andThen(core.updateRun(runId, update), publish(runId)),
     interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
       Effect.tap(core.interruptRunning(startedFromMillis, endedAtMillis), publishAll),
-    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
-      Effect.tap(core.interruptRunningBefore(beforeMillis, endedAtMillis), publishAll),
+    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number, held?: ReadonlyArray<HeldRun>) =>
+      Effect.tap(core.interruptRunningBefore(beforeMillis, endedAtMillis, held), publishAll),
     crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
       Effect.tap(core.crashRunning(workspace, workItem, endedAtMillis), publishAll),
     closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>

@@ -320,6 +320,19 @@ describe("RunLedger (memory)", () => {
   });
 
   it.layer(layerMemory)((it) => {
+    it.effect("counts a trailing running row toward the crash streak for recovery", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertRun(record("c1", 1000, { status: "crashed" }));
+        yield* ledger.insertRun(record("c2", 2000, { status: "crashed" }));
+        yield* ledger.insertRun(record("live", 3000));
+        assert.strictEqual(yield* ledger.consecutiveCrashes("gh", "#7"), 0);
+        assert.strictEqual(yield* ledger.consecutiveCrashesForRecovery("gh", "#7"), 3);
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
     it.effect("interrupts runs left running by an earlier daemon and spares this daemon's own", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
@@ -342,6 +355,23 @@ describe("RunLedger (memory)", () => {
           ["running", null],
           ["succeeded", 3850],
         ]);
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
+    it.effect("spares held paused recoveries during the bootstrap orphan sweep", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertRun(record("held", 3900));
+        yield* ledger.insertRun({ ...record("orphan", 3800), workItem: otherWorkItem });
+
+        yield* ledger.interruptRunningBefore(4000, 5000, [{ workspace: "gh", workItem: "#7" }]);
+
+        const statuses = yield* Effect.forEach(["held", "orphan"], (id) =>
+          Effect.map(ledger.getRun(runId(id)), (run) => run?.status),
+        );
+        assert.deepStrictEqual(statuses, ["running", "interrupted"]);
       }),
     );
   });
