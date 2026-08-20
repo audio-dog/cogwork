@@ -16,7 +16,6 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
@@ -222,12 +221,15 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     at: number,
   ) {
-    const result = yield* Effect.result(
-      issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }),
+    return yield* issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error }).pipe(
+            Effect.map(() => false),
+          ),
+        onSuccess: () => Effect.succeed(true),
+      }),
     );
-    if (Result.isSuccess(result)) return true;
-    yield* Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error: result.failure });
-    return false;
   });
 
   const settleRun = (runId: RunId, update: RunUpdate) => ledger.updateRun(runId, update);
@@ -402,19 +404,21 @@ export const make = Effect.gen(function* () {
     record: RunRecord,
     acc: TriageAccumulator,
   ) {
-    const result = yield* Effect.result(decodeTriageResult(acc));
-    if (Result.isSuccess(result)) {
-      yield* recorder.record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" });
-      return yield* applyTriageSuccess(workspace, item, record.id, acc, result.success);
-    }
-    yield* recorder.record(record, failedTerminal);
-    return yield* applyFailure(
-      workspace,
-      item,
-      record.id,
-      result.failure.retryable,
-      result.failure.message,
-      acc.handle,
+    return yield* decodeTriageResult(acc).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          recorder
+            .record(record, failedTerminal)
+            .pipe(
+              Effect.andThen(
+                applyFailure(workspace, item, record.id, error.retryable, error.message, acc.handle),
+              ),
+            ),
+        onSuccess: (result) =>
+          recorder
+            .record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" })
+            .pipe(Effect.andThen(applyTriageSuccess(workspace, item, record.id, acc, result))),
+      }),
     );
   });
 
@@ -694,18 +698,17 @@ export const make = Effect.gen(function* () {
       attempt: Effect.Effect<A, PrepareError | HarnessError>,
       complete: (acc: A) => Effect.Effect<void, IssueTrackerError>,
     ) =>
-      Effect.gen(function* () {
-        const outcome = yield* Effect.result(attempt);
-        if (Result.isSuccess(outcome)) return yield* complete(outcome.success);
-        return yield* applyFailure(
-          workspace,
-          item,
-          runId,
-          retryableOf(outcome.failure),
-          prepareFailureReason(outcome.failure),
-          yield* handleOf(ledger, record.session),
-        );
-      });
+      attempt.pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            handleOf(ledger, record.session).pipe(
+              Effect.flatMap((handle) =>
+                applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
+              ),
+            ),
+          onSuccess: complete,
+        }),
+      );
 
     if (ops.kind === "triage") {
       return yield* settle(foldTriageOutcome(record, ops, request), (acc) => ops.complete(record, acc));
@@ -736,25 +739,39 @@ export const make = Effect.gen(function* () {
     };
     yield* ledger.insertRun(record);
     yield* Effect.withFiber((self) => runControl.register(runId, self));
-    return yield* Effect.gen(function* () {
-      const plan = yield* Effect.result(planSession(workspace, ops, startedAtMillis));
-      const session = Result.isSuccess(plan)
-        ? plan.success.session
-        : (previous ?? (yield* mintSession(workspace, ops, startedAtMillis)));
+    const persistSession = (session: SessionId) => {
       const prepared = withSession(record, session);
-      if (prepared !== record) yield* ledger.setRunSession(runId, session);
-      if (Result.isFailure(plan)) {
-        return yield* applyFailure(
-          workspace,
-          item,
-          runId,
-          retryableOf(plan.failure),
-          prepareFailureReason(plan.failure),
-          yield* handleOf(ledger, prepared.session),
-        );
-      }
-      return yield* settleOutcome(workspace, item, ops, prepared, runId, plan.success.request);
-    }).pipe(Effect.ensuring(runControl.unregister(runId)));
+      return prepared === record
+        ? Effect.succeed(prepared)
+        : ledger.setRunSession(runId, session).pipe(Effect.map(() => prepared));
+    };
+    return yield* planSession(workspace, ops, startedAtMillis).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          (previous ? Effect.succeed(previous) : mintSession(workspace, ops, startedAtMillis)).pipe(
+            Effect.flatMap(persistSession),
+            Effect.flatMap((prepared) =>
+              handleOf(ledger, prepared.session).pipe(
+                Effect.flatMap((handle) =>
+                  applyFailure(
+                    workspace,
+                    item,
+                    runId,
+                    retryableOf(error),
+                    prepareFailureReason(error),
+                    handle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        onSuccess: ({ request, session }) =>
+          persistSession(session).pipe(
+            Effect.flatMap((prepared) => settleOutcome(workspace, item, ops, prepared, runId, request)),
+          ),
+      }),
+      Effect.ensuring(runControl.unregister(runId)),
+    );
   });
 
   const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (
