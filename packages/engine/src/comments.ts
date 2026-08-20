@@ -65,7 +65,6 @@ export const prepareFailureReason = (error: {
   return error.message;
 };
 
-
 const crashWord = (count: number) => (count === 1 ? "crash" : "crashes");
 
 const headline = (stage: LifecycleStage, cause: HandoffCause) => {

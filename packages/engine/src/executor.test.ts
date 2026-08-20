@@ -1331,13 +1331,20 @@ describe("Executor.execute", () => {
   it.effect("retries a follow-up with no structured result", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
-      const layer = provide(recorder(calls), [runner(missingFollowUpResultEvents)], worktreeStubCreated(false));
+      const layer = provide(
+        recorder(calls),
+        [runner(missingFollowUpResultEvents)],
+        worktreeStubCreated(false),
+      );
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
         yield* executor.execute(followUpWorkspace, followUpItem);
 
         const log = yield* Ref.get(calls);
-        assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured follow-up result");
+        assert.include(
+          log.find((call) => call.method === "attemptFailed")?.reason ?? "",
+          "structured follow-up result",
+        );
         assert.isFalse(log.some((call) => call.method === "handOff"));
       }).pipe(Effect.provide(layer));
     }),
@@ -1356,7 +1363,10 @@ describe("Executor.execute", () => {
         yield* executor.execute(followUpWorkspace, followUpItem);
 
         const log = yield* Ref.get(calls);
-        assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured follow-up result");
+        assert.include(
+          log.find((call) => call.method === "attemptFailed")?.reason ?? "",
+          "structured follow-up result",
+        );
         assert.isFalse(log.some((call) => call.method === "handOff"));
       }).pipe(Effect.provide(layer));
     }),
