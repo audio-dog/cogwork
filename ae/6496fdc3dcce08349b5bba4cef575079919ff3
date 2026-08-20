@@ -1,0 +1,22 @@
+packages/engine/src/comments.ts
+  h_46518a29d4dd91 40-41
+packages/engine/src/executor.test.ts
+  h_46518a29d4dd91 1166-1169,1395-1404,1406-1410,1412-1422
+packages/engine/src/executor.ts
+  h_46518a29d4dd91 441-443
+packages/engine/src/harness.ts
+  h_46518a29d4dd91 4,33-35
+packages/engine/src/playbook.ts
+  h_46518a29d4dd91 180-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "ae6496fdc3dcce08349b5bba4cef575079919ff3",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
