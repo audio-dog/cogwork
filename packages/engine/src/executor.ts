@@ -3,6 +3,7 @@ import {
   agUiIsStructuredOutputComplete,
   agUiTextDelta,
   agUiUsage,
+  ImplementStageResult,
   RunId,
   StructuredOutputCompleteValue,
   sessionHandle,
@@ -38,7 +39,6 @@ import {
   buildImplementPrompt,
   buildTriagePrompt,
   parseFollowUpResult,
-  parseImplementResult,
   type ResolvedStage,
   resolveStage,
 } from "./playbook";
@@ -58,6 +58,7 @@ interface RunAccumulator {
   readonly text: string;
   readonly handle: string | null;
   readonly usage: TokenUsage | null;
+  readonly structuredOutputs: ReadonlyArray<unknown>;
 }
 
 interface TriageAccumulator extends RunAccumulator {
@@ -69,6 +70,7 @@ const emptyAccumulator: RunAccumulator = {
   text: "",
   handle: null,
   usage: null,
+  structuredOutputs: [],
 };
 
 const emptyTriageAccumulator: TriageAccumulator = {
@@ -119,7 +121,7 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
-const appendStructuredOutput = (acc: TriageAccumulator, event: AgUiEvent) => {
+const appendStructuredOutput = (acc: Pick<RunAccumulator, "structuredOutputs">, event: AgUiEvent) => {
   if (!agUiIsStructuredOutputComplete(event)) return acc.structuredOutputs;
   return [...acc.structuredOutputs, event.value];
 };
@@ -128,12 +130,12 @@ const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null
   text: acc.text + agUiTextDelta(event),
   handle,
   usage: agUiUsage(event) ?? acc.usage,
+  structuredOutputs: appendStructuredOutput(acc, event),
 });
 
 const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: string | null) =>
   ({
     ...mergeEvent(acc, event, handle),
-    structuredOutputs: appendStructuredOutput(acc, event),
     deferredTerminal: acc.deferredTerminal,
   }) satisfies TriageAccumulator;
 
@@ -424,18 +426,41 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const ImplementCompletion = Schema.Struct({
+    ...StructuredOutputCompleteValue.fields,
+    object: ImplementStageResult,
+  });
+
+  const decodeImplementResult = Effect.fn("Executor.decodeImplementResult")(function* (acc: RunAccumulator) {
+    if (acc.structuredOutputs.length !== 1) {
+      return yield* structuredTriageError(
+        `expected exactly one structured implement result, received ${acc.structuredOutputs.length}`,
+      );
+    }
+    const completion = yield* Schema.decodeUnknownEffect(ImplementCompletion)(acc.structuredOutputs[0]).pipe(
+      Effect.mapError((error) =>
+        structuredTriageError(`invalid structured implement result: ${error.message}`),
+      ),
+    );
+    return completion.object;
+  });
+
   const completeImplement = Effect.fn("Executor.completeImplement")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     runId: RunId,
     acc: RunAccumulator,
   ) {
-    const result = parseImplementResult(acc.text);
-    if (result === "opened-pr") {
-      return yield* applyImplementSuccess(workspace, item, runId, acc);
-    }
-    const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
-    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.handle);
+    return yield* decodeImplementResult(acc).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          applyFailure(workspace, item, runId, error.retryable, error.message, acc.handle),
+        onSuccess: (result) =>
+          result.outcome === "opened-pr"
+            ? applyImplementSuccess(workspace, item, runId, acc)
+            : applyFailure(workspace, item, runId, false, result.summary, acc.handle),
+      }),
+    );
   });
 
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (

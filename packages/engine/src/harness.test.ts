@@ -44,8 +44,36 @@ describe("stageResultSchema", () => {
     }),
   );
 
+  it.effect("prepares the implement result as a validating Standard JSON Schema", () =>
+    Effect.gen(function* () {
+      const schema = stageResultSchema("implement");
+      if (!schema) return assert.fail("implement stage has no result schema");
+
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "implement",
+            outcome: "opened-pr",
+            summary: "Opened PR #110.",
+          }),
+        ),
+      );
+      assert.isUndefined(result.issues);
+
+      const invalid = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "implement",
+            outcome: "opened-pr",
+            summary: " ",
+          }),
+        ),
+      );
+      assert.isDefined(invalid.issues);
+    }),
+  );
+
   it("does not prepare a structured result for stages still using their existing protocols", () => {
-    assert.isUndefined(stageResultSchema("implement"));
     assert.isUndefined(stageResultSchema("follow-up"));
     assert.isUndefined(stageResultSchema("verify"));
   });

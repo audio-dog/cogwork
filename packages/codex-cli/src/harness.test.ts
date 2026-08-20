@@ -2,6 +2,7 @@ import {
   agUiSessionId,
   agUiStructuredOutputComplete,
   HarnessName,
+  ImplementStageResult,
   SessionId,
   TriageStageResult,
 } from "@cogwork/contracts";
@@ -89,6 +90,28 @@ const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => ({
     return { next: () => Promise.resolve(iterator.next()) };
   },
 });
+
+const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
+  const completion = events.flatMap((event) => {
+    const result = agUiStructuredOutputComplete(event);
+    return result === null ? [] : [result];
+  })[0];
+  if (!completion) return assert.fail("fake Codex emitted no structured result");
+  return Schema.decodeUnknownEffect(ImplementStageResult)(completion.object).pipe(
+    Effect.flatMap((result) =>
+      Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            args: Schema.Array(Schema.String),
+            prompt: Schema.String,
+            cwd: Schema.optional(Schema.String),
+            hasCodexConfig: Schema.optional(Schema.Boolean),
+          }),
+        ),
+      )(result.summary),
+    ),
+  );
+};
 
 const makeLiveHarness = (args = "") =>
   Effect.acquireRelease(
@@ -353,17 +376,7 @@ describe("codexRunner", () => {
       const events = yield* Stream.runCollect(
         harness.run(makeRequest({ checkoutPath: handle.id, session: null })),
       );
-      const response = events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
-      if (!response) return assert.fail("fake Codex emitted no response");
-      const capture = yield* Schema.decodeUnknownEffect(
-        Schema.fromJsonString(
-          Schema.Struct({
-            args: Schema.Array(Schema.String),
-            prompt: Schema.String,
-            cwd: Schema.String,
-          }),
-        ),
-      )(response);
+      const capture = yield* structuredCapture(events);
 
       assert.include(capture.args, "workspace-write");
       assert.include(capture.args, 'approval_policy="never"');
@@ -375,7 +388,7 @@ describe("codexRunner", () => {
       assert.include(capture.prompt, "playbook rules");
       assert.include(capture.prompt, "Mandatory playbook resources: /home/skills/implement");
       assert.include(capture.prompt, "implement the issue");
-      assert.strictEqual(capture.cwd.split("/").at(-1), handle.id.split("/").at(-1));
+      assert.strictEqual(capture.cwd?.split("/").at(-1), handle.id.split("/").at(-1));
       assert.isTrue(
         events.some(
           (event) =>
@@ -385,6 +398,28 @@ describe("codexRunner", () => {
         ),
       );
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.live("returns a plain capture when the stage has no output schema", () =>
+    Effect.gen(function* () {
+      const { handle, harness } = yield* makeLiveHarness();
+      const events = yield* Stream.runCollect(
+        harness.run(makeRequest({ checkoutPath: handle.id, session: null, stage: "follow-up" })),
+      );
+      const response = events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
+      if (!response) return assert.fail("fake Codex emitted no response");
+      const capture = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            args: Schema.Array(Schema.String),
+            prompt: Schema.String,
+          }),
+        ),
+      )(response);
+
+      assert.notInclude(capture.args, "--output-schema");
+      assert.include(capture.prompt, "implement the issue");
     }),
   );
 
@@ -406,22 +441,12 @@ describe("codexRunner", () => {
           }),
         ),
       );
-      const response = events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
-      if (!response) return assert.fail("fake Codex emitted no response");
-      const capture = yield* Schema.decodeUnknownEffect(
-        Schema.fromJsonString(
-          Schema.Struct({
-            args: Schema.Array(Schema.String),
-            prompt: Schema.String,
-            hasCodexConfig: Schema.Boolean,
-          }),
-        ),
-      )(response);
+      const capture = yield* structuredCapture(events);
       const bearer = yield* Effect.promise(() => handle.fs.read("/workspace/.mcp-bearer"));
       const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(events);
 
       assert.strictEqual(bearer, "mcp-secret");
-      assert.isFalse(capture.hasCodexConfig);
+      assert.isFalse(capture.hasCodexConfig ?? true);
       assert.notInclude(capture.args.join(" "), "mcp-secret");
       assert.notInclude(capture.prompt, "mcp-secret");
       assert.notInclude(serializedEvents, "mcp-secret");
@@ -488,16 +513,7 @@ describe("codexRunner", () => {
       const resumedEvents = yield* Stream.runCollect(
         resumedHarness.run(makeRequest({ checkoutPath: handle.id, prompt: "current run prompt" })),
       );
-      const response = resumedEvents.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
-      if (!response) return assert.fail("resumed Codex emitted no response");
-      const capture = yield* Schema.decodeUnknownEffect(
-        Schema.fromJsonString(
-          Schema.Struct({
-            args: Schema.Array(Schema.String),
-            prompt: Schema.String,
-          }),
-        ),
-      )(response);
+      const capture = yield* structuredCapture(resumedEvents);
 
       assert.include(capture.args, "resume");
       assert.include(capture.args, recordedHandle);

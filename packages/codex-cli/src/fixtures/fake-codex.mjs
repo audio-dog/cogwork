@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { access, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
 const mcpBearer = Object.entries(process.env).find(([name]) => /^COGWORK_MCP_.*_BEARER$/.test(name))?.[1];
@@ -14,9 +14,19 @@ const capture = JSON.stringify({
   cwd: process.cwd(),
   hasCodexConfig,
 });
-const response = process.argv.includes("--output-schema")
-  ? JSON.stringify({ _tag: "triage", role: "ready-for-agent", proposal: capture })
-  : capture;
+const outputSchemaPath = () => {
+  const index = process.argv.indexOf("--output-schema");
+  if (index === -1) return null;
+  return process.argv.at(index + 1) ?? null;
+};
+
+const schemaPath = outputSchemaPath();
+const schema = schemaPath ? JSON.parse(await readFile(schemaPath, "utf8")) : null;
+const response = schema?.properties?.outcome
+  ? JSON.stringify({ _tag: "implement", outcome: "opened-pr", summary: capture })
+  : schema
+    ? JSON.stringify({ _tag: "triage", role: "ready-for-agent", proposal: capture })
+    : capture;
 const events = [
   { type: "thread.started", thread_id: "fake-thread-1" },
   {

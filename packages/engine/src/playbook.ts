@@ -137,29 +137,14 @@ const buildPrompt = (
   ].join("\n");
 };
 
-const parseLastSentinel = <A extends string>(pattern: RegExp, valid: ReadonlyArray<A>, text: string) => {
-  const last = [...text.matchAll(pattern)].at(-1)?.[1]?.toLowerCase();
-  return valid.find((value) => value === last) ?? null;
-};
-
 export const buildTriagePrompt = (resolved: ResolvedStage, item: PromptItem) =>
   buildPrompt(resolved, item, null);
 
-export type ImplementResult = "opened-pr" | "stuck";
-
-const implementResults: ReadonlyArray<ImplementResult> = ["opened-pr", "stuck"];
-
 const implementFooter = [
   "",
-  "Only one pull request should ever exist for this branch. Before opening one, check whether a pull",
-  "request for this branch is already open; if it is, push your work to that one instead of opening another.",
-  "End your final message with exactly one line, and nothing after it:",
-  "IMPLEMENT-RESULT: <opened-pr | stuck>",
-  "Use `opened-pr` when a pull request that references {id} is open for this branch — whether you opened it",
-  "or pushed to one that already existed; otherwise use `stuck`.",
+  "Only one pull request should ever exist for this branch. Before opening one, check whether a pull request",
+  "for this branch is already open; if it is, push your work to that one instead of opening another.",
 ].join("\n");
-
-const implementResultPattern = /IMPLEMENT-RESULT:\s*([a-z-]+)/gi;
 
 export const buildImplementPrompt = (resolved: ResolvedStage, item: PromptItem) =>
   buildPrompt(resolved, item, implementFooter);
@@ -172,9 +157,6 @@ export const buildContinuationNudge = (worktreePath: string) =>
     "request for this branch already exists, keep using it and never open a second one. If the task is",
     "already complete, say COMPLETE and stop.",
   ].join("\n");
-
-export const parseImplementResult = (text: string) =>
-  parseLastSentinel(implementResultPattern, implementResults, text);
 
 export type FollowUpResult = "pushed" | "noop" | "stuck";
 
@@ -199,4 +181,6 @@ export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem, l
   });
 
 export const parseFollowUpResult = (text: string) =>
-  parseLastSentinel(followUpResultPattern, followUpResults, text);
+  followUpResults.find(
+    (value) => value === [...text.matchAll(followUpResultPattern)].at(-1)?.[1]?.toLowerCase(),
+  ) ?? null;
