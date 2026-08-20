@@ -14,10 +14,10 @@
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
     "@cogwork/engine": "workspace:*",
-    "@tanstack/ai": "0.44.0",
-    "@tanstack/ai-codex": "0.3.2",
-    "@tanstack/ai-sandbox": "0.3.2",
-    "@tanstack/ai-sandbox-local-process": "0.2.1",
+    "@tanstack/ai": "catalog:",
+    "@tanstack/ai-codex": "catalog:",
+    "@tanstack/ai-sandbox": "catalog:",
+    "@tanstack/ai-sandbox-local-process": "catalog:",
     "effect": "catalog:effect"
   },
   "devDependencies": {
