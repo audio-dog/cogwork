@@ -1,0 +1,28 @@
+packages/engine/src/comments.ts
+  s_7d42045e7090a1::t_a306ddea2a586e 7,35,40,75
+packages/engine/src/playbook.test.ts
+  s_7d42045e7090a1::t_a306ddea2a586e 188,197
+packages/engine/src/comments.test.ts
+  s_7d42045e7090a1::t_a306ddea2a586e 63
+packages/engine/src/playbook.ts
+  s_7d42045e7090a1::t_384dae1ccfe8a1 34-35,180-181
+  s_7d42045e7090a1::t_a306ddea2a586e 146
+packages/engine/skills/implement-agent/SKILL.md
+  s_7d42045e7090a1::t_a306ddea2a586e 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "09745ae844a1b3d3a5124b50d9bf5cec7905142d",
+  "prompts": {},
+  "sessions": {
+    "s_7d42045e7090a1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02042-1803-77c2-9622-5759ee36cd01",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
