@@ -80,6 +80,7 @@ interface CommonStageOps {
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
   readonly fullPrompt: string;
   readonly resume: boolean;
+  readonly resumePolicy: boolean;
 }
 
 interface TriageStageOps extends CommonStageOps {
@@ -197,19 +198,37 @@ export const make = Effect.gen(function* () {
       harness.sessionKind,
     );
 
-  const priorSession = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
-    if (item.resume) return Effect.succeed(item.resume.session);
-    if (ops.branch) return ledger.sessionForBranch(workspace.config.name, ops.branch);
-    return Effect.succeed(null);
-  };
+  const priorSession = Effect.fn("Executor.priorSession")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    ops: StageOps,
+  ) {
+    const id =
+      item.resume?.session ??
+      (ops.branch ? yield* ledger.sessionForBranch(workspace.config.name, ops.branch) : null);
+    if (!id) return null;
+    const session = yield* ledger.getSession(id);
+    if (!session || session.harness === ops.resolved.harness) return session?.id ?? null;
+    yield* Effect.logInfo("started fresh after harness switch", {
+      workspace: workspace.config.name,
+      ...(ops.branch ? { branch: ops.branch } : {}),
+      oldHarness: session.harness,
+      newHarness: ops.resolved.harness,
+    });
+    return null;
+  });
 
   const planSession = Effect.fn("Executor.planSession")(function* (
     workspace: RegisteredWorkspace,
     ops: StageOps,
     startedAtMillis: number,
+    previous: SessionId | null,
   ) {
     const request = yield* ops.prepare;
-    const session = request.session ?? (yield* mintSession(workspace, ops, startedAtMillis));
+    const session =
+      request.session ??
+      (ops.resumePolicy ? null : previous) ??
+      (yield* mintSession(workspace, ops, startedAtMillis));
     return { request: { ...request, session }, session };
   });
 
@@ -462,19 +481,10 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     resolved: ResolvedStage,
-    branch: string,
     prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
-    const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
-    return yield* harnessRequest(
-      workspace,
-      resolved,
-      worktree.path,
-      prompt,
-      last?.session ?? null,
-      item.stage,
-    );
+    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null, item.stage);
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
@@ -494,6 +504,7 @@ export const make = Effect.gen(function* () {
       complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
       fullPrompt,
       resume: false,
+      resumePolicy: false,
     } satisfies StageOps;
   };
 
@@ -504,10 +515,11 @@ export const make = Effect.gen(function* () {
       kind: "text",
       resolved,
       branch,
-      prepare: prepareImplement(workspace, item, resolved, branch, fullPrompt),
+      prepare: prepareImplement(workspace, item, resolved, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
       fullPrompt,
       resume: false,
+      resumePolicy: false,
     } satisfies StageOps;
   };
 
@@ -608,7 +620,7 @@ export const make = Effect.gen(function* () {
       resolved,
       worktree.path,
       prompt,
-      decision.kind === "resume" ? (last?.session ?? null) : null,
+      decision.kind === "resume" && session?.harness === resolved.harness ? (last?.session ?? null) : null,
       item.stage,
     );
   });
@@ -625,6 +637,7 @@ export const make = Effect.gen(function* () {
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
       fullPrompt,
       resume: false,
+      resumePolicy: true,
     } satisfies StageOps;
   };
 
@@ -724,13 +737,14 @@ export const make = Effect.gen(function* () {
   ) {
     const runId = yield* nextRunId(startedAtMillis);
     const previous = yield* priorSession(workspace, item, ops);
+    const selectedOps = previous === item.resume?.session ? ops : stageOps(workspace, item, ops.resolved);
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,
       workItem: item.id,
       stage: item.stage,
-      harness: ops.resolved.harness,
-      branch: ops.branch,
+      harness: selectedOps.resolved.harness,
+      branch: selectedOps.branch,
       session: previous,
       usage: null,
       status: "running",
@@ -745,10 +759,10 @@ export const make = Effect.gen(function* () {
         ? Effect.succeed(prepared)
         : ledger.setRunSession(runId, session).pipe(Effect.map(() => prepared));
     };
-    return yield* planSession(workspace, ops, startedAtMillis).pipe(
+    return yield* planSession(workspace, selectedOps, startedAtMillis, previous).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
-          (previous ? Effect.succeed(previous) : mintSession(workspace, ops, startedAtMillis)).pipe(
+          (previous ? Effect.succeed(previous) : mintSession(workspace, selectedOps, startedAtMillis)).pipe(
             Effect.flatMap(persistSession),
             Effect.flatMap((prepared) =>
               handleOf(ledger, prepared.session).pipe(
@@ -767,7 +781,9 @@ export const make = Effect.gen(function* () {
           ),
         onSuccess: ({ request, session }) =>
           persistSession(session).pipe(
-            Effect.flatMap((prepared) => settleOutcome(workspace, item, ops, prepared, runId, request)),
+            Effect.flatMap((prepared) =>
+              settleOutcome(workspace, item, selectedOps, prepared, runId, request),
+            ),
           ),
       }),
       Effect.ensuring(runControl.unregister(runId)),

@@ -41,6 +41,7 @@ import { SourceControlProvider, type SourceControlProviderService } from "./sour
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
+const codex = Schema.decodeSync(HarnessName)("codex");
 const id = Schema.decodeSync(WorkItemId);
 const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
 
@@ -115,6 +116,14 @@ const implementWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { implement: { enabled: true } },
+  }),
+};
+
+const codexImplementWorkspace: RegisteredWorkspace = {
+  ...implementWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    ...implementWorkspace.config,
+    playbook: { implement: { enabled: true, harness: "codex" } },
   }),
 };
 
@@ -382,8 +391,9 @@ const capturingRunner = (
   events: ReadonlyArray<AgUiEvent>,
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
   sessionKind: SessionKind = "opaque-handle",
+  name: HarnessName = cursor,
 ): HarnessRunner => ({
-  name: cursor,
+  name,
   sessionKind,
   run: (request) =>
     Stream.unwrap(
@@ -1009,6 +1019,33 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("starts fresh whenever the selected implement harness changes", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [
+        capturingRunner(requests, implementEvents),
+        capturingRunner(requests, implementEvents, Stream.empty, "opaque-handle", codex),
+      ]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(codexImplementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.deepStrictEqual(
+          captured.map((request) => request.harness),
+          [cursor, codex, cursor],
+        );
+        assert.notStrictEqual(captured[0]?.session, captured[1]?.session);
+        assert.notStrictEqual(captured[1]?.session, captured[2]?.session);
+        assert.notStrictEqual(captured[0]?.session, captured[2]?.session);
+        assert.isTrue(captured.slice(1).every((request) => !request.prompt.includes("just been resumed")));
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("resumes an interrupted run with a continuation nudge and its persisted session", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
@@ -1042,6 +1079,40 @@ describe("Executor.execute", () => {
 
         const log = yield* Ref.get(calls);
         assert.isTrue(log.some((c) => c.method === "implemented"));
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("cold-starts recovery when its selected harness changed", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const resumeItem: EligibleWork = {
+        ...implementItem,
+        resume: { session: previousSession, reason: "interrupted" },
+      };
+      const layer = provide(
+        recorder(calls),
+        [
+          capturingRunner(requests, implementEvents),
+          capturingRunner(requests, implementEvents, Stream.empty, "opaque-handle", codex),
+        ],
+        resumeRecordingWorktree(yield* Ref.make<ReadonlyArray<boolean>>([])),
+      );
+      yield* Effect.gen(function* () {
+        yield* seedResumeSession();
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(codexImplementWorkspace, resumeItem);
+
+        const [request] = yield* Ref.get(requests);
+        assert.strictEqual(request?.harness, codex);
+        assert.notStrictEqual(request?.session, previousSession);
+        assert.include(request?.prompt ?? "", "implement-agent");
+        assert.notInclude(request?.prompt ?? "", "just been resumed");
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.session, request?.session);
       }).pipe(Effect.provide(layer));
     }),
   );
