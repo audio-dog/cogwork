@@ -1,0 +1,21 @@
+packages/engine/src/executor.ts
+  s_d017a4ce5fc611::t_3e10334d0800b6 133-138
+packages/cursor-acp/src/harness.test.ts
+  s_d017a4ce5fc611::t_3e10334d0800b6 46-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "8abfc8006d370082517c2a157e34eba9b4589e22",
+  "prompts": {},
+  "sessions": {
+    "s_d017a4ce5fc611": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01fe3-df10-71a1-aeba-16bb614c8697",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
