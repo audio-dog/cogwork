@@ -205,6 +205,21 @@ describe("buildImplementPrompt", () => {
     assert.include(prompt, "Only one pull request should ever exist for this branch");
     assert.include(prompt, "push your work to that one instead of opening another");
   });
+
+  it("keeps the pull request reuse rule when the implement prompt is customized", () => {
+    const prompt = buildImplementPrompt(
+      resolveImplement(
+        config({
+          playbook: { implement: { enabled: true, prompt: "Implement the requested change." } },
+        }),
+      ),
+      { id: "#15", title: "Implement playbook" },
+    );
+
+    assert.include(prompt, "Implement the requested change.");
+    assert.include(prompt, "Only one pull request should ever exist for this branch");
+    assert.include(prompt, "push your work to that one instead of opening another");
+  });
 });
 
 describe("buildContinuationNudge", () => {

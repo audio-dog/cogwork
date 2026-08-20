@@ -31,8 +31,6 @@ const defaultImplementPrompt = [
   "You are on a fresh branch dedicated to {id}, with no human in the session.",
   "Follow the `{skill}` skill to implement {id}: read the issue and its comments as the brief, make the change,",
   "pass the local gate, commit, and open a pull request that references {id}.",
-  "Only one pull request should ever exist for this branch. Before opening one, check whether a pull request",
-  "for this branch is already open; if it is, push your work to that one instead of opening another.",
 ].join("\n");
 
 const defaultFollowUpPrompt = [
@@ -142,8 +140,14 @@ const buildPrompt = (
 export const buildTriagePrompt = (resolved: ResolvedStage, item: PromptItem) =>
   buildPrompt(resolved, item, null);
 
+const implementFooter = [
+  "",
+  "Only one pull request should ever exist for this branch. Before opening one, check whether a pull request",
+  "for this branch is already open; if it is, push your work to that one instead of opening another.",
+].join("\n");
+
 export const buildImplementPrompt = (resolved: ResolvedStage, item: PromptItem) =>
-  buildPrompt(resolved, item, null);
+  buildPrompt(resolved, item, implementFooter);
 
 export const buildContinuationNudge = (worktreePath: string) =>
   [
