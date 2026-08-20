@@ -1,0 +1,26 @@
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_bf8c279703aadb::t_f6c8db32ab4129 11-14
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_bf8c279703aadb::t_f6c8db32ab4129 1-18
+packages/engine/CONTEXT.md
+  s_bf8c279703aadb::t_f6c8db32ab4129 77,89
+packages/contracts/CONTEXT.md
+  s_bf8c279703aadb::t_a26b2390706384 117-120
+  s_bf8c279703aadb::t_1d8245eb334e2b 121-124,130,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "da6cc31effc85d5b14c8b8cf542295d9845aa727",
+  "prompts": {},
+  "sessions": {
+    "s_bf8c279703aadb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01d50-ab6c-7b33-ae5e-8e22fa791a7b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
