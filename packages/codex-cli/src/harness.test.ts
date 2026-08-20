@@ -1,4 +1,4 @@
-import { HarnessName, SessionId } from "@cogwork/contracts";
+import { agUiSessionId, HarnessName, SessionId } from "@cogwork/contracts";
 import { type ContextAssembler, type CredentialStore, Harness, type SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
@@ -306,6 +306,53 @@ describe("codexRunner", () => {
         ),
       );
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.live("records a fresh Codex handle and resumes it natively with reinjected context", () =>
+    Effect.gen(function* () {
+      const { handle, harness: freshHarness } = yield* makeLiveHarness();
+      const freshEvents = yield* Stream.runCollect(
+        freshHarness.run(makeRequest({ checkoutPath: handle.id, session: null, prompt: "first run prompt" })),
+      );
+      const recordedHandle = freshEvents.map(agUiSessionId).find((value) => value !== null);
+      if (!recordedHandle) return assert.fail("fresh Codex run emitted no session handle");
+
+      const resumedHarness = Harness.make(
+        [
+          codexRunner({
+            name,
+            codexExecutable: `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}`,
+          }),
+        ],
+        {
+          sessionStore: { ...sessionStore, resumeHandle: () => Effect.succeed(recordedHandle) },
+          contextAssembler,
+          credentialStore,
+        },
+      );
+      const resumedEvents = yield* Stream.runCollect(
+        resumedHarness.run(makeRequest({ checkoutPath: handle.id, prompt: "current run prompt" })),
+      );
+      const response = resumedEvents.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
+      if (!response) return assert.fail("resumed Codex emitted no response");
+      const capture = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            args: Schema.Array(Schema.String),
+            prompt: Schema.String,
+          }),
+        ),
+      )(response);
+
+      assert.include(capture.args, "resume");
+      assert.include(capture.args, recordedHandle);
+      assert.include(capture.prompt, "global rules");
+      assert.include(capture.prompt, "repo rules");
+      assert.include(capture.prompt, "playbook rules");
+      assert.include(capture.prompt, "Mandatory playbook resources: /home/skills/implement");
+      assert.include(capture.prompt, "current run prompt");
+      assert.notInclude(capture.prompt, "first run prompt");
     }),
   );
 

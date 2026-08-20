@@ -191,6 +191,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
           const adapter = makeAdapter(model, adapterConfig(effort, options.codexExecutable, mcpSkills));
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,
+            fileEvents: false,
             provider: localProcessSandbox({
               dir: request.checkoutPath,
               scrubEnv: ["GITHUB_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"],
