@@ -84,8 +84,6 @@ const resolveEffort = (requested: string | null, fallback: CodexEffort) => {
   return Effect.fail(launchError(`unsupported Codex reasoning effort: ${configured}`));
 };
 
-const mcpNamePattern = /^[A-Za-z0-9_-]+$/;
-
 const codexEnvironmentNames = [
   "HOME",
   "PATH",
@@ -112,13 +110,10 @@ export const codexChildEnvironment = (environment: NodeJS.ProcessEnv = process.e
     }),
   );
 
-const validateMcpSkill = (skill: Harness.ResolvedMcpSkill) =>
-  mcpNamePattern.test(skill.name)
-    ? Effect.succeed(skill)
-    : Effect.fail(launchError(`unsupported Codex MCP skill name: ${skill.name}`));
+const mcpServerIdentity = (name: string, index: number) =>
+  `cogwork_mcp_${Array.from(name, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}_${index}`;
 
-const mcpEnvName = (name: string) =>
-  `COGWORK_MCP_${Array.from(name, (character) => character.charCodeAt(0).toString(16)).join("")}`;
+const mcpEnvName = (identity: string) => `${identity.toUpperCase()}_BEARER`;
 
 const mcpBearerEntries = (prefix: string, envName: string, bearer: Harness.ResolvedMcpSkill["bearer"]) => {
   if (!bearer) return { configEntries: [], envEntries: [] };
@@ -131,9 +126,10 @@ const mcpBearerEntries = (prefix: string, envName: string, bearer: Harness.Resol
   };
 };
 
-const mcpEntries = (skill: Harness.ResolvedMcpSkill) => {
-  const prefix = `mcp_servers.${skill.name}`;
-  const envName = mcpEnvName(skill.name);
+const mcpEntries = (skill: Harness.ResolvedMcpSkill, index: number) => {
+  const identity = mcpServerIdentity(skill.name, index);
+  const prefix = `mcp_servers.${identity}`;
+  const envName = mcpEnvName(identity);
   const bearer = mcpBearerEntries(prefix, envName, skill.bearer);
   const configEntries: ReadonlyArray<readonly [string, string]> = [
     [`${prefix}.url`, JSON.stringify(skill.endpoint)],
@@ -187,8 +183,10 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
           const store = yield* SessionStore.SessionStore;
           const handle = request.session ? yield* store.resumeHandle(request.session) : null;
           const model = request.model ?? "gpt-5.6-sol";
-          const mcpSkills = yield* Effect.forEach(request.mcpSkills, validateMcpSkill);
-          const adapter = makeAdapter(model, adapterConfig(effort, options.codexExecutable, mcpSkills));
+          const adapter = makeAdapter(
+            model,
+            adapterConfig(effort, options.codexExecutable, request.mcpSkills),
+          );
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,
             fileEvents: false,

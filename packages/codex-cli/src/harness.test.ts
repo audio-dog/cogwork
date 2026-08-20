@@ -210,16 +210,89 @@ describe("codexRunner", () => {
       const config = adapterCalls[0]?.[1];
       if (!config) return assert.fail("adapter was not created");
       assert.deepStrictEqual(config.config, {
-        "mcp_servers.linear.url": '"https://mcp.linear.app/mcp/readonly"',
-        "mcp_servers.linear.bearer_token_env_var": '"COGWORK_MCP_6c696e656172"',
+        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_0.url": '"https://mcp.linear.app/mcp/readonly"',
+        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_0.bearer_token_env_var":
+          '"COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER"',
       });
       assert.deepStrictEqual(config.env, {
         ...codexChildEnvironment(),
-        COGWORK_MCP_6c696e656172: "mcp-secret",
+        COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER: "mcp-secret",
       });
-      assert.strictEqual(config.env?.COGWORK_MCP_6c696e656172, "mcp-secret");
+      assert.strictEqual(config.env?.COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER, "mcp-secret");
       const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
       assert.notInclude(serialized, "mcp-secret");
+    }),
+  );
+
+  it.effect("projects every MCP skill into a distinct safe Codex identity", () =>
+    Effect.gen(function* () {
+      const adapterCalls: Array<Parameters<typeof codexText>> = [];
+      const runner = codexRunner({
+        name,
+        makeAdapter: (model, config) => {
+          adapterCalls.push([model, config]);
+          return codexText(model, config);
+        },
+        runChat: () => toAsyncIterable(chunks),
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+
+      yield* Stream.runDrain(
+        harness.run(
+          makeRequest({
+            mcpSkills: [
+              { name: "linear.api", endpoint: "https://mcp.example.com/public", bearer: null },
+              {
+                name: "linear-api",
+                endpoint: "https://mcp.example.com/private",
+                bearer: Redacted.make("rotated-secret"),
+              },
+            ],
+          }),
+        ),
+      );
+
+      const config = adapterCalls[0]?.[1];
+      if (!config) return assert.fail("adapter was not created");
+      assert.deepStrictEqual(config.config, {
+        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_2e_61_70_69_0.url": '"https://mcp.example.com/public"',
+        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_2d_61_70_69_1.url": '"https://mcp.example.com/private"',
+        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_2d_61_70_69_1.bearer_token_env_var":
+          '"COGWORK_MCP_6C_69_6E_65_61_72_2D_61_70_69_1_BEARER"',
+      });
+      assert.deepStrictEqual(config.env, {
+        ...codexChildEnvironment(),
+        COGWORK_MCP_6C_69_6E_65_61_72_2D_61_70_69_1_BEARER: "rotated-secret",
+      });
+      const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
+      assert.notInclude(serialized, "rotated-secret");
+    }),
+  );
+
+  it.effect("rebuilds the child environment with a rotated MCP bearer on every run", () =>
+    Effect.gen(function* () {
+      const adapterCalls: Array<Parameters<typeof codexText>> = [];
+      const runner = codexRunner({
+        name,
+        makeAdapter: (model, config) => {
+          adapterCalls.push([model, config]);
+          return codexText(model, config);
+        },
+        runChat: () => toAsyncIterable(chunks),
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const mcpSkill = (bearer: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
+        { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: Redacted.make(bearer) },
+      ];
+
+      yield* Stream.runDrain(harness.run(makeRequest({ mcpSkills: mcpSkill("first-secret") })));
+      yield* Stream.runDrain(harness.run(makeRequest({ mcpSkills: mcpSkill("rotated-secret") })));
+
+      const firstConfig = adapterCalls[0]?.[1];
+      const rotatedConfig = adapterCalls[1]?.[1];
+      if (!firstConfig || !rotatedConfig) return assert.fail("adapter was not created for both runs");
+      assert.strictEqual(firstConfig.env?.COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER, "first-secret");
+      assert.strictEqual(rotatedConfig.env?.COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER, "rotated-secret");
     }),
   );
 
@@ -306,6 +379,46 @@ describe("codexRunner", () => {
         ),
       );
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.live("keeps an MCP bearer out of the Codex command, events, and worktree configuration", () =>
+    Effect.gen(function* () {
+      const { handle, harness } = yield* makeLiveHarness();
+      const events = yield* Stream.runCollect(
+        harness.run(
+          makeRequest({
+            checkoutPath: handle.id,
+            session: null,
+            mcpSkills: [
+              {
+                name: "linear",
+                endpoint: "https://mcp.linear.app/mcp/readonly",
+                bearer: Redacted.make("mcp-secret"),
+              },
+            ],
+          }),
+        ),
+      );
+      const response = events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
+      if (!response) return assert.fail("fake Codex emitted no response");
+      const capture = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            args: Schema.Array(Schema.String),
+            prompt: Schema.String,
+            hasCodexConfig: Schema.Boolean,
+          }),
+        ),
+      )(response);
+      const bearer = yield* Effect.promise(() => handle.fs.read("/workspace/.mcp-bearer"));
+      const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(events);
+
+      assert.strictEqual(bearer, "mcp-secret");
+      assert.isFalse(capture.hasCodexConfig);
+      assert.notInclude(capture.args.join(" "), "mcp-secret");
+      assert.notInclude(capture.prompt, "mcp-secret");
+      assert.notInclude(serializedEvents, "mcp-secret");
     }),
   );
 
