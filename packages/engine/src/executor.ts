@@ -510,7 +510,17 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     summary: string,
   ) {
-    yield* sourceControl.comment(workspace, { id: item.id, title: item.title }, followUpNoteBody(summary));
+    yield* sourceControl
+      .comment(workspace, { id: item.id, title: item.title }, followUpNoteBody(summary))
+      .pipe(
+        Effect.catchTag("IssueTrackerError", (error) =>
+          Effect.logWarning("follow-up summary comment failed", {
+            workspace: workspace.config.name,
+            item: item.id,
+            message: error.message,
+          }),
+        ),
+      );
   });
 
   const applyFollowUpSuccess = Effect.fn("Executor.applyFollowUpSuccess")(function* (

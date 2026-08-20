@@ -30,7 +30,7 @@ import {
   type HarnessRunner,
   layer as harnessLayer,
 } from "./harness";
-import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
+import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunControl from "./run-control";
@@ -472,6 +472,14 @@ const recordingProvider = (posted: Ref.Ref<ReadonlyArray<PostedComment>>): Sourc
   observe: () => Effect.succeed(new Map()),
   comment: (_workspace, item, body) => Ref.update(posted, (xs) => [...xs, { item: item.id, body }]),
 });
+
+const unavailableCommentProvider: SourceControlProviderService = {
+  observe: () => Effect.succeed(new Map()),
+  comment: () =>
+    Effect.fail(
+      new IssueTrackerError({ reason: "unavailable", message: "GitHub comment endpoint unavailable" }),
+    ),
+};
 
 const provide = (
   ws: IssueTrackerService,
@@ -1257,6 +1265,29 @@ describe("Executor.execute", () => {
         assert.strictEqual(comment?.item, "#5");
         assert.include(comment?.body ?? "", "Fixed the failing check and pushed");
         assert.include(comment?.body ?? "", "posted by cogwork");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("settles a successful follow-up when posting its pull request summary fails", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(
+        recorder(calls),
+        [runner(followUpEvents)],
+        worktreeStubCreated(false),
+        unavailableCommentProvider,
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const log = yield* Ref.get(calls);
+        assert.isTrue(log.some((call) => call.method === "followedUp"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "succeeded");
       }).pipe(Effect.provide(layer));
     }),
   );
