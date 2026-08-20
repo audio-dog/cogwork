@@ -1,0 +1,19 @@
+packages/engine/src/index.ts
+  s_b72b96ca2cca30::t_6c6958b90ba13b 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "aa40bbf66b54e000b57f20f232e76c9f15b3c739",
+  "prompts": {},
+  "sessions": {
+    "s_b72b96ca2cca30": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01d73-81cf-7f32-87b9-b1a415c9ea60",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
