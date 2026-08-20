@@ -54,10 +54,14 @@ interface ItemTabState {
   readonly descriptor: ItemStateDescriptor;
   readonly tabs: readonly SubTab[];
   readonly subTab: SubTabKey;
+  readonly triageRole: TriageRole;
+  readonly triageNote: string;
 }
 
 interface ItemTabActions {
   readonly setSubTab: (key: SubTabKey) => void;
+  readonly setTriageRole: (role: TriageRole) => void;
+  readonly setTriageNote: (note: string) => void;
   readonly cancel: () => void;
   readonly reclassify: (role: TriageRole, note?: string) => void;
 }
@@ -101,6 +105,8 @@ function ItemTabProvider({
   children: ReactNode;
 }) {
   const [subTab, setSubTab] = useState<SubTabKey>("main");
+  const [triageRole, setTriageRole] = useState<TriageRole>("ready-for-agent");
+  const [triageNote, setTriageNote] = useState("");
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
   const [reclassifyResult, reclassify] = useAtom(reclassifyAtom);
   const triageRef = useRef<HTMLDivElement | null>(null);
@@ -112,6 +118,8 @@ function ItemTabProvider({
 
   const actions: ItemTabActions = {
     setSubTab,
+    setTriageRole,
+    setTriageNote,
     cancel: () => {
       if (run) cancelRun({ payload: { runId: run.id } });
     },
@@ -133,7 +141,18 @@ function ItemTabProvider({
   return (
     <ItemTabContext
       value={{
-        state: { workspace, item, run, preview, attempts, descriptor, tabs, subTab: resolved },
+        state: {
+          workspace,
+          item,
+          run,
+          preview,
+          attempts,
+          descriptor,
+          tabs,
+          subTab: resolved,
+          triageRole,
+          triageNote,
+        },
         actions,
         meta,
       }}
@@ -369,13 +388,12 @@ function TriageProposal({ proposal }: { proposal: string }) {
 // The triage control lives here only — the Attention tab launches into it.
 function TriageSection({ item }: { item: NeedsHumanItem }) {
   const {
-    actions: { reclassify },
+    state: { triageRole, triageNote },
+    actions: { reclassify, setTriageRole, setTriageNote },
     meta: { reclassifyPending, reclassifyError, triageRef },
   } = useItemTab();
-  const [role, setRole] = useState<TriageRole>("ready-for-agent");
-  const [note, setNote] = useState("");
 
-  const trimmed = note.trim();
+  const trimmed = triageNote.trim();
   return (
     <section ref={triageRef} className="flex flex-col gap-3">
       <SectionLabel>Triage</SectionLabel>
@@ -393,10 +411,10 @@ function TriageSection({ item }: { item: NeedsHumanItem }) {
           <ToggleGroup
             className="flex-col items-stretch"
             orientation="vertical"
-            value={[role]}
+            value={[triageRole]}
             onValueChange={(value) => {
               const next = triageRoles.find((option) => option.role === value[0]);
-              if (next) setRole(next.role);
+              if (next) setTriageRole(next.role);
             }}
           >
             {triageRoles.map(({ role: value, label }) => (
@@ -411,8 +429,8 @@ function TriageSection({ item }: { item: NeedsHumanItem }) {
           <Textarea
             id="triage-note"
             placeholder="Answer the question or explain the override…"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
+            value={triageNote}
+            onChange={(event) => setTriageNote(event.target.value)}
           />
         </Field>
       </FieldGroup>
@@ -420,7 +438,7 @@ function TriageSection({ item }: { item: NeedsHumanItem }) {
         size="sm"
         className="w-fit"
         disabled={reclassifyPending}
-        onClick={() => reclassify(role, trimmed || undefined)}
+        onClick={() => reclassify(triageRole, trimmed || undefined)}
       >
         {reclassifyPending && <Spinner data-icon="inline-start" />}
         Apply
@@ -667,6 +685,7 @@ export function ItemTab({ selection }: { selection: ItemSelection }) {
 
   return (
     <ItemTabProvider
+      key={`${selection.workspace}:${entry.item.id}`}
       workspace={selection.workspace}
       item={entry.item}
       run={run}
