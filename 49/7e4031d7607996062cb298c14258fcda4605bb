@@ -1,0 +1,21 @@
+packages/engine/skills/implement-agent/SKILL.md
+  s_7f3142d385b312::t_f4feb7609b5468 54-57,59-64,79-80,82,85-86,115-118
+  s_7f3142d385b312::t_032cf0fe68e2e2 58
+  s_7f3142d385b312::t_0c919fcd310cd5 119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "497e4031d7607996062cb298c14258fcda4605bb",
+  "prompts": {},
+  "sessions": {
+    "s_7f3142d385b312": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0208d-353e-7823-9997-778bd00bff3a",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
