@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/markdown.tsx
+  s_363a0ec7face42::t_5fa98b6823bcd9 82-86
+  s_363a0ec7face42::t_be53f5d2456770 2-7,9,12-13,62,79-81
+  s_363a0ec7face42::t_8dffe9e2787d4a 87-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "d0672c43998dab4ba3bcf9f5c50a7571759e06b9",
+  "prompts": {},
+  "sessions": {
+    "s_363a0ec7face42": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02145-fdd5-77d1-bbf8-2d85de3d610d",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": null
+    }
+  }
+}
