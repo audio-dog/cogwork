@@ -16,7 +16,6 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
@@ -192,32 +191,45 @@ export const make = Effect.gen(function* () {
       Effect.orDie,
     );
 
-  const resolveSession = Effect.fn("Executor.resolveSession")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    ops: StageOps,
-    startedAtMillis: number,
-  ) {
-    if (item.resume) return item.resume.session;
-    const existing = ops.branch ? yield* ledger.sessionForBranch(workspace.config.name, ops.branch) : null;
-    if (existing) return existing;
-    return yield* sessionStore.mint(
+  const mintSession = (workspace: RegisteredWorkspace, ops: StageOps, startedAtMillis: number) =>
+    sessionStore.mint(
       { workspace: workspace.config.name, harness: ops.resolved.harness, createdAtMillis: startedAtMillis },
       harness.sessionKind,
     );
+
+  const priorSession = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
+    if (item.resume) return Effect.succeed(item.resume.session);
+    if (ops.branch) return ledger.sessionForBranch(workspace.config.name, ops.branch);
+    return Effect.succeed(null);
+  };
+
+  const planSession = Effect.fn("Executor.planSession")(function* (
+    workspace: RegisteredWorkspace,
+    ops: StageOps,
+    startedAtMillis: number,
+  ) {
+    const request = yield* ops.prepare;
+    const session = request.session ?? (yield* mintSession(workspace, ops, startedAtMillis));
+    return { request: { ...request, session }, session };
   });
+
+  const withSession = (record: RunRecord, session: SessionId) =>
+    record.session === session ? record : { ...record, session };
 
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     at: number,
   ) {
-    const result = yield* Effect.result(
-      issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }),
+    return yield* issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error }).pipe(
+            Effect.map(() => false),
+          ),
+        onSuccess: () => Effect.succeed(true),
+      }),
     );
-    if (Result.isSuccess(result)) return true;
-    yield* Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error: result.failure });
-    return false;
   });
 
   const settleRun = (runId: RunId, update: RunUpdate) => ledger.updateRun(runId, update);
@@ -392,19 +404,21 @@ export const make = Effect.gen(function* () {
     record: RunRecord,
     acc: TriageAccumulator,
   ) {
-    const result = yield* Effect.result(decodeTriageResult(acc));
-    if (Result.isSuccess(result)) {
-      yield* recorder.record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" });
-      return yield* applyTriageSuccess(workspace, item, record.id, acc, result.success);
-    }
-    yield* recorder.record(record, failedTerminal);
-    return yield* applyFailure(
-      workspace,
-      item,
-      record.id,
-      result.failure.retryable,
-      result.failure.message,
-      acc.handle,
+    return yield* decodeTriageResult(acc).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          recorder
+            .record(record, failedTerminal)
+            .pipe(
+              Effect.andThen(
+                applyFailure(workspace, item, record.id, error.retryable, error.message, acc.handle),
+              ),
+            ),
+        onSuccess: (result) =>
+          recorder
+            .record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" })
+            .pipe(Effect.andThen(applyTriageSuccess(workspace, item, record.id, acc, result))),
+      }),
     );
   });
 
@@ -678,34 +692,28 @@ export const make = Effect.gen(function* () {
     ops: StageOps,
     record: RunRecord,
     runId: RunId,
+    request: HarnessRequest,
   ) {
     const settle = <A>(
       attempt: Effect.Effect<A, PrepareError | HarnessError>,
       complete: (acc: A) => Effect.Effect<void, IssueTrackerError>,
     ) =>
-      Effect.gen(function* () {
-        const outcome = yield* Effect.result(attempt);
-        if (Result.isSuccess(outcome)) return yield* complete(outcome.success);
-        return yield* applyFailure(
-          workspace,
-          item,
-          runId,
-          retryableOf(outcome.failure),
-          prepareFailureReason(outcome.failure),
-          yield* handleOf(ledger, record.session),
-        );
-      });
+      attempt.pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            handleOf(ledger, record.session).pipe(
+              Effect.flatMap((handle) =>
+                applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
+              ),
+            ),
+          onSuccess: complete,
+        }),
+      );
 
     if (ops.kind === "triage") {
-      return yield* settle(
-        ops.prepare.pipe(Effect.flatMap((request) => foldTriageOutcome(record, ops, request))),
-        (acc) => ops.complete(record, acc),
-      );
+      return yield* settle(foldTriageOutcome(record, ops, request), (acc) => ops.complete(record, acc));
     }
-    return yield* settle(
-      ops.prepare.pipe(Effect.flatMap((request) => foldOutcome(record, ops, request))),
-      (acc) => ops.complete(runId, acc),
-    );
+    return yield* settle(foldOutcome(record, ops, request), (acc) => ops.complete(runId, acc));
   });
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
@@ -715,7 +723,7 @@ export const make = Effect.gen(function* () {
     startedAtMillis: number,
   ) {
     const runId = yield* nextRunId(startedAtMillis);
-    const session = yield* resolveSession(workspace, item, ops, startedAtMillis);
+    const previous = yield* priorSession(workspace, item, ops);
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,
@@ -723,7 +731,7 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       harness: ops.resolved.harness,
       branch: ops.branch,
-      session,
+      session: previous,
       usage: null,
       status: "running",
       startedAtMillis,
@@ -731,7 +739,37 @@ export const make = Effect.gen(function* () {
     };
     yield* ledger.insertRun(record);
     yield* Effect.withFiber((self) => runControl.register(runId, self));
-    return yield* settleOutcome(workspace, item, ops, record, runId).pipe(
+    const persistSession = (session: SessionId) => {
+      const prepared = withSession(record, session);
+      return prepared === record
+        ? Effect.succeed(prepared)
+        : ledger.setRunSession(runId, session).pipe(Effect.map(() => prepared));
+    };
+    return yield* planSession(workspace, ops, startedAtMillis).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          (previous ? Effect.succeed(previous) : mintSession(workspace, ops, startedAtMillis)).pipe(
+            Effect.flatMap(persistSession),
+            Effect.flatMap((prepared) =>
+              handleOf(ledger, prepared.session).pipe(
+                Effect.flatMap((handle) =>
+                  applyFailure(
+                    workspace,
+                    item,
+                    runId,
+                    retryableOf(error),
+                    prepareFailureReason(error),
+                    handle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        onSuccess: ({ request, session }) =>
+          persistSession(session).pipe(
+            Effect.flatMap((prepared) => settleOutcome(workspace, item, ops, prepared, runId, request)),
+          ),
+      }),
       Effect.ensuring(runControl.unregister(runId)),
     );
   });

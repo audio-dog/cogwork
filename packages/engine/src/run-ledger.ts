@@ -145,6 +145,8 @@ export const makeMemory = Effect.gen(function* () {
       Ref.update(eventsRef, (events) => new Map(events).set(runId, [...(events.get(runId) ?? []), event])),
     updateRun: (runId: RunId, update: RunUpdate) =>
       Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
+    setRunSession: (runId: RunId, session: SessionId) =>
+      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => ({ ...run, session }))),
     interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
       Ref.modify(runsRef, (runs) =>
         transition(
@@ -255,6 +257,8 @@ const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusSer
     insertRun: (record: RunRecord) => Effect.andThen(core.insertRun(record), publish(record.id)),
     updateRun: (runId: RunId, update: RunUpdate) =>
       Effect.andThen(core.updateRun(runId, update), publish(runId)),
+    setRunSession: (runId: RunId, session: SessionId) =>
+      Effect.andThen(core.setRunSession(runId, session), publish(runId)),
     interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
       Effect.tap(core.interruptRunning(startedFromMillis, endedAtMillis), publishAll),
     interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>

@@ -274,6 +274,11 @@ const make = (ledgerPath: string) =>
           db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run();
         }),
 
+      setRunSession: (runId: RunId, session: SessionId) =>
+        write("setRunSession", () => {
+          db.update(runs).set({ session }).where(eq(runs.id, runId)).run();
+        }),
+
       interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
         writeIds("interruptRunning", () =>
           db

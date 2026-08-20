@@ -769,7 +769,6 @@ describe("Executor.execute", () => {
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
-        assert.isNull(request?.session ?? null);
         assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
 
         const log = yield* Ref.get(calls);
@@ -779,6 +778,7 @@ describe("Executor.execute", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(request?.session, run?.session);
         assert.strictEqual(run?.stage, "implement");
         assert.strictEqual(run?.branch, implementBranch);
         assert.strictEqual(run?.status, "succeeded");
@@ -917,6 +917,57 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("ledgers the branch session before an interrupted worktree prepare", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const prepares = yield* Ref.make(0);
+      const entered = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const worktree: WorktreeManagerService = {
+        ...worktreeStubCreated(false),
+        ensure: (_workspace, item) =>
+          Ref.getAndUpdate(prepares, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 0
+                ? Effect.succeed({
+                    branch: branchName(item),
+                    path: `/wt/${branchName(item)}`,
+                    created: false,
+                  })
+                : Deferred.succeed(entered, undefined).pipe(
+                    Effect.andThen(Deferred.await(release)),
+                    Effect.map(() => ({
+                      branch: branchName(item),
+                      path: `/wt/${branchName(item)}`,
+                      created: false,
+                    })),
+                  ),
+            ),
+          ),
+        list: () => Effect.succeed([]),
+        remove: () => Effect.void,
+        reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+      };
+      const layer = provide(recorder(calls), [runner(implementEvents)], worktree);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(implementWorkspace, implementItem);
+        const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+
+        yield* Deferred.await(entered);
+
+        const runs = yield* ledger.listRuns(10);
+        const completed = runs.find((run) => run.status === "succeeded");
+        const inFlight = runs.find((run) => run.status === "running");
+        assert.strictEqual(inFlight?.session, completed?.session);
+
+        yield* Fiber.interrupt(running);
+        assert.strictEqual((yield* Ref.get(calls)).filter((call) => call.method === "release").length, 1);
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
+
   it.effect("ledgers the newest session when the harness starts a fresh one mid-run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
@@ -951,7 +1002,7 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured.length, 2);
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        assert.isNull(captured[0]?.session ?? null);
+        assert.strictEqual(captured[0]?.session, run?.session);
         assert.strictEqual(captured[1]?.session, run?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
       }).pipe(Effect.provide(layer));
@@ -1169,6 +1220,93 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.status, "failed");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("keeps an owned transcript through a failed prepare and retry", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const ensures = yield* Ref.make(0);
+      const worktree: WorktreeManagerService = {
+        ...worktreeStubCreated(false),
+        ensure: (_workspace, item) =>
+          Ref.getAndUpdate(ensures, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 1
+                ? Effect.fail(
+                    new GitError({ command: "fetch origin", message: "could not resolve host github.com" }),
+                  )
+                : Effect.succeed({
+                    branch: branchName(item),
+                    path: `/wt/${branchName(item)}`,
+                    created: false,
+                  }),
+            ),
+          ),
+      };
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, implementEvents, Stream.empty, "owned-transcript")],
+        worktree,
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const runs = yield* ledger.listRuns(10);
+        const succeeded = runs.find((run) => run.status === "succeeded");
+        const failed = runs.find((run) => run.status === "failed");
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(failed?.session, succeeded?.session);
+        assert.strictEqual(captured[1]?.session, succeeded?.session);
+        assert.isAbove((yield* ledger.sessionEvents(succeeded?.session ?? previousSession)).length, 0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("keeps an opaque resume handle when prepare hands a run off", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const ensures = yield* Ref.make(0);
+      const worktree: WorktreeManagerService = {
+        ...worktreeStubCreated(false),
+        ensure: (_workspace, item) =>
+          Ref.getAndUpdate(ensures, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 1
+                ? Effect.fail(
+                    new WorktreeDivergedError({
+                      remote: "origin",
+                      branch: branchName(item),
+                      message: "branch has diverged from origin and replaying the local commits failed",
+                    }),
+                  )
+                : Effect.succeed({
+                    branch: branchName(item),
+                    path: `/wt/${branchName(item)}`,
+                    created: false,
+                  }),
+            ),
+          ),
+      };
+      const layer = provide(recorder(calls), [runner(implementEvents)], worktree);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const runs = yield* ledger.listRuns(10);
+        const succeeded = runs.find((run) => run.status === "succeeded");
+        const exhausted = runs.find((run) => run.status === "exhausted");
+        const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
+        assert.strictEqual(exhausted?.session, succeeded?.session);
+        assert.include(handOff?.note ?? "", "agent --resume 'sess-42'");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1420,9 +1558,38 @@ describe("Executor.execute", () => {
         const captured = yield* Ref.get(requests);
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        assert.isNull(captured[0]?.session ?? null);
+        assert.strictEqual(captured[0]?.session, run?.session);
         assert.strictEqual(captured[1]?.session, run?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("mints and dispatches a new session for an explicit fresh follow-up", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, followUpEvents)],
+        worktreeStubCreated(false),
+      );
+      const freshItem = {
+        ...followUpItem,
+        followUp: { ...followUpItem.followUp, fresh: true },
+      };
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* executor.execute(followUpWorkspace, freshItem);
+
+        const [freshRequest] = (yield* Ref.get(requests)).slice(-1);
+        const ledger = yield* RunLedger.RunLedger;
+        const [priorRun, freshRun] = yield* ledger.listRuns(10);
+        assert.notStrictEqual(freshRun?.session, priorRun?.session);
+        assert.strictEqual(freshRequest?.session, freshRun?.session);
+        assert.include(freshRequest?.prompt ?? "", "follow-up-agent");
+        assert.notInclude(freshRequest?.prompt ?? "", "You were interrupted part-way through");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1468,7 +1635,10 @@ describe("Executor.execute", () => {
         yield* executor.execute(followUpWorkspace, followUpItem);
 
         const captured = yield* Ref.get(requests);
-        assert.isNull(captured[1]?.session ?? null);
+        const ledger = yield* RunLedger.RunLedger;
+        const [priorRun, freshRun] = yield* ledger.listRuns(10);
+        assert.notStrictEqual(freshRun?.session, priorRun?.session);
+        assert.strictEqual(captured[1]?.session, freshRun?.session);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1530,7 +1700,7 @@ describe("Executor.execute", () => {
       }),
   );
 
-  it.effect("announces the run summary on the bus when it starts and again when it settles", () =>
+  it.effect("announces the run summary when it starts, gains a session, and settles", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const layer = provide(recorder(calls), [runner(successEvents)]);
@@ -1547,8 +1717,11 @@ describe("Executor.execute", () => {
         const runChanges = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
         assert.deepStrictEqual(
           runChanges.map((run) => run.status),
-          ["running", "succeeded"],
+          ["running", "running", "succeeded"],
         );
+        assert.isNull(runChanges[0]?.session ?? null);
+        assert.isNotNull(runChanges[1]?.session ?? null);
+        assert.strictEqual(runChanges[1]?.session, runChanges.at(-1)?.session);
         assert.strictEqual(runChanges.at(-1)?.eventCount, successEvents.length);
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
