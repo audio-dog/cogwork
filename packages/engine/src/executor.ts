@@ -1,4 +1,4 @@
-import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@cogwork/contracts";
+import type { LifecycleStage, RunRecord, Session, SessionId, TokenUsage } from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
@@ -189,17 +189,20 @@ export const make = Effect.gen(function* () {
       harness.sessionKind,
     );
 
-  const priorSession = Effect.fn("Executor.priorSession")(function* (
+  const candidateSession = (workspace: RegisteredWorkspace, item: EligibleWork, branch: string | null) => {
+    const resumedSession = item.resume?.session;
+    if (resumedSession) return Effect.succeed(resumedSession);
+    if (!branch) return Effect.succeed(null);
+    return ledger.sessionForBranch(workspace.config.name, branch);
+  };
+
+  const compatibleSession = Effect.fn("Executor.compatibleSession")(function* (
     workspace: RegisteredWorkspace,
-    item: EligibleWork,
     ops: StageOps,
+    session: Session | null,
   ) {
-    const id =
-      item.resume?.session ??
-      (ops.branch ? yield* ledger.sessionForBranch(workspace.config.name, ops.branch) : null);
-    if (!id) return null;
-    const session = yield* ledger.getSession(id);
-    if (!session || session.harness === ops.resolved.harness) return session?.id ?? null;
+    if (!session) return null;
+    if (session.harness === ops.resolved.harness) return session.id;
     yield* Effect.logInfo("started fresh after harness switch", {
       workspace: workspace.config.name,
       ...(ops.branch ? { branch: ops.branch } : {}),
@@ -208,6 +211,12 @@ export const make = Effect.gen(function* () {
     });
     return null;
   });
+
+  const priorSession = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) =>
+    candidateSession(workspace, item, ops.branch).pipe(
+      Effect.flatMap((id) => (id ? ledger.getSession(id) : Effect.succeed(null))),
+      Effect.flatMap((session) => compatibleSession(workspace, ops, session)),
+    );
 
   const planSession = Effect.fn("Executor.planSession")(function* (
     workspace: RegisteredWorkspace,
