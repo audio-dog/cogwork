@@ -1,0 +1,21 @@
+apps/cli/config/colony.workspace.ts
+  s_5499650ed1994c::t_a08f88d627a08c 4-5,33
+apps/cli/src/colony-workspace.test.ts
+  s_5499650ed1994c::t_f182132fbf2e38 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "0dc9f633f08106f163544cd2a946febc6b94e7dc",
+  "prompts": {},
+  "sessions": {
+    "s_5499650ed1994c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01ff0-6232-78d0-a861-5945b8a80abe",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
