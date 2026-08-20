@@ -121,7 +121,12 @@ const mcpAdapterConfig = (mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>) =>
   const entries = mcpSkills.map(mcpEntries);
   return {
     config: Object.fromEntries(entries.flatMap((entry) => entry.configEntries)),
-    env: Object.fromEntries(entries.flatMap((entry) => entry.envEntries)),
+    env: {
+      ...Object.fromEntries(
+        Object.entries(process.env).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])),
+      ),
+      ...Object.fromEntries(entries.flatMap((entry) => entry.envEntries)),
+    },
   };
 };
 

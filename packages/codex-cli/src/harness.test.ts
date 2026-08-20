@@ -211,7 +211,9 @@ describe("codexRunner", () => {
         "mcp_servers.linear.url": '"https://mcp.linear.app/mcp/readonly"',
         "mcp_servers.linear.bearer_token_env_var": '"COGWORK_MCP_6c696e656172"',
       });
-      assert.deepStrictEqual(config.env, { COGWORK_MCP_6c696e656172: "mcp-secret" });
+      assert.isString(config.env?.HOME);
+      assert.isString(config.env?.PATH);
+      assert.strictEqual(config.env?.COGWORK_MCP_6c696e656172, "mcp-secret");
       const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
       assert.notInclude(serialized, "mcp-secret");
     }),
