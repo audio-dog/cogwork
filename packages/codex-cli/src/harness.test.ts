@@ -401,6 +401,28 @@ describe("codexRunner", () => {
     }),
   );
 
+  it.live("returns a plain capture when the stage has no output schema", () =>
+    Effect.gen(function* () {
+      const { handle, harness } = yield* makeLiveHarness();
+      const events = yield* Stream.runCollect(
+        harness.run(makeRequest({ checkoutPath: handle.id, session: null, stage: "follow-up" })),
+      );
+      const response = events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
+      if (!response) return assert.fail("fake Codex emitted no response");
+      const capture = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            args: Schema.Array(Schema.String),
+            prompt: Schema.String,
+          }),
+        ),
+      )(response);
+
+      assert.notInclude(capture.args, "--output-schema");
+      assert.include(capture.prompt, "implement the issue");
+    }),
+  );
+
   it.live("keeps an MCP bearer out of the Codex command, events, and worktree configuration", () =>
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness();

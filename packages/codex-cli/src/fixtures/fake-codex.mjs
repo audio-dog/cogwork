@@ -14,7 +14,13 @@ const capture = JSON.stringify({
   cwd: process.cwd(),
   hasCodexConfig,
 });
-const schemaPath = process.argv.at(process.argv.indexOf("--output-schema") + 1);
+const outputSchemaPath = () => {
+  const index = process.argv.indexOf("--output-schema");
+  if (index === -1) return null;
+  return process.argv.at(index + 1) ?? null;
+};
+
+const schemaPath = outputSchemaPath();
 const schema = schemaPath ? JSON.parse(await readFile(schemaPath, "utf8")) : null;
 const response = schema?.properties?.outcome
   ? JSON.stringify({ _tag: "implement", outcome: "opened-pr", summary: capture })
