@@ -1,11 +1,12 @@
 import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@cogwork/contracts";
-import { agUiTextDelta, agUiUsage, RunId, sessionHandle } from "@cogwork/contracts";
+import { agUiTextDelta, agUiUsage, RunId, sessionHandle, TriageStageResult } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -21,7 +22,7 @@ import {
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
-import { type AgUiEvent, Harness, type HarnessError, type HarnessRequest } from "./harness";
+import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import {
@@ -33,8 +34,6 @@ import {
   parseImplementResult,
   type ResolvedStage,
   resolveStage,
-  resolveTriageDecision,
-  type TriageDecision,
 } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
@@ -52,9 +51,15 @@ interface RunAccumulator {
   readonly text: string;
   readonly handle: string | null;
   readonly usage: TokenUsage | null;
+  readonly structuredOutputs: ReadonlyArray<unknown>;
 }
 
-const emptyAccumulator: RunAccumulator = { text: "", handle: null, usage: null };
+const emptyAccumulator: RunAccumulator = {
+  text: "",
+  handle: null,
+  usage: null,
+  structuredOutputs: [],
+};
 
 // A best-guess estimate undercounts the real transcript, so it must never trip the
 // resume token cap — only metered usage from the harness can gate the resume decision.
@@ -87,32 +92,24 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
-const warnTriageDecision = Effect.fn("Executor.warnTriageDecision")(function* (
-  item: EligibleWork,
-  decision: TriageDecision,
-) {
-  if (decision.source !== "sentinel") {
-    return yield* Effect.logWarning("triage run emitted no decision sentinel", {
-      item: item.id,
-      source: decision.source,
-      disposition: decision.disposition,
-      applied: decision.role,
-    });
-  }
-  if (decision.disposition && decision.disposition !== decision.sentinel) {
-    yield* Effect.logWarning("triage sentinel disagrees with proposal disposition", {
-      item: item.id,
-      sentinel: decision.sentinel,
-      disposition: decision.disposition,
-      applied: decision.role,
-    });
-  }
-});
+const StructuredOutputCompleteValue = Schema.Struct({ object: Schema.Unknown });
+const decodeStructuredOutputCompleteValue = Schema.decodeUnknownOption(StructuredOutputCompleteValue);
+
+const structuredOutputObject = (event: AgUiEvent) => {
+  if (event.type !== "CUSTOM" || event.name !== "structured-output.complete") return undefined;
+  return Option.getOrUndefined(decodeStructuredOutputCompleteValue(event.value))?.object;
+};
+
+const appendStructuredOutput = (acc: RunAccumulator, event: AgUiEvent) => {
+  const object = structuredOutputObject(event);
+  return object === undefined ? acc.structuredOutputs : [...acc.structuredOutputs, object];
+};
 
 const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator => ({
   text: acc.text + agUiTextDelta(event),
   handle,
   usage: agUiUsage(event) ?? acc.usage,
+  structuredOutputs: appendStructuredOutput(acc, event),
 });
 
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
@@ -293,13 +290,12 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     runId: RunId,
     acc: RunAccumulator,
+    result: TriageStageResult,
   ) {
-    const decision = resolveTriageDecision(acc.text);
-    yield* warnTriageDecision(item, decision);
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* issueTracker.triaged(workspace, item.id, {
-      role: decision.role,
-      proposal: triageProposalBody(acc.text),
+      role: result.role,
+      proposal: triageProposalBody(result.proposal),
       atMillis: endedAtMillis,
     });
     yield* settleRun(runId, {
@@ -307,6 +303,40 @@ export const make = Effect.gen(function* () {
       usage: acc.usage,
       endedAtMillis,
     });
+  });
+
+  const structuredTriageError = (message: string) =>
+    new HarnessError({ reason: "turn", retryable: true, message });
+
+  const decodeTriageResult = Effect.fn("Executor.decodeTriageResult")(function* (acc: RunAccumulator) {
+    if (acc.structuredOutputs.length !== 1) {
+      return yield* structuredTriageError(
+        `expected exactly one structured triage result, received ${acc.structuredOutputs.length}`,
+      );
+    }
+    return yield* Schema.decodeUnknownEffect(TriageStageResult)(acc.structuredOutputs[0]).pipe(
+      Effect.mapError((error) => structuredTriageError(`invalid structured triage result: ${error.message}`)),
+    );
+  });
+
+  const completeTriage = Effect.fn("Executor.completeTriage")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    acc: RunAccumulator,
+  ) {
+    const result = yield* Effect.result(decodeTriageResult(acc));
+    if (Result.isSuccess(result)) {
+      return yield* applyTriageSuccess(workspace, item, runId, acc, result.success);
+    }
+    return yield* applyFailure(
+      workspace,
+      item,
+      runId,
+      result.failure.retryable,
+      result.failure.message,
+      acc.handle,
+    );
   });
 
   const applyImplementSuccess = Effect.fn("Executor.applyImplementSuccess")(function* (
@@ -370,7 +400,7 @@ export const make = Effect.gen(function* () {
         null,
         item.stage,
       ),
-      complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
+      complete: (runId: RunId, acc: RunAccumulator) => completeTriage(workspace, item, runId, acc),
       fullPrompt,
       resume: false,
     } satisfies StageOps;
