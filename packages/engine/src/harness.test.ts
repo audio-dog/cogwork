@@ -10,10 +10,15 @@ describe("stageResultSchema", () => {
       if (!schema) return assert.fail("triage stage has no result schema");
 
       const jsonSchema = schema["~standard"].jsonSchema.input({ target: "draft-2020-12" });
-      const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(jsonSchema);
-      assert.include(serialized, '"_tag"');
-      assert.include(serialized, '"role"');
-      assert.include(serialized, '"proposal"');
+      const root = yield* Schema.decodeUnknownEffect(
+        Schema.Struct({
+          type: Schema.Literal("object"),
+          properties: Schema.Record(Schema.String, Schema.Unknown),
+          required: Schema.Array(Schema.String),
+        }),
+      )(jsonSchema);
+      assert.hasAllKeys(root.properties, ["_tag", "role", "proposal"]);
+      assert.deepStrictEqual([...root.required].sort(), ["_tag", "proposal", "role"]);
 
       const result = yield* Effect.promise(() =>
         Promise.resolve(
@@ -25,6 +30,17 @@ describe("stageResultSchema", () => {
         ),
       );
       assert.isUndefined(result.issues);
+
+      const invalid = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "triage",
+            role: "needs-triage",
+            proposal: "Run triage again.",
+          }),
+        ),
+      );
+      assert.isDefined(invalid.issues);
     }),
   );
 

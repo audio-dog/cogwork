@@ -13,8 +13,16 @@ export const TriageRole = Schema.Literals([
 ]);
 export type TriageRole = typeof TriageRole.Type;
 
+export const TriageResultRole = Schema.Literals([
+  "ready-for-agent",
+  "needs-info",
+  "ready-for-human",
+  "wontfix",
+]);
+export type TriageResultRole = typeof TriageResultRole.Type;
+
 export class TriageStageResult extends Schema.TaggedClass<TriageStageResult>()("triage", {
-  role: TriageRole,
+  role: TriageResultRole,
   proposal: TrimmedNonEmptyString,
 }) {}
 

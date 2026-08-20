@@ -31,6 +31,20 @@ describe("StageResult", () => {
       assert.strictEqual(error._tag, "SchemaError");
     }),
   );
+
+  it.effect("rejects needs-triage as a terminal triage result", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        Schema.decodeUnknownEffect(StageResult)({
+          _tag: "triage",
+          role: "needs-triage",
+          proposal: "Run triage again.",
+        }),
+      );
+
+      assert.strictEqual(error._tag, "SchemaError");
+    }),
+  );
 });
 
 describe("resolvePriority", () => {

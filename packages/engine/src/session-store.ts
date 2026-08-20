@@ -9,6 +9,7 @@ import type {
 import {
   agUiDisplayName,
   agUiIsTerminal,
+  agUiStructuredOutputComplete,
   agUiTextDelta,
   SessionId as SessionIdSchema,
 } from "@cogwork/contracts";
@@ -73,22 +74,14 @@ const flushText = (state: FoldState): FoldState =>
 const toolCallId = (event: AgUiEvent) =>
   event.type.startsWith("TOOL_CALL_") ? (event.toolCallId ?? null) : null;
 
-const StructuredOutputCompleteValue = Schema.Struct({ raw: Schema.String });
-const decodeStructuredOutputCompleteValue = Schema.decodeUnknownOption(StructuredOutputCompleteValue);
-
-const structuredOutputRaw = (event: AgUiEvent) => {
-  if (event.type !== "CUSTOM" || event.name !== "structured-output.complete") return null;
-  return Option.getOrNull(Option.map(decodeStructuredOutputCompleteValue(event.value), (value) => value.raw));
-};
-
-const appendStructuredOutput = (state: FoldState, raw: string): FoldState => {
+const appendStructuredOutput = (state: FoldState, raw: string) => {
   const flushed = flushText(state);
   const previous = flushed.messages.at(-1);
   if (previous?.role === "assistant" && previous.content === raw) return flushed;
   return {
     ...flushed,
     messages: [...flushed.messages, { role: "assistant", content: raw }],
-  };
+  } satisfies FoldState;
 };
 
 const appendTool = (state: FoldState, event: AgUiEvent, callId: string): FoldState => {
@@ -106,8 +99,8 @@ const appendTool = (state: FoldState, event: AgUiEvent, callId: string): FoldSta
 const foldEvent = (state: FoldState, event: AgUiEvent): FoldState => {
   const delta = agUiTextDelta(event);
   if (delta.length > 0) return { ...state, text: state.text + delta };
-  const structured = structuredOutputRaw(event);
-  if (structured !== null) return appendStructuredOutput(state, structured);
+  const structured = agUiStructuredOutputComplete(event);
+  if (structured !== null) return appendStructuredOutput(state, structured.raw);
   const callId = toolCallId(event);
   if (callId && !state.seenTools.has(callId)) return appendTool(state, event, callId);
   return agUiIsTerminal(event) ? flushText(state) : state;

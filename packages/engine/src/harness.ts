@@ -19,13 +19,12 @@ import { SessionStore, type SessionStoreService } from "./session-store";
 export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
 
-const triageResultSchema = Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(TriageStageResult));
+const triageResultSchema = Schema.toStandardJSONSchemaV1(
+  Schema.toStandardSchemaV1(Schema.Struct(TriageStageResult.fields)),
+);
 
-const stageResultSchemas: Partial<Record<LifecycleStage, typeof triageResultSchema>> = {
-  triage: triageResultSchema,
-};
-
-export const stageResultSchema = (stage: LifecycleStage) => stageResultSchemas[stage];
+export const stageResultSchema = (stage: LifecycleStage) =>
+  stage === "triage" ? triageResultSchema : undefined;
 export type StageResultSchema = typeof triageResultSchema;
 
 export interface HarnessRequest {
