@@ -1,0 +1,19 @@
+.codex/environments/environment.toml
+  s_da7bb60ae50d5a::t_a510f93ed20d9d 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "d7ed16059442bbd298ead1df09c002c911115cab",
+  "prompts": {},
+  "sessions": {
+    "s_da7bb60ae50d5a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01fbc-9dbd-77a1-8367-fb7b60ab9612",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
