@@ -124,6 +124,7 @@ export type TranscriptEntry =
       readonly name: string;
       args: string;
       result: string | null;
+      complete: boolean;
     }
   | { readonly kind: "diff"; readonly key: string; readonly path: string; diff: string }
   | { readonly kind: "error"; readonly key: string; readonly message: string };
@@ -166,6 +167,7 @@ const transcriptHandlers: Record<string, TranscriptHandler> = {
       name: event.toolCallName ?? "tool",
       args: "",
       result: null,
+      complete: false,
     };
     state.byKey.set(key, entry);
     state.entries.push(entry);
@@ -176,11 +178,16 @@ const transcriptHandlers: Record<string, TranscriptHandler> = {
   },
   TOOL_CALL_END: (state, event) => {
     const entry = state.byKey.get(`tool:${event.toolCallId ?? ""}`);
-    if (entry?.kind === "tool" && entry.args === "" && event.args) entry.args = event.args;
+    if (entry?.kind !== "tool") return;
+    if (entry.args === "" && event.args) entry.args = event.args;
+    entry.complete = true;
   },
   TOOL_CALL_RESULT: (state, event) => {
     const entry = state.byKey.get(`tool:${event.toolCallId ?? ""}`);
-    if (entry?.kind === "tool") entry.result = stringify(event.result ?? event.content);
+    if (entry?.kind === "tool") {
+      entry.result = stringify(event.result ?? event.content);
+      entry.complete = true;
+    }
   },
   CUSTOM: (state, event) => {
     if (event.name !== FILE_DIFF_EVENT) return;
@@ -209,6 +216,30 @@ export const foldTranscript = (activities: ReadonlyArray<RunActivity>) => {
   for (const activity of activities)
     transcriptHandlers[activity.event.type]?.(state, activity.event, activity);
   return state.entries;
+};
+
+export const statusLine = (activities: ReadonlyArray<RunActivity>) => {
+  const names = new Map<string, string>();
+  const latest = activities.at(-1);
+  if (!latest) return "Thinking…";
+
+  for (const activity of activities) {
+    if (activity.event.type !== "TOOL_CALL_START") continue;
+    names.set(activity.event.toolCallId ?? "", activity.event.toolCallName ?? "tool");
+  }
+
+  const { event } = latest;
+  if (event.type === "REASONING_MESSAGE_CONTENT") return "Thinking…";
+  if (event.type === "TEXT_MESSAGE_CONTENT") return "Responding…";
+  if (event.type === "TOOL_CALL_START") return `Running ${event.toolCallName ?? "tool"}…`;
+  if (event.type === "TOOL_CALL_END" || event.type === "TOOL_CALL_RESULT") {
+    return `Ran ${names.get(event.toolCallId ?? "") ?? event.toolCallName ?? "tool"}`;
+  }
+  if (event.type === "RUN_FINISHED") return "Run finished.";
+  if (event.type !== "CUSTOM" || event.name !== FILE_DIFF_EVENT) return "Thinking…";
+
+  const diff = Option.getOrNull(decodeFileDiff(event.value));
+  return diff ? `Editing ${diff.path}` : "Thinking…";
 };
 
 type ActivityResult = typeof runActivityAtom extends (id: RunId) => Atom.Atom<infer V> ? V : never;
