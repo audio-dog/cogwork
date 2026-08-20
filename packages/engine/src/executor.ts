@@ -77,6 +77,7 @@ interface CommonStageOps {
   readonly resolved: ResolvedStage;
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
+  readonly fullPrompt: string;
   readonly resume: boolean;
   readonly resumePolicy: boolean;
 }
@@ -502,6 +503,7 @@ export const make = Effect.gen(function* () {
         item.stage,
       ),
       complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
+      fullPrompt,
       resume: false,
       resumePolicy: false,
     } satisfies StageOps;
@@ -516,6 +518,7 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareImplement(workspace, item, resolved, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
+      fullPrompt,
       resume: false,
       resumePolicy: false,
     } satisfies StageOps;
@@ -633,6 +636,7 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
+      fullPrompt,
       resume: false,
       resumePolicy: true,
     } satisfies StageOps;
@@ -679,6 +683,26 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const freshRecoveryPrepare = Effect.fn("Executor.freshRecoveryPrepare")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    resolved: ResolvedStage,
+    prompt: string,
+  ) {
+    if (item.stage === "triage") {
+      return yield* harnessRequest(
+        workspace,
+        resolved,
+        workspace.config.checkoutPath,
+        prompt,
+        null,
+        item.stage,
+      );
+    }
+    const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
+    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null, item.stage);
+  });
+
   const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
     if (item.stage === "implement") return implementOps(workspace, item, resolved);
     if (item.stage === "follow-up") return followUpOps(workspace, item, resolved);
@@ -693,6 +717,15 @@ export const make = Effect.gen(function* () {
       ...ops,
       prepare: resumePrepare(workspace, item, resolved, session),
       resume: true,
+    } satisfies StageOps;
+  };
+
+  const freshRecoveryOps = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
+    const fresh = stageOps(workspace, item, ops.resolved);
+    if (!item.resume) return fresh;
+    return {
+      ...fresh,
+      prepare: freshRecoveryPrepare(workspace, item, ops.resolved, fresh.fullPrompt),
     } satisfies StageOps;
   };
 
@@ -734,7 +767,7 @@ export const make = Effect.gen(function* () {
   ) {
     const runId = yield* nextRunId(startedAtMillis);
     const previous = yield* priorSession(workspace, item, ops);
-    const selectedOps = previous === item.resume?.session ? ops : stageOps(workspace, item, ops.resolved);
+    const selectedOps = previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,

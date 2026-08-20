@@ -1087,6 +1087,7 @@ describe("Executor.execute", () => {
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const ensured = yield* Ref.make<ReadonlyArray<boolean>>([]);
       const resumeItem: EligibleWork = {
         ...implementItem,
         resume: { session: previousSession, reason: "interrupted" },
@@ -1097,7 +1098,7 @@ describe("Executor.execute", () => {
           capturingRunner(requests, implementEvents),
           capturingRunner(requests, implementEvents, Stream.empty, "opaque-handle", codex),
         ],
-        resumeRecordingWorktree(yield* Ref.make<ReadonlyArray<boolean>>([])),
+        resumeRecordingWorktree(ensured),
       );
       yield* Effect.gen(function* () {
         yield* seedResumeSession();
@@ -1109,6 +1110,7 @@ describe("Executor.execute", () => {
         assert.notStrictEqual(request?.session, previousSession);
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.notInclude(request?.prompt ?? "", "just been resumed");
+        assert.deepStrictEqual(yield* Ref.get(ensured), [true]);
 
         const callsAfterRun = yield* Ref.get(calls);
         assert.isFalse(callsAfterRun.some((call) => call.method === "attemptFailed"));
