@@ -1,0 +1,19 @@
+pnpm-lock.yaml
+  s_b72b96ca2cca30::t_1b152ec5b46d42 15-26,267,270,273,276,326,332,335,360,375,378
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "eea45dabb547f2d14a4cbb2f1018294ee14387a6",
+  "prompts": {},
+  "sessions": {
+    "s_b72b96ca2cca30": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01d73-81cf-7f32-87b9-b1a415c9ea60",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
