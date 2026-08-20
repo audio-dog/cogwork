@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { TrimmedNonEmptyString } from "./base-schemas";
 
 export const LifecycleStage = Schema.Literals(["triage", "implement", "follow-up", "verify"]);
 export type LifecycleStage = typeof LifecycleStage.Type;
@@ -11,6 +12,22 @@ export const TriageRole = Schema.Literals([
   "wontfix",
 ]);
 export type TriageRole = typeof TriageRole.Type;
+
+export const TriageResultRole = Schema.Literals([
+  "ready-for-agent",
+  "needs-info",
+  "ready-for-human",
+  "wontfix",
+]);
+export type TriageResultRole = typeof TriageResultRole.Type;
+
+export class TriageStageResult extends Schema.TaggedClass<TriageStageResult>()("triage", {
+  role: TriageResultRole,
+  proposal: TrimmedNonEmptyString,
+}) {}
+
+export const StageResult = Schema.Union([TriageStageResult]);
+export type StageResult = typeof StageResult.Type;
 
 export const NeedsHumanReason = Schema.Literals(["needs-info", "ready-for-human"]);
 export type NeedsHumanReason = typeof NeedsHumanReason.Type;

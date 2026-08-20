@@ -1,12 +1,14 @@
-import { type AgUiEvent, agUiUsage, HarnessName } from "@cogwork/contracts";
-import type { Harness } from "@cogwork/engine";
+import { type AgUiEvent, agUiStructuredOutputComplete, agUiUsage, HarnessName } from "@cogwork/contracts";
+import { Harness, type SessionStore } from "@cogwork/engine";
+import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
+import { memoryPersistence } from "@tanstack/ai-persistence";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
+import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { assert, describe, it } from "vitest";
 import {
   cursorModelOptions,
   cursorRunner,
@@ -18,6 +20,43 @@ import {
 
 const collect = (stream: Stream.Stream<AgUiEvent, Harness.HarnessError>) =>
   Effect.runPromise(Stream.runCollect(stream));
+
+const cursorName = Schema.decodeSync(HarnessName)("cursor");
+
+const sessionStore: SessionStore.SessionStoreService = {
+  persistence: memoryPersistence(),
+  resumeHandle: () => Effect.succeed(null),
+  mint: () => Effect.die(new Error("unexpected mint")),
+};
+
+const unexpected = () => Effect.die(new Error("unexpected service access"));
+
+const harnessServices: Harness.HarnessRunnerServices = {
+  sessionStore,
+  contextAssembler: { assemble: unexpected },
+  credentialStore: {
+    bearerToken: unexpected,
+    persist: unexpected,
+    invalidate: unexpected,
+    providerKey: unexpected,
+    persistProviderKey: unexpected,
+  },
+};
+
+const request = (checkoutPath: string) =>
+  ({
+    harness: cursorName,
+    stage: "triage",
+    skill: "triage-agent",
+    checkoutPath,
+    session: null,
+    prompt: "triage the issue",
+    model: "auto",
+    effort: null,
+    mcpSkills: [],
+  }) satisfies Harness.HarnessRequest;
+
+const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
@@ -61,9 +100,49 @@ describe("mcpWorkspaceProjection", () => {
 
 describe("cursorRunner", () => {
   it("declares the opaque-handle session kind", () => {
-    const runner = cursorRunner({ name: Schema.decodeSync(HarnessName)("cursor") });
+    const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
   });
+
+  it.live("streams one structured triage result through the native Cursor ACP adapter", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const runner = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent}`,
+      });
+      const harness = Harness.make([runner], harnessServices);
+
+      const events = yield* Stream.runCollect(harness.run(request(checkout.id)));
+      const completions = events.filter((event) => agUiStructuredOutputComplete(event) !== null);
+
+      assert.lengthOf(completions, 1);
+      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.live("fails malformed Cursor structured output without coercing its prose", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const runner = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent} --malformed`,
+      });
+      const harness = Harness.make([runner], harnessServices);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
 });
 
 describe("cursorModelOptions", () => {

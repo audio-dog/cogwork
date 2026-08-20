@@ -1,6 +1,7 @@
 import { agUiTextDelta, HarnessName, SessionId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
+import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { type ChatWithInterruptsPersistence, defineAIPersistence } from "@tanstack/ai-persistence";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
@@ -50,6 +51,32 @@ const scriptedChunks: ReadonlyArray<StreamChunk> = [
   { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "hello world" },
   { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" },
 ];
+
+const structuredTriageJson = '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}';
+
+const nativeStructuredAdapter = {
+  kind: "text",
+  name: "fake",
+  model: "fake",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: undefined,
+    systemPromptMetadata: undefined,
+  },
+  chatStream: () =>
+    toAsyncIterable<StreamChunk>([
+      { type: EventType.RUN_STARTED, runId: "r1", threadId: "t1" },
+      { type: EventType.TEXT_MESSAGE_START, messageId: "m1", role: "assistant" },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: structuredTriageJson },
+      { type: EventType.TEXT_MESSAGE_END, messageId: "m1" },
+      { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1", finishReason: "stop" },
+    ]),
+  structuredOutput: () => Promise.reject(new Error("unexpected structured finalization")),
+  supportsCombinedToolsAndSchema: () => true,
+} satisfies AnyTextAdapter;
 
 const unexpected = () => Effect.die(new Error("credential store method not expected in this test"));
 
@@ -178,6 +205,30 @@ describe("providerRunner", () => {
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "chat-persistence"));
       }),
     30000,
+  );
+
+  it.live("streams one structured triage result through TanStack's provider path", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const runner = providerRunner({
+        name: harnessName,
+        makeAdapter: () => nativeStructuredAdapter,
+      });
+
+      const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
+        Effect.provide(
+          Layer.mergeAll(contextLayer([sampleLayer]), credentialLayer(keyProvider), sessionLayer([])),
+        ),
+      );
+
+      assert.strictEqual(
+        events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")
+          .length,
+        1,
+      );
+      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+      assert.strictEqual(events.at(-1)?.name, "structured-output.complete");
+    }),
   );
 
   it.effect("fails with a launch error when the model has no wired provider", () =>

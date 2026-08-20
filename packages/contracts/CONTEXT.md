@@ -126,6 +126,10 @@ _Avoid_: Owned tool policy, provider sandbox, fallback
 The input handed to a harness for one run: which harness, the checkout path, the prompt, an optional model, an optional harness-native effort level, an optional session to resume, and the MCP skills to provision. Secret material (e.g. an MCP skill's bearer token) rides a channel that is never persisted or logged, not a plain field.
 _Avoid_: Prompt (that's one field), job
 
+**Stage result**:
+The tagged, Effect-Schema-defined value a lifecycle stage returns through the harness stream. The shared kernel owns each stage's schema; triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal. Prose remains ordinary streamed output and is never parsed as a stage result.
+_Avoid_: Footer, sentinel, disposition line, text protocol
+
 **Playbook skill**:
 The coding playbook's named `SKILL.md` capability for a lifecycle stage (e.g. `triage-agent`). It is a required engine input: every harness runner receives the assembled playbook instructions and their provisioned resource path instead of relying on ambient harness discovery. Distinct from an MCP skill.
 _Avoid_: Skill (alone), MCP skill, agent skill (TanStack Intent authoring docs)

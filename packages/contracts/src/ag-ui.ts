@@ -36,6 +36,22 @@ export const AgUiEvent = Schema.StructWithRest(
 );
 export type AgUiEvent = typeof AgUiEvent.Type;
 
+export const StructuredOutputCompleteValue = Schema.Struct({
+  object: Schema.Unknown,
+  raw: Schema.String,
+});
+export type StructuredOutputCompleteValue = typeof StructuredOutputCompleteValue.Type;
+
+const decodeStructuredOutputCompleteValue = Schema.decodeUnknownOption(StructuredOutputCompleteValue);
+
+export const agUiIsStructuredOutputComplete = (event: AgUiEvent) =>
+  event.type === "CUSTOM" && event.name === "structured-output.complete";
+
+export const agUiStructuredOutputComplete = (event: AgUiEvent) => {
+  if (!agUiIsStructuredOutputComplete(event)) return null;
+  return Option.getOrNull(decodeStructuredOutputCompleteValue(event.value));
+};
+
 export const AgUiCorrelation = Schema.Struct({
   threadId: Schema.NullOr(Schema.String),
   messageId: Schema.NullOr(Schema.String),

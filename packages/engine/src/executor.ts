@@ -1,5 +1,13 @@
 import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@cogwork/contracts";
-import { agUiTextDelta, agUiUsage, RunId, sessionHandle } from "@cogwork/contracts";
+import {
+  agUiIsStructuredOutputComplete,
+  agUiTextDelta,
+  agUiUsage,
+  RunId,
+  StructuredOutputCompleteValue,
+  sessionHandle,
+  TriageStageResult,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -21,7 +29,7 @@ import {
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
-import { type AgUiEvent, Harness, type HarnessError, type HarnessRequest } from "./harness";
+import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import {
@@ -33,8 +41,6 @@ import {
   parseImplementResult,
   type ResolvedStage,
   resolveStage,
-  resolveTriageDecision,
-  type TriageDecision,
 } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { decideResume } from "./resume-policy";
@@ -54,21 +60,47 @@ interface RunAccumulator {
   readonly usage: TokenUsage | null;
 }
 
-const emptyAccumulator: RunAccumulator = { text: "", handle: null, usage: null };
+interface TriageAccumulator extends RunAccumulator {
+  readonly structuredOutputs: ReadonlyArray<unknown>;
+  readonly deferredTerminal: AgUiEvent | null;
+}
+
+const emptyAccumulator: RunAccumulator = {
+  text: "",
+  handle: null,
+  usage: null,
+};
+
+const emptyTriageAccumulator: TriageAccumulator = {
+  ...emptyAccumulator,
+  structuredOutputs: [],
+  deferredTerminal: null,
+};
 
 // A best-guess estimate undercounts the real transcript, so it must never trip the
 // resume token cap — only metered usage from the harness can gate the resume decision.
 export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
   usage && !usage.estimated ? (usage.totalTokens ?? null) : null;
 
-interface StageOps {
+interface CommonStageOps {
   readonly resolved: ResolvedStage;
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
-  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
   readonly fullPrompt: string;
   readonly resume: boolean;
 }
+
+interface TriageStageOps extends CommonStageOps {
+  readonly kind: "triage";
+  readonly complete: (record: RunRecord, acc: TriageAccumulator) => Effect.Effect<void, IssueTrackerError>;
+}
+
+interface TextStageOps extends CommonStageOps {
+  readonly kind: "text";
+  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
+}
+
+type StageOps = TriageStageOps | TextStageOps;
 
 class SessionRestarted extends Data.TaggedError("SessionRestarted")<Record<string, never>> {}
 
@@ -87,27 +119,10 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
-const warnTriageDecision = Effect.fn("Executor.warnTriageDecision")(function* (
-  item: EligibleWork,
-  decision: TriageDecision,
-) {
-  if (decision.source !== "sentinel") {
-    return yield* Effect.logWarning("triage run emitted no decision sentinel", {
-      item: item.id,
-      source: decision.source,
-      disposition: decision.disposition,
-      applied: decision.role,
-    });
-  }
-  if (decision.disposition && decision.disposition !== decision.sentinel) {
-    yield* Effect.logWarning("triage sentinel disagrees with proposal disposition", {
-      item: item.id,
-      sentinel: decision.sentinel,
-      disposition: decision.disposition,
-      applied: decision.role,
-    });
-  }
-});
+const appendStructuredOutput = (acc: TriageAccumulator, event: AgUiEvent) => {
+  if (!agUiIsStructuredOutputComplete(event)) return acc.structuredOutputs;
+  return [...acc.structuredOutputs, event.value];
+};
 
 const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator => ({
   text: acc.text + agUiTextDelta(event),
@@ -115,7 +130,16 @@ const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null
   usage: agUiUsage(event) ?? acc.usage,
 });
 
+const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: string | null) =>
+  ({
+    ...mergeEvent(acc, event, handle),
+    structuredOutputs: appendStructuredOutput(acc, event),
+    deferredTerminal: acc.deferredTerminal,
+  }) satisfies TriageAccumulator;
+
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
+const successfulTerminal = (event: AgUiEvent) =>
+  event.type === "RUN_FINISHED" && event.finishReason !== "failed";
 
 const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
   Stream.catchCause(stream, (cause) =>
@@ -215,33 +239,68 @@ export const make = Effect.gen(function* () {
     return mergeEvent(acc, event, handle);
   });
 
-  const foldStream = <E, R>(
+  const foldTriageEvent = Effect.fn("Executor.foldTriageEvent")(function* (
+    record: RunRecord,
+    acc: TriageAccumulator,
+    event: AgUiEvent,
+  ) {
+    if (successfulTerminal(event)) {
+      return { ...mergeTriageEvent(acc, event, acc.handle), deferredTerminal: event };
+    }
+    const handle = yield* recorder.record(record, event);
+    return mergeTriageEvent(acc, event, handle);
+  });
+
+  const foldStream = <A, E, R>(
     request: HarnessRequest,
-    step: (acc: RunAccumulator, event: AgUiEvent) => Effect.Effect<RunAccumulator, E, R>,
-  ) => Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => emptyAccumulator, step);
+    initial: A,
+    step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
+  ) => Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step);
 
   const foldRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(request, (acc, event) => foldEvent(record, acc, event));
+    foldStream(request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event));
 
-  const guardResume = (prev: RunAccumulator, next: RunAccumulator, expected: string) =>
+  const foldTriageRun = (record: RunRecord, request: HarnessRequest) =>
+    foldStream(request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
+
+  const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
       ? Effect.fail(new SessionRestarted({}))
       : Effect.succeed(next);
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(request, (acc, event) =>
+    foldStream(request, emptyAccumulator, (acc, event) =>
       foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
+    );
+
+  const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
+    foldStream(request, emptyTriageAccumulator, (acc, event) =>
+      foldTriageEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
     );
 
   const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
     record: RunRecord,
-    ops: StageOps,
+    ops: CommonStageOps,
     request: HarnessRequest,
   ) {
     const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
     if (!expected) return yield* foldRun(record, request);
     return yield* foldResume(record, request, expected).pipe(
       Effect.catchTag("SessionRestarted", () => foldRun(record, withFullPrompt(request, ops.fullPrompt))),
+    );
+  });
+
+  const foldTriageOutcome = Effect.fn("Executor.foldTriageOutcome")(function* (
+    record: RunRecord,
+    ops: TriageStageOps,
+    request: HarnessRequest,
+  ) {
+    const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
+    if (!expected) return yield* foldTriageRun(record, request);
+    return yield* foldTriageResume(record, request, expected).pipe(
+      Effect.catchTag("SessionRestarted", () =>
+        foldTriageRun(record, withFullPrompt(request, ops.fullPrompt)),
+      ),
     );
   });
 
@@ -293,13 +352,12 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     runId: RunId,
     acc: RunAccumulator,
+    result: TriageStageResult,
   ) {
-    const decision = resolveTriageDecision(acc.text);
-    yield* warnTriageDecision(item, decision);
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* issueTracker.triaged(workspace, item.id, {
-      role: decision.role,
-      proposal: triageProposalBody(acc.text),
+      role: result.role,
+      proposal: triageProposalBody(result.proposal),
       atMillis: endedAtMillis,
     });
     yield* settleRun(runId, {
@@ -307,6 +365,48 @@ export const make = Effect.gen(function* () {
       usage: acc.usage,
       endedAtMillis,
     });
+  });
+
+  const structuredTriageError = (message: string) =>
+    new HarnessError({ reason: "turn", retryable: true, message });
+
+  const TriageCompletion = Schema.Struct({
+    ...StructuredOutputCompleteValue.fields,
+    object: TriageStageResult,
+  });
+
+  const decodeTriageResult = Effect.fn("Executor.decodeTriageResult")(function* (acc: TriageAccumulator) {
+    if (acc.structuredOutputs.length !== 1) {
+      return yield* structuredTriageError(
+        `expected exactly one structured triage result, received ${acc.structuredOutputs.length}`,
+      );
+    }
+    const completion = yield* Schema.decodeUnknownEffect(TriageCompletion)(acc.structuredOutputs[0]).pipe(
+      Effect.mapError((error) => structuredTriageError(`invalid structured triage result: ${error.message}`)),
+    );
+    return completion.object;
+  });
+
+  const completeTriage = Effect.fn("Executor.completeTriage")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    record: RunRecord,
+    acc: TriageAccumulator,
+  ) {
+    const result = yield* Effect.result(decodeTriageResult(acc));
+    if (Result.isSuccess(result)) {
+      yield* recorder.record(record, acc.deferredTerminal ?? { type: "RUN_FINISHED", finishReason: "stop" });
+      return yield* applyTriageSuccess(workspace, item, record.id, acc, result.success);
+    }
+    yield* recorder.record(record, failedTerminal);
+    return yield* applyFailure(
+      workspace,
+      item,
+      record.id,
+      result.failure.retryable,
+      result.failure.message,
+      acc.handle,
+    );
   });
 
   const applyImplementSuccess = Effect.fn("Executor.applyImplementSuccess")(function* (
@@ -360,6 +460,7 @@ export const make = Effect.gen(function* () {
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
     const fullPrompt = buildTriagePrompt(resolved, item);
     return {
+      kind: "triage",
       resolved,
       branch: null,
       prepare: harnessRequest(
@@ -370,7 +471,7 @@ export const make = Effect.gen(function* () {
         null,
         item.stage,
       ),
-      complete: (runId: RunId, acc: RunAccumulator) => applyTriageSuccess(workspace, item, runId, acc),
+      complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
       fullPrompt,
       resume: false,
     } satisfies StageOps;
@@ -380,6 +481,7 @@ export const make = Effect.gen(function* () {
     const branch = branchName(item);
     const fullPrompt = buildImplementPrompt(resolved, item);
     return {
+      kind: "text",
       resolved,
       branch,
       prepare: prepareImplement(workspace, item, resolved, branch, fullPrompt),
@@ -491,6 +593,7 @@ export const make = Effect.gen(function* () {
     const context = item.followUp ?? defaultFollowUp;
     const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {
+      kind: "text",
       resolved,
       branch,
       prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
@@ -565,24 +668,32 @@ export const make = Effect.gen(function* () {
     record: RunRecord,
     runId: RunId,
   ) {
-    const outcome = yield* Effect.result(
-      ops.prepare.pipe(
-        Effect.flatMap(
-          (request): Effect.Effect<RunAccumulator, PrepareError | HarnessError> =>
-            foldOutcome(record, ops, request),
-        ),
-      ),
-    );
-    if (Result.isSuccess(outcome)) {
-      return yield* ops.complete(runId, outcome.success);
+    const settle = <A>(
+      attempt: Effect.Effect<A, PrepareError | HarnessError>,
+      complete: (acc: A) => Effect.Effect<void, IssueTrackerError>,
+    ) =>
+      Effect.gen(function* () {
+        const outcome = yield* Effect.result(attempt);
+        if (Result.isSuccess(outcome)) return yield* complete(outcome.success);
+        return yield* applyFailure(
+          workspace,
+          item,
+          runId,
+          retryableOf(outcome.failure),
+          prepareFailureReason(outcome.failure),
+          yield* handleOf(ledger, record.session),
+        );
+      });
+
+    if (ops.kind === "triage") {
+      return yield* settle(
+        ops.prepare.pipe(Effect.flatMap((request) => foldTriageOutcome(record, ops, request))),
+        (acc) => ops.complete(record, acc),
+      );
     }
-    return yield* applyFailure(
-      workspace,
-      item,
-      runId,
-      retryableOf(outcome.failure),
-      prepareFailureReason(outcome.failure),
-      yield* handleOf(ledger, record.session),
+    return yield* settle(
+      ops.prepare.pipe(Effect.flatMap((request) => foldOutcome(record, ops, request))),
+      (acc) => ops.complete(runId, acc),
     );
   });
 

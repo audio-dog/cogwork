@@ -1,5 +1,51 @@
 import { assert, describe, it } from "@effect/vitest";
-import { defaultPriority, priorityRank, resolvePriority } from "./triage";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import { defaultPriority, priorityRank, resolvePriority, StageResult, TriageStageResult } from "./triage";
+
+describe("StageResult", () => {
+  it.effect("decodes a tagged triage result with a canonical role and non-empty proposal", () =>
+    Effect.gen(function* () {
+      const result = yield* Schema.decodeUnknownEffect(StageResult)({
+        _tag: "triage",
+        role: "ready-for-agent",
+        proposal: "  Ship the verified fix.  ",
+      });
+
+      assert.isTrue(Schema.is(TriageStageResult)(result));
+      assert.strictEqual(result.role, "ready-for-agent");
+      assert.strictEqual(result.proposal, "Ship the verified fix.");
+    }),
+  );
+
+  it.effect("rejects an empty triage proposal", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        Schema.decodeUnknownEffect(StageResult)({
+          _tag: "triage",
+          role: "ready-for-agent",
+          proposal: "   ",
+        }),
+      );
+
+      assert.strictEqual(error._tag, "SchemaError");
+    }),
+  );
+
+  it.effect("rejects needs-triage as a terminal triage result", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        Schema.decodeUnknownEffect(StageResult)({
+          _tag: "triage",
+          role: "needs-triage",
+          proposal: "Run triage again.",
+        }),
+      );
+
+      assert.strictEqual(error._tag, "SchemaError");
+    }),
+  );
+});
 
 describe("resolvePriority", () => {
   it("maps each canonical name straight through", () => {

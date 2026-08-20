@@ -88,6 +88,7 @@ export const watchWorktreeDiffs = (
         try: () =>
           watchWorkspace(sandbox.handle, {
             root: DEFAULT_WORKSPACE_ROOT,
+            ignore: [".git", "node_modules", ".repos"],
             onEvent: (event) => Queue.offerUnsafe(queue, event),
           }),
         catch: (cause) => toolError("exec-failed", `failed to start file watcher: ${String(cause)}`),

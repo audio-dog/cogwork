@@ -1,4 +1,10 @@
-import { agUiSessionId, HarnessName, SessionId } from "@cogwork/contracts";
+import {
+  agUiSessionId,
+  agUiStructuredOutputComplete,
+  HarnessName,
+  SessionId,
+  TriageStageResult,
+} from "@cogwork/contracts";
 import { type ContextAssembler, type CredentialStore, Harness, type SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
@@ -419,6 +425,41 @@ describe("codexRunner", () => {
       assert.notInclude(capture.args.join(" "), "mcp-secret");
       assert.notInclude(capture.prompt, "mcp-secret");
       assert.notInclude(serializedEvents, "mcp-secret");
+    }),
+  );
+
+  it.live("streams one structured triage result through the native Codex adapter", () =>
+    Effect.gen(function* () {
+      const { handle, harness } = yield* makeLiveHarness();
+      const events = yield* Stream.runCollect(
+        harness.run(
+          makeRequest({
+            checkoutPath: handle.id,
+            session: null,
+            stage: "triage",
+            skill: "triage-agent",
+            prompt: "triage the issue",
+          }),
+        ),
+      );
+      const completions = events.flatMap((event) => {
+        const completion = agUiStructuredOutputComplete(event);
+        return completion === null ? [] : [completion];
+      });
+      assert.lengthOf(completions, 1);
+      const result = yield* Schema.decodeUnknownEffect(TriageStageResult)(completions[0]?.object);
+      const capture = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            args: Schema.Array(Schema.String),
+            prompt: Schema.String,
+          }),
+        ),
+      )(result.proposal);
+      assert.include(capture.args, "--output-schema");
+      assert.include(capture.prompt, "triage the issue");
+      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
     }),
   );
 

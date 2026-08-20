@@ -239,6 +239,8 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             messages: [{ role: "user", content: request.prompt }],
             middleware: [withSandbox(sandbox)],
             ...(handle || request.effort ? { modelOptions } : {}),
+            outputSchema: Harness.stageResultSchema(request.stage),
+            stream: true,
           });
           return withEstimatedUsage(request.prompt.length, bridge(stream));
         }),

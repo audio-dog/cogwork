@@ -3,7 +3,6 @@ import type {
   LifecycleStage,
   McpSkill,
   PlaybookStageConfig,
-  TriageRole,
   WorkspaceConfig,
 } from "@cogwork/contracts";
 
@@ -102,13 +101,6 @@ export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
 export const runnable = (config: WorkspaceConfig, stage: LifecycleStage) =>
   resolveStage(config, stage)?.enabled ?? false;
 
-const decisionRoles: ReadonlyArray<TriageRole> = [
-  "ready-for-agent",
-  "ready-for-human",
-  "needs-info",
-  "wontfix",
-];
-
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
 
@@ -134,11 +126,15 @@ const communicationStyle = [
 const buildPrompt = (
   resolved: ResolvedStage,
   item: PromptItem,
-  footer: string,
+  footer: string | null,
   extra: Record<string, string> = {},
 ) => {
   const values = { id: item.id, title: item.title, skill: resolved.skill, ...extra };
-  return `${fill(resolved.promptTemplate, values)}\n${communicationStyle}\n${fill(footer, values)}`;
+  return [
+    fill(resolved.promptTemplate, values),
+    communicationStyle,
+    ...(footer === null ? [] : [fill(footer, values)]),
+  ].join("\n");
 };
 
 const parseLastSentinel = <A extends string>(pattern: RegExp, valid: ReadonlyArray<A>, text: string) => {
@@ -146,55 +142,8 @@ const parseLastSentinel = <A extends string>(pattern: RegExp, valid: ReadonlyArr
   return valid.find((value) => value === last) ?? null;
 };
 
-const decisionFooter = [
-  "",
-  "When you are done, write your proposal for the maintainer as your final message.",
-  "It will be published verbatim on {id} inside the single comment cogwork keeps there,",
-  "so write it as that comment body.",
-  "End your final message with exactly one line, and nothing after it:",
-  `TRIAGE-DECISION: <${decisionRoles.join(" | ")}>`,
-].join("\n");
-
-const decisionPattern = /TRIAGE-DECISION:\s*([a-z-]+)/gi;
-
 export const buildTriagePrompt = (resolved: ResolvedStage, item: PromptItem) =>
-  buildPrompt(resolved, item, decisionFooter);
-
-export const parseTriageDecision = (text: string) => parseLastSentinel(decisionPattern, decisionRoles, text);
-
-const dispositionPattern = /Disposition\**\s*:\s*\**\s*([a-z-]+)/gi;
-
-export const parseTriageDisposition = (text: string) =>
-  parseLastSentinel(dispositionPattern, decisionRoles, text);
-
-export type TriageDecisionSource = "sentinel" | "disposition" | "default";
-
-export interface TriageDecision {
-  readonly role: TriageRole;
-  readonly source: TriageDecisionSource;
-  readonly sentinel: TriageRole | null;
-  readonly disposition: TriageRole | null;
-}
-
-const decisionSource = (
-  sentinel: TriageRole | null,
-  disposition: TriageRole | null,
-): TriageDecisionSource => {
-  if (sentinel) return "sentinel";
-  if (disposition) return "disposition";
-  return "default";
-};
-
-export const resolveTriageDecision = (text: string): TriageDecision => {
-  const sentinel = parseTriageDecision(text);
-  const disposition = parseTriageDisposition(text);
-  return {
-    sentinel,
-    disposition,
-    source: decisionSource(sentinel, disposition),
-    role: sentinel ?? disposition ?? "ready-for-human",
-  };
-};
+  buildPrompt(resolved, item, null);
 
 export type ImplementResult = "opened-pr" | "stuck";
 

@@ -14,11 +14,14 @@ const capture = JSON.stringify({
   cwd: process.cwd(),
   hasCodexConfig,
 });
+const response = process.argv.includes("--output-schema")
+  ? JSON.stringify({ _tag: "triage", role: "ready-for-agent", proposal: capture })
+  : capture;
 const events = [
   { type: "thread.started", thread_id: "fake-thread-1" },
   {
     type: "item.completed",
-    item: { id: "message-1", type: "agent_message", text: capture },
+    item: { id: "message-1", type: "agent_message", text: response },
   },
   {
     type: "turn.completed",
