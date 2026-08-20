@@ -1,0 +1,22 @@
+packages/engine/src/executor.ts
+  s_7d42045e7090a1::t_7cdb95b65afc72 453-460
+  s_7d42045e7090a1::t_60fc3ae4fe7a8e 452,461
+docs/agent-patterns/effect-control-flow.md
+  s_7d42045e7090a1::t_0f822622c2ce4d 1-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "94c47d3f30b0856819393129c281fd0f14a003ef",
+  "prompts": {},
+  "sessions": {
+    "s_7d42045e7090a1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02042-1803-77c2-9622-5759ee36cd01",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
