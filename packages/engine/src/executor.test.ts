@@ -253,6 +253,14 @@ const followUpWorkspace: RegisteredWorkspace = {
   }),
 };
 
+const codexFollowUpWorkspace: RegisteredWorkspace = {
+  ...followUpWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    ...followUpWorkspace.config,
+    harness: { preferred: "codex" },
+  }),
+};
+
 const followUpItem = {
   id: id("#5"),
   title: "PR follow-up playbook",
@@ -1068,6 +1076,33 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("does not resurrect an older implement session after an interrupted harness switch", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [
+        capturingRunner(requests, implementEvents),
+        capturingRunner(requests, implementEvents, Stream.empty, "opaque-handle", codex),
+        capturingRunner(requests, implementEvents),
+      ]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(codexImplementWorkspace, implementItem);
+        const [latest] = yield* ledger.listRuns(1);
+        assert.isDefined(latest);
+        yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
+
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 3);
+        assert.notStrictEqual(captured[2]?.session, captured[0]?.session);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("resumes an interrupted run with a continuation nudge and its persisted session", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
@@ -1641,6 +1676,37 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured[0]?.session, run?.session);
         assert.strictEqual(captured[1]?.session, run?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("does not resurrect an older follow-up session after an interrupted harness switch", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [
+          capturingRunner(requests, followUpEvents),
+          capturingRunner(requests, followUpEvents, Stream.empty, "opaque-handle", codex),
+          capturingRunner(requests, followUpEvents),
+        ],
+        worktreeStubCreated(false),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* executor.execute(codexFollowUpWorkspace, followUpItem);
+        const [latest] = yield* ledger.listRuns(1);
+        assert.isDefined(latest);
+        yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
+
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 3);
+        assert.notStrictEqual(captured[2]?.session, captured[0]?.session);
       }).pipe(Effect.provide(layer));
     }),
   );

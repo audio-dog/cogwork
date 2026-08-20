@@ -193,13 +193,17 @@ export const make = Effect.gen(function* () {
       harness.sessionKind,
     );
 
+  const latestResumableBranchRun = (workspace: RegisteredWorkspace, branch: string) =>
+    Effect.all([
+      ledger.sessionForBranch(workspace.config.name, branch),
+      ledger.latestRunByBranch(workspace.config.name, branch),
+    ]).pipe(Effect.map(([session, run]) => (session === run?.session ? run : null)));
+
   const candidateSession = (workspace: RegisteredWorkspace, item: EligibleWork, branch: string | null) => {
     const resumedSession = item.resume?.session;
     if (resumedSession) return Effect.succeed(resumedSession);
     if (!branch) return Effect.succeed(null);
-    return ledger
-      .latestRunByBranch(workspace.config.name, branch)
-      .pipe(Effect.map((run) => run?.session ?? null));
+    return latestResumableBranchRun(workspace, branch).pipe(Effect.map((run) => run?.session ?? null));
   };
 
   const compatibleSession = Effect.fn("Executor.compatibleSession")(function* (
@@ -614,7 +618,7 @@ export const make = Effect.gen(function* () {
     prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
-    const last = yield* ledger.latestRunByBranch(workspace.config.name, branch);
+    const last = yield* latestResumableBranchRun(workspace, branch);
     const session = last?.session ? yield* ledger.getSession(last.session) : null;
     const now = yield* Clock.currentTimeMillis;
     const decision = decideResume({
