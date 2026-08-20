@@ -405,7 +405,7 @@ describe("codexRunner", () => {
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness();
       const events = yield* Stream.runCollect(
-        harness.run(makeRequest({ checkoutPath: handle.id, session: null, stage: "follow-up" })),
+        harness.run(makeRequest({ checkoutPath: handle.id, session: null, stage: "verify" })),
       );
       const response = events.find((event) => event.type === "TEXT_MESSAGE_CONTENT")?.delta;
       if (!response) return assert.fail("fake Codex emitted no response");

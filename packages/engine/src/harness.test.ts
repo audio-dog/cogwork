@@ -73,8 +73,36 @@ describe("stageResultSchema", () => {
     }),
   );
 
+  it.effect("prepares the follow-up result as a validating Standard JSON Schema", () =>
+    Effect.gen(function* () {
+      const schema = stageResultSchema("follow-up");
+      if (!schema) return assert.fail("follow-up stage has no result schema");
+
+      const result = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "follow-up",
+            outcome: "pushed",
+            summary: "Fixed the failing check and pushed.",
+          }),
+        ),
+      );
+      assert.isUndefined(result.issues);
+
+      const invalid = yield* Effect.promise(() =>
+        Promise.resolve(
+          schema["~standard"].validate({
+            _tag: "follow-up",
+            outcome: "pushed",
+            summary: " ",
+          }),
+        ),
+      );
+      assert.isDefined(invalid.issues);
+    }),
+  );
+
   it("does not prepare a structured result for stages still using their existing protocols", () => {
-    assert.isUndefined(stageResultSchema("follow-up"));
     assert.isUndefined(stageResultSchema("verify"));
   });
 });

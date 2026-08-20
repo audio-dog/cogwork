@@ -30,7 +30,7 @@ import {
   type HarnessRunner,
   layer as harnessLayer,
 } from "./harness";
-import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
+import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
 import * as RunControl from "./run-control";
@@ -266,20 +266,51 @@ const followUpBranch = branchName(followUpItem);
 const followUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-42"),
-  text("Fixed the failing check and pushed.\nFOLLOWUP-RESULT: pushed"),
+  text("Fixed the failing check and pushed."),
+  structuredComplete(
+    { _tag: "follow-up", outcome: "pushed", summary: "Fixed the failing check and pushed." },
+    '{"_tag":"follow-up","outcome":"pushed","summary":"Fixed the failing check and pushed."}',
+  ),
   finished,
 ];
 
 const noopFollowUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-42"),
-  text("The PR is green and the comment needed no code change.\nFOLLOWUP-RESULT: noop"),
+  text("The PR is green and the comment needed no code change."),
+  structuredComplete(
+    { _tag: "follow-up", outcome: "noop", summary: "The PR is green and needs no code change." },
+    '{"_tag":"follow-up","outcome":"noop","summary":"The PR is green and needs no code change."}',
+  ),
   finished,
 ];
 
 const stuckFollowUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
-  text("The review feedback contradicts the checks; leaving for a human.\nFOLLOWUP-RESULT: stuck"),
+  text("The review feedback contradicts the checks; leaving for a human."),
+  structuredComplete(
+    {
+      _tag: "follow-up",
+      outcome: "stuck",
+      summary: "The review feedback contradicts the checks; leaving for a human.",
+    },
+    '{"_tag":"follow-up","outcome":"stuck","summary":"The review feedback contradicts the checks; leaving for a human."}',
+  ),
+  finished,
+];
+
+const missingFollowUpResultEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  text("Made progress but ran out of turn."),
+  finished,
+];
+
+const malformedFollowUpResultEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  structuredComplete(
+    { _tag: "follow-up", outcome: "pushed", summary: " " },
+    '{"_tag":"follow-up","outcome":"pushed","summary":" "}',
+  ),
   finished,
 ];
 
@@ -287,7 +318,11 @@ const stuckFollowUpEvents: ReadonlyArray<AgUiEvent> = [
 // lives in the run ledger — so these events carry no session id.
 const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
-  text("Fixed the failing check and pushed.\nFOLLOWUP-RESULT: pushed"),
+  text("Fixed the failing check and pushed."),
+  structuredComplete(
+    { _tag: "follow-up", outcome: "pushed", summary: "Fixed the failing check and pushed." },
+    '{"_tag":"follow-up","outcome":"pushed","summary":"Fixed the failing check and pushed."}',
+  ),
   finished,
 ];
 
@@ -437,6 +472,14 @@ const recordingProvider = (posted: Ref.Ref<ReadonlyArray<PostedComment>>): Sourc
   observe: () => Effect.succeed(new Map()),
   comment: (_workspace, item, body) => Ref.update(posted, (xs) => [...xs, { item: item.id, body }]),
 });
+
+const unavailableCommentProvider: SourceControlProviderService = {
+  observe: () => Effect.succeed(new Map()),
+  comment: () =>
+    Effect.fail(
+      new IssueTrackerError({ reason: "unavailable", message: "GitHub comment endpoint unavailable" }),
+    ),
+};
 
 const provide = (
   ws: IssueTrackerService,
@@ -1188,7 +1231,6 @@ describe("Executor.execute", () => {
         const [request] = yield* Ref.get(requests);
         assert.strictEqual(request?.checkoutPath, `/wt/${followUpBranch}`);
         assert.include(request?.prompt ?? "", "follow-up-agent");
-        assert.include(request?.prompt ?? "", "FOLLOWUP-RESULT");
 
         const log = yield* Ref.get(calls);
         const followedUp = log.find((c) => c.method === "followedUp");
@@ -1205,7 +1247,7 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("posts the round summary to the pull request with the result line stripped", () =>
+  it.effect("posts the structured round summary to the pull request", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const posted = yield* Ref.make<ReadonlyArray<PostedComment>>([]);
@@ -1223,7 +1265,29 @@ describe("Executor.execute", () => {
         assert.strictEqual(comment?.item, "#5");
         assert.include(comment?.body ?? "", "Fixed the failing check and pushed");
         assert.include(comment?.body ?? "", "posted by cogwork");
-        assert.notInclude(comment?.body ?? "", "FOLLOWUP-RESULT");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("settles a successful follow-up when posting its pull request summary fails", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(
+        recorder(calls),
+        [runner(followUpEvents)],
+        worktreeStubCreated(false),
+        unavailableCommentProvider,
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const log = yield* Ref.get(calls);
+        assert.isTrue(log.some((call) => call.method === "followedUp"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "succeeded");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1291,6 +1355,50 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.status, "exhausted");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("retries a follow-up with no structured result", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(
+        recorder(calls),
+        [runner(missingFollowUpResultEvents)],
+        worktreeStubCreated(false),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const log = yield* Ref.get(calls);
+        assert.include(
+          log.find((call) => call.method === "attemptFailed")?.reason ?? "",
+          "structured follow-up result",
+        );
+        assert.isFalse(log.some((call) => call.method === "handOff"));
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("retries a follow-up with a malformed structured result", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(
+        recorder(calls),
+        [runner(malformedFollowUpResultEvents)],
+        worktreeStubCreated(false),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const log = yield* Ref.get(calls);
+        assert.include(
+          log.find((call) => call.method === "attemptFailed")?.reason ?? "",
+          "structured follow-up result",
+        );
+        assert.isFalse(log.some((call) => call.method === "handOff"));
       }).pipe(Effect.provide(layer));
     }),
   );

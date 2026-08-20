@@ -1,11 +1,11 @@
 import {
   type AgUiEvent,
   type HarnessName,
-  ImplementStageResult,
   type LifecycleStage,
   type SessionId,
   type SessionKind,
-  TriageStageResult,
+  type StageResultJsonSchema,
+  stageResultJsonSchema,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -20,26 +20,8 @@ import { SessionStore, type SessionStoreService } from "./session-store";
 export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
 
-const triageResultSchema = Schema.toStandardJSONSchemaV1(
-  Schema.toStandardSchemaV1(Schema.Struct(TriageStageResult.fields)),
-);
-const implementResultSchema = Schema.toStandardJSONSchemaV1(
-  Schema.toStandardSchemaV1(Schema.Struct(ImplementStageResult.fields)),
-);
-
-const stageSchemas = {
-  triage: triageResultSchema,
-  implement: implementResultSchema,
-} as const satisfies Partial<
-  Record<LifecycleStage, typeof triageResultSchema | typeof implementResultSchema>
->;
-
-export const stageResultSchema = (stage: LifecycleStage) => {
-  if (stage === "triage") return stageSchemas.triage;
-  if (stage === "implement") return stageSchemas.implement;
-  return undefined;
-};
-export type StageResultSchema = typeof triageResultSchema | typeof implementResultSchema;
+export const stageResultSchema = stageResultJsonSchema;
+export type StageResultSchema = StageResultJsonSchema;
 
 export interface HarnessRequest {
   readonly harness: HarnessName;

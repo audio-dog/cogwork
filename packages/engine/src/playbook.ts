@@ -158,29 +158,7 @@ export const buildContinuationNudge = (worktreePath: string) =>
     "already complete, say COMPLETE and stop.",
   ].join("\n");
 
-export type FollowUpResult = "pushed" | "noop" | "stuck";
-
-const followUpResults: ReadonlyArray<FollowUpResult> = ["pushed", "noop", "stuck"];
-
-const followUpFooter = [
-  "",
-  "End your final message with exactly one line, and nothing after it:",
-  "FOLLOWUP-RESULT: <pushed | noop | stuck>",
-  "Use `pushed` when you pushed a fix to the PR's branch.",
-  "Use `noop` when the PR is already healthy and there is nothing to do — no failing checks, no",
-  "base conflict, and no review feedback that needs a code change. This hands the PR back for review;",
-  "it is not a failure.",
-  "Use `stuck` only when something genuinely blocks you and a human needs to step in.",
-].join("\n");
-
-const followUpResultPattern = /FOLLOWUP-RESULT:\s*([a-z-]+)/gi;
-
 export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem, linearHistory: boolean) =>
-  buildPrompt(resolved, item, followUpFooter, {
+  buildPrompt(resolved, item, null, {
     linearHistory: linearHistory ? "required" : "not required",
   });
-
-export const parseFollowUpResult = (text: string) =>
-  followUpResults.find(
-    (value) => value === [...text.matchAll(followUpResultPattern)].at(-1)?.[1]?.toLowerCase(),
-  ) ?? null;

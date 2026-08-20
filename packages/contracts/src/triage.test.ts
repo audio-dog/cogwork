@@ -3,10 +3,14 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import {
   defaultPriority,
+  FollowUpStageResult,
+  FollowUpStageResultCompletion,
   ImplementStageResult,
   priorityRank,
   resolvePriority,
   StageResult,
+  stageResultCompletionSchema,
+  stageResultJsonSchema,
   TriageStageResult,
 } from "./triage";
 
@@ -82,6 +86,44 @@ describe("StageResult", () => {
       assert.strictEqual(error._tag, "SchemaError");
     }),
   );
+
+  it.effect("decodes a follow-up result with a summary", () =>
+    Effect.gen(function* () {
+      const result = yield* Schema.decodeUnknownEffect(StageResult)({
+        _tag: "follow-up",
+        outcome: "noop",
+        summary: "  Checks already green.  ",
+      });
+
+      assert.isTrue(Schema.is(FollowUpStageResult)(result));
+      if (result._tag !== "follow-up") return assert.fail("expected a follow-up result");
+      assert.strictEqual(result.outcome, "noop");
+      assert.strictEqual(result.summary, "Checks already green.");
+    }),
+  );
+
+  it.effect("decodes a structured follow-up completion through the shared schema", () =>
+    Effect.gen(function* () {
+      const completion = yield* Schema.decodeUnknownEffect(FollowUpStageResultCompletion)({
+        raw: '{"_tag":"follow-up","outcome":"pushed","summary":"Fixed it."}',
+        object: {
+          _tag: "follow-up",
+          outcome: "pushed",
+          summary: "Fixed it.",
+        },
+      });
+
+      assert.strictEqual(completion.object._tag, "follow-up");
+      assert.strictEqual(completion.object.outcome, "pushed");
+    }),
+  );
+
+  it("returns shared stage-result schemas for follow-up and leaves verify without one", () => {
+    assert.isDefined(stageResultJsonSchema("follow-up"));
+    assert.strictEqual(stageResultJsonSchema("verify"), undefined);
+    assert.strictEqual(stageResultCompletionSchema("follow-up"), FollowUpStageResultCompletion);
+    assert.strictEqual(stageResultCompletionSchema("verify"), undefined);
+  });
 });
 
 describe("resolvePriority", () => {

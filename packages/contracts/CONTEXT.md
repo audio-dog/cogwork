@@ -131,7 +131,7 @@ The input handed to a harness for one run: which harness, the checkout path, the
 _Avoid_: Prompt (that's one field), job
 
 **Stage result**:
-The tagged, Effect-Schema-defined value a lifecycle stage returns through the harness stream. The shared kernel owns each stage's schema; triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal. Prose remains ordinary streamed output and is never parsed as a stage result.
+The tagged, Effect-Schema-defined value a lifecycle stage returns through the harness stream. The shared kernel owns each stage's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary. Prose remains ordinary streamed output and is never parsed as a stage result.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Playbook skill**:

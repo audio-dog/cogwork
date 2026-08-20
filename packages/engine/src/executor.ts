@@ -1,13 +1,13 @@
 import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
-  agUiTextDelta,
   agUiUsage,
-  ImplementStageResult,
+  type FollowUpStageResult,
+  type ImplementStageResult,
   RunId,
-  StructuredOutputCompleteValue,
   sessionHandle,
-  TriageStageResult,
+  stageResultCompletionSchema,
+  type TriageStageResult,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -20,13 +20,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
-import {
-  agentFailureReason,
-  followUpNoteBody,
-  handoffNote,
-  prepareFailureReason,
-  triageProposalBody,
-} from "./comments";
+import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
@@ -38,7 +32,6 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
-  parseFollowUpResult,
   type ResolvedStage,
   resolveStage,
 } from "./playbook";
@@ -55,7 +48,6 @@ import type { WorktreeFsError } from "./worktree-fs";
 type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError;
 
 interface RunAccumulator {
-  readonly text: string;
   readonly handle: string | null;
   readonly usage: TokenUsage | null;
   readonly structuredOutputs: ReadonlyArray<unknown>;
@@ -67,7 +59,6 @@ interface TriageAccumulator extends RunAccumulator {
 }
 
 const emptyAccumulator: RunAccumulator = {
-  text: "",
   handle: null,
   usage: null,
   structuredOutputs: [],
@@ -127,7 +118,6 @@ const appendStructuredOutput = (acc: Pick<RunAccumulator, "structuredOutputs">, 
 };
 
 const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator => ({
-  text: acc.text + agUiTextDelta(event),
   handle,
   usage: agUiUsage(event) ?? acc.usage,
   structuredOutputs: appendStructuredOutput(acc, event),
@@ -369,25 +359,32 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const structuredTriageError = (message: string) =>
+  const structuredResultError = (message: string) =>
     new HarnessError({ reason: "turn", retryable: true, message });
 
-  const TriageCompletion = Schema.Struct({
-    ...StructuredOutputCompleteValue.fields,
-    object: TriageStageResult,
-  });
-
-  const decodeTriageResult = Effect.fn("Executor.decodeTriageResult")(function* (acc: TriageAccumulator) {
+  const decodeStageResult = Effect.fn("Executor.decodeStageResult")(function* (
+    stage: LifecycleStage,
+    acc: Pick<RunAccumulator, "structuredOutputs">,
+  ) {
     if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredTriageError(
-        `expected exactly one structured triage result, received ${acc.structuredOutputs.length}`,
+      return yield* structuredResultError(
+        `expected exactly one structured ${stage} result, received ${acc.structuredOutputs.length}`,
       );
     }
-    const completion = yield* Schema.decodeUnknownEffect(TriageCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredTriageError(`invalid structured triage result: ${error.message}`)),
+    const schema = stageResultCompletionSchema(stage);
+    if (!schema) {
+      return yield* structuredResultError(`structured ${stage} result has no shared schema`);
+    }
+    const completion = yield* Schema.decodeUnknownEffect(schema)(acc.structuredOutputs[0]).pipe(
+      Effect.mapError((error) =>
+        structuredResultError(`invalid structured ${stage} result: ${error.message}`),
+      ),
     );
     return completion.object;
   });
+
+  const decodeTriageResult = (acc: TriageAccumulator) =>
+    decodeStageResult("triage", acc).pipe(Effect.map((result) => result as TriageStageResult));
 
   const completeTriage = Effect.fn("Executor.completeTriage")(function* (
     workspace: RegisteredWorkspace,
@@ -426,24 +423,8 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const ImplementCompletion = Schema.Struct({
-    ...StructuredOutputCompleteValue.fields,
-    object: ImplementStageResult,
-  });
-
-  const decodeImplementResult = Effect.fn("Executor.decodeImplementResult")(function* (acc: RunAccumulator) {
-    if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredTriageError(
-        `expected exactly one structured implement result, received ${acc.structuredOutputs.length}`,
-      );
-    }
-    const completion = yield* Schema.decodeUnknownEffect(ImplementCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) =>
-        structuredTriageError(`invalid structured implement result: ${error.message}`),
-      ),
-    );
-    return completion.object;
-  });
+  const decodeImplementResult = (acc: RunAccumulator) =>
+    decodeStageResult("implement", acc).pipe(Effect.map((result) => result as ImplementStageResult));
 
   const completeImplement = Effect.fn("Executor.completeImplement")(function* (
     workspace: RegisteredWorkspace,
@@ -524,19 +505,16 @@ export const make = Effect.gen(function* () {
     baseDivergence: context.baseDivergence,
   });
 
-  // The engine — not the agent — posts the round summary to the PR, and the provider appends the
-  // coordination marker. A failed post must not strand the follow-up marker or spin a retry, so it
-  // degrades to a warning rather than failing the round.
   const postFollowUpSummary = Effect.fn("Executor.postFollowUpSummary")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    acc: RunAccumulator,
+    summary: string,
   ) {
     yield* sourceControl
-      .comment(workspace, { id: item.id, title: item.title }, followUpNoteBody(acc.text))
+      .comment(workspace, { id: item.id, title: item.title }, followUpNoteBody(summary))
       .pipe(
         Effect.catchTag("IssueTrackerError", (error) =>
-          Effect.logWarning("failed to post follow-up summary to the pull request", {
+          Effect.logWarning("follow-up summary comment failed", {
             workspace: workspace.config.name,
             item: item.id,
             message: error.message,
@@ -551,9 +529,10 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     acc: RunAccumulator,
     context: FollowUpContext,
+    result: FollowUpStageResult,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
-    yield* postFollowUpSummary(workspace, item, acc);
+    yield* postFollowUpSummary(workspace, item, result.summary);
     yield* issueTracker.followedUp(workspace, item.id, {
       marker: followUpMarker(context),
       atMillis: endedAtMillis,
@@ -565,6 +544,9 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const decodeFollowUpResult = (acc: RunAccumulator) =>
+    decodeStageResult("follow-up", acc).pipe(Effect.map((result) => result as FollowUpStageResult));
+
   const completeFollowUp = Effect.fn("Executor.completeFollowUp")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -572,12 +554,16 @@ export const make = Effect.gen(function* () {
     acc: RunAccumulator,
     context: FollowUpContext,
   ) {
-    const result = parseFollowUpResult(acc.text);
-    if (result === "pushed" || result === "noop") {
-      return yield* applyFollowUpSuccess(workspace, item, runId, acc, context);
-    }
-    const reason = agentFailureReason(acc.text, result === "stuck" ? "stuck" : "missing-sentinel");
-    return yield* applyFailure(workspace, item, runId, result !== "stuck", reason, acc.handle);
+    return yield* decodeFollowUpResult(acc).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          applyFailure(workspace, item, runId, error.retryable, error.message, acc.handle),
+        onSuccess: (result) =>
+          result.outcome === "stuck"
+            ? applyFailure(workspace, item, runId, false, result.summary, acc.handle)
+            : applyFollowUpSuccess(workspace, item, runId, acc, context, result),
+      }),
+    );
   });
 
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
