@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_26550afb701170::t_ca6aa307e936dd 108-109
+  s_26550afb701170::t_0b556d97fde471 121-122
+  s_26550afb701170::t_c04fd9f93078a7 432-433
+  s_26550afb701170::t_f1ab4e7dd1355d 144-155
+  s_26550afb701170::t_891474ac89e219 688
+  s_26550afb701170::t_56c1cad275d7a9 414,417
+  s_26550afb701170::t_63800447c9ea1e 57-58,63-64
+  s_26550afb701170::t_19e29c263f410f 391-392,396
+  s_26550afb701170::t_9745317754421b 441
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "78ad90cf126b307043cb986777ee99e41ad9f04f",
+  "prompts": {},
+  "sessions": {
+    "s_26550afb701170": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f7d1cff8-4717-4011-8dbc-dd8f9cd62d20",
+        "model": "composer-2.5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
