@@ -1,0 +1,34 @@
+packages/engine/src/executor.ts
+  s_fb91f8fbc47908::t_b9a163a1762f40 708,710
+  s_fb91f8fbc47908::t_0a8462d2c49bef 207,212,214,688
+  s_fb91f8fbc47908::t_6be795ba8c0655 195-200,213,721
+  s_fb91f8fbc47908::t_d8829182a9d0d6 722-723,739-748,750
+  s_fb91f8fbc47908::t_fdc4b496d2cca0 201-206,720,724
+packages/engine/src/executor.test.ts
+  s_fb91f8fbc47908::t_d8829182a9d0d6 781,1537,1588
+  s_fb91f8fbc47908::t_cb6667360c149f 1517-1536,1538-1545
+  s_fb91f8fbc47908::t_4636437712b0da 954,1510,1587,1589-1590
+  s_fb91f8fbc47908::t_78108c49f2b76c 1187-1194,1238-1242
+  s_fb91f8fbc47908::t_027e8bf4d47ba7 1176-1186,1195-1237,1243-1262
+packages/codex-cli/src/harness.test.ts
+  s_fb91f8fbc47908::t_2aaff6be3e593f 541,543
+  s_fb91f8fbc47908::t_1436da971384f2 540,542,545
+  s_fb91f8fbc47908::t_615b574e055e7e 535
+  s_fb91f8fbc47908::t_ee487157bf42cd 544
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "604731131a532602e8b7dd0ff0491ecb0bdeba5f",
+  "prompts": {},
+  "sessions": {
+    "s_fb91f8fbc47908": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02090-a11c-7352-afeb-894cab89b93b",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
