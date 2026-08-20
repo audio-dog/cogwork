@@ -16,6 +16,7 @@ Use this to explore APIs, find usage examples, and understand implementations fo
 When Effect v4 behavior or types are unclear, don't guess from Effect v3 memory —
 grep the real source in `.repos/effect` (e.g. `packages/effect/src`).
 The repo also contains agent-specific rules and guidance to follow in various markdown files.
+The repo also contains effect-specific examples at `docs/agent-patterns`, follow those where applicable.
 
 You must always invoke the /effect-ts skill when writing Effect code.
 
