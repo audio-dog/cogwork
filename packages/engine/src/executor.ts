@@ -364,7 +364,7 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const structuredTriageError = (message: string) =>
+  const structuredResultError = (message: string) =>
     new HarnessError({ reason: "turn", retryable: true, message });
 
   const TriageCompletion = Schema.Struct({
@@ -374,12 +374,12 @@ export const make = Effect.gen(function* () {
 
   const decodeTriageResult = Effect.fn("Executor.decodeTriageResult")(function* (acc: TriageAccumulator) {
     if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredTriageError(
+      return yield* structuredResultError(
         `expected exactly one structured triage result, received ${acc.structuredOutputs.length}`,
       );
     }
     const completion = yield* Schema.decodeUnknownEffect(TriageCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredTriageError(`invalid structured triage result: ${error.message}`)),
+      Effect.mapError((error) => structuredResultError(`invalid structured triage result: ${error.message}`)),
     );
     return completion.object;
   });
@@ -428,12 +428,12 @@ export const make = Effect.gen(function* () {
 
   const decodeImplementResult = Effect.fn("Executor.decodeImplementResult")(function* (acc: RunAccumulator) {
     if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredTriageError(
+      return yield* structuredResultError(
         `expected exactly one structured implement result, received ${acc.structuredOutputs.length}`,
       );
     }
     const completion = yield* Schema.decodeUnknownEffect(ImplementCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredTriageError(`invalid structured implement result: ${error.message}`)),
+      Effect.mapError((error) => structuredResultError(`invalid structured implement result: ${error.message}`)),
     );
     return completion.object;
   });
@@ -553,12 +553,12 @@ export const make = Effect.gen(function* () {
 
   const decodeFollowUpResult = Effect.fn("Executor.decodeFollowUpResult")(function* (acc: RunAccumulator) {
     if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredTriageError(
+      return yield* structuredResultError(
         `expected exactly one structured follow-up result, received ${acc.structuredOutputs.length}`,
       );
     }
     const completion = yield* Schema.decodeUnknownEffect(FollowUpCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredTriageError(`invalid structured follow-up result: ${error.message}`)),
+      Effect.mapError((error) => structuredResultError(`invalid structured follow-up result: ${error.message}`)),
     );
     return completion.object;
   });
