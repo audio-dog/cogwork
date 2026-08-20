@@ -1,0 +1,20 @@
+packages/engine/CONTEXT.md
+  s_d017a4ce5fc611::t_4d719873a0b34d 61
+  s_d017a4ce5fc611::t_f02320da4d47f4 69,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "e7deec2b41a41b8eb57c3f8b448161642840e4d2",
+  "prompts": {},
+  "sessions": {
+    "s_d017a4ce5fc611": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01fe3-df10-71a1-aeba-16bb614c8697",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,27 @@
+packages/contracts/CONTEXT.md
+  s_d017a4ce5fc611::t_f02320da4d47f4 129-132
+packages/contracts/src/triage.ts
+  s_d017a4ce5fc611::t_082b90cf7a9404 2,16-22
+  s_d017a4ce5fc611::t_6e80b0b0c7194a 23
+packages/contracts/src/triage.test.ts
+  s_d017a4ce5fc611::t_aa9f2410772685 2-3
+  s_d017a4ce5fc611::t_dcdb75daf0ee02 4
+  s_d017a4ce5fc611::t_8f1704f44fe3f4 15
+  s_d017a4ce5fc611::t_5cbf8ae967c50f 5-14,16-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "ca72586f645af350217991facec9c945efd5ced5",
+  "prompts": {},
+  "sessions": {
+    "s_d017a4ce5fc611": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01fe3-df10-71a1-aeba-16bb614c8697",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+packages/cursor-acp/src/harness.test.ts
+  s_d017a4ce5fc611::t_f85315e23e7bce 24-25,75,95,102
+  s_d017a4ce5fc611::t_e3b2a7931cef53 5,78,90
+  s_d017a4ce5fc611::t_dcdb75daf0ee02 2-3,12,134-135
+  s_d017a4ce5fc611::t_d68d1e5d2ca8bf 26-32,79-89,91-94,96-101,103-133,136-140
+packages/cursor-acp/package.json
+  s_d017a4ce5fc611::t_f85315e23e7bce 31
+  s_d017a4ce5fc611::t_aae4bb114fd373 32
+packages/engine/src/provider-runner.ts
+  s_d017a4ce5fc611::t_3209d332e0904f 23-29,50,64-65,164
+packages/codex-cli/src/harness.ts
+  s_d017a4ce5fc611::t_3209d332e0904f 35,48-49,210
+packages/engine/src/provider-runner.test.ts
+  s_d017a4ce5fc611::t_2e356e38cf86f6 54-66,196-207,209-215,218-221
+  s_d017a4ce5fc611::t_dcdb75daf0ee02 208,216-217
+  s_d017a4ce5fc611::t_fd21f0b20ad3de 222-223
+packages/codex-cli/src/harness.test.ts
+  s_d017a4ce5fc611::t_dcdb75daf0ee02 196-197
+  s_d017a4ce5fc611::t_5381a71fc8d42c 80-92,178-195,198-200
+  s_d017a4ce5fc611::t_52bdde5032685b 201-203
+packages/cursor-acp/src/harness.ts
+  s_d017a4ce5fc611::t_dcdb75daf0ee02 4
+  s_d017a4ce5fc611::t_3209d332e0904f 5,36,39-58,230,260,265
+pnpm-lock.yaml
+  s_d017a4ce5fc611::t_3d4259e85d14f7 344-349
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "ccd5119cce24a245ed5aa82e4bb5efdc77e37649",
+  "prompts": {},
+  "sessions": {
+    "s_d017a4ce5fc611": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01fe3-df10-71a1-aeba-16bb614c8697",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

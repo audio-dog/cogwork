@@ -1,0 +1,36 @@
+packages/engine/src/comments.test.ts
+  s_d017a4ce5fc611::t_02c221065ae763 139
+packages/engine/src/playbook.test.ts
+  s_d017a4ce5fc611::t_af15c36055d39a 223,228
+packages/engine/src/playbook.ts
+  s_d017a4ce5fc611::t_af15c36055d39a 129,133-137,146
+packages/engine/src/comments.ts
+  s_d017a4ce5fc611::t_02c221065ae763 7
+  s_d017a4ce5fc611::t_dcdb75daf0ee02 44
+packages/engine/skills/triage-agent/SKILL.md
+  s_d017a4ce5fc611::t_b04486990ba10b 12,81,83
+packages/engine/src/executor.ts
+  s_d017a4ce5fc611::t_7e0cc76a294175 25,313-314
+  s_d017a4ce5fc611::t_dcdb75daf0ee02 2,311
+  s_d017a4ce5fc611::t_7dfd2591c6e708 9,54,57-62,95-106,112,293,297-298,308-310,312,315-341,403
+packages/engine/src/executor.test.ts
+  s_d017a4ce5fc611::t_79b7903888c068 500,503-507,509,512,514,519-524
+  s_d017a4ce5fc611::t_460aed61d680d9 508,510-511
+  s_d017a4ce5fc611::t_ba976c7ae41a36 95-101,393-401,486,489,494-495,525-542,967
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "a45fe948692aa65cae4d7616977e46a96a977eaa",
+  "prompts": {},
+  "sessions": {
+    "s_d017a4ce5fc611": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01fe3-df10-71a1-aeba-16bb614c8697",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
