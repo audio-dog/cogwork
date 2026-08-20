@@ -1,4 +1,10 @@
-import { agUiSessionId, HarnessName, SessionId } from "@cogwork/contracts";
+import {
+  agUiSessionId,
+  agUiStructuredOutputComplete,
+  HarnessName,
+  SessionId,
+  TriageStageResult,
+} from "@cogwork/contracts";
 import { type ContextAssembler, type CredentialStore, Harness, type SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
@@ -73,19 +79,6 @@ const chunks: ReadonlyArray<StreamChunk> = [
     messageId: "message-1",
     content: "done",
     role: "tool",
-  },
-  { type: EventType.RUN_FINISHED, runId: "run-1", threadId: "thread-123" },
-];
-
-const triageChunks: ReadonlyArray<StreamChunk> = [
-  { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "message-1", delta: "still streaming" },
-  {
-    type: EventType.CUSTOM,
-    name: "structured-output.complete",
-    value: {
-      object: { _tag: "triage", role: "ready-for-agent", proposal: "Verified and ready." },
-      raw: '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}',
-    },
   },
   { type: EventType.RUN_FINISHED, runId: "run-1", threadId: "thread-123" },
 ];
@@ -172,32 +165,6 @@ describe("codexRunner", () => {
           assert.deepStrictEqual(Reflect.get(event, key), value);
         });
       });
-    }),
-  );
-
-  it.effect("streams triage through the harness interface with one prepared structured result", () =>
-    Effect.gen(function* () {
-      const calls: Array<CodexRunChatOptions> = [];
-      const runner = codexRunner({
-        name,
-        runChat: (options) => {
-          calls.push(options);
-          return toAsyncIterable(triageChunks);
-        },
-      });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
-
-      const events = yield* Stream.runCollect(
-        harness.run(makeRequest({ stage: "triage", prompt: "triage the issue" })),
-      );
-
-      assert.isDefined(calls[0]?.outputSchema);
-      assert.strictEqual(
-        events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")
-          .length,
-        1,
-      );
-      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
     }),
   );
 
@@ -458,6 +425,41 @@ describe("codexRunner", () => {
       assert.notInclude(capture.args.join(" "), "mcp-secret");
       assert.notInclude(capture.prompt, "mcp-secret");
       assert.notInclude(serializedEvents, "mcp-secret");
+    }),
+  );
+
+  it.live("streams one structured triage result through the native Codex adapter", () =>
+    Effect.gen(function* () {
+      const { handle, harness } = yield* makeLiveHarness();
+      const events = yield* Stream.runCollect(
+        harness.run(
+          makeRequest({
+            checkoutPath: handle.id,
+            session: null,
+            stage: "triage",
+            skill: "triage-agent",
+            prompt: "triage the issue",
+          }),
+        ),
+      );
+      const completions = events.flatMap((event) => {
+        const completion = agUiStructuredOutputComplete(event);
+        return completion === null ? [] : [completion];
+      });
+      assert.lengthOf(completions, 1);
+      const result = yield* Schema.decodeUnknownEffect(TriageStageResult)(completions[0]?.object);
+      const capture = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(
+          Schema.Struct({
+            args: Schema.Array(Schema.String),
+            prompt: Schema.String,
+          }),
+        ),
+      )(result.proposal);
+      assert.include(capture.args, "--output-schema");
+      assert.include(capture.prompt, "triage the issue");
+      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
     }),
   );
 

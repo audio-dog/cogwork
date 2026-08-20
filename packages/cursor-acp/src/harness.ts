@@ -1,8 +1,7 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
 import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
 import { Harness, SessionStore } from "@cogwork/engine";
-import { type ChatMiddleware, chat, EventType, type ModelMessage, type StreamChunk } from "@tanstack/ai";
-import type { AnyTextAdapter } from "@tanstack/ai/adapters";
+import { chat, EventType, type StreamChunk } from "@tanstack/ai";
 import {
   type AcpHarnessContext,
   type AcpJsonRpcStream,
@@ -33,28 +32,7 @@ export interface CursorRunnerOptions {
   readonly defaultModel?: string;
   readonly scrubEnv?: ReadonlyArray<string>;
   readonly authMethodId?: string;
-  readonly runChat?: CursorRunChat;
 }
-
-export interface CursorRunChatOptions {
-  readonly adapter: AnyTextAdapter;
-  readonly messages: ReadonlyArray<ModelMessage>;
-  readonly middleware: ReadonlyArray<ChatMiddleware>;
-  readonly modelOptions?: CursorModelOptions;
-  readonly outputSchema?: Harness.StageResultSchema;
-}
-
-export type CursorRunChat = (options: CursorRunChatOptions) => AsyncIterable<StreamChunk>;
-
-const defaultRunChat: CursorRunChat = (options) =>
-  chat({
-    adapter: options.adapter,
-    messages: [...options.messages],
-    middleware: [...options.middleware],
-    modelOptions: options.modelOptions,
-    outputSchema: options.outputSchema,
-    stream: true,
-  });
 
 type CursorModelOptions = {
   readonly sessionId?: string;
@@ -227,7 +205,6 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   const defaultModel = options.defaultModel ?? "auto";
   const scrubEnv = [...(options.scrubEnv ?? ["GITHUB_TOKEN", "GH_TOKEN"])];
   const authMethodId = options.authMethodId ?? "cursor_login";
-  const runChat = options.runChat ?? defaultRunChat;
   return {
     name: options.name,
     sessionKind: "opaque-handle",
@@ -257,12 +234,13 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             }),
           });
           const modelOptions = cursorModelOptions(handle, request.effort);
-          const stream = runChat({
+          const stream = chat({
             adapter: adapter(model),
             messages: [{ role: "user", content: request.prompt }],
             middleware: [withSandbox(sandbox)],
             ...(handle || request.effort ? { modelOptions } : {}),
             outputSchema: Harness.stageResultSchema(request.stage),
+            stream: true,
           });
           return withEstimatedUsage(request.prompt.length, bridge(stream));
         }),
