@@ -175,7 +175,11 @@ const implementBranch = branchName(implementItem);
 const implementStreamEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-42"),
-  text("Opened PR #99, Closes #15.\nIMPLEMENT-RESULT: opened-pr"),
+  text("Opened PR #99, Closes #15."),
+  structuredComplete(
+    { _tag: "implement", outcome: "opened-pr", summary: "Opened PR #99, Closes #15." },
+    '{"_tag":"implement","outcome":"opened-pr","summary":"Opened PR #99, Closes #15."}',
+  ),
 ];
 
 const implementFinished: AgUiEvent = finished;
@@ -185,13 +189,21 @@ const implementEvents: ReadonlyArray<AgUiEvent> = [...implementStreamEvents, imp
 const resumedImplementEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-prev"),
-  text("Picked up where I left off.\nIMPLEMENT-RESULT: opened-pr"),
+  text("Picked up where I left off."),
+  structuredComplete(
+    { _tag: "implement", outcome: "opened-pr", summary: "Opened PR #99." },
+    '{"_tag":"implement","outcome":"opened-pr","summary":"Opened PR #99."}',
+  ),
   implementFinished,
 ];
 
 const stuckImplementEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
-  text("The brief contradicts itself; leaving for a human.\nIMPLEMENT-RESULT: stuck"),
+  text("The brief contradicts itself; leaving for a human."),
+  structuredComplete(
+    { _tag: "implement", outcome: "stuck", summary: "The brief contradicts itself." },
+    '{"_tag":"implement","outcome":"stuck","summary":"The brief contradicts itself."}',
+  ),
   finished,
 ];
 
@@ -205,10 +217,19 @@ const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
     ),
 });
 
-const noSentinelImplementEvents: ReadonlyArray<AgUiEvent> = [
+const missingImplementResultEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-42"),
   text("Made progress but ran out of turn before opening a PR."),
+  finished,
+];
+
+const malformedImplementResultEvents: ReadonlyArray<AgUiEvent> = [
+  runStarted,
+  structuredComplete(
+    { _tag: "implement", outcome: "opened-pr", summary: " " },
+    '{"_tag":"implement","outcome":"opened-pr","summary":" "}',
+  ),
   finished,
 ];
 
@@ -955,7 +976,7 @@ describe("Executor.execute", () => {
         assert.strictEqual(full?.session, previousSession);
         assert.strictEqual(full?.checkoutPath, `/wt/${implementBranch}`);
         assert.include(full?.prompt ?? "", "implement-agent");
-        assert.include(full?.prompt ?? "", "IMPLEMENT-RESULT");
+        assert.notInclude(full?.prompt ?? "", "IMPLEMENT-RESULT");
         assert.notInclude(full?.prompt ?? "", "You were interrupted part-way through");
 
         const log = yield* Ref.get(calls);
@@ -1128,6 +1149,22 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.status, "exhausted");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("retries an implement run with a malformed structured result", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const layer = provide(recorder(calls), [runner(malformedImplementResultEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const log = yield* Ref.get(calls);
+        assert.isFalse(log.some((call) => call.method === "implemented"));
+        assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured implement result");
+        assert.isFalse(log.some((call) => call.method === "handOff"));
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1352,11 +1389,11 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("retries a sentinel-less implement run and resumes its session on the next attempt", () =>
+  it.effect("retries an implement run with no structured result and resumes its session on the next attempt", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
-      const layer = provide(recorder(calls), [capturingRunner(requests, noSentinelImplementEvents)]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, missingImplementResultEvents)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
         yield* executor.execute(implementWorkspace, implementItem);
@@ -1364,7 +1401,7 @@ describe("Executor.execute", () => {
         const log = yield* Ref.get(calls);
         const attempt = log.find((c) => c.method === "attemptFailed");
         assert.strictEqual(attempt?.stage, "implement");
-        assert.include(attempt?.reason ?? "", "agent produced no result line");
+        assert.include(attempt?.reason ?? "", "structured implement result");
         assert.isFalse(log.some((c) => c.method === "handOff"));
 
         const ledger = yield* RunLedger.RunLedger;
