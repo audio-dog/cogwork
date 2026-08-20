@@ -1,0 +1,21 @@
+.codex/environments/environment.toml
+  s_06ad067c843d4d::t_17ddea0ed40af4 7
+  s_06ad067c843d4d::t_36d1e9d6390225 6
+  s_06ad067c843d4d::t_32fa7abeb7da6a 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "0be343650a23240d6647b69bc2e7ca3b7043bc87",
+  "prompts": {},
+  "sessions": {
+    "s_06ad067c843d4d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02039-ac10-7960-a0b3-f56eb8beabf1",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
