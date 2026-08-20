@@ -1,0 +1,22 @@
+docs/agent-patterns/effect-control-flow.md
+  s_811cea661fbf9d::t_f56149e3d24ff6 25-57,144
+  s_811cea661fbf9d::t_37ede412523ff5 3,143
+AGENTS.md
+  s_811cea661fbf9d::t_f56149e3d24ff6 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "112caef681ad3d43060e5d59137361fe063b3209",
+  "prompts": {},
+  "sessions": {
+    "s_811cea661fbf9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a020d1-0ed2-7d13-ae49-2c50ecbd4811",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
