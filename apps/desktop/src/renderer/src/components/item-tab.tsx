@@ -104,7 +104,7 @@ function ItemTabProvider({
   attempts: readonly RunSummary[];
   children: ReactNode;
 }) {
-  const [subTab, setSubTab] = useState<SubTabKey>("main");
+  const [subTab, setSubTab] = useState<SubTabKey>(run?.status === "running" ? "run" : "main");
   const [triageRole, setTriageRole] = useState<TriageRole>("ready-for-agent");
   const [triageNote, setTriageNote] = useState("");
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
@@ -526,6 +526,14 @@ function PreviousAttempts() {
                       {relativeTime(attempt.endedAtMillis ?? attempt.startedAtMillis, now)}
                     </span>
                   </div>
+                  <Collapsible>
+                    <CollapsibleTrigger className="w-fit cursor-pointer text-muted-foreground hover:text-foreground">
+                      Show transcript
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2 h-96 rounded-md border">
+                      <RunDrillIn run={attempt} />
+                    </CollapsibleContent>
+                  </Collapsible>
                 </li>
               );
             })}
@@ -606,18 +614,29 @@ function LiveRunBody() {
       <SubTabBody>
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No run yet</EmptyTitle>
-            <EmptyDescription>The agent hasn't started a run for this item.</EmptyDescription>
+            <EmptyTitle>No live run</EmptyTitle>
+            <EmptyDescription>The latest completed run is shown below.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       </SubTabBody>
     );
   }
-  return (
-    <SubTabBody>
-      <RunDrillIn run={run} />
-    </SubTabBody>
-  );
+  if (run.status !== "running") {
+    return (
+      <SubTabBody>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No live run</EmptyTitle>
+            <EmptyDescription>The latest completed run is shown below.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+        <div className="h-96 rounded-md border">
+          <RunDrillIn run={run} />
+        </div>
+      </SubTabBody>
+    );
+  }
+  return <RunDrillIn run={run} />;
 }
 
 function PullRequestBody({ pr }: { pr: PrSummary }) {
