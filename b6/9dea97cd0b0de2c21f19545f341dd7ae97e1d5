@@ -1,0 +1,20 @@
+docs/research/desktop-settings-storage-updates.md
+  s_338bed3385d614::t_14d60b73c26cb7 25,62
+  s_338bed3385d614::t_a06cea70095864 1-24,26-61,63-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "b69dea97cd0b0de2c21f19545f341dd7ae97e1d5",
+  "prompts": {},
+  "sessions": {
+    "s_338bed3385d614": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02117-ca3b-7623-b2c6-a8d7e05df440",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
