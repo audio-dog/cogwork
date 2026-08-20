@@ -30,6 +30,12 @@ When you create or change any UI element:
   usage to match this repo (`@remixicon/react`, alias `@cogwork/ui`).
 - **Use semantic tokens** (`bg-background`, `text-muted-foreground`, `bg-primary`) — never raw
   colors. `className` is for layout, not for restyling primitives.
+- **Compose variant styles with `cn()`, not lookup maps.** When an element's classes change by
+  state (tone, outcome, active tab), put the shared base classes on the element and add each
+  variant's classes as explicit `cn()` branches — duplicate the class strings per branch so you
+  can see what applies where. Do not hoist variant class strings into `Record<Variant, string>`
+  maps; Tailwind's own guidance treats that as the readable pattern for conditional styling.
+  See [Reusing Styles](https://v3.tailwindcss.com/docs/reusing-styles).
 
 Both `components.json` files are already wired for this: `apps/desktop` points its `ui` alias at
 `@cogwork/ui`, and `packages/ui` keeps primitives local.

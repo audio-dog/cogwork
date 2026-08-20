@@ -34,6 +34,8 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@react-hookz/web": "^26.1.0",
     "@remixicon/react": "^4.9.0",
+    "@tanstack/highlight": "^0.0.10",
+    "@tanstack/markdown": "^0.0.13",
     "@tanstack/react-router": "^1.170.25",
     "effect": "catalog:effect",
     "electron-log": "^5.2.0",

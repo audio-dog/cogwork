@@ -154,6 +154,12 @@ importers:
       '@remixicon/react':
         specifier: ^4.9.0
         version: 4.9.0(react@19.2.8)
+      '@tanstack/highlight':
+        specifier: ^0.0.10
+        version: 0.0.10
+      '@tanstack/markdown':
+        specifier: ^0.0.13
+        version: 0.0.13(react@19.2.8)
       '@tanstack/react-router':
         specifier: ^1.170.25
         version: 1.170.25(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -1841,9 +1847,24 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
+  '@tanstack/highlight@0.0.10':
+    resolution: {integrity: sha512-RNWn4BYgroDnHSdWduHVUN3hXM5OZUVwynuY2Fwh4el2hVy0woe9XZBZ5IIxC50h1y8SEYkBipS+cPgdzRc7Zg==}
+    engines: {node: '>=18'}
+
   '@tanstack/history@1.162.1':
     resolution: {integrity: sha512-DR9t6lfLVdrjgCwpglrR9DR7Ok8/HlXjcOE+goWXF3zyuLUO/ug7vMbSFxTqrQTtbRghJfyhmIZ0S6LhPIy44w==}
     engines: {node: '>=20.19'}
+
+  '@tanstack/markdown@0.0.13':
+    resolution: {integrity: sha512-ZSQP2ulBvlPzdpZeRheBJnaELo7e4ET/D/XrfgweHyqhhLMN5vUJJAUl7ufSRd7GlfO/vwdzjKPh0E0JwqJkDA==}
+    peerDependencies:
+      octane: '>=0.1.12'
+      react: '>=18'
+    peerDependenciesMeta:
+      octane:
+        optional: true
+      react:
+        optional: true
 
   '@tanstack/openai-base@0.9.12':
     resolution: {integrity: sha512-UZwt+3O2WYQ4rWHc95EfIPFFIlWsZQncNZlyw05tpuogwWoR+9xtPot+uPbx6tGr/XX+/vPwQn0jVljBD1zppQ==}
@@ -6135,7 +6156,13 @@ snapshots:
 
   '@tanstack/devtools-event-client@0.4.4': {}
 
+  '@tanstack/highlight@0.0.10': {}
+
   '@tanstack/history@1.162.1': {}
+
+  '@tanstack/markdown@0.0.13(react@19.2.8)':
+    optionalDependencies:
+      react: 19.2.8
 
   '@tanstack/openai-base@0.9.12(@tanstack/ai@0.44.0(@opentelemetry/api@1.9.1)(zod@4.4.3))(ws@8.21.1)(zod@4.4.3)':
     dependencies:
