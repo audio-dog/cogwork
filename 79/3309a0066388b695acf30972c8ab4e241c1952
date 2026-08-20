@@ -1,0 +1,21 @@
+packages/engine/src/playbook.ts
+  s_7d42045e7090a1::t_dc493492a8260f 143-148,150
+packages/engine/src/playbook.test.ts
+  s_7d42045e7090a1::t_9af90f1a94e83c 208-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "793309a0066388b695acf30972c8ab4e241c1952",
+  "prompts": {},
+  "sessions": {
+    "s_7d42045e7090a1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02042-1803-77c2-9622-5759ee36cd01",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
