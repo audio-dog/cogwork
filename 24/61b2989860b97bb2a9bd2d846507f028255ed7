@@ -1,0 +1,23 @@
+packages/engine/src/run-ledger.ts
+  s_811cea661fbf9d::t_f8dea26bcb85a4 80
+packages/engine/src/run-ledger.test.ts
+  s_811cea661fbf9d::t_9fc4b937b9d30c 25
+  s_811cea661fbf9d::t_aae75400b8409a 148-160
+  s_811cea661fbf9d::t_3645589fa365bf 147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "2461b2989860b97bb2a9bd2d846507f028255ed7",
+  "prompts": {},
+  "sessions": {
+    "s_811cea661fbf9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a020d1-0ed2-7d13-ae49-2c50ecbd4811",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
