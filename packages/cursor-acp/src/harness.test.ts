@@ -1,13 +1,15 @@
 import { type AgUiEvent, agUiUsage, HarnessName } from "@cogwork/contracts";
-import type { Harness } from "@cogwork/engine";
+import { Harness, type SessionStore } from "@cogwork/engine";
+import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
+import { memoryPersistence } from "@tanstack/ai-persistence";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { assert, describe, it } from "vitest";
 import {
+  type CursorRunChatOptions,
   cursorModelOptions,
   cursorRunner,
   estimatedUsage,
@@ -18,6 +20,15 @@ import {
 
 const collect = (stream: Stream.Stream<AgUiEvent, Harness.HarnessError>) =>
   Effect.runPromise(Stream.runCollect(stream));
+
+const cursorName = Schema.decodeSync(HarnessName)("cursor");
+
+const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => {
+  const iterator = items[Symbol.iterator]();
+  return {
+    [Symbol.asyncIterator]: (): AsyncIterator<A> => ({ next: () => Promise.resolve(iterator.next()) }),
+  };
+};
 
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
@@ -61,9 +72,72 @@ describe("mcpWorkspaceProjection", () => {
 
 describe("cursorRunner", () => {
   it("declares the opaque-handle session kind", () => {
-    const runner = cursorRunner({ name: Schema.decodeSync(HarnessName)("cursor") });
+    const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
   });
+
+  it.effect("streams triage through the harness interface with one prepared structured result", () =>
+    Effect.gen(function* () {
+      const calls: Array<CursorRunChatOptions> = [];
+      const chunks: ReadonlyArray<StreamChunk> = [
+        { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "still streaming" },
+        {
+          type: EventType.CUSTOM,
+          name: "structured-output.complete",
+          value: {
+            object: { _tag: "triage", role: "ready-for-agent", proposal: "Verified and ready." },
+            raw: '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}',
+          },
+        },
+        { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" },
+      ];
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: (options) => {
+          calls.push(options);
+          return toAsyncIterable(chunks);
+        },
+      });
+      const request: Harness.HarnessRequest = {
+        harness: cursorName,
+        stage: "triage",
+        skill: "triage-agent",
+        checkoutPath: "/repo",
+        session: null,
+        prompt: "triage the issue",
+        model: "auto",
+        effort: null,
+        mcpSkills: [],
+      };
+      const store: SessionStore.SessionStoreService = {
+        persistence: memoryPersistence(),
+        resumeHandle: () => Effect.succeed(null),
+        mint: () => Effect.die(new Error("unexpected mint")),
+      };
+      const unexpected = () => Effect.die(new Error("unexpected service access"));
+      const harness = Harness.make([runner], {
+        sessionStore: store,
+        contextAssembler: { assemble: unexpected },
+        credentialStore: {
+          bearerToken: unexpected,
+          persist: unexpected,
+          invalidate: unexpected,
+          providerKey: unexpected,
+          persistProviderKey: unexpected,
+        },
+      });
+
+      const events = yield* Stream.runCollect(harness.run(request));
+
+      assert.isDefined(calls[0]?.outputSchema);
+      assert.strictEqual(
+        events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")
+          .length,
+        1,
+      );
+      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+    }),
+  );
 });
 
 describe("cursorModelOptions", () => {

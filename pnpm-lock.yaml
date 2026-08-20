@@ -341,6 +341,12 @@ importers:
         specifier: catalog:effect
         version: 4.0.0-rc.110
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:effect
+        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)))
+      '@tanstack/ai-persistence':
+        specifier: 'catalog:'
+        version: 0.2.0(@tanstack/ai@0.46.0(@opentelemetry/api@1.9.1)(zod@4.4.3))(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)))
       gpt-tokenizer:
         specifier: ^4.0.0
         version: 4.0.0

@@ -77,6 +77,19 @@ const chunks: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, runId: "run-1", threadId: "thread-123" },
 ];
 
+const triageChunks: ReadonlyArray<StreamChunk> = [
+  { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "message-1", delta: "still streaming" },
+  {
+    type: EventType.CUSTOM,
+    name: "structured-output.complete",
+    value: {
+      object: { _tag: "triage", role: "ready-for-agent", proposal: "Verified and ready." },
+      raw: '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}',
+    },
+  },
+  { type: EventType.RUN_FINISHED, runId: "run-1", threadId: "thread-123" },
+];
+
 const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => ({
   [Symbol.asyncIterator]: () => {
     const iterator = items[Symbol.iterator]();
@@ -159,6 +172,32 @@ describe("codexRunner", () => {
           assert.deepStrictEqual(Reflect.get(event, key), value);
         });
       });
+    }),
+  );
+
+  it.effect("streams triage through the harness interface with one prepared structured result", () =>
+    Effect.gen(function* () {
+      const calls: Array<CodexRunChatOptions> = [];
+      const runner = codexRunner({
+        name,
+        runChat: (options) => {
+          calls.push(options);
+          return toAsyncIterable(triageChunks);
+        },
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+
+      const events = yield* Stream.runCollect(
+        harness.run(makeRequest({ stage: "triage", prompt: "triage the issue" })),
+      );
+
+      assert.isDefined(calls[0]?.outputSchema);
+      assert.strictEqual(
+        events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")
+          .length,
+        1,
+      );
+      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
     }),
   );
 

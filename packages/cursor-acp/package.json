@@ -28,6 +28,8 @@
     "effect": "catalog:effect"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:effect",
+    "@tanstack/ai-persistence": "catalog:",
     "gpt-tokenizer": "^4.0.0",
     "typescript": "catalog:",
     "vitest": "catalog:"

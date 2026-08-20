@@ -51,6 +51,19 @@ const scriptedChunks: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" },
 ];
 
+const structuredTriageChunks: ReadonlyArray<StreamChunk> = [
+  { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "still streaming" },
+  {
+    type: EventType.CUSTOM,
+    name: "structured-output.complete",
+    value: {
+      object: { _tag: "triage", role: "ready-for-agent", proposal: "Verified and ready." },
+      raw: '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}',
+    },
+  },
+  { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" },
+];
+
 const unexpected = () => Effect.die(new Error("credential store method not expected in this test"));
 
 const credentialStore = (providerKey: CredentialStoreService["providerKey"]): CredentialStoreService => ({
@@ -178,6 +191,34 @@ describe("providerRunner", () => {
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "chat-persistence"));
       }),
     30000,
+  );
+
+  it.live("streams triage through the harness interface with one prepared structured result", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const calls: Array<RunChatOptions> = [];
+      const runner = providerRunner({
+        name: harnessName,
+        runChat: (options) => {
+          calls.push(options);
+          return toAsyncIterable(structuredTriageChunks);
+        },
+      });
+
+      const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
+        Effect.provide(
+          Layer.mergeAll(contextLayer([sampleLayer]), credentialLayer(keyProvider), sessionLayer([])),
+        ),
+      );
+
+      assert.isDefined(calls[0]?.outputSchema);
+      assert.strictEqual(
+        events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")
+          .length,
+        1,
+      );
+      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+    }),
   );
 
   it.effect("fails with a launch error when the model has no wired provider", () =>

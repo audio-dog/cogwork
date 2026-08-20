@@ -32,6 +32,7 @@ export interface CodexRunChatOptions {
   readonly middleware: ReadonlyArray<ChatMiddleware>;
   readonly abortController: AbortController;
   readonly modelOptions: CodexTextProviderOptions;
+  readonly outputSchema?: Harness.StageResultSchema;
 }
 
 export type CodexRunChat = (options: CodexRunChatOptions) => AsyncIterable<StreamChunk>;
@@ -44,6 +45,8 @@ const defaultRunChat: CodexRunChat = (options) =>
     middleware: [...options.middleware],
     abortController: options.abortController,
     modelOptions: options.modelOptions,
+    outputSchema: options.outputSchema,
+    stream: true,
   });
 
 export const codexRuntimeConfig = (effort: CodexEffort): CodexTextConfig => ({
@@ -204,6 +207,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
             middleware: [withSandbox(sandbox)],
             abortController,
             modelOptions: codexModelOptions(handle, effort),
+            outputSchema: Harness.stageResultSchema(request.stage),
           });
           return HarnessBridge.bridgeChat(stream).pipe(
             Stream.mapError(classifyTurnError),
