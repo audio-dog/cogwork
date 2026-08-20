@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
+    "@cogwork/codex-cli": "workspace:*",
     "@cogwork/cursor-acp": "workspace:*",
     "@cogwork/engine": "workspace:*",
     "@effect/opentelemetry": "catalog:effect",
