@@ -114,16 +114,24 @@ _Avoid_: Failed (a real, still-retryable attempt), exhausted (the terminal failu
 A coding agent (Cursor, Claude Code, …) the control plane drives to do work in a checkout, identified by a branded `HarnessName`. A harness bundles its own model access and tools.
 _Avoid_: Model, provider, target (that word belongs to sync)
 
+**Harness-owned authentication**:
+The credentials an external CLI harness owns and resolves from its host installation, such as a Codex CLI `codex login`. Cogwork selects and launches the harness but does not copy, store, refresh, or fall back from those credentials.
+_Avoid_: Provider key, Cogwork login, harness fallback
+
+**Harness execution boundary**:
+The sandbox, approval mode, and native tools an external CLI harness enforces inside its agent loop. Cogwork chooses that boundary when it launches the harness, but its owned-tool policy cannot intercept native shell or file operations inside Cursor or Codex. An unattended harness must use a non-interactive approval mode and remain bounded to its worktree; full host access is not an unattended default.
+_Avoid_: Owned tool policy, provider sandbox, fallback
+
 **Harness request**:
 The input handed to a harness for one run: which harness, the checkout path, the prompt, an optional model, an optional harness-native effort level, an optional session to resume, and the MCP skills to provision. Secret material (e.g. an MCP skill's bearer token) rides a channel that is never persisted or logged, not a plain field.
 _Avoid_: Prompt (that's one field), job
 
 **Playbook skill**:
-The coding playbook's named `SKILL.md` capability for a lifecycle stage (e.g. `triage-agent`). The engine owns loading it for the provider harness runner; CLI harnesses still resolve the name themselves. Distinct from an MCP skill.
+The coding playbook's named `SKILL.md` capability for a lifecycle stage (e.g. `triage-agent`). It is a required engine input: every harness runner receives the assembled playbook instructions and their provisioned resource path instead of relying on ambient harness discovery. Distinct from an MCP skill.
 _Avoid_: Skill (alone), MCP skill, agent skill (TanStack Intent authoring docs)
 
 **MCP skill**:
-An external MCP server the engine provisions onto a run so the harness can call its tools — named and configured (endpoint + auth) by the engine, not by the harness. The engine assembles the set for a run; the harness runner projects each into the harness's native MCP channel (for an ACP harness like Cursor, the `newSession` `mcpServers` field — no config file is written; a file-based harness would instead get an `--mcp-config`). Read-only where the server offers a read-only endpoint. The name follows TanStack AI's `mcpSkill`; it is the first kind of engine-provisioned run capability.
+An external MCP server the engine provisions onto a run so the harness can call its tools — named and configured (endpoint + auth) by the engine, not by the harness. The engine assembles the set for a run; the harness runner projects each into the harness's native MCP channel. Secret values travel only through a secret or environment channel, never through a generated worktree config or command argument. Read-only where the server offers a read-only endpoint. The name follows TanStack AI's `mcpSkill`; it is the first kind of engine-provisioned run capability.
 _Avoid_: MCP server, playbook skill, tool (one server exposes many), harness tool (the harness's own built-ins), plugin, provider skill (Anthropic/OpenAI hosted sandbox bundles)
 
 **Harness event**:

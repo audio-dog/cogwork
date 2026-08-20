@@ -74,7 +74,7 @@ The envelope the executor hands the harness for one run: the checkout path, the 
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
-The engine's dispatcher — given a harness request, it routes to the registered harness runner by name, and provides the `SessionStore` a runner pulls history through. It also exposes `sessionKind(name)`: the declared kind for a harness, read straight off the runner registry (an unregistered name falls back to opaque-handle, since its run fails at dispatch anyway). This is the one place kind lookup lives — no separate harness-to-kind map. Knows nothing about any specific agent.
+The engine's dispatcher — given a harness request, it routes to the registered harness runner by name and provides the runner services for session and context access. It also exposes `sessionKind(name)`: the declared kind for a harness, read straight off the runner registry (an unregistered name falls back to opaque-handle, since its run fails at dispatch anyway). This is the one place kind lookup lives — no separate harness-to-kind map. Knows nothing about any specific agent.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
@@ -86,7 +86,7 @@ Turns a workspace's configured MCP skills into the resolved set a run gets, fill
 _Avoid_: MCP server, credential store (it delegates to that, it is not that), context assembler (that builds instruction layers, not MCP capabilities)
 
 **Context assembler**:
-Builds the layered instruction set for one turn of the provider harness runner — global, then repo, then playbook. Returns structured layers the runner renders into model system prompts; does not run for CLI harnesses.
+Builds the required layered instruction set for one harness turn — global, then repo, then playbook — and provisions the playbook's resource directory outside the worktree. Every runner renders this output into its native instruction channel; ambient CLI discovery may add optional context but never replaces the required playbook.
 _Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP skill assembler
 
 **Instruction layer**:
