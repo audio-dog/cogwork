@@ -1,0 +1,32 @@
+packages/engine/src/executor.test.ts
+  s_7f3142d385b312::t_3f8cb2c96340b9 443-446,448
+  s_7f3142d385b312::t_6469436a500984 441,449,1244,1249,1256
+  s_7f3142d385b312::t_3ceba7bd5c9411 33,442,450,1241-1243,1245-1248,1250-1255,1257-1262
+  s_7f3142d385b312::t_98be5c4b139552 447
+  s_7f3142d385b312::t_9f854d3e2f0a1e 1263-1265
+  s_fb91f8fbc47908::t_b5982804620bfe 1266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "3ce4077658a6c6188bce1fd2aa8d8d6f015d31af",
+  "prompts": {},
+  "sessions": {
+    "s_7f3142d385b312": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0208d-353e-7823-9997-778bd00bff3a",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_fb91f8fbc47908": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02090-a11c-7352-afeb-894cab89b93b",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
