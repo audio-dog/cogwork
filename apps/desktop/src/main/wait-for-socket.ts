@@ -1,39 +1,16 @@
-import * as fs from "node:fs";
-import { dirname } from "node:path";
+import { scheduler } from "node:timers/promises";
 import { isDaemonListening } from "./socket-probe";
 
-export const waitForDaemonListening = (socketPath: string, signal: AbortSignal): Promise<boolean> =>
-  new Promise<boolean>((resolve) => {
-    if (signal.aborted) {
-      resolve(false);
-      return;
-    }
+const PROBE_INTERVAL_MILLIS = 50;
 
-    const state: { settled: boolean; watcher: fs.FSWatcher | null } = { settled: false, watcher: null };
+export const waitForDaemonListening = async (socketPath: string, signal: AbortSignal): Promise<boolean> => {
+  if (signal.aborted) return false;
+  const listening = await isDaemonListening(socketPath);
+  if (signal.aborted) return false;
+  if (listening) return true;
 
-    const settle = (listening: boolean): void => {
-      if (state.settled) return;
-      state.settled = true;
-      state.watcher?.close();
-      signal.removeEventListener("abort", onAbort);
-      resolve(listening);
-    };
-
-    function onAbort(): void {
-      settle(false);
-    }
-
-    const check = (): void => {
-      if (state.settled) return;
-      void isDaemonListening(socketPath).then((listening) => {
-        if (listening) settle(true);
-      });
-    };
-
-    signal.addEventListener("abort", onAbort, { once: true });
-
-    fs.mkdirSync(dirname(socketPath), { recursive: true });
-    state.watcher = fs.watch(dirname(socketPath), () => check());
-    state.watcher.on("error", () => settle(false));
-    check();
-  });
+  return scheduler.wait(PROBE_INTERVAL_MILLIS, { signal }).then(
+    () => waitForDaemonListening(socketPath, signal),
+    () => false,
+  );
+};
