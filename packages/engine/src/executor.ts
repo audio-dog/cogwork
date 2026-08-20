@@ -1,13 +1,13 @@
 import type { LifecycleStage, RunRecord, SessionId, TokenUsage } from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
-  FollowUpStageResult,
   agUiUsage,
-  ImplementStageResult,
+  type FollowUpStageResult,
+  type ImplementStageResult,
   RunId,
-  StructuredOutputCompleteValue,
   sessionHandle,
-  TriageStageResult,
+  stageResultCompletionSchema,
+  type TriageStageResult,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -20,12 +20,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
-import {
-  followUpNoteBody,
-  handoffNote,
-  prepareFailureReason,
-  triageProposalBody,
-} from "./comments";
+import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
@@ -367,22 +362,29 @@ export const make = Effect.gen(function* () {
   const structuredResultError = (message: string) =>
     new HarnessError({ reason: "turn", retryable: true, message });
 
-  const TriageCompletion = Schema.Struct({
-    ...StructuredOutputCompleteValue.fields,
-    object: TriageStageResult,
-  });
-
-  const decodeTriageResult = Effect.fn("Executor.decodeTriageResult")(function* (acc: TriageAccumulator) {
+  const decodeStageResult = Effect.fn("Executor.decodeStageResult")(function* (
+    stage: LifecycleStage,
+    acc: Pick<RunAccumulator, "structuredOutputs">,
+  ) {
     if (acc.structuredOutputs.length !== 1) {
       return yield* structuredResultError(
-        `expected exactly one structured triage result, received ${acc.structuredOutputs.length}`,
+        `expected exactly one structured ${stage} result, received ${acc.structuredOutputs.length}`,
       );
     }
-    const completion = yield* Schema.decodeUnknownEffect(TriageCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredResultError(`invalid structured triage result: ${error.message}`)),
+    const schema = stageResultCompletionSchema(stage);
+    if (!schema) {
+      return yield* structuredResultError(`structured ${stage} result has no shared schema`);
+    }
+    const completion = yield* Schema.decodeUnknownEffect(schema)(acc.structuredOutputs[0]).pipe(
+      Effect.mapError((error) =>
+        structuredResultError(`invalid structured ${stage} result: ${error.message}`),
+      ),
     );
     return completion.object;
   });
+
+  const decodeTriageResult = (acc: TriageAccumulator) =>
+    decodeStageResult("triage", acc).pipe(Effect.map((result) => result as TriageStageResult));
 
   const completeTriage = Effect.fn("Executor.completeTriage")(function* (
     workspace: RegisteredWorkspace,
@@ -421,22 +423,8 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const ImplementCompletion = Schema.Struct({
-    ...StructuredOutputCompleteValue.fields,
-    object: ImplementStageResult,
-  });
-
-  const decodeImplementResult = Effect.fn("Executor.decodeImplementResult")(function* (acc: RunAccumulator) {
-    if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredResultError(
-        `expected exactly one structured implement result, received ${acc.structuredOutputs.length}`,
-      );
-    }
-    const completion = yield* Schema.decodeUnknownEffect(ImplementCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredResultError(`invalid structured implement result: ${error.message}`)),
-    );
-    return completion.object;
-  });
+  const decodeImplementResult = (acc: RunAccumulator) =>
+    decodeStageResult("implement", acc).pipe(Effect.map((result) => result as ImplementStageResult));
 
   const completeImplement = Effect.fn("Executor.completeImplement")(function* (
     workspace: RegisteredWorkspace,
@@ -546,22 +534,8 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const FollowUpCompletion = Schema.Struct({
-    ...StructuredOutputCompleteValue.fields,
-    object: FollowUpStageResult,
-  });
-
-  const decodeFollowUpResult = Effect.fn("Executor.decodeFollowUpResult")(function* (acc: RunAccumulator) {
-    if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredResultError(
-        `expected exactly one structured follow-up result, received ${acc.structuredOutputs.length}`,
-      );
-    }
-    const completion = yield* Schema.decodeUnknownEffect(FollowUpCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredResultError(`invalid structured follow-up result: ${error.message}`)),
-    );
-    return completion.object;
-  });
+  const decodeFollowUpResult = (acc: RunAccumulator) =>
+    decodeStageResult("follow-up", acc).pipe(Effect.map((result) => result as FollowUpStageResult));
 
   const completeFollowUp = Effect.fn("Executor.completeFollowUp")(function* (
     workspace: RegisteredWorkspace,
@@ -572,7 +546,8 @@ export const make = Effect.gen(function* () {
   ) {
     return yield* decodeFollowUpResult(acc).pipe(
       Effect.matchEffect({
-        onFailure: (error) => applyFailure(workspace, item, runId, error.retryable, error.message, acc.handle),
+        onFailure: (error) =>
+          applyFailure(workspace, item, runId, error.retryable, error.message, acc.handle),
         onSuccess: (result) =>
           result.outcome === "stuck"
             ? applyFailure(workspace, item, runId, false, result.summary, acc.handle)
