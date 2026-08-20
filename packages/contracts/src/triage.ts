@@ -34,7 +34,15 @@ export class ImplementStageResult extends Schema.TaggedClass<ImplementStageResul
   summary: TrimmedNonEmptyString,
 }) {}
 
-export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult]);
+export const FollowUpResultOutcome = Schema.Literals(["pushed", "noop", "stuck"]);
+export type FollowUpResultOutcome = typeof FollowUpResultOutcome.Type;
+
+export class FollowUpStageResult extends Schema.TaggedClass<FollowUpStageResult>()("follow-up", {
+  outcome: FollowUpResultOutcome,
+  summary: TrimmedNonEmptyString,
+}) {}
+
+export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult, FollowUpStageResult]);
 export type StageResult = typeof StageResult.Type;
 
 export const NeedsHumanReason = Schema.Literals(["needs-info", "ready-for-human"]);
