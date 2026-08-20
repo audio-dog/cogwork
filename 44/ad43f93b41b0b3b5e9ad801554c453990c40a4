@@ -1,0 +1,14 @@
+AGENTS.md
+  h_46518a29d4dd91 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "44ad43f93b41b0b3b5e9ad801554c453990c40a4",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
