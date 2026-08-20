@@ -11,6 +11,7 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -93,6 +94,8 @@ interface TextStageOps extends CommonStageOps {
 }
 
 type StageOps = TriageStageOps | TextStageOps;
+
+class SessionRestarted extends Data.TaggedError("SessionRestarted")<Record<string, never>> {}
 
 const defaultFollowUp: FollowUpContext = {
   checks: "pending",
@@ -289,24 +292,31 @@ export const make = Effect.gen(function* () {
 
   const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
-      ? Effect.fail(
+      ? Effect.fail(new SessionRestarted({}))
+      : Effect.succeed(next);
+
+  const rejectedResume = (record: RunRecord) =>
+    recorder.record(record, failedTerminal).pipe(
+      Effect.andThen(
+        Effect.fail(
           new HarnessError({
             reason: "turn",
             retryable: true,
             message: "harness restarted instead of resuming its session",
           }),
-        )
-      : Effect.succeed(next);
+        ),
+      ),
+    );
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
     foldStream(request, emptyAccumulator, (acc, event) =>
       foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
-    );
+    ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
     foldStream(request, emptyTriageAccumulator, (acc, event) =>
       foldTriageEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
-    );
+    ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
     record: RunRecord,

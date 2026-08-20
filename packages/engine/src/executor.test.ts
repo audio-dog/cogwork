@@ -1151,6 +1151,7 @@ describe("Executor.execute", () => {
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
         assert.strictEqual(run?.status, "failed");
+        assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1183,6 +1184,7 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.status, "failed");
+        assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
       }).pipe(Effect.provide(layer));
     }),
   );
