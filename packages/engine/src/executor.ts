@@ -130,15 +130,12 @@ const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null
   usage: agUiUsage(event) ?? acc.usage,
 });
 
-const mergeTriageEvent = (
-  acc: TriageAccumulator,
-  event: AgUiEvent,
-  handle: string | null,
-): TriageAccumulator => ({
-  ...mergeEvent(acc, event, handle),
-  structuredOutputs: appendStructuredOutput(acc, event),
-  deferredTerminal: acc.deferredTerminal,
-});
+const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: string | null) =>
+  ({
+    ...mergeEvent(acc, event, handle),
+    structuredOutputs: appendStructuredOutput(acc, event),
+    deferredTerminal: acc.deferredTerminal,
+  }) satisfies TriageAccumulator;
 
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 const successfulTerminal = (event: AgUiEvent) =>

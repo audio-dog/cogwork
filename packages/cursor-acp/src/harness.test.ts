@@ -43,17 +43,18 @@ const harnessServices: Harness.HarnessRunnerServices = {
   },
 };
 
-const request = (checkoutPath: string): Harness.HarnessRequest => ({
-  harness: cursorName,
-  stage: "triage",
-  skill: "triage-agent",
-  checkoutPath,
-  session: null,
-  prompt: "triage the issue",
-  model: "auto",
-  effort: null,
-  mcpSkills: [],
-});
+const request = (checkoutPath: string) =>
+  ({
+    harness: cursorName,
+    stage: "triage",
+    skill: "triage-agent",
+    checkoutPath,
+    session: null,
+    prompt: "triage the issue",
+    model: "auto",
+    effort: null,
+    mcpSkills: [],
+  }) satisfies Harness.HarnessRequest;
 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
