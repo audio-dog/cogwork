@@ -11,7 +11,6 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -78,7 +77,6 @@ interface CommonStageOps {
   readonly resolved: ResolvedStage;
   readonly branch: string | null;
   readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
-  readonly fullPrompt: string;
   readonly resume: boolean;
   readonly resumePolicy: boolean;
 }
@@ -94,13 +92,6 @@ interface TextStageOps extends CommonStageOps {
 }
 
 type StageOps = TriageStageOps | TextStageOps;
-
-class SessionRestarted extends Data.TaggedError("SessionRestarted")<Record<string, never>> {}
-
-const withFullPrompt = (request: HarnessRequest, prompt: string): HarnessRequest => ({
-  ...request,
-  prompt,
-});
 
 const defaultFollowUp: FollowUpContext = {
   checks: "pending",
@@ -288,7 +279,13 @@ export const make = Effect.gen(function* () {
 
   const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
-      ? Effect.fail(new SessionRestarted({}))
+      ? Effect.fail(
+          new HarnessError({
+            reason: "turn",
+            retryable: true,
+            message: "harness restarted instead of resuming its session",
+          }),
+        )
       : Effect.succeed(next);
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
@@ -308,9 +305,7 @@ export const make = Effect.gen(function* () {
   ) {
     const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
     if (!expected) return yield* foldRun(record, request);
-    return yield* foldResume(record, request, expected).pipe(
-      Effect.catchTag("SessionRestarted", () => foldRun(record, withFullPrompt(request, ops.fullPrompt))),
-    );
+    return yield* foldResume(record, request, expected);
   });
 
   const foldTriageOutcome = Effect.fn("Executor.foldTriageOutcome")(function* (
@@ -320,11 +315,7 @@ export const make = Effect.gen(function* () {
   ) {
     const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
     if (!expected) return yield* foldTriageRun(record, request);
-    return yield* foldTriageResume(record, request, expected).pipe(
-      Effect.catchTag("SessionRestarted", () =>
-        foldTriageRun(record, withFullPrompt(request, ops.fullPrompt)),
-      ),
-    );
+    return yield* foldTriageResume(record, request, expected);
   });
 
   const applyFailure = Effect.fn("Executor.applyFailure")(function* (
@@ -502,7 +493,6 @@ export const make = Effect.gen(function* () {
         item.stage,
       ),
       complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
-      fullPrompt,
       resume: false,
       resumePolicy: false,
     } satisfies StageOps;
@@ -517,7 +507,6 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareImplement(workspace, item, resolved, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
-      fullPrompt,
       resume: false,
       resumePolicy: false,
     } satisfies StageOps;
@@ -635,7 +624,6 @@ export const make = Effect.gen(function* () {
       branch,
       prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
-      fullPrompt,
       resume: false,
       resumePolicy: true,
     } satisfies StageOps;

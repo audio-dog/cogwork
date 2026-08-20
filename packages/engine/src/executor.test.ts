@@ -1110,6 +1110,9 @@ describe("Executor.execute", () => {
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.notInclude(request?.prompt ?? "", "just been resumed");
 
+        const callsAfterRun = yield* Ref.get(calls);
+        assert.isFalse(callsAfterRun.some((call) => call.method === "attemptFailed"));
+
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(run?.session, request?.session);
@@ -1117,7 +1120,7 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("delivers the full stage prompt when a resumed run silently starts a fresh session", () =>
+  it.effect("fails a resumed implement run when the harness rejects its session", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
@@ -1132,36 +1135,25 @@ describe("Executor.execute", () => {
         yield* executor.execute(implementWorkspace, resumeItem);
 
         const captured = yield* Ref.get(requests);
-        assert.strictEqual(captured.length, 2);
+        assert.strictEqual(captured.length, 1);
 
-        const [nudge, full] = captured;
+        const [nudge] = captured;
         assert.strictEqual(nudge?.session, previousSession);
         assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
 
-        assert.strictEqual(full?.session, previousSession);
-        assert.strictEqual(full?.checkoutPath, `/wt/${implementBranch}`);
-        assert.include(full?.prompt ?? "", "implement-agent");
-        assert.notInclude(full?.prompt ?? "", "IMPLEMENT-RESULT");
-        assert.notInclude(full?.prompt ?? "", "You were interrupted part-way through");
-
         const log = yield* Ref.get(calls);
-        assert.isTrue(log.some((c) => c.method === "implemented"));
+        assert.isTrue(log.some((c) => c.method === "attemptFailed"));
+        assert.isFalse(log.some((c) => c.method === "implemented"));
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
-        assert.strictEqual(run?.status, "succeeded");
-
-        const events = run ? yield* ledger.events(run.id) : [];
-        assert.deepStrictEqual(
-          events.map((e) => e.seq),
-          events.map((_, i) => i),
-        );
+        assert.strictEqual(run?.status, "failed");
       }).pipe(Effect.provide(layer));
     }),
   );
 
-  it.effect("delivers the full triage prompt when a resumed triage run starts a fresh session", () =>
+  it.effect("fails a resumed triage run when the harness rejects its session", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
@@ -1176,28 +1168,19 @@ describe("Executor.execute", () => {
         yield* executor.execute(workspace, resumeItem);
 
         const captured = yield* Ref.get(requests);
-        assert.strictEqual(captured.length, 2);
+        assert.strictEqual(captured.length, 1);
 
-        const [nudge, full] = captured;
+        const [nudge] = captured;
         assert.strictEqual(nudge?.session, previousSession);
         assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
 
-        assert.strictEqual(full?.session, previousSession);
-        assert.strictEqual(full?.checkoutPath, "/repos/gh");
-        assert.include(full?.prompt ?? "", "triage-agent");
-        assert.notInclude(full?.prompt ?? "", "TRIAGE-DECISION");
-        assert.notInclude(full?.prompt ?? "", "You were interrupted part-way through");
-
         const log = yield* Ref.get(calls);
-        assert.strictEqual(log.find((c) => c.method === "triaged")?.role, "ready-for-agent");
+        assert.isTrue(log.some((c) => c.method === "attemptFailed"));
+        assert.isFalse(log.some((c) => c.method === "triaged"));
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        const events = run ? yield* ledger.events(run.id) : [];
-        assert.deepStrictEqual(
-          events.map((e) => e.seq),
-          events.map((_, i) => i),
-        );
+        assert.strictEqual(run?.status, "failed");
       }).pipe(Effect.provide(layer));
     }),
   );
