@@ -1,6 +1,7 @@
 import {
   type AgUiEvent,
   type HarnessName,
+  FollowUpStageResult,
   ImplementStageResult,
   type LifecycleStage,
   type SessionId,
@@ -26,20 +27,28 @@ const triageResultSchema = Schema.toStandardJSONSchemaV1(
 const implementResultSchema = Schema.toStandardJSONSchemaV1(
   Schema.toStandardSchemaV1(Schema.Struct(ImplementStageResult.fields)),
 );
+const followUpResultSchema = Schema.toStandardJSONSchemaV1(
+  Schema.toStandardSchemaV1(Schema.Struct(FollowUpStageResult.fields)),
+);
 
 const stageSchemas = {
   triage: triageResultSchema,
   implement: implementResultSchema,
+  "follow-up": followUpResultSchema,
 } as const satisfies Partial<
-  Record<LifecycleStage, typeof triageResultSchema | typeof implementResultSchema>
+  Record<LifecycleStage, typeof triageResultSchema | typeof implementResultSchema | typeof followUpResultSchema>
 >;
 
 export const stageResultSchema = (stage: LifecycleStage) => {
   if (stage === "triage") return stageSchemas.triage;
   if (stage === "implement") return stageSchemas.implement;
+  if (stage === "follow-up") return stageSchemas["follow-up"];
   return undefined;
 };
-export type StageResultSchema = typeof triageResultSchema | typeof implementResultSchema;
+export type StageResultSchema =
+  | typeof triageResultSchema
+  | typeof implementResultSchema
+  | typeof followUpResultSchema;
 
 export interface HarnessRequest {
   readonly harness: HarnessName;
