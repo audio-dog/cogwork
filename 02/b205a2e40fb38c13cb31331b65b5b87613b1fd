@@ -1,0 +1,20 @@
+docs/research/agent-capability-product-models.md
+  s_338bed3385d614::t_17af89f6ce95df 108,307
+  s_338bed3385d614::t_eabe451e2e5228 1-107,109-306,308-331
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "02b205a2e40fb38c13cb31331b65b5b87613b1fd",
+  "prompts": {},
+  "sessions": {
+    "s_338bed3385d614": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02117-ca3b-7623-b2c6-a8d7e05df440",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
