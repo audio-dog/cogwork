@@ -1,0 +1,22 @@
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_d2b84c25d31dc7::t_ef3900f77325d0 1-2,7-15,18-23,26-30,32-34,36-70
+  s_d2b84c25d31dc7::t_04c8a33a1d82f8 3-6
+apps/desktop/src/main/wait-for-socket.ts
+  s_d2b84c25d31dc7::t_68164e87790175 8-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "1b81d917b27fef6b99c2c626ceaf7cd4a061a52b",
+  "prompts": {},
+  "sessions": {
+    "s_d2b84c25d31dc7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02151-9a0d-7bc0-9913-bb70a4784bd5",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
