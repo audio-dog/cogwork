@@ -119,7 +119,8 @@ Vocabulary throughout is the **Shell surfaces** glossary in the desktop context 
 
 ### 3. Side panel: per-item tabs
 
-- Generalize the side-panel store from its fixed surface kinds (attention · detail · activity) to **per-item tabs**: identity is (workspace, work item id); tab title is the id (`#50`, `AUD-1`); workspace in the tooltip; a second open **focuses** the existing tab; every open is **persistent** (no preview state). Attention and Activity stay fixed tabs.
+- **Superseded (right-panel revamp):** the side panel is a user-assembled **surface catalog**, not a fixed set. Attention and Activity are **Tool surfaces** you add and close like any tab; item tabs are **Subject surfaces**. Tabs are drag-reorderable and persist across launches. The store no longer seeds fixed surfaces. See product ADR 0010 and the desktop `CONTEXT.md` glossary (surface catalog, Tool surface, Subject surface).
+- Generalize the side-panel store from its fixed surface kinds (attention · detail · activity) to **per-item tabs**: identity is (workspace, work item id); tab title is the id (`#50`, `AUD-1`); workspace in the tooltip; a second open **focuses** the existing tab; every open is **persistent** (no preview state). Attention and Activity are no longer fixed — they are Tool surfaces (see the superseding note above).
 - Animate the panel opening/closing like the left sidebar (panel-level chrome, surfaced while deciding #13).
 
 ### 4. Item tab (from #13 content, #25 layout, #11 transcript; steal from branch `prototype/item-tab-layout`, commit `6ca32df`)

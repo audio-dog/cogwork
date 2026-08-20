@@ -46,7 +46,7 @@ Completion: you can state the resolved intent and the acceptance criteria. Irrec
 Plan the change against the acceptance criteria, then build it.
 
 - **Tests first at clear seams.** Use `/tdd` where a seam is obvious — write the failing test, make it pass, refactor.
-- **React work** touching component structure invokes `/react-composition-patterns` and `/react-no-use-effect`.
+- **Any change to a React component or a `.tsx` / `.jsx` file — new or existing — you MUST load `/react-composition-patterns` and `/react-no-use-effect` before you write the code, then follow them.** This is not optional, and it does not wait for your own judgment that the change is "structural": a touched component file is the trigger. Boolean behavior props, `renderX` render props for static UI, monolithic components, prop drilling, `forwardRef`, and `useContext` are defects here, not style choices.
 - Run the repo's typecheck and the relevant test files frequently as you go — not just at the end.
 
 Completion: every acceptance criterion from [step 1](#1-read-the-brief) is met in the diff. The gate proves the code runs, not that you built the right thing.
@@ -66,12 +66,12 @@ If any fails, fix and re-run. Do not open a PR on a red gate. If it will not go 
 Once done, run the code-simplifier agent in a subagent to refine the implementation.
 
  Then, in parallel separate subagents run: 
-- rule-reviewer agent. Explicitly instruct it to load and enforce every file in my personal rules directory at the absolute path `/Users/taylorsteele/sites/sync/packages/sync/assets/rules/` (currently `global.md` and `react.md`) alongside the repo rules, so my personal rules are checked as blocking violations.
+- rule-reviewer agent. Explicitly instruct it to load and enforce every file in my personal rules directory at the absolute path `/Users/taylorsteele/sites/sync/packages/sync/assets/rules/` (currently `global.md` and `react.md`) alongside the repo rules, so my personal rules are checked as blocking violations. When the diff touches any React component or `.tsx` / `.jsx` file, also instruct it to load `/react-composition-patterns` and report every composition violation as blocking.
 - /adversarial-review skill
 - /review-bugbot skill
 - /code-review skill
  
-Implment any findings.
+Implment any findings. **The composition review is part of the gate: if the diff touches a React component or a `.tsx` / `.jsx` file and any composition rule is violated, treat it as a red gate and fix it before you open the PR — do not open a PR on a composition violation.**
 
 ## 4. Commit and open the PR
 

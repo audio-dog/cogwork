@@ -82,11 +82,38 @@ The renderer's UI vocabulary, settled while charting the shell-revamp map (orche
 These name the *meaning* of each surface; the visual layout of several is still being prototyped.
 
 **Side panel**:
-The contextual right-hand panel of the shell — tabbed, resizable, and expandable to full window. It
-holds a couple of fixed tabs (Attention, Activity) alongside per-work-item tabs. "Tab" is the human
-word for a unit of the panel; the renderer's `Surface` is the code word for what a tab shows — the
-fixed `attention` / `activity` kinds, or an `item` keyed by its (workspace, work item) pair.
-_Avoid_: Right rail (the old fixed form), sidebar (that's the left nav), inspector.
+The contextual right-hand panel of the shell — tabbed, resizable, and expandable to full window. You
+assemble it yourself from a **surface catalog**: it starts empty and you add the tabs you want. A tab
+is either a **Tool surface** (Attention, Activity, Terminal — one of each) or a **Subject surface**
+(one per work item, keyed to it). Tabs are **user-ordered** — you drag them to rearrange — and the
+panel remembers them across launches. "Tab" is the human word for a unit of the panel; the renderer's
+`Surface` is the code word for what a tab shows — the `attention` / `activity` / `terminal` Tool
+kinds, or an `item` Subject keyed by its (workspace, work item) pair.
+_Avoid_: Right rail, sidebar (that's the left nav), inspector, fixed / permanent tabs (nothing in the
+panel is permanent now).
+
+**Surface catalog**:
+The set of Tool surfaces you can add to the side panel — today Attention, Activity, and a Terminal
+placeholder. An empty panel shows the catalog as a grid of cards; a panel that already has tabs shows
+the same catalog behind a Plus button on the tab strip. One list drives both, so they never drift.
+_Avoid_: Fixed tabs, permanent tabs.
+
+**Tool surface**:
+A side-panel tab that is **not** about any single work item and has **one** instance — Attention,
+Activity, Terminal. You add it from the surface catalog; adding one that is already open focuses it.
+Its identity is its kind alone (`surfaceId` = the kind). "Tool" describes its identity, not its
+content — Attention and Activity both stream live. Terminal is a placeholder today (a card that opens
+a "coming soon" body); when it is built for real it may become a Subject surface, one per shell
+session.
+_Avoid_: Fixed tab, static tab (the content can be live; only the identity is single).
+
+**Subject surface**:
+A side-panel tab that **is** about one thing — one instance per subject, its content following that
+subject. The **item tab** is the Subject surface today, keyed by (workspace, work item). A future PR
+review would be another Subject surface, keyed by a pull request. You open a Subject surface by
+clicking its subject (a Feed card, an Attention row), never from the catalog. Identity is kind +
+subject key (e.g. `item:<workspace>:<workItem>`).
+_Avoid_: Detail tab, dynamic tab (the difference is the subject key, not that the content changes).
 
 **Feed**:
 The shell's mission-control home surface — live, queued, and recently-done work items as cards.
@@ -95,20 +122,23 @@ chat-first home.
 _Avoid_: Dashboard, home screen, Board / Inbox (both deleted).
 
 **Item tab**:
-A side-panel tab opened by clicking a work item card — one per work item, titled by its `WorkItemId`
-(`#50`, `AUD-1`), deduped (a second open focuses the existing tab) and persistent (no preview state).
-The canonical drill-in, and both a context and an action surface: identity, triage
-approve/reclassify, the item's Pull request, blockers, the live run transcript, previous attempts,
-and metadata. The Pull-request section is labelled plainly "Pull request" — never "PR gate".
+The **Subject surface** for a work item — a side-panel tab opened by clicking a work item card, one
+per work item, keyed to (workspace, work item), titled by its `WorkItemId` (`#50`, `AUD-1`), deduped
+(a second open focuses the existing tab) and persistent (no preview state). The canonical drill-in,
+and both a context and an action surface: identity, triage approve/reclassify, the item's Pull
+request, blockers, the live run transcript, previous attempts, and metadata. The Pull-request section
+is labelled plainly "Pull request" — never "PR gate".
 _Avoid_: Detail tab (there is no single reusable one), preview tab, PR gate (as user-facing copy).
 
 **Attention tab**:
-The fixed side-panel tab listing the work items that need a person. It holds two kinds — **Needs a
-decision** and **Ready to merge** (below) — in one list, filterable by kind (default: all) and by
-workspace. Each card is a **launcher**: clicking anywhere on it opens that item's item tab, where the
-human acts; a card also carries a quick provider-aware "open on the tracker / code host" button.
-Cards show **deterministic** signals only (the reason, wait time, PR status) — never AI-written prose.
-_Avoid_: Inbox (deleted), notifications, needs-human queue, self-halt / merge gate (renamed below).
+A **Tool surface** you add from the surface catalog, listing the work items that need a person. It
+holds two kinds — **Needs a decision** and **Ready to merge** (below) — in one list, filterable by
+kind (default: all) and by workspace. Each card is a **launcher**: clicking anywhere on it opens that
+item's item tab, where the human acts; a card also carries a quick provider-aware "open on the
+tracker / code host" button. Cards show **deterministic** signals only (the reason, wait time, PR
+status) — never AI-written prose.
+_Avoid_: Inbox (deleted), notifications, needs-human queue, self-halt / merge gate (renamed below),
+fixed tab.
 
 **Needs a decision**:
 An attention item where the agent stopped and waits on a human — it needs info, or it is ready for a
@@ -124,8 +154,9 @@ shows its checks / review / base-divergence / wait time; the human opens it on t
 _Avoid_: Merge gate, PR gate (old jargon; the PR section elsewhere is still labelled "Pull request").
 
 **Activity tab**:
-The fixed side-panel tab showing the raw daemon event stream, distinct from the run transcript.
-_Avoid_: Transcript (that's the folded per-run view), log, firehose.
+A **Tool surface** you add from the surface catalog, showing the raw daemon event stream, distinct
+from the run transcript.
+_Avoid_: Transcript (that's the folded per-run view), log, firehose, fixed tab.
 
 **Run transcript**:
 A live (or replayed) agent run rendered as **Conversation + Now** inside an item tab: a natural-prose
