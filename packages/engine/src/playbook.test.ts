@@ -185,7 +185,7 @@ describe("parseFollowUpResult", () => {
 });
 
 describe("buildImplementPrompt", () => {
-  it("interpolates the item and names the skill without a decision protocol", () => {
+  it("interpolates the item and names the skill without a text result protocol", () => {
     const prompt = buildImplementPrompt(resolveImplement(config()), {
       id: "#15",
       title: "Implement playbook",
@@ -194,6 +194,7 @@ describe("buildImplementPrompt", () => {
     assert.include(prompt, "Implement playbook");
     assert.include(prompt, "`implement-agent`");
     assert.notInclude(prompt, "TRIAGE-DECISION");
+    assert.notInclude(prompt, "IMPLEMENT-RESULT");
   });
 
   it("tells the agent to reuse an existing pull request for the branch instead of opening a second", () => {
@@ -215,7 +216,6 @@ describe("buildContinuationNudge", () => {
     assert.include(nudge, "say COMPLETE and stop");
     assert.include(nudge, "keep using it and never open a second one");
     assert.notInclude(nudge, "implement-agent");
-    assert.notInclude(nudge, "IMPLEMENT-RESULT");
   });
 });
 

@@ -13,7 +13,6 @@ import {
   recoveryReason,
   shellQuote,
   statusReason,
-  stripResultLines,
   triageProposalBody,
   truncate,
 } from "./comments";
@@ -61,21 +60,7 @@ describe("comments", () => {
     assert.ok(truncate(long).endsWith("…"));
   });
 
-  it("strips result sentinel lines from agent text", () => {
-    assert.strictEqual(
-      stripResultLines("Brief contradicts itself.\nIMPLEMENT-RESULT: stuck\n"),
-      "Brief contradicts itself.",
-    );
-  });
-
-  it("prefers the agent's final message when reporting a stuck run", () => {
-    assert.strictEqual(
-      agentFailureReason("Cannot reconcile the brief.\nIMPLEMENT-RESULT: stuck", "stuck"),
-      "Cannot reconcile the brief.",
-    );
-  });
-
-  it("labels a missing sentinel and keeps any trailing agent text", () => {
+  it("labels a missing follow-up sentinel and keeps any trailing agent text", () => {
     assert.strictEqual(
       agentFailureReason("Almost done but no footer.", "missing-sentinel"),
       "agent produced no result line — Almost done but no footer.",
