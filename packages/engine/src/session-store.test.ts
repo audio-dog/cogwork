@@ -63,6 +63,24 @@ describe("foldThread", () => {
     ];
     assert.deepStrictEqual(foldThread(events), [{ role: "tool", content: "a.ts", toolName: "read" }]);
   });
+
+  it("preserves a structured result as an assistant turn", () => {
+    const raw = '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}';
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "CUSTOM", name: "structured-output.start", value: { messageId: "m1" } },
+      {
+        type: "CUSTOM",
+        name: "structured-output.complete",
+        value: {
+          object: { _tag: "triage", role: "ready-for-agent", proposal: "Verified and ready." },
+          raw,
+        },
+      },
+      { type: "RUN_FINISHED", finishReason: "stop" },
+    ];
+
+    assert.deepStrictEqual(foldThread(events), [{ role: "assistant", content: raw }]);
+  });
 });
 
 describe("SessionStore ledger-backed message store", () => {
