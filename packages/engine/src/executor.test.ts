@@ -1173,6 +1173,93 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("keeps an owned transcript through a failed prepare and retry", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const ensures = yield* Ref.make(0);
+      const worktree: WorktreeManagerService = {
+        ...worktreeStubCreated(false),
+        ensure: (_workspace, item) =>
+          Ref.getAndUpdate(ensures, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 1
+                ? Effect.fail(
+                    new GitError({ command: "fetch origin", message: "could not resolve host github.com" }),
+                  )
+                : Effect.succeed({
+                    branch: branchName(item),
+                    path: `/wt/${branchName(item)}`,
+                    created: false,
+                  }),
+            ),
+          ),
+      };
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, implementEvents, Stream.empty, "owned-transcript")],
+        worktree,
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const runs = yield* ledger.listRuns(10);
+        const succeeded = runs.find((run) => run.status === "succeeded");
+        const failed = runs.find((run) => run.status === "failed");
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(failed?.session, succeeded?.session);
+        assert.strictEqual(captured[1]?.session, succeeded?.session);
+        assert.isAbove((yield* ledger.sessionEvents(succeeded?.session ?? previousSession)).length, 0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("keeps an opaque resume handle when prepare hands a run off", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const ensures = yield* Ref.make(0);
+      const worktree: WorktreeManagerService = {
+        ...worktreeStubCreated(false),
+        ensure: (_workspace, item) =>
+          Ref.getAndUpdate(ensures, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 1
+                ? Effect.fail(
+                    new WorktreeDivergedError({
+                      remote: "origin",
+                      branch: branchName(item),
+                      message: "branch has diverged from origin and replaying the local commits failed",
+                    }),
+                  )
+                : Effect.succeed({
+                    branch: branchName(item),
+                    path: `/wt/${branchName(item)}`,
+                    created: false,
+                  }),
+            ),
+          ),
+      };
+      const layer = provide(recorder(calls), [runner(implementEvents)], worktree);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const ledger = yield* RunLedger.RunLedger;
+        const runs = yield* ledger.listRuns(10);
+        const succeeded = runs.find((run) => run.status === "succeeded");
+        const exhausted = runs.find((run) => run.status === "exhausted");
+        const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
+        assert.strictEqual(exhausted?.session, succeeded?.session);
+        assert.include(handOff?.note ?? "", "agent --resume 'sess-42'");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("hands a self-reported stuck implement run to a human without retrying", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);

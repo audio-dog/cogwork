@@ -198,6 +198,12 @@ export const make = Effect.gen(function* () {
       harness.sessionKind,
     );
 
+  const priorSession = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
+    if (item.resume) return Effect.succeed(item.resume.session);
+    if (ops.branch) return ledger.sessionForBranch(workspace.config.name, ops.branch);
+    return Effect.succeed(null);
+  };
+
   const planSession = Effect.fn("Executor.planSession")(function* (
     workspace: RegisteredWorkspace,
     ops: StageOps,
@@ -711,10 +717,11 @@ export const make = Effect.gen(function* () {
     startedAtMillis: number,
   ) {
     const runId = yield* nextRunId(startedAtMillis);
+    const previous = yield* priorSession(workspace, item, ops);
     const plan = yield* Effect.result(planSession(workspace, ops, startedAtMillis));
     const session = Result.isSuccess(plan)
       ? plan.success.session
-      : (item.resume?.session ?? (yield* mintSession(workspace, ops, startedAtMillis)));
+      : (previous ?? (yield* mintSession(workspace, ops, startedAtMillis)));
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,
