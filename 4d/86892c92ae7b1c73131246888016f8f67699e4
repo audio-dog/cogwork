@@ -1,0 +1,20 @@
+packages/contracts/CONTEXT.md
+  s_338bed3385d614::t_d02a93e5aa86c3 43-45,47-69,71-72
+  s_338bed3385d614::t_9fc1cb613d6aec 46,70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "4d86892c92ae7b1c73131246888016f8f67699e4",
+  "prompts": {},
+  "sessions": {
+    "s_338bed3385d614": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02117-ca3b-7623-b2c6-a8d7e05df440",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
