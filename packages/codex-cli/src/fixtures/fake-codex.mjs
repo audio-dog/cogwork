@@ -1,11 +1,18 @@
 import { once } from "node:events";
-import { writeFile } from "node:fs/promises";
+import { access, writeFile } from "node:fs/promises";
 
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
+const mcpBearer = Object.entries(process.env).find(([name]) => /^COGWORK_MCP_.*_BEARER$/.test(name))?.[1];
+const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
+  () => true,
+  () => false,
+);
+if (mcpBearer) await writeFile(`${process.cwd()}/.mcp-bearer`, mcpBearer);
 const capture = JSON.stringify({
   args: process.argv.slice(2),
   prompt,
   cwd: process.cwd(),
+  hasCodexConfig,
 });
 const events = [
   { type: "thread.started", thread_id: "fake-thread-1" },
