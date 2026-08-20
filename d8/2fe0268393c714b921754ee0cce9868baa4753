@@ -1,0 +1,26 @@
+packages/contracts/CONTEXT.md
+  s_9fb4eb048b514b::t_fb045da076a5f6 104
+  s_9fb4eb048b514b::t_4bed5f0bb6bd6e 103,105
+  s_9fb4eb048b514b::t_78d1dba385c9a1 100
+  s_9fb4eb048b514b::t_83aba2bc4665f7 106
+packages/engine/docs/adr/0002-restart-recovery-resumes-sessions.md
+  s_9fb4eb048b514b::t_1acae60eb2deb0 23-30
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_9fb4eb048b514b::t_3821ffaa4b69c2 1-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "d82fe0268393c714b921754ee0cce9868baa4753",
+  "prompts": {},
+  "sessions": {
+    "s_9fb4eb048b514b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01ffa-cba4-7261-a6fb-df01553727c6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
