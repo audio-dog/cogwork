@@ -33,17 +33,13 @@ import {
   type SubTabKey,
   subTabs,
 } from "../features/item-tab";
-import type { RunActivityPreview } from "../features/run-activity";
+import { type RunActivityPreview, statusLine, useRunActivity } from "../features/run-activity";
 import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
 import { Markdown } from "./markdown";
 import { RunDrillIn } from "./run-drill-in";
-
-// The item tab: a sub-tab shell (Main | Live run | Pull request) over a shared
-// context. Each part reads the item, its focal run, and the actions from the
-// provider — no prop drilling, so a section can sit anywhere inside the tab.
 
 interface ItemTabState {
   readonly workspace: WorkspaceId;
@@ -306,7 +302,6 @@ function OpenOnGitHubButton() {
   );
 }
 
-// Equal-weight outline actions — no single AI-chosen primary (#13).
 function ActionBar() {
   const {
     state: { item, descriptor },
@@ -327,15 +322,13 @@ function ActionBar() {
   );
 }
 
-// Reconciles "open to Main" with "transcript focal when live": a running item
-// surfaces the live status here and jumps to the Live run sub-tab.
-function RunningAffordance() {
+function RunningAffordance({ run }: { run: RunSummary }) {
   const {
-    state: { descriptor, preview },
     actions: { setSubTab },
   } = useItemTab();
-  if (!descriptor.running) return null;
-  const line = preview?.text || preview?.label || "working";
+  const result = useRunActivity(run.id);
+  const activities = result._tag === "Success" ? result.value.items : [];
+  const line = statusLine(activities);
   return (
     <button
       type="button"
@@ -595,7 +588,7 @@ function MainBody() {
     <SubTabBody>
       <Header />
       <ActionBar />
-      <RunningAffordance />
+      {run?.status === "running" && <RunningAffordance run={run} />}
       {item._tag === "NeedsHuman" && <TriageSection item={item} />}
       {item._tag === "Blocked" && <BlockersSection openBlockers={item.openBlockers} />}
       {item.pr && <PullRequestSummary pr={item.pr} />}

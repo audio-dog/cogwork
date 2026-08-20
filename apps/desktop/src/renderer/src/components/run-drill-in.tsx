@@ -65,6 +65,8 @@ const foldedPreview = (entry: FoldedEntry) => {
 
 const foldedLabel = (entry: FoldedEntry) => {
   if (entry.kind === "reasoning") return "Thought";
+  if (entry.kind === "tool" && entry.name === "read") return "Read file";
+  if (entry.kind === "tool" && /rg|grep|search/i.test(entry.name)) return "Searched";
   if (entry.kind === "tool") return "Ran command";
   return "Edited";
 };
