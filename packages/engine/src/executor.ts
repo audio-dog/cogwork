@@ -449,14 +449,16 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     acc: RunAccumulator,
   ) {
-    const result = yield* Effect.result(decodeImplementResult(acc));
-    if (Result.isFailure(result)) {
-      return yield* applyFailure(workspace, item, runId, result.failure.retryable, result.failure.message, acc.handle);
-    }
-    if (result.success.outcome === "opened-pr") {
-      return yield* applyImplementSuccess(workspace, item, runId, acc);
-    }
-    return yield* applyFailure(workspace, item, runId, false, result.success.summary, acc.handle);
+    return yield* decodeImplementResult(acc).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          applyFailure(workspace, item, runId, error.retryable, error.message, acc.handle),
+        onSuccess: (result) =>
+          result.outcome === "opened-pr"
+            ? applyImplementSuccess(workspace, item, runId, acc)
+            : applyFailure(workspace, item, runId, false, result.summary, acc.handle),
+      }),
+    );
   });
 
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
