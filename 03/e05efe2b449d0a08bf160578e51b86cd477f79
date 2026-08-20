@@ -1,0 +1,14 @@
+packages/engine/src/executor.test.ts
+  h_46518a29d4dd91 1334-1338,1344-1347,1366-1369
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "03e05efe2b449d0a08bf160578e51b86cd477f79",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
