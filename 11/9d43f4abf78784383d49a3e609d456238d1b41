@@ -1,0 +1,36 @@
+pnpm-workspace.yaml
+  s_e5f5f9f8d62005::t_469fe0ea7c7a08 16-19,39-41
+  h_46518a29d4dd91 20
+  s_e5f5f9f8d62005::t_ce68d9955f0a2a 42-44
+  h_46518a29d4dd91 45-49
+packages/codex-cli/package.json
+  h_46518a29d4dd91 25
+packages/cursor-acp/package.json
+  s_e5f5f9f8d62005::t_469fe0ea7c7a08 25
+packages/engine/package.json
+  s_e5f5f9f8d62005::t_469fe0ea7c7a08 16-18
+  h_46518a29d4dd91 19
+pnpm-lock.yaml
+  h_46518a29d4dd91 16-17,19-23,25-26,28-29,271,274,277,280,289-290,330,332-333,336,339,364,366-367,369-370,372-373,375-376,379,382,1836-1837,1839-1840,1842-1843,1845,1848-1849,1851-1852,1854-1855,1857-1858,1860,1862-1863,1865,1868-1869,1871,1877-1878,1880,1882-1883,1886,1897-1898,1930-1931,1933,2271,6139,6142-6143,6147,6150,6154,6156-6157,6159,6163,6166,6175,6177,6179,6188,6190,6195,6197,6199,6202,6212,6216,6234,6236
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "119d43f4abf78784383d49a3e609d456238d1b41",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_e5f5f9f8d62005": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01fa8-33b4-7571-88af-b7f8e40ad310",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
