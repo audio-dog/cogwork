@@ -1,0 +1,21 @@
+packages/codex-cli/src/harness.test.ts
+  s_7d42045e7090a1::t_eb64d92e08ede8 404-425
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_7d42045e7090a1::t_ab9bec8f9f82b9 17-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "d04a60943983d923c206b378861f1e8869ee1748",
+  "prompts": {},
+  "sessions": {
+    "s_7d42045e7090a1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02042-1803-77c2-9622-5759ee36cd01",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
