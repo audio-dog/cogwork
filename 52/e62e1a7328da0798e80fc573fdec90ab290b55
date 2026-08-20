@@ -1,0 +1,19 @@
+apps/cli/config/cogwork.workspace.ts
+  s_b72b96ca2cca30::t_cd8bc3cd163a48 1,4-5,16,19-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "52e62e1a7328da0798e80fc573fdec90ab290b55",
+  "prompts": {},
+  "sessions": {
+    "s_b72b96ca2cca30": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01d73-81cf-7f32-87b9-b1a415c9ea60",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
