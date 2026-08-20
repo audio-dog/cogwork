@@ -769,7 +769,6 @@ describe("Executor.execute", () => {
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
-        assert.isNull(request?.session ?? null);
         assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
 
         const log = yield* Ref.get(calls);
@@ -779,6 +778,7 @@ describe("Executor.execute", () => {
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(request?.session, run?.session);
         assert.strictEqual(run?.stage, "implement");
         assert.strictEqual(run?.branch, implementBranch);
         assert.strictEqual(run?.status, "succeeded");
@@ -951,7 +951,7 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured.length, 2);
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        assert.isNull(captured[0]?.session ?? null);
+        assert.strictEqual(captured[0]?.session, run?.session);
         assert.strictEqual(captured[1]?.session, run?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
       }).pipe(Effect.provide(layer));
@@ -1420,9 +1420,38 @@ describe("Executor.execute", () => {
         const captured = yield* Ref.get(requests);
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        assert.isNull(captured[0]?.session ?? null);
+        assert.strictEqual(captured[0]?.session, run?.session);
         assert.strictEqual(captured[1]?.session, run?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("mints and dispatches a new session for an explicit fresh follow-up", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [capturingRunner(requests, followUpEvents)],
+        worktreeStubCreated(false),
+      );
+      const freshItem = {
+        ...followUpItem,
+        followUp: { ...followUpItem.followUp, fresh: true },
+      };
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* executor.execute(followUpWorkspace, freshItem);
+
+        const [freshRequest] = (yield* Ref.get(requests)).slice(-1);
+        const ledger = yield* RunLedger.RunLedger;
+        const [priorRun, freshRun] = yield* ledger.listRuns(10);
+        assert.notStrictEqual(freshRun?.session, priorRun?.session);
+        assert.strictEqual(freshRequest?.session, freshRun?.session);
+        assert.include(freshRequest?.prompt ?? "", "follow-up-agent");
+        assert.notInclude(freshRequest?.prompt ?? "", "You were interrupted part-way through");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1468,7 +1497,10 @@ describe("Executor.execute", () => {
         yield* executor.execute(followUpWorkspace, followUpItem);
 
         const captured = yield* Ref.get(requests);
-        assert.isNull(captured[1]?.session ?? null);
+        const ledger = yield* RunLedger.RunLedger;
+        const [priorRun, freshRun] = yield* ledger.listRuns(10);
+        assert.notStrictEqual(freshRun?.session, priorRun?.session);
+        assert.strictEqual(captured[1]?.session, freshRun?.session);
       }).pipe(Effect.provide(layer));
     }),
   );

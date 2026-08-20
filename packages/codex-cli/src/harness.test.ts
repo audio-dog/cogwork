@@ -532,13 +532,17 @@ describe("codexRunner", () => {
 
       yield* harness
         .run(makeRequest({ checkoutPath: handle.id, session: null }))
-        .pipe(Stream.take(1), Stream.runDrain);
+        .pipe(Stream.take(2), Stream.runDrain);
 
       const pid = yield* Schema.decodeUnknownEffect(Schema.FiniteFromString)(
         yield* Effect.promise(() => handle.fs.read("/workspace/.pid")),
       );
-      const probe = yield* Effect.promise(() => handle.process.exec(`kill -0 ${pid}`));
-      assert.notStrictEqual(probe.exitCode, 0);
+      const stopped = yield* Effect.promise(() =>
+        handle.process.exec(
+          `for attempt in $(seq 1 100); do state=$(ps -o stat= -p ${pid} 2>/dev/null); case "$state" in ""|Z*) exit 0 ;; esac; sleep 0.01; done; exit 1`,
+        ),
+      );
+      assert.strictEqual(stopped.exitCode, 0);
     }),
   );
 });

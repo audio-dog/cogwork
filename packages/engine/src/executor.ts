@@ -192,19 +192,20 @@ export const make = Effect.gen(function* () {
       Effect.orDie,
     );
 
-  const resolveSession = Effect.fn("Executor.resolveSession")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    ops: StageOps,
-    startedAtMillis: number,
-  ) {
-    if (item.resume) return item.resume.session;
-    const existing = ops.branch ? yield* ledger.sessionForBranch(workspace.config.name, ops.branch) : null;
-    if (existing) return existing;
-    return yield* sessionStore.mint(
+  const mintSession = (workspace: RegisteredWorkspace, ops: StageOps, startedAtMillis: number) =>
+    sessionStore.mint(
       { workspace: workspace.config.name, harness: ops.resolved.harness, createdAtMillis: startedAtMillis },
       harness.sessionKind,
     );
+
+  const planSession = Effect.fn("Executor.planSession")(function* (
+    workspace: RegisteredWorkspace,
+    ops: StageOps,
+    startedAtMillis: number,
+  ) {
+    const request = yield* ops.prepare;
+    const session = request.session ?? (yield* mintSession(workspace, ops, startedAtMillis));
+    return { request: { ...request, session }, session };
   });
 
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
@@ -678,6 +679,7 @@ export const make = Effect.gen(function* () {
     ops: StageOps,
     record: RunRecord,
     runId: RunId,
+    request: HarnessRequest,
   ) {
     const settle = <A>(
       attempt: Effect.Effect<A, PrepareError | HarnessError>,
@@ -697,15 +699,9 @@ export const make = Effect.gen(function* () {
       });
 
     if (ops.kind === "triage") {
-      return yield* settle(
-        ops.prepare.pipe(Effect.flatMap((request) => foldTriageOutcome(record, ops, request))),
-        (acc) => ops.complete(record, acc),
-      );
+      return yield* settle(foldTriageOutcome(record, ops, request), (acc) => ops.complete(record, acc));
     }
-    return yield* settle(
-      ops.prepare.pipe(Effect.flatMap((request) => foldOutcome(record, ops, request))),
-      (acc) => ops.complete(runId, acc),
-    );
+    return yield* settle(foldOutcome(record, ops, request), (acc) => ops.complete(runId, acc));
   });
 
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
@@ -715,7 +711,10 @@ export const make = Effect.gen(function* () {
     startedAtMillis: number,
   ) {
     const runId = yield* nextRunId(startedAtMillis);
-    const session = yield* resolveSession(workspace, item, ops, startedAtMillis);
+    const plan = yield* Effect.result(planSession(workspace, ops, startedAtMillis));
+    const session = Result.isSuccess(plan)
+      ? plan.success.session
+      : (item.resume?.session ?? (yield* mintSession(workspace, ops, startedAtMillis)));
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,
@@ -730,8 +729,18 @@ export const make = Effect.gen(function* () {
       endedAtMillis: null,
     };
     yield* ledger.insertRun(record);
+    if (Result.isFailure(plan)) {
+      return yield* applyFailure(
+        workspace,
+        item,
+        runId,
+        retryableOf(plan.failure),
+        prepareFailureReason(plan.failure),
+        yield* handleOf(ledger, record.session),
+      );
+    }
     yield* Effect.withFiber((self) => runControl.register(runId, self));
-    return yield* settleOutcome(workspace, item, ops, record, runId).pipe(
+    return yield* settleOutcome(workspace, item, ops, record, runId, plan.success.request).pipe(
       Effect.ensuring(runControl.unregister(runId)),
     );
   });
