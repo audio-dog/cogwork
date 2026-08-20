@@ -21,10 +21,10 @@
     "@agentclientprotocol/sdk": "0.25.1",
     "@cogwork/contracts": "workspace:*",
     "@cogwork/engine": "workspace:*",
-    "@tanstack/ai": "0.44.0",
+    "@tanstack/ai": "catalog:",
     "@tanstack/ai-acp": "0.2.6",
-    "@tanstack/ai-sandbox": "0.3.2",
-    "@tanstack/ai-sandbox-local-process": "0.2.1",
+    "@tanstack/ai-sandbox": "catalog:",
+    "@tanstack/ai-sandbox-local-process": "catalog:",
     "effect": "catalog:effect"
   },
   "devDependencies": {

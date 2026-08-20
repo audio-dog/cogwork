@@ -1,6 +1,7 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+import { codexRunner } from "@cogwork/codex-cli";
 import { HarnessName } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
 import { ContextAssembler, Daemon, Provider, Registry } from "@cogwork/engine";
@@ -78,7 +79,14 @@ const registryLayer = (configHome: string) =>
   Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
 
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
+const codexName = Schema.decodeSync(HarnessName)("codex");
 const providerName = Schema.decodeSync(HarnessName)("provider");
+
+export const harnessRunners = [
+  cursorRunner({ name: cursorName }),
+  codexRunner({ name: codexName }),
+  Provider.providerRunner({ name: providerName }),
+];
 
 // The engine ships the playbook skills beside its source, and the daemon home
 // (where the global AGENTS.md and provisioned skills live) is the directory that
@@ -99,7 +107,7 @@ export const serverLayer = (options: DaemonOptions) =>
     runLedger: ledgerLayer(options.ledgerPath),
     registry: registryLayer(options.configHome),
     worktrees: worktreeManagerLayer,
-    harnessRunners: [cursorRunner({ name: cursorName }), Provider.providerRunner({ name: providerName })],
+    harnessRunners,
     scheduler: {
       globalLimit: options.maxConcurrency,
       perWorkspaceLimit: options.maxPerWorkspace,
