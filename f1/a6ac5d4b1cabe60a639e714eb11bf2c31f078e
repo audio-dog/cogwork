@@ -1,0 +1,31 @@
+packages/codex-cli/src/harness.ts
+  s_5499650ed1994c::t_97d281ac08ea9e 186-189
+  s_5499650ed1994c::t_638594ffdb476d 116
+  s_5499650ed1994c::t_c636953aaaea37 113-114,129-132
+packages/codex-cli/src/harness.test.ts
+  s_5499650ed1994c::t_5d37f759d21093 272-290,296-298
+  s_5499650ed1994c::t_e5d96ce76bae8e 385-424
+  s_5499650ed1994c::t_638594ffdb476d 215,219,221,261,265
+  s_5499650ed1994c::t_9c745229d83796 227-260,262-264,266-271
+  s_5499650ed1994c::t_1cbc30a1635782 294-295
+  s_5499650ed1994c::t_513e69583dca7a 291-293
+  s_5499650ed1994c::t_c636953aaaea37 213-214
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_5499650ed1994c::t_9bb92736818f64 2,5-10,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "f1a6ac5d4b1cabe60a639e714eb11bf2c31f078e",
+  "prompts": {},
+  "sessions": {
+    "s_5499650ed1994c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01ff0-6232-78d0-a861-5945b8a80abe",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
