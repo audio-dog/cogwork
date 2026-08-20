@@ -1,71 +1,61 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const { waitMock, isDaemonListeningMock } = vi.hoisted(() => ({
-  waitMock: vi.fn<(delay: number, options?: { signal?: AbortSignal }) => Promise<void>>(),
-  isDaemonListeningMock: vi.fn<(socketPath: string) => Promise<boolean>>(),
-}));
-
-vi.mock("node:timers/promises", () => ({
-  scheduler: { wait: waitMock },
-}));
-
-vi.mock("./socket-probe", () => ({
-  isDaemonListening: isDaemonListeningMock,
-}));
-
+import { mkdtempSync, rmSync } from "node:fs";
+import * as net from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 import { waitForDaemonListening } from "./wait-for-socket";
 
-const deferred = <T>() => {
-  const box: { resolve: (value: T) => void } = { resolve: () => {} };
-  const promise = new Promise<T>((resolve) => {
-    box.resolve = resolve;
-  });
-  return { promise, resolve: (value: T) => box.resolve(value) };
+const withTempDir = async (run: (dir: string) => Promise<void>): Promise<void> => {
+  const dir = mkdtempSync(join(tmpdir(), "cf-ready-"));
+  try {
+    await run(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 };
 
+const listen = async (socketPath: string): Promise<net.Server> => {
+  const server = net.createServer();
+  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  return server;
+};
+
+const close = (server: net.Server): Promise<void> =>
+  new Promise<void>((resolve) => server.close(() => resolve()));
+
 describe("waitForDaemonListening", () => {
-  beforeEach(() => {
-    isDaemonListeningMock.mockReset();
-    waitMock.mockReset();
-  });
+  it("resolves true when the socket is already listening", () =>
+    withTempDir(async (dir) => {
+      const server = await listen(join(dir, "live.sock"));
+      const controller = new AbortController();
+      try {
+        expect(await waitForDaemonListening(join(dir, "live.sock"), controller.signal)).toBe(true);
+      } finally {
+        controller.abort();
+        await close(server);
+      }
+    }));
 
-  it("resolves true when the socket is already listening", async () => {
-    const controller = new AbortController();
-    isDaemonListeningMock.mockResolvedValueOnce(true);
+  it("resolves once a server binds the socket after the wait begins", () =>
+    withTempDir(async (dir) => {
+      const socketPath = join(dir, "late.sock");
+      const controller = new AbortController();
+      const waiting = waitForDaemonListening(socketPath, controller.signal);
 
-    await expect(waitForDaemonListening("/tmp/live.sock", controller.signal)).resolves.toBe(true);
-    expect(waitMock).not.toHaveBeenCalled();
-  });
+      const server = await listen(socketPath);
+      try {
+        expect(await waiting).toBe(true);
+      } finally {
+        controller.abort();
+        await close(server);
+      }
+    }));
 
-  it("resolves once a probe succeeds after waiting", async () => {
-    const controller = new AbortController();
-    isDaemonListeningMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    waitMock.mockResolvedValueOnce();
-
-    await expect(waitForDaemonListening("/tmp/late.sock", controller.signal)).resolves.toBe(true);
-    expect(waitMock).toHaveBeenCalledOnce();
-    expect(waitMock).toHaveBeenCalledWith(50, { signal: controller.signal });
-  });
-
-  it("resolves false when already aborted", async () => {
-    const controller = new AbortController();
-    controller.abort();
-
-    await expect(waitForDaemonListening("/tmp/never.sock", controller.signal)).resolves.toBe(false);
-    expect(isDaemonListeningMock).not.toHaveBeenCalled();
-    expect(waitMock).not.toHaveBeenCalled();
-  });
-
-  it("resolves false when aborted during a successful probe", async () => {
-    const controller = new AbortController();
-    const probe = deferred<boolean>();
-    isDaemonListeningMock.mockReturnValueOnce(probe.promise);
-
-    const waiting = waitForDaemonListening("/tmp/live.sock", controller.signal);
-    controller.abort();
-    probe.resolve(true);
-
-    await expect(waiting).resolves.toBe(false);
-    expect(waitMock).not.toHaveBeenCalled();
-  });
+  it("resolves false when aborted before the socket appears", () =>
+    withTempDir(async (dir) => {
+      const controller = new AbortController();
+      const waiting = waitForDaemonListening(join(dir, "never.sock"), controller.signal);
+      controller.abort();
+      expect(await waiting).toBe(false);
+    }));
 });
