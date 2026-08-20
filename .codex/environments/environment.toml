@@ -3,4 +3,10 @@ version = 1
 name = "cogwork"
 
 [setup]
-script = "pnpm install"
+script = """
+mkdir -p .repos
+if [ ! -e .repos/effect ]; then
+  ln -s /Users/taylorsteele/sites/cogwork/.repos/effect .repos/effect
+fi
+pnpm install
+"""
