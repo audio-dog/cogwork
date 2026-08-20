@@ -1,0 +1,25 @@
+packages/codex-cli/package.json
+  s_b72b96ca2cca30::t_a3b577167c1d66 17-20
+packages/engine/package.json
+  s_b72b96ca2cca30::t_a3b577167c1d66 15,20-21
+packages/cursor-acp/package.json
+  s_b72b96ca2cca30::t_a3b577167c1d66 24,26-27
+pnpm-workspace.yaml
+  s_b72b96ca2cca30::t_a3b577167c1d66 16-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "3cfd710813fde82ee43d4995d095538dd80e9f5a",
+  "prompts": {},
+  "sessions": {
+    "s_b72b96ca2cca30": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01d73-81cf-7f32-87b9-b1a415c9ea60",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
