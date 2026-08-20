@@ -214,6 +214,9 @@ export const make = Effect.gen(function* () {
     return { request: { ...request, session }, session };
   });
 
+  const withSession = (record: RunRecord, session: SessionId) =>
+    record.session === session ? record : { ...record, session };
+
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -718,10 +721,6 @@ export const make = Effect.gen(function* () {
   ) {
     const runId = yield* nextRunId(startedAtMillis);
     const previous = yield* priorSession(workspace, item, ops);
-    const plan = yield* Effect.result(planSession(workspace, ops, startedAtMillis));
-    const session = Result.isSuccess(plan)
-      ? plan.success.session
-      : (previous ?? (yield* mintSession(workspace, ops, startedAtMillis)));
     const record: RunRecord = {
       id: runId,
       workspace: workspace.config.name,
@@ -729,27 +728,33 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       harness: ops.resolved.harness,
       branch: ops.branch,
-      session,
+      session: previous,
       usage: null,
       status: "running",
       startedAtMillis,
       endedAtMillis: null,
     };
     yield* ledger.insertRun(record);
-    if (Result.isFailure(plan)) {
-      return yield* applyFailure(
-        workspace,
-        item,
-        runId,
-        retryableOf(plan.failure),
-        prepareFailureReason(plan.failure),
-        yield* handleOf(ledger, record.session),
-      );
-    }
     yield* Effect.withFiber((self) => runControl.register(runId, self));
-    return yield* settleOutcome(workspace, item, ops, record, runId, plan.success.request).pipe(
-      Effect.ensuring(runControl.unregister(runId)),
-    );
+    return yield* Effect.gen(function* () {
+      const plan = yield* Effect.result(planSession(workspace, ops, startedAtMillis));
+      const session = Result.isSuccess(plan)
+        ? plan.success.session
+        : (previous ?? (yield* mintSession(workspace, ops, startedAtMillis)));
+      const prepared = withSession(record, session);
+      if (prepared !== record) yield* ledger.setRunSession(runId, session);
+      if (Result.isFailure(plan)) {
+        return yield* applyFailure(
+          workspace,
+          item,
+          runId,
+          retryableOf(plan.failure),
+          prepareFailureReason(plan.failure),
+          yield* handleOf(ledger, prepared.session),
+        );
+      }
+      return yield* settleOutcome(workspace, item, ops, prepared, runId, plan.success.request);
+    }).pipe(Effect.ensuring(runControl.unregister(runId)));
   });
 
   const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (

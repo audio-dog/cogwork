@@ -145,6 +145,8 @@ export const makeMemory = Effect.gen(function* () {
       Ref.update(eventsRef, (events) => new Map(events).set(runId, [...(events.get(runId) ?? []), event])),
     updateRun: (runId: RunId, update: RunUpdate) =>
       Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
+    setRunSession: (runId: RunId, session: SessionId) =>
+      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => ({ ...run, session }))),
     interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
       Ref.modify(runsRef, (runs) =>
         transition(

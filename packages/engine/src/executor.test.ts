@@ -917,6 +917,57 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("ledgers the branch session before an interrupted worktree prepare", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const prepares = yield* Ref.make(0);
+      const entered = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const worktree: WorktreeManagerService = {
+        ...worktreeStubCreated(false),
+        ensure: (_workspace, item) =>
+          Ref.getAndUpdate(prepares, (count) => count + 1).pipe(
+            Effect.flatMap((count) =>
+              count === 0
+                ? Effect.succeed({
+                    branch: branchName(item),
+                    path: `/wt/${branchName(item)}`,
+                    created: false,
+                  })
+                : Deferred.succeed(entered, undefined).pipe(
+                    Effect.andThen(Deferred.await(release)),
+                    Effect.map(() => ({
+                      branch: branchName(item),
+                      path: `/wt/${branchName(item)}`,
+                      created: false,
+                    })),
+                  ),
+            ),
+          ),
+        list: () => Effect.succeed([]),
+        remove: () => Effect.void,
+        reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+      };
+      const layer = provide(recorder(calls), [runner(implementEvents)], worktree);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(implementWorkspace, implementItem);
+        const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+
+        yield* Deferred.await(entered);
+
+        const runs = yield* ledger.listRuns(10);
+        const completed = runs.find((run) => run.status === "succeeded");
+        const inFlight = runs.find((run) => run.status === "running");
+        assert.strictEqual(inFlight?.session, completed?.session);
+
+        yield* Fiber.interrupt(running);
+        assert.strictEqual((yield* Ref.get(calls)).filter((call) => call.method === "release").length, 1);
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
+
   it.effect("ledgers the newest session when the harness starts a fresh one mid-run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
