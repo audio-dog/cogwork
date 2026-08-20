@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { StructuredOutputCompleteValue } from "./ag-ui";
 import { TrimmedNonEmptyString } from "./base-schemas";
 
 export const LifecycleStage = Schema.Literals(["triage", "implement", "follow-up", "verify"]);
@@ -44,6 +45,52 @@ export class FollowUpStageResult extends Schema.TaggedClass<FollowUpStageResult>
 
 export const StageResult = Schema.Union([TriageStageResult, ImplementStageResult, FollowUpStageResult]);
 export type StageResult = typeof StageResult.Type;
+
+export const TriageStageResultCompletion = Schema.Struct({
+  ...StructuredOutputCompleteValue.fields,
+  object: TriageStageResult,
+});
+
+export const ImplementStageResultCompletion = Schema.Struct({
+  ...StructuredOutputCompleteValue.fields,
+  object: ImplementStageResult,
+});
+
+export const FollowUpStageResultCompletion = Schema.Struct({
+  ...StructuredOutputCompleteValue.fields,
+  object: FollowUpStageResult,
+});
+
+const standardSchema = <S extends Schema.Codec<unknown, unknown, never, never>>(schema: S) =>
+  Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(schema));
+
+const triageStageResultSchema = standardSchema(Schema.Struct(TriageStageResult.fields));
+const implementStageResultSchema = standardSchema(Schema.Struct(ImplementStageResult.fields));
+const followUpStageResultSchema = standardSchema(Schema.Struct(FollowUpStageResult.fields));
+
+export const stageResultJsonSchema = (stage: LifecycleStage) => {
+  if (stage === "triage") return triageStageResultSchema;
+  if (stage === "implement") return implementStageResultSchema;
+  if (stage === "follow-up") return followUpStageResultSchema;
+  return undefined;
+};
+
+export const stageResultCompletionSchema = (stage: LifecycleStage) => {
+  if (stage === "triage") return TriageStageResultCompletion;
+  if (stage === "implement") return ImplementStageResultCompletion;
+  if (stage === "follow-up") return FollowUpStageResultCompletion;
+  return undefined;
+};
+
+export type StageResultJsonSchema =
+  | typeof triageStageResultSchema
+  | typeof implementStageResultSchema
+  | typeof followUpStageResultSchema;
+
+export type StageResultCompletionSchema =
+  | typeof TriageStageResultCompletion
+  | typeof ImplementStageResultCompletion
+  | typeof FollowUpStageResultCompletion;
 
 export const NeedsHumanReason = Schema.Literals(["needs-info", "ready-for-human"]);
 export type NeedsHumanReason = typeof NeedsHumanReason.Type;
