@@ -86,6 +86,32 @@ const resolveEffort = (requested: string | null, fallback: CodexEffort) => {
 
 const mcpNamePattern = /^[A-Za-z0-9_-]+$/;
 
+const codexEnvironmentNames = [
+  "HOME",
+  "PATH",
+  "CODEX_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+];
+
+export const codexChildEnvironment = (environment: NodeJS.ProcessEnv = process.env) =>
+  Object.fromEntries(
+    codexEnvironmentNames.flatMap((name) => {
+      const value = environment[name];
+      return value === undefined ? [] : [[name, value]];
+    }),
+  );
+
 const validateMcpSkill = (skill: Harness.ResolvedMcpSkill) =>
   mcpNamePattern.test(skill.name)
     ? Effect.succeed(skill)
@@ -117,14 +143,13 @@ const mcpEntries = (skill: Harness.ResolvedMcpSkill) => {
 };
 
 const mcpAdapterConfig = (mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
-  if (mcpSkills.length === 0) return {};
   const entries = mcpSkills.map(mcpEntries);
   return {
-    config: Object.fromEntries(entries.flatMap((entry) => entry.configEntries)),
+    ...(entries.length > 0
+      ? { config: Object.fromEntries(entries.flatMap((entry) => entry.configEntries)) }
+      : {}),
     env: {
-      ...Object.fromEntries(
-        Object.entries(process.env).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])),
-      ),
+      ...codexChildEnvironment(),
       ...Object.fromEntries(entries.flatMap((entry) => entry.envEntries)),
     },
   };

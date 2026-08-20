@@ -12,6 +12,7 @@ import * as Stream from "effect/Stream";
 import {
   type CodexRunChat,
   type CodexRunChatOptions,
+  codexChildEnvironment,
   codexModelOptions,
   codexRunner,
   codexRuntimeConfig,
@@ -135,6 +136,7 @@ describe("codexRunner", () => {
             sandboxMode: "workspace-write",
             networkAccessEnabled: true,
             modelReasoningEffort: "high",
+            env: codexChildEnvironment(),
           },
         ],
       ]);
@@ -211,8 +213,10 @@ describe("codexRunner", () => {
         "mcp_servers.linear.url": '"https://mcp.linear.app/mcp/readonly"',
         "mcp_servers.linear.bearer_token_env_var": '"COGWORK_MCP_6c696e656172"',
       });
-      assert.isString(config.env?.HOME);
-      assert.isString(config.env?.PATH);
+      assert.deepStrictEqual(config.env, {
+        ...codexChildEnvironment(),
+        COGWORK_MCP_6c696e656172: "mcp-secret",
+      });
       assert.strictEqual(config.env?.COGWORK_MCP_6c696e656172, "mcp-secret");
       const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
       assert.notInclude(serialized, "mcp-secret");
@@ -330,6 +334,29 @@ describe("codexRuntimeConfig", () => {
       networkAccessEnabled: true,
       modelReasoningEffort: "high",
     });
+  });
+});
+
+describe("codexChildEnvironment", () => {
+  it("preserves Codex login prerequisites without forwarding host secrets", () => {
+    assert.deepStrictEqual(
+      codexChildEnvironment({
+        HOME: "/home/codex",
+        PATH: "/usr/bin",
+        CODEX_HOME: "/codex",
+        XDG_CONFIG_HOME: "/config",
+        GITHUB_TOKEN: "github-secret",
+        GH_TOKEN: "gh-secret",
+        OPENAI_API_KEY: "openai-secret",
+        CODEX_API_KEY: "codex-secret",
+      }),
+      {
+        HOME: "/home/codex",
+        PATH: "/usr/bin",
+        CODEX_HOME: "/codex",
+        XDG_CONFIG_HOME: "/config",
+      },
+    );
   });
 });
 
