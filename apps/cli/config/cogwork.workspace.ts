@@ -1,8 +1,8 @@
 import type { CodexEffort, CodexModel } from "@cogwork/codex-cli";
 import { defineWorkspace } from "@cogwork/engine";
 
-const model = "gpt-5.6-sol" satisfies CodexModel;
-const effort = "high" satisfies CodexEffort;
+const model = "gpt-5.6-terra" satisfies CodexModel;
+const effort = "medium" satisfies CodexEffort;
 
 export default defineWorkspace({
   name: "cogwork",

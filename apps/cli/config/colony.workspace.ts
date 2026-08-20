@@ -1,9 +1,8 @@
-import type { CursorModel } from "@cogwork/cursor-acp";
+import type { CodexEffort, CodexModel } from "@cogwork/codex-cli";
 import { defineWorkspace } from "@cogwork/engine";
 
-const triageModel = "claude-opus-4-8-thinking-high" satisfies CursorModel;
-const implementModel = "claude-opus-4-8-thinking-high" satisfies CursorModel;
-const followUpModel = "composer-2.5" satisfies CursorModel;
+const model = "gpt-5.6-terra" satisfies CodexModel;
+const effort = "medium" satisfies CodexEffort;
 
 const taylor = "02051c43-a071-42bd-9bae-8f6ede983375";
 
@@ -41,9 +40,9 @@ export default defineWorkspace({
   ],
   concurrency: 3,
   playbook: {
-    triage: { enabled: true, model: triageModel },
-    implement: { enabled: true, model: implementModel },
-    "follow-up": { enabled: true, model: followUpModel },
+    triage: { enabled: true, model, effort },
+    implement: { enabled: true, model, effort },
+    "follow-up": { enabled: true, model, effort },
     verify: { enabled: true },
   },
   worktrees: {
