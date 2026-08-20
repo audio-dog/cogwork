@@ -1,0 +1,26 @@
+packages/codex-cli/tsconfig.json
+  s_b72b96ca2cca30::t_5bea0ad41159df 1-19
+apps/cli/package.json
+  s_b72b96ca2cca30::t_1de23bf868b664 16
+packages/codex-cli/package.json
+  s_b72b96ca2cca30::t_a881a49a37fcd5 25
+  s_b72b96ca2cca30::t_5bea0ad41159df 1-24,26-29
+pnpm-lock.yaml
+  s_b72b96ca2cca30::t_6aa428de1e44fc 78-80,246-282,1833-1838,6138-6142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "40c2b44b5a6c02a332de8581a16c5ce6927aa25b",
+  "prompts": {},
+  "sessions": {
+    "s_b72b96ca2cca30": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01d73-81cf-7f32-87b9-b1a415c9ea60",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
