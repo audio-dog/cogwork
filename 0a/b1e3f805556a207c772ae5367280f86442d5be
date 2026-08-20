@@ -1,0 +1,29 @@
+apps/cli/config/colony.workspace.ts
+  s_32d389a1184929::t_2ea05b9186afa3 1,4-5,44-45
+  h_46518a29d4dd91 43
+apps/cli/config/cogwork.workspace.ts
+  h_46518a29d4dd91 4-5
+docs/research/tanstack-ai-harness-structured-outputs.md
+  s_32d389a1184929::t_f8408bb673f095 1-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0ab1e3f805556a207c772ae5367280f86442d5be",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_32d389a1184929": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01f88-ba0f-7592-b980-ef48d399198c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
