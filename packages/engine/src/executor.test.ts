@@ -391,6 +391,7 @@ const successEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-42"),
   text("Investigated the exporter and verified the failure."),
+  finished,
   structuredComplete(
     {
       _tag: "triage",
@@ -399,7 +400,6 @@ const successEvents: ReadonlyArray<AgUiEvent> = [
     },
     '{"_tag":"triage","role":"ready-for-agent","proposal":"This is a genuine bug in the exporter."}',
   ),
-  finished,
 ];
 
 interface PostedComment {
@@ -479,6 +479,8 @@ describe("Executor.execute", () => {
           events.map((e) => e.seq),
           successEvents.map((_, i) => i),
         );
+        assert.strictEqual(events.at(-2)?.name, "structured-output.complete");
+        assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -540,6 +542,39 @@ describe("Executor.execute", () => {
         const log = yield* Ref.get(calls);
         assert.isFalse(log.some((call) => call.method === "triaged"));
         assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("retries a structured completion envelope without raw output", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const malformed: ReadonlyArray<AgUiEvent> = [
+        {
+          type: "CUSTOM",
+          name: "structured-output.complete",
+          value: {
+            object: {
+              _tag: "triage",
+              role: "ready-for-agent",
+              proposal: "Verified and ready.",
+            },
+          },
+        },
+        finished,
+      ];
+      const layer = provide(recorder(calls), [runner(malformed)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(workspace, triageItem);
+        const log = yield* Ref.get(calls);
+        assert.isFalse(log.some((call) => call.method === "triaged"));
+        assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured");
+
+        const ledger = yield* RunLedger.RunLedger;
+        const runs = yield* ledger.listRuns(10);
+        const events = runs[0] ? yield* ledger.events(runs[0].id) : [];
+        assert.include(events.at(-1)?.data ?? "", '"finishReason":"failed"');
       }).pipe(Effect.provide(layer));
     }),
   );
