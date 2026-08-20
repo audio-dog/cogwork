@@ -1700,7 +1700,7 @@ describe("Executor.execute", () => {
       }),
   );
 
-  it.effect("announces the run summary on the bus when it starts and again when it settles", () =>
+  it.effect("announces the run summary when it starts, gains a session, and settles", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const layer = provide(recorder(calls), [runner(successEvents)]);
@@ -1717,8 +1717,11 @@ describe("Executor.execute", () => {
         const runChanges = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
         assert.deepStrictEqual(
           runChanges.map((run) => run.status),
-          ["running", "succeeded"],
+          ["running", "running", "succeeded"],
         );
+        assert.isNull(runChanges[0]?.session ?? null);
+        assert.isNotNull(runChanges[1]?.session ?? null);
+        assert.strictEqual(runChanges[1]?.session, runChanges.at(-1)?.session);
         assert.strictEqual(runChanges.at(-1)?.eventCount, successEvents.length);
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),

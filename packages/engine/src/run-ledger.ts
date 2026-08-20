@@ -257,6 +257,8 @@ const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusSer
     insertRun: (record: RunRecord) => Effect.andThen(core.insertRun(record), publish(record.id)),
     updateRun: (runId: RunId, update: RunUpdate) =>
       Effect.andThen(core.updateRun(runId, update), publish(runId)),
+    setRunSession: (runId: RunId, session: SessionId) =>
+      Effect.andThen(core.setRunSession(runId, session), publish(runId)),
     interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
       Effect.tap(core.interruptRunning(startedFromMillis, endedAtMillis), publishAll),
     interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
