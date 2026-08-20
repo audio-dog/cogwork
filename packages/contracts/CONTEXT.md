@@ -40,6 +40,36 @@ _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 `sourceControl.botAllowlist` (with the same fallback field on `issueTracker` the source-control target already borrows) — an optional, non-empty-when-present list of bot logins whose PR comments are trusted to *wake a follow-up*. Absent means the gate is off: no bot comment ever wakes one, exactly as before. A listed bot's comment is a wake signal only — it triggers a follow-up but does not reset the no-progress counter and can never set `/fresh`, so a stall still hands off to a human. It grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
 _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot never steers)
 
+### Configuration and capabilities
+
+**Settings profile**:
+The principal-owned configuration source for installed plugins, connections, and defaults shared across workspaces and agent activity.
+_Avoid_: User settings, global config
+
+**Runtime host**:
+The execution environment that binds portable configuration to machine-specific checkout paths, installed harnesses, and local credential storage.
+_Avoid_: Device, machine config, workspace
+
+**Workspace input**:
+Versioned configuration and agent context read from files committed to a registered workspace's repository.
+_Avoid_: Repo settings, private workspace overlay
+
+**Private workspace overlay**:
+Principal-owned configuration scoped to one workspace but stored outside its repository, for repo-specific customization that must not be committed.
+_Avoid_: User-level repo input, workspace input, global config
+
+**Plugin**:
+An install-and-setup bundle that contributes capabilities and may establish connections; its contributions remain individually visible and configurable through Customize.
+_Avoid_: Capability, MCP skill, marketplace listing
+
+**Connection**:
+An authenticated binding to an external system, established once and granted to the workflows or workspaces that may use it.
+_Avoid_: Plugin, credential, MCP skill
+
+**Capability access**:
+The resolution lifecycle in which a capability is available when installed, enabled when selected, required when demanded by the operating instructions, allowed when policy permits it, and resolved when included in the validated inputs for one run.
+_Avoid_: Installed (for every state), permission
+
 ### Lifecycle
 
 **Lifecycle stage**:
