@@ -1,0 +1,24 @@
+packages/engine/src/harness.ts
+  s_7d42045e7090a1::t_1497691d204477 30-33
+  s_7d42045e7090a1::t_a306ddea2a586e 7,26-28,40
+  s_7d42045e7090a1::t_544a0a2fb02e65 35-39
+  s_7d42045e7090a1::t_d742fca876b860 29
+packages/engine/src/harness.test.ts
+  s_7d42045e7090a1::t_c66d517f9ef802 47-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "8c70f7c7cb0ac60bd4d7a2f55cf7ce739c5f87a4",
+  "prompts": {},
+  "sessions": {
+    "s_7d42045e7090a1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02042-1803-77c2-9622-5759ee36cd01",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
