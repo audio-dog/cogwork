@@ -2,7 +2,6 @@ import { WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
-  agentFailureReason,
   attachCommand,
   followUpNoteBody,
   handoffComment,
@@ -58,13 +57,6 @@ describe("comments", () => {
     const long = "x".repeat(900);
     assert.strictEqual(truncate(long).length, 800);
     assert.ok(truncate(long).endsWith("…"));
-  });
-
-  it("labels a missing follow-up sentinel and keeps any trailing agent text", () => {
-    assert.strictEqual(
-      agentFailureReason("Almost done but no footer.", "missing-sentinel"),
-      "agent produced no result line — Almost done but no footer.",
-    );
   });
 
   it("formats prepare errors from their tagged fields", () => {
@@ -132,13 +124,10 @@ describe("comments", () => {
     assert.isNull(parseTriageProposal(triageProposalBody("")));
   });
 
-  it("attributes a follow-up summary and drops the result line and any marker the agent still wrote", () => {
-    const body = followUpNoteBody(
-      "Merged main and fixed the type error.\n<!-- cogwork:agent-note -->\nFOLLOWUP-RESULT: pushed",
-    );
+  it("attributes a structured follow-up summary and strips any marker", () => {
+    const body = followUpNoteBody("Merged main and fixed the type error.\n<!-- cogwork:agent-note -->");
     assert.include(body, "This was posted by cogwork.");
     assert.include(body, "Merged main and fixed the type error.");
-    assert.notInclude(body, "FOLLOWUP-RESULT");
     // The engine owns the marker now — anything the agent stamps in is stripped before we post.
     assert.notInclude(body, "agent-note");
   });
