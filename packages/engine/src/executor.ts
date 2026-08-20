@@ -197,7 +197,9 @@ export const make = Effect.gen(function* () {
     const resumedSession = item.resume?.session;
     if (resumedSession) return Effect.succeed(resumedSession);
     if (!branch) return Effect.succeed(null);
-    return ledger.sessionForBranch(workspace.config.name, branch);
+    return ledger
+      .latestRunByBranch(workspace.config.name, branch)
+      .pipe(Effect.map((run) => run?.session ?? null));
   };
 
   const compatibleSession = Effect.fn("Executor.compatibleSession")(function* (

@@ -1019,6 +1019,28 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("starts fresh when the branch's latest session is unresumable", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(implementWorkspace, implementItem);
+        const [first] = yield* ledger.listRuns(1);
+        assert.isDefined(first);
+        yield* ledger.updateRun(first.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
+
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 2);
+        assert.notStrictEqual(captured[0]?.session, captured[1]?.session);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("starts fresh whenever the selected implement harness changes", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
