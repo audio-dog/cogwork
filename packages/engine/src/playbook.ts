@@ -177,5 +177,6 @@ export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem, l
   });
 
 export const parseFollowUpResult = (text: string) =>
-  followUpResults.find((value) => value === [...text.matchAll(followUpResultPattern)].at(-1)?.[1]?.toLowerCase()) ??
-  null;
+  followUpResults.find(
+    (value) => value === [...text.matchAll(followUpResultPattern)].at(-1)?.[1]?.toLowerCase(),
+  ) ?? null;

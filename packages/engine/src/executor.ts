@@ -438,7 +438,9 @@ export const make = Effect.gen(function* () {
       );
     }
     const completion = yield* Schema.decodeUnknownEffect(ImplementCompletion)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) => structuredTriageError(`invalid structured implement result: ${error.message}`)),
+      Effect.mapError((error) =>
+        structuredTriageError(`invalid structured implement result: ${error.message}`),
+      ),
     );
     return completion.object;
   });

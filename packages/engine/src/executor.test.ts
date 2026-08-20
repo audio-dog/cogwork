@@ -1163,7 +1163,10 @@ describe("Executor.execute", () => {
 
         const log = yield* Ref.get(calls);
         assert.isFalse(log.some((call) => call.method === "implemented"));
-        assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured implement result");
+        assert.include(
+          log.find((call) => call.method === "attemptFailed")?.reason ?? "",
+          "structured implement result",
+        );
         assert.isFalse(log.some((call) => call.method === "handOff"));
       }).pipe(Effect.provide(layer));
     }),
@@ -1389,32 +1392,34 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("retries an implement run with no structured result and resumes its session on the next attempt", () =>
-    Effect.gen(function* () {
-      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
-      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
-      const layer = provide(recorder(calls), [capturingRunner(requests, missingImplementResultEvents)]);
-      yield* Effect.gen(function* () {
-        const executor = yield* Executor.Executor;
-        yield* executor.execute(implementWorkspace, implementItem);
+  it.effect(
+    "retries an implement run with no structured result and resumes its session on the next attempt",
+    () =>
+      Effect.gen(function* () {
+        const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+        const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+        const layer = provide(recorder(calls), [capturingRunner(requests, missingImplementResultEvents)]);
+        yield* Effect.gen(function* () {
+          const executor = yield* Executor.Executor;
+          yield* executor.execute(implementWorkspace, implementItem);
 
-        const log = yield* Ref.get(calls);
-        const attempt = log.find((c) => c.method === "attemptFailed");
-        assert.strictEqual(attempt?.stage, "implement");
-        assert.include(attempt?.reason ?? "", "structured implement result");
-        assert.isFalse(log.some((c) => c.method === "handOff"));
+          const log = yield* Ref.get(calls);
+          const attempt = log.find((c) => c.method === "attemptFailed");
+          assert.strictEqual(attempt?.stage, "implement");
+          assert.include(attempt?.reason ?? "", "structured implement result");
+          assert.isFalse(log.some((c) => c.method === "handOff"));
 
-        const ledger = yield* RunLedger.RunLedger;
-        const [firstRun] = yield* ledger.listRuns(10);
-        assert.strictEqual(firstRun?.status, "failed");
-        assert.strictEqual(yield* handleOf(ledger, firstRun?.session), "sess-42");
+          const ledger = yield* RunLedger.RunLedger;
+          const [firstRun] = yield* ledger.listRuns(10);
+          assert.strictEqual(firstRun?.status, "failed");
+          assert.strictEqual(yield* handleOf(ledger, firstRun?.session), "sess-42");
 
-        yield* executor.execute(implementWorkspace, implementItem);
-        const captured = yield* Ref.get(requests);
-        assert.strictEqual(captured[1]?.session, firstRun?.session);
-        assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
-      }).pipe(Effect.provide(layer));
-    }),
+          yield* executor.execute(implementWorkspace, implementItem);
+          const captured = yield* Ref.get(requests);
+          assert.strictEqual(captured[1]?.session, firstRun?.session);
+          assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+        }).pipe(Effect.provide(layer));
+      }),
   );
 
   it.effect("announces the run summary on the bus when it starts and again when it settles", () =>

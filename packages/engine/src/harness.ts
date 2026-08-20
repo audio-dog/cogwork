@@ -1,10 +1,10 @@
 import {
   type AgUiEvent,
   type HarnessName,
+  ImplementStageResult,
   type LifecycleStage,
   type SessionId,
   type SessionKind,
-  ImplementStageResult,
   TriageStageResult,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -30,7 +30,9 @@ const implementResultSchema = Schema.toStandardJSONSchemaV1(
 const stageSchemas = {
   triage: triageResultSchema,
   implement: implementResultSchema,
-} as const satisfies Partial<Record<LifecycleStage, typeof triageResultSchema | typeof implementResultSchema>>;
+} as const satisfies Partial<
+  Record<LifecycleStage, typeof triageResultSchema | typeof implementResultSchema>
+>;
 
 export const stageResultSchema = (stage: LifecycleStage) => {
   if (stage === "triage") return stageSchemas.triage;
