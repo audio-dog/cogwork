@@ -1,6 +1,6 @@
 # Effect control flow
 
-Use this reference when an Effect workflow needs to branch on success or failure. It covers the typed failure channel, not resource cleanup or concurrency.
+Use this reference when an Effect workflow branches on successful values or expected failures. It covers sequencing and the typed failure channel, not resource cleanup or concurrency.
 
 ## Model
 
@@ -21,6 +21,39 @@ Use this reference when an Effect workflow needs to branch on success or failure
 | Inspect typed failures, defects, and interruption | `Effect.matchCauseEffect` or `Effect.exit` |
 
 `Effect.result` is not a default replacement for error handling. It removes `E` by turning it into `Result<A, E>`; use it only when the result must survive as data beyond the immediate branch.
+
+## Data-dependent sequencing
+
+When a successful value determines the next effect, use `flatMap`. This is sequencing, not failure handling: `flatMap` installs the next step on success while preserving the typed failure channel.
+
+Keep the stages small: select a candidate, load it, then make the domain decision. Use guard clauses inside the stage that owns each decision.
+
+```ts
+const loadSession = (id: SessionId | null) => {
+  if (!id) return Effect.succeed(null)
+  return ledger.getSession(id)
+}
+
+const compatibleSession = Effect.fn("Executor.compatibleSession")(function*(
+  selected: HarnessName,
+  session: Session | null,
+) {
+  if (!session) return null
+  if (session.harness === selected) return session.id
+  yield* Effect.logInfo("started fresh after harness switch", {
+    oldHarness: session.harness,
+    newHarness: selected,
+  })
+  return null
+})
+
+return candidateSession.pipe(
+  Effect.flatMap(loadSession),
+  Effect.flatMap((session) => compatibleSession(selectedHarness, session)),
+)
+```
+
+Use `matchEffect` only when the branch is on an expected failure or success. A nullable or tagged success value belongs in the next `flatMap` continuation, not in the error channel.
 
 ## Effectful terminal dispatch
 
@@ -107,7 +140,8 @@ Do not flatten a cause into an ordinary error merely to make control flow conven
 
 ## Sources
 
-- `.repos/effect/packages/effect/src/Effect.ts`: `result`, `catchTag`, `matchEffect`, and `matchCauseEffect`.
+- `.repos/effect/packages/effect/src/Effect.ts`: `flatMap`, `result`, `catchTag`, `matchEffect`, and `matchCauseEffect`.
+- `.repos/effect/packages/effect/src/internal/effect.ts`: `flatMap` installs an `OnSuccess` continuation.
 - `.agents/skills/effect-ts/references/guide-effect.md`.
 - `.agents/skills/effect-ts/references/guide-error-handling.md`.
 - `packages/engine/src/executor.ts`: run settlement and structured-result handling.

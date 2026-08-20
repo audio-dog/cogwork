@@ -238,6 +238,20 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("breaks equal branch-run timestamps by insertion order", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const branch = "16-timestamp-tie";
+        yield* ledger.insertSession(sessionRecord());
+        yield* ledger.insertSession(sessionRecord({ id: replacementSession, handle: "cursor-replaced" }));
+        yield* ledger.insertRun(record("tie-earlier", 1000, { branch, session }));
+        yield* ledger.insertRun(record("tie-later", 1000, { branch, session: replacementSession }));
+
+        assert.strictEqual(yield* ledger.sessionForBranch("gh", branch), replacementSession);
+        assert.strictEqual((yield* ledger.latestRunByBranch("gh", branch))?.session, replacementSession);
+      }),
+    );
+
     it.effect("offers an owned-transcript run's session for resume even with no handle", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;

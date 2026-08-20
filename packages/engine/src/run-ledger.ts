@@ -77,6 +77,7 @@ const consecutiveCrashesOf = (runs: ReadonlyArray<RunRecord>) => {
 
 const latestRunWhere = (runs: ReadonlyArray<RunRecord>, match: (run: RunRecord) => boolean) =>
   [...runs]
+    .reverse()
     .filter(match)
     .sort((a, b) => b.startedAtMillis - a.startedAtMillis)
     .at(0) ?? null;

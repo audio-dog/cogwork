@@ -16,7 +16,7 @@ Use this to explore APIs, find usage examples, and understand implementations fo
 When Effect v4 behavior or types are unclear, don't guess from Effect v3 memory —
 grep the real source in `.repos/effect` (e.g. `packages/effect/src`).
 The repo also contains agent-specific rules and guidance to follow in various markdown files.
-The repo also contains effect-specific examples at `docs/agent-patterns`, follow those where applicable.
+Before changing Effect code, read the applicable patterns in `docs/agent-patterns`; use each pattern's scope to select it.
 
 You must always invoke the /effect-ts skill when writing Effect code.
 
@@ -37,4 +37,3 @@ Multi-context: a root `CONTEXT-MAP.md` points to per-package `CONTEXT.md` files.
 ### Technical disposition
 
 The product direction and the maintainer's decision principles for answering finely-tuned technical open questions during triage — instead of reflexively blocking on the maintainer. See `docs/agents/technical-disposition.md`.
-

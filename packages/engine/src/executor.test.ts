@@ -41,6 +41,7 @@ import { SourceControlProvider, type SourceControlProviderService } from "./sour
 import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
+const codex = Schema.decodeSync(HarnessName)("codex");
 const id = Schema.decodeSync(WorkItemId);
 const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
 
@@ -115,6 +116,14 @@ const implementWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { implement: { enabled: true } },
+  }),
+};
+
+const codexImplementWorkspace: RegisteredWorkspace = {
+  ...implementWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    ...implementWorkspace.config,
+    playbook: { implement: { enabled: true, harness: "codex" } },
   }),
 };
 
@@ -241,6 +250,14 @@ const followUpWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { "follow-up": { enabled: true } },
+  }),
+};
+
+const codexFollowUpWorkspace: RegisteredWorkspace = {
+  ...followUpWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    ...followUpWorkspace.config,
+    harness: { preferred: "codex" },
   }),
 };
 
@@ -382,8 +399,9 @@ const capturingRunner = (
   events: ReadonlyArray<AgUiEvent>,
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
   sessionKind: SessionKind = "opaque-handle",
+  name: HarnessName = cursor,
 ): HarnessRunner => ({
-  name: cursor,
+  name,
   sessionKind,
   run: (request) =>
     Stream.unwrap(
@@ -1009,6 +1027,82 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("starts fresh when the branch's latest session is unresumable", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [capturingRunner(requests, implementEvents)]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(implementWorkspace, implementItem);
+        const [first] = yield* ledger.listRuns(1);
+        assert.isDefined(first);
+        yield* ledger.updateRun(first.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
+
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 2);
+        assert.notStrictEqual(captured[0]?.session, captured[1]?.session);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("starts fresh whenever the selected implement harness changes", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [
+        capturingRunner(requests, implementEvents),
+        capturingRunner(requests, implementEvents, Stream.empty, "opaque-handle", codex),
+      ]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(codexImplementWorkspace, implementItem);
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.deepStrictEqual(
+          captured.map((request) => request.harness),
+          [cursor, codex, cursor],
+        );
+        assert.notStrictEqual(captured[0]?.session, captured[1]?.session);
+        assert.notStrictEqual(captured[1]?.session, captured[2]?.session);
+        assert.notStrictEqual(captured[0]?.session, captured[2]?.session);
+        assert.isTrue(captured.slice(1).every((request) => !request.prompt.includes("just been resumed")));
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("does not resurrect an older implement session after an interrupted harness switch", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(recorder(calls), [
+        capturingRunner(requests, implementEvents),
+        capturingRunner(requests, implementEvents, Stream.empty, "opaque-handle", codex),
+        capturingRunner(requests, implementEvents),
+      ]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(implementWorkspace, implementItem);
+        yield* executor.execute(codexImplementWorkspace, implementItem);
+        const [latest] = yield* ledger.listRuns(1);
+        assert.isDefined(latest);
+        yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
+
+        yield* executor.execute(implementWorkspace, implementItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 3);
+        assert.notStrictEqual(captured[2]?.session, captured[0]?.session);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("resumes an interrupted run with a continuation nudge and its persisted session", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
@@ -1046,7 +1140,46 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("delivers the full stage prompt when a resumed run silently starts a fresh session", () =>
+  it.effect("cold-starts recovery when its selected harness changed", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const ensured = yield* Ref.make<ReadonlyArray<boolean>>([]);
+      const resumeItem: EligibleWork = {
+        ...implementItem,
+        resume: { session: previousSession, reason: "interrupted" },
+      };
+      const layer = provide(
+        recorder(calls),
+        [
+          capturingRunner(requests, implementEvents),
+          capturingRunner(requests, implementEvents, Stream.empty, "opaque-handle", codex),
+        ],
+        resumeRecordingWorktree(ensured),
+      );
+      yield* Effect.gen(function* () {
+        yield* seedResumeSession();
+        const executor = yield* Executor.Executor;
+        yield* executor.execute(codexImplementWorkspace, resumeItem);
+
+        const [request] = yield* Ref.get(requests);
+        assert.strictEqual(request?.harness, codex);
+        assert.notStrictEqual(request?.session, previousSession);
+        assert.include(request?.prompt ?? "", "implement-agent");
+        assert.notInclude(request?.prompt ?? "", "just been resumed");
+        assert.deepStrictEqual(yield* Ref.get(ensured), [true]);
+
+        const callsAfterRun = yield* Ref.get(calls);
+        assert.isFalse(callsAfterRun.some((call) => call.method === "attemptFailed"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.session, request?.session);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("fails a resumed implement run when the harness rejects its session", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
@@ -1061,36 +1194,26 @@ describe("Executor.execute", () => {
         yield* executor.execute(implementWorkspace, resumeItem);
 
         const captured = yield* Ref.get(requests);
-        assert.strictEqual(captured.length, 2);
+        assert.strictEqual(captured.length, 1);
 
-        const [nudge, full] = captured;
+        const [nudge] = captured;
         assert.strictEqual(nudge?.session, previousSession);
         assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
 
-        assert.strictEqual(full?.session, previousSession);
-        assert.strictEqual(full?.checkoutPath, `/wt/${implementBranch}`);
-        assert.include(full?.prompt ?? "", "implement-agent");
-        assert.notInclude(full?.prompt ?? "", "IMPLEMENT-RESULT");
-        assert.notInclude(full?.prompt ?? "", "You were interrupted part-way through");
-
         const log = yield* Ref.get(calls);
-        assert.isTrue(log.some((c) => c.method === "implemented"));
+        assert.isTrue(log.some((c) => c.method === "attemptFailed"));
+        assert.isFalse(log.some((c) => c.method === "implemented"));
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
         assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
-        assert.strictEqual(run?.status, "succeeded");
-
-        const events = run ? yield* ledger.events(run.id) : [];
-        assert.deepStrictEqual(
-          events.map((e) => e.seq),
-          events.map((_, i) => i),
-        );
+        assert.strictEqual(run?.status, "failed");
+        assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
       }).pipe(Effect.provide(layer));
     }),
   );
 
-  it.effect("delivers the full triage prompt when a resumed triage run starts a fresh session", () =>
+  it.effect("fails a resumed triage run when the harness rejects its session", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
@@ -1105,28 +1228,20 @@ describe("Executor.execute", () => {
         yield* executor.execute(workspace, resumeItem);
 
         const captured = yield* Ref.get(requests);
-        assert.strictEqual(captured.length, 2);
+        assert.strictEqual(captured.length, 1);
 
-        const [nudge, full] = captured;
+        const [nudge] = captured;
         assert.strictEqual(nudge?.session, previousSession);
         assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
 
-        assert.strictEqual(full?.session, previousSession);
-        assert.strictEqual(full?.checkoutPath, "/repos/gh");
-        assert.include(full?.prompt ?? "", "triage-agent");
-        assert.notInclude(full?.prompt ?? "", "TRIAGE-DECISION");
-        assert.notInclude(full?.prompt ?? "", "You were interrupted part-way through");
-
         const log = yield* Ref.get(calls);
-        assert.strictEqual(log.find((c) => c.method === "triaged")?.role, "ready-for-agent");
+        assert.isTrue(log.some((c) => c.method === "attemptFailed"));
+        assert.isFalse(log.some((c) => c.method === "triaged"));
 
         const ledger = yield* RunLedger.RunLedger;
         const [run] = yield* ledger.listRuns(10);
-        const events = run ? yield* ledger.events(run.id) : [];
-        assert.deepStrictEqual(
-          events.map((e) => e.seq),
-          events.map((_, i) => i),
-        );
+        assert.strictEqual(run?.status, "failed");
+        assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -1561,6 +1676,37 @@ describe("Executor.execute", () => {
         assert.strictEqual(captured[0]?.session, run?.session);
         assert.strictEqual(captured[1]?.session, run?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("does not resurrect an older follow-up session after an interrupted harness switch", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const layer = provide(
+        recorder(calls),
+        [
+          capturingRunner(requests, followUpEvents),
+          capturingRunner(requests, followUpEvents, Stream.empty, "opaque-handle", codex),
+          capturingRunner(requests, followUpEvents),
+        ],
+        worktreeStubCreated(false),
+      );
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const ledger = yield* RunLedger.RunLedger;
+        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* executor.execute(codexFollowUpWorkspace, followUpItem);
+        const [latest] = yield* ledger.listRuns(1);
+        assert.isDefined(latest);
+        yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
+
+        yield* executor.execute(followUpWorkspace, followUpItem);
+
+        const captured = yield* Ref.get(requests);
+        assert.strictEqual(captured.length, 3);
+        assert.notStrictEqual(captured[2]?.session, captured[0]?.session);
       }).pipe(Effect.provide(layer));
     }),
   );

@@ -22,6 +22,7 @@ const workspace = Schema.decodeSync(WorkspaceId)("gh");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
 const otherWorkItem = Schema.decodeSync(WorkItemId)("#8");
 const session = Schema.decodeSync(SessionId)("sess-abc");
+const laterSession = Schema.decodeSync(SessionId)("sess-later");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
 const record = (id: string, startedAtMillis: number, over: Partial<RunRecord> = {}): RunRecord => ({
@@ -139,6 +140,20 @@ describe("RunLedger (memory)", () => {
         assert.strictEqual(yield* sessionByBranch("gh", "7-fix-export"), "sess-abc");
         assert.isNull(yield* sessionByBranch("gh", "9-other"));
         assert.isNull(yield* sessionByBranch("other", "7-fix-export"));
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
+    it.effect("prefers the later run when runs share a timestamp", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertSession(sessionRecord());
+        yield* ledger.insertSession(sessionRecord({ id: laterSession }));
+        yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export", session }));
+        yield* ledger.insertRun(record("run-2", 1000, { branch: "7-fix-export", session: laterSession }));
+
+        assert.strictEqual(yield* ledger.sessionForBranch("gh", "7-fix-export"), laterSession);
       }),
     );
   });
