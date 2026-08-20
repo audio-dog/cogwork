@@ -1,0 +1,23 @@
+packages/contracts/src/triage.ts
+  s_83de1e624f0446::t_804af730ea5adc 49-63,65-93
+  s_83de1e624f0446::t_797438846daf8a 64
+  s_83de1e624f0446::t_4f940c9a6d378a 2,94
+packages/contracts/src/triage.test.ts
+  s_83de1e624f0446::t_5762bb55723c9e 6-7,12-13,89-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "5dcd7effd7b4ca80ff3be350303656ed6ee1dacb",
+  "prompts": {},
+  "sessions": {
+    "s_83de1e624f0446": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0206b-921e-7593-877a-6c8cef72ce52",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
