@@ -1,8 +1,8 @@
 import type { CodexEffort, CodexModel } from "@cogwork/codex-cli";
 import { defineWorkspace } from "@cogwork/engine";
 
-const model = "gpt-5.6-terra" satisfies CodexModel;
-const effort = "medium" satisfies CodexEffort;
+const model = "gpt-5.6-sol" satisfies CodexModel;
+const effort = "high" satisfies CodexEffort;
 
 const taylor = "02051c43-a071-42bd-9bae-8f6ede983375";
 
@@ -30,7 +30,7 @@ export default defineWorkspace({
     actorLogin: "taylorfsteele",
     botAllowlist: ["cursor[bot]"],
   },
-  harness: { preferred: "cursor" },
+  harness: { preferred: "codex" },
   mcpSkills: [
     {
       name: "linear",
