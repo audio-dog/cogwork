@@ -1,0 +1,19 @@
+turbo.json
+  s_048e5db577aaec::t_381961d38c8194 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "79b3c9538a1393a555583353ae0e479dbe6c5961",
+  "prompts": {},
+  "sessions": {
+    "s_048e5db577aaec": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02649-6a3f-7c62-b7ec-ff4fba3244f7",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
