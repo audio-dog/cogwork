@@ -13,6 +13,7 @@ import {
 } from "@remixicon/react";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { ActivityTab as ActivityTabBody } from "./activity-tab";
+import { ActivityViewProvider } from "./activity-view";
 import { AttentionList } from "./attention-rail";
 import { CompactEngineGate } from "./engine-gate";
 import { ItemTab as ItemTabView } from "./item-tab";
@@ -144,75 +145,77 @@ export function RightPanel() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <div
-        className={cn(
-          "flex h-11 min-h-11 shrink-0 items-center gap-1 border-b pr-2 pl-2 [-webkit-app-region:drag]",
-          maximized && "[[data-sidebar-state=collapsed]_&]:pl-[var(--workspace-titlebar-content-left)]",
-        )}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          <FixedTab
-            active={active === "attention"}
-            onSelect={() => setActive("attention")}
-            icon={<RiFocus2Line className="size-3.5 shrink-0" />}
-            label="Attention"
-          />
-          <FixedTab
-            active={active === "activity"}
-            onSelect={() => setActive("activity")}
-            icon={<RiPulseLine className="size-3.5 shrink-0" />}
-            label="Activity"
-          />
-          {itemSurfaces.map((surface) => {
-            const id = surfaceId(surface);
-            return (
-              <ItemTab
-                key={id}
-                workspace={surface.workspace}
-                workItem={surface.workItem}
-                active={active === id}
-                onSelect={() => setActive(id)}
-                onClose={() => closeSurface(id)}
-              />
-            );
-          })}
+    <ActivityViewProvider>
+      <div className="flex h-full min-h-0 flex-col bg-background">
+        <div
+          className={cn(
+            "flex h-11 min-h-11 shrink-0 items-center gap-1 border-b pr-2 pl-2 [-webkit-app-region:drag]",
+            maximized && "[[data-sidebar-state=collapsed]_&]:pl-[var(--workspace-titlebar-content-left)]",
+          )}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
+            <FixedTab
+              active={active === "attention"}
+              onSelect={() => setActive("attention")}
+              icon={<RiFocus2Line className="size-3.5 shrink-0" />}
+              label="Attention"
+            />
+            <FixedTab
+              active={active === "activity"}
+              onSelect={() => setActive("activity")}
+              icon={<RiPulseLine className="size-3.5 shrink-0" />}
+              label="Activity"
+            />
+            {itemSurfaces.map((surface) => {
+              const id = surfaceId(surface);
+              return (
+                <ItemTab
+                  key={id}
+                  workspace={surface.workspace}
+                  workItem={surface.workItem}
+                  active={active === id}
+                  onSelect={() => setActive(id)}
+                  onClose={() => closeSurface(id)}
+                />
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
+            <Button
+              aria-label={maximized ? "Restore panel" : "Expand panel"}
+              size="icon-sm"
+              variant="ghost"
+              onClick={toggleMaximized}
+            >
+              {maximized ? <RiCollapseDiagonalLine /> : <RiExpandDiagonalLine />}
+            </Button>
+            <Button aria-label="Close panel" size="icon-sm" variant="ghost" onClick={closePanel}>
+              <RiCloseLine />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
-          <Button
-            aria-label={maximized ? "Restore panel" : "Expand panel"}
-            size="icon-sm"
-            variant="ghost"
-            onClick={toggleMaximized}
-          >
-            {maximized ? <RiCollapseDiagonalLine /> : <RiExpandDiagonalLine />}
-          </Button>
-          <Button aria-label="Close panel" size="icon-sm" variant="ghost" onClick={closePanel}>
-            <RiCloseLine />
-          </Button>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <CompactEngineGate.Provider>
+            <CompactEngineGate.Live>
+              {current.kind === "attention" && <AttentionPanelBody />}
+              {current.kind === "activity" && <ActivityTabBody />}
+              {current.kind === "item" && (
+                <ItemPanelBody
+                  key={`${surfaceId(current)}:${current.runId ?? ""}`}
+                  workspace={current.workspace}
+                  workItem={current.workItem}
+                  runId={current.runId}
+                />
+              )}
+            </CompactEngineGate.Live>
+            <CompactEngineGate.Connecting>
+              <PanelSkeleton />
+            </CompactEngineGate.Connecting>
+            <CompactEngineGate.Off />
+            <CompactEngineGate.Broken />
+          </CompactEngineGate.Provider>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            {current.kind === "attention" && <AttentionPanelBody />}
-            {current.kind === "activity" && <ActivityTabBody />}
-            {current.kind === "item" && (
-              <ItemPanelBody
-                key={`${surfaceId(current)}:${current.runId ?? ""}`}
-                workspace={current.workspace}
-                workItem={current.workItem}
-                runId={current.runId}
-              />
-            )}
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
-      </div>
-    </div>
+    </ActivityViewProvider>
   );
 }
