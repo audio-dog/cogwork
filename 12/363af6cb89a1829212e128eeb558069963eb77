@@ -1,0 +1,25 @@
+packages/engine/src/provider-runner.test.ts
+  s_85012f36742a48::t_e16b45a06f4208 56,171,217
+packages/cursor-acp/src/harness.ts
+  s_85012f36742a48::t_a612084dd1311b 229
+packages/engine/src/provider-runner.ts
+  s_85012f36742a48::t_e16b45a06f4208 73,111,169
+packages/cursor-acp/run.ts
+  s_85012f36742a48::t_a612084dd1311b 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "12363af6cb89a1829212e128eeb558069963eb77",
+  "prompts": {},
+  "sessions": {
+    "s_85012f36742a48": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02584-5278-70b1-95b4-59d18aaecc09",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
