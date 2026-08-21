@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/run-drill-in.tsx
+  s_5b5fc7aa0a05af::t_d4842715a9b431 132,136-139,145-161,256
+  s_5b5fc7aa0a05af::t_13323d79419852 121-122,127
+  s_5b5fc7aa0a05af::t_01ec25b81e87ca 124-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "a84ae8dabb973e852b44feaa5109c9f2949c3387",
+  "prompts": {},
+  "sessions": {
+    "s_5b5fc7aa0a05af": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02187-72b8-7c21-9d47-c37dcd532459",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
