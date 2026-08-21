@@ -1,0 +1,30 @@
+packages/codex-cli/CONTEXT.md
+  s_1a1bc01aadef16::t_b6d39a9a899a4c 18-32
+  s_ab43e4c1324b79::t_2025729014c44c 35-36
+CONTEXT-MAP.md
+  s_1a1bc01aadef16::t_b6d39a9a899a4c 47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "b50098b98257a553d1f91f9e72bb580ebf30b1df",
+  "prompts": {},
+  "sessions": {
+    "s_1a1bc01aadef16": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02145-f010-7021-b832-7aee1c46f119",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ab43e4c1324b79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02188-e70b-7633-9b1f-fa1213143994",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
