@@ -1,0 +1,21 @@
+packages/engine/src/provider-runner.ts
+  s_85012f36742a48::t_9e2645b22fe4ab 167
+packages/engine/src/provider-runner.test.ts
+  s_85012f36742a48::t_9e2645b22fe4ab 170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "96e7d82d0619dd64e14c3a0e21bde69e0b0f4da2",
+  "prompts": {},
+  "sessions": {
+    "s_85012f36742a48": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02584-5278-70b1-95b4-59d18aaecc09",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
