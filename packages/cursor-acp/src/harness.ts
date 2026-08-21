@@ -226,6 +226,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           const projection = mcpWorkspaceProjection(request.mcpSkills);
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,
+            fileEvents: false,
             provider: localProcessSandbox({ dir: request.checkoutPath, scrubEnv }),
             workspace: defineWorkspace({
               source: { type: "none" },
