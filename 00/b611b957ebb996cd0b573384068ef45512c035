@@ -1,0 +1,19 @@
+packages/ui/src/styles/globals.css
+  s_fb71bbca38c907::t_90e9c455c4ec42 30-31,72-73,109-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "00b611b957ebb996cd0b573384068ef45512c035",
+  "prompts": {},
+  "sessions": {
+    "s_fb71bbca38c907": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02501-7dac-7e61-b7ec-98f70ddfe682",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
