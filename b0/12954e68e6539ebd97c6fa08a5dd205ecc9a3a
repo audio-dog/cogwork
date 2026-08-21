@@ -1,0 +1,26 @@
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_2030a111de880f::t_086875e36c0df7 33,35,66,74
+  s_2030a111de880f::t_ef4392657740bb 24-32,34,36
+  s_2030a111de880f::t_12e1a209fa40cd 1,7-12
+  s_2030a111de880f::t_f7c2d904f1af1c 37
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_2030a111de880f::t_4e1ff133b15f77 92,99,709
+  s_2030a111de880f::t_12e1a209fa40cd 684,692-696
+  s_2030a111de880f::t_a88bc3e07f7976 102-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "b012954e68e6539ebd97c6fa08a5dd205ecc9a3a",
+  "prompts": {},
+  "sessions": {
+    "s_2030a111de880f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a021c1-677f-7902-b52c-7276bc071389",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
