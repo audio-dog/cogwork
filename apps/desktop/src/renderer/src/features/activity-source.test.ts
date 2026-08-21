@@ -10,6 +10,7 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import {
   activeRuns,
+  activityCategory,
   boundLog,
   decodeEvent,
   deriveActivityFeed,
@@ -133,7 +134,7 @@ describe("decodeEvent — human summaries", () => {
 
     expect(row?.label).toBe("Run");
     expect(row?.summary).toBe("42 · run succeeded");
-    expect(row?.entity).toEqual({ type: "run", id: "run-1", workspace: "acme" });
+    expect(row?.entity).toEqual({ type: "run", id: "run-1", workspace: "acme", workItem: "42" });
   });
 
   it("reads a registered workspace and a failed one", () => {
@@ -171,6 +172,16 @@ describe("decodeEvent — human summaries", () => {
     expect(row?.label).toBe("Scheduler");
     expect(row?.summary).toBe("2/4 in flight · budget 37/100");
     expect(row?.severity).toBe("info");
+  });
+});
+
+describe("activityCategory", () => {
+  it("groups items and system lifecycle events for the shared funnel", () => {
+    expect(activityCategory("item")).toBe("item");
+    expect(activityCategory("item-removed")).toBe("item");
+    expect(activityCategory("engine")).toBe("system");
+    expect(activityCategory("connection")).toBe("system");
+    expect(activityCategory("stream")).toBe("system");
   });
 });
 

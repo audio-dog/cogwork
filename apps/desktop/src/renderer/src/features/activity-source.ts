@@ -1,13 +1,18 @@
 import type {
   ClassifiedItem,
   DaemonEvent,
+  RunId,
   RunStatus,
   RunSummary,
   SchedulerStats,
+  WorkItemId,
+  WorkspaceId,
   WorkspaceState,
 } from "@cogwork/contracts";
+import { useRef } from "react";
 import { type RunActivityPreview, runPreviews } from "./run-activity";
-import type { EnginePhase } from "./use-engine-status";
+import { type EnginePhase, enginePhase, useEngineStatus } from "./use-engine-status";
+import { useLiveEvents } from "./use-live-events";
 
 export type ActivityKind =
   | "item"
@@ -23,11 +28,9 @@ export type ActivitySeverity = "info" | "success" | "warn" | "error";
 
 export type ConnectionState = "live" | "connecting" | "lost";
 
-export interface ActivityEntity {
-  type: "run" | "item";
-  id: string;
-  workspace: string;
-}
+export type ActivityEntity =
+  | { type: "run"; id: RunId; workspace: WorkspaceId; workItem: WorkItemId }
+  | { type: "item"; id: WorkItemId; workspace: WorkspaceId };
 
 export interface ActivityRow {
   id: string;
@@ -107,7 +110,7 @@ const runRow = (run: RunSummary): ActivityRow => ({
   label: activityLabels.run,
   summary: `${run.workItem} · run ${run.status}`,
   severity: runStatusSeverity[run.status],
-  entity: { type: "run", id: run.id, workspace: run.workspace },
+  entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem },
   raw: pretty(run),
   lowSignal: false,
 });
@@ -156,7 +159,7 @@ const schedulerRow = (scheduler: SchedulerStats, atMillis: number): ActivityRow 
   };
 };
 
-const itemChangedRow = (workspace: string, item: ClassifiedItem, atMillis: number): ActivityRow => {
+const itemChangedRow = (workspace: WorkspaceId, item: ClassifiedItem, atMillis: number): ActivityRow => {
   const state = classifiedState(item);
   return {
     id: `item:${workspace}:${item.id}:${atMillis}`,
@@ -171,7 +174,7 @@ const itemChangedRow = (workspace: string, item: ClassifiedItem, atMillis: numbe
   };
 };
 
-const itemRemovedRow = (workspace: string, id: string, atMillis: number): ActivityRow => ({
+const itemRemovedRow = (workspace: WorkspaceId, id: WorkItemId, atMillis: number): ActivityRow => ({
   id: `rm:${workspace}:${id}:${atMillis}`,
   kind: "item-removed",
   atMillis,
@@ -309,6 +312,14 @@ export const activeRuns = (events: ReadonlyArray<DaemonEvent>) => {
 
 export const defaultActivityLimit = 500;
 
+export type ActivityCategory = "item" | "run" | "workspace" | "scheduler" | "system";
+
+export const activityCategory = (kind: ActivityKind): ActivityCategory => {
+  if (kind === "item" || kind === "item-removed") return "item";
+  if (kind === "engine" || kind === "connection" || kind === "stream") return "system";
+  return kind;
+};
+
 export const boundLog = (
   rows: ReadonlyArray<ActivityRow>,
   limit: number = defaultActivityLimit,
@@ -344,3 +355,32 @@ export const deriveActivityFeed = (inputs: ActivityInputs): ActivityFeed => {
     total: merged.length,
   };
 };
+
+export function useActivityFeed() {
+  const events = useLiveEvents();
+  const { status } = useEngineStatus();
+  const arrivals = useRef<number[]>([]);
+  const lifecycle = useRef<LifecycleState>(initialLifecycleState);
+  const synthesized = useRef<ActivityRow[]>([]);
+  const items = events._tag === "Success" ? events.value.items : [];
+  const connection: ConnectionState =
+    events._tag === "Failure" ? "lost" : events._tag === "Success" ? "live" : "connecting";
+
+  if (arrivals.current.length < items.length) {
+    const timestamp = Date.now();
+    arrivals.current.push(...items.slice(arrivals.current.length).map(() => timestamp));
+  }
+
+  const sample: LifecycleSample = { engine: enginePhase(status), connection, atMillis: Date.now() };
+  const next = stepLifecycle(lifecycle.current, sample);
+  lifecycle.current = next.state;
+  if (next.rows.length > 0) synthesized.current.push(...next.rows);
+
+  return deriveActivityFeed({
+    events: items,
+    arrivals: arrivals.current,
+    synthesized: synthesized.current,
+    engine: sample.engine,
+    connection,
+  });
+}
