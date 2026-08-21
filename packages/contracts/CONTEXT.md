@@ -25,7 +25,7 @@ The stable key tying a work item to its pull request across systems: `ticketSlug
 _Avoid_: Closing keyword (`Closes #N`, the GitHub-only match this replaces), PR reference, branch name (the full branch also carries a title slug that can drift)
 
 **Workspace**:
-A repo registered with the daemon: a checkout path bound to an issue tracker and, optionally, a source control provider, plus harness preferences and playbook config. The unit of isolation and per-repo configuration.
+A repo registered with the daemon: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. The unit of isolation and per-repo configuration.
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:
@@ -63,29 +63,67 @@ An install-and-setup bundle that contributes capabilities and may establish conn
 _Avoid_: Capability, MCP skill, marketplace listing
 
 **Connection**:
-An authenticated binding to an external system, established once and granted to the workflows or workspaces that may use it.
+An authenticated binding to an external system, established once and granted to the operations or workspaces that may use it.
 _Avoid_: Plugin, credential, MCP skill
 
 **Capability access**:
 The resolution lifecycle in which a capability is available when installed, enabled when selected, required when demanded by the operating instructions, allowed when policy permits it, and resolved when included in the validated inputs for one run.
 _Avoid_: Installed (for every state), permission
 
-### Lifecycle
+### Workflows and operations
 
-**Lifecycle stage**:
-One of `triage`, `implement`, `follow-up`, `verify` — the kind of work a run performs on an item. Chosen by classification from the item's roles and PR state.
-_Avoid_: Step, phase, task type
+**Workflow**:
+A reusable end-to-end automation made of operations and the transitions between them. Cogwork owns the graph today; user-authored composition may come later without changing the concept.
+_Avoid_: Playbook, pipeline, run
+
+**Operation**:
+One selectable kind of agent work within a workflow, such as triage, implementation, follow-up, or validation. A run executes one operation.
+_Avoid_: Lifecycle stage, stage, step, task type
+
+**Transition**:
+The routing relationship that selects what follows an operation from its outcome and current external state.
+_Avoid_: Operation, workflow step
+
+**Operation definition**:
+The engine-authored contract for one operation: its behavior, defaults, required capabilities, operating instructions, and possible outcomes.
+_Avoid_: Playbook, run plan, operation settings
+
+**Operation settings**:
+The scoped choices that configure an operation, such as enablement, harness, model, effort, permissions, optional capabilities, and allowed overrides.
+_Avoid_: Playbook, operation definition, run plan
+
+**Operating instructions**:
+Reusable guidance an agent must follow when performing an operation, resolved separately from the work-specific facts supplied for one run.
+_Avoid_: Playbook skill, prompt, work context
+
+**Work context**:
+The work-specific facts supplied to a run, such as a work item's body and comments or a pull request's checks and reviews.
+_Avoid_: Operating instructions, prompt template, workflow settings
+
+The relationship is:
+
+```text
+Workflow
+├── Operations and transitions
+│   ├── Operation Definition
+│   ├── Operation Settings
+│   └── Operating Instructions
+│
+└── selected Operation + Work Context
+    → Run Plan
+    → Run
+```
 
 **Priority**:
-One of `urgent`, `high`, `medium`, `low` — a four-level scale (`priorityRank`, highest first) that orders work *within* a lifecycle stage and nowhere else. Stage is always the primary sort key, so a low-priority follow-up still runs before an urgent implement; priority only breaks ties between items of the same stage, and stable tracker order breaks ties between items of the same priority. Every observed item carries a resolved priority. Each adapter reads its own tracker's field and maps it onto this scale (`resolvePriority`, case-insensitive); anything absent, blank, or unrecognized becomes the `defaultPriority`, `medium`. Priority orders work — it never gates eligibility — so a value we can't read must never drop an item; it just lands in the middle.
-_Avoid_: Stage priority (that's the fixed stage order, `stagePriority`), severity, weight, rank (alone — `priorityRank` is the ordering, priority is the value)
+One of `urgent`, `high`, `medium`, `low` — a four-level scale (`priorityRank`, highest first) that orders work *within* an operation and nowhere else. Operation is always the primary sort key, so a low-priority follow-up still runs before an urgent implementation; priority only breaks ties between items selected for the same operation, and stable tracker order breaks ties between items of the same priority. Every observed item carries a resolved priority. Each adapter reads its own tracker's field and maps it onto this scale (`resolvePriority`, case-insensitive); anything absent, blank, or unrecognized becomes the `defaultPriority`, `medium`. Priority orders work — it never gates eligibility — so a value we can't read must never drop an item; it just lands in the middle.
+_Avoid_: Operation priority (that's the fixed operation order), severity, weight, rank (alone — `priorityRank` is the ordering, priority is the value)
 
 **Triage role**:
-A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; stages drive execution.
+A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; operations drive execution.
 _Avoid_: Status, state, label (when you mean the role's meaning)
 
 **Blocked / blocker / blocking**:
-An item is *blocked* when its issue tracker reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the issue tracker's own dependency relation (GitHub issue dependencies today; Linear blocking relations when its adapter reads them), read per adapter. A blocked item is held out of the `implement` stage until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.
+An item is *blocked* when its issue tracker reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the issue tracker's own dependency relation (GitHub issue dependencies today; Linear blocking relations when its adapter reads them), read per adapter. A blocked item is held out of the implementation operation until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.
 _Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those are needs-human — a person clears them); stuck / exhausted / stalled (failure outcomes, not dependencies).
 
 **Needs-human reason**:
@@ -95,11 +133,11 @@ _Avoid_: Block reason (blocking now means open dependencies), error, failure.
 ### Coordination
 
 **Claim**:
-A coordination record marking an item as being worked: `by`, `claimedAtMillis`, and an optional stage. Persisted onto the issue tracker (a label plus a marker), so it survives a daemon restart.
+A coordination record marking an item as being worked: `by`, `claimedAtMillis`, and an optional operation. Persisted onto the issue tracker (a label plus a marker), so it survives a daemon restart.
 _Avoid_: Lock, lease, reservation
 
 **Attempt record**:
-A coordination record of one finished stage attempt on an item: its stage, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the issue tracker.
+A coordination record of one finished operation attempt on an item: its operation, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the issue tracker.
 _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
 
 ### Credentials
@@ -110,8 +148,12 @@ _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id`
 
 ### Runs
 
+**Run plan**:
+The immutable, engine-validated resolution of one operation and its work context, settings, instructions, capabilities, policy, versions, and provenance. It is accepted before dispatch and retained with the run; runtime projection and observations are evidence about execution, not changes to the plan.
+_Avoid_: Run manifest, resolved stage, harness request, operation settings
+
 **Run**:
-One execution of one stage against one work item by one harness, captured as a `RunRecord` (branch, session, token usage, status, timings). The daemon's disposable local record of an execution.
+One execution of one run plan by one harness, captured with its events, outcome, usage, and timings. The run records what was projected and observed without changing its plan.
 _Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
@@ -127,11 +169,11 @@ A live envelope broadcast while a run is in flight: run identity (run id / seque
 _Avoid_: Run event (the persisted form), notification
 
 **Session**:
-A first-class entity with its own `SessionId`, grouping the runs that make up one conversation — a run points at it by foreign key (`RunRecord.session`), and runs on the same branch share one while their selected harness remains unchanged. Every session is permanently owned by the harness that created it and can be resumed only by that harness; model, effort, playbook, and stage changes do not affect compatibility. A fresh start always mints a new session. It comes in two kinds. An **owned-transcript** session is the provider runner's: the whole conversation lives in our run ledger, so its transcript folds straight from the events and no handle is kept. An **opaque-handle** session is a CLI harness's: the harness keeps its own history and hands back an opaque `handle` (e.g. Cursor's session id) we store to resume it — `null` until the harness emits one. The kind is not a guess: each harness runner declares its `SessionKind` beside its name, and the session store mints the matching one. The session is minted when the run is inserted, before the harness has said anything (see engine ADR 0002), so a run always names a session even before it can be resumed.
+A first-class entity with its own `SessionId`, grouping the runs that make up one conversation — a run points at it by foreign key (`RunRecord.session`), and runs on the same branch share one while their selected harness remains unchanged. Every session is permanently owned by the harness that created it and can be resumed only by that harness; model, effort, operation, and instruction changes do not affect compatibility. A fresh start always mints a new session. It comes in two kinds. An **owned-transcript** session is the provider runner's: the whole conversation lives in our run ledger, so its transcript folds straight from the events and no handle is kept. An **opaque-handle** session is a CLI harness's: the harness keeps its own history and hands back an opaque `handle` (e.g. Cursor's session id) we store to resume it — `null` until the harness emits one. The kind is not a guess: each harness runner declares its `SessionKind` beside its name, and the session store mints the matching one. The session is minted when the run is inserted, before the harness has said anything (see engine ADR 0002), so a run always names a session even before it can be resumed.
 _Avoid_: Run, connection, handle (that's one field of the opaque-handle kind, not the session itself)
 
 **Harness switch**:
-A run selecting a different harness from the branch's latest session. It begins a new session with the full stage instructions while preserving the worktree, branch, code progress, claim, and historical run records; only conversation continuity is discarded. Switching back never resurrects an older session from that harness.
+A run selecting a different harness from the branch's latest session. It begins a new session with the full operating instructions while preserving the worktree, branch, code progress, claim, and historical run records; only conversation continuity is discarded. Switching back never resurrects an older session from that harness.
 _Avoid_: Session migration, session transfer, cross-harness resume
 
 **Exhausted / stalled / stuck**:
@@ -157,20 +199,20 @@ The sandbox, approval mode, and native tools an external CLI harness enforces in
 _Avoid_: Owned tool policy, provider sandbox, fallback
 
 **Harness request**:
-The input handed to a harness for one run: which harness, the checkout path, the prompt, an optional model, an optional harness-native effort level, an optional session to resume, and the MCP skills to provision. Secret material (e.g. an MCP skill's bearer token) rides a channel that is never persisted or logged, not a plain field.
-_Avoid_: Prompt (that's one field), job
+The projection of an accepted run plan handed to one harness: checkout path, work request, model and effort, session reference, instructions, and capabilities in the harness's supported forms. Secret material rides a channel that is never persisted or logged, not a plain field.
+_Avoid_: Run plan (the complete engine-owned input), prompt, job
 
-**Stage result**:
-The tagged, Effect-Schema-defined value a lifecycle stage returns through the harness stream. The shared kernel owns each stage's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary. Prose remains ordinary streamed output and is never parsed as a stage result.
+**Operation result**:
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. The shared kernel owns each operation's schema: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary. Prose remains ordinary streamed output and is never parsed as an operation result.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
-**Playbook skill**:
-The coding playbook's named `SKILL.md` capability for a lifecycle stage (e.g. `triage-agent`). It is a required engine input: every harness runner receives the assembled playbook instructions and their provisioned resource path instead of relying on ambient harness discovery. Distinct from an MCP skill.
-_Avoid_: Skill (alone), MCP skill, agent skill (TanStack Intent authoring docs)
+**Operating-instructions package**:
+The named `SKILL.md` package carrying an operation's mandatory operating instructions and supporting resources. It is a required engine input supplied explicitly to every harness rather than trusted to ambient discovery.
+_Avoid_: Playbook skill, skill (alone), MCP skill, agent skill (TanStack Intent authoring docs)
 
 **MCP skill**:
 An external MCP server the engine provisions onto a run so the harness can call its tools — named and configured (endpoint + auth) by the engine, not by the harness. The engine assembles the set for a run; the harness runner projects each into the harness's native MCP channel. Secret values travel only through a secret or environment channel, never through a generated worktree config or command argument. Read-only where the server offers a read-only endpoint. The name follows TanStack AI's `mcpSkill`; it is the first kind of engine-provisioned run capability.
-_Avoid_: MCP server, playbook skill, tool (one server exposes many), harness tool (the harness's own built-ins), plugin, provider skill (Anthropic/OpenAI hosted sandbox bundles)
+_Avoid_: MCP server, operating-instructions package, tool (one server exposes many), harness tool (the harness's own built-ins), plugin, provider skill (Anthropic/OpenAI hosted sandbox bundles)
 
 **Harness event**:
 The whole AG-UI event a harness run streams, carried inside a stable envelope rather than curated down to a fixed set of fields. A handful of fields are named because our folds and clients read them (text delta, tool call id/name, result, session id, usage, finish reason); every other key the harness emits — tool-call input, reasoning deltas, correlation ids, per-turn cost, and AG-UI fields we don't name yet — rides along instead of being dropped at decode. The engine persists these as run events and republishes them as run activity. The provider runner will emit AG-UI natively; cursor-acp maps its ACP stream best-effort.
