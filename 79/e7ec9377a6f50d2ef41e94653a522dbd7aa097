@@ -1,0 +1,76 @@
+packages/codex-cli/src/harness.test.ts
+  s_946bf013fae8ed::t_30d68bd82a537b 413
+  s_946bf013fae8ed::t_1dbbe7840e4f94 111-117,119,372,387,402,416,493,572,604
+  s_ab43e4c1324b79::t_a23a861fd8db10 25
+  s_ab43e4c1324b79::t_5fa503039e5624 373,403,464-468
+  s_946bf013fae8ed::t_45d7f326a9f202 107-109
+  s_1a1bc01aadef16::t_9c99bcba3f423f 137-140,151,478,483-485,487,490,494-496
+  s_1a1bc01aadef16::t_bc7b51e06e450f 369,380-384,395
+  s_ab43e4c1324b79::t_598d21af8c20a4 80-86,194,242,259,302,346,371,386,401,415
+  s_946bf013fae8ed::t_112d026f03ee9e 17,105-106,110,479-480
+  s_ab43e4c1324b79::t_58dfb2e4ae3928 410-411,459-461,463,469-472,474-476,503-504,609-610
+  s_946bf013fae8ed::t_01ed129f418594 481
+  s_1a1bc01aadef16::t_9884eb69a3950a 652
+  s_ab43e4c1324b79::t_e36f0f538fee6a 15,159-179,462,473,477,482,486,488-489,498-502
+  s_1a1bc01aadef16::t_e2843a962de412 4,370,414,491-492,590-603,605-607
+  s_ab43e4c1324b79::t_71ad2d3ac1950c 180
+  s_ab43e4c1324b79::t_438b0b9bd35f1f 404-409
+  s_ab43e4c1324b79::t_5a19d33d692957 505
+  s_ab43e4c1324b79::t_c1e7281535ec30 611
+  s_0e765b3d2a9f01::t_6d3e24fc170544 374-379,412,497,608
+packages/codex-cli/package.json
+  s_1a1bc01aadef16::t_9c99bcba3f423f 12-13
+packages/codex-cli/src/harness.ts
+  s_ab43e4c1324b79::t_c663677de8a37f 24,29-30,198,218
+  s_ab43e4c1324b79::t_65008c3da187af 92,187,191,221
+  s_1a1bc01aadef16::t_e088f89ff9516b 80-82
+  s_946bf013fae8ed::t_30d68bd82a537b 76
+  s_1a1bc01aadef16::t_0f4d01a50e8527 75,78-79,83-88
+  s_ab43e4c1324b79::t_2200ce05948060 93-104
+  s_ab43e4c1324b79::t_cc6b13e74edf3b 105
+  s_0e765b3d2a9f01::t_ee4eb6c56f2cad 77
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_946bf013fae8ed::t_01ed129f418594 26,29-33
+  s_946bf013fae8ed::t_59afdce0ffd549 27-28
+  s_1a1bc01aadef16::t_ac02356267ef9d 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "79e7ec9377a6f50d2ef41e94653a522dbd7aa097",
+  "prompts": {},
+  "sessions": {
+    "s_0e765b3d2a9f01": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0218c-03f3-7cd0-9525-5edca0315f1e",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_1a1bc01aadef16": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02145-f010-7021-b832-7aee1c46f119",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_946bf013fae8ed": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02177-45b9-75e1-8c95-a5eb18bb0f7b",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ab43e4c1324b79": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02188-e70b-7633-9b1f-fa1213143994",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
