@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiLayoutRightLine } from "@remixicon/react";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { ActivityViewProvider } from "../../components/activity-view";
 import { AppSidebar } from "../../components/nav-sidebar";
 import { RightPanel } from "../../components/right-panel";
 import { RightPanelResizeHandle, useRightPanelWidthActions } from "../../components/right-panel-resize";
@@ -109,7 +110,9 @@ function AppShell() {
     <>
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden">
-        <ContentArea onRightPanelCommit={rightPanel.setWidth} onRightPanelReset={rightPanel.reset} />
+        <ActivityViewProvider>
+          <ContentArea onRightPanelCommit={rightPanel.setWidth} onRightPanelReset={rightPanel.reset} />
+        </ActivityViewProvider>
       </SidebarInset>
       <SidebarControl />
       <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
