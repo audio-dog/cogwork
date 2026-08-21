@@ -1,6 +1,7 @@
 import {
   agUiSessionId,
   agUiStructuredOutputComplete,
+  FollowUpStageResult,
   HarnessName,
   ImplementStageResult,
   SessionId,
@@ -11,7 +12,9 @@ import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
+import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -19,6 +22,7 @@ import * as Stream from "effect/Stream";
 import {
   type CodexRunChat,
   type CodexRunChatOptions,
+  type CodexRunnerOptions,
   codexChildEnvironment,
   codexModelOptions,
   codexRunner,
@@ -73,6 +77,13 @@ const makeRequest = (overrides: Partial<Harness.HarnessRequest> = {}): Harness.H
   ...overrides,
 });
 
+const testRunner = (options: Omit<CodexRunnerOptions, "name">) =>
+  codexRunner({
+    name,
+    resolveGitMetadataDirectory: () => Effect.succeed(null),
+    ...options,
+  });
+
 const chunks: ReadonlyArray<StreamChunk> = [
   {
     type: EventType.TOOL_CALL_RESULT,
@@ -91,11 +102,21 @@ const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => ({
   },
 });
 
+const runErrorChunk = (message: string) =>
+  ({
+    type: EventType.RUN_ERROR,
+    message,
+    error: { message },
+  }) satisfies StreamChunk;
+
+const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>
+  events.flatMap((event) => {
+    const completion = agUiStructuredOutputComplete(event);
+    return completion === null ? [] : [completion];
+  });
+
 const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
-  const completion = events.flatMap((event) => {
-    const result = agUiStructuredOutputComplete(event);
-    return result === null ? [] : [result];
-  })[0];
+  const completion = structuredCompletions(events)[0];
   if (!completion) return assert.fail("fake Codex emitted no structured result");
   return Schema.decodeUnknownEffect(ImplementStageResult)(completion.object).pipe(
     Effect.flatMap((result) =>
@@ -113,7 +134,10 @@ const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   );
 };
 
-const makeLiveHarness = (args = "") =>
+const fakeCodexExecutable = (args = "") =>
+  `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${args}`;
+
+const makeLiveHarness = (codexExecutable = fakeCodexExecutable()) =>
   Effect.acquireRelease(
     Effect.promise(() => localProcessSandbox({}).create({})),
     (sandbox) => Effect.promise(() => sandbox.destroy()),
@@ -124,13 +148,35 @@ const makeLiveHarness = (args = "") =>
         [
           codexRunner({
             name,
-            codexExecutable: `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${args}`,
+            codexExecutable,
           }),
         ],
         { sessionStore, contextAssembler, credentialStore },
       ),
     })),
   );
+
+const linkedWorktree = (handle: SandboxHandle) =>
+  Effect.gen(function* () {
+    const checkoutPath = `${handle.id}/linked-worktree`;
+    const setup = yield* Effect.promise(() =>
+      handle.process.exec(
+        [
+          "git init",
+          'git config user.email "cogwork@example.com"',
+          'git config user.name "Cogwork"',
+          "git commit --allow-empty -m initial",
+          `git worktree add -b linked-worktree ${checkoutPath}`,
+        ].join(" && "),
+      ),
+    );
+    assert.strictEqual(setup.exitCode, 0);
+    const commonDirectory = yield* Effect.promise(() =>
+      handle.process.exec(`git -C ${checkoutPath} rev-parse --git-common-dir`),
+    );
+    assert.strictEqual(commonDirectory.exitCode, 0);
+    return { checkoutPath, commonDirectory: commonDirectory.stdout.trim() };
+  });
 
 describe("codexRunner", () => {
   it("declares an opaque Codex-owned session", () => {
@@ -145,8 +191,7 @@ describe("codexRunner", () => {
         runCalls.push(options);
         return toAsyncIterable(chunks);
       };
-      const runner = codexRunner({
-        name,
+      const runner = testRunner({
         makeAdapter: (model, config) => {
           adapterCalls.push([model, config]);
           return codexText(model, config);
@@ -194,8 +239,7 @@ describe("codexRunner", () => {
   it.effect("aborts the Codex run when the harness stream is interrupted", () =>
     Effect.gen(function* () {
       const calls: Array<CodexRunChatOptions> = [];
-      const runner = codexRunner({
-        name,
+      const runner = testRunner({
         runChat: (options) => {
           calls.push(options);
           return toAsyncIterable(chunks);
@@ -212,8 +256,7 @@ describe("codexRunner", () => {
   it.effect("passes MCP bearer values only through the Codex child environment", () =>
     Effect.gen(function* () {
       const adapterCalls: Array<Parameters<typeof codexText>> = [];
-      const runner = codexRunner({
-        name,
+      const runner = testRunner({
         makeAdapter: (model, config) => {
           adapterCalls.push([model, config]);
           return codexText(model, config);
@@ -256,8 +299,7 @@ describe("codexRunner", () => {
   it.effect("projects every MCP skill into a distinct safe Codex identity", () =>
     Effect.gen(function* () {
       const adapterCalls: Array<Parameters<typeof codexText>> = [];
-      const runner = codexRunner({
-        name,
+      const runner = testRunner({
         makeAdapter: (model, config) => {
           adapterCalls.push([model, config]);
           return codexText(model, config);
@@ -301,8 +343,7 @@ describe("codexRunner", () => {
   it.effect("rebuilds the child environment with a rotated MCP bearer on every run", () =>
     Effect.gen(function* () {
       const adapterCalls: Array<Parameters<typeof codexText>> = [];
-      const runner = codexRunner({
-        name,
+      const runner = testRunner({
         makeAdapter: (model, config) => {
           adapterCalls.push([model, config]);
           return codexText(model, config);
@@ -325,18 +366,10 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.effect("treats a missing Codex login or binary as a non-retryable launch failure", () =>
+  it.effect("gives an actionable handoff for a missing Codex binary", () =>
     Effect.gen(function* () {
-      const runner = codexRunner({
-        name,
-        runChat: () =>
-          toAsyncIterable([
-            {
-              type: EventType.RUN_ERROR,
-              message: "codex command not found; run codex login",
-              error: { message: "codex command not found; run codex login" },
-            },
-          ]),
+      const runner = testRunner({
+        runChat: () => toAsyncIterable([runErrorChunk("spawn codex ENOENT")]),
       });
       const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
 
@@ -344,21 +377,43 @@ describe("codexRunner", () => {
 
       assert.strictEqual(error.reason, "launch");
       assert.isFalse(error.retryable);
+      assert.include(error.message, "Install Codex CLI");
+    }),
+  );
+
+  it.effect("gives an actionable handoff for a missing Codex login", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () => toAsyncIterable([runErrorChunk("You are not logged in")]),
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+      assert.include(error.message, "codex login");
     }),
   );
 
   it.effect("keeps ordinary not-found turn errors retryable", () =>
     Effect.gen(function* () {
-      const runner = codexRunner({
-        name,
-        runChat: () =>
-          toAsyncIterable([
-            {
-              type: EventType.RUN_ERROR,
-              message: "File not found: /repo/input.json",
-              error: { message: "File not found: /repo/input.json" },
-            },
-          ]),
+      const runner = testRunner({
+        runChat: () => toAsyncIterable([runErrorChunk("File not found: /repo/input.json")]),
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
+
+  it.effect("keeps provider authentication turn errors retryable", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () => toAsyncIterable([runErrorChunk("Provider authentication failed with status 401")]),
       });
       const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
 
@@ -398,6 +453,53 @@ describe("codexRunner", () => {
         ),
       );
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.live("grants Codex access to linked-worktree Git metadata", () =>
+    Effect.gen(function* () {
+      const { handle } = yield* makeLiveHarness();
+      const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
+
+      const harness = Harness.make([codexRunner({ name, codexExecutable: fakeCodexExecutable() })], {
+        sessionStore,
+        contextAssembler,
+        credentialStore,
+      });
+      const events = yield* Stream.runCollect(harness.run(makeRequest({ checkoutPath, session: null })));
+      const capture = yield* structuredCapture(events);
+
+      assert.include(capture.args, "--add-dir");
+      assert.include(capture.args, commonDirectory);
+    }),
+  );
+
+  it.live("probes authenticated Codex linked-worktree commits when explicitly enabled", () =>
+    Effect.gen(function* () {
+      const probe = yield* Config.string("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
+      if (probe !== "1") return;
+      const { handle, harness } = yield* makeLiveHarness("codex");
+      const { checkoutPath } = yield* linkedWorktree(handle);
+      const events = yield* Stream.runCollect(
+        harness.run(
+          makeRequest({
+            checkoutPath,
+            session: null,
+            prompt:
+              "Create a file named codex-probe.txt, add it to Git, and commit it with the message codex linked worktree probe. Then return the required implement result. Do not open a pull request.",
+          }),
+        ),
+      );
+      const completions = structuredCompletions(events);
+
+      assert.lengthOf(completions, 1);
+      yield* Schema.decodeUnknownEffect(ImplementStageResult)(completions[0]?.object);
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+      const commit = yield* Effect.promise(() =>
+        handle.process.exec(`git -C ${checkoutPath} log -1 --format=%s`),
+      );
+      assert.strictEqual(commit.exitCode, 0);
+      assert.strictEqual(commit.stdout.trim(), "codex linked worktree probe");
     }),
   );
 
@@ -467,10 +569,7 @@ describe("codexRunner", () => {
           }),
         ),
       );
-      const completions = events.flatMap((event) => {
-        const completion = agUiStructuredOutputComplete(event);
-        return completion === null ? [] : [completion];
-      });
+      const completions = structuredCompletions(events);
       assert.lengthOf(completions, 1);
       const result = yield* Schema.decodeUnknownEffect(TriageStageResult)(completions[0]?.object);
       const capture = yield* Schema.decodeUnknownEffect(
@@ -484,6 +583,28 @@ describe("codexRunner", () => {
       assert.include(capture.args, "--output-schema");
       assert.include(capture.prompt, "triage the issue");
       assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.live("streams one structured follow-up result through the native Codex adapter", () =>
+    Effect.gen(function* () {
+      const { handle, harness } = yield* makeLiveHarness();
+      const events = yield* Stream.runCollect(
+        harness.run(
+          makeRequest({
+            checkoutPath: handle.id,
+            session: null,
+            stage: "follow-up",
+            skill: "follow-up-agent",
+            prompt: "follow up on the pull request",
+          }),
+        ),
+      );
+      const completions = structuredCompletions(events);
+
+      assert.lengthOf(completions, 1);
+      yield* Schema.decodeUnknownEffect(FollowUpStageResult)(completions[0]?.object);
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
     }),
   );
@@ -528,7 +649,7 @@ describe("codexRunner", () => {
 
   it.live("terminates the Codex child process when the run is interrupted", () =>
     Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness(" --hang");
+      const { handle, harness } = yield* makeLiveHarness(fakeCodexExecutable(" --hang"));
 
       yield* harness
         .run(makeRequest({ checkoutPath: handle.id, session: null }))

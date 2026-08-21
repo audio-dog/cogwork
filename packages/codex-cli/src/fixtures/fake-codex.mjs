@@ -22,11 +22,15 @@ const outputSchemaPath = () => {
 
 const schemaPath = outputSchemaPath();
 const schema = schemaPath ? JSON.parse(await readFile(schemaPath, "utf8")) : null;
-const response = schema?.properties?.outcome
-  ? JSON.stringify({ _tag: "implement", outcome: "opened-pr", summary: capture })
-  : schema
-    ? JSON.stringify({ _tag: "triage", role: "ready-for-agent", proposal: capture })
-    : capture;
+const stage = schema?.properties?._tag?.enum?.[0];
+const stageResponse = () => {
+  if (stage === "implement")
+    return JSON.stringify({ _tag: "implement", outcome: "opened-pr", summary: capture });
+  if (stage === "follow-up") return JSON.stringify({ _tag: "follow-up", outcome: "noop", summary: capture });
+  if (schema) return JSON.stringify({ _tag: "triage", role: "ready-for-agent", proposal: capture });
+  return capture;
+};
+const response = stageResponse();
 const events = [
   { type: "thread.started", thread_id: "fake-thread-1" },
   {
