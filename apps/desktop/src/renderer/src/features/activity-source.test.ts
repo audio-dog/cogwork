@@ -136,7 +136,13 @@ describe("decodeEvent — human summaries", () => {
 
     expect(row?.label).toBe("Run");
     expect(row?.summary).toBe("42 · run succeeded");
-    expect(row?.entity).toEqual({ type: "run", id: "run-1", workspace: "acme", workItem: "42" });
+    expect(row?.entity).toMatchObject({
+      type: "run",
+      id: "run-1",
+      workspace: "acme",
+      workItem: "42",
+      run: { id: "run-1", workItem: "42" },
+    });
   });
 
   it("reads a registered workspace and a failed one", () => {

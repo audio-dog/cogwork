@@ -9,9 +9,12 @@ import type {
   WorkspaceId,
   WorkspaceState,
 } from "@cogwork/contracts";
-import { useEffect, useState } from "react";
+import { useAtomSubscribe } from "@effect/atom-react";
+import type * as Atom from "effect/unstable/reactivity/Atom";
+import { useSyncExternalStore } from "react";
+import { daemonEventsAtom } from "../daemon/atoms";
 import { type RunActivityPreview, runPreviews } from "./run-activity";
-import { type EnginePhase, enginePhase, useEngineStatus } from "./use-engine-status";
+import { type EnginePhase, enginePhase, subscribeEngineStatus } from "./use-engine-status";
 import { useLiveEvents } from "./use-live-events";
 
 export type ActivityKind =
@@ -29,7 +32,7 @@ export type ActivitySeverity = "info" | "success" | "warn" | "error";
 export type ConnectionState = "live" | "connecting" | "lost";
 
 export type ActivityEntity =
-  | { type: "run"; id: RunId; workspace: WorkspaceId; workItem: WorkItemId }
+  | { type: "run"; id: RunId; workspace: WorkspaceId; workItem: WorkItemId; run: RunSummary }
   | { type: "item"; id: WorkItemId; workspace: WorkspaceId };
 
 export interface ActivityRow {
@@ -110,7 +113,7 @@ const runRow = (run: RunSummary): ActivityRow => ({
   label: activityLabels.run,
   summary: `${run.workItem} · run ${run.status}`,
   severity: runStatusSeverity[run.status],
-  entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem },
+  entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem, run },
   raw: pretty(run),
   lowSignal: false,
 });
@@ -393,22 +396,52 @@ export const deriveActivityFeed = (inputs: ActivityInputs): ActivityFeed => {
   };
 };
 
-export function useActivityFeed() {
-  const events = useLiveEvents();
-  const { status } = useEngineStatus();
-  const [session, setSession] = useState<ActivitySession>(initialActivitySession);
-  const items = events._tag === "Success" ? events.value.items : null;
-  const connection: ConnectionState =
-    events._tag === "Failure" ? "lost" : events._tag === "Success" ? "live" : "connecting";
-  const engine = enginePhase(status);
+type EventsResult = typeof daemonEventsAtom extends Atom.Atom<infer Value> ? Value : never;
 
-  // biome-ignore lint/plugin: The daemon stream needs commit-time recording into the session log.
-  useEffect(() => {
-    setSession((current) =>
-      recordActivitySession(current, { events: items, engine, connection, atMillis: Date.now() }),
-    );
-  }, [connection, engine, items]);
+interface ActivityFeedState {
+  readonly session: ActivitySession;
+  readonly events: readonly DaemonEvent[];
+  readonly engine: EnginePhase;
+  readonly connection: ConnectionState;
+}
 
+const activityFeedListeners = new Set<() => void>();
+
+let activityFeedState: ActivityFeedState = {
+  session: initialActivitySession,
+  events: [],
+  engine: "off",
+  connection: "connecting",
+};
+
+let activityFeedSnapshot = deriveActivityFeed({
+  events: [],
+  arrivals: [],
+  synthesized: [],
+  engine: "off",
+  connection: "connecting",
+});
+
+function refreshActivityFeed(
+  sessionEvents: readonly DaemonEvent[] | null,
+  events: readonly DaemonEvent[],
+  engine: EnginePhase,
+  connection: ConnectionState,
+) {
+  const session = recordActivitySession(activityFeedState.session, {
+    events: sessionEvents,
+    engine,
+    connection,
+    atMillis: Date.now(),
+  });
+  const unchanged =
+    session === activityFeedState.session &&
+    events === activityFeedState.events &&
+    engine === activityFeedState.engine &&
+    connection === activityFeedState.connection;
+  if (unchanged) return;
+
+  activityFeedState = { session, events, engine, connection };
   const sessionFeed = deriveActivityFeed({
     events: [...session.events],
     arrivals: [...session.arrivals],
@@ -417,12 +450,47 @@ export function useActivityFeed() {
     connection,
   });
   const liveFeed = deriveActivityFeed({
-    events: items ? [...items] : [],
+    events: [...events],
     arrivals: [],
     synthesized: [],
     engine,
     connection,
   });
+  activityFeedSnapshot = { ...sessionFeed, now: liveFeed.now };
+  for (const listener of activityFeedListeners) listener();
+}
 
-  return { ...sessionFeed, now: liveFeed.now };
+function recordLiveEvents(result: EventsResult) {
+  const connection: ConnectionState =
+    result._tag === "Failure" ? "lost" : result._tag === "Success" ? "live" : "connecting";
+  const events = result._tag === "Success" ? result.value.items : [];
+  refreshActivityFeed(
+    result._tag === "Success" ? events : null,
+    events,
+    activityFeedState.engine,
+    connection,
+  );
+}
+
+function recordEngineStatus(status: Parameters<typeof enginePhase>[0]) {
+  refreshActivityFeed(null, activityFeedState.events, enginePhase(status), activityFeedState.connection);
+}
+
+function subscribeActivityFeed(listener: () => void) {
+  activityFeedListeners.add(listener);
+  const unsubscribeEngine = subscribeEngineStatus(recordEngineStatus);
+  return () => {
+    activityFeedListeners.delete(listener);
+    unsubscribeEngine();
+  };
+}
+
+function getActivityFeedSnapshot() {
+  return activityFeedSnapshot;
+}
+
+export function useActivityFeed() {
+  useLiveEvents();
+  useAtomSubscribe(daemonEventsAtom, recordLiveEvents, { immediate: true });
+  return useSyncExternalStore(subscribeActivityFeed, getActivityFeedSnapshot);
 }
