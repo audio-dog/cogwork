@@ -126,6 +126,9 @@ const transcriptGroups = (entries: readonly TranscriptEntry[]) =>
     return groups;
   }, []);
 
+const previousActivityLabel = (entries: readonly FoldedEntry[]) =>
+  entries.every((entry) => entry.kind === "tool") ? "previous tool calls" : "previous activities";
+
 function TranscriptRows({ entries }: { entries: readonly TranscriptEntry[] }) {
   const groups = transcriptGroups(entries);
 
@@ -147,7 +150,7 @@ function TranscriptRows({ entries }: { entries: readonly TranscriptEntry[] }) {
           {previous.length > 0 && (
             <Collapsible>
               <CollapsibleTrigger className="cursor-pointer px-2 text-xs text-muted-foreground hover:text-foreground">
-                +{previous.length} previous tool calls
+                +{previous.length} {previousActivityLabel(previous)}
               </CollapsibleTrigger>
               <CollapsibleContent className="flex flex-col gap-1">
                 {previous.map((entry) => (
@@ -277,7 +280,7 @@ export function RunDrillIn({ run }: { run: RunSummary }) {
   const running = run.status === "running";
   const activities = result._tag === "Success" ? result.value.items : [];
   const entries = foldTranscript(activities);
-  const line = statusLine(activities);
+  const line = statusLine(activities, run.status);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <NowBanner run={run} line={line} />
