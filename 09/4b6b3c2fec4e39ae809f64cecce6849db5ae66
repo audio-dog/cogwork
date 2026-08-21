@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/components/activity-tab.tsx
+  s_d7d603c049ca51::t_f16e4907d54bd9 4
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_d7d603c049ca51::t_f16e4907d54bd9 16,148-149,219
+  s_d7d603c049ca51::t_0cae771a63bf9b 150-195,197-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "094b6b3c2fec4e39ae809f64cecce6849db5ae66",
+  "prompts": {},
+  "sessions": {
+    "s_d7d603c049ca51": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0257d-489a-7f62-9b6f-624c8f008517",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
