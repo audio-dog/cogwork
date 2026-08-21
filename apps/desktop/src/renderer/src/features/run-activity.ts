@@ -223,9 +223,13 @@ export const statusLine = (
   activities: ReadonlyArray<RunActivity>,
   status: RunSummary["status"] = "running",
 ) => {
+  if (status === "succeeded") return "Run finished.";
+  if (status === "failed" || status === "crashed" || status === "exhausted") return "Run failed.";
+  if (status === "interrupted") return "Run interrupted.";
+
   const names = new Map<string, string>();
   const latest = activities.at(-1);
-  if (!latest) return status === "running" ? "Thinking…" : "Run finished.";
+  if (!latest) return "Thinking…";
 
   for (const activity of activities) {
     if (activity.event.type !== "TOOL_CALL_START") continue;
