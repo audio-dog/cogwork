@@ -40,7 +40,7 @@ _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 `sourceControl.botAllowlist` (with the same fallback field on `issueTracker` the source-control target already borrows) — an optional, non-empty-when-present list of bot logins whose PR comments are trusted to *wake a follow-up*. Absent means the gate is off: no bot comment ever wakes one, exactly as before. A listed bot's comment is a wake signal only — it triggers a follow-up but does not reset the no-progress counter and can never set `/fresh`, so a stall still hands off to a human. It grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
 _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot never steers)
 
-### Configuration and capabilities
+### Configuration
 
 **Settings profile**:
 The principal-owned configuration source for installed plugins, connections, and defaults shared across workspaces and agent activity.
@@ -59,16 +59,48 @@ Principal-owned configuration scoped to one workspace but stored outside its rep
 _Avoid_: User-level repo input, workspace input, global config
 
 **Plugin**:
-An install-and-setup bundle that contributes capabilities and may establish connections; its contributions remain individually visible and configurable through Customize.
-_Avoid_: Capability, MCP skill, marketplace listing
+A first-party install-and-setup bundle whose manifest contains separate typed, versioned definitions for Skills, MCP servers, Subagents, Scripts, Middleware, Hooks, and Connection setup. Each definition has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
+_Avoid_: Capability, component, marketplace listing
 
 **Connection**:
 An authenticated binding to an external system, established once and granted to the operations or workspaces that may use it.
-_Avoid_: Plugin, credential, MCP skill
+_Avoid_: Plugin, credential, MCP server
 
-**Capability access**:
-The resolution lifecycle in which a capability is available when installed, enabled when selected, required when demanded by the operating instructions, allowed when policy permits it, and resolved when included in the validated inputs for one run.
-_Avoid_: Installed (for every state), permission
+**Tool**:
+A typed function an agent may call during a Run. A Tool may be engine-owned, provider-native, or exposed by an MCP server, but its source remains explicit.
+_Avoid_: MCP server (one server may expose many Tools), Script
+
+**Skill**:
+A discoverable package of instructions and supporting resources an agent may use during a Run. It remains distinct from mandatory Operating Instructions.
+_Avoid_: Operating-instructions package, MCP server, Plugin
+
+**MCP server**:
+One configured Model Context Protocol server instance made available to a Run so its Tools, resources, and prompts can be used, identified by a Cogwork-owned `McpServerId`. It retains the verified MCP Registry name/version as provenance when available; runtime `serverInfo` is observed metadata, never the configured identity.
+_Avoid_: MCP skill, Tool, Connection, Plugin
+
+**MCP server readiness**:
+The Engine-owned conclusion that a configured MCP server is enabled, launchable or reachable, authenticated, protocol-compatible, exposes the expected MCP features, and can be projected by the selected Harness. Required servers must be ready before a Run Plan is accepted; clients use the same result and reason to show Operation availability.
+_Avoid_: Installed, runtime `serverInfo`, UI-only validation
+
+**Script**:
+A named Workspace command the agent or user may invoke. Its stable name can be allowed, queried, or denied by Sandbox Policy without matching a free-form shell command.
+_Avoid_: Tool, hook, setup command
+
+**Middleware**:
+An engine-owned interceptor around the model loop lifecycle. It is portable across owned-runtime Runs and distinct from Hooks interpreted by an external Harness.
+_Avoid_: Hook, Operating Instructions
+
+**Hook**:
+A Harness-native lifecycle extension projected only when the selected Harness supports it. A Hook does not become Middleware merely because both react to lifecycle events.
+_Avoid_: Middleware, Script
+
+**Subagent**:
+A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool.
+_Avoid_: Tool, Harness, Operation
+
+**Sandbox policy**:
+The allow, ask, and deny rules governing Tools, Scripts, file writes, and network access during a Run.
+_Avoid_: Middleware, Harness execution boundary
 
 ### Workflows and operations
 
@@ -85,16 +117,16 @@ The routing relationship that selects what follows an operation from its outcome
 _Avoid_: Operation, workflow step
 
 **Operation definition**:
-The engine-authored contract for one operation: its behavior, defaults, required capabilities, operating instructions, and possible outcomes.
+The engine-authored contract for one operation: its behavior, defaults, required type-specific ids, Operating Instructions, and possible outcomes.
 _Avoid_: Playbook, run plan, operation settings
 
 **Operation settings**:
-The scoped choices that configure an operation, such as enablement, harness, model, effort, permissions, optional capabilities, and allowed overrides.
+The scoped choices that configure an operation, such as enablement, Harness, model, effort, optional Tools, Skills, and MCP servers, permissions, and allowed overrides.
 _Avoid_: Playbook, operation definition, run plan
 
 **Operating instructions**:
 Reusable guidance an agent must follow when performing an operation, resolved separately from the work-specific facts supplied for one run.
-_Avoid_: Playbook skill, prompt, work context
+_Avoid_: Skill, playbook skill, prompt, work context
 
 **Work context**:
 The work-specific facts supplied to a run, such as a work item's body and comments or a pull request's checks and reviews.
@@ -105,12 +137,16 @@ The relationship is:
 ```text
 Workflow
 ├── Operations and transitions
-│   ├── Operation Definition
-│   ├── Operation Settings
-│   └── Operating Instructions
+│   └── Operation
+│       ├── Operation Definition
+│       │   └── Operating Instructions
+│       └── Operation Settings
+│           └── optional Skills
 │
 └── selected Operation + Work Context
     → Run Plan
+      ├── Operating Instructions
+      └── resolved Skills
     → Run
 ```
 
@@ -149,7 +185,7 @@ _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id`
 ### Runs
 
 **Run plan**:
-The immutable, engine-validated resolution of one operation and its work context, settings, instructions, capabilities, policy, versions, and provenance. It is accepted before dispatch and retained with the run; runtime projection and observations are evidence about execution, not changes to the plan.
+The immutable, engine-validated resolution of one operation and its Work Context, settings, Instructions, Tools, Skills, MCP, Middleware, Sandbox Policy, persistence, versions, and provenance. Plugin items retain their Plugin version and file-backed inputs retain a content revision; the plan is accepted before dispatch and never changed by runtime observations.
 _Avoid_: Run manifest, resolved stage, harness request, operation settings
 
 **Run**:
@@ -199,7 +235,7 @@ The sandbox, approval mode, and native tools an external CLI harness enforces in
 _Avoid_: Owned tool policy, provider sandbox, fallback
 
 **Harness request**:
-The projection of an accepted run plan handed to one harness: checkout path, work request, model and effort, session reference, instructions, and capabilities in the harness's supported forms. Secret material rides a channel that is never persisted or logged, not a plain field.
+The projection of an accepted Run Plan handed to one Harness: checkout path, work request, model and effort, Session reference, Instructions, Tools, Skills, MCP, and other supported fields. Secret material rides a channel that is never persisted or logged, not a plain field.
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
@@ -207,12 +243,8 @@ The tagged, Effect-Schema-defined value an operation returns through the harness
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:
-The named `SKILL.md` package carrying an operation's mandatory operating instructions and supporting resources. It is a required engine input supplied explicitly to every harness rather than trusted to ambient discovery.
-_Avoid_: Playbook skill, skill (alone), MCP skill, agent skill (TanStack Intent authoring docs)
-
-**MCP skill**:
-An external MCP server the engine provisions onto a run so the harness can call its tools — named and configured (endpoint + auth) by the engine, not by the harness. The engine assembles the set for a run; the harness runner projects each into the harness's native MCP channel. Secret values travel only through a secret or environment channel, never through a generated worktree config or command argument. Read-only where the server offers a read-only endpoint. The name follows TanStack AI's `mcpSkill`; it is the first kind of engine-provisioned run capability.
-_Avoid_: MCP server, operating-instructions package, tool (one server exposes many), harness tool (the harness's own built-ins), plugin, provider skill (Anthropic/OpenAI hosted sandbox bundles)
+The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path; `SKILL.md` is reserved for real Skills.
+_Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Harness event**:
 The whole AG-UI event a harness run streams, carried inside a stable envelope rather than curated down to a fixed set of fields. A handful of fields are named because our folds and clients read them (text delta, tool call id/name, result, session id, usage, finish reason); every other key the harness emits — tool-call input, reasoning deltas, correlation ids, per-turn cost, and AG-UI fields we don't name yet — rides along instead of being dropped at decode. The engine persists these as run events and republishes them as run activity. The provider runner will emit AG-UI natively; cursor-acp maps its ACP stream best-effort.

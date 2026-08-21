@@ -10,7 +10,7 @@ Role in the flow: **reconcile → schedule → execute → dispatch to a harness
 ## Language
 
 **Daemon**:
-The long-lived host process that runs the engine on one machine: it serves the RPC group and drives two heartbeats (reconcile and execute). Not a class — a set of modules composed at startup. The composition itself is the **seam** `Daemon.serverLayer(hostAdapters)`: it assembles the RPC server, its handlers, and the NDJSON framing on top of the engine's own services, taking a host's adapters (credential store, run ledger, workspace registry, worktree platform, harness runners, scheduler config, RPC transport) as its one argument. The one-credential-store rule lives here — the issue-tracker reads and the MCP-skill bearer must share one store instance. `Daemon.serializationLayer` is exported so a client frames its end of the wire the same way. Any host (the CLI today, desktop next) builds those adapters and calls this.
+The long-lived host process that runs the engine on one machine: it serves the RPC group and drives two heartbeats (reconcile and execute). Not a class — a set of modules composed at startup. The composition itself is the **seam** `Daemon.serverLayer(hostAdapters)`: it assembles the RPC server, its handlers, and the NDJSON framing on top of the engine's own services, taking a host's adapters (credential store, run ledger, workspace registry, worktree platform, harness runners, scheduler config, RPC transport) as its one argument. The one-credential-store rule lives here — the issue-tracker reads and the MCP-server bearer must share one store instance. `Daemon.serializationLayer` is exported so a client frames its end of the wire the same way. Any host (the CLI today, desktop next) builds those adapters and calls this.
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
@@ -70,7 +70,7 @@ The place sessions are minted and the read model a runner pulls a session's hist
 _Avoid_: Message store (that's the persistence library's term for the one piece of the adapter), transcript database, second store
 
 **Harness request**:
-The envelope the executor hands the harness for one run: the checkout path, the turn's prompt, model/effort, MCP skills, and a `session` reference — the `SessionId` this run continues, or null for a fresh start. It references a session rather than shipping one; no frozen transcript ever crosses the seam, so compaction can live inside the runner's loop where context actually grows. The prompt is only this run's instruction, never accumulated history.
+The envelope the executor hands the harness for one run: the checkout path, the turn's prompt, model/effort, MCP servers, and a `session` reference — the `SessionId` this run continues, or null for a fresh start. It references a session rather than shipping one; no frozen transcript ever crosses the seam, so compaction can live inside the runner's loop where context actually grows. The prompt is only this run's instruction, never accumulated history.
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
@@ -81,13 +81,13 @@ _Avoid_: Harness (the concept, defined in contracts), model
 A pluggable implementation of one agent backend: a `name`, a declared **session kind**, and a `run` that returns a stream of harness events. The session kind says who owns the conversation: the Cursor runner declares opaque-handle (the harness keeps its own history and hands back a resume handle), the provider runner declares owned-transcript (the run ledger holds the conversation). It pulls the session's history in-process from the request's reference — a CLI runner its opaque resume handle, the owned runner the folded transcript. The runner derives the operation's root-object Standard JSON Schema, asks TanStack AI to stream against it, and emits one terminal `structured-output.complete`; the request carries no duplicate schema or selector. The executor holds triage's `RUN_FINISHED` until it decodes that terminal envelope once through the shared Effect Schema, then publishes either the original success terminal or a failed terminal. Missing, duplicate, or malformed values are retryable harness failures. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
-**MCP skill assembler**:
-Turns a workspace's configured MCP skills into the resolved set a run gets, filling in auth just before dispatch. A skill that asks for `credential-store` auth borrows the workspace's own credential account (Linear today) so its bearer is minted and rotated alongside the token the engine already uses; the token comes back wrapped in a `Redacted` and travels on the harness request only, never into the ledger or the event log. Public skills pass straight through with no token and never touch the credential store.
-_Avoid_: MCP server, credential store (it delegates to that, it is not that), context assembler (that builds instruction layers, not MCP capabilities)
+**MCP server assembler**:
+Turns a Workspace's configured MCP servers into the resolved set a Run gets, filling in authentication and checking MCP server readiness before dispatch. Registry identity/version remains provenance and runtime `serverInfo` remains observed metadata; secret values travel on the Harness Request only, never into the ledger or event log.
+_Avoid_: MCP skill assembler, credential store (it delegates to that, it is not that), context assembler (that builds instruction layers)
 
 **Context assembler**:
 Builds the required layered operating instructions for one harness turn — broad personal, then workspace, then operation-specific — and provisions their resource directory outside the worktree. Every runner renders this output into its native instruction channel; ambient CLI discovery may add optional context but never replaces required operating instructions.
-_Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP skill assembler
+_Avoid_: Prompt builder, system prompt (those are outputs of rendering), MCP server assembler
 
 **Instruction layer**:
 One provenance-bearing slice of the context assembler's output, such as broad personal, workspace, or operation-specific operating instructions. Distinct from the work context supplied for one run.
@@ -95,7 +95,7 @@ _Avoid_: Context source (opencode's term), rules file
 
 **Owned tool set**:
 The owned tools the engine hands a run instead of leaning on the harness's built-ins: `read`, `write`, `edit`, `bash`, `glob`, `grep`, and `webfetch`. Each is a TanStack `toolDefinition` with an Effect handler, and each runs through the run's worktree sandbox rather than touching the host directly. There is no tracker or PR tool — `git` and `gh` ride in on `bash`. File-touching tools go through path confinement first; failures surface as a typed `ToolError`.
-_Avoid_: Built-in tools (those are the harness's), MCP skill (that is an external capability, this set is native)
+_Avoid_: Built-in tools (those are the harness's), MCP server (one server exposes Tools; this set is native)
 
 **Worktree sandbox**:
 An `ai-sandbox` `localProcessSandbox` opened onto a run's worktree, so the owned tools read, write, and exec against that checkout and nothing else. Opened as an Effect resource (acquire the handle, release on scope close); the release only tears down the sandbox handle, never the checkout itself. The base SHA it reports is `git rev-parse HEAD`, or `""` when the checkout is not a git repo.
@@ -122,15 +122,11 @@ A command-glob rule refused in every profile, for every operation — the small 
 _Avoid_: Confinement (that keeps writes inside the worktree root; this bounds shell commands), sandbox isolation
 
 **Operating-instructions package**:
-The `SKILL.md` and supporting directory carrying one operation's mandatory operating instructions. Distinct from an MCP skill.
-_Avoid_: Playbook skill, skill (alone — ambiguous), MCP skill, sync skill
-
-**Skill provision**:
-A copy or link of an operating-instructions package onto a host path under `~/.cogwork/` that the run's tools can read, without writing into the driven worktree.
-_Avoid_: Sync, install, gitSkill (TanStack sandbox's clone-into-workspace form — same idea, different path)
+The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills.
+_Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Operation resolution**:
-The engine's combination of an operation definition, operation settings, operating instructions, work context, capabilities, and policy into an immutable run plan before dispatch.
+The engine's combination of an Operation Definition, Operation Settings, Operating Instructions, Work Context, Tools, Skills, MCP servers, Middleware, and Sandbox Policy into an immutable Run Plan before dispatch.
 _Avoid_: Playbook, resolved stage, prompt assembly
 
 **Issue tracker adapter**:
