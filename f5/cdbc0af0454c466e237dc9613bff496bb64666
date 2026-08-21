@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_048e5db577aaec::t_381961d38c8194 5,23-26,80,102-103,105
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_048e5db577aaec::t_381961d38c8194 5-6,10-13,33,43-44,46,59-60
+apps/desktop/src/main/socket-probe.test.ts
+  s_048e5db577aaec::t_381961d38c8194 5-6,10-13,24,35-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "f5cdbc0af0454c466e237dc9613bff496bb64666",
+  "prompts": {},
+  "sessions": {
+    "s_048e5db577aaec": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02649-6a3f-7c62-b7ec-ff4fba3244f7",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
