@@ -613,11 +613,12 @@ function LiveRunBody() {
 
 function PullRequestBody({ pr }: { pr: PrSummary }) {
   const {
+    state: { item },
     meta: { now },
   } = useItemTab();
   return (
     <SubTabBody>
-      <PullRequest pr={pr} now={now} />
+      <PullRequest pr={pr} now={now} title={item.title} />
     </SubTabBody>
   );
 }
