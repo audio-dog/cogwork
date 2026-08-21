@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_f408e886713743::t_36c7ba194ba449 616
+  s_f408e886713743::t_75e53d36524882 620
+  s_f408e886713743::t_de7917003fa1b7 615
+  s_f408e886713743::t_002a3055791cef 617
+  s_f408e886713743::t_b125e1d3a7dd73 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "17a023848f2873a462a8b47ef485010383718c79",
+  "prompts": {},
+  "sessions": {
+    "s_f408e886713743": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a021b1-f1f6-7db2-b624-74152e3e3441",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
