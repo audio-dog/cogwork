@@ -31,6 +31,7 @@ import {
   resolveSubTab,
   type SubTab,
   type SubTabKey,
+  selectedRunForItem,
   subTabs,
 } from "../features/item-tab";
 import { statusLine, useRunActivity } from "../features/run-activity";
@@ -689,11 +690,12 @@ export function ItemTab({ selection }: { selection: ItemSelection & { runId?: Ru
   const entry = boardItem(board, selection.workspace, selection.workItem);
   if (!entry) return <ItemGone />;
 
-  const selectedRun = selection.runId ? board.runs.get(selection.runId) : null;
-  const run =
-    selectedRun?.workspace === selection.workspace && selectedRun.workItem === selection.workItem
-      ? selectedRun
-      : runForItem(board, selection.workspace, selection.workItem);
+  const selectedRun = selectedRunForItem(
+    selection.runId ? board.runs.get(selection.runId) : null,
+    selection.workspace,
+    selection.workItem,
+  );
+  const run = selectedRun ?? runForItem(board, selection.workspace, selection.workItem);
   const attempts = previousAttempts(
     runsForItem(board, selection.workspace, selection.workItem),
     run?.id ?? null,
@@ -706,7 +708,7 @@ export function ItemTab({ selection }: { selection: ItemSelection & { runId?: Ru
       item={entry.item}
       run={run}
       attempts={attempts}
-      initialSubTab={selection.runId ? "run" : undefined}
+      initialSubTab={selectedRun ? "run" : undefined}
     >
       <div className="flex h-full min-h-0 flex-col">
         <SubTabStrip />
