@@ -70,7 +70,6 @@ export interface ProviderRunnerOptions {
   readonly defaultModel?: string;
   readonly makeAdapter?: ModelAdapterFactory;
   readonly runChat?: RunChat;
-  readonly watchDiffs?: typeof watchWorktreeDiffs;
 }
 
 // Read-only stages get fewer turns than the writing stages.
@@ -108,7 +107,6 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
   const defaultModel = options.defaultModel ?? "anthropic/claude-sonnet-4-5";
   const makeAdapter = options.makeAdapter ?? defaultModelAdapterFactory;
   const runChat = options.runChat ?? defaultRunChat;
-  const watchDiffs = options.watchDiffs ?? watchWorktreeDiffs;
 
   return {
     name: options.name,
@@ -166,7 +164,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             outputSchema: stageResultSchema(request.stage),
           });
 
-          const diffs = watchDiffs(sandbox, baseSha).pipe(Stream.catchCause(() => Stream.empty));
+          const diffs = watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.catchCause(() => Stream.empty));
           return Stream.merge(bridgeChat(chatStream), diffs, { haltStrategy: "left" }).pipe(
             Stream.ensuring(Effect.sync(() => abortController.abort())),
           );

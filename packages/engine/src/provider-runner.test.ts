@@ -53,7 +53,6 @@ const scriptedChunks: ReadonlyArray<StreamChunk> = [
 ];
 
 const structuredTriageJson = '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}';
-const noDiffs = () => Stream.empty;
 
 const nativeStructuredAdapter = {
   kind: "text",
@@ -168,7 +167,7 @@ describe("providerRunner", () => {
           capturedOptions.push(options);
           return toAsyncIterable(scriptedChunks);
         };
-        const runner = providerRunner({ name: harnessName, makeAdapter, runChat, watchDiffs: noDiffs });
+        const runner = providerRunner({ name: harnessName, makeAdapter, runChat });
 
         const events = yield* Stream.runCollect(
           runner.run(request({ checkoutPath, session: sessionId })),
@@ -214,7 +213,6 @@ describe("providerRunner", () => {
       const runner = providerRunner({
         name: harnessName,
         makeAdapter: () => nativeStructuredAdapter,
-        watchDiffs: noDiffs,
       });
 
       const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
