@@ -79,7 +79,6 @@ const foldedIcon = (entry: FoldedEntry) => {
 
 const foldedLanguage = (entry: FoldedEntry) => {
   if (entry.kind === "diff") return "diff";
-  if (entry.kind === "tool" && entry.args) return "json";
   return "plaintext";
 };
 
@@ -119,50 +118,47 @@ function ErrorRow({ entry }: { entry: Extract<TranscriptEntry, { kind: "error" }
   );
 }
 
-const transcriptGroups = (entries: readonly TranscriptEntry[]) => {
-  const groups: TranscriptEntry[][] = [];
-  for (const entry of entries) {
+const transcriptGroups = (entries: readonly TranscriptEntry[]) =>
+  entries.reduce<TranscriptEntry[][]>((groups, entry) => {
     const group = groups.at(-1);
-    if (isFoldedEntry(entry) && group?.every(isFoldedEntry)) {
-      group.push(entry);
-      continue;
-    }
-    groups.push([entry]);
-  }
-  return groups;
-};
+    if (isFoldedEntry(entry) && group?.every(isFoldedEntry)) group.push(entry);
+    else groups.push([entry]);
+    return groups;
+  }, []);
 
 function TranscriptRows({ entries }: { entries: readonly TranscriptEntry[] }) {
   const groups = transcriptGroups(entries);
 
-  return groups.map((group) => {
+  return groups.map((group, index) => {
     const [first] = group;
     if (!first) return null;
     if (!isFoldedEntry(first))
-      return first.kind === "text" ? (
-        <TextRow key={first.key} entry={first} />
-      ) : (
-        <ErrorRow key={first.key} entry={first} />
+      return (
+        <MessageScrollerItem key={first.key} scrollAnchor={index === groups.length - 1}>
+          {first.kind === "text" ? <TextRow entry={first} /> : <ErrorRow entry={first} />}
+        </MessageScrollerItem>
       );
     const folded = group.filter(isFoldedEntry);
     const latest = folded.at(-1);
     const previous = folded.slice(0, -1);
     return (
-      <div key={latest?.key} className="flex flex-col gap-1">
-        {previous.length > 0 && (
-          <Collapsible>
-            <CollapsibleTrigger className="cursor-pointer px-2 text-xs text-muted-foreground hover:text-foreground">
-              +{previous.length} previous tool calls
-            </CollapsibleTrigger>
-            <CollapsibleContent className="flex flex-col gap-1">
-              {previous.map((entry) => (
-                <FoldedRow key={entry.key} entry={entry} />
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-        {latest && <FoldedRow entry={latest} />}
-      </div>
+      <MessageScrollerItem key={first.key} scrollAnchor={index === groups.length - 1}>
+        <div className="flex flex-col gap-1">
+          {previous.length > 0 && (
+            <Collapsible>
+              <CollapsibleTrigger className="cursor-pointer px-2 text-xs text-muted-foreground hover:text-foreground">
+                +{previous.length} previous tool calls
+              </CollapsibleTrigger>
+              <CollapsibleContent className="flex flex-col gap-1">
+                {previous.map((entry) => (
+                  <FoldedRow key={entry.key} entry={entry} />
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+          {latest && <FoldedRow entry={latest} />}
+        </div>
+      </MessageScrollerItem>
     );
   });
 }
@@ -257,9 +253,7 @@ function TranscriptBody({
       <MessageScroller>
         <MessageScrollerViewport>
           <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
-            <MessageScrollerItem scrollAnchor>
-              <TranscriptRows entries={entries} />
-            </MessageScrollerItem>
+            <TranscriptRows entries={entries} />
             {running && (
               <MessageScrollerItem>
                 <Marker>
