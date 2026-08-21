@@ -92,7 +92,7 @@ export function ActivityViewProvider({ children }: { children: ReactNode }) {
       kind: "item",
       workspace: entity.workspace,
       workItem: entity.type === "run" ? entity.workItem : entity.id,
-      ...(entity.type === "run" ? { runId: entity.id } : {}),
+      ...(entity.type === "run" ? { runId: entity.id, run: entity.run } : {}),
     });
   };
   const openRun = (run: NowState["runs"][number]) => {

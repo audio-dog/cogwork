@@ -1,4 +1,4 @@
-import type { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { create } from "zustand";
 
 export type Surface =
@@ -9,6 +9,7 @@ export type Surface =
       readonly workspace: WorkspaceId;
       readonly workItem: WorkItemId;
       readonly runId?: RunId;
+      readonly run?: RunSummary;
     };
 
 export type SurfaceId = string;
