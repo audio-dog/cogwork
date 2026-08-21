@@ -82,11 +82,11 @@ const foldedLanguage = (entry: FoldedEntry) => {
   return "plaintext";
 };
 
-function FoldedRow({ entry }: { entry: FoldedEntry }) {
+function FoldedRow({ entry, status }: { entry: FoldedEntry; status: RunSummary["status"] }) {
   const detail = foldedDetail(entry);
   const preview = foldedPreview(entry);
   const label = foldedLabel(entry);
-  const complete = entry.kind === "tool" ? entry.complete : true;
+  const complete = entry.kind !== "tool" || entry.complete || status !== "running";
   const Icon = foldedIcon(entry);
   const language = foldedLanguage(entry);
 
@@ -129,7 +129,13 @@ const transcriptGroups = (entries: readonly TranscriptEntry[]) =>
 const previousActivityLabel = (entries: readonly FoldedEntry[]) =>
   entries.every((entry) => entry.kind === "tool") ? "previous tool calls" : "previous activities";
 
-function TranscriptRows({ entries }: { entries: readonly TranscriptEntry[] }) {
+function TranscriptRows({
+  entries,
+  status,
+}: {
+  entries: readonly TranscriptEntry[];
+  status: RunSummary["status"];
+}) {
   const groups = transcriptGroups(entries);
 
   return groups.map((group, index) => {
@@ -154,12 +160,12 @@ function TranscriptRows({ entries }: { entries: readonly TranscriptEntry[] }) {
               </CollapsibleTrigger>
               <CollapsibleContent className="flex flex-col gap-1">
                 {previous.map((entry) => (
-                  <FoldedRow key={entry.key} entry={entry} />
+                  <FoldedRow key={entry.key} entry={entry} status={status} />
                 ))}
               </CollapsibleContent>
             </Collapsible>
           )}
-          {latest && <FoldedRow entry={latest} />}
+          {latest && <FoldedRow entry={latest} status={status} />}
         </div>
       </MessageScrollerItem>
     );
@@ -223,12 +229,13 @@ function NowBanner({ run, line }: { run: RunSummary; line: string }) {
 function TranscriptBody({
   entries,
   result,
-  running,
+  status,
 }: {
   entries: readonly TranscriptEntry[];
   result: ReturnType<typeof useRunActivity>;
-  running: boolean;
+  status: RunSummary["status"];
 }) {
+  const running = status === "running";
   if (result._tag === "Failure") {
     return (
       <Alert className="m-4" variant="destructive">
@@ -256,7 +263,7 @@ function TranscriptBody({
       <MessageScroller>
         <MessageScrollerViewport>
           <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
-            <TranscriptRows entries={entries} />
+            <TranscriptRows entries={entries} status={status} />
             {running && (
               <MessageScrollerItem>
                 <Marker>
@@ -277,14 +284,13 @@ function TranscriptBody({
 
 export function RunDrillIn({ run }: { run: RunSummary }) {
   const result = useRunActivity(run.id);
-  const running = run.status === "running";
   const activities = result._tag === "Success" ? result.value.items : [];
   const entries = foldTranscript(activities);
   const line = statusLine(activities, run.status);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <NowBanner run={run} line={line} />
-      <TranscriptBody entries={entries} result={result} running={running} />
+      <TranscriptBody entries={entries} result={result} status={run.status} />
     </div>
   );
 }
