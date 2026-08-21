@@ -21,9 +21,12 @@ export interface CodexRunnerOptions {
   readonly codexExecutable?: string;
   readonly makeAdapter?: MakeCodexAdapter;
   readonly runChat?: CodexRunChat;
+  readonly resolveGitMetadataDirectory?: ResolveGitMetadataDirectory;
 }
 
 export type MakeCodexAdapter = (model: CodexModel, config: CodexTextConfig) => CodexTextAdapter<CodexModel>;
+
+export type ResolveGitMetadataDirectory = (checkoutPath: string) => Effect.Effect<string | null>;
 
 export interface CodexRunChatOptions {
   readonly adapter: CodexTextAdapter<CodexModel>;
@@ -69,13 +72,36 @@ export const codexModelOptions = (handle: string | null, effort: CodexEffort): C
 const launchError = (message: string) =>
   new Harness.HarnessError({ reason: "launch", retryable: false, message });
 
-const launchFailurePattern =
-  /ENOENT|EACCES|command not found|codex login|not logged in|authentication|unauthorized|401/i;
+const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
+const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
 
-const classifyTurnError = (error: Harness.HarnessError) =>
-  launchFailurePattern.test(error.message) ? launchError(error.message) : error;
+const classifyTurnError = (error: Harness.HarnessError) => {
+  if (missingExecutablePattern.test(error.message)) {
+    return launchError(
+      `Codex CLI could not start. Install Codex CLI, then run \`codex login\`. (${error.message})`,
+    );
+  }
+  if (missingLoginPattern.test(error.message)) {
+    return launchError(`Codex CLI is not authenticated. Run \`codex login\`, then retry. (${error.message})`);
+  }
+  return error;
+};
 
 const codexEfforts: ReadonlyArray<CodexEffort> = ["minimal", "low", "medium", "high"];
+
+const gitMetadataDirectory = (checkoutPath: string) =>
+  Effect.scoped(
+    Effect.acquireRelease(
+      Effect.promise(() => localProcessSandbox({ dir: checkoutPath }).create({})),
+      (sandbox) => Effect.promise(() => sandbox.destroy()),
+    ).pipe(
+      Effect.flatMap((sandbox) =>
+        Effect.promise(() => sandbox.process.exec("git rev-parse --path-format=absolute --git-common-dir")),
+      ),
+      Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)),
+      Effect.orElseSucceed(() => null),
+    ),
+  );
 
 const decodeEffort = (effort: string): CodexEffort | null =>
   codexEfforts.find((candidate) => candidate === effort) ?? null;
@@ -158,15 +184,18 @@ const adapterConfig = (
   effort: CodexEffort,
   codexExecutable: string | undefined,
   mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>,
+  gitDirectory: string | null,
 ): CodexTextConfig => ({
   ...codexRuntimeConfig(effort),
   ...(codexExecutable ? { codexExecutable } : {}),
+  ...(gitDirectory ? { additionalDirectories: [gitDirectory] } : {}),
   ...mcpAdapterConfig(mcpSkills),
 });
 
 export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner => {
   const makeAdapter = options.makeAdapter ?? codexText;
   const runChat = options.runChat ?? defaultRunChat;
+  const resolveGitMetadataDirectory = options.resolveGitMetadataDirectory ?? gitMetadataDirectory;
 
   return {
     name: options.name,
@@ -186,9 +215,10 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
           const store = yield* SessionStore.SessionStore;
           const handle = request.session ? yield* store.resumeHandle(request.session) : null;
           const model = request.model ?? "gpt-5.6-sol";
+          const gitDirectory = yield* resolveGitMetadataDirectory(request.checkoutPath);
           const adapter = makeAdapter(
             model,
-            adapterConfig(effort, options.codexExecutable, request.mcpSkills),
+            adapterConfig(effort, options.codexExecutable, request.mcpSkills, gitDirectory),
           );
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,
