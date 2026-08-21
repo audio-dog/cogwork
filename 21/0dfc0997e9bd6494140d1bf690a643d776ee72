@@ -1,0 +1,31 @@
+apps/cli/src/rpc.test.ts
+  s_048e5db577aaec::t_381961d38c8194 12-14,24,42,60
+  s_c3cdfde017ffbb::t_02376145243541 3
+apps/cli/src/login.test.ts
+  s_048e5db577aaec::t_381961d38c8194 15-16,69-77,79-90,93-94,96,98-105
+  s_c3cdfde017ffbb::t_f2c7b2f65fb679 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "210dfc0997e9bd6494140d1bf690a643d776ee72",
+  "prompts": {},
+  "sessions": {
+    "s_048e5db577aaec": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02649-6a3f-7c62-b7ec-ff4fba3244f7",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c3cdfde017ffbb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0264e-f8fd-7f61-ad2b-b880e613c103",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
