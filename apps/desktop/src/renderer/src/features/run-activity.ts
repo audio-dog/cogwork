@@ -232,6 +232,7 @@ export const statusLine = (activities: ReadonlyArray<RunActivity>) => {
   if (event.type === "REASONING_MESSAGE_CONTENT") return "Thinking…";
   if (event.type === "TEXT_MESSAGE_CONTENT") return "Responding…";
   if (event.type === "TOOL_CALL_START") return `Running ${event.toolCallName ?? "tool"}…`;
+  if (event.type === "TOOL_CALL_ARGS") return `Running ${names.get(event.toolCallId ?? "") ?? "tool"}…`;
   if (event.type === "TOOL_CALL_END" || event.type === "TOOL_CALL_RESULT") {
     return `Ran ${names.get(event.toolCallId ?? "") ?? event.toolCallName ?? "tool"}`;
   }

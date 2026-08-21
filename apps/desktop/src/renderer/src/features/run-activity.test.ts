@@ -139,6 +139,12 @@ describe("statusLine", () => {
     ).toBe("Running rg…");
     expect(
       statusLine([
+        runActivity(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "rg" }),
+        runActivity(1, { type: "TOOL_CALL_ARGS", toolCallId: "t1", delta: "--files" }),
+      ]),
+    ).toBe("Running rg…");
+    expect(
+      statusLine([
         runActivity(0, {
           type: "CUSTOM",
           name: "sandbox.file.diff",
