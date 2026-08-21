@@ -342,6 +342,7 @@ export interface ActivityInputs {
 
 export interface ActivitySession {
   readonly events: readonly DaemonEvent[];
+  readonly eventKeys: readonly string[];
   readonly arrivals: readonly number[];
   readonly synthesized: readonly ActivityRow[];
   readonly lifecycle: LifecycleState;
@@ -349,6 +350,7 @@ export interface ActivitySession {
 
 export const initialActivitySession: ActivitySession = {
   events: [],
+  eventKeys: [],
   arrivals: [],
   synthesized: [],
   lifecycle: initialLifecycleState,
@@ -363,14 +365,14 @@ interface ActivitySessionSample {
 
 export const recordActivitySession = (session: ActivitySession, sample: ActivitySessionSample) => {
   const incoming = sample.events;
-  const sharesPrefix = incoming !== null && session.events.every((event, index) => event === incoming[index]);
-  const addedEvents =
-    incoming === null ? [] : sharesPrefix ? incoming.slice(session.events.length) : incoming;
+  const knownEvents = new Set(session.eventKeys);
+  const addedEvents = incoming?.filter((event) => !knownEvents.has(JSON.stringify(event))) ?? [];
   const lifecycle = stepLifecycle(session.lifecycle, sample);
   if (addedEvents.length === 0 && lifecycle.rows.length === 0) return session;
 
   return {
     events: [...session.events, ...addedEvents],
+    eventKeys: [...session.eventKeys, ...addedEvents.map((event) => JSON.stringify(event))],
     arrivals: [...session.arrivals, ...addedEvents.map(() => sample.atMillis)],
     synthesized: [...session.synthesized, ...lifecycle.rows],
     lifecycle: lifecycle.state,

@@ -436,4 +436,24 @@ describe("recordActivitySession", () => {
     expect(afterReconnect.arrivals).toEqual([100, 200]);
     expect(afterReconnect.events).toEqual([first, second]);
   });
+
+  it("does not append matching reconnect seed events", () => {
+    const first = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const reseeded = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const session = recordActivitySession(initialActivitySession, {
+      events: [first],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+
+    expect(
+      recordActivitySession(session, {
+        events: [reseeded],
+        engine: "up",
+        connection: "live",
+        atMillis: 200,
+      }).events,
+    ).toEqual([first]);
+  });
 });
