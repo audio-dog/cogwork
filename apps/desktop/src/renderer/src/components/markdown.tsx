@@ -1,13 +1,16 @@
 import { cn } from "@cogwork/ui/lib/utils";
-import { defaultHighlighter } from "@tanstack/highlight";
+import { createHighlighter } from "@tanstack/highlight/core";
+import { diff } from "@tanstack/highlight/languages/diff";
+import { json } from "@tanstack/highlight/languages/json";
+import { shell } from "@tanstack/highlight/languages/shell";
+import { ts } from "@tanstack/highlight/languages/ts";
+import { tsx } from "@tanstack/highlight/languages/tsx";
 import { createTanStackMarkdownHighlighter } from "@tanstack/highlight/markdown";
+import { createHighlightedCodeBlockProps } from "@tanstack/highlight/react";
 import { type MarkdownComponentProps, Markdown as TanStackMarkdown } from "@tanstack/markdown/react";
 
-// App-level markdown surface. The triage proposal is the first caller; the
-// run-transcript ticket extends this (syntax highlighting) rather than adding a
-// second renderer. TanStack Markdown escapes raw HTML and strips unsafe URL
-// protocols by default.
-const highlighter = createTanStackMarkdownHighlighter(defaultHighlighter);
+const highlighter = createHighlighter({ languages: [diff, json, shell, ts, tsx] });
+const markdownHighlighter = createTanStackMarkdownHighlighter(highlighter);
 
 function MarkdownParagraph({ className, ...props }: MarkdownComponentProps<"p">) {
   return <p className={cn("leading-relaxed", className)} {...props} />;
@@ -56,7 +59,7 @@ export function Markdown({ children, className }: { children: string; className?
   return (
     <div className={cn("flex flex-col gap-2 text-sm wrap-break-word", className)}>
       <TanStackMarkdown
-        highlighter={highlighter}
+        highlighter={markdownHighlighter}
         components={{
           p: MarkdownParagraph,
           a: MarkdownLink,
@@ -71,5 +74,15 @@ export function Markdown({ children, className }: { children: string; className?
         {children}
       </TanStackMarkdown>
     </div>
+  );
+}
+
+export function CodeBlock({ code, language }: { code: string; language: string }) {
+  const { htmlMarkup } = createHighlightedCodeBlockProps({ highlighter, code, lang: language });
+  return (
+    <div
+      className="overflow-x-auto rounded-md border bg-muted text-xs"
+      dangerouslySetInnerHTML={{ __html: htmlMarkup }}
+    />
   );
 }

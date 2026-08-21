@@ -33,7 +33,7 @@ import {
   type SubTabKey,
   subTabs,
 } from "../features/item-tab";
-import type { RunActivityPreview } from "../features/run-activity";
+import { statusLine, useRunActivity } from "../features/run-activity";
 import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
@@ -41,15 +41,10 @@ import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
 import { Markdown } from "./markdown";
 import { RunDrillIn } from "./run-drill-in";
 
-// The item tab: a sub-tab shell (Main | Live run | Pull request) over a shared
-// context. Each part reads the item, its focal run, and the actions from the
-// provider — no prop drilling, so a section can sit anywhere inside the tab.
-
 interface ItemTabState {
   readonly workspace: WorkspaceId;
   readonly item: ClassifiedItem;
   readonly run: RunSummary | null;
-  readonly preview: RunActivityPreview | undefined;
   readonly attempts: readonly RunSummary[];
   readonly descriptor: ItemStateDescriptor;
   readonly tabs: readonly SubTab[];
@@ -93,18 +88,16 @@ function ItemTabProvider({
   workspace,
   item,
   run,
-  preview,
   attempts,
   children,
 }: {
   workspace: WorkspaceId;
   item: ClassifiedItem;
   run: RunSummary | null;
-  preview: RunActivityPreview | undefined;
   attempts: readonly RunSummary[];
   children: ReactNode;
 }) {
-  const [subTab, setSubTab] = useState<SubTabKey>("main");
+  const [subTab, setSubTab] = useState<SubTabKey>(run?.status === "running" ? "run" : "main");
   const [triageRole, setTriageRole] = useState<TriageRole>("ready-for-agent");
   const [triageNote, setTriageNote] = useState("");
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
@@ -145,7 +138,6 @@ function ItemTabProvider({
           workspace,
           item,
           run,
-          preview,
           attempts,
           descriptor,
           tabs,
@@ -306,7 +298,6 @@ function OpenOnGitHubButton() {
   );
 }
 
-// Equal-weight outline actions — no single AI-chosen primary (#13).
 function ActionBar() {
   const {
     state: { item, descriptor },
@@ -327,15 +318,13 @@ function ActionBar() {
   );
 }
 
-// Reconciles "open to Main" with "transcript focal when live": a running item
-// surfaces the live status here and jumps to the Live run sub-tab.
-function RunningAffordance() {
+function RunningAffordance({ run }: { run: RunSummary }) {
   const {
-    state: { descriptor, preview },
     actions: { setSubTab },
   } = useItemTab();
-  if (!descriptor.running) return null;
-  const line = preview?.text || preview?.label || "working";
+  const result = useRunActivity(run.id);
+  const activities = result._tag === "Success" ? result.value.items : [];
+  const line = statusLine(activities, run.status);
   return (
     <button
       type="button"
@@ -526,6 +515,14 @@ function PreviousAttempts() {
                       {relativeTime(attempt.endedAtMillis ?? attempt.startedAtMillis, now)}
                     </span>
                   </div>
+                  <Collapsible>
+                    <CollapsibleTrigger className="w-fit cursor-pointer text-muted-foreground hover:text-foreground">
+                      Show transcript
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2 h-96 rounded-md border">
+                      <RunDrillIn run={attempt} />
+                    </CollapsibleContent>
+                  </Collapsible>
                 </li>
               );
             })}
@@ -587,7 +584,7 @@ function MainBody() {
     <SubTabBody>
       <Header />
       <ActionBar />
-      <RunningAffordance />
+      {run?.status === "running" && <RunningAffordance run={run} />}
       {item._tag === "NeedsHuman" && <TriageSection item={item} />}
       {item._tag === "Blocked" && <BlockersSection openBlockers={item.openBlockers} />}
       {item.pr && <PullRequestSummary pr={item.pr} />}
@@ -606,18 +603,29 @@ function LiveRunBody() {
       <SubTabBody>
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No run yet</EmptyTitle>
-            <EmptyDescription>The agent hasn't started a run for this item.</EmptyDescription>
+            <EmptyTitle>No live run</EmptyTitle>
+            <EmptyDescription>No run has started for this item.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       </SubTabBody>
     );
   }
-  return (
-    <SubTabBody>
-      <RunDrillIn run={run} />
-    </SubTabBody>
-  );
+  if (run.status !== "running") {
+    return (
+      <SubTabBody>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No live run</EmptyTitle>
+            <EmptyDescription>The latest completed run is shown below.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+        <div className="h-96 rounded-md border">
+          <RunDrillIn run={run} />
+        </div>
+      </SubTabBody>
+    );
+  }
+  return <RunDrillIn run={run} />;
 }
 
 function PullRequestBody({ pr }: { pr: PrSummary }) {
@@ -673,7 +681,7 @@ export function ItemTab({ selection }: { selection: ItemSelection }) {
   const result = useBoard();
   if (result._tag !== "Success") return <ItemGone />;
 
-  const { board, previews } = result;
+  const { board } = result;
   const entry = boardItem(board, selection.workspace, selection.workItem);
   if (!entry) return <ItemGone />;
 
@@ -689,7 +697,6 @@ export function ItemTab({ selection }: { selection: ItemSelection }) {
       workspace={selection.workspace}
       item={entry.item}
       run={run}
-      preview={run ? previews.get(run.id) : undefined}
       attempts={attempts}
     >
       <div className="flex h-full min-h-0 flex-col">
