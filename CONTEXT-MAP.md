@@ -27,14 +27,14 @@ lives in a separate safekeep repo: [taylorfsteele/sync](https://github.com/taylo
 
 The **daemon** (hosted by the `cli`) runs two heartbeats over every registered **workspace**:
 
-1. **Reconcile.** The reconcile worker polls each workspace's **issue tracker** (GitHub Issues or Linear) and attaches any configured **source control provider**'s PR state, then `classify` partitions the observed items into **eligible**, **claimed**, **blocked** (open dependencies), and **needs-human** (triage parked it), each tagged with a **lifecycle stage**. The result is held in an in-memory snapshot.
+1. **Reconcile.** The reconcile worker polls each workspace's **issue tracker** (GitHub Issues or Linear) and attaches any configured **source control provider**'s PR state, then `classify` partitions the observed items into **eligible**, **claimed**, **blocked** (open dependencies), and **needs-human** (triage parked it), each tagged with an **operation**. The result is held in an in-memory snapshot.
 2. **Execute.** The **scheduler** picks eligible **candidates** from that snapshot under its concurrency limits and daily budget, and forks one **executor** per candidate.
 
 Each executor run then:
 
 - **claims** the work item on the issue tracker (a label plus a coordination marker),
 - opens a git **worktree** for the branch,
-- resolves the stage's **playbook** into a prompt + harness + model,
+- resolves the selected **operation** and its settings into the inputs for a run,
 - sends a **harness request** to the **harness service**, which routes to the registered **harness runner** by name,
 - streams **harness events** back, appending them to the **run ledger** and publishing **run activity** on the event bus,
 - records the **attempt** outcome and updates roles and coordination on the issue tracker (PR state is read from the source control provider, never written back).
@@ -44,6 +44,6 @@ Each executor run then:
 - **engine → contracts.** Every engine service consumes and produces contracts schemas. Contracts owns the nouns; engine owns the verbs.
 - **cli → engine.** The `daemon` command is the headless host: it composes the engine's layers into a running server. `status` / `runs` / `watch` are clients over the RPC group. `worktree` embeds the engine's worktree manager directly, with no RPC. The desktop app is the primary daemon host on a laptop and talks over the same RPC contract; it does not live in this package yet.
 - **cursor-acp → engine.** `cursorRunner` implements the engine's harness runner interface. The harness request now carries a `SessionId` reference, not a frozen transcript, so `cursorRunner` pulls the opaque resume handle it needs from the engine's `SessionStore` in-process. The engine knows nothing about ACP or Cursor; cursor-acp knows nothing about scheduling.
-- **codex-cli → engine.** `codexRunner` implements the same harness runner interface, pulls its opaque Codex thread handle from `SessionStore`, and receives mandatory instruction layers and the provisioned playbook path from `ContextAssembler`. It passes the stage's engine-owned root JSON Schema to Codex and returns the native AG-UI stream, including one terminal `structured-output.complete` event. Codex CLI owns login and its native agent loop; Cogwork owns dispatch, policy, event persistence, and the one Effect decode that applies the stage result.
+- **codex-cli → engine.** `codexRunner` implements the same harness runner interface, pulls its opaque Codex thread handle from `SessionStore`, and receives operating-instruction layers and their provisioned resource path from `ContextAssembler`. It passes the operation's engine-owned root JSON Schema to Codex and returns the native AG-UI stream, including one terminal `structured-output.complete` event. Codex CLI owns login and its native agent loop; Cogwork owns dispatch, policy, event persistence, and the one Effect decode that applies the operation result.
 - **engine ↔ issue tracker.** Claims, attempts, and other coordination markers live in one coordination comment on the issue tracker, so any daemon can rebuild its coordination view from the tracker alone. Human-facing triage proposals are separate comments (one per round) so the thread stays conversational. The "ledger" marker anchoring the coordination comment is not the run ledger — see contracts.
 - **engine ↔ source control provider.** A separate, read-only port that resolves a work item's pull request by its **link key** (the `ticketSlug(item.id)` branch prefix) and reports the PR's checks, reviews, mergeable state, and human comments. It never writes: coordination stays on the issue tracker, PR writes stay with the agent. A GitHub issue tracker is its own provider by default; a Linear tracker pairs with a GitHub provider via an explicit `sourceControl` config block. This is what lets a Linear-tracked, GitHub-hosted repo get follow-up on its PRs (see engine ADR 0004).
