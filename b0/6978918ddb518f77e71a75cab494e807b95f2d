@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_d7d603c049ca51::t_e6ba425548fc39 698
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "b06978918ddb518f77e71a75cab494e807b95f2d",
+  "prompts": {},
+  "sessions": {
+    "s_d7d603c049ca51": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0257d-489a-7f62-9b6f-624c8f008517",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
