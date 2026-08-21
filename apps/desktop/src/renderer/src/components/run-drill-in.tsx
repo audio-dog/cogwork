@@ -260,24 +260,26 @@ function TranscriptBody({
   }
   return (
     <MessageScrollerProvider>
-      <MessageScroller>
-        <MessageScrollerViewport>
-          <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
-            <TranscriptRows entries={entries} status={status} />
-            {running && (
-              <MessageScrollerItem>
-                <Marker>
-                  <MarkerIcon>
-                    <Spinner />
-                  </MarkerIcon>
-                  <MarkerContent>Working…</MarkerContent>
-                </Marker>
-              </MessageScrollerItem>
-            )}
-          </MessageScrollerContent>
-        </MessageScrollerViewport>
-        <MessageScrollerButton />
-      </MessageScroller>
+      <div className="min-h-0 flex-1">
+        <MessageScroller>
+          <MessageScrollerViewport>
+            <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
+              <TranscriptRows entries={entries} status={status} />
+              {running && (
+                <MessageScrollerItem>
+                  <Marker>
+                    <MarkerIcon>
+                      <Spinner />
+                    </MarkerIcon>
+                    <MarkerContent>Working…</MarkerContent>
+                  </Marker>
+                </MessageScrollerItem>
+              )}
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton />
+        </MessageScroller>
+      </div>
     </MessageScrollerProvider>
   );
 }
