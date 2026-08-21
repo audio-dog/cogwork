@@ -695,7 +695,7 @@ export function ItemTab({
   if (!entry) return <ItemGone />;
 
   const selectedRun = selectedRunForItem(
-    selection.run ?? (selection.runId ? board.runs.get(selection.runId) : null),
+    (selection.runId ? board.runs.get(selection.runId) : null) ?? selection.run,
     selection.workspace,
     selection.workItem,
   );
