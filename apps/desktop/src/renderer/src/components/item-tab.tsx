@@ -608,7 +608,7 @@ function LiveRunBody() {
         <Empty>
           <EmptyHeader>
             <EmptyTitle>No live run</EmptyTitle>
-            <EmptyDescription>The latest completed run is shown below.</EmptyDescription>
+            <EmptyDescription>No run has started for this item.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       </SubTabBody>
