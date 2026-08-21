@@ -9,7 +9,7 @@ import type {
   WorkspaceId,
   WorkspaceState,
 } from "@cogwork/contracts";
-import { useRef } from "react";
+import { useEffect, useState } from "react";
 import { type RunActivityPreview, runPreviews } from "./run-activity";
 import { type EnginePhase, enginePhase, useEngineStatus } from "./use-engine-status";
 import { useLiveEvents } from "./use-live-events";
@@ -337,6 +337,43 @@ export interface ActivityInputs {
   limit?: number;
 }
 
+export interface ActivitySession {
+  readonly events: readonly DaemonEvent[];
+  readonly arrivals: readonly number[];
+  readonly synthesized: readonly ActivityRow[];
+  readonly lifecycle: LifecycleState;
+}
+
+export const initialActivitySession: ActivitySession = {
+  events: [],
+  arrivals: [],
+  synthesized: [],
+  lifecycle: initialLifecycleState,
+};
+
+interface ActivitySessionSample {
+  readonly events: readonly DaemonEvent[] | null;
+  readonly engine: EnginePhase;
+  readonly connection: ConnectionState;
+  readonly atMillis: number;
+}
+
+export const recordActivitySession = (session: ActivitySession, sample: ActivitySessionSample) => {
+  const incoming = sample.events;
+  const sharesPrefix = incoming !== null && session.events.every((event, index) => event === incoming[index]);
+  const addedEvents =
+    incoming === null ? [] : sharesPrefix ? incoming.slice(session.events.length) : incoming;
+  const lifecycle = stepLifecycle(session.lifecycle, sample);
+  if (addedEvents.length === 0 && lifecycle.rows.length === 0) return session;
+
+  return {
+    events: [...session.events, ...addedEvents],
+    arrivals: [...session.arrivals, ...addedEvents.map(() => sample.atMillis)],
+    synthesized: [...session.synthesized, ...lifecycle.rows],
+    lifecycle: lifecycle.state,
+  };
+};
+
 export const deriveActivityFeed = (inputs: ActivityInputs): ActivityFeed => {
   const daemonRows = inputs.events
     .map((event, i) => decodeEvent(event, inputs.arrivals[i] ?? 0))
@@ -359,28 +396,33 @@ export const deriveActivityFeed = (inputs: ActivityInputs): ActivityFeed => {
 export function useActivityFeed() {
   const events = useLiveEvents();
   const { status } = useEngineStatus();
-  const arrivals = useRef<number[]>([]);
-  const lifecycle = useRef<LifecycleState>(initialLifecycleState);
-  const synthesized = useRef<ActivityRow[]>([]);
-  const items = events._tag === "Success" ? events.value.items : [];
+  const [session, setSession] = useState<ActivitySession>(initialActivitySession);
+  const items = events._tag === "Success" ? events.value.items : null;
   const connection: ConnectionState =
     events._tag === "Failure" ? "lost" : events._tag === "Success" ? "live" : "connecting";
+  const engine = enginePhase(status);
 
-  if (arrivals.current.length < items.length) {
-    const timestamp = Date.now();
-    arrivals.current.push(...items.slice(arrivals.current.length).map(() => timestamp));
-  }
+  // biome-ignore lint/plugin: The daemon stream needs commit-time recording into the session log.
+  useEffect(() => {
+    setSession((current) =>
+      recordActivitySession(current, { events: items, engine, connection, atMillis: Date.now() }),
+    );
+  }, [connection, engine, items]);
 
-  const sample: LifecycleSample = { engine: enginePhase(status), connection, atMillis: Date.now() };
-  const next = stepLifecycle(lifecycle.current, sample);
-  lifecycle.current = next.state;
-  if (next.rows.length > 0) synthesized.current.push(...next.rows);
-
-  return deriveActivityFeed({
-    events: items,
-    arrivals: arrivals.current,
-    synthesized: synthesized.current,
-    engine: sample.engine,
+  const sessionFeed = deriveActivityFeed({
+    events: [...session.events],
+    arrivals: [...session.arrivals],
+    synthesized: [...session.synthesized],
+    engine,
     connection,
   });
+  const liveFeed = deriveActivityFeed({
+    events: items ? [...items] : [],
+    arrivals: [],
+    synthesized: [],
+    engine,
+    connection,
+  });
+
+  return { ...sessionFeed, now: liveFeed.now };
 }

@@ -14,6 +14,8 @@ import {
   boundLog,
   decodeEvent,
   deriveActivityFeed,
+  initialActivitySession,
+  recordActivitySession,
   synthesizeLifecycle,
 } from "./activity-source";
 
@@ -405,5 +407,27 @@ describe("deriveActivityFeed — the unified fold", () => {
     expect(feed.total).toBe(4);
     expect(feed.log).toHaveLength(1);
     expect(feed.log[0].summary).toBe("b removed");
+  });
+});
+
+describe("recordActivitySession", () => {
+  it("keeps arrival times correct when a fresh event stream replaces the prior one", () => {
+    const first = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const second = event({ _tag: "ItemRemoved", workspace: "acme", id: "second" });
+    const afterFirst = recordActivitySession(initialActivitySession, {
+      events: [first],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+    const afterReconnect = recordActivitySession(afterFirst, {
+      events: [second],
+      engine: "up",
+      connection: "live",
+      atMillis: 200,
+    });
+
+    expect(afterReconnect.arrivals).toEqual([100, 200]);
+    expect(afterReconnect.events).toEqual([first, second]);
   });
 });
