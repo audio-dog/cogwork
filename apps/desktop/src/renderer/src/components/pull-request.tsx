@@ -1,4 +1,4 @@
-import type { PrSummary } from "@cogwork/contracts";
+import type { PrChecks, PrSummary } from "@cogwork/contracts";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@cogwork/ui/components/collapsible";
 import {
   Item,
@@ -9,9 +9,11 @@ import {
   ItemTitle,
 } from "@cogwork/ui/components/item";
 import { Separator } from "@cogwork/ui/components/separator";
+import type { RemixiconComponentType } from "@remixicon/react";
 import {
   RiArrowRightSLine,
   RiCheckboxCircleLine,
+  RiCloseCircleLine,
   RiGitBranchLine,
   RiGitPullRequestLine,
   RiQuestionAnswerLine,
@@ -20,6 +22,12 @@ import {
 import type { ReactNode } from "react";
 import { relativeTime } from "../features/format";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
+
+const checksIcon: Record<PrChecks, { className: string; component: RemixiconComponentType }> = {
+  passing: { className: "text-primary", component: RiCheckboxCircleLine },
+  failing: { className: "text-destructive", component: RiCloseCircleLine },
+  pending: { className: "text-muted-foreground", component: RiTimeLine },
+};
 
 function PullRequestSection({
   children,
@@ -46,6 +54,7 @@ function PullRequestSection({
 
 export function PullRequest({ pr, now, title }: { pr: PrSummary; now: number; title: string }) {
   const waiting = relativeTime(pr.waitingSinceMillis, now);
+  const { className: checksIconClassName, component: ChecksIcon } = checksIcon[pr.checks];
 
   return (
     <section className="flex flex-col gap-6">
@@ -92,7 +101,7 @@ export function PullRequest({ pr, now, title }: { pr: PrSummary; now: number; ti
         <PullRequestSection defaultOpen title="Checks">
           <Item size="sm" variant="outline">
             <ItemMedia variant="icon">
-              <RiCheckboxCircleLine className="text-primary" />
+              <ChecksIcon aria-hidden className={checksIconClassName} />
             </ItemMedia>
             <ItemContent>
               <ItemTitle>Code host checks</ItemTitle>
