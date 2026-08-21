@@ -39,6 +39,7 @@ import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
 import { Markdown } from "./markdown";
+import { PullRequest } from "./pull-request";
 import { RunDrillIn } from "./run-drill-in";
 
 interface ItemTabState {
@@ -448,16 +449,6 @@ function BlockersSection({ openBlockers }: { openBlockers: number }) {
   );
 }
 
-function PrStatusBadges({ pr }: { pr: PrSummary }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <PrChecksBadge checks={pr.checks} />
-      <PrReviewBadge review={pr.review} />
-      <PrDivergenceBadge divergence={pr.baseDivergence} />
-    </div>
-  );
-}
-
 function PullRequestSummary({ pr }: { pr: PrSummary }) {
   return (
     <Section title="Pull request">
@@ -629,26 +620,13 @@ function LiveRunBody() {
 }
 
 function PullRequestBody({ pr }: { pr: PrSummary }) {
+  const {
+    state: { item },
+    meta: { now },
+  } = useItemTab();
   return (
     <SubTabBody>
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>PR #{pr.number}</span>
-          <span aria-hidden>·</span>
-          <span>waiting {relativeTime(pr.waitingSinceMillis)}</span>
-        </div>
-        <PrStatusBadges pr={pr} />
-        <p className="text-xs text-muted-foreground">Review and merge happen on GitHub.</p>
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-fit"
-          render={<a href={pr.url} rel="noreferrer" target="_blank" />}
-        >
-          Open on GitHub
-          <RiExternalLinkLine data-icon="inline-end" />
-        </Button>
-      </div>
+      <PullRequest pr={pr} now={now} title={item.title} />
     </SubTabBody>
   );
 }
