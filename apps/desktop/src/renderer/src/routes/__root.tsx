@@ -24,6 +24,4 @@ function RootLayout() {
   );
 }
 
-export const Route = createRootRoute({
-  component: RootLayout,
-});
+export const Route = createRootRoute({ component: RootLayout });
