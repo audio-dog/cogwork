@@ -4,6 +4,7 @@ import {
   type DaemonEvent,
   type RunActivity,
   type RunId,
+  type RunSummary,
 } from "@cogwork/contracts";
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
@@ -218,10 +219,13 @@ export const foldTranscript = (activities: ReadonlyArray<RunActivity>) => {
   return state.entries;
 };
 
-export const statusLine = (activities: ReadonlyArray<RunActivity>) => {
+export const statusLine = (
+  activities: ReadonlyArray<RunActivity>,
+  status: RunSummary["status"] = "running",
+) => {
   const names = new Map<string, string>();
   const latest = activities.at(-1);
-  if (!latest) return "Thinking…";
+  if (!latest) return status === "running" ? "Thinking…" : "Run finished.";
 
   for (const activity of activities) {
     if (activity.event.type !== "TOOL_CALL_START") continue;

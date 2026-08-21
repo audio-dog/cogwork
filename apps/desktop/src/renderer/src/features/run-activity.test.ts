@@ -128,6 +128,7 @@ describe("foldTranscript", () => {
 
 describe("statusLine", () => {
   it("describes the live edge in agent language", () => {
+    expect(statusLine([], "succeeded")).toBe("Run finished.");
     expect(statusLine([runActivity(0, { type: "REASONING_MESSAGE_CONTENT", delta: "checking" })])).toBe(
       "Thinking…",
     );
