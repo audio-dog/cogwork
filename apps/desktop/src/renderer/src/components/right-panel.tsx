@@ -1,4 +1,4 @@
-import type { DaemonEvent, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import type { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Button } from "@cogwork/ui/components/button";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
@@ -11,53 +11,21 @@ import {
   RiFocus2Line,
   RiPulseLine,
 } from "@remixicon/react";
-import { useLiveEvents } from "../features/use-live-events";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
+import { ActivityTab as ActivityTabBody } from "./activity-tab";
 import { AttentionList } from "./attention-rail";
 import { CompactEngineGate } from "./engine-gate";
 import { ItemTab as ItemTabView } from "./item-tab";
 
+const baseTabClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
+
+const activeTabClassName = "bg-accent text-foreground";
+
+const inactiveTabClassName = "text-muted-foreground hover:bg-accent/60 hover:text-foreground";
+
 function SurfaceFill({ children }: { children: React.ReactNode }) {
   return (
     <div className="size-full [&>aside]:size-full [&>aside]:w-full [&>aside]:border-l-0">{children}</div>
-  );
-}
-
-function describeLiveEvent(event: DaemonEvent): string {
-  switch (event._tag) {
-    case "RunActivity":
-      return `run ${event.activity.runId} · #${event.activity.seq}`;
-    case "ItemChanged":
-      return `${event.workspace} · ${event.item.id}`;
-    case "RunChanged":
-      return `run ${event.run.id} → ${event.run.status}`;
-    case "SchedulerChanged":
-      return `${event.scheduler.globalInFlight} / ${event.scheduler.globalLimit} in flight`;
-    default:
-      return event._tag;
-  }
-}
-
-function ActivityPanelBody() {
-  const result = useLiveEvents();
-  if (result._tag !== "Success") return null;
-  const { items } = result.value;
-  const start = Math.max(0, items.length - 40);
-  const recent = items.slice(start);
-  if (recent.length === 0) {
-    return <p className="p-4 text-xs text-muted-foreground">No events yet this session.</p>;
-  }
-  return (
-    <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-auto p-3 text-xs">
-      {recent
-        .map((event, offset) => (
-          <li key={start + offset} className="flex items-center gap-2">
-            <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{event._tag}</span>
-            <span className="truncate text-muted-foreground">{describeLiveEvent(event)}</span>
-          </li>
-        ))
-        .reverse()}
-    </ul>
   );
 }
 
@@ -69,41 +37,38 @@ function AttentionPanelBody() {
   );
 }
 
-function ItemPanelBody({ workspace, workItem }: { workspace: WorkspaceId; workItem: WorkItemId }) {
-  return <ItemTabView selection={{ workspace, workItem }} />;
+function ItemPanelBody({
+  workspace,
+  workItem,
+  runId,
+}: {
+  workspace: WorkspaceId;
+  workItem: WorkItemId;
+  runId?: RunId;
+}) {
+  return <ItemTabView selection={{ workspace, workItem, runId }} />;
 }
 
-function AttentionTab({ active, onSelect }: { active: boolean; onSelect: () => void }) {
-  return (
-    <div
-      className={cn(
-        "flex h-7 shrink-0 items-center gap-0.5 rounded-md pr-2 pl-2 text-xs",
-        active
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-      )}
-    >
-      <button type="button" className="flex min-w-0 cursor-pointer items-center gap-1.5" onClick={onSelect}>
-        <RiFocus2Line className="size-3.5 shrink-0" />
-        <span className="truncate">Attention</span>
-      </button>
-    </div>
-  );
+function tabClassName(active: boolean, padding: string) {
+  return cn(baseTabClassName, padding, active ? activeTabClassName : inactiveTabClassName);
 }
 
-function ActivityTab({ active, onSelect }: { active: boolean; onSelect: () => void }) {
+function FixedTab({
+  active,
+  onSelect,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
-    <div
-      className={cn(
-        "flex h-7 shrink-0 items-center gap-0.5 rounded-md pr-2 pl-2 text-xs",
-        active
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-      )}
-    >
+    <div className={tabClassName(active, "px-2")}>
       <button type="button" className="flex min-w-0 cursor-pointer items-center gap-1.5" onClick={onSelect}>
-        <RiPulseLine className="size-3.5 shrink-0" />
-        <span className="truncate">Activity</span>
+        {icon}
+        <span className="truncate">{label}</span>
       </button>
     </div>
   );
@@ -123,14 +88,7 @@ function ItemTab({
   onClose: () => void;
 }) {
   return (
-    <div
-      className={cn(
-        "flex h-7 shrink-0 items-center gap-0.5 rounded-md pr-1 pl-2 text-xs",
-        active
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-      )}
-    >
+    <div className={tabClassName(active, "pl-2 pr-1")}>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -158,7 +116,7 @@ function ItemTab({
   );
 }
 
-function activeSurface(surfaces: readonly Surface[], active: SurfaceId): Surface {
+function currentSurface(surfaces: readonly Surface[], active: SurfaceId): Surface {
   return surfaces.find((surface) => surfaceId(surface) === active) ?? surfaces[0];
 }
 
@@ -180,7 +138,7 @@ export function RightPanel() {
   const toggleMaximized = useRightPanelStore((state) => state.toggleMaximized);
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
-  const current = activeSurface(surfaces, active);
+  const current = currentSurface(surfaces, active);
   const itemSurfaces = surfaces.filter(
     (surface): surface is Extract<Surface, { kind: "item" }> => surface.kind === "item",
   );
@@ -190,13 +148,22 @@ export function RightPanel() {
       <div
         className={cn(
           "flex h-11 min-h-11 shrink-0 items-center gap-1 border-b pr-2 pl-2 [-webkit-app-region:drag]",
-          // Maximized over a collapsed sidebar, inset the strip to clear the fixed toggle.
           maximized && "[[data-sidebar-state=collapsed]_&]:pl-[var(--workspace-titlebar-content-left)]",
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          <AttentionTab active={active === "attention"} onSelect={() => setActive("attention")} />
-          <ActivityTab active={active === "activity"} onSelect={() => setActive("activity")} />
+          <FixedTab
+            active={active === "attention"}
+            onSelect={() => setActive("attention")}
+            icon={<RiFocus2Line className="size-3.5 shrink-0" />}
+            label="Attention"
+          />
+          <FixedTab
+            active={active === "activity"}
+            onSelect={() => setActive("activity")}
+            icon={<RiPulseLine className="size-3.5 shrink-0" />}
+            label="Activity"
+          />
           {itemSurfaces.map((surface) => {
             const id = surfaceId(surface);
             return (
@@ -229,12 +196,13 @@ export function RightPanel() {
         <CompactEngineGate.Provider>
           <CompactEngineGate.Live>
             {current.kind === "attention" && <AttentionPanelBody />}
-            {current.kind === "activity" && <ActivityPanelBody />}
+            {current.kind === "activity" && <ActivityTabBody />}
             {current.kind === "item" && (
               <ItemPanelBody
-                key={surfaceId(current)}
+                key={`${surfaceId(current)}:${current.runId ?? ""}`}
                 workspace={current.workspace}
                 workItem={current.workItem}
+                runId={current.runId}
               />
             )}
           </CompactEngineGate.Live>

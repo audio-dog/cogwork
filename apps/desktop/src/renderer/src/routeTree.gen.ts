@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppActivityRouteImport } from './routes/_app/activity'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 
@@ -30,11 +29,6 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppActivityRoute = AppActivityRouteImport.update({
-  id: '/activity',
-  path: '/activity',
-  getParentRoute: () => AppRouteRoute,
-} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -49,12 +43,10 @@ const SettingsSectionRoute = SettingsSectionRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsRouteRouteWithChildren
-  '/activity': typeof AppActivityRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/activity': typeof AppActivityRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -63,22 +55,19 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
-  '/_app/activity': typeof AppActivityRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    '/' | '/settings' | '/activity' | '/settings/$section' | '/settings/'
+  fullPaths: '/' | '/settings' | '/settings/$section' | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/activity' | '/settings/$section' | '/' | '/settings'
+  to: '/settings/$section' | '/' | '/settings'
   id:
     | '__root__'
     | '/_app'
     | '/settings'
-    | '/_app/activity'
     | '/settings/$section'
     | '/_app/'
     | '/settings/'
@@ -112,13 +101,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
-    '/_app/activity': {
-      id: '/_app/activity'
-      path: '/activity'
-      fullPath: '/activity'
-      preLoaderRoute: typeof AppActivityRouteImport
-      parentRoute: typeof AppRouteRoute
-    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -137,12 +119,10 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteRouteChildren {
-  AppActivityRoute: typeof AppActivityRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
-  AppActivityRoute: AppActivityRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
