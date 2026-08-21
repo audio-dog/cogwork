@@ -9,6 +9,7 @@ import {
   ItemTitle,
 } from "@cogwork/ui/components/item";
 import { Separator } from "@cogwork/ui/components/separator";
+import { cn } from "@cogwork/ui/lib/utils";
 import type { RemixiconComponentType } from "@remixicon/react";
 import {
   RiArrowRightSLine,
@@ -23,10 +24,10 @@ import type { ReactNode } from "react";
 import { relativeTime } from "../features/format";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
 
-const checksIcon: Record<PrChecks, { className: string; component: RemixiconComponentType }> = {
-  passing: { className: "text-primary", component: RiCheckboxCircleLine },
-  failing: { className: "text-destructive", component: RiCloseCircleLine },
-  pending: { className: "text-muted-foreground", component: RiTimeLine },
+const checksIcon: Record<PrChecks, RemixiconComponentType> = {
+  passing: RiCheckboxCircleLine,
+  failing: RiCloseCircleLine,
+  pending: RiTimeLine,
 };
 
 function PullRequestSection({
@@ -54,7 +55,7 @@ function PullRequestSection({
 
 export function PullRequest({ pr, now, title }: { pr: PrSummary; now: number; title: string }) {
   const waiting = relativeTime(pr.waitingSinceMillis, now);
-  const { className: checksIconClassName, component: ChecksIcon } = checksIcon[pr.checks];
+  const ChecksIcon = checksIcon[pr.checks];
 
   return (
     <section className="flex flex-col gap-6">
@@ -101,7 +102,14 @@ export function PullRequest({ pr, now, title }: { pr: PrSummary; now: number; ti
         <PullRequestSection defaultOpen title="Checks">
           <Item size="sm" variant="outline">
             <ItemMedia variant="icon">
-              <ChecksIcon aria-hidden className={checksIconClassName} />
+              <ChecksIcon
+                aria-hidden
+                className={cn(
+                  "text-muted-foreground",
+                  pr.checks === "passing" && "text-primary",
+                  pr.checks === "failing" && "text-destructive",
+                )}
+              />
             </ItemMedia>
             <ItemContent>
               <ItemTitle>Code host checks</ItemTitle>
