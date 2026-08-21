@@ -1,0 +1,25 @@
+packages/contracts/CONTEXT.md
+  s_0d0e9772a086cc::t_3de4d9772f2fbd 126,136,176
+  s_0d0e9772a086cc::t_000deb013e1118 122,140,151-154,156,172,202-203,205-206,209-211,215
+  s_0d0e9772a086cc::t_e45604cc65ee68 28,66,73,75-115,118-119
+packages/engine/CONTEXT.md
+  s_0d0e9772a086cc::t_0b3f7f7b9fa654 29-30,61,81,89,93,113,121,124-126,129,132-134,158,181,185-186
+CONTEXT-MAP.md
+  s_0d0e9772a086cc::t_3de4d9772f2fbd 30,37,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.23",
+  "base_commit_sha": "993d6b54f52e0205a9315436447a922fb2a3eefa",
+  "prompts": {},
+  "sessions": {
+    "s_0d0e9772a086cc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a02508-f06e-78b3-92f6-d1ba6df56f0d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
