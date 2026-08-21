@@ -33,7 +33,7 @@ import {
   type SubTabKey,
   subTabs,
 } from "../features/item-tab";
-import { type RunActivityPreview, statusLine, useRunActivity } from "../features/run-activity";
+import { statusLine, useRunActivity } from "../features/run-activity";
 import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
@@ -45,7 +45,6 @@ interface ItemTabState {
   readonly workspace: WorkspaceId;
   readonly item: ClassifiedItem;
   readonly run: RunSummary | null;
-  readonly preview: RunActivityPreview | undefined;
   readonly attempts: readonly RunSummary[];
   readonly descriptor: ItemStateDescriptor;
   readonly tabs: readonly SubTab[];
@@ -89,14 +88,12 @@ function ItemTabProvider({
   workspace,
   item,
   run,
-  preview,
   attempts,
   children,
 }: {
   workspace: WorkspaceId;
   item: ClassifiedItem;
   run: RunSummary | null;
-  preview: RunActivityPreview | undefined;
   attempts: readonly RunSummary[];
   children: ReactNode;
 }) {
@@ -141,7 +138,6 @@ function ItemTabProvider({
           workspace,
           item,
           run,
-          preview,
           attempts,
           descriptor,
           tabs,
@@ -328,7 +324,7 @@ function RunningAffordance({ run }: { run: RunSummary }) {
   } = useItemTab();
   const result = useRunActivity(run.id);
   const activities = result._tag === "Success" ? result.value.items : [];
-  const line = statusLine(activities);
+  const line = statusLine(activities, run.status);
   return (
     <button
       type="button"
@@ -685,7 +681,7 @@ export function ItemTab({ selection }: { selection: ItemSelection }) {
   const result = useBoard();
   if (result._tag !== "Success") return <ItemGone />;
 
-  const { board, previews } = result;
+  const { board } = result;
   const entry = boardItem(board, selection.workspace, selection.workItem);
   if (!entry) return <ItemGone />;
 
@@ -701,7 +697,6 @@ export function ItemTab({ selection }: { selection: ItemSelection }) {
       workspace={selection.workspace}
       item={entry.item}
       run={run}
-      preview={run ? previews.get(run.id) : undefined}
       attempts={attempts}
     >
       <div className="flex h-full min-h-0 flex-col">
