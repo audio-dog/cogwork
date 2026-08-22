@@ -54,8 +54,7 @@ const defaultRunChat: CodexRunChat = (options) =>
 
 export const codexRuntimeConfig = (effort: CodexEffort): CodexTextConfig => ({
   approvalPolicy: "never",
-  sandboxMode: "workspace-write",
-  networkAccessEnabled: true,
+  sandboxMode: "danger-full-access",
   modelReasoningEffort: effort,
 });
 

@@ -207,8 +207,7 @@ describe("codexRunner", () => {
           "gpt-5.6-sol",
           {
             approvalPolicy: "never",
-            sandboxMode: "workspace-write",
-            networkAccessEnabled: true,
+            sandboxMode: "danger-full-access",
             modelReasoningEffort: "high",
             env: codexChildEnvironment(),
           },
@@ -433,10 +432,10 @@ describe("codexRunner", () => {
       );
       const capture = yield* structuredCapture(events);
 
-      assert.include(capture.args, "workspace-write");
+      assert.include(capture.args, "danger-full-access");
       assert.include(capture.args, 'approval_policy="never"');
-      assert.include(capture.args, "sandbox_workspace_write.network_access=true");
-      assert.notInclude(capture.args, "danger-full-access");
+      assert.notInclude(capture.args, "workspace-write");
+      assert.notInclude(capture.args, "sandbox_workspace_write.network_access=true");
       assert.notInclude(capture.args, "resume");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
@@ -638,6 +637,9 @@ describe("codexRunner", () => {
 
       assert.include(capture.args, "resume");
       assert.include(capture.args, recordedHandle);
+      assert.include(capture.args, "danger-full-access");
+      assert.include(capture.args, 'approval_policy="never"');
+      assert.notInclude(capture.args, "workspace-write");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
       assert.include(capture.prompt, "playbook rules");
@@ -669,11 +671,10 @@ describe("codexRunner", () => {
 });
 
 describe("codexRuntimeConfig", () => {
-  it("pins unattended runs to workspace-write with network and no approvals", () => {
+  it("pins unattended runs to full access with no approvals", () => {
     assert.deepStrictEqual(codexRuntimeConfig("high"), {
       approvalPolicy: "never",
-      sandboxMode: "workspace-write",
-      networkAccessEnabled: true,
+      sandboxMode: "danger-full-access",
       modelReasoningEffort: "high",
     });
   });
