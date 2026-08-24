@@ -1,5 +1,5 @@
 import { Button } from "@cogwork/ui/components/button";
-import { Empty, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
@@ -176,6 +176,7 @@ function AttentionContent({
   const workspace = useFunnelSelection();
   const counts = attentionCounts(entries);
   const rows = filterAttention(entries, kind, workspace.selected);
+  const hasActiveFilters = kind !== "all" || workspace.selected.size > 0;
   const options = workspaces.map((name) => ({
     key: name,
     label: name,
@@ -190,7 +191,7 @@ function AttentionContent({
         meta: { ariaLabel: "Filter workspaces", resetLabel: "All workspaces" },
       }}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex size-full min-h-0 flex-col">
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <ToggleGroup
             spacing={0}
@@ -222,7 +223,12 @@ function AttentionContent({
           {rows.length === 0 ? (
             <Empty className="p-6">
               <EmptyHeader>
-                <EmptyTitle>Nothing needs a person right now.</EmptyTitle>
+                <EmptyTitle>
+                  {hasActiveFilters
+                    ? "No attention items match these filters."
+                    : "Nothing needs a person right now."}
+                </EmptyTitle>
+                {hasActiveFilters && <EmptyDescription>Try a different kind or workspace.</EmptyDescription>}
               </EmptyHeader>
             </Empty>
           ) : (
