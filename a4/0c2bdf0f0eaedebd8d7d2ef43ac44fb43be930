@@ -1,0 +1,21 @@
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_1c78639d852e06::t_4d7216034374a7 4,17-29
+  s_1c78639d852e06::t_59d500b94c7f3c 3
+  s_1c78639d852e06::t_934e394d3f3ea3 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "a40c2bdf0f0eaedebd8d7d2ef43ac44fb43be930",
+  "prompts": {},
+  "sessions": {
+    "s_1c78639d852e06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "166aa4b7-b9be-43d6-9a36-27e9e1c2003f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
