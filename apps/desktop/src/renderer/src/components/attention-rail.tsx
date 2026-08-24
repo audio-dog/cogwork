@@ -1,4 +1,4 @@
-import { Button, buttonVariants } from "@cogwork/ui/components/button";
+import { buttonVariants } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
@@ -110,11 +110,7 @@ function ReadyToMergeQuickOpen({ entry }: { entry: ReadyToMergeAttentionEntry })
 function DecisionQuickOpen({ entry }: { entry: NeedsDecisionAttentionEntry }) {
   const label = `Open in ${trackerLabel(entry.tracker)}`;
   if (!entry.url) {
-    return (
-      <Button size="icon-sm" variant="ghost" aria-label={label} className="relative z-10 opacity-0" disabled>
-        <RiExternalLinkLine />
-      </Button>
-    );
+    return <span className="size-7 shrink-0" aria-hidden />;
   }
   return (
     <a
