@@ -55,40 +55,48 @@ function tabClassName(active: boolean, padding: string) {
   return cn(baseTabClassName, padding, active ? activeTabClassName : inactiveTabClassName);
 }
 
-function FixedTab({
-  active,
-  onSelect,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onSelect: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
+function AttentionTab() {
+  const active = useRightPanelStore((state) => state.active === "attention");
+  const setActive = useRightPanelStore((state) => state.setActive);
+
   return (
     <div className={tabClassName(active, "px-2")}>
-      <button type="button" className="flex min-w-0 cursor-pointer items-center gap-1.5" onClick={onSelect}>
-        {icon}
-        <span className="truncate">{label}</span>
+      <button
+        type="button"
+        className="flex min-w-0 cursor-pointer items-center gap-1.5"
+        onClick={() => setActive("attention")}
+      >
+        <RiFocus2Line className="size-3.5 shrink-0" />
+        <span className="truncate">Attention</span>
       </button>
     </div>
   );
 }
 
-function ItemTab({
-  workspace,
-  workItem,
-  active,
-  onSelect,
-  onClose,
-}: {
-  workspace: WorkspaceId;
-  workItem: WorkItemId;
-  active: boolean;
-  onSelect: () => void;
-  onClose: () => void;
-}) {
+function ActivityTab() {
+  const active = useRightPanelStore((state) => state.active === "activity");
+  const setActive = useRightPanelStore((state) => state.setActive);
+
+  return (
+    <div className={tabClassName(active, "px-2")}>
+      <button
+        type="button"
+        className="flex min-w-0 cursor-pointer items-center gap-1.5"
+        onClick={() => setActive("activity")}
+      >
+        <RiPulseLine className="size-3.5 shrink-0" />
+        <span className="truncate">Activity</span>
+      </button>
+    </div>
+  );
+}
+
+function ItemTab({ surface }: { surface: Extract<Surface, { kind: "item" }> }) {
+  const id = surfaceId(surface);
+  const active = useRightPanelStore((state) => state.active === id);
+  const setActive = useRightPanelStore((state) => state.setActive);
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
+
   return (
     <div className={tabClassName(active, "pl-2 pr-1")}>
       <Tooltip>
@@ -97,20 +105,20 @@ function ItemTab({
             <button
               type="button"
               className="flex min-w-0 cursor-pointer items-center gap-1.5"
-              onClick={onSelect}
+              onClick={() => setActive(id)}
             >
               <RiFileList2Line className="size-3.5 shrink-0" />
-              <span className="truncate">{workItem}</span>
+              <span className="truncate">{surface.workItem}</span>
             </button>
           }
         />
-        <TooltipContent side="bottom">{workspace}</TooltipContent>
+        <TooltipContent side="bottom">{surface.workspace}</TooltipContent>
       </Tooltip>
       <button
         type="button"
-        aria-label={`Close ${workItem}`}
+        aria-label={`Close ${surface.workItem}`}
         className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
-        onClick={onClose}
+        onClick={() => closeSurface(id)}
       >
         <RiCloseLine className="size-3" />
       </button>
@@ -138,8 +146,6 @@ export function RightPanel() {
   const maximized = useRightPanelStore((state) => state.maximized);
   const closePanel = useRightPanelStore((state) => state.closePanel);
   const toggleMaximized = useRightPanelStore((state) => state.toggleMaximized);
-  const setActive = useRightPanelStore((state) => state.setActive);
-  const closeSurface = useRightPanelStore((state) => state.closeSurface);
   const current = currentSurface(surfaces, active);
   const itemSurfaces = surfaces.filter(
     (surface): surface is Extract<Surface, { kind: "item" }> => surface.kind === "item",
@@ -154,30 +160,11 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          <FixedTab
-            active={active === "attention"}
-            onSelect={() => setActive("attention")}
-            icon={<RiFocus2Line className="size-3.5 shrink-0" />}
-            label="Attention"
-          />
-          <FixedTab
-            active={active === "activity"}
-            onSelect={() => setActive("activity")}
-            icon={<RiPulseLine className="size-3.5 shrink-0" />}
-            label="Activity"
-          />
+          <AttentionTab />
+          <ActivityTab />
           {itemSurfaces.map((surface) => {
             const id = surfaceId(surface);
-            return (
-              <ItemTab
-                key={id}
-                workspace={surface.workspace}
-                workItem={surface.workItem}
-                active={active === id}
-                onSelect={() => setActive(id)}
-                onClose={() => closeSurface(id)}
-              />
-            );
+            return <ItemTab key={id} surface={surface} />;
           })}
         </div>
         <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
