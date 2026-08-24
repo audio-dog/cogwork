@@ -64,13 +64,24 @@ Who authored a contribution — `plugin:<pluginId>`, `engine`, or `local`. Part 
 _Avoid_: Scope, source, owner, namespace
 
 **Scope**:
-Where a setting that configures a contribution lives. Four of them: **Settings profile** (principal), **Runtime host** (machine), **Workspace input** (repo, committed), **Private workspace overlay** (principal-owned, per-workspace, uncommitted). Mutable, and never part of a contribution's identity.
-_Avoid_: Authority, level, tier
+Where a setting lives. Four of them: **Settings profile** (principal), **Runtime host** (machine), **Workspace input** (repo, committed), **Private workspace overlay** (principal-owned, per-workspace, uncommitted). Mutable, and never part of a contribution's identity.
+**Not every Scope may hold every setting**, and the two settings families take different sets:
+
+| Setting | Scopes that may hold it |
+|---|---|
+| A **contribution**'s on / off — Skill, Rules, Command, Subagent | Settings profile · Workspace input · Private workspace overlay |
+| A **contribution**'s on / off — Hook, MCP server | Settings profile · Private workspace overlay |
+| An **Operation setting** | Settings profile · Private workspace overlay — plus Runtime host for `harness` only |
+
+The Runtime host holds machine facts — checkout paths, installed harnesses, credential storage location — not contributions. The Workspace input is excluded from Operation settings because a repository you cloned must not choose the model you pay for, and from enabling a Hook or MCP server because it must not start a process on your machine — it may still *ship* the file. The excluded cells are empty by decision, not by omission.
+There is **no collective noun** over either family; say `contribution` or `Operation setting`. Every candidate umbrella collided with a term already in this glossary.
+_Avoid_: Authority, level, tier, target (an invented axis name — say default / Workflow / Operation)
 
 **Resolution**:
-How a contribution kind combines across Scopes, declared **per kind** as a triple of **(scope set, operator, direction)** — both which Scopes may contribute *and* how they combine. Operators: `override-scalar`, `merge-by-key`, `append-sources`, `union-values`, `constrain`.
-The scope set is per-kind for a **trust** reason, not a stylistic one: a repository you cloned must not be able to enable executable behavior on your machine. Inert text (Rules, Skills) may come from repo scope; executable contributions (Hooks) may not. There is no industry convention to inherit here — Codex replaces lists but merges MCP servers field-by-field, while Claude Code unions lists but replaces an MCP server entry whole.
-_Avoid_: Merge (only one of the operators), precedence (only one axis of three), override
+How settings combine across Scopes, declared as a triple of **(scope set, operator, direction)** — both which Scopes may contribute *and* how they combine. Operators: `override-scalar`, `append-sources`, `union-values`, `constrain`.
+Composing the **set** of contributions across Scopes is a `union-values`, never a merge. Identity carries Authority, so two contributions sharing a local name are two different things and Cogwork never reconciles them. Only a *single* identity with settings at more than one Scope resolves, by `override-scalar` down the direction below.
+Direction, low to high: **Settings profile → Runtime host → Workspace input → Private workspace overlay**. No kind inverts it; trust is carried by the scope set instead, which is why a repository may hold a Hook file but may never turn one on.
+_Avoid_: Merge (only one of the operators), precedence (only one axis of three), override, `merge-by-key` (retired — nothing field-merges across Scopes)
 
 **Plugin**:
 A first-party install-and-setup bundle. Its manifest **points at files** rather than inlining definitions, and declares which Connections it requires. `version` is optional — a Plugin is identified by its declared version or, absent one, by content revision. Each contribution has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
@@ -78,12 +89,13 @@ _Avoid_: Capability (retired — there is no umbrella noun), component, marketpl
 
 **Contribution kind**:
 One of the six types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Command, Hook**. The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
-_Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed)
+A contribution has exactly **one** setting — on or off — written as a default and nowhere else. Everything else about it lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
+_Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed), per-Operation enablement (say binding)
 
-**Connection**:
+**Connection** — _provisional, do not design against_:
 The established, authenticated binding to an external system — engine-owned, and not a contribution kind. It is never the credential itself: secret material stays in the credential store, keyed by account, and reaches a Run over a channel that is never persisted to the run ledger or event log. Other contributions reference a Connection by id rather than carrying secrets. The noun exists because Cogwork authenticates external systems that are not MCP servers, such as the Linear issue tracker.
-Granted **per-Workspace**, with its own scope ladder (user/global and per-workspace). Per-Operation grants are unnecessary: the Workspace grant says whether a repo's Runs may use it at all, and the Operation Definition's declared need narrows it, so a Run Plan resolves to the intersection.
-_Avoid_: Plugin, credential, MCP server, contribution kind
+**This term is not settled.** What a Connection *is* depends on whether a first-party integration such as the Linear issue tracker stays an engine-owned port or becomes something a person installs and authenticates themselves — [#172](https://github.com/colonylabs/cogwork/issues/172) — and its establishment, health, refresh, and revocation belong to [#125](https://github.com/colonylabs/cogwork/issues/125). Both are open. Until they resolve, Connection names a gap, not a design.
+_Avoid_: Plugin, credential, MCP server, contribution kind. Also avoid **scoping, binding, granting, or resolving** a Connection, and avoid giving it a Scope ladder of its own — [#134](https://github.com/colonylabs/cogwork/issues/134) deliberately declined to scope it, because the concept must be defined before it can be scoped.
 
 **Tool**:
 A typed function an agent may call during a Run. A Tool may be engine-owned, provider-native, or exposed by an MCP server, but its source remains explicit.
@@ -146,8 +158,10 @@ The engine-authored contract for one operation: its behavior, defaults, required
 _Avoid_: Playbook, run plan, operation settings
 
 **Operation settings**:
-The scoped choices that configure an operation, such as enablement, Harness, model, effort, permissions, allowed overrides, and the contributions bound to the Operation Definition's declared needs. Settings bind; the Definition declares what is required; a Plugin only offers, and can never mark itself required for an Operation it does not own.
-_Avoid_: Playbook, operation definition, run plan
+The scoped choices that configure an operation: on / off, Harness, model, effort, permission profile, and the contributions **bound** to the Operation Definition's declared needs. Settings bind; the Definition declares what is required; a Plugin only offers, and can never mark itself required for an Operation it does not own.
+Each may be written three ways — as a **default**, for one **Workflow**, or for one **Operation** — and the most specific of the three wins before Scope is consulted. A default must never outrank a value that names the work.
+An Operation Definition may lock a setting against override. That lock **is** Engine policy, not a second mechanism: it constrains rather than overwrites, and refuses with its source named.
+_Avoid_: Playbook, operation definition, run plan, target (say default / Workflow / Operation)
 
 **Operating instructions**:
 Reusable guidance an agent must follow when performing an operation, resolved separately from the work-specific facts supplied for one run.
