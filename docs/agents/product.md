@@ -1,0 +1,141 @@
+# Product
+
+What cogwork is, who it is for, where it is, and where it is going.
+
+Read this when a question needs an answer the code cannot give you — during `/triage`, or when
+answering in the maintainer's place. `docs/agents/technical-disposition.md` is its sibling and
+its complement: **this doc says what the product is; that one says how the maintainer decides.**
+Neither restates the other.
+
+## What earns a line here
+
+- **The roadmap-turn test.** If the next three tickets all landed, would this sentence need
+  editing? If yes it belongs on a map or a ticket, not here.
+- **The cache test.** Could an agent find this by reading the code, a `CONTEXT.md`, or the issue
+  tracker? Then it does not live here. This document caches only what the environment cannot
+  tell you: why the thing exists, what it refuses to be, and who it is for.
+- **Slice-level status lives on the tracker.** For "is X built yet", read the issue tracker or
+  the code. This document will not tell you, and if it appears to, do not believe it.
+
+## What cogwork is
+
+**cogwork is a productivity assistant for a software engineer. Coding orchestration is its
+first capability, not its definition.** The `triage → implement → follow-up → PR` pipeline is
+one workflow keyed by a work-item type, not the product itself. A Slack reply or meeting prep
+is a peer workflow over the same runtime, never another stage bolted onto the pipeline.
+([#168](https://github.com/colonylabs/cogwork/issues/168))
+
+**The general loop is sense → classify → schedule → act → record.** Issue-tracker-plus-coding-
+harness is its first instance. Nothing may assume that *sense* means polling a tracker or that
+*act* means running a harness — those are today's implementations of two general steps.
+
+**The north star is a meeting to a pull request with no human in the middle.** A meeting
+mentions a bug; cogwork mints the ticket, triages it, implements it, and opens the PR. It is a
+capstone that proves the loop closed end to end, not an exit criterion.
+
+## Who it is for
+
+**Today there is exactly one user and it is the maintainer.** cogwork builds cogwork, and
+dogfooding is the only feedback loop it has. A surface the maintainer would not open daily is
+not worth building yet, and "a user might want this" carries no weight while there is no such
+user.
+
+**The audience trends toward casual non-coders.** As the proactive layer lands, the person
+being helped is less and less someone who reads a stack trace. Provider login UX and plain
+vocabulary get more valuable over time, not less — so an interface decision that only a
+maintainer could love is borrowing against that trend.
+
+## Where we are
+
+The epoch, not the changelog. Each claim licenses a default answer to a whole class of
+questions. For anything finer-grained than this, read the tracker.
+
+**Nothing is publicly released.** A breaking change costs a migration of zero installs. Renaming
+a contract, reshaping a schema, or deleting a command is free — do not design around
+compatibility that is owed to nobody.
+
+**Everything runs on one machine for one person.** There is no tenancy, no auth system, and no
+multi-user story to uphold. The contracts are nonetheless shaped to survive going remote, which
+is a design constraint, not a feature being built.
+
+**The premise is still being proved.** The bet — that an agent pipeline can carry well-defined
+work to a merged PR unattended — is not yet settled by evidence. Investment goes to the
+pipeline's judgment quality before it goes to surface area.
+
+**The written corpus is young and compounding.** Direction, principles, and ADRs are still being
+laid down. A question with no written answer is more likely a gap than a fork; that is what the
+disposition's line is for.
+
+## Where it is going
+
+Three capabilities. They are deliberately unnumbered — the *order* they arrive in is the
+tracker's business, and phase numbers are the part that goes stale.
+
+**Mission control** — a desktop control tower over the AFK agents. Ambient confidence that
+everything is moving, live runs watchable as they happen, and the ability to act in place on the
+few decisions the pipeline cannot self-resolve. It informs and offers override; it does not gate.
+
+**The owned runtime** — cogwork owns the model loop rather than renting it. A first-party runner
+registered *behind* the existing harness seam, beside the external CLI harnesses rather than
+replacing them, with bring-your-own-provider credentials. Harnesses exist to run coding sessions;
+everything else runs on the owned layer.
+
+**The proactive layer** — real-world context becomes proposed work. Meetings first, then the rest.
+The job is to turn what was said into a work item the existing pipeline can carry, gated on
+precision rather than recall: a wrong ticket costs more trust than a missed one.
+
+## Not now
+
+Each of these is a positive claim about the present. The boundary falls out of it.
+
+**Hosting is a someday, not a now.** Every contract is shaped to survive the daemon going remote
+and multi-user; the hosting itself has no owner and no date.
+
+**Interactive sessions follow the runtime.** Chat, steer/queue, and mid-run approvals are in the
+product's future, and session contracts are shaped for them from the start. The surface and the
+machinery come after mission control and the owned runtime are real.
+
+**Pull request review stays on GitHub.** The one hard human gate is review and merge, and it
+lives where the maintainer already reviews. The PR read model is shaped richly enough to host an
+in-app panel the day that changes.
+
+**Workspace config is heading for declarative, schema-validated data.** It is executable
+TypeScript today. That is a migration with a destination, not the destination.
+(ADR [0006](../adr/0006-workspace-config-trends-toward-declarative-data.md))
+
+**Selling a first-party AI provider is a far-future product.** Provider credentials are the
+user's own, brought to cogwork.
+
+## Seams held open
+
+Named so future work knows the reopen cost. None of this is in scope to build.
+
+**The issue tracker plays three roles at once** — sensor, work-item identity, and coordination
+store (ADR [0003](../adr/0003-work-source-as-coordination-substrate.md)). Non-coding work has no
+tracker, so the roles separate eventually.
+
+**"Act" generalises to an actuator.** The coding harness is one actuator and the owned provider
+layer is another. Nothing may assume that acting means running a harness.
+
+**The coordination store becomes ours when a work item has no tracker.** The first small instance
+already exists as an ingestion watermark; the full store waits for the first non-coding workflow.
+
+**A knowledge layer — what cogwork knows about you — is deferred.** Meeting ingestion is its seed.
+
+## The product reference
+
+**Feldspar** (`~/sites/feldspar`) is the product model for the proactive layer — prepared next
+steps over briefings, precision over recall, human-approved plans. Take its product lessons, not
+its code. Reference *implementations* for technical questions are a different list and live in
+the technical disposition.
+
+## Where the reasoning lives
+
+A claim here gists a decision; the decision itself lives in exactly one place.
+
+- `docs/adr/` — system-wide decisions, and the per-package `<context>/docs/adr/` beside them.
+- [`docs/spec/next-phase.md`](../spec/next-phase.md) — a superseded snapshot of closed wayfinder
+  map [#159](https://github.com/colonylabs/cogwork/issues/159). Its **Decision log** table is the
+  index from an area to the ticket that holds its full reasoning.
+- The issue tracker — every live map and its decision tickets. See
+  [`docs/agents/issue-tracker.md`](./issue-tracker.md).

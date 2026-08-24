@@ -28,6 +28,22 @@ Multi-context repo (presence of `CONTEXT-MAP.md` at the root). Each package/app 
     └── cursor-acp/CONTEXT.md
 ```
 
+## Two kinds of doc under `docs/agents/`
+
+They resolve differently, so a new doc added here has to land on the right side.
+
+- **Project substance** — `product.md` and `technical-disposition.md`. What the product is and
+  how its maintainer decides. These are committed, reviewed in pull requests like code, and read
+  by humans joining the project as much as by agents. They have exactly one version: the one in
+  the repo.
+- **Agent config** — `issue-tracker.md`, `triage-labels.md`. How to operate agents *against* this
+  repo. These describe a role whose value differs per repo and per machine, and a machine-local
+  copy under `~/.agents/repo-config/<slug>/` resolves ahead of the committed one.
+
+The test: would a new human contributor want to read it? Project substance, and it must stay in
+the repo where a local override cannot shadow it. Would only an agent care, and could the answer
+differ on another machine? Agent config.
+
 ## Use the glossary's vocabulary
 
 When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in the relevant `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.

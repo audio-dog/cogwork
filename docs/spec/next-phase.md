@@ -1,5 +1,13 @@
 # Next phase: mission control, first-party runtime, proactive assistant
 
+> **Superseded snapshot.** This is a point-in-time handoff from wayfinder map
+> [#159](https://github.com/colonylabs/cogwork/issues/159), closed 2026-08. Its phase numbering
+> and roadmap slices describe work that has since shipped or moved, and are **not** maintained.
+> For what the product is and where it is going, read
+> [`docs/agents/product.md`](../agents/product.md). For what is built, read the issue tracker or
+> the code. What stays useful here is the **Decision log** at the foot of this file — the index
+> from an area to the ticket or ADR that holds its full reasoning.
+
 The product and architecture spec for cogwork's next phase, with a sequenced roadmap. Every
 decision here was settled on the wayfinder map
 [#159](https://github.com/colonylabs/cogwork/issues/159) between 2026-07 and 2026-08; each
