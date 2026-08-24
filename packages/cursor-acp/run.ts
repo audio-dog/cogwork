@@ -48,6 +48,7 @@ const drive = async (
 ): Promise<TurnOutcome> => {
   const sandbox = defineSandbox({
     id: "cursor-spike",
+    fileEvents: false,
     provider: localProcessSandbox({ dir }),
     workspace: defineWorkspace({ source: { type: "none" } }),
   });

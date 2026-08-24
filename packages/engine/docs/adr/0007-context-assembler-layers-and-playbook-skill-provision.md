@@ -8,6 +8,10 @@ The first-party harness runner needs engine-owned context. External CLI harnesse
 
 Compaction / windowing / tool-result pruning remain a named seam on the runner (`onConfig` + optional `summarize()`); this ADR does not pick an algorithm.
 
+## Amendment: required context crosses every harness path
+
+ADR 0010 adds the Codex CLI runner and changes the provider-only boundary above. The context assembler now supplies every harness runner with the required instruction layers and provisioned playbook resource path. External CLI discovery remains useful for optional user capabilities, but a mandatory AFK playbook never depends on ambient installation or discovery.
+
 ## Considered Options
 
 - **Flatten everything into one prompt string in the engine** — rejected: blocks mid-run compaction and muddies the ADR 0005 assemble/render split.

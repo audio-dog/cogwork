@@ -58,6 +58,8 @@ CREATE INDEX IF NOT EXISTS runs_started_at ON runs (started_at DESC);
 
 const unresumableStatuses = ["interrupted", "crashed", "exhausted"];
 
+const newestRunFirst = [desc(runs.startedAt), desc(sql<number>`rowid`)] as const;
+
 const runColumns = (record: {
   readonly usage: TokenUsage | null;
   readonly status: string;
@@ -249,7 +251,13 @@ const make = (ledgerPath: string) =>
 
     const latestRunWhere = (operation: string, where: SQL | undefined) =>
       readRun(operation, () =>
-        db.select(runRecordSelection).from(runs).where(where).orderBy(desc(runs.startedAt)).limit(1).get(),
+        db
+          .select(runRecordSelection)
+          .from(runs)
+          .where(where)
+          .orderBy(...newestRunFirst)
+          .limit(1)
+          .get(),
       );
 
     const service: RunLedger.RunLedgerService = {
@@ -272,6 +280,11 @@ const make = (ledgerPath: string) =>
       updateRun: (runId: RunId, patch: RunLedger.RunUpdate) =>
         write("updateRun", () => {
           db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run();
+        }),
+
+      setRunSession: (runId: RunId, session: SessionId) =>
+        write("setRunSession", () => {
+          db.update(runs).set({ session }).where(eq(runs.id, runId)).run();
         }),
 
       interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
@@ -321,7 +334,7 @@ const make = (ledgerPath: string) =>
             .select({ session: runs.session })
             .from(runs)
             .where(and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)))
-            .orderBy(desc(runs.startedAt))
+            .orderBy(desc(runs.startedAt), desc(sql<number>`"runs".rowid`))
             .limit(1)
             .all(),
         ).pipe(
@@ -434,7 +447,7 @@ const make = (ledgerPath: string) =>
                 or(eq(sessions.kind, "owned-transcript"), isNotNull(sessions.handle)),
               ),
             )
-            .orderBy(desc(runs.startedAt))
+            .orderBy(desc(runs.startedAt), desc(sql<number>`"runs".rowid`))
             .limit(1)
             .get(),
         ),

@@ -1,0 +1,30 @@
+{
+  "name": "@cogwork/codex-cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Codex CLI harness runner for Cogwork, built on the TanStack AI Codex adapter",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:codex-live": "COGWORK_LIVE_CODEX_PROBE=1 vitest run src/harness.test.ts"
+  },
+  "dependencies": {
+    "@cogwork/contracts": "workspace:*",
+    "@cogwork/engine": "workspace:*",
+    "@tanstack/ai": "catalog:",
+    "@tanstack/ai-codex": "catalog:",
+    "@tanstack/ai-sandbox": "catalog:",
+    "@tanstack/ai-sandbox-local-process": "catalog:",
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:effect",
+    "@tanstack/ai-persistence": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

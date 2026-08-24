@@ -20,7 +20,13 @@ import {
   type InstructionLayer,
 } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
-import { HarnessError, type HarnessRequest, type HarnessRunner } from "./harness";
+import {
+  HarnessError,
+  type HarnessRequest,
+  type HarnessRunner,
+  type StageResultSchema,
+  stageResultSchema,
+} from "./harness";
 import { defaultModelAdapterFactory, type ModelAdapterFactory } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
@@ -41,6 +47,7 @@ export interface RunChatOptions {
   readonly agentLoopStrategy: AgentLoopStrategy;
   readonly abortController: AbortController;
   readonly threadId?: string;
+  readonly outputSchema?: StageResultSchema;
 }
 
 export type RunChat = (options: RunChatOptions) => AsyncIterable<StreamChunk>;
@@ -54,6 +61,8 @@ const defaultRunChat: RunChat = (options) =>
     agentLoopStrategy: options.agentLoopStrategy,
     abortController: options.abortController,
     threadId: options.threadId,
+    outputSchema: options.outputSchema,
+    stream: true,
   });
 
 export interface ProviderRunnerOptions {
@@ -152,6 +161,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             agentLoopStrategy: maxIterations(defaultLoopBudget(request.stage)),
             abortController,
             threadId: session ?? undefined,
+            outputSchema: stageResultSchema(request.stage),
           });
 
           const diffs = watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.catchCause(() => Stream.empty));

@@ -1,4 +1,12 @@
-import type { AgUiEvent, HarnessName, LifecycleStage, SessionId, SessionKind } from "@cogwork/contracts";
+import {
+  type AgUiEvent,
+  type HarnessName,
+  type LifecycleStage,
+  type SessionId,
+  type SessionKind,
+  type StageResultJsonSchema,
+  stageResultJsonSchema,
+} from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -11,6 +19,9 @@ import { SessionStore, type SessionStoreService } from "./session-store";
 
 export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
+
+export const stageResultSchema = stageResultJsonSchema;
+export type StageResultSchema = StageResultJsonSchema;
 
 export interface HarnessRequest {
   readonly harness: HarnessName;

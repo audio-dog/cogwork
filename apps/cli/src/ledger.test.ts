@@ -68,6 +68,7 @@ const crashItem = Schema.decodeSync(WorkItemId)("#101");
 const resolveItem = Schema.decodeSync(WorkItemId)("#202");
 const resolveOther = Schema.decodeSync(WorkItemId)("#303");
 const session = Schema.decodeSync(SessionId)("sess-abc");
+const replacementSession = Schema.decodeSync(SessionId)("sess-replaced");
 const midSession = Schema.decodeSync(SessionId)("sess-mid");
 const foldSession = Schema.decodeSync(SessionId)("sess-fold");
 const ownedSession = Schema.decodeSync(SessionId)("sess-owned");
@@ -146,6 +147,7 @@ describe("sqlite RunLedger", () => {
           data: "{}",
           atMillis: 1001,
         });
+        yield* ledger.setRunSession(id, replacementSession);
         yield* ledger.updateRun(id, {
           status: "succeeded",
           usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
@@ -157,7 +159,7 @@ describe("sqlite RunLedger", () => {
         assert.isDefined(summary);
         assert.strictEqual(summary?.status, "succeeded");
         assert.strictEqual(summary?.eventCount, 2);
-        assert.strictEqual(summary?.session, "sess-abc");
+        assert.strictEqual(summary?.session, "sess-replaced");
         assert.deepStrictEqual(summary?.usage, {
           inputTokens: 5,
           outputTokens: 2,
@@ -233,6 +235,20 @@ describe("sqlite RunLedger", () => {
         assert.strictEqual(yield* sessionByBranch("gh", "7-fix-export"), "sess-abc");
         assert.isNull(yield* sessionByBranch("gh", "9-other"));
         assert.isNull(yield* sessionByBranch("other", "7-fix-export"));
+      }),
+    );
+
+    it.effect("breaks equal branch-run timestamps by insertion order", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const branch = "16-timestamp-tie";
+        yield* ledger.insertSession(sessionRecord());
+        yield* ledger.insertSession(sessionRecord({ id: replacementSession, handle: "cursor-replaced" }));
+        yield* ledger.insertRun(record("tie-earlier", 1000, { branch, session }));
+        yield* ledger.insertRun(record("tie-later", 1000, { branch, session: replacementSession }));
+
+        assert.strictEqual(yield* ledger.sessionForBranch("gh", branch), replacementSession);
+        assert.strictEqual((yield* ledger.latestRunByBranch("gh", branch))?.session, replacementSession);
       }),
     );
 

@@ -6,14 +6,10 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
-  parseFollowUpResult,
-  parseTriageDecision,
-  parseTriageDisposition,
   resolveFollowUp,
   resolveImplement,
   resolveStage,
   resolveTriage,
-  resolveTriageDecision,
 } from "./playbook";
 
 const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
@@ -154,17 +150,15 @@ describe("WorkspaceConfig.linearHistory", () => {
 });
 
 describe("buildFollowUpPrompt", () => {
-  it("names the skill, forbids merging, and appends the follow-up sentinel", () => {
+  it("names the skill and forbids merging without a text result protocol", () => {
     const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, false);
     assert.include(prompt, "`follow-up-agent`");
     assert.include(prompt, "Never merge");
-    assert.include(prompt, "FOLLOWUP-RESULT: <pushed | noop | stuck>");
   });
 
-  it("explains that a healthy PR with nothing to do is a noop, not a failure", () => {
+  it("does not describe structured outcomes in the agent prompt", () => {
     const prompt = buildFollowUpPrompt(resolveFollowUp(config()), { id: "#5", title: "in review" }, false);
-    assert.include(prompt, "Use `noop` when the PR is already healthy");
-    assert.include(prompt, "it is not a failure");
+    assert.notInclude(prompt, "structured outcomes");
   });
 
   it("states linear history is not required by default", () => {
@@ -178,17 +172,8 @@ describe("buildFollowUpPrompt", () => {
   });
 });
 
-describe("parseFollowUpResult", () => {
-  it("reads the last pushed/noop/stuck sentinel", () => {
-    assert.strictEqual(parseFollowUpResult("work\nFOLLOWUP-RESULT: pushed"), "pushed");
-    assert.strictEqual(parseFollowUpResult("nothing to do\nFOLLOWUP-RESULT: noop"), "noop");
-    assert.strictEqual(parseFollowUpResult("FOLLOWUP-RESULT: pushed\nFOLLOWUP-RESULT: stuck"), "stuck");
-    assert.isNull(parseFollowUpResult("FOLLOWUP-RESULT: banana"));
-  });
-});
-
 describe("buildImplementPrompt", () => {
-  it("interpolates the item and names the skill without a decision protocol", () => {
+  it("interpolates the item and names the skill without a text result protocol", () => {
     const prompt = buildImplementPrompt(resolveImplement(config()), {
       id: "#15",
       title: "Implement playbook",
@@ -197,6 +182,7 @@ describe("buildImplementPrompt", () => {
     assert.include(prompt, "Implement playbook");
     assert.include(prompt, "`implement-agent`");
     assert.notInclude(prompt, "TRIAGE-DECISION");
+    assert.notInclude(prompt, "IMPLEMENT-RESULT");
   });
 
   it("tells the agent to reuse an existing pull request for the branch instead of opening a second", () => {
@@ -204,6 +190,21 @@ describe("buildImplementPrompt", () => {
       id: "#15",
       title: "Implement playbook",
     });
+    assert.include(prompt, "Only one pull request should ever exist for this branch");
+    assert.include(prompt, "push your work to that one instead of opening another");
+  });
+
+  it("keeps the pull request reuse rule when the implement prompt is customized", () => {
+    const prompt = buildImplementPrompt(
+      resolveImplement(
+        config({
+          playbook: { implement: { enabled: true, prompt: "Implement the requested change." } },
+        }),
+      ),
+      { id: "#15", title: "Implement playbook" },
+    );
+
+    assert.include(prompt, "Implement the requested change.");
     assert.include(prompt, "Only one pull request should ever exist for this branch");
     assert.include(prompt, "push your work to that one instead of opening another");
   });
@@ -218,81 +219,15 @@ describe("buildContinuationNudge", () => {
     assert.include(nudge, "say COMPLETE and stop");
     assert.include(nudge, "keep using it and never open a second one");
     assert.notInclude(nudge, "implement-agent");
-    assert.notInclude(nudge, "IMPLEMENT-RESULT");
   });
 });
 
 describe("buildTriagePrompt", () => {
-  it("interpolates the item and skill and appends the decision protocol", () => {
+  it("interpolates the item and skill without a text result protocol", () => {
     const prompt = buildTriagePrompt(resolveTriage(config()), { id: "#7", title: "broken export" });
     assert.include(prompt, "#7");
     assert.include(prompt, "broken export");
     assert.include(prompt, "`triage-agent`");
-    assert.include(prompt, "TRIAGE-DECISION: <ready-for-agent | ready-for-human | needs-info | wontfix>");
-  });
-});
-
-describe("parseTriageDecision", () => {
-  it("reads a valid decision role", () => {
-    assert.strictEqual(parseTriageDecision("blah\nTRIAGE-DECISION: ready-for-agent"), "ready-for-agent");
-  });
-
-  it("takes the last decision when several appear", () => {
-    assert.strictEqual(
-      parseTriageDecision("TRIAGE-DECISION: needs-info\n...\nTRIAGE-DECISION: wontfix"),
-      "wontfix",
-    );
-  });
-
-  it("returns null for an unknown or missing decision", () => {
-    assert.isNull(parseTriageDecision("TRIAGE-DECISION: banana"));
-    assert.isNull(parseTriageDecision("no decision here"));
-  });
-});
-
-describe("parseTriageDisposition", () => {
-  it("reads the disposition from the proposal prose, bold or plain", () => {
-    assert.strictEqual(
-      parseTriageDisposition("**Disposition:** ready-for-agent\n\n### Findings"),
-      "ready-for-agent",
-    );
-    assert.strictEqual(parseTriageDisposition("Disposition: needs-info"), "needs-info");
-    assert.strictEqual(
-      parseTriageDisposition("**Disposition**: ready-for-human (Medium)"),
-      "ready-for-human",
-    );
-  });
-
-  it("returns null when no readable disposition is present", () => {
-    assert.isNull(parseTriageDisposition("no disposition here"));
-    assert.isNull(parseTriageDisposition("**Disposition:** banana"));
-  });
-});
-
-describe("resolveTriageDecision", () => {
-  it("prefers the sentinel over the disposition and reports the source", () => {
-    const decision = resolveTriageDecision(
-      "**Disposition:** ready-for-human\nTRIAGE-DECISION: ready-for-agent",
-    );
-    assert.strictEqual(decision.role, "ready-for-agent");
-    assert.strictEqual(decision.source, "sentinel");
-    assert.strictEqual(decision.sentinel, "ready-for-agent");
-    assert.strictEqual(decision.disposition, "ready-for-human");
-  });
-
-  it("backstops a missing sentinel with the proposal disposition", () => {
-    const decision = resolveTriageDecision("**Disposition:** ready-for-agent\n\n### Open questions\n- none");
-    assert.strictEqual(decision.role, "ready-for-agent");
-    assert.strictEqual(decision.source, "disposition");
-    assert.isNull(decision.sentinel);
-    assert.strictEqual(decision.disposition, "ready-for-agent");
-  });
-
-  it("defaults to ready-for-human when neither sentinel nor disposition is readable", () => {
-    const decision = resolveTriageDecision("I could not tell what to do.");
-    assert.strictEqual(decision.role, "ready-for-human");
-    assert.strictEqual(decision.source, "default");
-    assert.isNull(decision.sentinel);
-    assert.isNull(decision.disposition);
+    assert.notInclude(prompt, "TRIAGE-DECISION");
   });
 });
