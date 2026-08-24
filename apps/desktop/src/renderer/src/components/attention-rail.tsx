@@ -1,4 +1,4 @@
-import { Button } from "@cogwork/ui/components/button";
+import { Button, buttonVariants } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
@@ -89,16 +89,21 @@ function KindMarker({ kind }: { kind: AttentionKind }) {
 
 function ReadyToMergeQuickOpen({ entry }: { entry: ReadyToMergeAttentionEntry }) {
   return (
-    <Button
-      size="icon-sm"
-      variant="ghost"
+    <a
       aria-label="Open PR on code host"
-      className="relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-      render={<a href={entry.pr.url} rel="noreferrer" target="_blank" />}
+      className={buttonVariants({
+        size: "icon-sm",
+        variant: "ghost",
+        className:
+          "relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
+      })}
+      href={entry.pr.url}
+      rel="noreferrer"
+      target="_blank"
       onClick={(event) => event.stopPropagation()}
     >
       <RiExternalLinkLine />
-    </Button>
+    </a>
   );
 }
 
@@ -112,21 +117,27 @@ function DecisionQuickOpen({ entry }: { entry: NeedsDecisionAttentionEntry }) {
     );
   }
   return (
-    <Button
-      size="icon-sm"
-      variant="ghost"
+    <a
       aria-label={label}
-      className="relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-      render={<a href={entry.url} rel="noreferrer" target="_blank" />}
+      className={buttonVariants({
+        size: "icon-sm",
+        variant: "ghost",
+        className:
+          "relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
+      })}
+      href={entry.url}
+      rel="noreferrer"
+      target="_blank"
       onClick={(event) => event.stopPropagation()}
     >
       <RiExternalLinkLine />
-    </Button>
+    </a>
   );
 }
 
 function AttentionRow({ entry }: { entry: AttentionEntry }) {
   const openSurface = useRightPanelStore((state) => state.openSurface);
+  const signal = signalFor(entry);
   return (
     <div className="group relative flex w-full items-center gap-3 py-2 pr-2 pl-0 hover:bg-muted/50">
       <button
@@ -154,7 +165,9 @@ function AttentionRow({ entry }: { entry: AttentionEntry }) {
             onOpen={() => openSurface({ kind: "item", workspace: entry.workspace, workItem: entry.item.id })}
           />
         )}
-        <span className="pointer-events-none w-20 text-right">{signalFor(entry)}</span>
+        <span className="pointer-events-none w-28 truncate text-right" title={signal}>
+          {signal}
+        </span>
         {entry.kind === "ready-to-merge" ? (
           <ReadyToMergeQuickOpen entry={entry} />
         ) : (
