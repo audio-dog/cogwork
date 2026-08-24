@@ -9,12 +9,12 @@ export const waitForDaemonListening = (socketPath: string, signal: AbortSignal):
       return;
     }
 
-    const state: { settled: boolean; watcher: fs.FSWatcher | null } = { settled: false, watcher: null };
+    const state = { settled: false };
 
     const settle = (listening: boolean): void => {
       if (state.settled) return;
       state.settled = true;
-      state.watcher?.close();
+      fs.unwatchFile(socketPath, check);
       signal.removeEventListener("abort", onAbort);
       resolve(listening);
     };
@@ -33,7 +33,6 @@ export const waitForDaemonListening = (socketPath: string, signal: AbortSignal):
     signal.addEventListener("abort", onAbort, { once: true });
 
     fs.mkdirSync(dirname(socketPath), { recursive: true });
-    state.watcher = fs.watch(dirname(socketPath), () => check());
-    state.watcher.on("error", () => settle(false));
+    fs.watchFile(socketPath, { persistent: false, interval: 100 }, check);
     check();
   });
