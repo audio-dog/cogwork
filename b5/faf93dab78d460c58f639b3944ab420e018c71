@@ -1,0 +1,48 @@
+docs/research/tanstack-ai-vocabulary.md
+  s_1c78639d852e06::t_c9186a5a0dda5d 129,131
+  s_1c78639d852e06::t_fc11951cd3a277 100-102,804
+  s_1c78639d852e06::t_7408ef6f83c97d 56-59,875-884
+  s_1c78639d852e06::t_ce66ff4fb0afd4 1-17,19-55,60-99,103-128,130,132-218,220-260,262-275,279-319,365,592-624,626-690,692-721,723-753,755-792,794-803,805-821,823-862,864-874,885-887
+  s_1c78639d852e06::t_65c7b8e78ea465 320-364
+  s_1c78639d852e06::t_3e79438a792c69 18,219,261,591,625,691,722,754,793,822,863
+  s_1c78639d852e06::t_bc31b3f0efed95 276-278
+  s_1c78639d852e06::t_5f46a5a63ff140 366-590
+docs/research/harness-config-scopes-and-rules.md
+  s_1c78639d852e06::t_12a3e172843d0a 1-104,106-108,110-111,113-205,207-247,249,251-265,268-284,286-287,289-483,486-627,629-683
+  s_1c78639d852e06::t_8c9d63df152b11 105,109,206,266-267,484-485,628
+  s_1c78639d852e06::t_ed3aea759a6228 112,248,250,285,288
+docs/research/authoring-skills-and-subagents.md
+  s_973e9c5f4c1505::t_517f1d90ec9ea9 1-468
+docs/research/plugin-and-connector-versioning.md
+  s_973e9c5f4c1505::t_d3d72db5c307cb 608-615
+  s_973e9c5f4c1505::t_ff4acf94d09d26 624
+  s_973e9c5f4c1505::t_2157058c40f3dd 1-58,60-62,65-66,70-477,492-500,507-515,521-523,537-538,543,545-547,569-584,586-607,616-623,625-717
+  s_973e9c5f4c1505::t_417d8ee8c5be75 478-491,501-506,516-520,524-536,539-542,544,548-568
+  s_973e9c5f4c1505::t_0b4ab7a207c4f7 718-726
+  s_973e9c5f4c1505::t_6c43425fd84664 585
+  s_973e9c5f4c1505::t_2628e8a2270f62 59,63-64,67-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b5faf93dab78d460c58f639b3944ab420e018c71",
+  "prompts": {},
+  "sessions": {
+    "s_1c78639d852e06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "166aa4b7-b9be-43d6-9a36-27e9e1c2003f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_973e9c5f4c1505": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0fbb65a3-3e44-4998-8586-f7be2f6b516d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
