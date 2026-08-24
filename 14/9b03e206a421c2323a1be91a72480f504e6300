@@ -1,0 +1,32 @@
+docs/agents/product.md
+  s_b000f42bfbe198::t_688d3e485c6942 1-141
+docs/agents/domain.md
+  s_b000f42bfbe198::t_ba82de7c1e7e0c 31-46
+docs/agents/technical-disposition.md
+  s_b000f42bfbe198::t_bb2b250c073614 5,20-22,24,64,66,70
+docs/research/matt-pocock-skills-architecture.md
+  s_b000f42bfbe198::t_39ff45b920bec2 510,516
+  s_b000f42bfbe198::t_3df1df29851f1d 1-509,511-515,517-812
+AGENTS.md
+  s_b000f42bfbe198::t_ba82de7c1e7e0c 37-42
+docs/spec/next-phase.md
+  s_b000f42bfbe198::t_ba82de7c1e7e0c 3-10
+docs/adr/0012-product-direction-lives-in-its-own-durable-doc.md
+  s_b000f42bfbe198::t_4989a14dcbfeb8 1-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "149b03e206a421c2323a1be91a72480f504e6300",
+  "prompts": {},
+  "sessions": {
+    "s_b000f42bfbe198": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54b08a8b-a822-4cf4-8979-633650c4fb6c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
