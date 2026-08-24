@@ -7,7 +7,15 @@ import {
   WorkspaceState,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const { subscribeEngineStatus } = vi.hoisted(() => ({ subscribeEngineStatus: vi.fn() }));
+
+vi.mock("./use-engine-status", async () => {
+  const actual = await vi.importActual<typeof import("./use-engine-status")>("./use-engine-status");
+  return { ...actual, subscribeEngineStatus };
+});
+
 import {
   activeRuns,
   activityCategory,
@@ -17,6 +25,7 @@ import {
   deriveActivityFeed,
   initialActivitySession,
   recordActivitySession,
+  subscribeActivityFeed,
   synthesizeLifecycle,
 } from "./activity-source";
 
@@ -498,5 +507,20 @@ describe("recordActivitySession", () => {
         atMillis: 200,
       }).events,
     ).toEqual([first]);
+  });
+});
+
+describe("subscribeActivityFeed", () => {
+  it("does not notify its listener during subscription", () => {
+    subscribeEngineStatus.mockImplementation((listener) => {
+      listener("running");
+      return () => undefined;
+    });
+    const listener = vi.fn();
+
+    const unsubscribe = subscribeActivityFeed(listener);
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
   });
 });

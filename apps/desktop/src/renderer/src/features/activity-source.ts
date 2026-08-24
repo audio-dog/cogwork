@@ -496,9 +496,9 @@ function recordEngineStatus(status: Parameters<typeof enginePhase>[0]) {
   refreshActivityFeed(null, activityFeedState.events, enginePhase(status), activityFeedState.connection);
 }
 
-function subscribeActivityFeed(listener: () => void) {
-  activityFeedListeners.add(listener);
+export function subscribeActivityFeed(listener: () => void) {
   const unsubscribeEngine = subscribeEngineStatus(recordEngineStatus);
+  activityFeedListeners.add(listener);
   return () => {
     activityFeedListeners.delete(listener);
     unsubscribeEngine();
