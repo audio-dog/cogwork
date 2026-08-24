@@ -1,0 +1,19 @@
+apps/desktop/src/main/wait-for-socket.ts
+  s_2b7838b6ce3b7e::t_84b9385eecb8e1 12,17,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "9163ec298a7bc0f1e39a7a45556d25311795d318",
+  "prompts": {},
+  "sessions": {
+    "s_2b7838b6ce3b7e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0217e-1de5-7263-ab49-f7820eae3be7",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
