@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_c9db4c3184ce46::t_b191678ebe9584 1
+  s_c9db4c3184ce46::t_9b21b08597b22a 113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "efaa503b38f7377bebf61a9ee496378a48f5242a",
+  "prompts": {},
+  "sessions": {
+    "s_c9db4c3184ce46": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03476-e4b8-7660-94f5-56428ead4407",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
