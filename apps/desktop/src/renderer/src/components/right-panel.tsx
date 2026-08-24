@@ -61,15 +61,15 @@ function tabClassName(active: boolean, padding: string) {
   return cn(baseTabClassName, padding, active ? activeTabClassName : inactiveTabClassName);
 }
 
+const surfaceIcons = {
+  focus: RiFocus2Line,
+  pulse: RiPulseLine,
+  "file-list": RiFileList2Line,
+};
+
 function SurfaceIcon({ icon }: { icon: ReturnType<typeof describeSurface>["icon"] }) {
-  switch (icon) {
-    case "focus":
-      return <RiFocus2Line className="size-3.5 shrink-0" />;
-    case "pulse":
-      return <RiPulseLine className="size-3.5 shrink-0" />;
-    case "file-list":
-      return <RiFileList2Line className="size-3.5 shrink-0" />;
-  }
+  const Icon = surfaceIcons[icon];
+  return <Icon className="size-3.5 shrink-0" />;
 }
 
 function SurfaceTab({ surface, active }: { surface: Surface; active: boolean }) {
