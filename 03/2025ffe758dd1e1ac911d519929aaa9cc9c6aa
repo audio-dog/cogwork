@@ -1,0 +1,19 @@
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_1c78639d852e06::t_702485240000e1 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "032025ffe758dd1e1ac911d519929aaa9cc9c6aa",
+  "prompts": {},
+  "sessions": {
+    "s_1c78639d852e06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "166aa4b7-b9be-43d6-9a36-27e9e1c2003f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
