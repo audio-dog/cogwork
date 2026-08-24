@@ -383,7 +383,10 @@ export const recordActivitySession = (session: ActivitySession, sample: Activity
       return true;
     }) ?? [];
   const lifecycle = stepLifecycle(session.lifecycle, sample);
-  if (addedEvents.length === 0 && lifecycle.rows.length === 0) return session;
+  const lifecycleUnchanged =
+    lifecycle.state.engine === session.lifecycle.engine &&
+    lifecycle.state.connection === session.lifecycle.connection;
+  if (addedEvents.length === 0 && lifecycle.rows.length === 0 && lifecycleUnchanged) return session;
 
   return {
     events: boundSession([...session.events, ...addedEvents]),

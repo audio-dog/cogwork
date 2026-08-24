@@ -442,6 +442,24 @@ describe("recordActivitySession", () => {
     expect(session.arrivals).toHaveLength(defaultActivityLimit);
   });
 
+  it("records the first engine transition after a quiet initial sample", () => {
+    const initialized = recordActivitySession(initialActivitySession, {
+      events: [],
+      engine: "off",
+      connection: "connecting",
+      atMillis: 100,
+    });
+    const started = recordActivitySession(initialized, {
+      events: [],
+      engine: "up",
+      connection: "connecting",
+      atMillis: 200,
+    });
+
+    expect(initialized.lifecycle.engine).toBe("off");
+    expect(started.synthesized.map((row) => row.summary)).toEqual(["Engine started"]);
+  });
+
   it("keeps arrival times correct when a fresh event stream replaces the prior one", () => {
     const first = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
     const second = event({ _tag: "ItemRemoved", workspace: "acme", id: "second" });
