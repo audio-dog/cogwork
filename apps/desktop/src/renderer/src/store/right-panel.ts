@@ -14,8 +14,26 @@ export type Surface =
 
 export type SurfaceId = string;
 
+interface SurfaceDescriptor {
+  readonly title: string;
+  readonly icon: "focus" | "pulse" | "file-list";
+  readonly tooltip?: string;
+  readonly closable: boolean;
+}
+
 export function surfaceId(surface: Surface): SurfaceId {
   return surface.kind === "item" ? `item:${surface.workspace}:${surface.workItem}` : surface.kind;
+}
+
+export function describeSurface(surface: Surface): SurfaceDescriptor {
+  switch (surface.kind) {
+    case "attention":
+      return { title: "Attention", icon: "focus", tooltip: undefined, closable: false };
+    case "activity":
+      return { title: "Activity", icon: "pulse", tooltip: undefined, closable: false };
+    case "item":
+      return { title: surface.workItem, icon: "file-list", tooltip: surface.workspace, closable: true };
+  }
 }
 
 export const FIXED_SURFACES: readonly Surface[] = [{ kind: "attention" }, { kind: "activity" }];
