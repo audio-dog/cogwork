@@ -1,13 +1,21 @@
 import type {
   ClassifiedItem,
   DaemonEvent,
+  RunId,
   RunStatus,
   RunSummary,
   SchedulerStats,
+  WorkItemId,
+  WorkspaceId,
   WorkspaceState,
 } from "@cogwork/contracts";
+import { useAtomSubscribe } from "@effect/atom-react";
+import type * as Atom from "effect/unstable/reactivity/Atom";
+import { useSyncExternalStore } from "react";
+import { daemonEventsAtom } from "../daemon/atoms";
 import { type RunActivityPreview, runPreviews } from "./run-activity";
-import type { EnginePhase } from "./use-engine-status";
+import { type EnginePhase, enginePhase, subscribeEngineStatus } from "./use-engine-status";
+import { useLiveEvents } from "./use-live-events";
 
 export type ActivityKind =
   | "item"
@@ -23,11 +31,9 @@ export type ActivitySeverity = "info" | "success" | "warn" | "error";
 
 export type ConnectionState = "live" | "connecting" | "lost";
 
-export interface ActivityEntity {
-  type: "run" | "item";
-  id: string;
-  workspace: string;
-}
+export type ActivityEntity =
+  | { type: "run"; id: RunId; workspace: WorkspaceId; workItem: WorkItemId; run: RunSummary }
+  | { type: "item"; id: WorkItemId; workspace: WorkspaceId };
 
 export interface ActivityRow {
   id: string;
@@ -100,17 +106,20 @@ export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
 
 // The daemon stream carries a real timestamp only on run events; everything
 // else is stamped on arrival, so a run row must prefer its own time.
-const runRow = (run: RunSummary): ActivityRow => ({
-  id: `run:${run.id}:${run.status}:${run.endedAtMillis ?? run.startedAtMillis}`,
-  kind: "run",
-  atMillis: run.endedAtMillis ?? run.startedAtMillis,
-  label: activityLabels.run,
-  summary: `${run.workItem} · run ${run.status}`,
-  severity: runStatusSeverity[run.status],
-  entity: { type: "run", id: run.id, workspace: run.workspace },
-  raw: pretty(run),
-  lowSignal: false,
-});
+const runRow = (run: RunSummary): ActivityRow => {
+  const raw = pretty(run);
+  return {
+    id: `run:${raw}`,
+    kind: "run",
+    atMillis: run.endedAtMillis ?? run.startedAtMillis,
+    label: activityLabels.run,
+    summary: `${run.workItem} · run ${run.status}`,
+    severity: runStatusSeverity[run.status],
+    entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem, run },
+    raw,
+    lowSignal: false,
+  };
+};
 
 const workspaceRow = (workspace: WorkspaceState, atMillis: number): ActivityRow => {
   if (workspace._tag === "Registered") {
@@ -156,7 +165,7 @@ const schedulerRow = (scheduler: SchedulerStats, atMillis: number): ActivityRow 
   };
 };
 
-const itemChangedRow = (workspace: string, item: ClassifiedItem, atMillis: number): ActivityRow => {
+const itemChangedRow = (workspace: WorkspaceId, item: ClassifiedItem, atMillis: number): ActivityRow => {
   const state = classifiedState(item);
   return {
     id: `item:${workspace}:${item.id}:${atMillis}`,
@@ -171,7 +180,7 @@ const itemChangedRow = (workspace: string, item: ClassifiedItem, atMillis: numbe
   };
 };
 
-const itemRemovedRow = (workspace: string, id: string, atMillis: number): ActivityRow => ({
+const itemRemovedRow = (workspace: WorkspaceId, id: WorkItemId, atMillis: number): ActivityRow => ({
   id: `rm:${workspace}:${id}:${atMillis}`,
   kind: "item-removed",
   atMillis,
@@ -309,6 +318,14 @@ export const activeRuns = (events: ReadonlyArray<DaemonEvent>) => {
 
 export const defaultActivityLimit = 500;
 
+export type ActivityCategory = "item" | "run" | "workspace" | "scheduler" | "system";
+
+export const activityCategory = (kind: ActivityKind): ActivityCategory => {
+  if (kind === "item" || kind === "item-removed") return "item";
+  if (kind === "engine" || kind === "connection" || kind === "stream") return "system";
+  return kind;
+};
+
 export const boundLog = (
   rows: ReadonlyArray<ActivityRow>,
   limit: number = defaultActivityLimit,
@@ -325,6 +342,77 @@ export interface ActivityInputs {
   connection: ConnectionState;
   limit?: number;
 }
+
+export interface ActivitySession {
+  readonly events: readonly DaemonEvent[];
+  readonly eventKeys: readonly string[];
+  readonly arrivals: readonly number[];
+  readonly synthesized: readonly ActivityRow[];
+  readonly lifecycle: LifecycleState;
+  readonly sourceCount: number;
+  readonly sourceHead: string | null;
+}
+
+export const initialActivitySession: ActivitySession = {
+  events: [],
+  eventKeys: [],
+  arrivals: [],
+  synthesized: [],
+  lifecycle: initialLifecycleState,
+  sourceCount: 0,
+  sourceHead: null,
+};
+
+interface ActivitySessionSample {
+  readonly events: readonly DaemonEvent[] | null;
+  readonly engine: EnginePhase;
+  readonly connection: ConnectionState;
+  readonly atMillis: number;
+}
+
+const eventKey = (event: DaemonEvent) => JSON.stringify(event);
+
+const boundSession = <Value>(values: readonly Value[]) =>
+  values.length <= defaultActivityLimit ? [...values] : values.slice(-defaultActivityLimit);
+
+export const recordActivitySession = (session: ActivitySession, sample: ActivitySessionSample) => {
+  const incoming = sample.events;
+  const sourceCount = incoming?.length ?? session.sourceCount;
+  const sourceHead = incoming?.[0] ? eventKey(incoming[0]) : session.sourceHead;
+  const continuesSource =
+    incoming !== null &&
+    session.sourceCount > 0 &&
+    sourceCount >= session.sourceCount &&
+    sourceHead === session.sourceHead;
+  const candidates = continuesSource ? incoming.slice(session.sourceCount) : incoming;
+  const knownEvents = new Set(session.eventKeys);
+  const addedEvents =
+    candidates?.filter((event) => {
+      if (event._tag === "RunActivity") return false;
+      const key = eventKey(event);
+      if (!continuesSource && knownEvents.has(key)) return false;
+      knownEvents.add(key);
+      return true;
+    }) ?? [];
+  const lifecycle = stepLifecycle(session.lifecycle, sample);
+  const lifecycleUnchanged =
+    lifecycle.state.engine === session.lifecycle.engine &&
+    lifecycle.state.connection === session.lifecycle.connection;
+  const sourceUnchanged = sourceCount === session.sourceCount && sourceHead === session.sourceHead;
+  if (addedEvents.length === 0 && lifecycle.rows.length === 0 && lifecycleUnchanged && sourceUnchanged) {
+    return session;
+  }
+
+  return {
+    events: boundSession([...session.events, ...addedEvents]),
+    eventKeys: boundSession([...session.eventKeys, ...addedEvents.map(eventKey)]),
+    arrivals: boundSession([...session.arrivals, ...addedEvents.map(() => sample.atMillis)]),
+    synthesized: boundSession([...session.synthesized, ...lifecycle.rows]),
+    lifecycle: lifecycle.state,
+    sourceCount,
+    sourceHead,
+  };
+};
 
 export const deriveActivityFeed = (inputs: ActivityInputs): ActivityFeed => {
   const daemonRows = inputs.events
@@ -344,3 +432,102 @@ export const deriveActivityFeed = (inputs: ActivityInputs): ActivityFeed => {
     total: merged.length,
   };
 };
+
+type EventsResult = typeof daemonEventsAtom extends Atom.Atom<infer Value> ? Value : never;
+
+interface ActivityFeedState {
+  readonly session: ActivitySession;
+  readonly events: readonly DaemonEvent[];
+  readonly engine: EnginePhase;
+  readonly connection: ConnectionState;
+}
+
+const activityFeedListeners = new Set<() => void>();
+
+let activityFeedState: ActivityFeedState = {
+  session: initialActivitySession,
+  events: [],
+  engine: "off",
+  connection: "connecting",
+};
+
+let activityFeedSnapshot = deriveActivityFeed({
+  events: [],
+  arrivals: [],
+  synthesized: [],
+  engine: "off",
+  connection: "connecting",
+});
+
+function refreshActivityFeed(
+  sessionEvents: readonly DaemonEvent[] | null,
+  events: readonly DaemonEvent[],
+  engine: EnginePhase,
+  connection: ConnectionState,
+) {
+  const session = recordActivitySession(activityFeedState.session, {
+    events: sessionEvents,
+    engine,
+    connection,
+    atMillis: Date.now(),
+  });
+  const unchanged =
+    session === activityFeedState.session &&
+    events === activityFeedState.events &&
+    engine === activityFeedState.engine &&
+    connection === activityFeedState.connection;
+  if (unchanged) return;
+
+  activityFeedState = { session, events, engine, connection };
+  const sessionFeed = deriveActivityFeed({
+    events: [...session.events],
+    arrivals: [...session.arrivals],
+    synthesized: [...session.synthesized],
+    engine,
+    connection,
+  });
+  const liveFeed = deriveActivityFeed({
+    events: [...events],
+    arrivals: [],
+    synthesized: [],
+    engine,
+    connection,
+  });
+  activityFeedSnapshot = { ...sessionFeed, now: liveFeed.now };
+  for (const listener of activityFeedListeners) listener();
+}
+
+function recordLiveEvents(result: EventsResult) {
+  const connection: ConnectionState =
+    result._tag === "Failure" ? "lost" : result._tag === "Success" ? "live" : "connecting";
+  const events = result._tag === "Success" ? result.value.items : [];
+  refreshActivityFeed(
+    result._tag === "Success" ? events : null,
+    events,
+    activityFeedState.engine,
+    connection,
+  );
+}
+
+function recordEngineStatus(status: Parameters<typeof enginePhase>[0]) {
+  refreshActivityFeed(null, activityFeedState.events, enginePhase(status), activityFeedState.connection);
+}
+
+export function subscribeActivityFeed(listener: () => void) {
+  const unsubscribeEngine = subscribeEngineStatus(recordEngineStatus);
+  activityFeedListeners.add(listener);
+  return () => {
+    activityFeedListeners.delete(listener);
+    unsubscribeEngine();
+  };
+}
+
+function getActivityFeedSnapshot() {
+  return activityFeedSnapshot;
+}
+
+export function useActivityFeed() {
+  useLiveEvents();
+  useAtomSubscribe(daemonEventsAtom, recordLiveEvents, { immediate: true });
+  return useSyncExternalStore(subscribeActivityFeed, getActivityFeedSnapshot);
+}

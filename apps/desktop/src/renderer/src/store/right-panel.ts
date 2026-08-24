@@ -1,12 +1,16 @@
-import type { WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { create } from "zustand";
 
-// A side-panel tab. Attention and Activity are fixed singletons; an item tab is
-// identified by the (workspace, work item) pair it drills into.
 export type Surface =
   | { readonly kind: "attention" }
   | { readonly kind: "activity" }
-  | { readonly kind: "item"; readonly workspace: WorkspaceId; readonly workItem: WorkItemId };
+  | {
+      readonly kind: "item";
+      readonly workspace: WorkspaceId;
+      readonly workItem: WorkItemId;
+      readonly runId?: RunId;
+      readonly run?: RunSummary;
+    };
 
 export type SurfaceId = string;
 
@@ -14,11 +18,30 @@ export function surfaceId(surface: Surface): SurfaceId {
   return surface.kind === "item" ? `item:${surface.workspace}:${surface.workItem}` : surface.kind;
 }
 
-// The fixed tabs are always present and cannot be closed. Item tabs are appended
-// after them in the order they were opened.
 export const FIXED_SURFACES: readonly Surface[] = [{ kind: "attention" }, { kind: "activity" }];
 
 const DEFAULT_ACTIVE = surfaceId({ kind: "attention" });
+
+function updatedSurface(existing: Surface, next: Surface) {
+  if (existing.kind === "item" && next.kind === "item" && existing.runId && !next.runId) {
+    return existing;
+  }
+  return next;
+}
+
+function upsertSurface(surfaces: readonly Surface[], next: Surface) {
+  const id = surfaceId(next);
+  const existing = surfaces.findIndex((surface) => surfaceId(surface) === id);
+
+  if (existing === -1) return [...surfaces, next];
+
+  return surfaces.map((surface, index) => (index === existing ? updatedSurface(surface, next) : surface));
+}
+
+function fallbackActiveSurfaceId(surfaces: readonly Surface[], closingId: SurfaceId, active: SurfaceId) {
+  if (active !== closingId) return active;
+  return surfaceId(surfaces[surfaces.length - 1] ?? FIXED_SURFACES[0]);
+}
 
 export interface RightPanelState {
   readonly open: boolean;
@@ -45,11 +68,10 @@ export const useRightPanelStore = create<RightPanelState>((set) => ({
   openSurface: (surface) =>
     set((state) => {
       const id = surfaceId(surface);
-      const exists = state.surfaces.some((entry) => surfaceId(entry) === id);
       return {
         open: true,
         active: id,
-        surfaces: exists ? state.surfaces : [...state.surfaces, surface],
+        surfaces: upsertSurface(state.surfaces, surface),
       };
     }),
   closeSurface: (id) =>
@@ -57,9 +79,7 @@ export const useRightPanelStore = create<RightPanelState>((set) => ({
       const target = state.surfaces.find((entry) => surfaceId(entry) === id);
       if (target?.kind !== "item") return state;
       const surfaces = state.surfaces.filter((entry) => surfaceId(entry) !== id);
-      const fallback = surfaces[surfaces.length - 1];
-      const active = state.active === id && fallback ? surfaceId(fallback) : state.active;
-      return { surfaces, active };
+      return { surfaces, active: fallbackActiveSurfaceId(surfaces, id, state.active) };
     }),
   setActive: (id) => set({ active: id }),
   toggleMaximized: () => set((state) => ({ maximized: !state.maximized })),
