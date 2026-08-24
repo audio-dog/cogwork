@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_d7d603c049ca51::t_e4e603fe906393 1,8,10,14,61-67
+  s_d7d603c049ca51::t_d4684d1c2537f6 68-69
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_d7d603c049ca51::t_6af9c27dd3d279 25-31,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7b14343d8c9ee7844040fa648f311d4373efba19",
+  "prompts": {},
+  "sessions": {
+    "s_d7d603c049ca51": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0257d-489a-7f62-9b6f-624c8f008517",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
