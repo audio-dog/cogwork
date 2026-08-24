@@ -1,0 +1,21 @@
+docs/adr/0012-product-direction-lives-in-its-own-durable-doc.md
+  s_b000f42bfbe198::t_1faa8475fa3f68 38-41
+docs/agents/product.md
+  s_b000f42bfbe198::t_1faa8475fa3f68 38-52,63-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7aa84ab1912fca34c392a6c6769f029fe7451a08",
+  "prompts": {},
+  "sessions": {
+    "s_b000f42bfbe198": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "54b08a8b-a822-4cf4-8979-633650c4fb6c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
