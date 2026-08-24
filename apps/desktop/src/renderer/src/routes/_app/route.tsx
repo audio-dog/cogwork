@@ -2,7 +2,7 @@ import { Button } from "@cogwork/ui/components/button";
 import { SidebarInset, SidebarTrigger } from "@cogwork/ui/components/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiLayoutRightLine } from "@remixicon/react";
+import { RiCollapseDiagonalLine, RiExpandDiagonalLine, RiLayoutRightLine } from "@remixicon/react";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { ActivityViewProvider } from "../../components/activity-view";
 import { AppSidebar } from "../../components/nav-sidebar";
@@ -26,23 +26,49 @@ function SidebarControl() {
 }
 
 function ShellHeader() {
-  const togglePanel = useRightPanelStore((store) => store.togglePanel);
-  const panelOpen = useRightPanelStore((store) => store.open);
-
   return (
-    <header className="flex h-11 min-h-11 shrink-0 items-center gap-4 border-b pr-4 pl-4 [-webkit-app-region:drag]">
+    <header className="flex h-11 min-h-11 shrink-0 items-center gap-4 border-b pr-[calc(var(--workspace-controls-right)+2.25rem)] pl-4 [-webkit-app-region:drag]">
       <div className="ml-auto flex items-center gap-4 [-webkit-app-region:no-drag]">
         <SchedulerControls />
-        <Button
-          aria-label={panelOpen ? "Hide side panel" : "Show side panel"}
-          size="icon-sm"
-          variant={panelOpen ? "secondary" : "ghost"}
-          onClick={togglePanel}
-        >
-          <RiLayoutRightLine />
-        </Button>
       </div>
     </header>
+  );
+}
+
+function RightPanelControls() {
+  const panelOpen = useRightPanelStore((store) => store.open);
+  const maximized = useRightPanelStore((store) => store.maximized);
+  const togglePanel = useRightPanelStore((store) => store.togglePanel);
+  const toggleMaximized = useRightPanelStore((store) => store.toggleMaximized);
+  const maximizeLabel = maximized ? "Restore panel" : "Expand panel";
+  const panelLabel = panelOpen ? "Hide side panel" : "Show side panel";
+  const panelVariant = panelOpen ? "secondary" : "ghost";
+
+  return (
+    <div className="absolute top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] z-10 flex h-11 items-center gap-1 [-webkit-app-region:no-drag]">
+      {panelOpen && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button aria-label={maximizeLabel} size="icon-sm" variant="ghost" onClick={toggleMaximized}>
+                {maximized ? <RiCollapseDiagonalLine /> : <RiExpandDiagonalLine />}
+              </Button>
+            }
+          />
+          <TooltipContent side="bottom">{maximizeLabel}</TooltipContent>
+        </Tooltip>
+      )}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button aria-label={panelLabel} size="icon-sm" variant={panelVariant} onClick={togglePanel}>
+              <RiLayoutRightLine />
+            </Button>
+          }
+        />
+        <TooltipContent side="bottom">{panelLabel}</TooltipContent>
+      </Tooltip>
+    </div>
   );
 }
 
@@ -58,9 +84,6 @@ function MainColumn() {
   );
 }
 
-// Always mounted so opening and closing animates its width, like the left sidebar's
-// offcanvas slide. Collapsed to zero width when closed; the inner column keeps a
-// fixed width so the content does not reflow mid-slide.
 function RightPanelRegion({ open }: { open: boolean }) {
   return (
     <div
@@ -88,16 +111,23 @@ function ContentArea({
 }) {
   const panelOpen = useRightPanelStore((store) => store.open);
   const maximized = useRightPanelStore((store) => store.maximized);
-
-  if (panelOpen && maximized) return <RightPanel />;
+  const content =
+    panelOpen && maximized ? (
+      <RightPanel />
+    ) : (
+      <div className="flex h-full min-h-0">
+        <div className="min-w-0 flex-1">
+          <MainColumn />
+        </div>
+        {panelOpen && <RightPanelResizeHandle onCommit={onRightPanelCommit} onReset={onRightPanelReset} />}
+        <RightPanelRegion open={panelOpen} />
+      </div>
+    );
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="min-w-0 flex-1">
-        <MainColumn />
-      </div>
-      {panelOpen && <RightPanelResizeHandle onCommit={onRightPanelCommit} onReset={onRightPanelReset} />}
-      <RightPanelRegion open={panelOpen} />
+    <div className="relative h-full min-h-0">
+      {content}
+      <RightPanelControls />
     </div>
   );
 }

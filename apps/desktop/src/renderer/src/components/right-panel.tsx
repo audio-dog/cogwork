@@ -1,16 +1,8 @@
 import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
-import { Button } from "@cogwork/ui/components/button";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import {
-  RiCloseLine,
-  RiCollapseDiagonalLine,
-  RiExpandDiagonalLine,
-  RiFileList2Line,
-  RiFocus2Line,
-  RiPulseLine,
-} from "@remixicon/react";
+import { RiCloseLine, RiFileList2Line, RiFocus2Line, RiPulseLine } from "@remixicon/react";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { ActivityTab as ActivityTabBody } from "./activity-tab";
 import { AttentionList } from "./attention-rail";
@@ -144,8 +136,6 @@ export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
   const active = useRightPanelStore((state) => state.active);
   const maximized = useRightPanelStore((state) => state.maximized);
-  const closePanel = useRightPanelStore((state) => state.closePanel);
-  const toggleMaximized = useRightPanelStore((state) => state.toggleMaximized);
   const current = currentSurface(surfaces, active);
   const itemSurfaces = surfaces.filter(
     (surface): surface is Extract<Surface, { kind: "item" }> => surface.kind === "item",
@@ -155,7 +145,7 @@ export function RightPanel() {
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div
         className={cn(
-          "flex h-11 min-h-11 shrink-0 items-center gap-1 border-b pr-2 pl-2 [-webkit-app-region:drag]",
+          "flex h-11 min-h-11 shrink-0 items-center gap-1 border-b pr-[calc(var(--workspace-controls-right)+4.25rem)] pl-2 [-webkit-app-region:drag]",
           maximized && "[[data-sidebar-state=collapsed]_&]:pl-[var(--workspace-titlebar-content-left)]",
         )}
       >
@@ -166,19 +156,6 @@ export function RightPanel() {
             const id = surfaceId(surface);
             return <ItemTab key={id} surface={surface} />;
           })}
-        </div>
-        <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
-          <Button
-            aria-label={maximized ? "Restore panel" : "Expand panel"}
-            size="icon-sm"
-            variant="ghost"
-            onClick={toggleMaximized}
-          >
-            {maximized ? <RiCollapseDiagonalLine /> : <RiExpandDiagonalLine />}
-          </Button>
-          <Button aria-label="Close panel" size="icon-sm" variant="ghost" onClick={closePanel}>
-            <RiCloseLine />
-          </Button>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
