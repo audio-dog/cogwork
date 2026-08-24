@@ -1,79 +1,261 @@
-import { Badge } from "@cogwork/ui/components/badge";
+import { buttonVariants } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
-import { Separator } from "@cogwork/ui/components/separator";
-import type { ReactNode } from "react";
-import { mergeGate, selfHalts } from "../features/feed";
+import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
+import { cn } from "@cogwork/ui/lib/utils";
+import { RiExternalLinkLine, RiGitPullRequestLine, RiQuestionAnswerLine } from "@remixicon/react";
+import { useState } from "react";
+import {
+  type AttentionEntry,
+  type AttentionKind,
+  type AttentionKindFilter,
+  attentionCounts,
+  attentionEntries,
+  filterAttention,
+  type NeedsDecisionAttentionEntry,
+  type ReadyToMergeAttentionEntry,
+} from "../features/attention";
+import { needsHumanReasonLabel, registeredWorkspaces } from "../features/feed";
+import { relativeTime } from "../features/format";
 import { useBoard } from "../features/use-board";
-import { useChromeStore } from "../store/chrome";
-import { MergeGateCard, SelfHaltCard } from "./attention-items";
-import { RailShell } from "./rail-shell";
+import { useRightPanelStore } from "../store/right-panel";
+import { FunnelFilter, useFunnelSelection } from "./funnel-filter";
 
-function RailSection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+const trackerLabel = (tracker: NeedsDecisionAttentionEntry["tracker"]) =>
+  tracker === "linear" ? "Linear" : "GitHub";
+
+const signalFor = (entry: AttentionEntry) => {
+  if (entry.kind === "ready-to-merge") return `waiting ${relativeTime(entry.pr.waitingSinceMillis)}`;
+  return needsHumanReasonLabel[entry.reason] ?? "needs a person";
+};
+
+function PrStatusDot({
+  status,
+}: {
+  status: "passing" | "failing" | "pending" | "ready" | "changes-requested" | "conflict" | "clean" | "none";
+}) {
   return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
-        <Badge variant="outline">{count}</Badge>
-      </div>
-      {children}
-    </section>
+    <span
+      className={cn(
+        "size-2 rounded-full",
+        (status === "passing" || status === "ready") && "bg-success",
+        (status === "failing" || status === "changes-requested" || status === "conflict") && "bg-destructive",
+        (status === "pending" || status === "clean") && "bg-warning",
+        status === "none" && "bg-muted-foreground/30",
+      )}
+    />
   );
 }
 
-function RailBody() {
-  const result = useBoard();
-  const filter = useChromeStore((state) => state.workspaceFilter);
+function PrStatus({ entry, onOpen }: { entry: ReadyToMergeAttentionEntry; onOpen: () => void }) {
+  const { checks, review, baseDivergence } = entry.pr;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`Open ${entry.item.id}`}
+            className="relative z-10 inline-flex items-center gap-1"
+            onClick={onOpen}
+          >
+            <PrStatusDot status={checks} />
+            <PrStatusDot status={review} />
+            <PrStatusDot status={baseDivergence} />
+          </button>
+        }
+      />
+      <TooltipContent>{`checks ${checks} · review ${review} · base ${baseDivergence}`}</TooltipContent>
+    </Tooltip>
+  );
+}
 
-  if (result._tag !== "Success") return null;
-
-  const halts = selfHalts(result.board, filter);
-  const gate = mergeGate(result.board, filter);
-
-  if (halts.length === 0 && gate.length === 0) {
+function KindMarker({ kind }: { kind: AttentionKind }) {
+  if (kind === "needs-decision") {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>All clear</EmptyTitle>
-          <EmptyDescription>No self-halts or PRs waiting at the merge gate.</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <>
+        <span className="pointer-events-none h-8 w-0.5 shrink-0 rounded-full bg-warning" aria-hidden />
+        <RiQuestionAnswerLine className="pointer-events-none size-4 shrink-0 text-warning" />
+      </>
     );
   }
-
   return (
-    <div className="flex flex-col gap-5">
-      {halts.length > 0 && (
-        <RailSection title="Self-halts" count={halts.length}>
-          <div className="flex flex-col gap-2">
-            {halts.map((entry) => (
-              <SelfHaltCard key={`${entry.workspace}:${entry.item.id}`} entry={entry} />
-            ))}
-          </div>
-        </RailSection>
-      )}
-      {halts.length > 0 && gate.length > 0 && <Separator />}
-      {gate.length > 0 && (
-        <RailSection title="Merge gate" count={gate.length}>
-          <div className="flex flex-col gap-2">
-            {gate.map((entry) => (
-              <MergeGateCard key={`${entry.workspace}:${entry.item.id}`} entry={entry} />
-            ))}
-          </div>
-        </RailSection>
-      )}
+    <>
+      <span className="pointer-events-none h-8 w-0.5 shrink-0 rounded-full bg-success" aria-hidden />
+      <RiGitPullRequestLine className="pointer-events-none size-4 shrink-0 text-success" />
+    </>
+  );
+}
+
+function ReadyToMergeQuickOpen({ entry }: { entry: ReadyToMergeAttentionEntry }) {
+  return (
+    <a
+      aria-label="Open PR on code host"
+      className={buttonVariants({
+        size: "icon-sm",
+        variant: "ghost",
+        className:
+          "relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
+      })}
+      href={entry.pr.url}
+      rel="noreferrer"
+      target="_blank"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <RiExternalLinkLine />
+    </a>
+  );
+}
+
+function DecisionQuickOpen({ entry }: { entry: NeedsDecisionAttentionEntry }) {
+  const label = `Open in ${trackerLabel(entry.tracker)}`;
+  if (!entry.url) {
+    return <span className="size-7 shrink-0" aria-hidden />;
+  }
+  return (
+    <a
+      aria-label={label}
+      className={buttonVariants({
+        size: "icon-sm",
+        variant: "ghost",
+        className:
+          "relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
+      })}
+      href={entry.url}
+      rel="noreferrer"
+      target="_blank"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <RiExternalLinkLine />
+    </a>
+  );
+}
+
+function AttentionRow({ entry }: { entry: AttentionEntry }) {
+  const openSurface = useRightPanelStore((state) => state.openSurface);
+  const signal = signalFor(entry);
+  return (
+    <div className="group relative flex w-full items-center gap-3 py-2 pr-2 pl-0 hover:bg-muted/50">
+      <button
+        type="button"
+        aria-label={`Open ${entry.item.id}`}
+        className="absolute inset-0 rounded-md focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={(event) => {
+          event.stopPropagation();
+          openSurface({ kind: "item", workspace: entry.workspace, workItem: entry.item.id });
+        }}
+      />
+      <KindMarker kind={entry.kind} />
+      <div className="pointer-events-none min-w-0 flex-1">
+        <span className="block truncate text-sm">{entry.item.title}</span>
+        <span className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+          <span>{entry.item.id}</span>
+          <span aria-hidden>·</span>
+          <span className="truncate">{entry.workspace}</span>
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+        {entry.kind === "ready-to-merge" && (
+          <PrStatus
+            entry={entry}
+            onOpen={() => openSurface({ kind: "item", workspace: entry.workspace, workItem: entry.item.id })}
+          />
+        )}
+        <span className="pointer-events-none w-28 truncate text-right" title={signal}>
+          {signal}
+        </span>
+        {entry.kind === "ready-to-merge" ? (
+          <ReadyToMergeQuickOpen entry={entry} />
+        ) : (
+          <DecisionQuickOpen entry={entry} />
+        )}
+      </div>
     </div>
   );
 }
 
-export function AttentionList() {
+function AttentionContent({
+  entries,
+  workspaces,
+}: {
+  entries: ReadonlyArray<AttentionEntry>;
+  workspaces: ReadonlyArray<string>;
+}) {
+  const [kind, setKind] = useState<AttentionKindFilter>("all");
+  const workspace = useFunnelSelection();
+  const counts = attentionCounts(entries);
+  const rows = filterAttention(entries, kind, workspace.selected);
+  const hasActiveFilters = kind !== "all" || workspace.selected.size > 0;
+  const options = workspaces.map((name) => ({
+    key: name,
+    label: name,
+    count: entries.filter((entry) => entry.workspace === name).length,
+  }));
+
   return (
-    <RailShell.Frame>
-      <RailShell.Header>
-        <h2 className="text-sm font-semibold">Attention</h2>
-      </RailShell.Header>
-      <RailShell.Body>
-        <RailBody />
-      </RailShell.Body>
-    </RailShell.Frame>
+    <FunnelFilter.Provider
+      value={{
+        state: { options, selected: workspace.selected },
+        actions: { toggle: workspace.toggle, clear: workspace.clear },
+        meta: { ariaLabel: "Filter workspaces", resetLabel: "All workspaces" },
+      }}
+    >
+      <div className="flex size-full min-h-0 flex-col">
+        <div className="flex items-center gap-2 border-b px-3 py-2">
+          <ToggleGroup
+            spacing={0}
+            value={[kind]}
+            onValueChange={(next) => {
+              const selection = next[0];
+              if (selection === "all" || selection === "needs-decision" || selection === "ready-to-merge") {
+                setKind(selection);
+              }
+            }}
+          >
+            <ToggleGroupItem value="all" variant="outline" size="sm" className="gap-1.5">
+              All
+              <span className="text-muted-foreground">{counts.all}</span>
+            </ToggleGroupItem>
+            <ToggleGroupItem value="needs-decision" variant="outline" size="sm" className="gap-1.5">
+              Needs a decision
+              <span className="text-muted-foreground">{counts["needs-decision"]}</span>
+            </ToggleGroupItem>
+            <ToggleGroupItem value="ready-to-merge" variant="outline" size="sm" className="gap-1.5">
+              Ready to merge
+              <span className="text-muted-foreground">{counts["ready-to-merge"]}</span>
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {workspaces.length > 1 && <FunnelFilter.Control />}
+        </div>
+        <FunnelFilter.Banner />
+        <div className="min-h-0 flex-1 overflow-auto">
+          {rows.length === 0 ? (
+            <Empty className="p-6">
+              <EmptyHeader>
+                <EmptyTitle>
+                  {hasActiveFilters
+                    ? "No attention items match these filters."
+                    : "Nothing needs a person right now."}
+                </EmptyTitle>
+                {hasActiveFilters && <EmptyDescription>Try a different kind or workspace.</EmptyDescription>}
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <div className="flex flex-col divide-y px-3">
+              {rows.map((entry) => (
+                <AttentionRow key={`${entry.workspace}:${entry.item.id}`} entry={entry} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </FunnelFilter.Provider>
   );
+}
+
+export function AttentionList() {
+  const result = useBoard();
+  if (result._tag !== "Success") return null;
+  const entries = attentionEntries(result.board);
+  return <AttentionContent entries={entries} workspaces={registeredWorkspaces(result.board)} />;
 }
