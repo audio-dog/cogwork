@@ -527,6 +527,31 @@ describe("recordActivitySession", () => {
       }).events,
     ).toEqual([repeated, repeated]);
   });
+
+  it("keeps the stream cursor through an engine-status sample", () => {
+    const repeated = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const first = recordActivitySession(initialActivitySession, {
+      events: [repeated],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+    const afterEngineStatus = recordActivitySession(first, {
+      events: null,
+      engine: "off",
+      connection: "live",
+      atMillis: 150,
+    });
+
+    expect(
+      recordActivitySession(afterEngineStatus, {
+        events: [repeated, repeated],
+        engine: "off",
+        connection: "live",
+        atMillis: 200,
+      }).events,
+    ).toEqual([repeated, repeated]);
+  });
 });
 
 describe("subscribeActivityFeed", () => {

@@ -377,8 +377,8 @@ const boundSession = <Value>(values: readonly Value[]) =>
 
 export const recordActivitySession = (session: ActivitySession, sample: ActivitySessionSample) => {
   const incoming = sample.events;
-  const sourceCount = incoming?.length ?? 0;
-  const sourceHead = incoming?.[0] ? eventKey(incoming[0]) : null;
+  const sourceCount = incoming?.length ?? session.sourceCount;
+  const sourceHead = incoming?.[0] ? eventKey(incoming[0]) : session.sourceHead;
   const continuesSource =
     incoming !== null &&
     session.sourceCount > 0 &&
