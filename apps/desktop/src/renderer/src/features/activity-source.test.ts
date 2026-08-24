@@ -13,6 +13,7 @@ import {
   activityCategory,
   boundLog,
   decodeEvent,
+  defaultActivityLimit,
   deriveActivityFeed,
   initialActivitySession,
   recordActivitySession,
@@ -143,6 +144,13 @@ describe("decodeEvent — human summaries", () => {
       workItem: "42",
       run: { id: "run-1", workItem: "42" },
     });
+  });
+
+  it("gives distinct run updates distinct row identities", () => {
+    const inserted = decodeEvent(event({ _tag: "RunChanged", run: run({ eventCount: 0 }) }), 1_000);
+    const attached = decodeEvent(event({ _tag: "RunChanged", run: run({ eventCount: 1 }) }), 1_000);
+
+    expect(inserted?.id).not.toBe(attached?.id);
   });
 
   it("reads a registered workspace and a failed one", () => {
@@ -417,6 +425,23 @@ describe("deriveActivityFeed — the unified fold", () => {
 });
 
 describe("recordActivitySession", () => {
+  it("keeps session storage bounded to the transcript limit", () => {
+    const events = Array.from({ length: defaultActivityLimit + 1 }, (_, index) =>
+      event({ _tag: "ItemRemoved", workspace: "acme", id: `${index}` }),
+    );
+
+    const session = recordActivitySession(initialActivitySession, {
+      events,
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+
+    expect(session.events).toEqual(events.slice(1));
+    expect(session.eventKeys).toHaveLength(defaultActivityLimit);
+    expect(session.arrivals).toHaveLength(defaultActivityLimit);
+  });
+
   it("keeps arrival times correct when a fresh event stream replaces the prior one", () => {
     const first = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
     const second = event({ _tag: "ItemRemoved", workspace: "acme", id: "second" });

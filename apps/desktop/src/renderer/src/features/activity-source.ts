@@ -106,17 +106,20 @@ export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
 
 // The daemon stream carries a real timestamp only on run events; everything
 // else is stamped on arrival, so a run row must prefer its own time.
-const runRow = (run: RunSummary): ActivityRow => ({
-  id: `run:${run.id}:${run.status}:${run.endedAtMillis ?? run.startedAtMillis}`,
-  kind: "run",
-  atMillis: run.endedAtMillis ?? run.startedAtMillis,
-  label: activityLabels.run,
-  summary: `${run.workItem} · run ${run.status}`,
-  severity: runStatusSeverity[run.status],
-  entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem, run },
-  raw: pretty(run),
-  lowSignal: false,
-});
+const runRow = (run: RunSummary): ActivityRow => {
+  const raw = pretty(run);
+  return {
+    id: `run:${raw}`,
+    kind: "run",
+    atMillis: run.endedAtMillis ?? run.startedAtMillis,
+    label: activityLabels.run,
+    summary: `${run.workItem} · run ${run.status}`,
+    severity: runStatusSeverity[run.status],
+    entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem, run },
+    raw,
+    lowSignal: false,
+  };
+};
 
 const workspaceRow = (workspace: WorkspaceState, atMillis: number): ActivityRow => {
   if (workspace._tag === "Registered") {
@@ -363,18 +366,30 @@ interface ActivitySessionSample {
   readonly atMillis: number;
 }
 
+const eventKey = (event: DaemonEvent) => JSON.stringify(event);
+
+const boundSession = <Value>(values: readonly Value[]) =>
+  values.length <= defaultActivityLimit ? [...values] : values.slice(-defaultActivityLimit);
+
 export const recordActivitySession = (session: ActivitySession, sample: ActivitySessionSample) => {
   const incoming = sample.events;
   const knownEvents = new Set(session.eventKeys);
-  const addedEvents = incoming?.filter((event) => !knownEvents.has(JSON.stringify(event))) ?? [];
+  const addedEvents =
+    incoming?.filter((event) => {
+      if (event._tag === "RunActivity") return false;
+      const key = eventKey(event);
+      if (knownEvents.has(key)) return false;
+      knownEvents.add(key);
+      return true;
+    }) ?? [];
   const lifecycle = stepLifecycle(session.lifecycle, sample);
   if (addedEvents.length === 0 && lifecycle.rows.length === 0) return session;
 
   return {
-    events: [...session.events, ...addedEvents],
-    eventKeys: [...session.eventKeys, ...addedEvents.map((event) => JSON.stringify(event))],
-    arrivals: [...session.arrivals, ...addedEvents.map(() => sample.atMillis)],
-    synthesized: [...session.synthesized, ...lifecycle.rows],
+    events: boundSession([...session.events, ...addedEvents]),
+    eventKeys: boundSession([...session.eventKeys, ...addedEvents.map(eventKey)]),
+    arrivals: boundSession([...session.arrivals, ...addedEvents.map(() => sample.atMillis)]),
+    synthesized: boundSession([...session.synthesized, ...lifecycle.rows]),
     lifecycle: lifecycle.state,
   };
 };
