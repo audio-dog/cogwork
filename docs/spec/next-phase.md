@@ -2,14 +2,14 @@
 
 The product and architecture spec for cogwork's next phase, with a sequenced roadmap. Every
 decision here was settled on the wayfinder map
-[#146](https://github.com/taylorfsteele/cogwork/issues/146) between 2026-07 and 2026-08; each
+[#159](https://github.com/colonylabs/cogwork/issues/159) between 2026-07 and 2026-08; each
 section links the ticket or ADR that holds the full reasoning. This document is the index and the
 handoff — the tickets are the depth.
 
 ## What cogwork is becoming
 
 **cogwork is a productivity assistant for a software engineer. Coding orchestration is its
-first capability, not its definition.** ([#155](https://github.com/taylorfsteele/cogwork/issues/155))
+first capability, not its definition.** ([#168](https://github.com/colonylabs/cogwork/issues/168))
 
 The `triage → implement → follow-up → PR` pipeline that exists today is one **workflow**, keyed by a
 work-item type, running over a shared runtime (scheduler, run ledger, event bus). Future non-coding
@@ -52,17 +52,17 @@ Three phases get there:
 
 The maintainer's daily driver over the AFK daemon. Ambient confidence that everything is moving,
 plus the ability to act in place on the few decisions that land on a human.
-([#147](https://github.com/taylorfsteele/cogwork/issues/147) spec,
-[#154](https://github.com/taylorfsteele/cogwork/issues/154) prototype)
+([#160](https://github.com/colonylabs/cogwork/issues/160) spec,
+[#167](https://github.com/colonylabs/cogwork/issues/167) prototype)
 
-**Shell layout** (settled by the [prototype](https://github.com/taylorfsteele/cogwork/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html)):
+**Shell layout** (settled by the [prototype](https://github.com/taylorfsteele/clanker-forge/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html)):
 a Slack/Codex-style three-band desktop window.
 
 - **Left nav rail** — views (Feed / Board / Inbox / Lanes) and a per-workspace filter.
 - **Center: the Feed (home)** — activity-first. Running agents are the hero, as live cards with a
   "watch this agent" affordance; then Queued; then Recently done. (The lifecycle **Board** — kanban
   across `Needs triage → Ready for agent → Working → In review → Needs you → Blocked` — was
-  explored as the home in #147 and demoted to a view by the prototype.)
+  explored as the home in #160 and demoted to a view by the prototype.)
 - **Right rail (collapsible)** — the single contextual surface. Defaults to **Attention**: triage
   self-halts with the agent's question inline, and PRs waiting at the merge gate. Clicking an item
   swaps the rail to that item's detail: live-run drill-in, triage approval, or PR gate. **Lanes** is
@@ -95,18 +95,18 @@ phase).
 
 cogwork owns the model loop: a TanStack AI runner registered behind the existing
 `HarnessRunner` seam, beside the CLI harnesses (cursor-acp), not replacing them. (engine ADR 0006;
-capability audit [#151](https://github.com/taylorfsteele/cogwork/issues/151))
+capability audit [#164](https://github.com/colonylabs/cogwork/issues/164))
 
 **Bring-your-own-provider.** API keys for every provider, plus OpenRouter OAuth (the only
 third-party OAuth a provider sanctions). ChatGPT-subscription login works but is
 unauthorized-in-writing — a flagged fast-follow, not v1. Anthropic prohibits and enforces against
 subscription-OAuth reuse. The model picker reads the models.dev `api.json` catalog.
-([#150](https://github.com/taylorfsteele/cogwork/issues/150))
+([#163](https://github.com/colonylabs/cogwork/issues/163))
 
 **The AFK keystone: no live ask.** The full allow/ask/deny policy vocabulary is authored now, but
 while AFK, `ask` compiles to `deny`. A denied tool call is a tool result the model adapts to — it
 never parks the item and adds no approval RPC. All approval UX and the interrupts machinery wait
-for the interactive phase. ([#153](https://github.com/taylorfsteele/cogwork/issues/153))
+for the interactive phase. ([#166](https://github.com/colonylabs/cogwork/issues/166))
 
 **Dogfood cutover is the phase-2 exit:** cogwork's own triage/implement/follow-up stages run
 on the first-party runner by default, with cursor-acp still registered.
@@ -115,7 +115,7 @@ on the first-party runner by default, with cursor-acp still registered.
 
 One new job: turn real-world context into a **proposed action**. In phase 3 there is exactly one
 kind — **mint a work item** — and the existing pipeline carries it the rest of the way.
-([#155](https://github.com/taylorfsteele/cogwork/issues/155))
+([#168](https://github.com/colonylabs/cogwork/issues/168))
 
 - **First context source: Granola meeting transcripts.** Slack and calendar come later.
 - **Extraction is agentic**, through the owned runtime (never a harness): separate actionable items
@@ -127,7 +127,7 @@ kind — **mint a work item** — and the existing pipeline carries it the rest 
   new work*, not a running agent, so the autonomous-with-override principle holds.
 - **Dedup is engine-driven**: a per-source watermark plus minted-keys gate the expensive model call.
   No agent is ever asked whether a meeting was already handled.
-- **Surfacing** (direction only; UI goes through a prototype like #154): one surface holding
+- **Surfacing** (direction only; UI goes through a prototype like #167): one surface holding
   go/no-gos, questions, and auto-mint awareness, grouped by meeting. Requires a
   pending-proposed-actions read model and one approve/dismiss RPC — the phase-3 addition beyond
   phase 1's three commands.
@@ -145,7 +145,7 @@ kind — **mint a work item** — and the existing pipeline carries it the rest 
 
 ## Architecture spec
 
-### Contracts and transport ([#148](https://github.com/taylorfsteele/cogwork/issues/148))
+### Contracts and transport ([#161](https://github.com/colonylabs/cogwork/issues/161))
 
 - **Transport stays Effect RPC over a Unix socket with NDJSON.** Effect RPC makes the protocol one
   swappable layer; WebSocket/HTTP+SSE and TLS are a later layer swap with no contract change. The
@@ -172,7 +172,7 @@ kind — **mint a work item** — and the existing pipeline carries it the rest 
   "there is no caller." Read models already key by `WorkspaceId`, so per-user scope is a later
   handler filter, not a reshape.
 
-### Desktop shell and UI client (ADR 0008, ADR 0009; [#149](https://github.com/taylorfsteele/cogwork/issues/149))
+### Desktop shell and UI client (ADR 0008, ADR 0009; [#162](https://github.com/colonylabs/cogwork/issues/162))
 
 - **Electron**, built with electron-vite + electron-builder (updates via electron-updater / GitHub
   channels). No Tauri, no browser-tab-first (browsers can't open the Unix socket), no Rust in
@@ -189,7 +189,7 @@ kind — **mint a work item** — and the existing pipeline carries it the rest 
   electron-log. The renderer never opens the socket — Effect RPC lives in main behind a typed
   main↔renderer IPC seam.
 
-### Session model ([#152](https://github.com/taylorfsteele/cogwork/issues/152))
+### Session model ([#165](https://github.com/colonylabs/cogwork/issues/165))
 
 The owned runtime **formalizes existing structure** — the scheduler already serializes per
 work-item, so no interactive coordinator is needed for AFK.
@@ -214,7 +214,7 @@ work-item, so no interactive coordinator is needed for AFK.
 - **Restart recovery keeps engine ADR 0002**: a crashed owned Run resumes by folding the transcript
   and sending the continuation nudge.
 
-### Tools, permissions, sandboxing ([#153](https://github.com/taylorfsteele/cogwork/issues/153))
+### Tools, permissions, sandboxing ([#166](https://github.com/colonylabs/cogwork/issues/166))
 
 - **Owned tool set** (opencode's shape): read, write, edit, bash, glob, grep, webfetch — TanStack
   `toolDefinition`s with Effect handlers. No tracker/PR tools; `git`/`gh` ride inside bash;
@@ -233,7 +233,7 @@ work-item, so no interactive coordinator is needed for AFK.
 - **Secrets:** credential store mints → TanStack Secrets channel → tool/exec env. Never the ledger
   or event log. The runner's own model API key resolves the same way.
 
-### Context assembly (engine ADR 0007; [#156](https://github.com/taylorfsteele/cogwork/issues/156))
+### Context assembly (engine ADR 0007; [#169](https://github.com/colonylabs/cogwork/issues/169))
 
 - The first-party runner pulls a **context assembler** that returns structured **instruction
   layers** — global → repo → playbook — rendered into `systemPrompts`; the filled playbook prompt
@@ -247,7 +247,7 @@ work-item, so no interactive coordinator is needed for AFK.
   compaction is a named runner seam (`onConfig` / `summarize()`), algorithm deferred until the loop
   exists.
 
-### Provider layer ([#150](https://github.com/taylorfsteele/cogwork/issues/150), [#151](https://github.com/taylorfsteele/cogwork/issues/151))
+### Provider layer ([#163](https://github.com/colonylabs/cogwork/issues/163), [#164](https://github.com/colonylabs/cogwork/issues/164))
 
 - Extend the existing `credential-store.ts` seam: API keys per provider + the OpenRouter PKCE flow.
 - TanStack AI supplies the agent loop, provider adapters, the AG-UI event vocabulary, the policy
@@ -256,7 +256,7 @@ work-item, so no interactive coordinator is needed for AFK.
   prompt inbox and steer/queue semantics. Top risk from the audit: docs-vs-installed version drift —
   re-verify against the pinned version at build.
 
-### Seams held open, deliberately not built (`/prefactor` discipline, [#155](https://github.com/taylorfsteele/cogwork/issues/155))
+### Seams held open, deliberately not built (`/prefactor` discipline, [#168](https://github.com/colonylabs/cogwork/issues/168))
 
 Marked so future work knows the reopen cost; none of this is in scope to build:
 
@@ -353,7 +353,7 @@ The structural prefactor (slices 1–3) is behavior-preserving — cursor-acp ke
 
 ### Phase 3 — Proactive layer
 
-Direction is settled ([#155](https://github.com/taylorfsteele/cogwork/issues/155)); these
+Direction is settled ([#168](https://github.com/colonylabs/cogwork/issues/168)); these
 slices are deliberately coarser and graduate into sharp tickets once phase 2 lands. Blocked behind
 the owned runtime (extraction runs through it).
 
@@ -366,7 +366,7 @@ the owned runtime (extraction runs through it).
    attribution, confidence scoring; never mint into an unrecognized project.
 5. **Proposed-action store, pending read model, approve/dismiss RPC** — the one mutating RPC beyond
    phase 1's three.
-6. **Proactive surface** on mission control — prototype first (like #154), then build: go/no-gos,
+6. **Proactive surface** on mission control — prototype first (like #167), then build: go/no-gos,
    questions, auto-mint awareness, grouped by meeting.
 7. **Product ADR: the hybrid-by-confidence mint gate** — recording why go/no-go on admission
    doesn't violate autonomous-with-override.
@@ -379,14 +379,14 @@ The full reasoning per area, in resolution order on the map:
 
 | Area | Ticket / ADR |
 |---|---|
-| TanStack AI capabilities | [#151](https://github.com/taylorfsteele/cogwork/issues/151) · [audit doc](../research/tanstack-ai-audit.md) |
-| Provider auth landscape | [#150](https://github.com/taylorfsteele/cogwork/issues/150) · [landscape doc](../research/provider-auth-landscape.md) |
-| Mission control product | [#147](https://github.com/taylorfsteele/cogwork/issues/147) · ADR [0007](../adr/0007-autonomous-with-override-triage-self-halts.md) |
-| Runtime session model | [#152](https://github.com/taylorfsteele/cogwork/issues/152) |
-| Tools / permissions / sandbox | [#153](https://github.com/taylorfsteele/cogwork/issues/153) |
-| Mission control UI shape | [#154](https://github.com/taylorfsteele/cogwork/issues/154) · [prototype](https://github.com/taylorfsteele/cogwork/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html) |
-| Client contract / transport | [#148](https://github.com/taylorfsteele/cogwork/issues/148) |
-| Desktop shell + UI stack | [#149](https://github.com/taylorfsteele/cogwork/issues/149) · ADRs [0008](../adr/0008-desktop-shell-is-electron-primary-daemon-host.md), [0009](../adr/0009-mission-control-ui-client-stack.md) |
-| Proactive layer + reframe | [#155](https://github.com/taylorfsteele/cogwork/issues/155) |
-| Context assembly | [#156](https://github.com/taylorfsteele/cogwork/issues/156) · engine ADR [0007](../../packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md) |
-| Wayfinder map | [#146](https://github.com/taylorfsteele/cogwork/issues/146) |
+| TanStack AI capabilities | [#164](https://github.com/colonylabs/cogwork/issues/164) · [audit doc](../research/tanstack-ai-audit.md) |
+| Provider auth landscape | [#163](https://github.com/colonylabs/cogwork/issues/163) · [landscape doc](../research/provider-auth-landscape.md) |
+| Mission control product | [#160](https://github.com/colonylabs/cogwork/issues/160) · ADR [0007](../adr/0007-autonomous-with-override-triage-self-halts.md) |
+| Runtime session model | [#165](https://github.com/colonylabs/cogwork/issues/165) |
+| Tools / permissions / sandbox | [#166](https://github.com/colonylabs/cogwork/issues/166) |
+| Mission control UI shape | [#167](https://github.com/colonylabs/cogwork/issues/167) · [prototype](https://github.com/taylorfsteele/clanker-forge/blob/dc38a35306d750b75fd4345cca95769885ae40c4/prototypes/mission-control-v1.html) |
+| Client contract / transport | [#161](https://github.com/colonylabs/cogwork/issues/161) |
+| Desktop shell + UI stack | [#162](https://github.com/colonylabs/cogwork/issues/162) · ADRs [0008](../adr/0008-desktop-shell-is-electron-primary-daemon-host.md), [0009](../adr/0009-mission-control-ui-client-stack.md) |
+| Proactive layer + reframe | [#168](https://github.com/colonylabs/cogwork/issues/168) |
+| Context assembly | [#169](https://github.com/colonylabs/cogwork/issues/169) · engine ADR [0007](../../packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md) |
+| Wayfinder map | [#159](https://github.com/colonylabs/cogwork/issues/159) |

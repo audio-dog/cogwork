@@ -36,4 +36,4 @@ Multi-context: a root `CONTEXT-MAP.md` points to per-package `CONTEXT.md` files.
 
 ### Technical disposition
 
-The product direction and the maintainer's decision principles for answering finely-tuned technical open questions during triage — instead of reflexively blocking on the maintainer. See `docs/agents/technical-disposition.md`.
+The product direction and the maintainer's decision principles for answering finely-tuned technical open questions — during triage, or when answering in the maintainer's place — instead of reflexively blocking. See `docs/agents/technical-disposition.md`.
