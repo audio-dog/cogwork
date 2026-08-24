@@ -7,12 +7,25 @@ import {
   WorkspaceState,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const { subscribeEngineStatus } = vi.hoisted(() => ({ subscribeEngineStatus: vi.fn() }));
+
+vi.mock("./use-engine-status", async () => {
+  const actual = await vi.importActual<typeof import("./use-engine-status")>("./use-engine-status");
+  return { ...actual, subscribeEngineStatus };
+});
+
 import {
   activeRuns,
+  activityCategory,
   boundLog,
   decodeEvent,
+  defaultActivityLimit,
   deriveActivityFeed,
+  initialActivitySession,
+  recordActivitySession,
+  subscribeActivityFeed,
   synthesizeLifecycle,
 } from "./activity-source";
 
@@ -133,7 +146,20 @@ describe("decodeEvent — human summaries", () => {
 
     expect(row?.label).toBe("Run");
     expect(row?.summary).toBe("42 · run succeeded");
-    expect(row?.entity).toEqual({ type: "run", id: "run-1", workspace: "acme" });
+    expect(row?.entity).toMatchObject({
+      type: "run",
+      id: "run-1",
+      workspace: "acme",
+      workItem: "42",
+      run: { id: "run-1", workItem: "42" },
+    });
+  });
+
+  it("gives distinct run updates distinct row identities", () => {
+    const inserted = decodeEvent(event({ _tag: "RunChanged", run: run({ eventCount: 0 }) }), 1_000);
+    const attached = decodeEvent(event({ _tag: "RunChanged", run: run({ eventCount: 1 }) }), 1_000);
+
+    expect(inserted?.id).not.toBe(attached?.id);
   });
 
   it("reads a registered workspace and a failed one", () => {
@@ -171,6 +197,16 @@ describe("decodeEvent — human summaries", () => {
     expect(row?.label).toBe("Scheduler");
     expect(row?.summary).toBe("2/4 in flight · budget 37/100");
     expect(row?.severity).toBe("info");
+  });
+});
+
+describe("activityCategory", () => {
+  it("groups items and system lifecycle events for the shared funnel", () => {
+    expect(activityCategory("item")).toBe("item");
+    expect(activityCategory("item-removed")).toBe("item");
+    expect(activityCategory("engine")).toBe("system");
+    expect(activityCategory("connection")).toBe("system");
+    expect(activityCategory("stream")).toBe("system");
   });
 });
 
@@ -394,5 +430,141 @@ describe("deriveActivityFeed — the unified fold", () => {
     expect(feed.total).toBe(4);
     expect(feed.log).toHaveLength(1);
     expect(feed.log[0].summary).toBe("b removed");
+  });
+});
+
+describe("recordActivitySession", () => {
+  it("keeps session storage bounded to the transcript limit", () => {
+    const events = Array.from({ length: defaultActivityLimit + 1 }, (_, index) =>
+      event({ _tag: "ItemRemoved", workspace: "acme", id: `${index}` }),
+    );
+
+    const session = recordActivitySession(initialActivitySession, {
+      events,
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+
+    expect(session.events).toEqual(events.slice(1));
+    expect(session.eventKeys).toHaveLength(defaultActivityLimit);
+    expect(session.arrivals).toHaveLength(defaultActivityLimit);
+  });
+
+  it("records the first engine transition after a quiet initial sample", () => {
+    const initialized = recordActivitySession(initialActivitySession, {
+      events: [],
+      engine: "off",
+      connection: "connecting",
+      atMillis: 100,
+    });
+    const started = recordActivitySession(initialized, {
+      events: [],
+      engine: "up",
+      connection: "connecting",
+      atMillis: 200,
+    });
+
+    expect(initialized.lifecycle.engine).toBe("off");
+    expect(started.synthesized.map((row) => row.summary)).toEqual(["Engine started"]);
+  });
+
+  it("keeps arrival times correct when a fresh event stream replaces the prior one", () => {
+    const first = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const second = event({ _tag: "ItemRemoved", workspace: "acme", id: "second" });
+    const afterFirst = recordActivitySession(initialActivitySession, {
+      events: [first],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+    const afterReconnect = recordActivitySession(afterFirst, {
+      events: [second],
+      engine: "up",
+      connection: "live",
+      atMillis: 200,
+    });
+
+    expect(afterReconnect.arrivals).toEqual([100, 200]);
+    expect(afterReconnect.events).toEqual([first, second]);
+  });
+
+  it("does not append matching reconnect seed events", () => {
+    const first = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const reseeded = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const session = recordActivitySession(initialActivitySession, {
+      events: [first],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+
+    expect(
+      recordActivitySession(session, {
+        events: [reseeded],
+        engine: "up",
+        connection: "live",
+        atMillis: 200,
+      }).events,
+    ).toEqual([first]);
+  });
+
+  it("records repeated event payloads from one live stream", () => {
+    const repeated = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const first = recordActivitySession(initialActivitySession, {
+      events: [repeated],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+
+    expect(
+      recordActivitySession(first, {
+        events: [repeated, repeated],
+        engine: "up",
+        connection: "live",
+        atMillis: 200,
+      }).events,
+    ).toEqual([repeated, repeated]);
+  });
+
+  it("keeps the stream cursor through an engine-status sample", () => {
+    const repeated = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const first = recordActivitySession(initialActivitySession, {
+      events: [repeated],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+    const afterEngineStatus = recordActivitySession(first, {
+      events: null,
+      engine: "off",
+      connection: "live",
+      atMillis: 150,
+    });
+
+    expect(
+      recordActivitySession(afterEngineStatus, {
+        events: [repeated, repeated],
+        engine: "off",
+        connection: "live",
+        atMillis: 200,
+      }).events,
+    ).toEqual([repeated, repeated]);
+  });
+});
+
+describe("subscribeActivityFeed", () => {
+  it("does not notify its listener during subscription", () => {
+    subscribeEngineStatus.mockImplementation((listener) => {
+      listener("running");
+      return () => undefined;
+    });
+    const listener = vi.fn();
+
+    const unsubscribe = subscribeActivityFeed(listener);
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
   });
 });

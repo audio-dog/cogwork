@@ -103,10 +103,6 @@ function UserButton() {
           <RiSettings3Line />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem render={<Link to="/activity" />}>
-          <RiPulseLine />
-          Raw activity
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as typeof theme)}>
           <DropdownMenuLabel>Theme</DropdownMenuLabel>

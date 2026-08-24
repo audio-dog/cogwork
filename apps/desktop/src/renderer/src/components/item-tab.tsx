@@ -31,6 +31,7 @@ import {
   resolveSubTab,
   type SubTab,
   type SubTabKey,
+  selectedRunForItem,
   subTabs,
 } from "../features/item-tab";
 import { statusLine, useRunActivity } from "../features/run-activity";
@@ -90,15 +91,19 @@ function ItemTabProvider({
   item,
   run,
   attempts,
+  initialSubTab,
   children,
 }: {
   workspace: WorkspaceId;
   item: ClassifiedItem;
   run: RunSummary | null;
   attempts: readonly RunSummary[];
+  initialSubTab?: SubTabKey;
   children: ReactNode;
 }) {
-  const [subTab, setSubTab] = useState<SubTabKey>(run?.status === "running" ? "run" : "main");
+  const [subTab, setSubTab] = useState<SubTabKey>(
+    initialSubTab ?? (run?.status === "running" ? "run" : "main"),
+  );
   const [triageRole, setTriageRole] = useState<TriageRole>("ready-for-agent");
   const [triageNote, setTriageNote] = useState("");
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
@@ -655,7 +660,11 @@ function ItemGone() {
   );
 }
 
-export function ItemTab({ selection }: { selection: ItemSelection }) {
+export function ItemTab({
+  selection,
+}: {
+  selection: ItemSelection & { runId?: RunSummary["id"]; run?: RunSummary };
+}) {
   const result = useBoard();
   if (result._tag !== "Success") return <ItemGone />;
 
@@ -663,7 +672,12 @@ export function ItemTab({ selection }: { selection: ItemSelection }) {
   const entry = boardItem(board, selection.workspace, selection.workItem);
   if (!entry) return <ItemGone />;
 
-  const run = runForItem(board, selection.workspace, selection.workItem);
+  const selectedRun = selectedRunForItem(
+    (selection.runId ? board.runs.get(selection.runId) : null) ?? selection.run,
+    selection.workspace,
+    selection.workItem,
+  );
+  const run = selectedRun ?? runForItem(board, selection.workspace, selection.workItem);
   const attempts = previousAttempts(
     runsForItem(board, selection.workspace, selection.workItem),
     run?.id ?? null,
@@ -676,6 +690,7 @@ export function ItemTab({ selection }: { selection: ItemSelection }) {
       item={entry.item}
       run={run}
       attempts={attempts}
+      initialSubTab={selectedRun ? "run" : undefined}
     >
       <div className="flex h-full min-h-0 flex-col">
         <SubTabStrip />

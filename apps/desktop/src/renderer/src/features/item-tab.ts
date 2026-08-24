@@ -1,4 +1,12 @@
-import type { ClassifiedItem, LifecycleStage, RunId, RunStatus, RunSummary } from "@cogwork/contracts";
+import type {
+  ClassifiedItem,
+  LifecycleStage,
+  RunId,
+  RunStatus,
+  RunSummary,
+  WorkItemId,
+  WorkspaceId,
+} from "@cogwork/contracts";
 
 // The header state chip: a content-hugging summary of where the item stands.
 // Tones follow the spec palette — live = primary, attention = amber,
@@ -96,3 +104,9 @@ export const previousAttempts = (
   focalRunId: RunId | null,
 ): readonly RunSummary[] =>
   runs.filter((run) => run.id !== focalRunId).toSorted((a, b) => b.startedAtMillis - a.startedAtMillis);
+
+export const selectedRunForItem = (
+  selectedRun: RunSummary | null | undefined,
+  workspace: WorkspaceId,
+  workItem: WorkItemId,
+) => (selectedRun?.workspace === workspace && selectedRun.workItem === workItem ? selectedRun : null);

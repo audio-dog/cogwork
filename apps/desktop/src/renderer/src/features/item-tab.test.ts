@@ -1,7 +1,7 @@
 import { ClassifiedItem, RunSummary } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { describeItemState, previousAttempts, resolveSubTab, subTabs } from "./item-tab";
+import { describeItemState, previousAttempts, resolveSubTab, selectedRunForItem, subTabs } from "./item-tab";
 
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
 const runSummary = Schema.decodeSync(RunSummary);
@@ -115,5 +115,18 @@ describe("previousAttempts", () => {
     const a = run({ id: "a", startedAtMillis: 100 });
     const b = run({ id: "b", startedAtMillis: 200 });
     expect(previousAttempts([a, b], null).map((attempt) => attempt.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("selectedRunForItem", () => {
+  it("rejects a requested run from another item", () => {
+    const selected = run({ workItem: "99" });
+    const item = run();
+    expect(selectedRunForItem(selected, item.workspace, item.workItem)).toBeNull();
+  });
+
+  it("keeps a requested run for the item", () => {
+    const selected = run();
+    expect(selectedRunForItem(selected, selected.workspace, selected.workItem)?.id).toBe("run-1");
   });
 });
