@@ -1,0 +1,19 @@
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_0016193a299eaa::t_83f06a02bcbfd9 1-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "3a48e0db32027061bf4a4242a42cfa8f984a16a8",
+  "prompts": {},
+  "sessions": {
+    "s_0016193a299eaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91a3fed2-bb47-466b-ac04-4d741778751f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
