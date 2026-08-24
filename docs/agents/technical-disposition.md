@@ -2,7 +2,7 @@
 
 Guidance for **answering on the maintainer's behalf** — the finely-tuned technical open questions where a ticket asks for a small technical call (how much to expose, whether to cap something, which error shape, how to split the work). These are rarely the maintainer's to answer: they follow from where the product is going and from how mature tools solve the same problem. Resolve them yourself instead of blocking.
 
-Read this alongside `docs/adr/` (the settled decisions these principles are drawn from) and the per-package `CONTEXT.md`.
+Read this alongside [`docs/agents/product.md`](./product.md) (what the product is and where it is going), `docs/adr/` (the settled decisions these principles are drawn from), and the per-package `CONTEXT.md`.
 
 ## How to use this doc
 
@@ -17,18 +17,11 @@ First decide whether the question is one you can **resolve** or a genuine fork y
 
 ## Product direction
 
-Where cogwork is going. Every technical call should support this trajectory, not just today's shape. The roadmap below was settled on the wayfinder map [#159](https://github.com/colonylabs/cogwork/issues/159), now closed; `docs/spec/next-phase.md` is its handoff. The live planning surface today is map [#124](https://github.com/colonylabs/cogwork/issues/124) — settings, Plugins, and agent contributions.
+Where cogwork is going lives in [`docs/agents/product.md`](./product.md) — what the product is,
+who it is for, where it is, and where it is heading. Every technical call should support that
+trajectory, not just today's shape. Read it before running [the research formula](#the-research-formula).
 
-- **Today:** a single-user, local tool — a CLI plus a daemon over local RPC, orchestrating AFK coding agents against your issue tracker, driven through an external agent CLI (cursor-acp over ACP).
-- **Phase 1 — mission control.** A desktop app that is a control tower for the AFK agents: every run streaming live, the lifecycle board, triage overrides (not approval gates — see principle 11), PR handoffs, budget dials, kick-off/cancel. No chat surface. Audience: the maintainer, dogfooding — cogwork builds cogwork.
-- **Phase 2 — the first-party agent runtime.** cogwork owns the model loop: a TanStack AI runner (provider adapters, tool calling, approval flow) registered *behind* the existing `HarnessRunner` seam, beside the CLI harnesses rather than replacing them. Bring-your-own-provider (log in with your OpenAI/Anthropic account or an API key); CLI harnesses remain for subscriptions that live in a CLI. See engine ADR-0006.
-- **Phase 3 — the proactive assistant layer.** The Feldspar product model folded in: background ingestion of meetings/Slack/calendar, precision-gated suggestions, tickets minted from real-world context. The north-star capstone: a meeting mentions a bug, cogwork mints the ticket, triages it, implements it, and opens the PR.
-- **Later, explicitly sequenced after phases 1–2:** interactive sessions (chat, steer/queue, mid-run approvals). Session contracts are designed interactive-ready from the start; the surface comes later.
-- **Audience trajectory:** maintainer-dogfooding first, trending toward casual non-coders as the Feldspar model lands. Provider login UX and simplified vocabulary matter more over time.
-- **The web/hosted future:** the daemon becomes remote and multi-user someday. Architect every contract hosted-ready; build none of the hosting now. Selling our own AI provider is a far-future product, not a current concern.
-- **Config direction:** workspace config moves toward **declarative, schema-validated, syncable data** — GUI-editable and cloud-syncable, the way Cursor and Codex keep settings. (It's executable TypeScript today; that's a migration, not the destination.)
-
-**Reference implementations.** Learn from how mature coding-agent tools solve these problems: Cursor, Codex, and Claude Code, plus three apps vendored on disk for you to read directly — `.repos/opencode` (the model for *owning* the agent loop: session drain, System Context, provider routes), `.repos/t3code` (the model for the control plane: event-sourced orchestration, typed contracts, Electron-supervised server), and `.repos/codex` (the model for external-harness config: layered settings, profiles, approval policy). Run `pnpm vendor` to hydrate them. For the proactive layer, Feldspar (`~/sites/feldspar`) is the product reference — take its product lessons (prepared next steps over briefings, precision over recall, human-approved tool plans), not its code. Ground a recommendation in how one of these actually does it rather than reasoning from first principles alone.
+**Reference implementations.** Learn from how mature coding-agent tools solve these problems: Cursor, Codex, and Claude Code, plus three apps vendored on disk for you to read directly — `.repos/opencode` (the model for *owning* the agent loop: session drain, System Context, provider routes), `.repos/t3code` (the model for the control plane: event-sourced orchestration, typed contracts, Electron-supervised server), and `.repos/codex` (the model for external-harness config: layered settings, profiles, approval policy). Run `pnpm vendor` to hydrate them. Ground a recommendation in how one of these actually does it rather than reasoning from first principles alone. The *product* reference for the proactive layer is a different list and lives in `product.md`.
 
 ## Decision principles
 
@@ -68,13 +61,13 @@ The whole point: know which questions to resolve and which to escalate.
 
 **Resolve it yourself** when the answer follows from the direction and principles above, or from prior art. These are finely-tuned technical one-offs — how much to expose, whether to cap, which error shape, how to split. Research, compare, recommend, and let your confidence rise toward `ready-for-agent`. Put the recommendation and its rationale in the proposal.
 
-**Escalate it** — via `ready-for-human`, with the question stated — only when the answer would establish **new product direction** not yet covered here or in an ADR. Signs it's a real fork: it trades off the product's identity, moves the roadmap, or principled people would genuinely disagree and the choice *defines* the product.
+**Escalate it** — via `ready-for-human`, with the question stated — only when the answer would establish **new product direction** not yet covered in [`docs/agents/product.md`](./product.md) or an ADR. Signs it's a real fork: it trades off the product's identity, moves the roadmap, or principled people would genuinely disagree and the choice *defines* the product.
 
-**The corpus compounds.** Every fork the maintainer answers should become a new principle here or a new ADR. So the same question never escalates twice — over time, more questions fall on the "resolve" side, and escalations shrink to only the genuinely new.
+**The corpus compounds.** Every fork the maintainer answers is written back, to exactly one of three places: a fork about **what the product is or where it goes** becomes a claim in [`product.md`](./product.md); a fork about **how to decide** becomes a new principle here; a fork that is hard to reverse and surprising without context also earns an ADR, which the other two then gist and link. Escalation and harvest read against the same documents, so the same question never escalates twice — over time, more questions fall on the "resolve" side, and escalations shrink to only the genuinely new.
 
 ## The research formula
 
-1. **Anchor in the direction.** Where is the product going (see [Product direction](#product-direction)), and what does this decision need to support *there*, not just today?
+1. **Anchor in the direction.** Where is the product going (read [`product.md`](./product.md)), and what does this decision need to support *there*, not just today?
 2. **Compare prior art.** How do the reference implementations handle it? Read the vendored `.repos/opencode`, `.repos/t3code`, and `.repos/codex`; recall Cursor and Claude Code.
 3. **Recommend.** Lay out the options, pick one, and justify it against the direction and principles. A recommendation with a rationale beats a question kicked back.
 

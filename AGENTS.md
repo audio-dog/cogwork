@@ -34,6 +34,12 @@ The five canonical triage roles map 1:1 to labels of the same name (`needs-triag
 
 Multi-context: a root `CONTEXT-MAP.md` points to per-package `CONTEXT.md` files. See `docs/agents/domain.md`.
 
+### Product
+
+What cogwork is, who it is for, where it is, and where it is going — read it to answer a question
+the code cannot answer, to judge whether work is in scope, or to check what the product refuses to
+become. See `docs/agents/product.md`.
+
 ### Technical disposition
 
 The product direction and the maintainer's decision principles for answering finely-tuned technical open questions — during triage, or when answering in the maintainer's place — instead of reflexively blocking. See `docs/agents/technical-disposition.md`.
