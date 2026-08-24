@@ -11,13 +11,7 @@ import {
   RiFocus2Line,
   RiPulseLine,
 } from "@remixicon/react";
-import {
-  describeSurface,
-  type Surface,
-  type SurfaceId,
-  surfaceId,
-  useRightPanelStore,
-} from "../store/right-panel";
+import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { ActivityTab as ActivityTabBody } from "./activity-tab";
 import { AttentionList } from "./attention-rail";
 import { CompactEngineGate } from "./engine-gate";
@@ -61,49 +55,73 @@ function tabClassName(active: boolean, padding: string) {
   return cn(baseTabClassName, padding, active ? activeTabClassName : inactiveTabClassName);
 }
 
-function SurfaceIcon({ icon }: { icon: ReturnType<typeof describeSurface>["icon"] }) {
-  if (icon === "focus") return <RiFocus2Line className="size-3.5 shrink-0" />;
-  if (icon === "pulse") return <RiPulseLine className="size-3.5 shrink-0" />;
-  return <RiFileList2Line className="size-3.5 shrink-0" />;
+function AttentionTab() {
+  const active = useRightPanelStore((state) => state.active === "attention");
+  const setActive = useRightPanelStore((state) => state.setActive);
+
+  return (
+    <div className={tabClassName(active, "px-2")}>
+      <button
+        type="button"
+        className="flex min-w-0 cursor-pointer items-center gap-1.5"
+        onClick={() => setActive("attention")}
+      >
+        <RiFocus2Line className="size-3.5 shrink-0" />
+        <span className="truncate">Attention</span>
+      </button>
+    </div>
+  );
 }
 
-function SurfaceTab({ surface }: { surface: Surface }) {
-  const descriptor = describeSurface(surface);
+function ActivityTab() {
+  const active = useRightPanelStore((state) => state.active === "activity");
+  const setActive = useRightPanelStore((state) => state.setActive);
+
+  return (
+    <div className={tabClassName(active, "px-2")}>
+      <button
+        type="button"
+        className="flex min-w-0 cursor-pointer items-center gap-1.5"
+        onClick={() => setActive("activity")}
+      >
+        <RiPulseLine className="size-3.5 shrink-0" />
+        <span className="truncate">Activity</span>
+      </button>
+    </div>
+  );
+}
+
+function ItemTab({ surface }: { surface: Extract<Surface, { kind: "item" }> }) {
   const id = surfaceId(surface);
   const active = useRightPanelStore((state) => state.active === id);
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
-  const trigger = (
-    <button
-      type="button"
-      className="flex min-w-0 cursor-pointer items-center gap-1.5"
-      onClick={() => setActive(id)}
-    >
-      <SurfaceIcon icon={descriptor.icon} />
-      <span className="truncate">{descriptor.title}</span>
-    </button>
-  );
 
   return (
-    <div className={tabClassName(active, descriptor.closable ? "pl-2 pr-1" : "px-2")}>
-      {descriptor.tooltip ? (
-        <Tooltip>
-          <TooltipTrigger render={trigger} />
-          <TooltipContent side="bottom">{descriptor.tooltip}</TooltipContent>
-        </Tooltip>
-      ) : (
-        trigger
-      )}
-      {descriptor.closable && (
-        <button
-          type="button"
-          aria-label={`Close ${descriptor.title}`}
-          className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
-          onClick={() => closeSurface(id)}
-        >
-          <RiCloseLine className="size-3" />
-        </button>
-      )}
+    <div className={tabClassName(active, "pl-2 pr-1")}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className="flex min-w-0 cursor-pointer items-center gap-1.5"
+              onClick={() => setActive(id)}
+            >
+              <RiFileList2Line className="size-3.5 shrink-0" />
+              <span className="truncate">{surface.workItem}</span>
+            </button>
+          }
+        />
+        <TooltipContent side="bottom">{surface.workspace}</TooltipContent>
+      </Tooltip>
+      <button
+        type="button"
+        aria-label={`Close ${surface.workItem}`}
+        className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
+        onClick={() => closeSurface(id)}
+      >
+        <RiCloseLine className="size-3" />
+      </button>
     </div>
   );
 }
@@ -129,6 +147,9 @@ export function RightPanel() {
   const closePanel = useRightPanelStore((state) => state.closePanel);
   const toggleMaximized = useRightPanelStore((state) => state.toggleMaximized);
   const current = currentSurface(surfaces, active);
+  const itemSurfaces = surfaces.filter(
+    (surface): surface is Extract<Surface, { kind: "item" }> => surface.kind === "item",
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -139,9 +160,11 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          {surfaces.map((surface) => {
+          <AttentionTab />
+          <ActivityTab />
+          {itemSurfaces.map((surface) => {
             const id = surfaceId(surface);
-            return <SurfaceTab key={id} surface={surface} />;
+            return <ItemTab key={id} surface={surface} />;
           })}
         </div>
         <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
