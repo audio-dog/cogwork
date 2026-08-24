@@ -1,5 +1,7 @@
 # Context assembler owns layered instructions; playbook skills are provisioned on the host
 
+> **Vocabulary note (2026-08-24).** This ADR predates the current domain language and uses retired terms. `MCP skill` is now **MCP server**; `playbook` is now **Operation Definition** plus **Operation Settings**; `playbook skill` is now **Operating Instructions**; `stage` is now **Operation**; `Run Manifest` is now **Run Plan**; and `capability` as an umbrella noun is retired outright — there is no collective term, so name the kind (MCP server, Skill, Subagent, Rules, Command, Hook). The decisions below stand; only the words changed. See `packages/contracts/CONTEXT.md`.
+
 The first-party harness runner needs engine-owned context. External CLI harnesses keep discovering skills themselves. We introduce a **context assembler** that returns structured **instruction layers** (global → repo → playbook). The runner turns those layers into `systemPrompts`; the filled playbook prompt template stays the user message. The assembler runs only on the first-party path (ADR 0006's unequal paths).
 
 **Ambient instructions** are `AGENTS.md` only: `~/.cogwork/AGENTS.md` plus every `AGENTS.md` from the worktree cwd up to the project root. The sync package is leaving this repo, so the assembler does not depend on it.
@@ -11,6 +13,20 @@ Compaction / windowing / tool-result pruning remain a named seam on the runner (
 ## Amendment: required context crosses every harness path
 
 ADR 0010 adds the Codex CLI runner and changes the provider-only boundary above. The context assembler now supplies every harness runner with the required instruction layers and provisioned playbook resource path. External CLI discovery remains useful for optional user capabilities, but a mandatory AFK playbook never depends on ambient installation or discovery.
+
+## Amendment: Rules are a fourth instruction layer, beneath Operating Instructions
+
+The contribution-kinds resolution adds **Rules** — advisory guidance contributed at any scope, authored as markdown with frontmatter. The ambient-instructions-are-`AGENTS.md`-only rule above is narrowed accordingly: `AGENTS.md` remains the only *ambient discovery*, and Rules are a fourth, *declared* layer.
+
+Precedence, general to specific: global Rules → repo `AGENTS.md` → repo Rules → private-overlay Rules → **Operating Instructions, last and highest**. Rules are advisory and can never satisfy a required need or weaken Operating Instructions — ADR 0010's guarantee that a mandatory AFK operation never depends on ambient installation or discovery holds unchanged.
+
+## Correction: same verb, same noun, opposite destination
+
+The paragraph above says skill provision "mirrors TanStack sandbox's 'skills are files on disk' idea". That is misleading and should not be read as placement parity.
+
+TanStack AI's provisioning writes **into the checkout root** — `bootstrapWorkspace()` places instructions, `fileSkill` and `gitSkill` content under the same directory as the cloned source, then `projectWorkspace()` renders per harness. Every on-disk destination is inside the checkout. This ADR does the opposite on purpose, and its own rejected-options list rejects what TanStack does ("Copy skills into the worktree — rejected: dirties the driven checkout and risks landing in a PR").
+
+The inversion is right, because the two systems drive different things: TanStack's checkout is a throwaway clone inside a disposable sandbox, while Cogwork drives a real worktree whose diff becomes a pull request. The decision stands; only the justification was wrong. The accurate framing is **host-side skill provision** — same verb, same noun, opposite destination.
 
 ## Considered Options
 

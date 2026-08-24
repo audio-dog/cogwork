@@ -58,17 +58,36 @@ _Avoid_: Repo settings, private workspace overlay
 Principal-owned configuration scoped to one workspace but stored outside its repository, for repo-specific customization that must not be committed.
 _Avoid_: User-level repo input, workspace input, global config
 
+**Authority**:
+Who authored a contribution — `plugin:<pluginId>`, `engine`, or `local`. Part of a contribution's identity and immutable, carried into the Run Plan as provenance. Every contribution is identified as `<authority>/<kind>/<localName>`.
+**Authority and Scope are orthogonal.** Authority is who wrote it; Scope is where the setting configuring it lives. Collapsing them would change a contribution's id when its configuration moves, breaking Run Plan provenance. In Customize, the kind is the view and the authority is a badge on the row.
+_Avoid_: Scope, source, owner, namespace
+
+**Scope**:
+Where a setting that configures a contribution lives. Four of them: **Settings profile** (principal), **Runtime host** (machine), **Workspace input** (repo, committed), **Private workspace overlay** (principal-owned, per-workspace, uncommitted). Mutable, and never part of a contribution's identity.
+_Avoid_: Authority, level, tier
+
+**Resolution**:
+How a contribution kind combines across Scopes, declared **per kind** as a triple of **(scope set, operator, direction)** — both which Scopes may contribute *and* how they combine. Operators: `override-scalar`, `merge-by-key`, `append-sources`, `union-values`, `constrain`.
+The scope set is per-kind for a **trust** reason, not a stylistic one: a repository you cloned must not be able to enable executable behavior on your machine. Inert text (Rules, Skills) may come from repo scope; executable contributions (Hooks) may not. There is no industry convention to inherit here — Codex replaces lists but merges MCP servers field-by-field, while Claude Code unions lists but replaces an MCP server entry whole.
+_Avoid_: Merge (only one of the operators), precedence (only one axis of three), override
+
 **Plugin**:
-A first-party install-and-setup bundle whose manifest contains separate typed, versioned definitions for Skills, MCP servers, Subagents, Scripts, Middleware, Hooks, and Connection setup. Each definition has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
-_Avoid_: Capability, component, marketplace listing
+A first-party install-and-setup bundle. Its manifest **points at files** rather than inlining definitions, and declares which Connections it requires. `version` is optional — a Plugin is identified by its declared version or, absent one, by content revision. Each contribution has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
+_Avoid_: Capability (retired — there is no umbrella noun), component, marketplace listing
+
+**Contribution kind**:
+One of the six types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Command, Hook**. The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
+_Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed)
 
 **Connection**:
-An authenticated binding to an external system, established once and granted to the operations or workspaces that may use it.
-_Avoid_: Plugin, credential, MCP server
+The established, authenticated binding to an external system — engine-owned, and not a contribution kind. It is never the credential itself: secret material stays in the credential store, keyed by account, and reaches a Run over a channel that is never persisted to the run ledger or event log. Other contributions reference a Connection by id rather than carrying secrets. The noun exists because Cogwork authenticates external systems that are not MCP servers, such as the Linear issue tracker.
+Granted **per-Workspace**, with its own scope ladder (user/global and per-workspace). Per-Operation grants are unnecessary: the Workspace grant says whether a repo's Runs may use it at all, and the Operation Definition's declared need narrows it, so a Run Plan resolves to the intersection.
+_Avoid_: Plugin, credential, MCP server, contribution kind
 
 **Tool**:
 A typed function an agent may call during a Run. A Tool may be engine-owned, provider-native, or exposed by an MCP server, but its source remains explicit.
-_Avoid_: MCP server (one server may expose many Tools), Script
+_Avoid_: MCP server (one server may expose many Tools), Command
 
 **Skill**:
 A discoverable package of instructions and supporting resources an agent may use during a Run. It remains distinct from mandatory Operating Instructions.
@@ -82,24 +101,30 @@ _Avoid_: MCP skill, Tool, Connection, Plugin
 The Engine-owned conclusion that a configured MCP server is enabled, launchable or reachable, authenticated, protocol-compatible, exposes the expected MCP features, and can be projected by the selected Harness. Required servers must be ready before a Run Plan is accepted; clients use the same result and reason to show Operation availability.
 _Avoid_: Installed, runtime `serverInfo`, UI-only validation
 
-**Script**:
-A named Workspace command the agent or user may invoke. Its stable name can be allowed, queried, or denied by Sandbox Policy without matching a free-form shell command.
-_Avoid_: Tool, hook, setup command
+**Command**:
+A user-invocable prompt template, in the Claude Code sense — identity, description, argument contract, and a template body, and nothing else. Harness, model, effort, and tool restrictions are deliberately omitted: a Command has no runtime to carry them into until interactive sessions land. Not a shell entry point.
+_Avoid_: Script (retired), Tool, Operation, shell command
+
+**Rules**:
+Reusable advisory guidance contributed at any scope, authored as markdown with frontmatter carrying glob-based path scoping and an always-apply flag. A contribution kind that is *not* a Run Plan member — Rules resolve into Instructions.
+Rules are advisory and can never satisfy a required need or weaken Operating Instructions. Instruction precedence, general to specific: global Rules → repo `AGENTS.md` → repo Rules → private-overlay Rules → Operating Instructions, last and highest.
+The frontmatter shape is a considered borrow from Cursor and Claude Code, which arrived at it independently — not a standard. `AGENTS.md` specifies a filename and closest-wins and nothing more.
+_Avoid_: Operating Instructions (those are mandatory and engine-authored), Skill, prompt
 
 **Middleware**:
-An engine-owned interceptor around the model loop lifecycle. It is portable across owned-runtime Runs and distinct from Hooks interpreted by an external Harness.
-_Avoid_: Hook, Operating Instructions
+An engine-owned interceptor around the model loop lifecycle, portable across owned-runtime Runs and distinct from Hooks interpreted by an external Harness. **Engine-only, and not a contribution kind** — a Plugin-shipped Middleware would run code inside the model loop, crossing ADR 0006's data-not-code line.
+_Avoid_: Hook, Operating Instructions, contribution kind
 
 **Hook**:
 A Harness-native lifecycle extension projected only when the selected Harness supports it. A Hook does not become Middleware merely because both react to lifecycle events.
-_Avoid_: Middleware, Script
+_Avoid_: Middleware, Command
 
 **Subagent**:
 A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool.
 _Avoid_: Tool, Harness, Operation
 
 **Sandbox policy**:
-The allow, ask, and deny rules governing Tools, Scripts, file writes, and network access during a Run.
+The allow, ask, and deny rules governing Tools, file writes, and network access during a Run.
 _Avoid_: Middleware, Harness execution boundary
 
 ### Workflows and operations
@@ -117,11 +142,11 @@ The routing relationship that selects what follows an operation from its outcome
 _Avoid_: Operation, workflow step
 
 **Operation definition**:
-The engine-authored contract for one operation: its behavior, defaults, required type-specific ids, Operating Instructions, and possible outcomes.
+The engine-authored contract for one operation: its behavior, defaults, required needs, Operating Instructions, and possible outcomes. A required need that cannot be satisfied — including a required Connection or MCP server that is not ready — is a Run Plan rejection, uniform across kinds. Rejection is a recorded failure with a reason; it never parks the item waiting for a human.
 _Avoid_: Playbook, run plan, operation settings
 
 **Operation settings**:
-The scoped choices that configure an operation, such as enablement, Harness, model, effort, optional Tools, Skills, and MCP servers, permissions, and allowed overrides.
+The scoped choices that configure an operation, such as enablement, Harness, model, effort, permissions, allowed overrides, and the contributions bound to the Operation Definition's declared needs. Settings bind; the Definition declares what is required; a Plugin only offers, and can never mark itself required for an Operation it does not own.
 _Avoid_: Playbook, operation definition, run plan
 
 **Operating instructions**:
@@ -139,14 +164,27 @@ Workflow
 ├── Operations and transitions
 │   └── Operation
 │       ├── Operation Definition
-│       │   └── Operating Instructions
+│       │   ├── Operating Instructions
+│       │   └── required needs
 │       └── Operation Settings
-│           └── optional Skills
+│           └── bound contributions
 │
 └── selected Operation + Work Context
     → Run Plan
-      ├── Operating Instructions
-      └── resolved Skills
+      ├── Harness Adapter
+      ├── Instructions        (Operating Instructions + resolved Rules)
+      ├── Tools
+      ├── Skills
+      ├── MCP
+      ├── Subagents
+      ├── Commands
+      ├── Hooks
+      ├── Middleware
+      ├── Sandbox (Workspace, Policy)
+      ├── Structured Output
+      ├── Persistence
+      ├── Connections
+      └── Provenance
     → Run
 ```
 
@@ -185,7 +223,9 @@ _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id`
 ### Runs
 
 **Run plan**:
-The immutable, engine-validated resolution of one operation and its Work Context, settings, Instructions, Tools, Skills, MCP, Middleware, Sandbox Policy, persistence, versions, and provenance. Plugin items retain their Plugin version and file-backed inputs retain a content revision; the plan is accepted before dispatch and never changed by runtime observations.
+The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Tools, Skills, MCP, Subagents, Commands, Hooks, Middleware, Sandbox (Workspace and Policy), Structured Output, Persistence, Connections, and Provenance.
+Run Plan members are **not** the same list as contribution kinds. Rules is a kind but not a member — it resolves into Instructions. Tools, Connections, and Middleware are members but never contributions.
+Every plan carries a mandatory **provenance stamp**: a Plugin item's declared version where it has one, a content revision where it does not. No contribution carries its own version — no platform in the field versions the capabilities inside a bundle. The plan is accepted before dispatch and never changed by runtime observations.
 _Avoid_: Run manifest, resolved stage, harness request, operation settings
 
 **Run**:
