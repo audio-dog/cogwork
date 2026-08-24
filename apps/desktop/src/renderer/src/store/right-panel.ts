@@ -22,13 +22,20 @@ export const FIXED_SURFACES: readonly Surface[] = [{ kind: "attention" }, { kind
 
 const DEFAULT_ACTIVE = surfaceId({ kind: "attention" });
 
+function updatedSurface(existing: Surface, next: Surface) {
+  if (existing.kind === "item" && next.kind === "item" && existing.runId && !next.runId) {
+    return existing;
+  }
+  return next;
+}
+
 function upsertSurface(surfaces: readonly Surface[], next: Surface) {
   const id = surfaceId(next);
   const existing = surfaces.findIndex((surface) => surfaceId(surface) === id);
 
   if (existing === -1) return [...surfaces, next];
 
-  return surfaces.map((surface, index) => (index === existing ? next : surface));
+  return surfaces.map((surface, index) => (index === existing ? updatedSurface(surface, next) : surface));
 }
 
 function fallbackActiveSurfaceId(surfaces: readonly Surface[], closingId: SurfaceId, active: SurfaceId) {

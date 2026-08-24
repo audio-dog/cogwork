@@ -1,15 +1,17 @@
-import { WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Schema } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FIXED_SURFACES, type Surface, surfaceId, useRightPanelStore } from "./right-panel";
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const workItem = Schema.decodeSync(WorkItemId);
+const runId = Schema.decodeSync(RunId);
 
-const item = (ws: string, id: string): Surface => ({
+const item = (ws: string, id: string, run?: string): Surface => ({
   kind: "item",
   workspace: workspace(ws),
   workItem: workItem(id),
+  ...(run ? { runId: runId(run) } : {}),
 });
 
 const reset = () =>
@@ -54,6 +56,15 @@ describe("right-panel store", () => {
     const state = useRightPanelStore.getState();
     expect(state.surfaces).toEqual([...FIXED_SURFACES, item("acme", "#50"), item("acme", "#51")]);
     expect(state.active).toBe("item:acme:#50");
+  });
+
+  it("keeps a selected run when the item opens again", () => {
+    const { openSurface } = useRightPanelStore.getState();
+    const historicalRun = item("acme", "#50", "run-1");
+    openSurface(historicalRun);
+    openSurface(item("acme", "#50"));
+
+    expect(useRightPanelStore.getState().surfaces).toEqual([...FIXED_SURFACES, historicalRun]);
   });
 
   it("tells apart the same work item id in different workspaces", () => {
