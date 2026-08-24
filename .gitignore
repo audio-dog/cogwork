@@ -9,7 +9,6 @@ skills-lock.json
 
 # Local generator output when targeting this repo as a project dir
 /.claude/
-/CLAUDE.md
 /.mcp.json
 
 .DS_Store
