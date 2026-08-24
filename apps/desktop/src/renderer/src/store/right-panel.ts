@@ -21,11 +21,6 @@ interface SurfaceDescriptor {
   readonly closable: boolean;
 }
 
-const toolSurfaceDescriptors = {
-  attention: { title: "Attention", icon: "focus", tooltip: undefined, closable: false },
-  activity: { title: "Activity", icon: "pulse", tooltip: undefined, closable: false },
-} satisfies Record<"attention" | "activity", SurfaceDescriptor>;
-
 export function surfaceId(surface: Surface): SurfaceId {
   return surface.kind === "item" ? `item:${surface.workspace}:${surface.workItem}` : surface.kind;
 }
@@ -34,7 +29,10 @@ export function describeSurface(surface: Surface): SurfaceDescriptor {
   if (surface.kind === "item") {
     return { title: surface.workItem, icon: "file-list", tooltip: surface.workspace, closable: true };
   }
-  return toolSurfaceDescriptors[surface.kind];
+  if (surface.kind === "attention") {
+    return { title: "Attention", icon: "focus", tooltip: undefined, closable: false };
+  }
+  return { title: "Activity", icon: "pulse", tooltip: undefined, closable: false };
 }
 
 export const FIXED_SURFACES: readonly Surface[] = [{ kind: "attention" }, { kind: "activity" }];

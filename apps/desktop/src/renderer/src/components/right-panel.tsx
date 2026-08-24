@@ -61,20 +61,16 @@ function tabClassName(active: boolean, padding: string) {
   return cn(baseTabClassName, padding, active ? activeTabClassName : inactiveTabClassName);
 }
 
-const surfaceIcons = {
-  focus: RiFocus2Line,
-  pulse: RiPulseLine,
-  "file-list": RiFileList2Line,
-};
-
 function SurfaceIcon({ icon }: { icon: ReturnType<typeof describeSurface>["icon"] }) {
-  const Icon = surfaceIcons[icon];
-  return <Icon className="size-3.5 shrink-0" />;
+  if (icon === "focus") return <RiFocus2Line className="size-3.5 shrink-0" />;
+  if (icon === "pulse") return <RiPulseLine className="size-3.5 shrink-0" />;
+  return <RiFileList2Line className="size-3.5 shrink-0" />;
 }
 
-function SurfaceTab({ surface, active }: { surface: Surface; active: boolean }) {
+function SurfaceTab({ surface }: { surface: Surface }) {
   const descriptor = describeSurface(surface);
   const id = surfaceId(surface);
+  const active = useRightPanelStore((state) => state.active === id);
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
   const trigger = (
@@ -145,7 +141,7 @@ export function RightPanel() {
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
           {surfaces.map((surface) => {
             const id = surfaceId(surface);
-            return <SurfaceTab key={id} surface={surface} active={active === id} />;
+            return <SurfaceTab key={id} surface={surface} />;
           })}
         </div>
         <div className="flex items-center gap-1 [-webkit-app-region:no-drag]">
