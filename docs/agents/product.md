@@ -35,15 +35,21 @@ capstone that proves the loop closed end to end, not an exit criterion.
 
 ## Who it is for
 
-**Today there is exactly one user and it is the maintainer.** cogwork builds cogwork, and
-dogfooding is the only feedback loop it has. A surface the maintainer would not open daily is
-not worth building yet, and "a user might want this" carries no weight while there is no such
-user.
+**cogwork is for software engineers.** That is the audience it is built for, and its vocabulary,
+surfaces, and defaults may assume it. The maintainer is the first of them and the only one today,
+using it daily and dogfooding it — cogwork builds cogwork — so their experience is the entire
+feedback loop. They are an instance of the audience, not the definition of it.
 
-**The audience trends toward casual non-coders.** As the proactive layer lands, the person
-being helped is less and less someone who reads a stack trace. Provider login UX and plain
-vocabulary get more valuable over time, not less — so an interface decision that only a
-maintainer could love is borrowing against that trend.
+**The ambition reaches past coders to casual non-coders.** As the proactive layer lands, the
+person being helped is less and less someone who reads a stack trace, and provider login UX and
+plain vocabulary get more valuable over time. It is an ambition rather than a current audience:
+do not trade an engineer's experience today against a non-coder who does not exist yet, and do
+not introduce vocabulary that will have to be unlearned.
+
+**Leave room for the user who is not here yet; build for the one who is.** Architecting or
+scaffolding against negative space that a future feature could fill costs little and often
+improves the shape of the thing you are building today — the [seams held open](#seams-held-open)
+below are that discipline written down. What waits is the feature itself, until someone needs it.
 
 ## Where we are
 
@@ -54,9 +60,9 @@ questions. For anything finer-grained than this, read the tracker.
 a contract, reshaping a schema, or deleting a command is free — do not design around
 compatibility that is owed to nobody.
 
-**Everything runs on one machine for one person.** There is no tenancy, no auth system, and no
-multi-user story to uphold. The contracts are nonetheless shaped to survive going remote, which
-is a design constraint, not a feature being built.
+**cogwork runs single-user and local.** One machine, one person's credentials, no tenancy and no
+auth system to uphold. The contracts are nonetheless shaped to survive going remote, which is a
+design constraint rather than a feature being built.
 
 **The premise is still being proved.** The bet — that an agent pipeline can carry well-defined
 work to a merged PR unattended — is not yet settled by evidence. Investment goes to the

@@ -35,9 +35,10 @@ this one says what the product *is*, the disposition says how the maintainer *de
   environment is a cache earning its load only when the lookup is expensive. Slices, sequencing,
   and slice-level status are barred; the document explicitly redirects "is X built yet" to the
   issue tracker.
-- **Position is recorded as an epoch, not a changelog.** Claims like "there is exactly one user and
-  it is the maintainer" and "nothing is publicly released" each license a default answer to a class
-  of questions, and no ticket landing changes them.
+- **Position is recorded as an epoch, not a changelog.** Claims like "nothing is publicly released"
+  and "cogwork runs single-user and local" each license a default answer to a class of questions,
+  and no ticket landing changes them. The epoch describes the project's situation, never its
+  audience — who cogwork is for is a separate, longer-lived claim.
 - **Capabilities are named, never numbered.** Mission control, the owned runtime, the proactive
   layer. The phase numbering *was* the sequencing claim, and sequencing is what rotted.
 - **Claims are cited by a bolded lead-in phrase, not a number**, so an insert never breaks a
