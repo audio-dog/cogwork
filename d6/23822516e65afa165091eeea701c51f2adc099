@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_04c0403b9ec1ad::t_c5b17e2e3d2a49 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "d623822516e65afa165091eeea701c51f2adc099",
+  "prompts": {},
+  "sessions": {
+    "s_04c0403b9ec1ad": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0361d-f671-77f0-bc62-eea6a1a4c694",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
