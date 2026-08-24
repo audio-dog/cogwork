@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_d621bc70c7fedf::t_a14a5959c25e6c 14-20,67,69,71,76
+  s_d621bc70c7fedf::t_d2908e69678f75 64-66,68,70,86
+  s_d621bc70c7fedf::t_6ac67fe6813142 72,75,77-85,87-90,92-110,146,148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "41d8f3c1d7cbe09325c138b2e76c31e5bba6fe8a",
+  "prompts": {},
+  "sessions": {
+    "s_d621bc70c7fedf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0353d-8687-7cf1-b940-490bb00c73b4",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
