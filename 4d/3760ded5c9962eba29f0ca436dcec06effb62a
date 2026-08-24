@@ -1,0 +1,26 @@
+scripts/vendor.mjs
+  s_1c78639d852e06::t_56bb3861926774 22
+  s_1c78639d852e06::t_f28bac5abbd39c 15,18-20,44,49-51
+  s_1c78639d852e06::t_e78316f9106612 13-14,24,27-29,52,54,58-66,68-70,74-77,80-81
+  s_1c78639d852e06::t_96a0fcabe4fe99 12,16-17,21,23,25-26,30-32,45-48,55,67,78-79,84
+  s_1c78639d852e06::t_189a32363f1bb7 34,36-42
+  s_1c78639d852e06::t_2894b82e60bd73 53,56-57,71-73
+  s_1c78639d852e06::t_20edc42bae4ed4 83
+  s_1c78639d852e06::t_28cd979eff87fd 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "4d3760ded5c9962eba29f0ca436dcec06effb62a",
+  "prompts": {},
+  "sessions": {
+    "s_1c78639d852e06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "166aa4b7-b9be-43d6-9a36-27e9e1c2003f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
