@@ -508,6 +508,25 @@ describe("recordActivitySession", () => {
       }).events,
     ).toEqual([first]);
   });
+
+  it("records repeated event payloads from one live stream", () => {
+    const repeated = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const first = recordActivitySession(initialActivitySession, {
+      events: [repeated],
+      engine: "up",
+      connection: "live",
+      atMillis: 100,
+    });
+
+    expect(
+      recordActivitySession(first, {
+        events: [repeated, repeated],
+        engine: "up",
+        connection: "live",
+        atMillis: 200,
+      }).events,
+    ).toEqual([repeated, repeated]);
+  });
 });
 
 describe("subscribeActivityFeed", () => {

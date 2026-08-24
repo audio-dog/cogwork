@@ -349,6 +349,8 @@ export interface ActivitySession {
   readonly arrivals: readonly number[];
   readonly synthesized: readonly ActivityRow[];
   readonly lifecycle: LifecycleState;
+  readonly sourceCount: number;
+  readonly sourceHead: string | null;
 }
 
 export const initialActivitySession: ActivitySession = {
@@ -357,6 +359,8 @@ export const initialActivitySession: ActivitySession = {
   arrivals: [],
   synthesized: [],
   lifecycle: initialLifecycleState,
+  sourceCount: 0,
+  sourceHead: null,
 };
 
 interface ActivitySessionSample {
@@ -373,12 +377,20 @@ const boundSession = <Value>(values: readonly Value[]) =>
 
 export const recordActivitySession = (session: ActivitySession, sample: ActivitySessionSample) => {
   const incoming = sample.events;
+  const sourceCount = incoming?.length ?? 0;
+  const sourceHead = incoming?.[0] ? eventKey(incoming[0]) : null;
+  const continuesSource =
+    incoming !== null &&
+    session.sourceCount > 0 &&
+    sourceCount >= session.sourceCount &&
+    sourceHead === session.sourceHead;
+  const candidates = continuesSource ? incoming.slice(session.sourceCount) : incoming;
   const knownEvents = new Set(session.eventKeys);
   const addedEvents =
-    incoming?.filter((event) => {
+    candidates?.filter((event) => {
       if (event._tag === "RunActivity") return false;
       const key = eventKey(event);
-      if (knownEvents.has(key)) return false;
+      if (!continuesSource && knownEvents.has(key)) return false;
       knownEvents.add(key);
       return true;
     }) ?? [];
@@ -386,7 +398,10 @@ export const recordActivitySession = (session: ActivitySession, sample: Activity
   const lifecycleUnchanged =
     lifecycle.state.engine === session.lifecycle.engine &&
     lifecycle.state.connection === session.lifecycle.connection;
-  if (addedEvents.length === 0 && lifecycle.rows.length === 0 && lifecycleUnchanged) return session;
+  const sourceUnchanged = sourceCount === session.sourceCount && sourceHead === session.sourceHead;
+  if (addedEvents.length === 0 && lifecycle.rows.length === 0 && lifecycleUnchanged && sourceUnchanged) {
+    return session;
+  }
 
   return {
     events: boundSession([...session.events, ...addedEvents]),
@@ -394,6 +409,8 @@ export const recordActivitySession = (session: ActivitySession, sample: Activity
     arrivals: boundSession([...session.arrivals, ...addedEvents.map(() => sample.atMillis)]),
     synthesized: boundSession([...session.synthesized, ...lifecycle.rows]),
     lifecycle: lifecycle.state,
+    sourceCount,
+    sourceHead,
   };
 };
 
