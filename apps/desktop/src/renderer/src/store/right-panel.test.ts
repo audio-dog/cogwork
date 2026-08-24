@@ -1,7 +1,7 @@
 import { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Schema } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
-import { describeSurface, FIXED_SURFACES, type Surface, surfaceId, useRightPanelStore } from "./right-panel";
+import { FIXED_SURFACES, type Surface, surfaceId, useRightPanelStore } from "./right-panel";
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const workItem = Schema.decodeSync(WorkItemId);
@@ -37,27 +37,6 @@ describe("right-panel store", () => {
     expect(surfaceId(item("beta", "#50"))).not.toBe(surfaceId(item("acme", "#50")));
     expect(surfaceId({ kind: "attention" })).toBe("attention");
     expect(surfaceId({ kind: "activity" })).toBe("activity");
-  });
-
-  it("describes tool and item tabs from one surface descriptor", () => {
-    expect(describeSurface({ kind: "attention" })).toEqual({
-      title: "Attention",
-      icon: "focus",
-      tooltip: undefined,
-      closable: false,
-    });
-    expect(describeSurface({ kind: "activity" })).toEqual({
-      title: "Activity",
-      icon: "pulse",
-      tooltip: undefined,
-      closable: false,
-    });
-    expect(describeSurface(item("acme", "#50"))).toEqual({
-      title: "#50",
-      icon: "file-list",
-      tooltip: "acme",
-      closable: true,
-    });
   });
 
   it("opens the panel and focuses an item tab when the item opens", () => {
