@@ -1,0 +1,21 @@
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_973e9c5f4c1505::t_fdd402d5f24ba0 3,23
+packages/engine/docs/adr/0002-restart-recovery-resumes-sessions.md
+  s_973e9c5f4c1505::t_fdd402d5f24ba0 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "c7fe0a40f47e1faededb3388e1815d5c041a5315",
+  "prompts": {},
+  "sessions": {
+    "s_973e9c5f4c1505": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0fbb65a3-3e44-4998-8586-f7be2f6b516d",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
