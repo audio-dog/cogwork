@@ -1,0 +1,59 @@
+packages/engine/src/executor.ts
+  s_c454b6a72caed7::t_f802277b73574b 620,646
+packages/contracts/CONTEXT.md
+  s_c454b6a72caed7::t_c4e86f65353aa6 24-25
+packages/engine/src/follow-up.ts
+  s_c454b6a72caed7::t_f802277b73574b 30-31
+packages/engine/src/worktree.test.ts
+  s_c454b6a72caed7::t_2fcf5f435c3fbf 131-151
+packages/engine/src/github/github.test.ts
+  s_c454b6a72caed7::t_2fcf5f435c3fbf 254-255,702-763
+  s_c454b6a72caed7::t_9e8db71e398eb2 764-767,769-803
+  s_c454b6a72caed7::t_76a15741c3ff44 768
+packages/engine/src/engine.test.ts
+  s_c454b6a72caed7::t_c827f4d0ebd027 233-234,618-619
+packages/engine/src/classify.test.ts
+  s_c454b6a72caed7::t_c827f4d0ebd027 36-37
+packages/engine/CONTEXT.md
+  s_c454b6a72caed7::t_c4e86f65353aa6 137
+packages/engine/skills/implement-agent/SKILL.md
+  s_c454b6a72caed7::t_c4e86f65353aa6 14
+packages/engine/src/worktree.ts
+  s_c454b6a72caed7::t_f802277b73574b 80,195
+packages/engine/src/follow-up.test.ts
+  s_c454b6a72caed7::t_c827f4d0ebd027 20-21
+packages/engine/src/executor.test.ts
+  s_c454b6a72caed7::t_2fcf5f435c3fbf 1503-1529
+packages/engine/src/github/provider.ts
+  s_c454b6a72caed7::t_f802277b73574b 81,170-171,180-183,185-196,206,208
+packages/engine/src/github/graphql.test.ts
+  s_c454b6a72caed7::t_c4e86f65353aa6 2,17-42
+  s_c454b6a72caed7::t_33331a4f4f19ff 43-44
+packages/engine/src/github/github-helpers.test.ts
+  s_c454b6a72caed7::t_c827f4d0ebd027 49-50
+packages/engine/src/github/client.ts
+  s_c454b6a72caed7::t_f802277b73574b 52-53,102-106,160-186,188-202,204-216,470-472,484,494-495
+  s_c454b6a72caed7::t_c4e86f65353aa6 187,203,473
+  s_c454b6a72caed7::t_9a0dad9342dc47 474-475
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_c454b6a72caed7::t_c4e86f65353aa6 7,13
+packages/engine/src/classify.ts
+  s_c454b6a72caed7::t_8b19c59d30a4f8 57,139
+  s_c454b6a72caed7::t_f802277b73574b 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "c89d5f39acb767541574f5a7a39e4720b7af350c",
+  "prompts": {},
+  "sessions": {
+    "s_c454b6a72caed7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a039c3-d513-71c2-a10e-df9f8bde507a",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
