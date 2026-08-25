@@ -85,6 +85,21 @@ describe("activity session", () => {
     expect(settled.previews.has("run-1")).toBe(false);
   });
 
+  it("does not recreate a terminal run's preview scratch state", () => {
+    const settled = ingestDaemonEvent(
+      initialActivitySession,
+      event({ _tag: "RunChanged", run: run({ status: "succeeded" }) }),
+      1,
+    );
+    const withLateActivity = ingestDaemonEvent(
+      settled,
+      activity("run-1", { type: "TEXT_MESSAGE_CONTENT", delta: "late" }),
+      2,
+    );
+
+    expect(withLateActivity.previews.has("run-1")).toBe(false);
+  });
+
   it("mints a distinct row identity for identical arrivals", () => {
     const duplicate = event({ _tag: "ItemRemoved", workspace: "acme", id: "42" });
     const session = [event({ _tag: "SeedEnd" }), duplicate, duplicate].reduce(

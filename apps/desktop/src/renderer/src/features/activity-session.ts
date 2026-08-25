@@ -110,6 +110,10 @@ const rowId = (ordinal: number) => `activity:${ordinal}`;
 const bound = <Value>(values: readonly Value[]) =>
   values.length <= defaultActivityLimit ? values : values.slice(-defaultActivityLimit);
 const terminal = (status: RunStatus) => status !== "running";
+const settledRun = (board: Board, runId: RunId) => {
+  const run = board.runs.get(runId);
+  return run !== undefined && terminal(run.status);
+};
 const stamp = (event: DaemonEvent, arrival: number) => event.emittedAtMillis ?? arrival;
 
 const classifiedState = (
@@ -232,7 +236,9 @@ export const ingestDaemonEvent = (
   const row = session.seed ? null : decodeEvent(event, arrival, nextOrdinal);
   const board = applyDaemonEvent(session.board, event);
   const updatedPreviews =
-    event._tag === "RunActivity" ? applyRunPreview(session.previews, event.activity) : session.previews;
+    event._tag === "RunActivity" && !settledRun(board, event.activity.runId)
+      ? applyRunPreview(session.previews, event.activity)
+      : session.previews;
   const previews =
     event._tag === "RunChanged" && terminal(event.run.status)
       ? withoutRunPreview(updatedPreviews, event.run.id)
