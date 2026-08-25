@@ -259,6 +259,7 @@ const contributions: readonly Contribution[] = [
     summary: "Turns a merged range into release notes.",
     file: ".cogwork/skills/release-notes/SKILL.md",
     definedAt: "workspace-input",
+    definedIn: cogworkWorkspaceId,
     load: { _tag: "loaded" },
     rows: [
       {
@@ -277,6 +278,7 @@ const contributions: readonly Contribution[] = [
     summary: "Runs biome over the staged set before a commit.",
     file: ".cogwork/hooks/lint-staged.json",
     definedAt: "workspace-input",
+    definedIn: cogworkWorkspaceId,
     load: { _tag: "loaded" },
     rows: [],
   },
@@ -289,12 +291,32 @@ const contributions: readonly Contribution[] = [
     summary: "Your own scratch conventions for this checkout.",
     file: "~/.cogwork/overlays/ws_01H8Z3/skills/scratch-notes/SKILL.md",
     definedAt: "private-overlay",
+    definedIn: cogworkWorkspaceId,
     load: { _tag: "loaded" },
     rows: [
       {
         scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
         value: true,
         source: "Control store",
+      },
+    ],
+  },
+  {
+    // A second workspace with something of its own, so the menu is not one populated repo.
+    id: "local/rules/forge-style",
+    kind: "rules",
+    localName: "forge-style",
+    authority: { _tag: "local" },
+    summary: "Coding conventions committed to the clanker-forge repository.",
+    file: ".cogwork/rules/forge-style.md",
+    definedAt: "workspace-input",
+    definedIn: clankerWorkspaceId,
+    load: { _tag: "loaded" },
+    rows: [
+      {
+        scope: { kind: "workspace-input", workspaceId: clankerWorkspaceId },
+        value: true,
+        source: ".cogwork/settings.json",
       },
     ],
   },
@@ -306,6 +328,7 @@ const contributions: readonly Contribution[] = [
     summary: "Prompts for a release checklist.",
     file: ".cogwork/settings.json",
     definedAt: "workspace-input",
+    definedIn: clankerWorkspaceId,
     load: { _tag: "loaded" },
     rows: [
       {

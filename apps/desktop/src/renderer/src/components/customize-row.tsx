@@ -27,6 +27,7 @@ import {
   scopeOriginLabels,
   scopeShortLabels,
 } from "../features/configuration-model";
+import { placeholderConfiguration } from "../features/configuration-placeholder";
 import {
   enableScopeFor,
   offeredElsewhere,
@@ -41,15 +42,19 @@ import {
   ReadinessBadge,
   scopeIcons,
 } from "./configuration-atoms";
-import { useWorkspaceId } from "./customize-atoms";
 
 /** Where a contribution's file sits. Shown on every row, because it is the axis being filtered. */
 export function DefinedAtBadge({ contribution }: { contribution: Contribution }) {
   const Icon = scopeIcons[contribution.definedAt];
+  // Several workspaces can be on screen at once now, so the badge names the one it belongs to.
+  const workspaceName = placeholderConfiguration.workspaces.find(
+    (workspace) => workspace.id === contribution.definedIn,
+  )?.name;
   return (
     <Tooltip>
       <TooltipTrigger render={<Badge variant="outline" className="cursor-help" />}>
         <Icon />
+        {workspaceName ? `${workspaceName} · ` : ""}
         {scopeShortLabels[contribution.definedAt]}
       </TooltipTrigger>
       <TooltipContent className="max-w-80">
@@ -65,12 +70,14 @@ export function DefinedAtBadge({ contribution }: { contribution: Contribution })
 export function CustomizeRow({ contribution }: { contribution: Contribution }) {
   const cells = useConfigurationDraftStore((state) => state.cells);
   const setCell = useConfigurationDraftStore((state) => state.setCell);
-  const workspaceId = useWorkspaceId();
 
+  // The workspace comes from the contribution, not from a picker: a contribution lives in one
+  // place, and that place already names its workspace.
+  const view = { workspaceId: contribution.definedIn };
   const edited = withDraft(contribution, cells);
-  const resolved = resolveEnablement(edited, { workspaceId });
-  const target = enableScopeFor(contribution, workspaceId);
-  const spread = settingsSpreadAcross(edited, { workspaceId });
+  const resolved = resolveEnablement(edited, view);
+  const target = enableScopeFor(contribution);
+  const spread = settingsSpreadAcross(edited, view);
   const failed = contribution.load._tag === "failed";
   const Icon = kindIcons[contribution.kind];
   const on = target ? draftCellAt(contribution, target, cells) === "on" : resolved.effective === true;

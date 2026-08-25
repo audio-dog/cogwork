@@ -53,6 +53,13 @@ export const scopeDescriptions: Record<ScopeKind, string> = {
   "private-overlay": "Yours, for this workspace only, and never committed.",
 };
 
+/** The terse form, for a menu row where a full sentence would be truncated. */
+export const scopeHints: Record<ScopeKind, string> = {
+  "runtime-host": "Available in every workspace",
+  "workspace-input": "Committed, shared with everyone",
+  "private-overlay": "Not committed, only yours",
+};
+
 /** Phrased as a place, for a row that says where one contribution came from. */
 export const scopeOriginLabels: Record<ScopeKind, string> = {
   "runtime-host": "on this machine",
@@ -203,6 +210,12 @@ export interface Contribution {
    * a plain description instead of minting one.
    */
   readonly definedAt: ScopeKind;
+  /**
+   * Which workspace, when `definedAt` is one of the two workspace-bound Scopes. Absent for anything
+   * on the machine. A place is not fully named without it: "the repository" is not an answer until
+   * you say which repository, and two workspaces here share one git remote.
+   */
+  readonly definedIn?: WorkspaceId;
   readonly load: LoadState;
   readonly rows: readonly EnablementRow[];
   /** Engine-owned, MCP servers only. Clients show Operation availability from the same result. */

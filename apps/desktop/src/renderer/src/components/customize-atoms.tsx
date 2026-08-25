@@ -1,48 +1,155 @@
-// PROTOTYPE — pieces every Customize variant needs, kept to what is genuinely neutral.
+// PROTOTYPE — the parts of Customize every split-dropdown variant holds constant.
 //
-// The workspace picker is here because all three variants need the same one and none of them is
-// arguing about it. The filter controls are *not* here: those are the thing being compared.
+// The page shell, the kind pills and the outer split pill are identical in all three variants, so
+// the only thing that differs on screen is the menu body. That is what is being compared.
 
-import { Label } from "@cogwork/ui/components/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@cogwork/ui/components/select";
-import type { WorkspaceId } from "../features/configuration-model";
-import { placeholderConfiguration } from "../features/configuration-placeholder";
-import { useCustomizeViewStore } from "../store/customize-view";
+import { Badge } from "@cogwork/ui/components/badge";
+import { Button } from "@cogwork/ui/components/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
+import { ItemGroup } from "@cogwork/ui/components/item";
+import { Popover, PopoverContent, PopoverTrigger } from "@cogwork/ui/components/popover";
+import { Separator } from "@cogwork/ui/components/separator";
+import { RiArrowDownSLine, RiBox3Line, RiSearchLine } from "@remixicon/react";
+import type { ReactNode } from "react";
+import { contributionKinds, kindLabelsPlural } from "../features/configuration-model";
+import { scopeIcons } from "./configuration-atoms";
+import { PluginsPanel } from "./configuration-plugins-panel";
+import { allPlaceKeys, type Facet, kindCount, summarize, visibleContributions } from "./customize-places";
+import { CustomizeRow } from "./customize-row";
 
-const { workspaces } = placeholderConfiguration;
+const MachineIcon = scopeIcons["runtime-host"];
 
-/** Labels must be declared or base-ui shows the raw value; and the path, not the remote, is what
- *  tells two clones of one repository apart. */
-const workspaceItems = Object.fromEntries(
-  workspaces.map((workspace) => [workspace.id, `${workspace.name} — ${workspace.checkoutPath}`]),
-);
-
-export function WorkspacePicker({ label = "Workspace" }: { label?: string }) {
-  const workspaceId = useCustomizeViewStore((state) => state.workspaceId);
-  const setWorkspaceId = useCustomizeViewStore((state) => state.setWorkspaceId);
+/**
+ * The split pill: a summary segment and a caret segment, divided. Clicking the summary is the
+ * escape hatch back to everything, so no menu design can trap a person in an empty list.
+ */
+export function SplitPlacePill({
+  places,
+  facet,
+  onSetAll,
+  menuWidth = "26rem",
+  children,
+}: {
+  places: readonly string[];
+  facet: Facet;
+  onSetAll: (next: readonly string[]) => void;
+  menuWidth?: string;
+  children: ReactNode;
+}) {
+  const everywhere = places.length === allPlaceKeys.length;
   return (
-    <div className="flex items-center gap-2">
-      <Label className="shrink-0 text-xs text-muted-foreground">{label}</Label>
-      <Select
-        items={workspaceItems}
-        value={workspaceId}
-        onValueChange={(value) => setWorkspaceId(String(value) as WorkspaceId)}
+    <div className="flex items-stretch rounded-full border border-input">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="rounded-s-full rounded-e-none border-0 pe-2"
+        onClick={() => onSetAll(everywhere ? [] : allPlaceKeys)}
       >
-        <SelectTrigger size="sm" className="w-72">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {workspaces.map((workspace) => (
-            <SelectItem key={workspace.id} value={workspace.id}>
-              {workspace.name} — {workspace.checkoutPath}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <MachineIcon />
+        <span className="max-w-56 truncate">{summarize(places, facet)}</span>
+      </Button>
+      <Separator orientation="vertical" />
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-s-none rounded-e-full border-0 px-1.5"
+              aria-label="Choose where to look"
+            />
+          }
+        >
+          <RiArrowDownSLine />
+        </PopoverTrigger>
+        <PopoverContent align="start" className="p-0" style={{ width: menuWidth }}>
+          {children}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
 
-export function useWorkspaceId(): WorkspaceId {
-  return useCustomizeViewStore((state) => state.workspaceId);
+/** Search, the kind pills with the place picker beside them, and the list. Identical everywhere. */
+export function CustomizePageShell({
+  facet,
+  onFacet,
+  places,
+  query,
+  onQuery,
+  picker,
+}: {
+  facet: Facet;
+  onFacet: (facet: Facet) => void;
+  places: readonly string[];
+  query: string;
+  onQuery: (query: string) => void;
+  picker: ReactNode;
+}) {
+  const visible = visibleContributions(facet, places, query);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <InputGroup>
+        <InputGroupInput
+          placeholder="Search contributions…"
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+        />
+        <InputGroupAddon>
+          <RiSearchLine />
+        </InputGroupAddon>
+      </InputGroup>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {picker}
+        <Separator orientation="vertical" className="h-6" />
+        <Button
+          variant={facet === "plugins" ? "secondary" : "outline"}
+          size="sm"
+          className="rounded-full"
+          onClick={() => onFacet("plugins")}
+        >
+          <RiBox3Line data-icon="inline-start" />
+          Plugins
+        </Button>
+        {contributionKinds.map((kind) => (
+          <Button
+            key={kind}
+            variant={facet === kind ? "secondary" : "outline"}
+            size="sm"
+            className="rounded-full"
+            onClick={() => onFacet(kind)}
+          >
+            {kindLabelsPlural[kind]}
+            <Badge variant="ghost" className="ms-1 px-1">
+              {kindCount(kind, places)}
+            </Badge>
+          </Button>
+        ))}
+      </div>
+
+      {facet === "plugins" ? (
+        <PluginsPanel />
+      ) : visible.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Nothing here</EmptyTitle>
+            <EmptyDescription>
+              {places.length === 0
+                ? "No place is checked, so nothing can show."
+                : "Nothing of this kind lives in the checked places."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ItemGroup className="gap-2">
+          {visible.map((contribution) => (
+            <CustomizeRow key={contribution.id} contribution={contribution} />
+          ))}
+        </ItemGroup>
+      )}
+    </div>
+  );
 }

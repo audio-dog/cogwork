@@ -244,13 +244,22 @@ export function scopeTally(
  * one ADR 0013 cares about: a repository may ship an executable contribution but may never enable
  * one, so a repo-defined Hook or MCP server is switched on in your own overlay instead.
  */
-export function enableScopeFor(contribution: Contribution, workspaceId?: WorkspaceId): ScopeRef | undefined {
+export function enableScopeFor(contribution: Contribution): ScopeRef | undefined {
   const permitted = enablementScopes[contribution.kind];
   const preferred = permitted.includes(contribution.definedAt) ? contribution.definedAt : permitted.at(-1);
   if (preferred === undefined) return undefined;
   if (preferred === "runtime-host") return { kind: preferred };
-  if (workspaceId === undefined) return undefined;
-  return { kind: preferred, workspaceId };
+  // A workspace-bound Scope belongs to the workspace this contribution lives in — never to
+  // whichever workspace happens to be selected in some picker.
+  if (contribution.definedIn === undefined) return undefined;
+  return { kind: preferred, workspaceId: contribution.definedIn };
+}
+
+/** The place a contribution's file sits, fully named. */
+export function definedScope(contribution: Contribution): ScopeRef {
+  return contribution.definedIn === undefined
+    ? { kind: contribution.definedAt }
+    : { kind: contribution.definedAt, workspaceId: contribution.definedIn };
 }
 
 /** True when a repository offers this but cannot be the place it is turned on. */

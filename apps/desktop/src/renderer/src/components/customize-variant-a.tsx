@@ -1,154 +1,155 @@
-// PROTOTYPE — Customize, Variant A: the location rail.
+// PROTOTYPE — split dropdown, menu A: the matrix.
 //
-// The rail from the last round, rebuilt on the corrected model. Two things changed and both matter
-// more than they look:
+// The drill-in dies because the hierarchy does. One row per workspace, and the two places become
+// two aligned checkbox columns, so every place on the machine is visible and one click away the
+// moment the menu opens. No workspace has to be "selected" to reveal anything.
 //
-//   1. **No indent, no ladder.** The three are equal-weight places a file can live, not rungs. The
-//      earlier version drew a staircase and taught precedence, which was the wrong idea.
-//   2. **Multi-select, not a mode.** Because a contribution is turned on where it lives, the rail
-//      never has to answer "where am I writing". It only narrows what is on screen, so checking two
-//      boxes is meaningful and checking none is just an empty list.
-//
-// What survives from the mode version is the part that earned its keep: a rail has room to say what
-// each place *means* and how much lives there, which a segmented control never did.
+// It also buys something no other shape here can offer: the column headings toggle a whole column,
+// so "every repository, none of my private overlays" is one click. That is a real question — it is
+// the difference between what your team shares and what only you have.
 
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Checkbox } from "@cogwork/ui/components/checkbox";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
-import { ItemGroup } from "@cogwork/ui/components/item";
 import { Label } from "@cogwork/ui/components/label";
 import { Separator } from "@cogwork/ui/components/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiSearchLine } from "@remixicon/react";
 import { useState } from "react";
-import { type ScopeKind, scopeDescriptions, scopeLabels, scopeOrder } from "../features/configuration-model";
+import {
+  scopeDescriptions,
+  scopeHints,
+  scopeKey,
+  scopeLabels,
+  scopeShortLabels,
+} from "../features/configuration-model";
+import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { scopeIcons } from "./configuration-atoms";
-import { PluginsPanel } from "./configuration-plugins-panel";
-import { WorkspacePicker } from "./customize-atoms";
-import { definedAtCount, type Facet, visibleContributions } from "./customize-filter";
-import { KindPills } from "./customize-kind-pills";
-import { CustomizeRow } from "./customize-row";
+import { CustomizePageShell, SplitPlacePill } from "./customize-atoms";
+import {
+  allPlaceKeys,
+  countAt,
+  type Facet,
+  machinePlace,
+  toggle,
+  toggleColumn,
+  workspaceScopeKinds,
+} from "./customize-places";
 
-const workspaceBound: readonly ScopeKind[] = ["workspace-input", "private-overlay"];
+const { workspaces } = placeholderConfiguration;
+const MachineIcon = scopeIcons["runtime-host"];
 
-function LocationCard({
-  kind,
-  checked,
-  count,
-  onToggle,
+function MatrixMenu({
+  places,
+  facet,
+  onChange,
 }: {
-  kind: ScopeKind;
-  checked: boolean;
-  count: number;
-  onToggle: () => void;
+  places: readonly string[];
+  facet: Facet;
+  onChange: (next: readonly string[]) => void;
 }) {
-  const Icon = scopeIcons[kind];
+  const machineKey = scopeKey(machinePlace);
+
   return (
-    <Label
-      className={cn(
-        "flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition-colors",
-        checked ? "border-primary bg-primary/5" : "border-border hover:bg-accent",
-      )}
-    >
-      <span className="flex items-center gap-2">
-        <Icon />
-        <span className="text-sm font-medium">{scopeLabels[kind]}</span>
-        <Checkbox checked={checked} onCheckedChange={onToggle} className="ms-auto" />
-      </span>
-      <span className="text-xs font-normal text-muted-foreground">{scopeDescriptions[kind]}</span>
-      <Badge variant={count > 0 ? "outline" : "ghost"} className="mt-1 w-fit">
-        {count} here
-      </Badge>
-    </Label>
+    <div className="flex flex-col">
+      {/* The machine has no columns — it is one place. That is the split in the split menu. */}
+      <Label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-accent">
+        <MachineIcon />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-sm font-medium">{scopeLabels["runtime-host"]}</span>
+          <span className="text-xs font-normal text-muted-foreground">{scopeHints["runtime-host"]}</span>
+        </span>
+        <Badge variant="ghost" className="px-1">
+          {countAt(machinePlace, facet)}
+        </Badge>
+        <Checkbox
+          checked={places.includes(machineKey)}
+          onCheckedChange={() => onChange(toggle(places, machineKey))}
+        />
+      </Label>
+
+      <Separator />
+
+      <div className="flex flex-col p-1">
+        {/* Column headings, which are also column toggles. */}
+        <div className="flex items-end gap-2 px-2 pt-2 pb-1">
+          <span className="flex-1 text-xs text-muted-foreground">Workspaces</span>
+          {workspaceScopeKinds.map((kind) => (
+            <Tooltip key={kind}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="w-24 justify-center px-1"
+                    onClick={() => onChange(toggleColumn(places, kind))}
+                  />
+                }
+              >
+                {scopeShortLabels[kind]}
+              </TooltipTrigger>
+              <TooltipContent className="max-w-72">
+                {scopeDescriptions[kind]} Click to check or clear this column for every workspace.
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
+
+        {workspaces.map((workspace) => (
+          <div key={workspace.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm">{workspace.name}</span>
+              {/* The path, not the remote: two of these share one remote. */}
+              <span className="truncate font-mono text-xs text-muted-foreground">
+                {workspace.checkoutPath}
+              </span>
+            </span>
+            {workspaceScopeKinds.map((kind) => {
+              const place = { kind, workspaceId: workspace.id };
+              const key = scopeKey(place);
+              const count = countAt(place, facet);
+              return (
+                <Label
+                  key={kind}
+                  className={cn(
+                    "flex w-24 cursor-pointer items-center justify-center gap-1.5 rounded px-1 py-1",
+                    "hover:bg-background",
+                  )}
+                >
+                  <Badge variant="ghost" className="px-1 text-[11px]">
+                    {count}
+                  </Badge>
+                  <Checkbox
+                    checked={places.includes(key)}
+                    onCheckedChange={() => onChange(toggle(places, key))}
+                  />
+                </Label>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
 export function CustomizeVariantA() {
   const [facet, setFacet] = useState<Facet>("skill");
-  const [places, setPlaces] = useState<readonly ScopeKind[]>(scopeOrder);
+  const [places, setPlaces] = useState<readonly string[]>(allPlaceKeys);
   const [query, setQuery] = useState("");
 
-  const toggle = (kind: ScopeKind) =>
-    setPlaces((current) =>
-      current.includes(kind) ? current.filter((entry) => entry !== kind) : [...current, kind],
-    );
-
-  const visible = visibleContributions(facet, places, query);
-  const showWorkspace = places.some((kind) => workspaceBound.includes(kind));
-
   return (
-    <div className="flex flex-col gap-4">
-      <InputGroup>
-        <InputGroupInput
-          placeholder="Search contributions…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <InputGroupAddon>
-          <RiSearchLine />
-        </InputGroupAddon>
-      </InputGroup>
-
-      <KindPills facet={facet} places={places} onSelect={setFacet} />
-
-      {facet === "plugins" ? (
-        <PluginsPanel />
-      ) : (
-        <div className="flex min-h-0 gap-6">
-          <div className="flex w-72 shrink-0 flex-col gap-2 self-start">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">Where it lives</span>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setPlaces(places.length === scopeOrder.length ? [] : scopeOrder)}
-              >
-                {places.length === scopeOrder.length ? "None" : "All"}
-              </Button>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {scopeOrder.map((kind) => (
-                <LocationCard
-                  key={kind}
-                  kind={kind}
-                  checked={places.includes(kind)}
-                  count={definedAtCount(kind, facet)}
-                  onToggle={() => toggle(kind)}
-                />
-              ))}
-            </div>
-            {showWorkspace ? (
-              <>
-                <Separator className="my-1" />
-                <WorkspacePicker label="in" />
-              </>
-            ) : null}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            {visible.length === 0 ? (
-              <Empty>
-                <EmptyHeader>
-                  <EmptyTitle>Nothing here</EmptyTitle>
-                  <EmptyDescription>
-                    {places.length === 0
-                      ? "No place is checked, so nothing can show."
-                      : "Nothing of this kind lives in the checked places."}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <ItemGroup className="gap-2">
-                {visible.map((contribution) => (
-                  <CustomizeRow key={contribution.id} contribution={contribution} />
-                ))}
-              </ItemGroup>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    <CustomizePageShell
+      facet={facet}
+      onFacet={setFacet}
+      places={places}
+      query={query}
+      onQuery={setQuery}
+      picker={
+        <SplitPlacePill places={places} facet={facet} onSetAll={setPlaces} menuWidth="30rem">
+          <MatrixMenu places={places} facet={facet} onChange={setPlaces} />
+        </SplitPlacePill>
+      }
+    />
   );
 }

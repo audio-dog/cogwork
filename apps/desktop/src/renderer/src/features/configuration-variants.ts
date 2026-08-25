@@ -25,21 +25,21 @@ export interface VariantDefinition {
 export const variants: readonly VariantDefinition[] = [
   {
     key: "A",
-    name: "Location rail",
+    name: "Matrix",
     claim:
-      "Three equal cards down the left — no indent and no ladder, because these are places a file lives, not rungs. Multi-select: it narrows what is on screen and never decides where a change lands.",
+      "One row per workspace and two aligned checkbox columns. Nothing is nested, so nothing needs revealing — and the column headings toggle every workspace's repo, or every private overlay, at once.",
   },
   {
     key: "B",
-    name: "Location columns",
+    name: "Two panes",
     claim:
-      "One column per place, and a row sits in the column it lives in. The headings are the filter. When a repository ships something it cannot enable, the marker and the switch land in different columns.",
+      "Workspaces on the left, that workspace's places on the right. Browsing costs no clicks — the pointer alone reveals each one — and it is the only shape that still works at twenty workspaces.",
   },
   {
     key: "C",
-    name: "Split dropdown",
+    name: "Segmented rows",
     claim:
-      "One divided pill inline with the kind filters, and a menu split the same way — machine on top, workspaces below. The only control that can name a workspace and a place in a single click.",
+      "One row per workspace, its two places as chips on the right carrying their own state and count. The most compact and the least abstract, at the cost of any whole-column action.",
   },
 ];
 

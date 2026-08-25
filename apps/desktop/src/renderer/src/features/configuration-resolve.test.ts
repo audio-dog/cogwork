@@ -161,7 +161,7 @@ describe("where a contribution lives, and where it is turned on", () => {
     const skill = required("local/skill/release-notes");
     expect(skill.definedAt).toBe("workspace-input");
     // A Skill may be enabled at the repo, so nothing is redirected.
-    expect(enableScopeFor(skill, cogworkWorkspaceId)?.kind).toBe("workspace-input");
+    expect(enableScopeFor(skill)?.kind).toBe("workspace-input");
     expect(offeredElsewhere(skill)).toBe(false);
   });
 
@@ -170,13 +170,16 @@ describe("where a contribution lives, and where it is turned on", () => {
     expect(hook.definedAt).toBe("workspace-input");
     // A repository may ship the file and may never start a process on your machine.
     expect(offeredElsewhere(hook)).toBe(true);
-    expect(enableScopeFor(hook, cogworkWorkspaceId)?.kind).toBe("private-overlay");
+    const target = enableScopeFor(hook);
+    expect(target?.kind).toBe("private-overlay");
+    // The overlay of the workspace it lives in — not of whichever workspace a picker had selected.
+    expect(target?.workspaceId).toBe(hook.definedIn);
   });
 
   it("keeps a machine-defined contribution on the machine", () => {
     const mcp = required("plugin:linear/mcp/linear");
     expect(mcp.definedAt).toBe("runtime-host");
-    expect(enableScopeFor(mcp, cogworkWorkspaceId)?.kind).toBe("runtime-host");
+    expect(enableScopeFor(mcp)?.kind).toBe("runtime-host");
   });
 
   it("puts every contribution in exactly one place", () => {
