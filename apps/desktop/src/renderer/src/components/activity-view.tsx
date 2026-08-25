@@ -57,7 +57,7 @@ export function useActivityView() {
 export function ActivityViewProvider({ children }: { children: ReactNode }) {
   const feed = useActivityFeed();
   const clock = useNow();
-  const openSurface = useRightPanelStore((state) => state.openSurface);
+  const openItem = useRightPanelStore((state) => state.openItem);
   const [query, setQuery] = useState("");
   const [verbose, setVerbose] = useState(false);
   const [frozen, setFrozen] = useState(false);
@@ -88,20 +88,14 @@ export function ActivityViewProvider({ children }: { children: ReactNode }) {
   const openRow = (row: ActivityRow) => {
     const entity = row.entity;
     if (!entity) return;
-    openSurface({
-      kind: "item",
-      workspace: entity.workspace,
-      workItem: entity.type === "run" ? entity.workItem : entity.id,
-      ...(entity.type === "run" ? { runId: entity.id, run: entity.run } : {}),
-    });
+    openItem(
+      entity.workspace,
+      entity.type === "run" ? entity.workItem : entity.id,
+      entity.type === "run" ? entity.run : undefined,
+    );
   };
   const openRun = (run: NowState["runs"][number]) => {
-    openSurface({
-      kind: "item",
-      workspace: run.workspace,
-      workItem: run.workItem,
-      runId: run.runId,
-    });
+    openItem(run.workspace, run.workItem, run.runId);
   };
   const filter: FunnelFilterContextValue = {
     state: { options, selected: selection.selected },
