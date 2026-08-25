@@ -722,9 +722,10 @@ export function ItemSurfaceTab({
   const active = useRightPanelStore((state) => state.active === id);
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
+  const Tab = active ? SurfaceTab.Active : SurfaceTab.Inactive;
 
   return (
-    <SurfaceTab.Root active={active}>
+    <Tab>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -737,6 +738,6 @@ export function ItemSurfaceTab({
         <TooltipContent side="bottom">{workspace}</TooltipContent>
       </Tooltip>
       <SurfaceTab.Close label={workItem} onClick={() => closeSurface(id)} />
-    </SurfaceTab.Root>
+    </Tab>
   );
 }

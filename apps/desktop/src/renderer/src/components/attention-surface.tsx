@@ -14,15 +14,16 @@ export function AttentionSurfaceTab() {
   const active = useRightPanelStore((state) => state.active === "attention");
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
+  const Tab = active ? SurfaceTab.Active : SurfaceTab.Inactive;
 
   return (
-    <SurfaceTab.Root active={active}>
+    <Tab>
       <SurfaceTab.Button onClick={() => setActive("attention")}>
         <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
       <SurfaceTab.Close label={title} onClick={() => closeSurface("attention")} />
-    </SurfaceTab.Root>
+    </Tab>
   );
 }
 

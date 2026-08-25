@@ -5,15 +5,16 @@ import type { ReactNode } from "react";
 
 const baseClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
 
-function SurfaceTabRoot({ active, children }: { active: boolean; children: ReactNode }) {
+function SurfaceTabActive({ children }: { children: ReactNode }) {
+  return <div className={cn(baseClassName, "bg-accent text-foreground pl-2 pr-1")}>{children}</div>;
+}
+
+function SurfaceTabInactive({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
         baseClassName,
-        "pl-2 pr-1",
-        active
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+        "text-muted-foreground hover:bg-accent/60 hover:text-foreground pl-2 pr-1",
       )}
     >
       {children}
@@ -38,7 +39,8 @@ function SurfaceTabClose({ label, onClick }: { label: string; onClick: () => voi
 }
 
 export const SurfaceTab = {
-  Root: SurfaceTabRoot,
+  Active: SurfaceTabActive,
+  Inactive: SurfaceTabInactive,
   Button: SurfaceTabButton,
   Close: SurfaceTabClose,
 };
