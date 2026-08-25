@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_b219f334323954::t_a42f844f3ac2a5 14,54,56-63,67,87,115
+  s_b219f334323954::t_45daf8304ffcbc 2,6,12,68-70,72,74-76,78,82,84-85,120,134-157,159-160,169-171,185-187,192,200
+  s_b219f334323954::t_2eea166014db3b 166
+  s_b219f334323954::t_ff2700968ed3c9 13
+  s_b219f334323954::t_fcd7dbeef41445 158
+  s_b219f334323954::t_8843623d76443d 161
+  s_b219f334323954::t_ad0a1f58211da7 168
+apps/desktop/src/renderer/src/components/surface-catalog.tsx
+  s_b219f334323954::t_d1631d674b15a1 1-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "f53bc66f2ae69a174b5716cdd24ff00e65c90ef7",
+  "prompts": {},
+  "sessions": {
+    "s_b219f334323954": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a036a8-d832-7930-ac55-878f416acac8",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
