@@ -1,7 +1,7 @@
 import { Button } from "@cogwork/ui/components/button";
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiCloseLine } from "@remixicon/react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 const baseClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
 
@@ -22,9 +22,9 @@ function SurfaceTabInactive({ children }: { children: ReactNode }) {
   );
 }
 
-function SurfaceTabButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+function SurfaceTabButton({ className, children, ...props }: ComponentProps<typeof Button>) {
   return (
-    <Button className="min-w-0" size="xs" variant="ghost" onClick={onClick}>
+    <Button {...props} className={cn("min-w-0", className)} size="xs" variant="ghost">
       {children}
     </Button>
   );
