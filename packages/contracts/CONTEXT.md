@@ -44,7 +44,8 @@ _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot neve
 
 **Settings profile**:
 The principal-owned configuration source for installed plugins, connections, and defaults shared across workspaces and agent activity.
-_Avoid_: User settings, global config
+**Installing a Plugin writes here and nowhere else** — by elimination, since the Workspace input may not enable executable behaviour, the Runtime host holds no contributions, and the overlay is per-workspace while an install is not. "Shared across workspaces" is not shared across machines: nothing synchronizes a Settings profile today, so an install is machine-local in practice and no design may assume otherwise.
+_Avoid_: User settings, global config, portable install
 
 **Runtime host**:
 The execution environment that binds portable configuration to machine-specific checkout paths, installed harnesses, and local credential storage.
@@ -85,7 +86,30 @@ _Avoid_: Merge (only one of the operators), precedence (only one axis of three),
 
 **Plugin**:
 A first-party install-and-setup bundle. Its manifest **points at files** rather than inlining definitions, and declares which Connections it requires. `version` is optional — a Plugin is identified by its declared version or, absent one, by content revision. Each contribution has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
-_Avoid_: Capability (retired — there is no umbrella noun), component, marketplace listing
+A Plugin is **a collection of contributions and nothing more**: it contributes no behaviour of its own, so **there is no human-written Plugin on / off**. Install and uninstall are the only Plugin-level states a person writes. Where a Plugin-level "off" ever appears it is Engine-observed status, never a setting competing with a contribution's own.
+_Avoid_: Capability (retired — there is no umbrella noun), component, marketplace listing, Plugin enablement
+
+**Install record**:
+The authority for *this Plugin is installed*, held in the Settings profile. Keyed by `pluginId` alone, so **one resolved identity is installed at a time** — a second would give two contributions the same `<authority>/<kind>/<localName>`, which is the *ambiguous* class. It carries the Plugin source, the resolved identity, whether that identity is pinned, the owning `Principal`, and a revision for stale-write detection. Reverting is an install at a named resolved identity, not a distinct operation, so no install history is kept.
+Update may rewrite the resolved identity and the revision, and **never** the `pluginId` or the Plugin source. A source that changes under a stable name is a proposal that needs an explicit act, because the source is the provenance the plugin layer is trusted by.
+_Avoid_: Plugin (the bundle, not the record), install cache, provisioned path, Plugin state
+
+**Plugin source**:
+Where a Plugin's files come from. Two members: an entry in the **Plugin catalog**, or a local path. Both resolve to one identity scheme and neither is copied into the record — the manifest points at files either way, and placing those files on a host is engine-owned provision. A local path is added explicitly and never found by scanning a directory.
+_Avoid_: Marketplace, registry, remote, catalog (unqualified)
+
+**Plugin catalog**:
+The one first-party document listing the Plugins on offer. Each entry carries a name, a pointer to the source, a **computed digest** of the bundle, and a status of `active`, `deprecated`, or `deleted` with an optional message — the state set the MCP Registry uses, adopted so a Plugin and an MCP server report the same way. The digest is what makes update detection one fetch rather than one per Plugin; it is computed rather than authored, so it can only be stale, never in disagreement, and the fetched bundle always wins with a diagnostic naming the entry. The document is fetched and cached, and a refresh that fails after a good load serves the stale copy.
+Qualified because bare *catalog* is spent twice — the desktop's **Surface catalog** and the engine's **Model catalog**.
+_Avoid_: Marketplace, registry, Surface catalog, Model catalog, index
+
+**Plugins**:
+The surface that owns Plugin **membership** — install, update, pin, uninstall — and the setup that follows an install. It is the only surface permitted to change what is installed.
+_Avoid_: Marketplace, Customize, Plugin store; and the lowercase plural *plugins*, which means the bundles
+
+**Customize**:
+The surface that owns **contribution settings** — a contribution's on / off, and Operation settings. The kind is the view and the authority is a badge on the row. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it.
+_Avoid_: Plugins, Settings, preferences
 
 **Contribution kind**:
 One of the six types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Command, Hook**. The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
