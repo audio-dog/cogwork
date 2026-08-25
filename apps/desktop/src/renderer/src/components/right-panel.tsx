@@ -1,6 +1,6 @@
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useRightPanelStore } from "../store/right-panel";
+import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
 import { CompactEngineGate } from "./engine-gate";
@@ -39,6 +39,52 @@ function EmptySurfaceCatalog() {
   );
 }
 
+function ActiveSurfaceBody({ surface }: { surface: RightPanelState["surfaces"][number] }) {
+  switch (surface.kind) {
+    case "attention":
+      return (
+        <CompactEngineGate.Provider>
+          <CompactEngineGate.Live>
+            <AttentionSurfaceBody />
+          </CompactEngineGate.Live>
+          <CompactEngineGate.Connecting>
+            <PanelSkeleton />
+          </CompactEngineGate.Connecting>
+          <CompactEngineGate.Off />
+          <CompactEngineGate.Broken />
+        </CompactEngineGate.Provider>
+      );
+    case "activity":
+      return (
+        <CompactEngineGate.Provider>
+          <CompactEngineGate.Live>
+            <ActivitySurfaceBody />
+          </CompactEngineGate.Live>
+          <CompactEngineGate.Connecting>
+            <PanelSkeleton />
+          </CompactEngineGate.Connecting>
+          <CompactEngineGate.Off />
+          <CompactEngineGate.Broken />
+        </CompactEngineGate.Provider>
+      );
+    case "terminal":
+      return <TerminalSurfaceBody />;
+    case "item":
+      return (
+        <CompactEngineGate.Provider>
+          <CompactEngineGate.Live>
+            <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />
+          </CompactEngineGate.Live>
+          <CompactEngineGate.Connecting>
+            <PanelSkeleton />
+          </CompactEngineGate.Connecting>
+          <CompactEngineGate.Off />
+          <CompactEngineGate.Broken />
+        </CompactEngineGate.Provider>
+      );
+  }
+}
+
 export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
   const active = useRightPanelStore((state) => state.active);
@@ -74,24 +120,7 @@ export function RightPanel() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {current.kind === "terminal" ? (
-          <TerminalSurfaceBody />
-        ) : (
-          <CompactEngineGate.Provider>
-            <CompactEngineGate.Live>
-              {current.kind === "attention" && <AttentionSurfaceBody />}
-              {current.kind === "activity" && <ActivitySurfaceBody />}
-              {current.kind === "item" && (
-                <ItemTab key={`${current.id}:${current.runId ?? ""}`} selection={current} />
-              )}
-            </CompactEngineGate.Live>
-            <CompactEngineGate.Connecting>
-              <PanelSkeleton />
-            </CompactEngineGate.Connecting>
-            <CompactEngineGate.Off />
-            <CompactEngineGate.Broken />
-          </CompactEngineGate.Provider>
-        )}
+        <ActiveSurfaceBody surface={current} />
       </div>
     </div>
   );
