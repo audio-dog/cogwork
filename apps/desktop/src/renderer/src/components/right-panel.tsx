@@ -1,13 +1,17 @@
 import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiCloseLine, RiFileList2Line, RiFocus2Line, RiPulseLine } from "@remixicon/react";
+import { RiCloseLine, RiFileList2Line, RiTerminalBoxLine } from "@remixicon/react";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { ActivityTab as ActivityTabBody } from "./activity-tab";
 import { AttentionList } from "./attention-rail";
 import { CompactEngineGate } from "./engine-gate";
 import { ItemTab as ItemTabView } from "./item-tab";
+import { SurfaceCatalogCards, SurfaceCatalogMenu, toolSurfaceDescriptor } from "./surface-catalog";
+
+type ToolSurface = Exclude<Surface, { kind: "item" }>;
 
 const baseTabClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
 
@@ -47,38 +51,40 @@ function tabClassName(active: boolean, padding: string) {
   return cn(baseTabClassName, padding, active ? activeTabClassName : inactiveTabClassName);
 }
 
-function AttentionTab() {
-  const active = useRightPanelStore((state) => state.active === "attention");
-  const setActive = useRightPanelStore((state) => state.setActive);
-
+function CloseTabButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <div className={tabClassName(active, "px-2")}>
-      <button
-        type="button"
-        className="flex min-w-0 cursor-pointer items-center gap-1.5"
-        onClick={() => setActive("attention")}
-      >
-        <RiFocus2Line className="size-3.5 shrink-0" />
-        <span className="truncate">Attention</span>
-      </button>
-    </div>
+    <button
+      type="button"
+      aria-label={`Close ${label}`}
+      className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
+      onClick={onClick}
+    >
+      <RiCloseLine className="size-3" />
+    </button>
   );
 }
 
-function ActivityTab() {
-  const active = useRightPanelStore((state) => state.active === "activity");
+function ToolTab({ surface }: { surface: ToolSurface }) {
+  const descriptor = toolSurfaceDescriptor(surface);
+  const id = surfaceId(surface);
+  const active = useRightPanelStore((state) => state.active === id);
   const setActive = useRightPanelStore((state) => state.setActive);
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
 
+  if (!descriptor) return null;
+
+  const { Icon, title } = descriptor;
   return (
-    <div className={tabClassName(active, "px-2")}>
+    <div className={tabClassName(active, "pl-2 pr-1")}>
       <button
         type="button"
         className="flex min-w-0 cursor-pointer items-center gap-1.5"
-        onClick={() => setActive("activity")}
+        onClick={() => setActive(id)}
       >
-        <RiPulseLine className="size-3.5 shrink-0" />
-        <span className="truncate">Activity</span>
+        <Icon className="size-3.5 shrink-0" />
+        <span className="truncate">{title}</span>
       </button>
+      <CloseTabButton label={title} onClick={() => closeSurface(id)} />
     </div>
   );
 }
@@ -106,19 +112,12 @@ function ItemTab({ surface }: { surface: Extract<Surface, { kind: "item" }> }) {
         />
         <TooltipContent side="bottom">{surface.workspace}</TooltipContent>
       </Tooltip>
-      <button
-        type="button"
-        aria-label={`Close ${surface.workItem}`}
-        className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
-        onClick={() => closeSurface(id)}
-      >
-        <RiCloseLine className="size-3" />
-      </button>
+      <CloseTabButton label={surface.workItem} onClick={() => closeSurface(id)} />
     </div>
   );
 }
 
-function currentSurface(surfaces: readonly Surface[], active: SurfaceId): Surface {
+function currentSurface(surfaces: readonly Surface[], active: SurfaceId | null) {
   return surfaces.find((surface) => surfaceId(surface) === active) ?? surfaces[0];
 }
 
@@ -132,11 +131,44 @@ function PanelSkeleton() {
   );
 }
 
+function TerminalPanelBody() {
+  return (
+    <Empty className="h-full border-0">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <RiTerminalBoxLine />
+        </EmptyMedia>
+        <EmptyTitle>Terminal is coming soon</EmptyTitle>
+        <EmptyDescription>Terminal sessions will appear here.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function EmptySurfaceCatalog() {
+  const openSurface = useRightPanelStore((state) => state.openSurface);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <div className="border-b px-4 py-3">
+        <h2 className="font-heading text-sm font-medium">Open a surface</h2>
+        <p className="text-sm text-muted-foreground">Choose what to show in the side panel.</p>
+      </div>
+      <SurfaceCatalogCards onSelect={openSurface} />
+    </div>
+  );
+}
+
 export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
   const active = useRightPanelStore((state) => state.active);
   const maximized = useRightPanelStore((state) => state.maximized);
+  const openSurface = useRightPanelStore((state) => state.openSurface);
   const current = currentSurface(surfaces, active);
+  const toolSurfaces = surfaces.filter((surface): surface is ToolSurface => surface.kind !== "item");
+
+  if (!current) return <EmptySurfaceCatalog />;
+
   const itemSurfaces = surfaces.filter(
     (surface): surface is Extract<Surface, { kind: "item" }> => surface.kind === "item",
   );
@@ -150,12 +182,14 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          <AttentionTab />
-          <ActivityTab />
+          {toolSurfaces.map((surface) => (
+            <ToolTab key={surfaceId(surface)} surface={surface} />
+          ))}
           {itemSurfaces.map((surface) => {
             const id = surfaceId(surface);
             return <ItemTab key={id} surface={surface} />;
           })}
+          <SurfaceCatalogMenu onSelect={openSurface} />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -163,6 +197,7 @@ export function RightPanel() {
           <CompactEngineGate.Live>
             {current.kind === "attention" && <AttentionPanelBody />}
             {current.kind === "activity" && <ActivityTabBody />}
+            {current.kind === "terminal" && <TerminalPanelBody />}
             {current.kind === "item" && (
               <ItemPanelBody
                 key={`${surfaceId(current)}:${current.runId ?? ""}`}
