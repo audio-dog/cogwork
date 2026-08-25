@@ -1,5 +1,6 @@
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { cn } from "@cogwork/ui/lib/utils";
+import type { ReactNode } from "react";
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
@@ -40,51 +41,56 @@ function EmptySurfaceCatalog() {
   );
 }
 
-function ActiveSurfaceBody({ surface }: { surface: RightPanelState["surfaces"][number] }) {
-  switch (surface.kind) {
-    case "attention":
-      return (
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            <AttentionSurfaceBody />
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
-      );
-    case "activity":
-      return (
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            <ActivitySurfaceBody />
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
-      );
-    case "terminal":
-      return <TerminalSurfaceBody />;
-    case "item":
-      return (
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
-      );
-  }
+function GatedBody({ children }: { children: ReactNode }) {
+  return (
+    <CompactEngineGate.Provider>
+      <CompactEngineGate.Live>{children}</CompactEngineGate.Live>
+      <CompactEngineGate.Connecting>
+        <PanelSkeleton />
+      </CompactEngineGate.Connecting>
+      <CompactEngineGate.Off />
+      <CompactEngineGate.Broken />
+    </CompactEngineGate.Provider>
+  );
 }
+
+type Surface = RightPanelState["surfaces"][number];
+
+type SurfaceRenderers = {
+  [K in Surface["kind"]]: (surface: Extract<Surface, { kind: K }>) => ReactNode;
+};
+
+const surfaceBodyByKind: SurfaceRenderers = {
+  attention: () => (
+    <GatedBody>
+      <AttentionSurfaceBody />
+    </GatedBody>
+  ),
+  activity: () => (
+    <GatedBody>
+      <ActivitySurfaceBody />
+    </GatedBody>
+  ),
+  terminal: () => <TerminalSurfaceBody />,
+  item: (surface) => (
+    <GatedBody>
+      <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />
+    </GatedBody>
+  ),
+};
+
+const surfaceTabByKind: SurfaceRenderers = {
+  attention: () => <AttentionSurfaceTab />,
+  activity: () => <ActivitySurfaceTab />,
+  terminal: () => <TerminalSurfaceTab />,
+  item: (surface) => <ItemSurfaceTab {...surface} />,
+};
+
+const surfaceBody = <K extends Surface["kind"]>(surface: Extract<Surface, { kind: K }>) =>
+  surfaceBodyByKind[surface.kind](surface);
+
+const surfaceTab = <K extends Surface["kind"]>(surface: Extract<Surface, { kind: K }>) =>
+  surfaceTabByKind[surface.kind](surface);
 
 export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
@@ -103,42 +109,15 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          {surfaces.map((surface) => {
-            switch (surface.kind) {
-              case "attention":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <AttentionSurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "activity":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <ActivitySurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "terminal":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <TerminalSurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "item":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <ItemSurfaceTab {...surface} />
-                  </SurfaceTab.ContextMenu>
-                );
-              default:
-                return null;
-            }
-          })}
+          {surfaces.map((surface) => (
+            <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
+              {surfaceTab(surface)}
+            </SurfaceTab.ContextMenu>
+          ))}
           <SurfaceCatalogMenu />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <ActiveSurfaceBody surface={current} />
-      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">{surfaceBody(current)}</div>
     </div>
   );
 }

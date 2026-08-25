@@ -24,7 +24,7 @@ import {
   RiWifiLine,
 } from "@remixicon/react";
 import type { ComponentType, ReactNode } from "react";
-import { useState } from "react";
+import { createContext, use, useState } from "react";
 import {
   type ActivityKind,
   type ActivityRow,
@@ -32,6 +32,7 @@ import {
   type NowState,
 } from "../features/activity-source";
 import { relativeTime } from "../features/format";
+import { useNow } from "../features/use-now";
 import { useActivityView } from "./activity-view";
 import { FunnelFilter } from "./funnel-filter";
 
@@ -58,6 +59,13 @@ const connectionCopy: Record<NowState["connection"], string> = {
   connecting: "Connecting",
   lost: "Disconnected",
 };
+
+const TimestampClockContext = createContext<number | null>(null);
+
+function TimestampClockProvider({ children }: { children: ReactNode }) {
+  const now = useNow();
+  return <TimestampClockContext value={now}>{children}</TimestampClockContext>;
+}
 
 function EnginePulse({ engine }: { engine: NowState["engine"] }) {
   return (
@@ -304,8 +312,20 @@ function EmptyEvents() {
   );
 }
 
+function RelativeTimestamp({ atMillis }: { atMillis: number }) {
+  const now = use(TimestampClockContext);
+  if (now === null) throw new Error("RelativeTimestamp must render inside TimestampClockProvider.");
+  return (
+    <time
+      className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+      title={new Date(atMillis).toLocaleString()}
+    >
+      {relativeTime(atMillis, now)}
+    </time>
+  );
+}
+
 function TranscriptEvent({ row }: { row: ActivityRow }) {
-  const { state } = useActivityView();
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.kind];
   return (
@@ -329,12 +349,7 @@ function TranscriptEvent({ row }: { row: ActivityRow }) {
           </span>
         </button>
         <EventEntityAction row={row} />
-        <time
-          className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
-          title={new Date(row.atMillis).toLocaleString()}
-        >
-          {relativeTime(row.atMillis, state.clock)}
-        </time>
+        <RelativeTimestamp atMillis={row.atMillis} />
       </div>
       {expanded && <RawPayload raw={row.raw} />}
     </div>
@@ -384,21 +399,23 @@ export function ActivityTranscript() {
   const { state, meta } = useActivityView();
   const groups = groupRows(state.rows);
   return (
-    <FunnelFilter.Provider value={meta.filter}>
-      <div className="flex h-full min-h-0 flex-col">
-        <NowPanel />
-        <Toolbar />
-        <FunnelFilter.Banner />
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-1 px-3 py-2">
-            {groups.length === 0 ? (
-              <EmptyEvents />
-            ) : (
-              groups.map((group) => <TranscriptGroup key={group[0]?.id} rows={group} />)
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-    </FunnelFilter.Provider>
+    <TimestampClockProvider>
+      <FunnelFilter.Provider value={meta.filter}>
+        <div className="flex h-full min-h-0 flex-col">
+          <NowPanel />
+          <Toolbar />
+          <FunnelFilter.Banner />
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col gap-1 px-3 py-2">
+              {groups.length === 0 ? (
+                <EmptyEvents />
+              ) : (
+                groups.map((group) => <TranscriptGroup key={group[0]?.id} rows={group} />)
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </FunnelFilter.Provider>
+    </TimestampClockProvider>
   );
 }
