@@ -1,0 +1,47 @@
+apps/desktop/src/renderer/src/components/terminal-surface.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 1,9,24,33-38,47,49-50
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 292-296,312
+apps/desktop/src/renderer/src/components/attention-surface.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 1,9,24,33-38,47,49-50
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 736
+apps/desktop/package.json
+  s_ccff80ed511cea::t_9033c0107bedf1 31-34
+apps/desktop/src/renderer/src/components/activity-surface.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 1,9,24,33-38,47,49-50
+apps/desktop/src/renderer/src/components/surface-catalog.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 15,33
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_ccff80ed511cea::t_9033c0107bedf1 54-84
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 3-21,56-61,66-133,140-146,149-155,167-178,182
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_ccff80ed511cea::t_9033c0107bedf1 2,52-58,70,103-104
+biome.json
+  s_ccff80ed511cea::t_9033c0107bedf1 57-58
+apps/desktop/src/renderer/src/components/catalog-entry.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 3-12,15-24,29-31
+configs/lint/no-switch.grit
+  s_ccff80ed511cea::t_9033c0107bedf1 1-5
+apps/desktop/src/renderer/src/components/surface-tab.tsx
+  s_ccff80ed511cea::t_9033c0107bedf1 14,17,22,36,38-46
+pnpm-lock.yaml
+  s_ccff80ed511cea::t_bc5ceafdb16444 157-168,844-871,5373-5404
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7b6efb871e95877a435122e925e731f56e2516c5",
+  "prompts": {},
+  "sessions": {
+    "s_ccff80ed511cea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03743-ee43-7c60-bb5b-e05bfc056adf",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
