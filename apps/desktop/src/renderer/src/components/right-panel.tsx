@@ -4,15 +4,13 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiCloseLine, RiFileList2Line, RiTerminalBoxLine } from "@remixicon/react";
+import { RiCloseLine, RiFileList2Line, RiFocus2Line, RiPulseLine, RiTerminalBoxLine } from "@remixicon/react";
 import { type Surface, type SurfaceId, surfaceId, useRightPanelStore } from "../store/right-panel";
 import { ActivityTab as ActivityTabBody } from "./activity-tab";
 import { AttentionList } from "./attention-rail";
 import { CompactEngineGate } from "./engine-gate";
 import { ItemTab as ItemTabView } from "./item-tab";
-import { SurfaceCatalogCards, SurfaceCatalogMenu, toolSurfaceDescriptor } from "./surface-catalog";
-
-type ToolSurface = Exclude<Surface, { kind: "item" }>;
+import { SurfaceCatalogCards, SurfaceCatalogMenu } from "./surface-catalog";
 
 const baseTabClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
 
@@ -60,23 +58,50 @@ function CloseTabButton({ label, onClick }: { label: string; onClick: () => void
   );
 }
 
-function ToolTab({ surface }: { surface: ToolSurface }) {
-  const descriptor = toolSurfaceDescriptor(surface);
-  const id = surfaceId(surface);
-  const active = useRightPanelStore((state) => state.active === id);
+function AttentionTab() {
+  const active = useRightPanelStore((state) => state.active === "attention");
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
 
-  if (!descriptor) return null;
-
-  const { Icon, title } = descriptor;
   return (
     <div className={tabClassName(active, "pl-2 pr-1")}>
-      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive(id)}>
-        <Icon className="size-3.5 shrink-0" />
-        <span className="truncate">{title}</span>
+      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("attention")}>
+        <RiFocus2Line className="size-3.5 shrink-0" />
+        <span className="truncate">Attention</span>
       </Button>
-      <CloseTabButton label={title} onClick={() => closeSurface(id)} />
+      <CloseTabButton label="Attention" onClick={() => closeSurface("attention")} />
+    </div>
+  );
+}
+
+function ActivityTab() {
+  const active = useRightPanelStore((state) => state.active === "activity");
+  const setActive = useRightPanelStore((state) => state.setActive);
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
+
+  return (
+    <div className={tabClassName(active, "pl-2 pr-1")}>
+      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("activity")}>
+        <RiPulseLine className="size-3.5 shrink-0" />
+        <span className="truncate">Activity</span>
+      </Button>
+      <CloseTabButton label="Activity" onClick={() => closeSurface("activity")} />
+    </div>
+  );
+}
+
+function TerminalTab() {
+  const active = useRightPanelStore((state) => state.active === "terminal");
+  const setActive = useRightPanelStore((state) => state.setActive);
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
+
+  return (
+    <div className={tabClassName(active, "pl-2 pr-1")}>
+      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("terminal")}>
+        <RiTerminalBoxLine className="size-3.5 shrink-0" />
+        <span className="truncate">Terminal</span>
+      </Button>
+      <CloseTabButton label="Terminal" onClick={() => closeSurface("terminal")} />
     </div>
   );
 }
@@ -154,7 +179,7 @@ function EmptySurfaceCatalog() {
           <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
         </div>
       </div>
-      <SurfaceCatalogCards onSelect={openSurface} />
+      <SurfaceCatalogCards onSelect={(kind) => openSurface({ kind })} />
     </div>
   );
 }
@@ -165,7 +190,9 @@ export function RightPanel() {
   const maximized = useRightPanelStore((state) => state.maximized);
   const openSurface = useRightPanelStore((state) => state.openSurface);
   const current = currentSurface(surfaces, active);
-  const toolSurfaces = surfaces.filter((surface): surface is ToolSurface => surface.kind !== "item");
+  const attentionOpen = surfaces.some((surface) => surface.kind === "attention");
+  const activityOpen = surfaces.some((surface) => surface.kind === "activity");
+  const terminalOpen = surfaces.some((surface) => surface.kind === "terminal");
 
   if (!current) return <EmptySurfaceCatalog />;
 
@@ -182,14 +209,14 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          {toolSurfaces.map((surface) => (
-            <ToolTab key={surfaceId(surface)} surface={surface} />
-          ))}
+          {attentionOpen && <AttentionTab />}
+          {activityOpen && <ActivityTab />}
+          {terminalOpen && <TerminalTab />}
           {itemSurfaces.map((surface) => {
             const id = surfaceId(surface);
             return <ItemTab key={id} surface={surface} />;
           })}
-          <SurfaceCatalogMenu onSelect={openSurface} />
+          <SurfaceCatalogMenu onSelect={(kind) => openSurface({ kind })} />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
