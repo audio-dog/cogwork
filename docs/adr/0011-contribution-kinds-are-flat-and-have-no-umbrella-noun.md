@@ -90,3 +90,19 @@ establishing required Connections and nothing else. That holds only while the bl
 
 This changes nothing about the two lists, the identity scheme, the file-pointing manifest, or the
 provenance rule.
+
+## Amendment (2026-08-25) — a Plugin may require a Connection, and may never define one
+
+This ADR left open whether a Plugin may introduce an external system the Engine has never seen, and
+kept the manifest's Connection-requirements field unused so the door stayed unbolted.
+
+[#172](https://github.com/colonylabs/cogwork/issues/172) answers it. **A Plugin may require a
+Connection by id from the Engine's known set, and may never define one.** The auth-recipe the field
+permits has no caller while every Plugin is first-party, and the capability it would add — the Engine
+performing an OAuth exchange against endpoints a bundle named — is a materially different act from
+the env-var name a Plugin's MCP server uses today. The field stays present and unused on this ADR's
+own reasoning; the *rule* is what is decided, and it holds either way.
+
+The same ticket confirms that Connections are engine-owned, as this ADR's rejected-options section
+already claimed, and derives a Plugin's pairing with a Connection from this very field rather than
+adding another. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).

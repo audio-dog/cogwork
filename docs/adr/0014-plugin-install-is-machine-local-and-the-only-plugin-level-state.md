@@ -132,3 +132,29 @@ else does. Resolution never fetches.
 Full reasoning: [#125](https://github.com/colonylabs/cogwork/issues/125). Research:
 `docs/research/plugin-and-connector-versioning.md`. On-disk prior art:
 `~/.codex/plugins/`, `~/.cursor/plugins/`, `~/.claude/plugins/`.
+
+## Amendment (2026-08-25) — the Connections surface exists, and a paired install turns its contributions on
+
+This ADR deliberately excluded Connection behaviour and struck four answers it had produced anyway.
+[#172](https://github.com/colonylabs/cogwork/issues/172) has now landed, and it changes three things
+here. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
+
+**The third surface is adopted.** This ADR rejected "a third surface for Connections" *while the
+Connection set is closed and first-party*. That condition is the reason **for** the surface, not
+against it: an Engine port's Connection — GitHub's, Linear's — has no Plugin over it, so Plugin setup
+can never be its home. This ADR could not weigh that, having excluded Connection behaviour.
+
+**A paired install turns its contributions on.** "After install every contribution is off" survives
+everywhere except one narrow case: establishing a Connection installs the one first-party Plugin that
+requires it and turns on **every** one of that Plugin's contributions. A person who connects Linear
+and must then find and flip an MCP server has been handed a setup step disguised as a settings screen.
+A Plugin with no Connection still installs with everything off.
+
+**The `Readiness` generalization is refused, not deferred.** This ADR expected Connection readiness to
+be a second instance of a general `Readiness`. It is not a peer: *MCP server readiness* already
+includes "authenticated", so Connection readiness is an **input** to it for a Plugin's MCP server, and
+stands alone for an Engine port. `Connection readiness` is its own term and no umbrella is minted.
+
+Unchanged and reused: install stays machine-local; provision stays atomic, which is why an abandoned
+browser login leaves the install standing rather than rolling it back; *dangling* is the shape a
+workspace binding takes when its Connection is removed.
