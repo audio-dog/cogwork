@@ -40,11 +40,12 @@ export const WorkspaceState = Schema.TaggedUnion({
 export type WorkspaceState = typeof WorkspaceState.Type;
 
 export const DaemonEvent = Schema.TaggedUnion({
-  RunActivity: { activity: RunActivity },
-  ItemChanged: { workspace: WorkspaceId, item: ClassifiedItem },
-  ItemRemoved: { workspace: WorkspaceId, id: WorkItemId },
-  RunChanged: { run: RunSummary },
-  WorkspaceChanged: { workspace: WorkspaceState },
-  SchedulerChanged: { scheduler: SchedulerStats },
+  SeedEnd: { emittedAtMillis: Schema.Finite },
+  RunActivity: { emittedAtMillis: Schema.Finite, activity: RunActivity },
+  ItemChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId, item: ClassifiedItem },
+  ItemRemoved: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId, id: WorkItemId },
+  RunChanged: { emittedAtMillis: Schema.Finite, run: RunSummary },
+  WorkspaceChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceState },
+  SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
 });
 export type DaemonEvent = typeof DaemonEvent.Type;
