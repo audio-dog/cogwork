@@ -182,8 +182,12 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
   };
 
+  const sameRepositoryHead = (target: GitHubTarget, pull: RawPull) =>
+    pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
+
   const rank = (target: GitHubTarget, item: OwnedItem, branch: string, pull: RawPull) =>
     [
+      sameRepositoryHead(target, pull) ? 1 : 0,
       closesItem(item, pull) ? 1 : 0,
       pull.headRef === branch ? 1 : 0,
       pull.authorLogin === target.actorLogin ? 1 : 0,
@@ -191,8 +195,9 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     ] as const;
 
   const outranks = (target: GitHubTarget, item: OwnedItem, branch: string, a: RawPull, b: RawPull) => {
-    const [aClosing, aExact, aBot, aNumber] = rank(target, item, branch, a);
-    const [bClosing, bExact, bBot, bNumber] = rank(target, item, branch, b);
+    const [aSameRepository, aClosing, aExact, aBot, aNumber] = rank(target, item, branch, a);
+    const [bSameRepository, bClosing, bExact, bBot, bNumber] = rank(target, item, branch, b);
+    if (aSameRepository !== bSameRepository) return aSameRepository > bSameRepository;
     if (aClosing !== bClosing) return aClosing > bClosing;
     if (aExact !== bExact) return aExact > bExact;
     if (aBot !== bBot) return aBot > bBot;

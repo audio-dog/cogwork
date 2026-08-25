@@ -766,6 +766,39 @@ describe("github work source adapter", () => {
     ),
   );
 
+  it.effect("prefers a followable branch-prefix PR over a fork closing reference", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#45");
+      assert.strictEqual(observed?.pr?.number, 350);
+      assert.isTrue(observed?.pr?.followable);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 45, title: "followable match", labels: ["ready-for-agent"] }],
+          pulls: [
+            pull({ number: 350, headRef: "45-followable-match" }),
+            pull({
+              number: 351,
+              headRef: "contributor/github-issue-45-a1b2c3",
+              headRepository: "contributor/repo",
+              closingIssueNumbers: [45],
+            }),
+          ],
+          comments: [
+            {
+              issue: 45,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
   it.effect("refuses to adopt an untrusted closing-reference pull request", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
