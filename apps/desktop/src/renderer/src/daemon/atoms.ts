@@ -1,4 +1,6 @@
 import { DaemonRpcs, type RunId } from "@cogwork/contracts";
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import * as AtomRpc from "effect/unstable/reactivity/AtomRpc";
 import { electronDaemonBridge } from "./electron-bridge";
@@ -11,7 +13,10 @@ export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomR
 
 export const daemonStatusAtom = DaemonAtomRpc.query("GetStatus", undefined);
 
-export const daemonEventsAtom = DaemonAtomRpc.query("WatchEvents", undefined);
+export const daemonEventAtom = DaemonAtomRpc.runtime.pull(
+  Stream.unwrap(DaemonAtomRpc.use((client) => Effect.succeed(client("WatchEvents", undefined)))),
+  { disableAccumulation: true },
+);
 
 // `query` keys its atom by object identity, so calling it inline per render would rebuild the stream
 // each time; the family hands out one stable pull atom per run.

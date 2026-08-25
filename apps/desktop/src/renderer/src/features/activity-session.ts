@@ -1,0 +1,465 @@
+import {
+  applyDaemonEvent,
+  type Board,
+  type ClassifiedItem,
+  type DaemonEvent,
+  initialBoard,
+  type RunId,
+  type RunStatus,
+  type RunSummary,
+  type SchedulerStats,
+  type WorkItemId,
+  type WorkspaceId,
+  type WorkspaceState,
+} from "@cogwork/contracts";
+import { useAtomRefresh, useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import type * as Cause from "effect/Cause";
+import type * as Atom from "effect/unstable/reactivity/Atom";
+import { useCallback, useSyncExternalStore } from "react";
+import { daemonEventAtom } from "../daemon/atoms";
+import {
+  applyRunPreview,
+  previewMap,
+  type RunActivityPreview,
+  type RunPreviewState,
+  withoutRunPreview,
+} from "./run-activity";
+import { type EnginePhase, enginePhase, subscribeEngineStatus } from "./use-engine-status";
+
+export type ActivityKind =
+  | "item"
+  | "item-removed"
+  | "run"
+  | "workspace"
+  | "scheduler"
+  | "engine"
+  | "connection"
+  | "stream";
+export type ActivitySeverity = "info" | "success" | "warn" | "error";
+export type ConnectionState = "live" | "connecting" | "lost";
+export type ActivityCategory = "item" | "run" | "workspace" | "scheduler" | "system";
+export type ActivityEntity =
+  | {
+      readonly type: "run";
+      readonly id: RunId;
+      readonly workspace: WorkspaceId;
+      readonly workItem: WorkItemId;
+    }
+  | { readonly type: "item"; readonly id: WorkItemId; readonly workspace: WorkspaceId };
+
+export interface ActivityRow {
+  readonly id: string;
+  readonly kind: ActivityKind;
+  readonly atMillis: number;
+  readonly label: string;
+  readonly summary: string;
+  readonly severity: ActivitySeverity;
+  readonly entity: ActivityEntity | null;
+  readonly raw: string;
+  readonly lowSignal: boolean;
+}
+
+export interface ActiveRun {
+  readonly runId: RunId;
+  readonly workspace: WorkspaceId;
+  readonly workItem: WorkItemId;
+  readonly stage: RunSummary["stage"];
+  readonly status: RunStatus;
+  readonly preview: RunActivityPreview | null;
+}
+
+export interface NowState {
+  readonly engine: EnginePhase;
+  readonly connection: ConnectionState;
+  readonly scheduler: SchedulerStats | null;
+  readonly runs: readonly ActiveRun[];
+}
+
+export interface ActivitySession {
+  readonly board: Board;
+  readonly previews: RunPreviewState;
+  readonly log: readonly ActivityRow[];
+  readonly engine: EnginePhase;
+  readonly hasEngineSample: boolean;
+  readonly connection: ConnectionState;
+  readonly seed: boolean;
+  readonly ordinal: number;
+}
+
+export const defaultActivityLimit = 500;
+
+export const activityLabels: Record<ActivityKind, string> = {
+  item: "Item",
+  "item-removed": "Item",
+  run: "Run",
+  workspace: "Workspace",
+  scheduler: "Scheduler",
+  engine: "Engine",
+  connection: "Connection",
+  stream: "Stream",
+};
+
+export const activityCategory = (kind: ActivityKind): ActivityCategory => {
+  if (kind === "item" || kind === "item-removed") return "item";
+  if (kind === "engine" || kind === "connection" || kind === "stream") return "system";
+  return kind;
+};
+
+const pretty = (value: unknown) => JSON.stringify(value, null, 2);
+const rowId = (ordinal: number) => `activity:${ordinal}`;
+const bound = <Value>(values: readonly Value[]) =>
+  values.length <= defaultActivityLimit ? values : values.slice(-defaultActivityLimit);
+const terminal = (status: RunStatus) => status !== "running";
+const settledRun = (board: Board, runId: RunId) => {
+  const run = board.runs.get(runId);
+  return run !== undefined && terminal(run.status);
+};
+const stamp = (event: DaemonEvent, arrival: number) => event.emittedAtMillis ?? arrival;
+
+const classifiedState = (
+  item: ClassifiedItem,
+): { readonly text: string; readonly severity: ActivitySeverity } => {
+  if (item._tag === "Eligible") return { text: "eligible", severity: "info" };
+  if (item._tag === "Claimed") return { text: "claimed", severity: "info" };
+  if (item._tag === "Blocked") return { text: `blocked · ${item.openBlockers} open`, severity: "warn" };
+  return { text: "needs a person", severity: "warn" };
+};
+
+export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
+  running: "info",
+  succeeded: "success",
+  failed: "error",
+  exhausted: "warn",
+  interrupted: "warn",
+  crashed: "error",
+};
+
+const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): ActivityRow | null => {
+  if (event._tag === "SeedEnd" || event._tag === "RunActivity") return null;
+  const atMillis = stamp(event, arrival);
+  if (event._tag === "ItemChanged") {
+    const state = classifiedState(event.item);
+    return {
+      id: rowId(ordinal),
+      kind: "item",
+      atMillis,
+      label: activityLabels.item,
+      summary: `${event.item.title} → ${state.text}`,
+      severity: state.severity,
+      entity: { type: "item", id: event.item.id, workspace: event.workspace },
+      raw: pretty(event.item),
+      lowSignal: event.item._tag === "Eligible",
+    };
+  }
+  if (event._tag === "ItemRemoved")
+    return {
+      id: rowId(ordinal),
+      kind: "item-removed",
+      atMillis,
+      label: activityLabels["item-removed"],
+      summary: `${event.id} removed`,
+      severity: "info",
+      entity: { type: "item", id: event.id, workspace: event.workspace },
+      raw: pretty({ workspace: event.workspace, id: event.id }),
+      lowSignal: true,
+    };
+  if (event._tag === "RunChanged")
+    return {
+      id: rowId(ordinal),
+      kind: "run",
+      atMillis,
+      label: activityLabels.run,
+      summary: `${event.run.workItem} · run ${event.run.status}`,
+      severity: runStatusSeverity[event.run.status],
+      entity: { type: "run", id: event.run.id, workspace: event.run.workspace, workItem: event.run.workItem },
+      raw: pretty(event.run),
+      lowSignal: false,
+    };
+  if (event._tag === "WorkspaceChanged") {
+    const workspace: WorkspaceState = event.workspace;
+    const failed = workspace._tag === "Failed";
+    return {
+      id: rowId(ordinal),
+      kind: "workspace",
+      atMillis,
+      label: activityLabels.workspace,
+      summary: failed
+        ? `${workspace.source} failed · ${workspace.message}`
+        : `${workspace.name} registered · ${workspace.issueTracker}`,
+      severity: failed ? "error" : "info",
+      entity: null,
+      raw: pretty(workspace),
+      lowSignal: false,
+    };
+  }
+  const paused = event.scheduler.scheduling === "paused";
+  return {
+    id: rowId(ordinal),
+    kind: "scheduler",
+    atMillis,
+    label: activityLabels.scheduler,
+    summary: paused
+      ? `paused · ${event.scheduler.globalInFlight}/${event.scheduler.globalLimit} in flight`
+      : `${event.scheduler.globalInFlight}/${event.scheduler.globalLimit} in flight · budget ${event.scheduler.dailyBudgetUsed}/${event.scheduler.dailyBudgetLimit}`,
+    severity: paused ? "warn" : "info",
+    entity: null,
+    raw: pretty(event.scheduler),
+    lowSignal: !paused,
+  };
+};
+
+export const initialActivitySession: ActivitySession = {
+  board: initialBoard,
+  previews: new Map(),
+  log: [],
+  engine: "off",
+  hasEngineSample: false,
+  connection: "connecting",
+  seed: true,
+  ordinal: 0,
+};
+
+export const resetActivityFolds = (session: ActivitySession): ActivitySession => ({
+  ...session,
+  board: initialBoard,
+  previews: new Map(),
+  seed: true,
+});
+
+export const ingestDaemonEvent = (
+  session: ActivitySession,
+  event: DaemonEvent,
+  arrival: number,
+): ActivitySession => {
+  if (event._tag === "SeedEnd") return { ...session, seed: false };
+  const nextOrdinal = session.ordinal + 1;
+  const row = session.seed ? null : decodeEvent(event, arrival, nextOrdinal);
+  const board = applyDaemonEvent(session.board, event);
+  const updatedPreviews =
+    event._tag === "RunActivity" && !settledRun(board, event.activity.runId)
+      ? applyRunPreview(session.previews, event.activity)
+      : session.previews;
+  const previews =
+    event._tag === "RunChanged" && terminal(event.run.status)
+      ? withoutRunPreview(updatedPreviews, event.run.id)
+      : updatedPreviews;
+  return {
+    ...session,
+    board,
+    previews,
+    log: row ? bound([...session.log, row]) : session.log,
+    ordinal: row ? nextOrdinal : session.ordinal,
+  };
+};
+
+export const unprocessedDaemonEvents = (
+  processed: readonly DaemonEvent[] | null,
+  current: readonly DaemonEvent[],
+) => (processed === current ? null : current);
+
+const lifecycleRow = (
+  kind: "engine" | "connection" | "stream",
+  atMillis: number,
+  ordinal: number,
+  summary: string,
+  severity: ActivitySeverity,
+  lowSignal: boolean,
+): ActivityRow => ({
+  id: rowId(ordinal),
+  kind,
+  atMillis,
+  label: activityLabels[kind],
+  summary,
+  severity,
+  entity: null,
+  raw: pretty({ kind }),
+  lowSignal,
+});
+
+const engineChange = (engine: EnginePhase) => {
+  if (engine === "up") return { summary: "Engine started", severity: "success" as const };
+  if (engine === "starting") return { summary: "Engine starting", severity: "info" as const };
+  if (engine === "failed") return { summary: "Engine failed", severity: "error" as const };
+  return { summary: "Engine stopped", severity: "warn" as const };
+};
+
+const connectionChange = (connection: ConnectionState) => {
+  if (connection === "live")
+    return {
+      kind: "connection" as const,
+      summary: "Connection restored",
+      severity: "info" as const,
+      lowSignal: false,
+    };
+  if (connection === "lost")
+    return {
+      kind: "stream" as const,
+      summary: "Event stream disconnected",
+      severity: "error" as const,
+      lowSignal: false,
+    };
+  return { kind: "connection" as const, summary: "Connecting…", severity: "info" as const, lowSignal: true };
+};
+
+const updateLifecycle = (
+  session: ActivitySession,
+  engine: EnginePhase,
+  connection: ConnectionState,
+  atMillis: number,
+): ActivitySession => {
+  const engineRow =
+    session.hasEngineSample && session.engine !== engine
+      ? lifecycleRow(
+          "engine",
+          atMillis,
+          session.ordinal + 1,
+          engineChange(engine).summary,
+          engineChange(engine).severity,
+          false,
+        )
+      : null;
+  const nextConnection = session.connection === connection ? null : connectionChange(connection);
+  const connectionRow = nextConnection
+    ? lifecycleRow(
+        nextConnection.kind,
+        atMillis,
+        session.ordinal + (engineRow ? 2 : 1),
+        nextConnection.summary,
+        nextConnection.severity,
+        nextConnection.lowSignal,
+      )
+    : null;
+  const rows = [engineRow, connectionRow].filter((row): row is ActivityRow => row !== null);
+  if (rows.length === 0 && session.engine === engine && session.hasEngineSample) return session;
+  return {
+    ...session,
+    engine,
+    connection,
+    hasEngineSample: true,
+    log: bound([...session.log, ...rows]),
+    ordinal: session.ordinal + rows.length,
+  };
+};
+
+const activeRuns = (board: Board, previews: RunPreviewState): readonly ActiveRun[] =>
+  [...board.runs.values()]
+    .filter((run) => run.status === "running")
+    .sort((left, right) => right.startedAtMillis - left.startedAtMillis)
+    .map((run) => ({ ...run, runId: run.id, preview: previewMap(previews).get(run.id) ?? null }));
+
+export const activityNow = (session: ActivitySession): NowState => ({
+  engine: session.engine,
+  connection: session.connection,
+  scheduler: session.board.scheduler,
+  runs: activeRuns(session.board, session.previews),
+});
+
+type EventResult = typeof daemonEventAtom extends Atom.Atom<infer Value> ? Value : never;
+const listeners = new Set<() => void>();
+const activityState: {
+  session: ActivitySession;
+  lastResult: EventResult | null;
+  lastPumpedResult: EventResult | null;
+  processedDaemonEvents: readonly DaemonEvent[] | null;
+} = {
+  session: initialActivitySession,
+  lastResult: null,
+  lastPumpedResult: null,
+  processedDaemonEvents: null,
+};
+
+const publish = (next: ActivitySession) => {
+  if (next === activityState.session) return;
+  activityState.session = next;
+  for (const listener of listeners) listener();
+};
+
+const recordDaemonResult = (result: EventResult, clock: () => number) => {
+  if (result === activityState.lastResult) return;
+  activityState.lastResult = result;
+  if (result._tag === "Initial") {
+    activityState.processedDaemonEvents = null;
+    return publish(
+      updateLifecycle(
+        resetActivityFolds(activityState.session),
+        activityState.session.engine,
+        "connecting",
+        clock(),
+      ),
+    );
+  }
+  if (result._tag === "Failure") {
+    activityState.processedDaemonEvents = null;
+    return publish(
+      updateLifecycle(
+        resetActivityFolds(activityState.session),
+        activityState.session.engine,
+        "lost",
+        clock(),
+      ),
+    );
+  }
+  const events = unprocessedDaemonEvents(activityState.processedDaemonEvents, result.value.items);
+  if (!events) return;
+  activityState.processedDaemonEvents = events;
+  const next = events.reduce(
+    (current, event) => ingestDaemonEvent(current, event, clock()),
+    activityState.session,
+  );
+  publish(updateLifecycle(next, next.engine, "live", clock()));
+};
+
+const recordEngineStatus = (status: Parameters<typeof enginePhase>[0], clock: () => number) =>
+  publish(
+    updateLifecycle(activityState.session, enginePhase(status), activityState.session.connection, clock()),
+  );
+
+const pumpDaemonResult = (current: EventResult, pull: () => void, resubscribe: () => void) => {
+  if (current.waiting) return;
+  if (current === activityState.lastPumpedResult) return;
+  activityState.lastPumpedResult = current;
+  if (current._tag === "Failure") return resubscribe();
+  if (current._tag === "Success" && !current.value.done) pull();
+};
+
+const subscribe = (listener: () => void, clock: () => number) => {
+  const unsubscribeEngine = subscribeEngineStatus((status) => recordEngineStatus(status, clock));
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    unsubscribeEngine();
+  };
+};
+
+const getSession = () => activityState.session;
+
+export function useActivitySession(clock: () => number = Date.now) {
+  useAtomValue(daemonEventAtom);
+  const pull = useAtomSet(daemonEventAtom);
+  const resubscribe = useAtomRefresh(daemonEventAtom);
+  const pump = useCallback(
+    (current: EventResult) => pumpDaemonResult(current, pull, resubscribe),
+    [pull, resubscribe],
+  );
+  const sessionSubscribe = useCallback((listener: () => void) => subscribe(listener, clock), [clock]);
+  useAtomSubscribe(daemonEventAtom, (result) => recordDaemonResult(result, clock), { immediate: true });
+  useAtomSubscribe(daemonEventAtom, pump, { immediate: true });
+  return useSyncExternalStore(sessionSubscribe, getSession);
+}
+
+export type BoardResult =
+  | { readonly _tag: "Initial" }
+  | { readonly _tag: "Failure"; readonly cause: Cause.Cause<unknown> }
+  | {
+      readonly _tag: "Success";
+      readonly board: Board;
+      readonly previews: ReadonlyMap<string, RunActivityPreview>;
+    };
+
+export function useBoard(): BoardResult {
+  const current = useActivitySession();
+  const result = useAtomValue(daemonEventAtom);
+  if (result._tag === "Failure") return { _tag: "Failure", cause: result.cause };
+  if (result._tag !== "Success") return { _tag: "Initial" };
+  return { _tag: "Success", board: current.board, previews: previewMap(current.previews) };
+}

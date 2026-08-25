@@ -30,7 +30,7 @@ import {
   type ActivityRow,
   activityLabels,
   type NowState,
-} from "../features/activity-source";
+} from "../features/activity-session";
 import { relativeTime } from "../features/format";
 import { useNow } from "../features/use-now";
 import { useActivityView } from "./activity-view";
@@ -175,34 +175,29 @@ function NowPanel() {
   );
 }
 
-function ToolbarToggle({
-  active,
+function ToolbarAction({
+  label,
   onClick,
-  activeIcon,
-  inactiveIcon,
-  activeLabel,
-  inactiveLabel,
+  icon,
+  pressed,
 }: {
-  active: boolean;
+  label: string;
   onClick: () => void;
-  activeIcon: ReactNode;
-  inactiveIcon: ReactNode;
-  activeLabel: string;
-  inactiveLabel: string;
+  icon: ReactNode;
+  pressed: boolean;
 }) {
-  const label = active ? activeLabel : inactiveLabel;
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <Button
             aria-label={label}
-            aria-pressed={active}
+            aria-pressed={pressed}
             size="icon-sm"
-            variant={active ? "secondary" : "ghost"}
+            variant={pressed ? "secondary" : "ghost"}
             onClick={onClick}
           >
-            {active ? activeIcon : inactiveIcon}
+            {icon}
           </Button>
         }
       />
@@ -216,22 +211,36 @@ function ToolbarActions() {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       <FunnelFilter.Control />
-      <ToolbarToggle
-        active={state.verbose}
-        onClick={actions.toggleVerbose}
-        activeIcon={<RiEyeLine data-icon="inline-start" />}
-        inactiveIcon={<RiEyeOffLine data-icon="inline-start" />}
-        activeLabel="Hide minor events"
-        inactiveLabel="Show minor events"
-      />
-      <ToolbarToggle
-        active={state.frozen}
-        onClick={actions.toggleFrozen}
-        activeIcon={<RiPlayMiniLine data-icon="inline-start" />}
-        inactiveIcon={<RiPauseLine data-icon="inline-start" />}
-        activeLabel="Resume new events"
-        inactiveLabel="Pause new events"
-      />
+      {state.verbose ? (
+        <ToolbarAction
+          label="Hide minor events"
+          onClick={actions.toggleVerbose}
+          icon={<RiEyeLine data-icon="inline-start" />}
+          pressed
+        />
+      ) : (
+        <ToolbarAction
+          label="Show minor events"
+          onClick={actions.toggleVerbose}
+          icon={<RiEyeOffLine data-icon="inline-start" />}
+          pressed={false}
+        />
+      )}
+      {state.frozen ? (
+        <ToolbarAction
+          label="Resume new events"
+          onClick={actions.toggleFrozen}
+          icon={<RiPlayMiniLine data-icon="inline-start" />}
+          pressed
+        />
+      ) : (
+        <ToolbarAction
+          label="Pause new events"
+          onClick={actions.toggleFrozen}
+          icon={<RiPauseLine data-icon="inline-start" />}
+          pressed={false}
+        />
+      )}
     </div>
   );
 }

@@ -661,11 +661,7 @@ function ItemGone() {
   );
 }
 
-export function ItemTab({
-  selection,
-}: {
-  selection: ItemSelection & { runId?: RunSummary["id"]; run?: RunSummary };
-}) {
+export function ItemTab({ selection }: { selection: ItemSelection & { runId?: RunSummary["id"] } }) {
   const result = useBoard();
   if (result._tag !== "Success") return <ItemGone />;
 
@@ -674,11 +670,11 @@ export function ItemTab({
   if (!entry) return <ItemGone />;
 
   const selectedRun = selectedRunForItem(
-    (selection.runId ? board.runs.get(selection.runId) : null) ?? selection.run,
+    selection.runId ? board.runs.get(selection.runId) : null,
     selection.workspace,
     selection.workItem,
   );
-  const run = selectedRun ?? runForItem(board, selection.workspace, selection.workItem);
+  const run = selection.runId ? selectedRun : runForItem(board, selection.workspace, selection.workItem);
   const attempts = previousAttempts(
     runsForItem(board, selection.workspace, selection.workItem),
     run?.id ?? null,
