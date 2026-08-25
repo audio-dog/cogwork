@@ -25,7 +25,7 @@ describe("attentionEntries", () => {
         {
           _tag: "ItemChanged",
           workspace: "acme",
-          item: { _tag: "Eligible", id: "3", title: "Newer PR", stage: "verify", pr: pr(40) },
+          item: { _tag: "Eligible", id: "3", title: "Newer PR", url: null, stage: "verify", pr: pr(40) },
         },
         {
           _tag: "ItemChanged",
@@ -55,7 +55,7 @@ describe("attentionEntries", () => {
         {
           _tag: "ItemChanged",
           workspace: "acme",
-          item: { _tag: "Eligible", id: "4", title: "Older PR", stage: "verify", pr: pr(5) },
+          item: { _tag: "Eligible", id: "4", title: "Older PR", url: null, stage: "verify", pr: pr(5) },
         },
       ]),
     );
@@ -87,7 +87,7 @@ describe("filterAttention", () => {
       {
         _tag: "ItemChanged",
         workspace: "beta",
-        item: { _tag: "Eligible", id: "2", title: "PR", stage: "verify", pr: pr(10) },
+        item: { _tag: "Eligible", id: "2", title: "PR", url: null, stage: "verify", pr: pr(10) },
       },
     ]),
   );
