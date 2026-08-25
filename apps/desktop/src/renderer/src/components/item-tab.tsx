@@ -19,13 +19,7 @@ import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-grou
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
-import {
-  RiArrowRightLine,
-  RiExternalLinkLine,
-  RiFileList2Line,
-  RiPulseLine,
-  RiStopCircleLine,
-} from "@remixicon/react";
+import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useRef, useState } from "react";
 import { cancelRunAtom, reclassifyAtom } from "../daemon/atoms";
@@ -233,6 +227,15 @@ function StateBadge({ descriptor }: { descriptor: ItemStateDescriptor }) {
   );
 }
 
+export function ItemTitle({ title, url }: Pick<ClassifiedItem, "title" | "url">) {
+  if (!url) return title;
+  return (
+    <a href={url} rel="noreferrer" target="_blank">
+      {title}
+    </a>
+  );
+}
+
 function Header() {
   const {
     state: { workspace, item, descriptor },
@@ -244,7 +247,9 @@ function Header() {
         <span aria-hidden>·</span>
         <span>{workspace}</span>
       </div>
-      <h1 className="text-base font-semibold">{item.title}</h1>
+      <h1 className="text-base font-semibold [&>a]:underline-offset-4 [&>a:hover]:underline">
+        <ItemTitle title={item.title} url={item.url} />
+      </h1>
       <StateBadge descriptor={descriptor} />
     </div>
   );
@@ -301,25 +306,12 @@ function ReclassifyButton() {
   );
 }
 
-function OpenOnGitHubButton() {
-  const {
-    state: { item },
-  } = useItemTab();
-  if (!item.pr) return null;
-  return (
-    <Button size="sm" variant="outline" render={<a href={item.pr.url} rel="noreferrer" target="_blank" />}>
-      Open on GitHub
-      <RiExternalLinkLine data-icon="inline-end" />
-    </Button>
-  );
-}
-
 function ActionBar() {
   const {
     state: { item, descriptor },
     meta: { cancelError },
   } = useItemTab();
-  const hasActions = descriptor.running || item._tag === "NeedsHuman" || item.pr !== undefined;
+  const hasActions = descriptor.running || item._tag === "NeedsHuman";
   if (!hasActions) return null;
   return (
     <div className="flex flex-col gap-1.5">
@@ -327,7 +319,6 @@ function ActionBar() {
         <CancelParkButton />
         <ApproveButton />
         <ReclassifyButton />
-        <OpenOnGitHubButton />
       </div>
       {cancelError && <span className="text-xs text-destructive">{cancelError}</span>}
     </div>
