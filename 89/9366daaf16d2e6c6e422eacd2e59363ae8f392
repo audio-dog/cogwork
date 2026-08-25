@@ -1,0 +1,86 @@
+packages/engine/skills/implement-agent/SKILL.md
+  s_ccff80ed511cea::t_d95006e66f82da 14
+packages/engine/src/read-model.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 37,56,62-69,74,78,125,141,155-162
+.gitignore
+  s_ccff80ed511cea::t_d95006e66f82da 10-15
+packages/engine/src/worktree.ts
+  s_ccff80ed511cea::t_d95006e66f82da 80,195
+packages/engine/src/executor.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 1503-1529,1710-1738
+  s_ccff80ed511cea::t_fc8e1210bdf250 1739
+packages/engine/CONTEXT.md
+  s_ccff80ed511cea::t_d95006e66f82da 137
+docs/agents/technical-disposition.md
+  s_ccff80ed511cea::t_d95006e66f82da 298-309
+packages/engine/src/linear/linear.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 300-307
+packages/engine/src/engine.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 233-234,587-592,623-624,659
+packages/engine/src/github/github-helpers.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 49-50
+packages/engine/src/executor.ts
+  s_ccff80ed511cea::t_d95006e66f82da 110-116,627,653,698,725
+packages/engine/src/follow-up.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 20-21
+packages/engine/src/worktree.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 131-151,411-427
+packages/engine/src/classify.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 36-37,100-102,160-167,169-175
+packages/contracts/src/board.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 32
+scripts/claude-worktree-setup.mjs
+  s_ccff80ed511cea::t_d95006e66f82da 1-69
+packages/contracts/CONTEXT.md
+  s_ccff80ed511cea::t_d95006e66f82da 24-25
+packages/engine/src/event-publisher.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 164
+packages/engine/src/classify.ts
+  s_ccff80ed511cea::t_d95006e66f82da 28,56-57,59,103-110,113-120,128,152,157,169,174-182
+.claude/settings.json
+  s_ccff80ed511cea::t_d95006e66f82da 1-27
+packages/engine/src/github/github.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 254-255,408-415,709-842
+  s_ccff80ed511cea::t_781b8b946d1e27 843
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_ccff80ed511cea::t_d95006e66f82da 22,230-238,250-252,314
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 28,58,90
+packages/engine/src/follow-up.ts
+  s_ccff80ed511cea::t_d95006e66f82da 30-31
+packages/engine/src/github/graphql.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 2,17-44
+  s_ccff80ed511cea::t_3444bf4a43367f 45-46
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_ccff80ed511cea::t_d95006e66f82da 37,59-60,67-74,83,93
+apps/desktop/src/renderer/src/components/item-title.test.tsx
+  s_ccff80ed511cea::t_d95006e66f82da 1-23
+packages/contracts/src/daemon.ts
+  s_ccff80ed511cea::t_d95006e66f82da 37,46,55
+packages/engine/src/read-model.ts
+  s_ccff80ed511cea::t_d95006e66f82da 14
+packages/engine/src/github/provider.ts
+  s_ccff80ed511cea::t_d95006e66f82da 81,170-171,180-183,185-201,211,213
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_ccff80ed511cea::t_d95006e66f82da 7,13
+packages/engine/src/daemon.ts
+  s_ccff80ed511cea::t_d95006e66f82da 233
+packages/engine/src/github/client.ts
+  s_ccff80ed511cea::t_d95006e66f82da 52-53,102-106,160-229,483-501,508-512,523-524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "899366daaf16d2e6c6e422eacd2e59363ae8f392",
+  "prompts": {},
+  "sessions": {
+    "s_ccff80ed511cea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03743-ee43-7c60-bb5b-e05bfc056adf",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
