@@ -8,45 +8,29 @@ import {
   DropdownMenuTrigger,
 } from "@cogwork/ui/components/dropdown-menu";
 import { RiAddLine, RiFocus2Line, RiPulseLine, RiTerminalBoxLine } from "@remixicon/react";
+import { useRightPanelStore } from "../store/right-panel";
 
-export const surfaceCatalog = [
-  {
-    id: "attention",
-    title: "Attention",
-    description: "See work that needs a decision or is ready to merge.",
-  },
-  {
-    id: "activity",
-    title: "Activity",
-    description: "Follow the raw daemon event stream.",
-  },
-  {
-    id: "terminal",
-    title: "Terminal",
-    description: "Run commands in this workspace when it is ready.",
-  },
-] as const;
+export function SurfaceCatalogCards() {
+  const openSurface = useRightPanelStore((state) => state.openSurface);
 
-const [attentionSurface, activitySurface, terminalSurface] = surfaceCatalog;
-
-export function SurfaceCatalogCards({
-  onSelect,
-}: {
-  onSelect: (id: (typeof surfaceCatalog)[number]["id"]) => void;
-}) {
   return (
     <div className="grid gap-3 p-4 sm:grid-cols-2">
       <Card size="sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RiFocus2Line className="size-4" />
-            {attentionSurface.title}
+            Attention
           </CardTitle>
-          <CardDescription>{attentionSurface.description}</CardDescription>
+          <CardDescription>See work that needs a decision or is ready to merge.</CardDescription>
         </CardHeader>
         <CardFooter>
-          <Button className="w-full" size="sm" variant="outline" onClick={() => onSelect("attention")}>
-            Open {attentionSurface.title}
+          <Button
+            className="w-full"
+            size="sm"
+            variant="outline"
+            onClick={() => openSurface({ kind: "attention" })}
+          >
+            Open Attention
           </Button>
         </CardFooter>
       </Card>
@@ -54,13 +38,18 @@ export function SurfaceCatalogCards({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RiPulseLine className="size-4" />
-            {activitySurface.title}
+            Activity
           </CardTitle>
-          <CardDescription>{activitySurface.description}</CardDescription>
+          <CardDescription>Follow the raw daemon event stream.</CardDescription>
         </CardHeader>
         <CardFooter>
-          <Button className="w-full" size="sm" variant="outline" onClick={() => onSelect("activity")}>
-            Open {activitySurface.title}
+          <Button
+            className="w-full"
+            size="sm"
+            variant="outline"
+            onClick={() => openSurface({ kind: "activity" })}
+          >
+            Open Activity
           </Button>
         </CardFooter>
       </Card>
@@ -68,13 +57,18 @@ export function SurfaceCatalogCards({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RiTerminalBoxLine className="size-4" />
-            {terminalSurface.title}
+            Terminal
           </CardTitle>
-          <CardDescription>{terminalSurface.description}</CardDescription>
+          <CardDescription>Run commands in this workspace when it is ready.</CardDescription>
         </CardHeader>
         <CardFooter>
-          <Button className="w-full" size="sm" variant="outline" onClick={() => onSelect("terminal")}>
-            Open {terminalSurface.title}
+          <Button
+            className="w-full"
+            size="sm"
+            variant="outline"
+            onClick={() => openSurface({ kind: "terminal" })}
+          >
+            Open Terminal
           </Button>
         </CardFooter>
       </Card>
@@ -82,11 +76,9 @@ export function SurfaceCatalogCards({
   );
 }
 
-export function SurfaceCatalogMenu({
-  onSelect,
-}: {
-  onSelect: (id: (typeof surfaceCatalog)[number]["id"]) => void;
-}) {
+export function SurfaceCatalogMenu() {
+  const openSurface = useRightPanelStore((state) => state.openSurface);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -98,25 +90,29 @@ export function SurfaceCatalogMenu({
       />
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => onSelect("attention")}>
+          <DropdownMenuItem onClick={() => openSurface({ kind: "attention" })}>
             <RiFocus2Line className="size-4" />
             <span className="flex flex-col">
-              <span>{attentionSurface.title}</span>
-              <span className="text-xs text-muted-foreground">{attentionSurface.description}</span>
+              <span>Attention</span>
+              <span className="text-xs text-muted-foreground">
+                See work that needs a decision or is ready to merge.
+              </span>
             </span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onSelect("activity")}>
+          <DropdownMenuItem onClick={() => openSurface({ kind: "activity" })}>
             <RiPulseLine className="size-4" />
             <span className="flex flex-col">
-              <span>{activitySurface.title}</span>
-              <span className="text-xs text-muted-foreground">{activitySurface.description}</span>
+              <span>Activity</span>
+              <span className="text-xs text-muted-foreground">Follow the raw daemon event stream.</span>
             </span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onSelect("terminal")}>
+          <DropdownMenuItem onClick={() => openSurface({ kind: "terminal" })}>
             <RiTerminalBoxLine className="size-4" />
             <span className="flex flex-col">
-              <span>{terminalSurface.title}</span>
-              <span className="text-xs text-muted-foreground">{terminalSurface.description}</span>
+              <span>Terminal</span>
+              <span className="text-xs text-muted-foreground">
+                Run commands in this workspace when it is ready.
+              </span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>

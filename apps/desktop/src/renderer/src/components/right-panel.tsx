@@ -163,7 +163,6 @@ function TerminalPanelBody() {
 }
 
 function EmptySurfaceCatalog() {
-  const openSurface = useRightPanelStore((state) => state.openSurface);
   const maximized = useRightPanelStore((state) => state.maximized);
 
   return (
@@ -179,7 +178,7 @@ function EmptySurfaceCatalog() {
           <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
         </div>
       </div>
-      <SurfaceCatalogCards onSelect={(kind) => openSurface({ kind })} />
+      <SurfaceCatalogCards />
     </div>
   );
 }
@@ -188,7 +187,6 @@ export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
   const active = useRightPanelStore((state) => state.active);
   const maximized = useRightPanelStore((state) => state.maximized);
-  const openSurface = useRightPanelStore((state) => state.openSurface);
   const current = currentSurface(surfaces, active);
   const attentionOpen = surfaces.some((surface) => surface.kind === "attention");
   const activityOpen = surfaces.some((surface) => surface.kind === "activity");
@@ -216,7 +214,7 @@ export function RightPanel() {
             const id = surfaceId(surface);
             return <ItemTab key={id} surface={surface} />;
           })}
-          <SurfaceCatalogMenu onSelect={(kind) => openSurface({ kind })} />
+          <SurfaceCatalogMenu />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
