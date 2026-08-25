@@ -1,5 +1,3 @@
-import { Button } from "@cogwork/ui/components/button";
-import { CardDescription, CardFooter, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { RiFocus2Line } from "@remixicon/react";
 import { useRightPanelStore } from "../store/right-panel";
 import { AttentionList } from "./attention-rail";
@@ -7,7 +5,7 @@ import { CatalogEntry } from "./catalog-entry";
 import { SurfaceTab } from "./surface-tab";
 
 const title = "Attention";
-const description = "See work that needs a decision or is ready to merge.";
+const description = "See what needs a decision.";
 const Icon = RiFocus2Line;
 
 export function AttentionSurfaceTab() {
@@ -18,11 +16,10 @@ export function AttentionSurfaceTab() {
 
   return (
     <Tab>
+      <SurfaceTab.Lead icon={Icon} label={title} onClose={() => closeSurface("attention")} />
       <SurfaceTab.Button onClick={() => setActive("attention")}>
-        <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
-      <SurfaceTab.Close label={title} onClick={() => closeSurface("attention")} />
     </Tab>
   );
 }
@@ -31,20 +28,12 @@ export function AttentionCatalogCard() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
   return (
-    <CatalogEntry.Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon className="size-4" />
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardFooter>
-        <Button className="w-full" size="sm" variant="outline" onClick={() => openTool("attention")}>
-          Open {title}
-        </Button>
-      </CardFooter>
-    </CatalogEntry.Card>
+    <CatalogEntry.Card
+      description={description}
+      icon={Icon}
+      title={title}
+      onClick={() => openTool("attention")}
+    />
   );
 }
 

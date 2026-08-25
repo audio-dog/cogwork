@@ -1,5 +1,3 @@
-import { Button } from "@cogwork/ui/components/button";
-import { CardDescription, CardFooter, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { RiPulseLine } from "@remixicon/react";
 import { useRightPanelStore } from "../store/right-panel";
 import { ActivityTranscript } from "./activity-transcript";
@@ -7,7 +5,7 @@ import { CatalogEntry } from "./catalog-entry";
 import { SurfaceTab } from "./surface-tab";
 
 const title = "Activity";
-const description = "Follow the raw daemon event stream.";
+const description = "Watch the raw event stream.";
 const Icon = RiPulseLine;
 
 export function ActivitySurfaceTab() {
@@ -18,11 +16,10 @@ export function ActivitySurfaceTab() {
 
   return (
     <Tab>
+      <SurfaceTab.Lead icon={Icon} label={title} onClose={() => closeSurface("activity")} />
       <SurfaceTab.Button onClick={() => setActive("activity")}>
-        <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
-      <SurfaceTab.Close label={title} onClick={() => closeSurface("activity")} />
     </Tab>
   );
 }
@@ -31,20 +28,12 @@ export function ActivityCatalogCard() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
   return (
-    <CatalogEntry.Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon className="size-4" />
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardFooter>
-        <Button className="w-full" size="sm" variant="outline" onClick={() => openTool("activity")}>
-          Open {title}
-        </Button>
-      </CardFooter>
-    </CatalogEntry.Card>
+    <CatalogEntry.Card
+      description={description}
+      icon={Icon}
+      title={title}
+      onClick={() => openTool("activity")}
+    />
   );
 }
 

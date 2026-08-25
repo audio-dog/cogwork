@@ -1,5 +1,3 @@
-import { Button } from "@cogwork/ui/components/button";
-import { CardDescription, CardFooter, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiTerminalBoxLine } from "@remixicon/react";
 import { useRightPanelStore } from "../store/right-panel";
@@ -7,7 +5,7 @@ import { CatalogEntry } from "./catalog-entry";
 import { SurfaceTab } from "./surface-tab";
 
 const title = "Terminal";
-const description = "Run commands in this workspace when it is ready.";
+const description = "Run commands in this workspace.";
 const Icon = RiTerminalBoxLine;
 
 export function TerminalSurfaceTab() {
@@ -18,11 +16,10 @@ export function TerminalSurfaceTab() {
 
   return (
     <Tab>
+      <SurfaceTab.Lead icon={Icon} label={title} onClose={() => closeSurface("terminal")} />
       <SurfaceTab.Button onClick={() => setActive("terminal")}>
-        <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
-      <SurfaceTab.Close label={title} onClick={() => closeSurface("terminal")} />
     </Tab>
   );
 }
@@ -31,20 +28,12 @@ export function TerminalCatalogCard() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
   return (
-    <CatalogEntry.Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon className="size-4" />
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardFooter>
-        <Button className="w-full" size="sm" variant="outline" onClick={() => openTool("terminal")}>
-          Open {title}
-        </Button>
-      </CardFooter>
-    </CatalogEntry.Card>
+    <CatalogEntry.Card
+      description={description}
+      icon={Icon}
+      title={title}
+      onClick={() => openTool("terminal")}
+    />
   );
 }
 

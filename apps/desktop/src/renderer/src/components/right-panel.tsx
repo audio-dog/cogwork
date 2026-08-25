@@ -53,8 +53,12 @@ function EmptySurfaceCatalog() {
           <h2 className="font-heading text-sm font-medium">Open a surface</h2>
         </div>
       </div>
-      <p className="px-4 pt-3 text-sm text-muted-foreground">Choose what to show in the right panel.</p>
-      <SurfaceCatalogCards />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col justify-center gap-3 px-4 py-6">
+          <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
+          <SurfaceCatalogCards />
+        </div>
+      </div>
     </div>
   );
 }

@@ -7,24 +7,20 @@ import {
   ContextMenuTrigger,
 } from "@cogwork/ui/components/context-menu";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiCloseLine } from "@remixicon/react";
+import { type RemixiconComponentType, RiCloseLine } from "@remixicon/react";
 import type { ComponentProps, ReactNode } from "react";
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 
-const baseClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
+const baseClassName =
+  "group/surface-tab flex h-7 shrink-0 items-center gap-0.5 rounded-md pl-1 pr-1.5 text-xs";
 
 function SurfaceTabActive({ children }: { children: ReactNode }) {
-  return <div className={cn(baseClassName, "bg-accent text-foreground pl-2 pr-1")}>{children}</div>;
+  return <div className={cn(baseClassName, "bg-accent text-foreground")}>{children}</div>;
 }
 
 function SurfaceTabInactive({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={cn(
-        baseClassName,
-        "text-muted-foreground hover:bg-accent/60 hover:text-foreground pl-2 pr-1",
-      )}
-    >
+    <div className={cn(baseClassName, "text-muted-foreground hover:bg-accent/60 hover:text-foreground")}>
       {children}
     </div>
   );
@@ -38,11 +34,31 @@ function SurfaceTabButton({ className, children, ...props }: ComponentProps<type
   );
 }
 
-function SurfaceTabClose({ label, onClick }: { label: string; onClick: () => void }) {
+function SurfaceTabLead({
+  icon: Icon,
+  label,
+  onClose,
+}: {
+  icon: RemixiconComponentType;
+  label: string;
+  onClose: () => void;
+}) {
   return (
-    <Button aria-label={`Close ${label}`} size="icon-xs" variant="ghost" onClick={onClick}>
-      <RiCloseLine data-icon="inline-start" />
-    </Button>
+    <span className="relative flex size-5 shrink-0 items-center justify-center">
+      <Icon
+        aria-hidden
+        className="size-3.5 group-hover/surface-tab:opacity-0 group-focus-within/surface-tab:opacity-0"
+      />
+      <Button
+        aria-label={`Close ${label}`}
+        className="absolute inset-0 size-5 opacity-0 group-hover/surface-tab:opacity-100 focus-visible:opacity-100"
+        size="icon-xs"
+        variant="ghost"
+        onClick={onClose}
+      >
+        <RiCloseLine className="size-3.5" />
+      </Button>
+    </span>
   );
 }
 
@@ -75,6 +91,6 @@ export const SurfaceTab = {
   Active: SurfaceTabActive,
   Inactive: SurfaceTabInactive,
   Button: SurfaceTabButton,
-  Close: SurfaceTabClose,
+  Lead: SurfaceTabLead,
   ContextMenu: SurfaceTabContextMenu,
 };

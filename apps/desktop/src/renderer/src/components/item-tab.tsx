@@ -726,18 +726,17 @@ export function ItemSurfaceTab({
 
   return (
     <Tab>
+      <SurfaceTab.Lead icon={RiFileList2Line} label={workItem} onClose={() => closeSurface(id)} />
       <Tooltip>
         <TooltipTrigger
           render={
             <SurfaceTab.Button onClick={() => setActive(id)}>
-              <RiFileList2Line data-icon="inline-start" />
               <span className="truncate">{workItem}</span>
             </SurfaceTab.Button>
           }
         />
         <TooltipContent side="bottom">{workspace}</TooltipContent>
       </Tooltip>
-      <SurfaceTab.Close label={workItem} onClick={() => closeSurface(id)} />
     </Tab>
   );
 }
