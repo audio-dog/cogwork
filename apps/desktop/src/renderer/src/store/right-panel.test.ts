@@ -1,11 +1,40 @@
-import { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Schema } from "effect";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRightPanelStore } from "./right-panel";
+
+const { storageEntries } = vi.hoisted(() => {
+  const entries = new Map<string, string>();
+  vi.stubGlobal("window", {
+    localStorage: {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+      removeItem: (key: string) => entries.delete(key),
+    },
+  });
+  return { storageEntries: entries };
+});
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const workItem = Schema.decodeSync(WorkItemId);
 const runId = Schema.decodeSync(RunId);
+const runSummary = Schema.decodeSync(RunSummary);
+
+const run = () =>
+  runSummary({
+    id: "run-1",
+    workspace: "acme",
+    workItem: "#50",
+    stage: "implement",
+    harness: "cursor",
+    branch: null,
+    session: null,
+    usage: null,
+    status: "running",
+    startedAtMillis: 100,
+    endedAtMillis: null,
+    eventCount: 0,
+  });
 
 const item = (ws: string, id: string, run?: string) =>
   expect.objectContaining({
@@ -21,13 +50,15 @@ const surfaceIdAt = (index: number) => {
   return surface.id;
 };
 
-const reset = () =>
+const reset = () => {
+  storageEntries.clear();
   useRightPanelStore.setState({
     open: false,
     maximized: false,
     surfaces: [],
     active: null,
   });
+};
 
 describe("right-panel store", () => {
   beforeEach(reset);
@@ -82,7 +113,7 @@ describe("right-panel store", () => {
 
   it("open resets a run pin", () => {
     const { openItem } = useRightPanelStore.getState();
-    openItem(workspace("acme"), workItem("#50"), runId("run-1"));
+    openItem(workspace("acme"), workItem("#50"), run());
     openItem(workspace("acme"), workItem("#50"));
 
     expect(useRightPanelStore.getState().surfaces).toEqual([item("acme", "#50")]);
@@ -182,5 +213,31 @@ describe("right-panel store", () => {
     const state = useRightPanelStore.getState();
     expect(state.open).toBe(false);
     expect(state.maximized).toBe(false);
+  });
+
+  it("persists assembled surfaces and active tab without panel state or run pins", () => {
+    const { openItem, openTool } = useRightPanelStore.getState();
+    openTool("attention");
+    openItem(workspace("acme"), workItem("#50"), run());
+
+    const persisted = JSON.parse(window.localStorage.getItem("right-panel") ?? "");
+
+    expect(persisted).toEqual({
+      state: {
+        surfaces: [{ id: "attention", kind: "attention" }, item("acme", "#50")],
+        active: surfaceIdAt(1),
+      },
+      version: 0,
+    });
+
+    useRightPanelStore.setState({ open: false, maximized: false, surfaces: [], active: null });
+    window.localStorage.setItem("right-panel", JSON.stringify(persisted));
+    useRightPanelStore.persist.rehydrate();
+
+    const state = useRightPanelStore.getState();
+    expect(state.open).toBe(false);
+    expect(state.maximized).toBe(false);
+    expect(state.surfaces).toEqual([{ id: "attention", kind: "attention" }, item("acme", "#50")]);
+    expect(state.active).toBe("item:acme:#50");
   });
 });
