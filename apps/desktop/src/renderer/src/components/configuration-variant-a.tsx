@@ -28,10 +28,12 @@ import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-grou
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiBox3Line, RiErrorWarningLine, RiFilter3Line, RiSearchLine, RiStore2Line } from "@remixicon/react";
 import { useState } from "react";
+import { draftCellAt, withDraft } from "../features/configuration-draft";
 import {
   type Contribution,
   type ContributionKind,
   contributionKinds,
+  type DraftCell,
   kindLabelsPlural,
   type ScopeRef,
   sameScope,
@@ -39,12 +41,8 @@ import {
   scopeLabels,
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
-import {
-  cellPermitted,
-  isOfferedNotEnabled,
-  resolveEnablement,
-  rowAt,
-} from "../features/configuration-resolve";
+import { cellPermitted, isOfferedNotEnabled, resolveEnablement } from "../features/configuration-resolve";
+import { useConfigurationDraftStore } from "../store/configuration-draft";
 import {
   AuthorityBadge,
   DiagnosticBadge,
@@ -159,15 +157,18 @@ function ContributionRow({
   writeScope: ScopeRef;
 }) {
   // Resolution over the checked Scopes only — which is not what a Run resolves over.
+  const cells = useConfigurationDraftStore((state) => state.cells);
+  const setCell = useConfigurationDraftStore((state) => state.setCell);
+  const edited = withDraft(contribution, cells);
+
   const scoped: Contribution = {
-    ...contribution,
-    rows: contribution.rows.filter((row) => viewScopes.some((scope) => sameScope(scope, row.scope))),
+    ...edited,
+    rows: edited.rows.filter((row) => viewScopes.some((scope) => sameScope(scope, row.scope))),
   };
   const resolved = resolveEnablement(scoped, { workspaceId: writeScope.workspaceId });
   const Icon = kindIcons[contribution.kind];
   const permitted = cellPermitted(contribution.kind, writeScope.kind);
-  const written = rowAt(contribution, writeScope);
-  const cell = written === undefined ? "unset" : written.value ? "on" : "off";
+  const cell = draftCellAt(contribution, writeScope, cells);
   const failed = contribution.load._tag === "failed";
 
   return (
@@ -213,7 +214,15 @@ function ContributionRow({
         ) : null}
       </ItemContent>
       <ItemActions className="flex-col items-end gap-1">
-        <ToggleGroup value={[cell]} disabled={!permitted || failed} onValueChange={() => undefined} size="sm">
+        <ToggleGroup
+          value={[cell]}
+          disabled={!permitted || failed}
+          onValueChange={(values) => {
+            const next = values[0];
+            if (next) setCell(contribution.id, writeScope, next as DraftCell);
+          }}
+          size="sm"
+        >
           <ToggleGroupItem value="on" aria-label="On">
             On
           </ToggleGroupItem>
@@ -242,6 +251,10 @@ export function ConfigurationVariantA() {
 
   const viewScopes = scopeInstances.filter((scope) => checked.includes(scopeKey(scope)));
   const writeScope = scopeInstances.find((scope) => scopeKey(scope) === writeKey) ?? scopeInstances[0];
+  // base-ui renders the raw value in the trigger unless the labels are declared here.
+  const writeTargets = Object.fromEntries(
+    viewScopes.map((scope) => [scopeKey(scope), describeScope(scope, workspaces)]),
+  );
 
   const toggle = (key: string) =>
     setChecked((current) =>
@@ -327,7 +340,11 @@ export function ConfigurationVariantA() {
             <div className="flex items-center gap-2">
               {/* A merged list has no inherent write target, so the target has to be named. */}
               <Label className="text-xs text-muted-foreground">Write to</Label>
-              <Select value={writeKey} onValueChange={(value) => setWriteKey(String(value))}>
+              <Select
+                items={writeTargets}
+                value={writeKey}
+                onValueChange={(value) => setWriteKey(String(value))}
+              >
                 <SelectTrigger size="sm" className="w-64">
                   <SelectValue />
                 </SelectTrigger>

@@ -26,10 +26,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { RiErrorWarningLine, RiInformationLine } from "@remixicon/react";
 import { useState } from "react";
+import { draftCellAt, withDraft } from "../features/configuration-draft";
 import {
   type Contribution,
   type ContributionKind,
   contributionKinds,
+  type DraftCell,
   enablementScopes,
   kindLabelsPlural,
   type OperationSettingKey,
@@ -43,6 +45,7 @@ import {
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { resolveEnablement, rowAt } from "../features/configuration-resolve";
+import { useConfigurationDraftStore } from "../store/configuration-draft";
 import {
   AuthorityBadge,
   DiagnosticBadge,
@@ -52,6 +55,10 @@ import {
 } from "./configuration-atoms";
 
 const { workspaces, contributions, operations } = placeholderConfiguration;
+
+const workspaceItems = Object.fromEntries(
+  workspaces.map((workspace) => [workspace.id, `${workspace.name} — ${workspace.checkoutPath}`]),
+);
 
 const workspaceScopes: readonly ScopeKind[] = ["workspace-input", "private-overlay"];
 
@@ -68,9 +75,13 @@ const exclusionReasons: Partial<Record<ScopeKind, string>> = {
 };
 
 function ContributionRowAtScope({ contribution, scope }: { contribution: Contribution; scope: ScopeRef }) {
-  const here = rowAt(contribution, scope);
-  const cell = here === undefined ? "unset" : here.value ? "on" : "off";
-  const resolved = resolveEnablement(contribution, { workspaceId: scope.workspaceId });
+  const cells = useConfigurationDraftStore((state) => state.cells);
+  const setCell = useConfigurationDraftStore((state) => state.setCell);
+  const edited = withDraft(contribution, cells);
+
+  const here = rowAt(edited, scope);
+  const cell = draftCellAt(contribution, scope, cells);
+  const resolved = resolveEnablement(edited, { workspaceId: scope.workspaceId });
   const Icon = kindIcons[contribution.kind];
   const failed = contribution.load._tag === "failed";
   const winsHere = resolved.winner !== undefined && resolved.winner === here;
@@ -124,7 +135,15 @@ function ContributionRowAtScope({ contribution, scope }: { contribution: Contrib
         )}
       </ItemContent>
       <ItemActions>
-        <ToggleGroup value={[cell]} disabled={failed} onValueChange={() => undefined} size="sm">
+        <ToggleGroup
+          value={[cell]}
+          disabled={failed}
+          onValueChange={(values) => {
+            const next = values[0];
+            if (next) setCell(contribution.id, scope, next as DraftCell);
+          }}
+          size="sm"
+        >
           <ToggleGroupItem value="on" aria-label="On">
             On
           </ToggleGroupItem>
@@ -305,6 +324,7 @@ export function ConfigurationVariantB() {
                 <div className="flex items-center gap-2">
                   <Label className="text-xs text-muted-foreground">Workspace</Label>
                   <Select
+                    items={workspaceItems}
                     value={workspaceId}
                     onValueChange={(value) => setWorkspaceId(String(value) as WorkspaceId)}
                   >

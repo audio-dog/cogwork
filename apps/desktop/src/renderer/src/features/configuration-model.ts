@@ -135,6 +135,12 @@ export interface EnablementRow {
   readonly diagnostic?: Diagnostic;
 }
 
+/**
+ * What one `(contribution identity, Scope)` cell holds. Three states, because #133's act is "set
+ * *or clear*" and #134 fixed that absence is not `false` — a switch cannot say this.
+ */
+export type DraftCell = "on" | "off" | "unset";
+
 /** Whether the file a manifest points at actually parsed. A failure yields no contribution. */
 export type LoadState = { readonly _tag: "loaded" } | { readonly _tag: "failed"; readonly reason: string };
 

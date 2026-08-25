@@ -32,6 +32,7 @@ import {
   RiShieldKeyholeLine,
 } from "@remixicon/react";
 import { useState } from "react";
+import { withDraft } from "../features/configuration-draft";
 import {
   contributionKinds,
   kindLabels,
@@ -43,9 +44,14 @@ import {
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { resolveEnablement, resolveOperationSetting } from "../features/configuration-resolve";
+import { useConfigurationDraftStore } from "../store/configuration-draft";
 import { describeScope, kindIcons } from "./configuration-atoms";
 
 const { workspaces, contributions, operations, workflows } = placeholderConfiguration;
+
+const workspaceItems = Object.fromEntries(
+  workspaces.map((workspace) => [workspace.id, `${workspace.name} — ${workspace.checkoutPath}`]),
+);
 
 const inspectedKeys: readonly OperationSettingKey[] = [
   "enabled",
@@ -146,9 +152,11 @@ function SettingRow({
 
 /** The `on` set for this workspace, grouped the way a Run Plan carries it. */
 function RunPlanMembers({ workspaceId }: { workspaceId: WorkspaceId }) {
+  const cells = useConfigurationDraftStore((state) => state.cells);
+  // Edits made in Variant A or B land here, so the same change can be read three ways.
   const on = contributions.filter((contribution) => {
     if (contribution.load._tag === "failed") return false;
-    return resolveEnablement(contribution, { workspaceId }).effective === true;
+    return resolveEnablement(withDraft(contribution, cells), { workspaceId }).effective === true;
   });
 
   return (
@@ -311,7 +319,11 @@ export function ConfigurationVariantC() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Label className="text-xs text-muted-foreground">Workspace</Label>
-        <Select value={workspaceId} onValueChange={(value) => setWorkspaceId(String(value) as WorkspaceId)}>
+        <Select
+          items={workspaceItems}
+          value={workspaceId}
+          onValueChange={(value) => setWorkspaceId(String(value) as WorkspaceId)}
+        >
           <SelectTrigger size="sm" className="w-72">
             <SelectValue />
           </SelectTrigger>
