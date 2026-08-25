@@ -4,8 +4,8 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 // Claude Code keeps CLAUDE_PROJECT_DIR at the directory the session started in, even after the
-// session moves into a worktree; only the hook payload's `cwd` follows. Resolve the root from
-// stdin or this hook hydrates the main checkout and silently skips every worktree.
+// session moves into a worktree; only the hook payload's `cwd` follows. Resolve from stdin or this
+// hook hydrates the main checkout and silently skips every worktree.
 const readStdin = async () => {
   if (process.stdin.isTTY) return "";
   const chunks = [];
@@ -13,7 +13,7 @@ const readStdin = async () => {
   return Buffer.concat(chunks).toString("utf8");
 };
 
-const rootFrom = (raw) => {
+const cwdFrom = (raw) => {
   try {
     return resolve(JSON.parse(raw).cwd ?? process.cwd());
   } catch {
@@ -21,16 +21,21 @@ const rootFrom = (raw) => {
   }
 };
 
-const mainCheckoutOf = (root) => {
+// CwdChanged reports wherever the session now sits, which is routinely a subdirectory, so the
+// checkout roots come from git rather than from the payload. `--git-common-dir` is relative to the
+// invocation directory rather than to the top level, so it resolves against `cwd`, not `root`.
+const checkoutsFrom = (cwd) => {
   try {
-    const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
-      cwd: root,
+    const [top, common] = execFileSync("git", ["rev-parse", "--show-toplevel", "--git-common-dir"], {
+      cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return dirname(resolve(root, commonDir));
+    })
+      .trim()
+      .split("\n");
+    return { root: resolve(top), mainCheckout: dirname(resolve(cwd, common)) };
   } catch {
-    return root;
+    return null;
   }
 };
 
@@ -57,8 +62,8 @@ const installDependencies = (root) => {
   if (result.stderr) console.log(result.stderr.trimEnd().split("\n").slice(-5).join("\n"));
 };
 
-const root = rootFrom(await readStdin());
-if (root === mainCheckoutOf(root)) process.exit(0);
+const checkouts = checkoutsFrom(cwdFrom(await readStdin()));
+if (!checkouts || checkouts.root === checkouts.mainCheckout) process.exit(0);
 
-hydrateLinks(root);
-installDependencies(root);
+hydrateLinks(checkouts.root);
+installDependencies(checkouts.root);
