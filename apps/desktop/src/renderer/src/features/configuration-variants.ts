@@ -11,7 +11,7 @@
 //   3. Workspace — two of the three Scopes are workspace-bound, so a Scope is not fully named
 //      until a workspace is.
 
-export const variantKeys = ["A", "B", "C"] as const;
+export const variantKeys = ["A", "B", "C", "D"] as const;
 
 export type VariantKey = (typeof variantKeys)[number];
 
@@ -27,19 +27,25 @@ export const variants: readonly VariantDefinition[] = [
     key: "A",
     name: "Two rows",
     claim:
-      "Kind filters; Scope does not. Scope is the write target, always visible, and every row shows the whole three-rung ladder so nothing about resolution is hidden behind a filter.",
+      "Kept as the reference point. Kind filters; Scope names the write target and every row carries the whole ladder. The level switch is still a mode, which is what the other three try to remove.",
   },
   {
     key: "B",
-    name: "Scope tabs",
+    name: "Layer rail",
     claim:
-      "Scope is the only filter, and kind becomes navigation: one long page per Scope with a jump list. The cells a Scope may not hold get stated as decisions instead of vanishing.",
+      "The mode gets a place to live. Three stacked layer cards down the left, each carrying its name, what it means, how much is written there, and how much of it wins. Switching is one click on a thing you can always see.",
   },
   {
     key: "C",
-    name: "Group by",
+    name: "Three columns",
     claim:
-      "No filters at all. Everything is always on screen and one control chooses how it is grouped — by kind, by Scope, or by Plugin. Search narrows; grouping organizes.",
+      "No mode at all. One column per level, side by side, so the ladder is taught by the layout itself. Every cell is always editable, and swapping levels means moving your cursor.",
+  },
+  {
+    key: "D",
+    name: "Effective first",
+    claim:
+      "One switch per row and a chip saying where the value came from. The three levels stay out of the way until a row is opened, so the common case never asks about them at all.",
   },
 ];
 

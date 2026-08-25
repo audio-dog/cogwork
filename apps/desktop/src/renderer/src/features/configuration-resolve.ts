@@ -217,3 +217,22 @@ export function collectAttention(
 
   return [...failedLoads, ...diagnostics, ...unmet, ...staged];
 }
+
+/**
+ * How many contributions have a value written at one Scope, and how many of those win there.
+ * The layer rail needs both: "what lives here" and "what of it actually takes effect".
+ */
+export function scopeTally(
+  contributions: readonly Contribution[],
+  scope: ScopeRef,
+  view: ViewContext,
+): { readonly written: number; readonly winning: number } {
+  const relevant = contributions.filter((contribution) => cellPermitted(contribution.kind, scope.kind));
+  const written = relevant.filter((contribution) =>
+    contribution.rows.some((row) => sameScope(row.scope, scope)),
+  );
+  const winning = written.filter(
+    (contribution) => resolveEnablement(contribution, view).winner?.scope.kind === scope.kind,
+  );
+  return { written: written.length, winning: winning.length };
+}

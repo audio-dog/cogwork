@@ -1,41 +1,31 @@
-// PROTOTYPE — Customize, Variant C: group by.
+// PROTOTYPE — Customize, Variant C: three columns.
 //
-// The claim: **no filter modes, and no write mode either.** Everything is always on screen; one
-// control chooses how it is grouped, and search narrows. Each row carries all three rungs as
-// directly clickable cells, so a person never sets a mode before making a change — they click the
-// rung they mean.
+// The mode is deleted rather than relocated. One column per level, side by side, so the ladder is
+// taught by the layout before any label is read: three columns, left to right, and the one that
+// wins is ringed. "Swapping levels" stops being an action — you move your cursor.
 //
-// The bet is that both filters were only ever compensating for a list that felt too long, and that
-// grouping plus search solves that without ever hiding a value. The cost is row density.
+// The honest costs: a table is denser than a list and gives a contribution's own description less
+// room, and the layout only survives because the ladder lost a rung. At four levels this would not fit.
 
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@cogwork/ui/components/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from "@cogwork/ui/components/item";
-import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
+import { Separator } from "@cogwork/ui/components/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiArrowRightSLine, RiBox3Line, RiSearchLine } from "@remixicon/react";
+import { RiBox3Line, RiSearchLine } from "@remixicon/react";
 import { useState } from "react";
-import { draftCellAt, withDraft } from "../features/configuration-draft";
+import { cycleCell, draftCellAt, withDraft } from "../features/configuration-draft";
 import {
-  authorityLabel,
   type Contribution,
+  type ContributionKind,
   contributionKinds,
-  type DraftCell,
   kindLabelsPlural,
   type ScopeKind,
   type ScopeRef,
+  scopeDescriptions,
   scopeLabels,
   scopeOrder,
   scopeShortLabels,
@@ -48,69 +38,67 @@ import { AuthorityBadge, DiagnosticBadge, kindIcons, ReadinessBadge } from "./co
 import { PluginsPanel } from "./configuration-plugins-panel";
 import { useWorkspaceId, WorkspacePicker } from "./customize-atoms";
 
-const { contributions, plugins } = placeholderConfiguration;
+type Facet = "plugins" | ContributionKind;
 
-const groupings = ["kind", "rung", "plugin"] as const;
-type Grouping = (typeof groupings)[number];
-
-const groupingLabels: Record<Grouping, string> = {
-  kind: "Kind",
-  rung: "Rung",
-  plugin: "Plugin",
-};
+const { contributions } = placeholderConfiguration;
 
 const workspaceBound: readonly ScopeKind[] = ["workspace-input", "private-overlay"];
 
-/** unset → on → off → unset. Three states, so a two-state control could never express it. */
-function cycle(cell: DraftCell): DraftCell {
-  if (cell === "unset") return "on";
-  if (cell === "on") return "off";
-  return "unset";
+function scopeAt(kind: ScopeKind, workspaceId: WorkspaceId): ScopeRef {
+  return workspaceBound.includes(kind) ? { kind, workspaceId } : { kind };
 }
 
-/** Every rung, directly clickable. No mode is set before a change is made. */
-function RungCells({ contribution }: { contribution: Contribution }) {
+const cellText: Record<string, string> = { on: "On", off: "Off", unset: "—" };
+
+function LevelCell({
+  contribution,
+  kind,
+  wins,
+}: {
+  contribution: Contribution;
+  kind: ScopeKind;
+  wins: boolean;
+}) {
   const cells = useConfigurationDraftStore((state) => state.cells);
   const setCell = useConfigurationDraftStore((state) => state.setCell);
   const workspaceId = useWorkspaceId();
-  const resolved = resolveEnablement(withDraft(contribution, cells), { workspaceId });
+
+  const permitted = cellPermitted(contribution.kind, kind);
   const failed = contribution.load._tag === "failed";
+  const scope = scopeAt(kind, workspaceId);
+  const cell = permitted ? draftCellAt(contribution, scope, cells) : "unset";
+
+  if (!permitted) {
+    return (
+      <TableCell className="text-center">
+        <Tooltip>
+          <TooltipTrigger
+            render={<span className="inline-block cursor-help px-2 text-muted-foreground/60" />}
+          >
+            ✕
+          </TooltipTrigger>
+          <TooltipContent className="max-w-72">
+            A {kindLabelsPlural[contribution.kind]} value may not be written at {scopeLabels[kind]}. A cloned
+            repository may ship the file; it may never turn it on. This cell is empty by decision, not merely
+            unset.
+          </TooltipContent>
+        </Tooltip>
+      </TableCell>
+    );
+  }
 
   return (
-    <div className="flex items-center gap-1">
-      {scopeOrder.map((kind) => {
-        const scope: ScopeRef = workspaceBound.includes(kind) ? { kind, workspaceId } : { kind };
-        const permitted = cellPermitted(contribution.kind, kind);
-        const cell = permitted ? draftCellAt(contribution, scope, cells) : "unset";
-        const wins = permitted && resolved.winner?.scope.kind === kind;
-
-        const button = (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!permitted || failed}
-            className={cn("w-24 flex-col gap-0 py-1 h-auto", wins && "border-primary")}
-            onClick={() => setCell(contribution.id, scope, cycle(cell))}
-          >
-            <span className="text-[10px] text-muted-foreground">{scopeShortLabels[kind]}</span>
-            <span className="text-xs font-medium">
-              {!permitted ? "not allowed" : cell === "unset" ? "not set" : cell}
-            </span>
-          </Button>
-        );
-
-        return (
-          <Tooltip key={kind}>
-            <TooltipTrigger render={<span />}>{button}</TooltipTrigger>
-            <TooltipContent className="max-w-72">
-              {permitted
-                ? `${scopeLabels[kind]}${wins ? " — this is the value a Run gets" : ""}. Click to cycle on, off, not set.`
-                : "A repository you cloned must not start a process on your machine. It may ship the file; it may not turn it on."}
-            </TooltipContent>
-          </Tooltip>
-        );
-      })}
-    </div>
+    <TableCell className="text-center">
+      <Button
+        variant={cell === "unset" ? "ghost" : "outline"}
+        size="sm"
+        disabled={failed}
+        onClick={() => setCell(contribution.id, scope, cycleCell(cell))}
+        className={cn("w-20 justify-center", wins && "border-primary ring-1 ring-primary/40")}
+      >
+        {cellText[cell]}
+      </Button>
+    </TableCell>
   );
 }
 
@@ -122,145 +110,75 @@ function ContributionRow({ contribution }: { contribution: Contribution }) {
   const Icon = kindIcons[contribution.kind];
 
   return (
-    <Item variant="outline" className="items-start">
-      <ItemMedia variant="icon">
-        <Icon />
-      </ItemMedia>
-      <ItemContent>
-        <ItemTitle className="flex flex-wrap items-center gap-1.5">
-          <span className="font-medium">{contribution.localName}</span>
-          <AuthorityBadge authority={contribution.authority} />
-          {contribution.readiness ? <ReadinessBadge readiness={contribution.readiness} /> : null}
-          {resolved.dropped.map((entry) => (
-            <DiagnosticBadge key={entry.diagnostic._tag} diagnostic={entry.diagnostic} />
-          ))}
-          {failed ? <Badge variant="destructive">Failed to load</Badge> : null}
-        </ItemTitle>
-        <ItemDescription>{contribution.summary}</ItemDescription>
-        {failed && contribution.load._tag === "failed" ? (
-          <p className="mt-1 text-xs text-destructive">{contribution.load.reason}</p>
+    <TableRow>
+      <TableCell className="max-w-80">
+        <div className="flex items-start gap-2">
+          <Icon />
+          <div className="flex min-w-0 flex-col">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="font-medium">{contribution.localName}</span>
+              <AuthorityBadge authority={contribution.authority} />
+              {contribution.readiness ? <ReadinessBadge readiness={contribution.readiness} /> : null}
+              {resolved.dropped.map((entry) => (
+                <DiagnosticBadge key={entry.diagnostic._tag} diagnostic={entry.diagnostic} />
+              ))}
+              {failed ? <Badge variant="destructive">Failed to load</Badge> : null}
+            </span>
+            <span className="text-xs text-muted-foreground">{contribution.summary}</span>
+            {failed && contribution.load._tag === "failed" ? (
+              <span className="text-xs text-destructive">{contribution.load.reason}</span>
+            ) : null}
+          </div>
+        </div>
+      </TableCell>
+      {scopeOrder.map((kind) => (
+        <LevelCell
+          key={kind}
+          contribution={contribution}
+          kind={kind}
+          wins={resolved.winner?.scope.kind === kind}
+        />
+      ))}
+      <TableCell className="text-center">
+        {resolved.effective === undefined ? (
+          <Tooltip>
+            <TooltipTrigger render={<Badge variant="ghost" className="cursor-help" />}>
+              nothing
+            </TooltipTrigger>
+            <TooltipContent className="max-w-72">
+              Nothing is written at any level. That is not the same as off — a level that says nothing shadows
+              nothing.
+            </TooltipContent>
+          </Tooltip>
         ) : (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {resolved.effective === undefined
-              ? "Nothing written at any rung. Not off — not there."
-              : `A Run gets ${resolved.effective ? "on" : "off"}.`}
-          </p>
+          <Badge variant={resolved.effective ? "secondary" : "outline"}>
+            {resolved.effective ? "On" : "Off"}
+          </Badge>
         )}
-      </ItemContent>
-      <ItemActions>
-        <RungCells contribution={contribution} />
-      </ItemActions>
-    </Item>
+      </TableCell>
+    </TableRow>
   );
 }
 
-interface Group {
-  readonly id: string;
-  readonly label: string;
-  readonly detail?: string;
-  readonly rows: readonly Contribution[];
-}
-
-function groupRows(
-  grouping: Grouping,
-  rows: readonly Contribution[],
-  workspaceId: WorkspaceId,
-): readonly Group[] {
-  if (grouping === "kind") {
-    return contributionKinds
-      .map((kind) => ({
-        id: kind,
-        label: kindLabelsPlural[kind],
-        rows: rows.filter((contribution) => contribution.kind === kind),
-      }))
-      .filter((group) => group.rows.length > 0);
-  }
-
-  if (grouping === "plugin") {
-    const byPlugin = plugins.map((plugin) => ({
-      id: plugin.record.pluginId,
-      label: plugin.name,
-      detail: plugin.record.resolvedIdentity,
-      rows: rows.filter(
-        (contribution) =>
-          contribution.authority._tag === "plugin" &&
-          contribution.authority.pluginId === plugin.record.pluginId,
-      ),
-    }));
-    const others = (["engine", "local"] as const).map((tag) => ({
-      id: tag,
-      label: tag === "engine" ? "Engine" : "This machine and this repository",
-      detail: authorityLabel({ _tag: tag }),
-      rows: rows.filter((contribution) => contribution.authority._tag === tag),
-    }));
-    return [...byPlugin, ...others].filter((group) => group.rows.length > 0);
-  }
-
-  // Group by the rung that *wins*, which is a question a filter cannot answer at all.
-  const unwritten: Contribution[] = [];
-  const byRung = new Map<ScopeKind, Contribution[]>(scopeOrder.map((kind) => [kind, []]));
-  for (const contribution of rows) {
-    const winner = resolveEnablement(contribution, { workspaceId }).winner;
-    if (!winner) unwritten.push(contribution);
-    else byRung.get(winner.scope.kind)?.push(contribution);
-  }
-  const written: Group[] = scopeOrder
-    .map((kind) => ({
-      id: kind as string,
-      label: scopeLabels[kind],
-      detail: "wins here",
-      rows: byRung.get(kind) ?? [],
-    }))
-    .filter((group) => group.rows.length > 0);
-  if (unwritten.length > 0) {
-    written.push({
-      id: "unwritten",
-      label: "Nothing written",
-      detail: "not off — not there",
-      rows: unwritten,
-    });
-  }
-  return written;
-}
-
 export function CustomizeVariantC() {
-  const [grouping, setGrouping] = useState<Grouping>("kind");
+  const [facet, setFacet] = useState<Facet>("skill");
   const [query, setQuery] = useState("");
-  const cells = useConfigurationDraftStore((state) => state.cells);
-  const workspaceId = useWorkspaceId();
 
   const needle = query.trim().toLowerCase();
-  const rows = contributions
-    .map((contribution) => withDraft(contribution, cells))
+  const visible = contributions
+    .filter((contribution) => facet !== "plugins" && contribution.kind === facet)
     .filter((contribution) =>
       needle === ""
         ? true
-        : `${contribution.localName} ${contribution.summary} ${contribution.id}`
-            .toLowerCase()
-            .includes(needle),
+        : `${contribution.localName} ${contribution.summary}`.toLowerCase().includes(needle),
     );
-  const groups = groupRows(grouping, rows, workspaceId);
 
   return (
     <div className="flex flex-col gap-4">
-      <Collapsible>
-        <CollapsibleTrigger render={<Button variant="outline" size="sm" className="w-full justify-start" />}>
-          <RiBox3Line data-icon="inline-start" />
-          Installed Plugins
-          <Badge variant="ghost" className="ms-1 px-1">
-            {plugins.length}
-          </Badge>
-          <RiArrowRightSLine data-icon="inline-end" className="ms-auto" />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-3">
-          <PluginsPanel />
-        </CollapsibleContent>
-      </Collapsible>
-
       <div className="flex flex-wrap items-center gap-3">
         <InputGroup className="min-w-64 flex-1">
           <InputGroupInput
-            placeholder="Search every contribution…"
+            placeholder="Search contributions…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -268,57 +186,84 @@ export function CustomizeVariantC() {
             <RiSearchLine />
           </InputGroupAddon>
         </InputGroup>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Group by</span>
-          <ToggleGroup
-            value={[grouping]}
-            onValueChange={(values) => {
-              const next = values[0];
-              if (next) setGrouping(next as Grouping);
-            }}
-            size="sm"
-          >
-            {groupings.map((option) => (
-              <ToggleGroupItem key={option} value={option} aria-label={groupingLabels[option]}>
-                {groupingLabels[option]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
         <WorkspacePicker />
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Nothing is filtered out. {rows.length} of {contributions.length} contributions shown, in{" "}
-        {groups.length} {groups.length === 1 ? "group" : "groups"}. Every rung is editable from its row.
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant={facet === "plugins" ? "secondary" : "outline"}
+          size="sm"
+          className="rounded-full"
+          onClick={() => setFacet("plugins")}
+        >
+          <RiBox3Line data-icon="inline-start" />
+          Plugins
+        </Button>
+        <Separator orientation="vertical" className="h-6" />
+        {contributionKinds.map((kind) => (
+          <Button
+            key={kind}
+            variant={facet === kind ? "secondary" : "outline"}
+            size="sm"
+            className="rounded-full"
+            onClick={() => setFacet(kind)}
+          >
+            {kindLabelsPlural[kind]}
+            <Badge variant="ghost" className="ms-1 px-1">
+              {contributions.filter((contribution) => contribution.kind === kind).length}
+            </Badge>
+          </Button>
+        ))}
+      </div>
 
-      {groups.length === 0 ? (
+      {facet === "plugins" ? (
+        <PluginsPanel />
+      ) : visible.length === 0 ? (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>Nothing matches</EmptyTitle>
-            <EmptyDescription>No contribution matches this search.</EmptyDescription>
+            <EmptyTitle>No {kindLabelsPlural[facet]}</EmptyTitle>
+            <EmptyDescription>Nothing matches this search.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="flex flex-col gap-6">
-          {groups.map((group) => (
-            <section key={group.id} className="flex flex-col gap-2">
-              <div className="flex items-baseline gap-2">
-                <h3 className="text-sm font-medium">{group.label}</h3>
-                {group.detail ? <span className="text-xs text-muted-foreground">{group.detail}</span> : null}
-                <Badge variant="ghost" className="px-1">
-                  {group.rows.length}
-                </Badge>
-              </div>
-              <ItemGroup className="gap-2">
-                {group.rows.map((contribution) => (
+        <>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Contribution</TableHead>
+                  {scopeOrder.map((kind, index) => (
+                    <TableHead key={kind} className="text-center">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={<span className="inline-flex cursor-help flex-col items-center" />}
+                        >
+                          <span>{scopeShortLabels[kind]}</span>
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            {index + 1} of {scopeOrder.length}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-72">
+                          <span className="font-medium">{scopeLabels[kind]}</span> — {scopeDescriptions[kind]}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableHead>
+                  ))}
+                  <TableHead className="text-center">A Run gets</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((contribution) => (
                   <ContributionRow key={contribution.id} contribution={contribution} />
                 ))}
-              </ItemGroup>
-            </section>
-          ))}
-        </div>
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Columns run low to high, left to right, and the higher level wins whole. Click a cell to cycle it
+            through On, Off, and not set. The ringed cell is the one a Run actually reads.
+          </p>
+        </>
       )}
     </div>
   );

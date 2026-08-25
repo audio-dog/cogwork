@@ -10,6 +10,13 @@ export interface DraftEntry {
   readonly cell: DraftCell;
 }
 
+/** unset → on → off → unset. A control that cycles has to visit all three, never two. */
+export function cycleCell(cell: DraftCell): DraftCell {
+  if (cell === "unset") return "on";
+  if (cell === "on") return "off";
+  return "unset";
+}
+
 export function draftKey(contributionId: string, scope: ScopeRef): string {
   return `${contributionId}|${scopeKey(scope)}`;
 }
