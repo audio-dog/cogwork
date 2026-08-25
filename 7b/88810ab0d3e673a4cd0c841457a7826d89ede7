@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_ccff80ed511cea::t_d8c4d8ce40872a 1,129,234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7b88810ab0d3e673a4cd0c841457a7826d89ede7",
+  "prompts": {},
+  "sessions": {
+    "s_ccff80ed511cea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03743-ee43-7c60-bb5b-e05bfc056adf",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
