@@ -1,0 +1,29 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_ddeb1545b195ff::t_03bfd07a8f37e6 740
+apps/desktop/src/renderer/src/components/surface-tab.tsx
+  s_ddeb1545b195ff::t_25d0ffb165e872 36,39-43
+apps/desktop/src/renderer/src/components/catalog-entry.tsx
+  s_ddeb1545b195ff::t_25d0ffb165e872 1,3,10,15-24,29-31
+apps/desktop/src/renderer/src/components/activity-surface.tsx
+  s_ddeb1545b195ff::t_03bfd07a8f37e6 1,24,33-39,46-51
+apps/desktop/src/renderer/src/components/attention-surface.tsx
+  s_ddeb1545b195ff::t_03bfd07a8f37e6 1,24,33-39,46-51
+apps/desktop/src/renderer/src/components/terminal-surface.tsx
+  s_ddeb1545b195ff::t_03bfd07a8f37e6 1,24,33-39,46-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b6e445e14b7f41920ee4f9ba6e73ab6347187868",
+  "prompts": {},
+  "sessions": {
+    "s_ddeb1545b195ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1d95e8c-6237-44db-aaae-1d26f927869c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
