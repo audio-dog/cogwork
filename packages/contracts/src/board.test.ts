@@ -29,7 +29,7 @@ const registered = (name: string) =>
 type Stage = "triage" | "implement" | "follow-up" | "verify";
 
 const eligible = (id: string, stage: Stage) =>
-  classifiedItem({ _tag: "Eligible", id, title: `Item ${id}`, stage });
+  classifiedItem({ _tag: "Eligible", id, title: `Item ${id}`, url: null, stage });
 
 const needsHuman = (id: string, url: string | null) =>
   classifiedItem({

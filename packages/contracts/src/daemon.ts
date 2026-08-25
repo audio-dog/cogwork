@@ -34,6 +34,7 @@ export type PrSummary = typeof PrSummary.Type;
 export const ActionableItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
+  url: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
   stage: LifecycleStage,
   pr: Schema.optionalKey(PrSummary),
 });
@@ -42,6 +43,7 @@ export type ActionableItem = typeof ActionableItem.Type;
 export const ClaimedItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
+  url: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
   claim: Claim,
   pr: Schema.optionalKey(PrSummary),
 });
@@ -50,6 +52,7 @@ export type ClaimedItem = typeof ClaimedItem.Type;
 export const BlockedItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
+  url: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
   openBlockers: Schema.Natural,
   pr: Schema.optionalKey(PrSummary),
 });
