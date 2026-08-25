@@ -143,3 +143,33 @@ still never calls Drizzle's `migrate()`, and still does no filesystem read at ru
 
 Full reasoning: [#126](https://github.com/colonylabs/cogwork/issues/126). Research:
 `docs/research/desktop-settings-storage-updates.md` on `research/desktop-settings-storage`.
+
+## Amendment (2026-08-25) — the daemon's runtime limits are a record kind
+
+This ADR listed the record kinds the Control store holds. It did not include the daemon's own
+scheduler limits, because at the time nobody had asked where they live. ADR
+[0016](./0016-one-management-contract-for-the-app-and-the-cli.md) asked, and the answer widens the
+list rather than changing anything already decided.
+
+**Global concurrency, per-workspace concurrency, and the daily budget are durable rows.** They are
+machine-local state cogwork writes and is authoritative for, which is this ADR's own membership test
+for the store. Today they have three rival authorities — a CLI flag at boot, `SetSchedulerConfig`
+writing an in-memory `Ref` that dies with the process, and `WorkspaceConfig.concurrency` — and the
+desktop's Settings → Engine rows silently revert on every restart.
+
+They are **not** on the Scope axis. A Scope answers *which of several rival values wins*, and one
+machine holds one value; the per-workspace form is a different key, not a competing Scope. ADR 0013
+is unchanged.
+
+**The `Ref` becomes a cache with one writer.** It is seeded from the store on the boot path and moved
+only by the *set a limit* act. The write order is forced and getting it backwards fails silently:
+write the row and raise on failure, then update the `Ref`, then publish. Moving the `Ref` first
+leaves a running daemon obeying a number that vanishes on restart — the same class of wrongness as
+the defect this fixes. Because re-seeding is part of the boot path, a snapshot restore reaches it for
+free.
+
+Scheduling running / paused is **not** one of these. It is a live control that resets to paused at
+every launch by design, so that spawning a daemon never silently spends budget.
+
+The four process arguments — socket, config home, ledger path, credentials path — stay flags. A
+daemon cannot read the location of its own store out of that store.
