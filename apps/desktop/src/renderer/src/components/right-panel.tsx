@@ -1,3 +1,4 @@
+import { Button } from "@cogwork/ui/components/button";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { cn } from "@cogwork/ui/lib/utils";
 import type { DragEndEvent } from "@dnd-kit/core";
@@ -18,6 +19,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { RiDraggable } from "@remixicon/react";
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
@@ -105,20 +107,36 @@ function ActiveSurfaceBody({ surface }: { surface: RightPanelState["surfaces"][n
 }
 
 function SortableSurfaceTab({ surface }: { surface: RightPanelState["surfaces"][number] }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: surface.id });
+  const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, transition } = useSortable({
+    id: surface.id,
+  });
 
   return (
     <div
       ref={setNodeRef}
+      className="flex items-center"
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
     >
+      <Button
+        ref={setActivatorNodeRef}
+        aria-label={`Reorder ${surfaceLabel(surface)}`}
+        size="icon-xs"
+        variant="ghost"
+        {...attributes}
+        {...listeners}
+      >
+        <RiDraggable data-icon="inline-start" />
+      </Button>
       <SurfaceTab.ContextMenu id={surface.id}>
         <SurfaceTabContent surface={surface} />
       </SurfaceTab.ContextMenu>
     </div>
   );
+}
+
+function surfaceLabel(surface: RightPanelState["surfaces"][number]) {
+  if (surface.kind === "item") return `item ${surface.workItem}`;
+  return surface.kind[0].toUpperCase() + surface.kind.slice(1);
 }
 
 function SurfaceTabContent({ surface }: { surface: RightPanelState["surfaces"][number] }) {
