@@ -1,0 +1,32 @@
+packages/contracts/src/daemon-event.ts
+  s_6217d5aad52bb9::t_f73feb80832648 43-49
+packages/contracts/CONTEXT.md
+  s_6217d5aad52bb9::t_dc25a3075c53e8 340
+packages/contracts/src/board.ts
+  s_6217d5aad52bb9::t_4d684c4b7696af 1,54,71-73
+packages/contracts/src/board.test.ts
+  s_6217d5aad52bb9::t_2eb6030491646c 2,4,6,141-144,158-171,174-177
+  s_6217d5aad52bb9::t_2bdf58692fb0ae 51-54,145-148,150-151,153-157
+  s_6217d5aad52bb9::t_0e3c0c282fb317 17
+  s_6217d5aad52bb9::t_f73feb80832648 16
+  s_6217d5aad52bb9::t_0abe7a3b337985 149
+  s_6217d5aad52bb9::t_b941cca2aed690 152
+  s_6217d5aad52bb9::t_3874b3d5c73912 172-173
+  s_6217d5aad52bb9::t_d9e2012414400a 178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "ebb69f78f5fe995a298f7c7a29c7180e0d1e76da",
+  "prompts": {},
+  "sessions": {
+    "s_6217d5aad52bb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a036e9-c115-7a03-86a5-d9de1561b790",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
