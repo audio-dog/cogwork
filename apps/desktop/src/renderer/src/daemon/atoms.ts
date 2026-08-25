@@ -11,8 +11,6 @@ export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomR
   protocol: layerProtocolIpc(electronDaemonBridge),
 }) {}
 
-export const daemonStatusAtom = DaemonAtomRpc.query("GetStatus", undefined);
-
 export const daemonEventAtom = DaemonAtomRpc.runtime.pull(
   Stream.unwrap(DaemonAtomRpc.use((client) => Effect.succeed(client("WatchEvents", undefined)))),
   { disableAccumulation: true },
