@@ -100,9 +100,10 @@ beats a paragraph.
 **Record the strength of a borrow.** When a decision copies prior art, say which of three it is: a
 **standard** (a published spec others conform to), a **convergence** (independent implementations
 arriving at the same shape, with no spec between them), or a **borrow** (one vendor's private choice
-you liked). Convergence is strong evidence and no guarantee; a borrow is taste. The test: **could you
-link the spec?** If not, it is not a standard. A future reader decides whether they may deviate from
-this label, and an overstated one reads as settled when it is merely copied.
+you liked). Convergence is strong evidence and no guarantee; a borrow is taste — and taste runs both
+ways, so a borrow can be evidence *against* the shape it carries. The test: **could you link the
+spec?** If not, it is not a standard. A future reader decides whether they may deviate from this
+label, and an overstated one reads as settled when it is merely copied.
 
 **The reference implementations.** Learn from how mature coding-agent tools solve these problems.
 Cursor, Codex, and Claude Code are the products to recall; three apps are vendored on disk to read
