@@ -42,4 +42,4 @@ become. See `docs/agents/product.md`.
 
 ### Technical disposition
 
-The product direction and the maintainer's decision principles for answering finely-tuned technical open questions — during triage, or when answering in the maintainer's place — instead of reflexively blocking. See `docs/agents/technical-disposition.md`.
+Decision shapes — a limit, a failure, a trust boundary, a name, how far to restructure, whether deterministic code or a model does the work — resolved from this project's own heuristics instead of blocked. Read it when answering a technical question in the maintainer's place. See `docs/agents/technical-disposition.md`.
