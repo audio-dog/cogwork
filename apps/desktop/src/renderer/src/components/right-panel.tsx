@@ -139,12 +139,20 @@ function TerminalPanelBody() {
 
 function EmptySurfaceCatalog() {
   const openSurface = useRightPanelStore((state) => state.openSurface);
+  const maximized = useRightPanelStore((state) => state.maximized);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="border-b px-4 py-3">
-        <h2 className="font-heading text-sm font-medium">Open a surface</h2>
-        <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
+      <div
+        className={cn(
+          "flex h-11 min-h-11 shrink-0 items-center border-b pr-[calc(var(--workspace-controls-right)+4.25rem)] pl-2 [-webkit-app-region:drag]",
+          maximized && "[[data-sidebar-state=collapsed]_&]:pl-[var(--workspace-titlebar-content-left)]",
+        )}
+      >
+        <div className="[-webkit-app-region:no-drag]">
+          <h2 className="font-heading text-sm font-medium">Open a surface</h2>
+          <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
+        </div>
       </div>
       <SurfaceCatalogCards onSelect={openSurface} />
     </div>
