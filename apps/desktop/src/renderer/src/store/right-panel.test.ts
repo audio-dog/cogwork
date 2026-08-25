@@ -51,6 +51,37 @@ describe("right-panel store", () => {
     expect(state.active).toBe("attention");
   });
 
+  it("reorders Tool and Subject surfaces freely", () => {
+    const { openItem, openTool, reorderSurface } = useRightPanelStore.getState();
+    openTool("attention");
+    openItem(workspace("acme"), workItem("#50"));
+    openTool("activity");
+
+    reorderSurface("activity", "attention");
+    reorderSurface("item:acme:#50", "attention");
+
+    expect(useRightPanelStore.getState().surfaces.map((surface) => surface.id)).toEqual([
+      "activity",
+      "item:acme:#50",
+      "attention",
+    ]);
+  });
+
+  it("keeps the order when a reordered surface is absent or already in place", () => {
+    const { openTool, reorderSurface } = useRightPanelStore.getState();
+    openTool("attention");
+    openTool("activity");
+
+    reorderSurface("attention", "attention");
+    reorderSurface("item:acme:#50", "attention");
+    reorderSurface("attention", "item:acme:#50");
+
+    expect(useRightPanelStore.getState().surfaces.map((surface) => surface.id)).toEqual([
+      "attention",
+      "activity",
+    ]);
+  });
+
   it("closes a Tool surface and clears active when it was the last tab", () => {
     const { openTool, closeSurface } = useRightPanelStore.getState();
     openTool("terminal");
