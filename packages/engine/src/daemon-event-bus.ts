@@ -1,5 +1,6 @@
 import type { AgUiEvent, DaemonEvent, RunActivity, RunRecord, RunSummary } from "@cogwork/contracts";
 import { agUiCorrelation } from "@cogwork/contracts";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -23,6 +24,11 @@ export const activityOf = (
 });
 
 type RunActivityEvent = Extract<DaemonEvent, { readonly _tag: "RunActivity" }>;
+type DaemonEventInput = DaemonEvent extends infer Event
+  ? Event extends { readonly emittedAtMillis: number }
+    ? Omit<Event, "emittedAtMillis">
+    : never
+  : never;
 
 export const isRunActivity = (event: DaemonEvent): event is RunActivityEvent => event._tag === "RunActivity";
 
@@ -35,7 +41,10 @@ export const runActivityStream = <E, R>(events: Stream.Stream<DaemonEvent, E, R>
 export const make = Effect.gen(function* () {
   // Sliding, not bounded: a stuck subscriber drops its oldest events instead of backpressuring publishers.
   const pubsub = yield* PubSub.sliding<DaemonEvent>(1024);
-  const publish = (event: DaemonEvent) => PubSub.publish(pubsub, event);
+  const publish = (event: DaemonEventInput) =>
+    Effect.flatMap(Clock.currentTimeMillis, (emittedAtMillis) =>
+      PubSub.publish(pubsub, { ...event, emittedAtMillis }),
+    );
   return {
     publish,
     publishActivity: (activity: RunActivity) => publish({ _tag: "RunActivity", activity }),

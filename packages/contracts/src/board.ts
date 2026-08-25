@@ -1,3 +1,4 @@
+import * as Stream from "effect/Stream";
 import type { WorkspaceId } from "./base-schemas";
 import type { SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
 import { type ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
@@ -50,6 +51,7 @@ const withoutItem = (items: ReadonlyMap<string, BoardItem>, key: string) =>
 
 export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
   DaemonEvent.match(event, {
+    SeedEnd: () => board,
     RunActivity: () => board,
     ItemChanged: ({ workspace, item }) => ({
       ...board,
@@ -66,3 +68,6 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
     }),
     SchedulerChanged: ({ scheduler }) => ({ ...board, scheduler }),
   });
+
+export const liveOnly = <E, R>(events: Stream.Stream<DaemonEvent, E, R>) =>
+  events.pipe(Stream.dropUntil((event) => event._tag === "SeedEnd"));
