@@ -1,0 +1,81 @@
+apps/desktop/src/renderer/src/components/settings-sidebar.tsx
+  s_05fbe5432690d4::t_c7a9c2baa973e0 25,31,33-37,40-46,48-81,124,133
+  s_05fbe5432690d4::t_fdf8a4d34191f5 22
+apps/desktop/src/renderer/src/features/configuration-variants.ts
+  s_05fbe5432690d4::t_d6d06d466615b8 1-73
+apps/desktop/src/renderer/src/components/configuration-section.tsx
+  s_05fbe5432690d4::t_fdf8a4d34191f5 11,21-23,25-26
+  s_05fbe5432690d4::t_cfa00ed6d95dec 1-10,12-20,24,27-31,38-57
+  s_05fbe5432690d4::t_30a491705b2dab 32-37
+apps/desktop/src/renderer/src/features/configuration-resolve.ts
+  s_05fbe5432690d4::t_fdf8a4d34191f5 18,131-133
+  s_05fbe5432690d4::t_c27c9eea174875 1-17,19-130,134-219
+apps/desktop/src/renderer/src/routes/settings/route.tsx
+  s_05fbe5432690d4::t_62060cf3a0ed61 3,5,7-8,15-18,26,32
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_05fbe5432690d4::t_43ac42703a3812 1-3,10-116,120-153
+  s_05fbe5432690d4::t_600089a7c93b87 4-9,117-119
+apps/desktop/src/renderer/src/components/configuration-variant-c.tsx
+  s_05fbe5432690d4::t_9c4b4aa9cba8ed 1-24,26-45,47-122,125-184,187-192,194-205,207,210-216,218-226,229-243,246-258,261-274,277-292,295-313,315-362
+  s_05fbe5432690d4::t_fdf8a4d34191f5 25,123-124,185-186,193,206,208-209,217,227-228,244-245,259-260,275-276,293-294,314
+  s_05fbe5432690d4::t_f305b4807311b5 46
+apps/desktop/src/renderer/src/components/configuration-atoms.tsx
+  s_05fbe5432690d4::t_713597308e2eea 1-9,11-13,15-115,121
+  s_05fbe5432690d4::t_fdf8a4d34191f5 10,14,116-120
+apps/desktop/src/renderer/src/features/use-variant.ts
+  s_05fbe5432690d4::t_fce30094b1af95 1-16
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_05fbe5432690d4::t_fdf8a4d34191f5 4
+  s_05fbe5432690d4::t_520824916fbe37 25
+  s_05fbe5432690d4::t_d204812b54c35f 1-3,5-9,22-24,26-27,30-36,83-110
+apps/desktop/src/renderer/src/routes/settings/$section.tsx
+  s_05fbe5432690d4::t_ca449c6103217c 3,9-10,17
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_05fbe5432690d4::t_fdf8a4d34191f5 67,443,556-562,617-623,683-689
+  s_05fbe5432690d4::t_6fea4093c34790 1-66,68-442,444-555,563-616,624-682,690-778
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_05fbe5432690d4::t_fdf8a4d34191f5 27
+  s_05fbe5432690d4::t_ca449c6103217c 297-301
+  s_05fbe5432690d4::t_62060cf3a0ed61 314-315,319-321
+apps/desktop/src/renderer/src/components/configuration-variant-b.tsx
+  s_05fbe5432690d4::t_fdf8a4d34191f5 23,46-52,70,283-284,301-302,345-346
+  s_05fbe5432690d4::t_a8cf406a263d5a 1-22,24-45,53-69,71-282,285-300,303-344,347-354
+apps/desktop/src/renderer/src/components/configuration-variant-a.tsx
+  s_05fbe5432690d4::t_2aebdbcf014633 1-12,14-24,26-28,30-36,38-77,79-89,91-209,212-215,217-312,314-317,320-368
+  s_05fbe5432690d4::t_9eb8a626d069ae 90,313
+  s_05fbe5432690d4::t_fdf8a4d34191f5 13,25,29,37,78,210-211,216,318-319
+apps/desktop/src/renderer/src/components/configuration-workspaces-panel.tsx
+  s_05fbe5432690d4::t_fdf8a4d34191f5 8,61-62,76-77,101-103,111-112,132-133,156-157,177-178,184-191,198-200
+  s_05fbe5432690d4::t_e2d76f54bb1b36 1-7,9-60,63-75,78-100,104-110,113-131,134-155,158-176,179-183,192-197,201-212
+apps/desktop/src/renderer/src/components/prototype-switcher.tsx
+  s_05fbe5432690d4::t_fdf8a4d34191f5 7,35-37,39-41
+  s_05fbe5432690d4::t_fce30094b1af95 1-6,8-34,38,42-74
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_05fbe5432690d4::t_7ed0bb01be2d8b 1-138,140-331
+  s_05fbe5432690d4::t_fdf8a4d34191f5 139
+apps/desktop/src/renderer/src/components/configuration-plugins-panel.tsx
+  s_05fbe5432690d4::t_387db3033d4757 1-9,11-12,15-55,57-79,82-136,138-144,147-164,167-227,229-233,237-238,241-265,267-410,413-416
+  s_05fbe5432690d4::t_fdf8a4d34191f5 10,56,80-81,137,145-146,165-166,228,234-236,266,411-412
+  s_05fbe5432690d4::t_f4fda3e840e134 13-14,239-240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "678d597be09ba295ab1e328c3064ed69b6cb1d84",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
