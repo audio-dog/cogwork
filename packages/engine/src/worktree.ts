@@ -77,6 +77,7 @@ export interface EnsuredWorktree {
 
 export interface EnsureOptions {
   readonly resume?: boolean;
+  readonly branch?: string;
 }
 
 export interface ReconcileOutcome {
@@ -191,7 +192,7 @@ export const make = Effect.gen(function* () {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
     const remote = remoteOf(config);
-    const branch = branchName(item);
+    const branch = options?.branch ?? branchName(item);
     const worktreePath = pathFor(repoPath, config, branch);
 
     yield* git.fetch(repoPath, remote);

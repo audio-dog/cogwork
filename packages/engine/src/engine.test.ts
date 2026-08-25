@@ -230,6 +230,8 @@ describe("reconcile worker", () => {
     fresh: false,
     baseDivergence: "none",
     waitingSinceMillis: 1_700_000_000_000,
+    headRef: "aud-2-in-review",
+    followable: true,
   };
   const workerWithInReview = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem], [[id("AUD-2"), inReviewPr]]))),
@@ -618,6 +620,8 @@ describe("daemon status over rpc", () => {
     fresh: false,
     baseDivergence: "none",
     waitingSinceMillis: 1_786_000_000_000,
+    headRef: "aud-9-pr-in-review",
+    followable: true,
   };
 
   it.effect("carries a PR summary on every classified item that has a linked pull request", () =>

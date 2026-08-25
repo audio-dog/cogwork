@@ -134,7 +134,7 @@ A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `
 _Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Source control provider adapter**:
-A concrete implementation of the source control provider port — read-only PR observation, GitHub the only one today. Given a work item, it resolves the item's PR by the link key (the open PR whose head branch starts with `ticketSlug(item.id)`) and reads its checks, reviews, mergeable / base-divergence signal, and human comments; it writes nothing. A GitHub issue tracker doubles as its own provider by default; a Linear tracker pairs with a GitHub provider through an explicit `sourceControl` config block.
+A concrete implementation of the source control provider port — read-only PR observation, GitHub the only one today. Given a work item, it resolves the item's PR by the link key: a GitHub closing reference for numeric GitHub items, or the open PR whose head branch starts with `ticketSlug(item.id)`. It reads checks, reviews, mergeable / base-divergence signal, human comments, and the head branch; it writes nothing. A same-repository head can drive a follow-up worktree on its exact branch. A GitHub issue tracker doubles as its own provider by default; a Linear tracker pairs with a GitHub provider through an explicit `sourceControl` config block.
 _Avoid_: Forge, code host, client (the HTTP client is a lower-level detail), plugin
 
 **Credential store**:
