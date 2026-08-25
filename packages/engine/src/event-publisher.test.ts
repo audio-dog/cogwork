@@ -360,6 +360,49 @@ describe("DaemonEventPublisher", () => {
     }),
   );
 
+  it.effect("places one SeedEnd after the stamped seed and keeps it out of the event bus", () =>
+    Effect.gen(function* () {
+      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
+      const statsRef = yield* Ref.make(schedulerState(1));
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const worker = yield* Reconcile.ReconcileWorker;
+        const subscription = yield* bus.subscribe();
+
+        yield* worker.submit();
+        const state = (yield* worker.snapshot).workspaces[0];
+        if (state === undefined) return assert.fail("expected a reconciled workspace");
+        const [item] = classifiedItemsOf(state);
+        if (item === undefined) return assert.fail("expected a classified item");
+        const live = { _tag: "ItemChanged", workspace: state.name, item } as const;
+
+        const watcher = yield* client.WatchEvents().pipe(Stream.take(5), Stream.runCollect, Effect.forkChild);
+        const busEvent = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+        yield* bus.publish(live).pipe(Effect.andThen(Effect.yieldNow), Effect.repeat(Schedule.recurs(50)));
+
+        const received = [...(yield* Fiber.join(watcher))];
+        const observedByBus = [...(yield* Fiber.join(busEvent))];
+        const boundary = received.filter((event) => event._tag === "SeedEnd");
+        const boundaryIndex = received.findIndex((event) => event._tag === "SeedEnd");
+        const seed = received.slice(0, boundaryIndex);
+
+        assert.strictEqual(boundary.length, 1);
+        assert.strictEqual(received[boundaryIndex + 1]?._tag, "ItemChanged");
+        assert.strictEqual(new Set(seed.map((event) => event.emittedAtMillis)).size, 1);
+        assert.strictEqual(typeof boundary[0]?.emittedAtMillis, "number");
+        assert.deepStrictEqual(
+          observedByBus.map((event) => event._tag),
+          ["ItemChanged"],
+        );
+      }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
+    }),
+  );
+
   const failingRegistryLayer = Layer.succeed(
     Registry.WorkspaceRegistry,
     Registry.buildRegistry({
