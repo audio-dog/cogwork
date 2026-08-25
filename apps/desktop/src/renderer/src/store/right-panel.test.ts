@@ -224,7 +224,15 @@ describe("right-panel store", () => {
 
     expect(persisted).toEqual({
       state: {
-        surfaces: [{ id: "attention", kind: "attention" }, item("acme", "#50")],
+        surfaces: [
+          { id: "attention", kind: "attention" },
+          {
+            id: "item:acme:#50",
+            kind: "item",
+            workspace: workspace("acme"),
+            workItem: workItem("#50"),
+          },
+        ],
         active: surfaceIdAt(1),
       },
       version: 0,
