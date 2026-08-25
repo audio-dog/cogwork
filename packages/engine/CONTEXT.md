@@ -110,7 +110,7 @@ The stream of file-change events the owned tools produce for the live run view's
 _Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
 
 **Policy profile**:
-The allow/ask/deny rules a run's owned tools are gated by, chosen from the selected operation and its settings. Two engine-owned defaults over one shared tool set: **read-only** for triage and validation (read/glob/grep/webfetch; writes and shell refused), and **full** for implementation and follow-up (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. Per-workspace overrides wait for settings-as-data.
+The allow/ask/deny rules a run's owned tools are gated by, chosen from the selected operation and its settings. Two engine-owned defaults over one shared tool set: **read-only** for triage and verify (read/glob/grep/webfetch; writes and shell refused), and **full** for implementation and follow-up (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. Per-workspace overrides wait for settings-as-data.
 _Avoid_: Sandbox isolation (that's the process boundary; this is the decision layer above it), per-tool allowlist (bash is command-matched, not all-or-nothing)
 
 **Ask-compiles-to-deny**:
