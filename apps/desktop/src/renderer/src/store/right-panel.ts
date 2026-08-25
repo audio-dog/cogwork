@@ -1,4 +1,5 @@
 import type { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { arrayMove } from "@dnd-kit/sortable";
 import { create } from "zustand";
 
 type ToolKind = "attention" | "activity" | "terminal";
@@ -48,6 +49,13 @@ const fallbackActiveSurfaceId = (
   return surfaces.at(-1)?.id ?? null;
 };
 
+const reorderSurfaces = (surfaces: readonly Surface[], activeId: SurfaceId, overId: SurfaceId) => {
+  const activeIndex = surfaces.findIndex((surface) => surface.id === activeId);
+  const overIndex = surfaces.findIndex((surface) => surface.id === overId);
+  if (activeIndex < 0 || overIndex < 0 || activeIndex === overIndex) return surfaces;
+  return arrayMove([...surfaces], activeIndex, overIndex);
+};
+
 export interface RightPanelState {
   readonly open: boolean;
   readonly maximized: boolean;
@@ -59,6 +67,7 @@ export interface RightPanelState {
   readonly closeSurface: (id: SurfaceId) => void;
   readonly closeOtherSurfaces: (id: SurfaceId) => void;
   readonly closeAllSurfaces: () => void;
+  readonly reorderSurface: (activeId: SurfaceId, overId: SurfaceId) => void;
   readonly setActive: (id: SurfaceId) => void;
   readonly toggleMaximized: () => void;
 }
@@ -91,6 +100,8 @@ export const useRightPanelStore = create<RightPanelState>((set) => ({
       return { surfaces: [surface], active: id };
     }),
   closeAllSurfaces: () => set({ surfaces: [], active: null }),
+  reorderSurface: (activeId, overId) =>
+    set((state) => ({ surfaces: reorderSurfaces(state.surfaces, activeId, overId) })),
   setActive: (id) =>
     set((state) => (state.surfaces.some((surface) => surface.id === id) ? { active: id } : state)),
   toggleMaximized: () => set((state) => ({ maximized: !state.maximized })),

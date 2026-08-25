@@ -1,5 +1,24 @@
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { cn } from "@cogwork/ui/lib/utils";
+import type { DragEndEvent } from "@dnd-kit/core";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import {
+  horizontalListSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import type { ReactNode } from "react";
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
@@ -34,63 +53,105 @@ function EmptySurfaceCatalog() {
           <h2 className="font-heading text-sm font-medium">Open a surface</h2>
         </div>
       </div>
-      <p className="px-4 pt-3 text-sm text-muted-foreground">Choose what to show in the right panel.</p>
-      <SurfaceCatalogCards />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col justify-center gap-3 px-4 py-6">
+          <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
+          <SurfaceCatalogCards />
+        </div>
+      </div>
     </div>
   );
 }
 
-function ActiveSurfaceBody({ surface }: { surface: RightPanelState["surfaces"][number] }) {
-  switch (surface.kind) {
-    case "attention":
-      return (
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            <AttentionSurfaceBody />
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
-      );
-    case "activity":
-      return (
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            <ActivitySurfaceBody />
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
-      );
-    case "terminal":
-      return <TerminalSurfaceBody />;
-    case "item":
-      return (
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
-      );
-  }
+function GatedBody({ children }: { children: ReactNode }) {
+  return (
+    <CompactEngineGate.Provider>
+      <CompactEngineGate.Live>{children}</CompactEngineGate.Live>
+      <CompactEngineGate.Connecting>
+        <PanelSkeleton />
+      </CompactEngineGate.Connecting>
+      <CompactEngineGate.Off />
+      <CompactEngineGate.Broken />
+    </CompactEngineGate.Provider>
+  );
+}
+
+type Surface = RightPanelState["surfaces"][number];
+
+type SurfaceRenderers = {
+  [K in Surface["kind"]]: (surface: Extract<Surface, { kind: K }>) => ReactNode;
+};
+
+const surfaceBodyByKind: SurfaceRenderers = {
+  attention: () => (
+    <GatedBody>
+      <AttentionSurfaceBody />
+    </GatedBody>
+  ),
+  activity: () => (
+    <GatedBody>
+      <ActivitySurfaceBody />
+    </GatedBody>
+  ),
+  terminal: () => <TerminalSurfaceBody />,
+  item: (surface) => (
+    <GatedBody>
+      <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />
+    </GatedBody>
+  ),
+};
+
+const surfaceTabByKind: SurfaceRenderers = {
+  attention: () => <AttentionSurfaceTab />,
+  activity: () => <ActivitySurfaceTab />,
+  terminal: () => <TerminalSurfaceTab />,
+  item: (surface) => <ItemSurfaceTab {...surface} />,
+};
+
+const surfaceBody = <K extends Surface["kind"]>(surface: Extract<Surface, { kind: K }>) =>
+  surfaceBodyByKind[surface.kind](surface);
+
+const surfaceTab = <K extends Surface["kind"]>(surface: Extract<Surface, { kind: K }>) =>
+  surfaceTabByKind[surface.kind](surface);
+
+function SortableSurfaceTab({ surface }: { surface: Surface }) {
+  const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
+    id: surface.id,
+    attributes: { role: "group", roleDescription: "sortable tab" },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn("flex shrink-0 items-center outline-none", isDragging && "z-10 opacity-70")}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+    >
+      <SurfaceTab.ContextMenu id={surface.id}>{surfaceTab(surface)}</SurfaceTab.ContextMenu>
+    </div>
+  );
 }
 
 export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
   const active = useRightPanelStore((state) => state.active);
   const maximized = useRightPanelStore((state) => state.maximized);
+  const reorderSurface = useRightPanelStore((state) => state.reorderSurface);
+  const surfaceIds = surfaces.map((surface) => surface.id);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const current = surfaces.find((surface) => surface.id === active) ?? surfaces[0];
+
+  const handleDragEnd = ({ active: dragged, over }: DragEndEvent) => {
+    const activeSurface = surfaces.find((surface) => surface.id === dragged.id);
+    const overSurface = surfaces.find((surface) => surface.id === over?.id);
+    if (!activeSurface || !overSurface) return;
+    reorderSurface(activeSurface.id, overSurface.id);
+  };
 
   if (!current) return <EmptySurfaceCatalog />;
 
@@ -103,42 +164,22 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          {surfaces.map((surface) => {
-            switch (surface.kind) {
-              case "attention":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <AttentionSurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "activity":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <ActivitySurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "terminal":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <TerminalSurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "item":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <ItemSurfaceTab {...surface} />
-                  </SurfaceTab.ContextMenu>
-                );
-              default:
-                return null;
-            }
-          })}
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToHorizontalAxis]}
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={surfaceIds} strategy={horizontalListSortingStrategy}>
+              {surfaces.map((surface) => (
+                <SortableSurfaceTab key={surface.id} surface={surface} />
+              ))}
+            </SortableContext>
+          </DndContext>
           <SurfaceCatalogMenu />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <ActiveSurfaceBody surface={current} />
-      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">{surfaceBody(current)}</div>
     </div>
   );
 }
