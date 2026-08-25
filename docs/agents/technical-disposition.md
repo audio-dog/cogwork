@@ -59,13 +59,13 @@ Durable heuristics, drawn from decisions already made (see the linked ADRs). App
 
 ## The line
 
-The whole point: know which questions you resolve, which you escalate, and which are not yet answerable by anyone.
+The whole point: know which questions you resolve, which you escalate, and which you defer because nobody can answer them yet.
 
 **Resolve it yourself** when the answer follows from the direction and principles above, or from prior art. These are finely-tuned technical one-offs — how much to expose, whether to cap, which error shape, how to split. Research, compare, recommend, and let your confidence rise toward `ready-for-agent`. Put the recommendation and its rationale in the proposal.
 
 **Escalate it** — via `ready-for-human`, with the question stated — only when the answer would establish **new product direction** not yet covered in [`docs/agents/product.md`](./product.md) or an ADR. Signs it's a real fork: it trades off the product's identity, moves the roadmap, or principled people would genuinely disagree and the choice *defines* the product.
 
-**Neither, sometimes.** A question can be undecidable rather than hard: the concept it asks about is not yet defined, and an open ticket owns defining it. Say so, mark the term provisional in the glossary, and name the ticket — scoping, binding, or resolving a thing before it is defined is how a glossary acquires claims no ticket ever decided. This is a real third outcome, not a slow escalation.
+**Defer it** — to the open ticket that owns defining the concept — when the question is undecidable rather than hard: what it asks about is not yet defined, so no answer would be sound. Escalation waits on a person's judgment; deferral waits on a definition. Say so, mark the term provisional in the glossary, and name the ticket. Scoping a thing before defining it is how a glossary acquires claims no ticket ever decided.
 
 **The corpus compounds.** Every fork the maintainer answers is written back, to exactly one of three places: a fork about **what the product is or where it goes** becomes a claim in [`product.md`](./product.md); a fork about **how to decide** becomes a new principle here; a fork that is hard to reverse and surprising without context also earns an ADR, which the other two then gist and link. Escalation and harvest read against the same documents, so the same question never escalates twice — over time, more questions fall on the "resolve" side, and escalations shrink to only the genuinely new.
 
@@ -90,4 +90,4 @@ From [#134](https://github.com/colonylabs/cogwork/issues/134) (configuration own
 
 - **How do settings resolve across the four Scopes?** → *Resolve*, but not as asked. The ticket named six configuration sources as one ladder; four are Scopes and two are levels a setting is written at. The rest dissolved on enumeration — see principle 15.
 - **Should the two settings families get a collective name?** → *Resolve*, by running principle 12's own check on the candidates. Every one collided with a term already in the glossary: *agent inputs* against the **Workspace input** Scope, *provisions* against engine ADR-0007's skill provision, *run settings* against Run and Run Plan. A principle harvested from #132 answered a #134 question without escalating it, which is the corpus doing its job.
-- **How should a Connection be scoped?** → *Neither*, per the rule above. The concept is undefined until [#172](https://github.com/colonylabs/cogwork/issues/172) and [#125](https://github.com/colonylabs/cogwork/issues/125) land — and the glossary had already acquired a scope-ladder claim from the last ticket that scoped it anyway.
+- **How should a Connection be scoped?** → *Defer.* The concept is undefined until [#172](https://github.com/colonylabs/cogwork/issues/172) and [#125](https://github.com/colonylabs/cogwork/issues/125) land — and the glossary had already acquired a scope-ladder claim from the last ticket that scoped it anyway.
