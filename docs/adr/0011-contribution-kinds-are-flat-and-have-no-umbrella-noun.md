@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-08-24
+- **Amended:** 2026-08-24 — resolution narrows, see [Amendment](#amendment-2026-08-24--resolution-is-per-settings-family-and-merge-by-key-is-retired)
 
 ## Context
 
@@ -26,7 +27,7 @@ The lists differ, deliberately. Rules is a kind that resolves into Instructions.
 Supporting decisions:
 
 - **Identity** is `<authority>/<kind>/<localName>`, authority being `plugin:<pluginId>`, `engine`, or `local`. **Authority and Scope are orthogonal** — authority is who authored it and is immutable; scope is where its configuration lives and is not part of the identity.
-- **Resolution** is declared per kind as a triple of *(scope set, operator, direction)*. The scope set is per-kind for a trust reason: a cloned repository must not be able to enable executable behavior on your machine.
+- **Resolution** is declared as a triple of *(scope set, operator, direction)*. The scope set narrows for a trust reason: a cloned repository must not be able to enable executable behavior on your machine. *(Amended — the scope set is per settings family, not per kind.)*
 - **Schemas are layered.** The Engine owns a per-kind envelope and validates it always; the Plugin supplies a JSON Schema for its own settings blob.
 - **`version` is optional; a provenance stamp is mandatory** — declared version, or content revision. No contribution carries its own version.
 - **The manifest points at files.** Nothing is inlined.
@@ -51,3 +52,13 @@ Supporting decisions:
 - Whether a Plugin may introduce an external system the Engine has never seen is deliberately unanswered. The manifest's Connection-requirements field permits an auth recipe; whether Plugins may use it is [#172](https://github.com/colonylabs/cogwork/issues/172).
 
 Full reasoning: [#132](https://github.com/colonylabs/cogwork/issues/132). Research: `docs/research/plugin-and-connector-versioning.md`, `docs/research/harness-config-scopes-and-rules.md`, `docs/research/tanstack-ai-vocabulary.md`.
+
+## Amendment (2026-08-24) — resolution is per settings family, and `merge-by-key` is retired
+
+This ADR declared resolution *per contribution kind* and listed five operators. [#134](https://github.com/colonylabs/cogwork/issues/134) enumerated the settings that actually exist and narrowed both claims. See ADR [0013](./0013-two-settings-families-with-different-scope-sets.md).
+
+**The scope set is per settings family, not per kind.** There are two families — a contribution's on / off, and an Operation setting — and they take different Scopes. Within the first family the set narrows once more, for Hooks and MCP servers only: a repository may ship the file but may never enable it. Nothing else varies by kind.
+
+**Five operators become four.** `merge-by-key` is retired. It existed to answer how entries sharing a key combine across Scopes, and that question dissolved: identity carries Authority, so two contributions sharing a local name are two different things, and composing the set across Scopes is a `union-values` with nothing to reconcile. A single identity with settings at more than one Scope resolves whole, by `override-scalar` — a configuration assembled field-wise from two files is one no person authored. The remaining operators are `override-scalar`, `append-sources`, `union-values`, `constrain`.
+
+This does not change the two lists, the identity scheme, the file-pointing manifest, or the provenance rule. It narrows how their settings resolve.
