@@ -1,18 +1,26 @@
 docs/spec/next-phase.md
   s_394ee14942e4a5::t_fe2ab71a7a9d62 274
+  s_394ee14942e4a5::t_b931579c879f23 273
 docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
   s_394ee14942e4a5::t_49d989af489571 135-139,141-160
+  s_394ee14942e4a5::t_b931579c879f23 140
 docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
   s_394ee14942e4a5::t_49d989af489571 93-107
+  s_394ee14942e4a5::t_b931579c879f23 108
 docs/adr/0015-one-control-store-with-engine-owned-migrations.md
   s_394ee14942e4a5::t_49d989af489571 146,177-190
+  s_394ee14942e4a5::t_41747d65ffb671 176
+  s_394ee14942e4a5::t_b931579c879f23 191
 docs/adr/0013-two-settings-families-with-different-scope-sets.md
   s_394ee14942e4a5::t_49d989af489571 78-90
+  s_394ee14942e4a5::t_b931579c879f23 91
 docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
   s_394ee14942e4a5::t_4ff258bb73fdb8 2-191,196-202
+  s_394ee14942e4a5::t_b931579c879f23 1,192-195
 packages/contracts/CONTEXT.md
   s_394ee14942e4a5::t_fe2ab71a7a9d62 46,273
   s_394ee14942e4a5::t_c30d1757c7c421 93,113,121-124,130-131,133-137,152
+  s_394ee14942e4a5::t_b931579c879f23 132
 ---
 {
   "schema_version": "authorship/3.0.0",
