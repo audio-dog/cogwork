@@ -358,7 +358,7 @@ _Avoid_: Observed PR (the engine-internal form the provider reads, which also ca
 ### Client RPC
 
 **Query RPC / command RPC**:
-The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* is an imperative that changes daemon state or behavior — cancel a run, reclassify a work item, pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries. `DaemonQueries` and `DaemonCommands` are the two groups; `DaemonRpcs` is their merge, what the daemon serves and a client generates against. The command group exists but is empty today — every RPC the daemon has is a read — and fills in with the mutating slice.
+The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* is an imperative that changes daemon state or behavior — cancel a run, reclassify a work item, pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries. `DaemonQueries` and `DaemonCommands` are the two groups; `DaemonRpcs` is their merge, what the daemon serves and a client generates against. The command group holds `CancelRun`, `Reclassify`, `SetScheduling`, and `SetSchedulerConfig` today, and fills in further with the settings and Plugin management slice.
 _Avoid_: Write RPC (too narrow — a command may change behavior, like pausing the scheduler, not only write data), mutation, getter
 
 **Principal**:
