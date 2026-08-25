@@ -1,0 +1,23 @@
+packages/contracts/src/board.test.ts
+  s_ccff80ed511cea::t_f6e2359475d73b 213-258
+packages/contracts/src/board.ts
+  s_ccff80ed511cea::t_4b48fe282569a0 26-35,37-41,80-82
+  s_ccff80ed511cea::t_93345b01d7d940 36
+  s_ccff80ed511cea::t_163f1b47aef8d8 83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "f3172ba8beb0954ce1c5c2cec64716331f48bf97",
+  "prompts": {},
+  "sessions": {
+    "s_ccff80ed511cea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03743-ee43-7c60-bb5b-e05bfc056adf",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
