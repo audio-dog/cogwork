@@ -495,6 +495,7 @@ describe("daemon status over rpc", () => {
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
+      Layer.provideMerge(EventPublisher.layer),
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
@@ -514,10 +515,19 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.workspaces.length, 1);
       assert.strictEqual(status.workspaces[0]?.name, "example");
       assert.strictEqual(status.workspaces[0]?.issueTracker, "linear");
-      assert.strictEqual(status.workspaces[0]?.poll.status, "ok");
+      assert.strictEqual(status.workspaces[0]?.poll.status, "pending");
       assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.strictEqual(status.failures.length, 2);
       assert.isAtLeast(status.uptimeMillis, 0);
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
+
+  it.effect("reports a workspace poll as ok only once it has actually polled", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      assert.strictEqual((yield* client.GetStatus()).workspaces[0]?.poll.status, "pending");
+      yield* (yield* Reconcile.ReconcileWorker).submit();
+      assert.strictEqual((yield* client.GetStatus()).workspaces[0]?.poll.status, "ok");
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 

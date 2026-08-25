@@ -20,6 +20,7 @@ import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
+import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import type { HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import * as Reconcile from "./reconcile";
@@ -52,26 +53,29 @@ const registryLayer = Layer.succeed(
 
 const stubConfig: Scheduler.SchedulerConfig = { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 };
 
-const schedulerStub = (
-  setScheduling?: Scheduler.Scheduler["Service"]["setScheduling"],
-  setConfig?: Scheduler.Scheduler["Service"]["setConfig"],
-) =>
-  Layer.succeed(Scheduler.Scheduler, {
-    tick: () => Effect.succeed([]),
-    drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
-    admit: () => Effect.void,
-    setScheduling: setScheduling ?? (() => Effect.succeed(Scheduler.initialState)),
-    setConfig:
-      setConfig ??
-      ((update) =>
-        Effect.succeed({
-          globalLimit: update.globalLimit ?? stubConfig.globalLimit,
-          perWorkspaceLimit: update.perWorkspaceLimit ?? stubConfig.perWorkspaceLimit,
-          dailyBudget: update.dailyBudget ?? stubConfig.dailyBudget,
-        })),
-    config: Effect.succeed(stubConfig),
-    stats: Effect.succeed(Scheduler.initialState),
-  });
+const schedulerStub = () =>
+  Layer.effect(
+    Scheduler.Scheduler,
+    Effect.gen(function* () {
+      const configRef = yield* Ref.make(stubConfig);
+      const stateRef = yield* Ref.make(Scheduler.initialState);
+      return {
+        tick: () => Effect.succeed([]),
+        drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
+        admit: () => Effect.void,
+        setScheduling: (desired) =>
+          Ref.updateAndGet(stateRef, (state) => ({ ...state, paused: desired === "paused" })),
+        setConfig: (update) =>
+          Ref.updateAndGet(configRef, (current) => ({
+            globalLimit: update.globalLimit ?? current.globalLimit,
+            perWorkspaceLimit: update.perWorkspaceLimit ?? current.perWorkspaceLimit,
+            dailyBudget: update.dailyBudget ?? current.dailyBudget,
+          })),
+        config: Ref.get(configRef),
+        stats: Ref.get(stateRef),
+      };
+    }),
+  );
 
 interface TrackerCalls {
   readonly reclassify: ReadonlyArray<{ readonly workItem: WorkItemId; readonly outcome: ReclassifyOutcome }>;
@@ -129,6 +133,7 @@ const daemonLayer = (
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
     Layer.provideMerge(Daemon.daemonInfoLayer),
+    Layer.provideMerge(eventPublisherLayer),
     Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)))),
     Layer.provideMerge(registryLayer),
     Layer.provideMerge(scheduler),
@@ -357,11 +362,27 @@ describe("RunControl", () => {
 });
 
 describe("SetScheduling", () => {
-  const pausableScheduler = () => {
-    const setScheduling: Scheduler.Scheduler["Service"]["setScheduling"] = (desired) =>
-      Effect.succeed({ ...Scheduler.initialState, paused: desired === "paused" });
-    return schedulerStub(setScheduling);
-  };
+  it.effect("publishes one SchedulerChanged, and the next tick adds no duplicate", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const publisher = yield* DaemonEventPublisher;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+      yield* client.SetScheduling({ desired: "paused" });
+      yield* publisher.publishScheduler();
+      yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("example"), id: id("AUD-1") });
+
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
+      );
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["SchedulerChanged", "ItemRemoved"],
+      );
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
 
   it.effect("reports paused after pausing and running after resuming", () =>
     Effect.gen(function* () {
@@ -370,7 +391,7 @@ describe("SetScheduling", () => {
       assert.strictEqual(paused.scheduling, "paused");
       const running = yield* client.SetScheduling({ desired: "running" });
       assert.strictEqual(running.scheduling, "running");
-    }).pipe(Effect.provide(daemonLayer(trackerLayer({}), pausableScheduler())), Effect.scoped),
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 });
 

@@ -12,9 +12,10 @@ import {
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { DaemonEventBus } from "./daemon-event-bus";
+import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegistryState } from "./projector";
-import { classifiedItemWithPr, schedulerStatsOf } from "./read-model";
+import { classifiedItemWithPr } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunControl } from "./run-control";
@@ -133,22 +134,16 @@ export const setScheduling = Effect.fn("Daemon.SetScheduling")(function* (payloa
   readonly desired: "running" | "paused";
 }) {
   const scheduler = yield* Scheduler;
-  const state = yield* scheduler.setScheduling(payload.desired);
-  const config = yield* scheduler.config;
-  const stats = schedulerStatsOf(config, state);
-  const bus = yield* DaemonEventBus;
-  yield* bus.publish({ _tag: "SchedulerChanged", scheduler: stats });
-  return stats;
+  const publisher = yield* DaemonEventPublisher;
+  yield* scheduler.setScheduling(payload.desired);
+  return yield* publisher.publishScheduler();
 });
 
 export const setSchedulerConfig = Effect.fn("Daemon.SetSchedulerConfig")(function* (payload: {
   readonly update: SchedulerConfigUpdate;
 }) {
   const scheduler = yield* Scheduler;
-  const config = yield* scheduler.setConfig(payload.update);
-  const state = yield* scheduler.stats;
-  const stats = schedulerStatsOf(config, state);
-  const bus = yield* DaemonEventBus;
-  yield* bus.publish({ _tag: "SchedulerChanged", scheduler: stats });
-  return stats;
+  const publisher = yield* DaemonEventPublisher;
+  yield* scheduler.setConfig(payload.update);
+  return yield* publisher.publishScheduler();
 });

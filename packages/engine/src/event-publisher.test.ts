@@ -276,6 +276,7 @@ describe("DaemonEventPublisher", () => {
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
+      Layer.provideMerge(eventPublisherLayer),
       Layer.provideMerge(
         Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, observing(itemsRef)))),
       ),
@@ -418,6 +419,7 @@ describe("DaemonEventPublisher", () => {
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
+      Layer.provideMerge(eventPublisherLayer),
       Layer.provideMerge(
         Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(failingRegistryLayer, observing(itemsRef)))),
       ),

@@ -6,7 +6,7 @@ import type { RegisteredWorkspace, RegistryState } from "./projector";
 import type { ReconcileSnapshot, WorkspaceReconcileState } from "./reconcile";
 import type { SchedulerConfig, SchedulerState } from "./scheduler";
 
-const okPoll = { status: "ok" as const };
+const pendingPoll = { status: "pending" as const };
 
 const actionableOf = (work: EligibleWork): ActionableItem => ({
   id: work.id,
@@ -33,7 +33,7 @@ export const workspaceInfoOf = (
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
   harness: workspace.config.harness.preferred,
-  poll: state?.poll ?? okPoll,
+  poll: state?.poll ?? pendingPoll,
   eligible: (state?.eligible ?? []).map(actionableOf),
   claimed: state?.claimed ?? [],
   blocked: state?.blocked ?? [],

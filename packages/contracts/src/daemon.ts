@@ -73,6 +73,7 @@ export type PollPauseReason = typeof PollPauseReason.Type;
 
 export const PollState = Schema.Union([
   Schema.Struct({ status: Schema.Literal("ok") }),
+  Schema.Struct({ status: Schema.Literal("pending") }),
   Schema.Struct({
     status: Schema.Literal("paused"),
     reason: PollPauseReason,
