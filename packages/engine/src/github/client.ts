@@ -49,6 +49,8 @@ export interface RawPull {
   readonly draft: boolean;
   readonly headSha: string;
   readonly headRef: string;
+  readonly headRepository: string | null;
+  readonly closingIssueNumbers: ReadonlyArray<number>;
   readonly updatedAtMillis: number;
 }
 
@@ -97,7 +99,11 @@ const PullSchema = Schema.Struct({
   html_url: Schema.optional(Schema.NullOr(Schema.String)),
   user: Schema.Struct({ login: Schema.String }),
   draft: Schema.optional(Schema.Boolean),
-  head: Schema.Struct({ sha: Schema.String, ref: Schema.String }),
+  head: Schema.Struct({
+    sha: Schema.String,
+    ref: Schema.String,
+    repo: Schema.optional(Schema.NullOr(Schema.Struct({ full_name: Schema.String }))),
+  }),
   author_association: Schema.optional(Schema.String),
   updated_at: Schema.optional(Schema.NullOr(Schema.String)),
 });
@@ -150,6 +156,63 @@ const GraphQlResponse = Schema.Struct({
 });
 export type GraphQlPayload = typeof GraphQlResponse.Type;
 const decodeGraphQl = Schema.decodeUnknownEffect(GraphQlResponse);
+
+const ClosingReferencesPayload = Schema.Struct({
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequests: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.NullOr(
+            Schema.Struct({
+              number: Schema.Finite,
+              closingIssuesReferences: Schema.Struct({
+                nodes: Schema.Array(
+                  Schema.NullOr(
+                    Schema.Struct({
+                      number: Schema.Finite,
+                      repository: Schema.NullOr(Schema.Struct({ nameWithOwner: Schema.String })),
+                    }),
+                  ),
+                ),
+              }),
+            }),
+          ),
+        ),
+      }),
+    }),
+  ),
+});
+const decodeClosingReferences = Schema.decodeUnknownEffect(ClosingReferencesPayload);
+
+export const closingReferencesQuery = `
+query ClosingReferences($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(first: 100, states: OPEN) {
+      nodes {
+        number
+        closingIssuesReferences(first: 100) {
+          nodes { number repository { nameWithOwner } }
+        }
+      }
+    }
+  }
+}`;
+
+const sameRepository = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
+
+export const closingReferencesFor = (repo: GitHubRepoRef, payload: typeof ClosingReferencesPayload.Type) => {
+  const nameWithOwner = `${repo.owner}/${repo.name}`;
+  return new Map(
+    (payload.repository?.pullRequests.nodes ?? []).flatMap((pull) => {
+      if (!pull) return [];
+      const references = pull.closingIssuesReferences.nodes.flatMap((issue) => {
+        if (!issue?.repository || !sameRepository(issue.repository.nameWithOwner, nameWithOwner)) return [];
+        return [issue.number];
+      });
+      return [[pull.number, references] as const];
+    }),
+  );
+};
 
 export const graphQlData = (
   decoded: GraphQlPayload,
@@ -404,6 +467,12 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return result;
   });
 
+  const pullClosingReferences = Effect.fn("github.pullClosingReferences")(function* (repo: GitHubRepoRef) {
+    const data = yield* graphql(repo, closingReferencesQuery, { owner: repo.owner, name: repo.name });
+    const payload = yield* Effect.mapError(decodeClosingReferences(data), toUnavailable);
+    return closingReferencesFor(repo, payload);
+  });
+
   return {
     listIssues: Effect.fn("github.listIssues")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, repoPath(repo, "/issues?state=open&per_page=100"));
@@ -412,6 +481,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
       const json = yield* fetchJson(repo, repoPath(repo, "/pulls?state=open&per_page=100"));
       const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
+      const references = yield* pullClosingReferences(repo);
       return pulls.map(
         (pull): RawPull => ({
           number: pull.number,
@@ -421,6 +491,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           draft: pull.draft ?? false,
           headSha: pull.head.sha,
           headRef: pull.head.ref,
+          headRepository: pull.head.repo?.full_name ?? null,
+          closingIssueNumbers: references.get(pull.number) ?? [],
           updatedAtMillis: millisFromIso(pull.updated_at ?? null),
         }),
       );

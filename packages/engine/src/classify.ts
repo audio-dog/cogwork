@@ -25,6 +25,7 @@ export interface EligibleWork extends ActionableItem {
   readonly priorFailures: number;
   readonly followUp?: FollowUpContext;
   readonly resume?: ResumeContext;
+  readonly followUpBranch?: string;
 }
 
 export interface Classification {
@@ -53,6 +54,7 @@ const prSummaryOf = (pr: ObservedPr): PrSummary => ({
 const prFields = (item: ObservedItem) => (item.pr ? { pr: prSummaryOf(item.pr) } : {});
 
 const prStage = (pr: ObservedPr) => {
+  if (pr.followable === false) return null;
   if (triggersFollowUp(pr)) return "follow-up";
   if (pr.review === "ready") return "verify";
   return null;
@@ -134,6 +136,7 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
     priority: item.priority,
     priorFailures,
     ...(followUp ? { followUp } : {}),
+    ...(stage === "follow-up" && item.pr?.followable !== false ? { followUpBranch: item.pr?.headRef } : {}),
     ...prFields(item),
   };
 };

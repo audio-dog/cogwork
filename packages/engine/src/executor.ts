@@ -617,7 +617,7 @@ export const make = Effect.gen(function* () {
     context: FollowUpContext,
     prompt: string,
   ) {
-    const worktree = yield* worktrees.ensure(workspace, item);
+    const worktree = yield* worktrees.ensure(workspace, item, { branch });
     const last = yield* latestResumableBranchRun(workspace, branch);
     const session = last?.session ? yield* ledger.getSession(last.session) : null;
     const now = yield* Clock.currentTimeMillis;
@@ -643,7 +643,7 @@ export const make = Effect.gen(function* () {
   });
 
   const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
-    const branch = branchName(item);
+    const branch = item.followUpBranch ?? branchName(item);
     const context = item.followUp ?? defaultFollowUp;
     const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {

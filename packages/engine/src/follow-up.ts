@@ -27,6 +27,8 @@ export interface ObservedPr {
   readonly fresh: boolean;
   readonly baseDivergence: BaseDivergence;
   readonly waitingSinceMillis: number;
+  readonly headRef: string;
+  readonly followable: boolean;
   readonly followUp: FollowUpMarker | null;
 }
 

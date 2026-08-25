@@ -128,6 +128,27 @@ describe("Worktree.ensure", () => {
     }),
   );
 
+  it.effect("prepares an explicitly linked branch instead of deriving one from the item", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const branch = "claude/github-issue-13-a1b2c3";
+      const manager = yield* Effect.provide(
+        Worktree.make,
+        provide(fakeGit(recorder, { remoteBranches: [branch] }), fakeFs(recorder, {})),
+      );
+      const result = yield* manager.ensure(
+        workspaceWith(),
+        { id: "#13", title: "Worktree lifecycle" },
+        { branch },
+      );
+      const [added] = yield* Ref.get(recorder.added);
+      assert.strictEqual(result.branch, branch);
+      assert.strictEqual(result.path, `/repo.worktrees/${branch}`);
+      assert.strictEqual(added?.branch, branch);
+      assert.strictEqual(added?.startPoint, `origin/${branch}`);
+    }),
+  );
+
   it.effect("symlinks configured link paths that exist in the checkout", () =>
     Effect.gen(function* () {
       const recorder = yield* makeRecorder();

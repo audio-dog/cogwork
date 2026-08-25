@@ -17,6 +17,8 @@ const pr = (over: Partial<ObservedPr> = {}): ObservedPr => ({
   fresh: false,
   baseDivergence: "none",
   waitingSinceMillis: 0,
+  headRef: "1-test",
+  followable: true,
   followUp: null,
   ...over,
 });

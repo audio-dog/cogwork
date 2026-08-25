@@ -46,6 +46,8 @@ const pull = (over: Partial<RawPull>): RawPull => ({
   draft: false,
   headSha: "sha",
   headRef: "1-x",
+  headRepository: "owner/repo",
+  closingIssueNumbers: [],
   updatedAtMillis: 0,
   ...over,
 });

@@ -33,6 +33,8 @@ const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"
   fresh: false,
   baseDivergence: "none",
   waitingSinceMillis: 0,
+  headRef: "1-test",
+  followable: true,
   followUp: null,
   ...over,
 });
