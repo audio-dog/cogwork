@@ -32,6 +32,7 @@ import {
   type NowState,
 } from "../features/activity-source";
 import { relativeTime } from "../features/format";
+import { useNow } from "../features/use-now";
 import { useActivityView } from "./activity-view";
 import { FunnelFilter } from "./funnel-filter";
 
@@ -304,8 +305,19 @@ function EmptyEvents() {
   );
 }
 
+function RelativeTimestamp({ atMillis }: { atMillis: number }) {
+  const now = useNow();
+  return (
+    <time
+      className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+      title={new Date(atMillis).toLocaleString()}
+    >
+      {relativeTime(atMillis, now)}
+    </time>
+  );
+}
+
 function TranscriptEvent({ row }: { row: ActivityRow }) {
-  const { state } = useActivityView();
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.kind];
   return (
@@ -329,12 +341,7 @@ function TranscriptEvent({ row }: { row: ActivityRow }) {
           </span>
         </button>
         <EventEntityAction row={row} />
-        <time
-          className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
-          title={new Date(row.atMillis).toLocaleString()}
-        >
-          {relativeTime(row.atMillis, state.clock)}
-        </time>
+        <RelativeTimestamp atMillis={row.atMillis} />
       </div>
       {expanded && <RawPayload raw={row.raw} />}
     </div>
