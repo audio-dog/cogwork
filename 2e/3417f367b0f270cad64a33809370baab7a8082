@@ -1,0 +1,25 @@
+scripts/claude-worktree-setup.mjs
+  s_16f0d9a82ec703::t_69d2b7723edd17 2,4,18,20,24-45,49-59,61-64
+  s_16f0d9a82ec703::t_31d5d7d6990c10 1,3,5-17,19,21-23,60
+  s_16f0d9a82ec703::t_32ab6140d28774 46-48
+.claude/settings.json
+  s_16f0d9a82ec703::t_69d2b7723edd17 9-10,20-21
+  s_16f0d9a82ec703::t_fed5bc2f6596cb 1-8,22-27
+  s_16f0d9a82ec703::t_31d5d7d6990c10 11-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "2e3417f367b0f270cad64a33809370baab7a8082",
+  "prompts": {},
+  "sessions": {
+    "s_16f0d9a82ec703": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0c10dbcd-9a70-4a15-9f98-85721869aa36",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
