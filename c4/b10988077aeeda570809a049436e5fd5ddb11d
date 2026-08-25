@@ -1,0 +1,20 @@
+docs/agents/technical-disposition.md
+  s_3f35ac757d838d::t_7be2599648852a 92-99,130-136,288-293
+  s_3f35ac757d838d::t_78d68f5afdc9d1 294
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "c4b10988077aeeda570809a049436e5fd5ddb11d",
+  "prompts": {},
+  "sessions": {
+    "s_3f35ac757d838d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "78473925-a64f-4e8d-9318-1f2bba3089af",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
