@@ -196,6 +196,7 @@ const itemRemovedRow = (workspace: WorkspaceId, id: WorkItemId, atMillis: number
 // decodes to null here.
 export const decodeEvent = (event: DaemonEvent, atMillis: number): ActivityRow | null => {
   switch (event._tag) {
+    case "SeedEnd":
     case "RunActivity":
       return null;
     case "ItemChanged":
@@ -370,7 +371,10 @@ interface ActivitySessionSample {
   readonly atMillis: number;
 }
 
-const eventKey = (event: DaemonEvent) => JSON.stringify(event);
+const eventKey = (event: DaemonEvent) => {
+  const { emittedAtMillis: _, ...unstamped } = event;
+  return JSON.stringify(unstamped);
+};
 
 const boundSession = <Value>(values: readonly Value[]) =>
   values.length <= defaultActivityLimit ? [...values] : values.slice(-defaultActivityLimit);

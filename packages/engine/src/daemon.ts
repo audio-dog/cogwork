@@ -80,6 +80,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const ledger = yield* RunLedger;
+  const emittedAtMillis = yield* Clock.currentTimeMillis;
   const snapshot = yield* worker.snapshot;
   const config = yield* scheduler.config;
   const stats = yield* scheduler.stats;
@@ -95,7 +96,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     _tag: "SchedulerChanged",
     scheduler: schedulerStatsOf(config, stats),
   } as const;
-  return [...items, ...workspaces, ...runs, scheduling];
+  return [...items, ...workspaces, ...runs, scheduling].map((event) => ({ ...event, emittedAtMillis }));
 });
 
 // Subscribe before reading the seed so an event published between the two is not lost.
@@ -103,7 +104,11 @@ export const watchEvents = Effect.fn("Daemon.watchEvents")(function* () {
   const bus = yield* DaemonEventBus;
   const subscription = yield* bus.subscribe();
   const seed = yield* seedEvents();
-  return Stream.concat(Stream.fromIterable(seed), Stream.fromSubscription(subscription));
+  const emittedAtMillis = yield* Clock.currentTimeMillis;
+  return Stream.concat(
+    Stream.concat(Stream.fromIterable(seed), Stream.make({ _tag: "SeedEnd", emittedAtMillis })),
+    Stream.fromSubscription(subscription),
+  );
 });
 
 const statesByName = (snapshot: ReconcileSnapshot) =>

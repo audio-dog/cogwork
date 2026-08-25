@@ -3,7 +3,8 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { foldTranscript, runPreviews, statusLine } from "./run-activity";
 
-const event = Schema.decodeSync(DaemonEvent);
+const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
+const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
 
 const activity = (
   runId: string,

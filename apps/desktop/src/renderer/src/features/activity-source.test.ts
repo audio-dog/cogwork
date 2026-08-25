@@ -29,7 +29,8 @@ import {
   synthesizeLifecycle,
 } from "./activity-source";
 
-const event = Schema.decodeSync(DaemonEvent);
+const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
+const event = (value: Record<string, unknown>) => decodeDaemonEvent({ emittedAtMillis: 0, ...value });
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
 const runSummary = Schema.decodeSync(RunSummary);
 const schedulerStats = Schema.decodeSync(SchedulerStats);
@@ -490,8 +491,8 @@ describe("recordActivitySession", () => {
   });
 
   it("does not append matching reconnect seed events", () => {
-    const first = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
-    const reseeded = event({ _tag: "ItemRemoved", workspace: "acme", id: "first" });
+    const first = event({ _tag: "ItemRemoved", emittedAtMillis: 100, workspace: "acme", id: "first" });
+    const reseeded = event({ _tag: "ItemRemoved", emittedAtMillis: 200, workspace: "acme", id: "first" });
     const session = recordActivitySession(initialActivitySession, {
       events: [first],
       engine: "up",

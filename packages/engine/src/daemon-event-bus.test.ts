@@ -14,6 +14,7 @@ const workItem = Schema.decodeSync(WorkItemId)("#7");
 const schedulerEvent = (globalInFlight: number) =>
   ({
     _tag: "SchedulerChanged",
+    emittedAtMillis: 0,
     scheduler: stats({
       scheduling: "running",
       globalInFlight,
@@ -66,7 +67,10 @@ describe("DaemonEventBus", () => {
         { type: "RUN_STARTED" },
       );
       const projected = yield* DaemonEventBus.runActivityStream(
-        Stream.fromIterable([{ _tag: "RunActivity", activity } as const, schedulerEvent(1)]),
+        Stream.fromIterable([
+          { _tag: "RunActivity", emittedAtMillis: 0, activity } as const,
+          schedulerEvent(1),
+        ]),
       ).pipe(Stream.runCollect);
 
       assert.deepStrictEqual(

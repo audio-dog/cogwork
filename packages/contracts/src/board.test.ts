@@ -1,7 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { WorkspaceId } from "./base-schemas";
-import { applyDaemonEvent, initialBoard } from "./board";
+import { applyDaemonEvent, initialBoard, liveOnly } from "./board";
 import { SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
@@ -11,7 +13,8 @@ const classifiedItem = Schema.decodeSync(ClassifiedItem);
 const runSummary = Schema.decodeSync(RunSummary);
 const schedulerStats = Schema.decodeSync(SchedulerStats);
 const workspaceState = Schema.decodeSync(WorkspaceState);
-const event = Schema.decodeSync(DaemonEvent);
+const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
+const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
 
 const registered = (name: string) =>
   workspaceState({
@@ -45,6 +48,10 @@ const urlOf = (item: ClassifiedItem | undefined) => (item?._tag === "NeedsHuman"
 const fold = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
 describe("applyDaemonEvent", () => {
+  it("requires emittedAtMillis on daemon events", () => {
+    assert.throws(() => decodeEvent({ _tag: "SeedEnd" }));
+  });
+
   it("records the latest classified item per workspace and id", () => {
     const board = fold([
       event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
@@ -130,6 +137,44 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(twice.items.size, 1);
     assert.strictEqual(stageOf(twice.items.get("acme::1")?.item), "implement");
   });
+
+  it("leaves the board unchanged for the SeedEnd subscription-control event", () => {
+    const board = applyDaemonEvent(initialBoard, event({ _tag: "SeedEnd", emittedAtMillis: 1_000 }));
+
+    assert.strictEqual(board, initialBoard);
+  });
+
+  it("does not retain an item that a new complete seed omits", () => {
+    const firstSeed = fold([
+      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("gone", "triage") }),
+    ]);
+    const nextSeed = fold([
+      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("kept", "implement") }),
+    ]);
+
+    assert.strictEqual(firstSeed.items.has("acme::gone"), true);
+    assert.strictEqual(nextSeed.items.has("acme::gone"), false);
+    assert.strictEqual(nextSeed.items.has("acme::kept"), true);
+  });
+
+  it.effect("keeps only events after the SeedEnd boundary for live consumers", () =>
+    Stream.fromIterable([
+      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("seed", "triage") }),
+      event({ _tag: "SeedEnd", emittedAtMillis: 1_000 }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("live", "implement") }),
+    ]).pipe(
+      liveOnly,
+      Stream.runCollect,
+      Effect.tap((events) =>
+        Effect.sync(() =>
+          assert.deepStrictEqual(
+            [...events].map((event) => event._tag),
+            ["ItemChanged"],
+          ),
+        ),
+      ),
+    ),
+  );
 
   it("tracks the latest run summary and scheduler stats", () => {
     const run = runSummary({

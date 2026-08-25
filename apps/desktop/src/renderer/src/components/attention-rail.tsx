@@ -132,7 +132,7 @@ function DecisionQuickOpen({ entry }: { entry: NeedsDecisionAttentionEntry }) {
 }
 
 function AttentionRow({ entry }: { entry: AttentionEntry }) {
-  const openSurface = useRightPanelStore((state) => state.openSurface);
+  const openItem = useRightPanelStore((state) => state.openItem);
   const signal = signalFor(entry);
   return (
     <div className="group relative flex w-full items-center gap-3 py-2 pr-2 pl-0 hover:bg-muted/50">
@@ -142,7 +142,7 @@ function AttentionRow({ entry }: { entry: AttentionEntry }) {
         className="absolute inset-0 rounded-md focus-visible:ring-2 focus-visible:ring-ring"
         onClick={(event) => {
           event.stopPropagation();
-          openSurface({ kind: "item", workspace: entry.workspace, workItem: entry.item.id });
+          openItem(entry.workspace, entry.item.id);
         }}
       />
       <KindMarker kind={entry.kind} />
@@ -156,10 +156,7 @@ function AttentionRow({ entry }: { entry: AttentionEntry }) {
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
         {entry.kind === "ready-to-merge" && (
-          <PrStatus
-            entry={entry}
-            onOpen={() => openSurface({ kind: "item", workspace: entry.workspace, workItem: entry.item.id })}
-          />
+          <PrStatus entry={entry} onOpen={() => openItem(entry.workspace, entry.item.id)} />
         )}
         <span className="pointer-events-none w-28 truncate text-right" title={signal}>
           {signal}

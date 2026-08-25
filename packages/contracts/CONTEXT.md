@@ -337,7 +337,7 @@ The caller behind an RPC, injected into every handler's context by one `RpcMiddl
 _Avoid_: User, account, session (the harness's conversation handle), token (the credential, not the caller)
 
 **Daemon event**:
-The unit a client watches on the daemon's live feed — a tagged envelope over everything a client view must react to: a harness event on a run (run activity), a work item's classification change or removal, a run summary change, a workspace's state change, and a scheduler change. The subscription self-seeds — it opens by replaying the current state as ordinary events — so one subscription per client is the whole story; the client fans out its own views.
+The unit a client watches on the daemon's live feed — a tagged envelope over everything a client view must react to: a harness event on a run (run activity), a work item's classification change or removal, a run summary change, a workspace's state change, and a scheduler change. The subscription self-seeds — it opens by replaying the current state as ordinary events — so one subscription per client is the whole story; the client fans out its own views. Each seed is complete: derived state folds from the newest subscription's seed, and anything the seed does not re-state is gone. `RunActivity` is live-only on `WatchEvents`. `SeedEnd` is a subscription-control event: it carries a delivery fact, not a domain fact, and changes no derived state. The watch endpoint emits it after the seed and before the live tail; the daemon event bus never carries it.
 _Avoid_: Run activity (now one kind of daemon event), notification, log line
 
 **Board**:
