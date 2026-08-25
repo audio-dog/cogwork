@@ -1,0 +1,21 @@
+packages/contracts/src/board.test.ts
+  s_989b09a36a7285::t_2a0f9e94031758 32
+packages/contracts/src/daemon.ts
+  s_989b09a36a7285::t_0e34ce2043011c 37,46,55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "961c177cf185ee86ee22c655d26d1ba8282ef6f0",
+  "prompts": {},
+  "sessions": {
+    "s_989b09a36a7285": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03a03-bef0-7f42-a1cf-3f077075e396",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
