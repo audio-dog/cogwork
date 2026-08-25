@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-08-25
+- **Amended:** 2026-08-25 — `drizzle-kit` is adopted as a development tool, see [Amendment](#amendment-2026-08-25--drizzle-kit-is-adopted-as-a-development-tool)
 
 ## Context
 
@@ -34,7 +35,8 @@ through `VACUUM INTO` when and only when a migration is pending, migrates, valid
 starts dispatch.
 
 **A migration is a TypeScript module** exporting an integer id and its statements — not an unpacked
-`.sql` tree, and `drizzle-kit` is not adopted as a generator.
+`.sql` tree, and `drizzle-kit` is not adopted as a generator. *(Amended — `drizzle-kit` is adopted,
+as a development tool that never runs on a user's machine; the module stays the shipped artifact.)*
 
 **Failure is closed.** On any failure in that sequence the daemon starts, serves RPC, reports the
 store unavailable through `DaemonHealth`, and dispatches nothing. The failed database is preserved as
@@ -98,6 +100,46 @@ is the only host.
 - One store-wide revision was considered and cut: its only consumer went to
   [#133](https://github.com/colonylabs/cogwork/issues/133), and a counter every write must touch is a
   contention point invented for a consumer that does not exist. Stale-write detection stays per-row.
+
+## Amendment (2026-08-25) — `drizzle-kit` is adopted as a development tool
+
+This ADR declared that a migration is a TypeScript module and that `drizzle-kit` is not adopted as a
+generator. The first half stands. The second is reversed.
+
+**The rejection conflated two tools.** `drizzle-orm`'s runtime `migrate()` is rejected on the code
+evidence above, and that rejection is unchanged — it is never called. `drizzle-kit` is a
+development-time CLI that never runs on a user's machine, and none of that evidence touches it.
+
+**`drizzle-kit push` against the developer's own database.** Drizzle documents push as "rapid
+prototyping in local development" and explicitly not for production deployments, which is the same
+split this ADR draws: a development database is disposable, so push is correct against it. It is
+wrong on a user's laptop for reasons that are not about Drizzle at all — there is no CLI and no
+person there, the diff would be computed at run time and so could never be reviewed in a pull
+request, and the Control store is the authority for *this Plugin is installed* rather than something
+a person can delete and recreate. Push also keeps no history, so there would be nothing for the
+compatibility check to read, and an automatic desktop update is exactly the case that check exists
+for.
+
+**`drizzle-kit generate` produces the SQL that ships.** Once push has settled a schema, generate
+emits the statements. Hand-writing them afterwards is transcription of a change the tool already
+made, with a chance to get it wrong — and SQLite's table-rebuild recipe for a type or constraint
+change is precisely where hand-written SQL corrupts a store that is not disposable. Push's
+documented blind spot is a second reason generate owns the shipped artifact: push does not detect
+changes to `.where()`, `.on()`, `.using()`, or `.op()` on an existing index.
+
+**What is committed, and what ships.** drizzle-kit's migration folder — its `.sql` output and the
+snapshot metadata it needs to compute the next diff — is committed, because without that metadata
+the next `generate` has no baseline. The TypeScript module is generated from that SQL and committed
+beside it. **Only the module ships.** `drizzle-kit`, the `.sql` tree, and the metadata stay in the
+repository and never reach a user's machine.
+
+The module is generated rather than inlined by a build step because there is no build:
+`packages/engine` exports `./src/index.ts` with no `build` script, and `apps/cli` starts through
+`tsx`. A check that regenerates the module and fails on any difference closes the hand-edit hole
+that two committed representations would otherwise leave open.
+
+Nothing about the boot loop changes. The engine still owns it, still reads an array of statements,
+still never calls Drizzle's `migrate()`, and still does no filesystem read at run time.
 
 Full reasoning: [#126](https://github.com/colonylabs/cogwork/issues/126). Research:
 `docs/research/desktop-settings-storage-updates.md` on `research/desktop-settings-storage`.
