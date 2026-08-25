@@ -371,7 +371,10 @@ interface ActivitySessionSample {
   readonly atMillis: number;
 }
 
-const eventKey = (event: DaemonEvent) => JSON.stringify(event);
+const eventKey = (event: DaemonEvent) => {
+  const { emittedAtMillis: _, ...unstamped } = event;
+  return JSON.stringify(unstamped);
+};
 
 const boundSession = <Value>(values: readonly Value[]) =>
   values.length <= defaultActivityLimit ? [...values] : values.slice(-defaultActivityLimit);
