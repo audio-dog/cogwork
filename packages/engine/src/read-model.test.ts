@@ -166,10 +166,10 @@ describe("workspaceInfoOf", () => {
     assert.deepStrictEqual(info.needsHuman, [needsHumanWithPr, needsHumanNoPr]);
   });
 
-  it("reports an empty, ok-polling workspace when it has no reconcile state yet", () => {
+  it("reports an empty workspace whose poll is pending when it has no reconcile state yet", () => {
     const info = workspaceInfoOf(workspace, undefined);
 
-    assert.deepStrictEqual(info.poll, { status: "ok" });
+    assert.deepStrictEqual(info.poll, { status: "pending" });
     assert.deepStrictEqual([info.eligible, info.claimed, info.blocked, info.needsHuman], [[], [], [], []]);
   });
 });

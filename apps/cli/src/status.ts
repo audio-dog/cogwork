@@ -27,8 +27,11 @@ const pauseQualifier = (poll: Extract<PollState, { readonly status: "paused" }>)
     : ` (self-healing, retrying after ${isoOrMillis(poll.retryAtMillis)})`;
 };
 
-const formatPoll = (poll: PollState) =>
-  poll.status === "ok" ? [] : [`      paused: ${poll.reason}${pauseQualifier(poll)} — ${poll.message}`];
+const formatPoll = (poll: PollState) => {
+  if (poll.status === "ok") return [];
+  if (poll.status === "pending") return ["      poll: not yet run"];
+  return [`      paused: ${poll.reason}${pauseQualifier(poll)} — ${poll.message}`];
+};
 
 const formatWorkspace = (workspace: WorkspaceInfo) => {
   const poll = formatPoll(workspace.poll);

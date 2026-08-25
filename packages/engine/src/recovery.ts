@@ -1,4 +1,4 @@
-import type { LifecycleStage, SessionId } from "@cogwork/contracts";
+import type { LifecycleStage, PollState, SessionId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -185,11 +185,14 @@ export const make = Effect.gen(function* () {
     yield* Effect.forEach(ours, (item) => recoverItem(workspace, item), { discard: true });
   });
 
+  const pollDetail = (poll: PollState) =>
+    poll.status === "paused" ? { poll: poll.status, reason: poll.reason } : { poll: poll.status };
+
   const recoverState = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState) => {
     if (state.poll.status !== "ok") {
-      return Effect.logWarning("claim recovery deferred; workspace poll paused", {
+      return Effect.logWarning("claim recovery deferred; workspace poll is not ok", {
         workspace: workspace.config.name,
-        reason: state.poll.reason,
+        ...pollDetail(state.poll),
       });
     }
     return recoverWorkspace(workspace, state.observed).pipe(
