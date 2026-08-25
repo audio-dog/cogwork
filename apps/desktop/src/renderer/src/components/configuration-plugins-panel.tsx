@@ -231,9 +231,9 @@ function InstalledPluginCard({ plugin }: { plugin: InstalledPlugin }) {
               <AlertDialogContent>
                 <AlertDialogTitle>Uninstall {plugin.name}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This deletes its settings at every Scope you own — your Settings profile and every private
-                  workspace overlay. A committed Workspace input is not yours to delete, so anything it wrote
-                  for this Plugin is left in place and will dangle.
+                  This deletes its settings at every Scope you own — this machine and every private workspace
+                  overlay. A committed Workspace input is not yours to delete, so anything it wrote for this
+                  Plugin is left in place and will dangle.
                 </AlertDialogDescription>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Keep it</AlertDialogCancel>

@@ -19,66 +19,31 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftLine, RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { findVariant } from "../features/configuration-variants";
 import {
   findSection,
-  isConfigurationSection,
   type SettingEntry,
   searchSettings,
   settingsSections,
 } from "../features/settings-catalog";
 import { useActiveSectionId } from "../features/use-settings-route";
-import { useVariantKey } from "../features/use-variant";
 
-/**
- * PROTOTYPE — the configuration sections come from the active variant, because whether Plugins and
- * Customize are one surface or two is part of what #131 decides. The app's own settings sections
- * are unaffected and sit below them.
- */
 function SectionNav({ activeSectionId }: { activeSectionId: string }) {
   const navigate = useNavigate();
-  const variantKey = useVariantKey();
-  const variant = findVariant(variantKey);
-
-  const appSections = settingsSections.filter((section) => !isConfigurationSection(section.id));
-  const go = (section: string) =>
-    navigate({ to: "/settings/$section", params: { section }, search: { variant: variantKey } });
-
   return (
-    <div className="flex flex-col gap-4">
-      <SidebarMenu>
-        {variant.sections.map((section) => {
-          const catalogEntry = findSection(section.id);
-          const Icon = catalogEntry?.icon;
-          return (
-            <SidebarMenuItem key={section.id}>
-              <SidebarMenuButton
-                isActive={section.id === activeSectionId}
-                tooltip={section.label}
-                onClick={() => go(section.id)}
-              >
-                {Icon ? <Icon /> : null}
-                <span>{section.label}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          );
-        })}
-      </SidebarMenu>
-      <SidebarMenu>
-        {appSections.map((section) => (
-          <SidebarMenuItem key={section.id}>
-            <SidebarMenuButton
-              isActive={section.id === activeSectionId}
-              tooltip={section.label}
-              onClick={() => go(section.id)}
-            >
-              <section.icon />
-              <span>{section.label}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ))}
-      </SidebarMenu>
-    </div>
+    <SidebarMenu>
+      {settingsSections.map((section) => (
+        <SidebarMenuItem key={section.id}>
+          <SidebarMenuButton
+            isActive={section.id === activeSectionId}
+            tooltip={section.label}
+            onClick={() => navigate({ to: "/settings/$section", params: { section: section.id } })}
+          >
+            <section.icon />
+            <span>{section.label}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ))}
+    </SidebarMenu>
   );
 }
 
@@ -121,7 +86,6 @@ function SearchResults({ query, onSelect }: { query: string; onSelect: (entry: S
 export function SettingsSidebar() {
   const navigate = useNavigate();
   const activeSectionId = useActiveSectionId();
-  const variantKey = useVariantKey();
   const [query, setQuery] = useState("");
   const searching = query.trim() !== "";
 
@@ -130,7 +94,7 @@ export function SettingsSidebar() {
     navigate({
       to: "/settings/$section",
       params: { section: entry.sectionId },
-      search: { focus: entry.id, jump: Date.now(), variant: variantKey },
+      search: { focus: entry.id, jump: Date.now() },
     });
   };
 

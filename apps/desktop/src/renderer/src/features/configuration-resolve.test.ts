@@ -18,11 +18,11 @@ function required(id: string): Contribution {
 
 describe("resolveEnablement", () => {
   it("lets the highest Scope win whole", () => {
-    // On at the Settings profile, off at the Private workspace overlay.
+    // On at the Runtime host, off at the Private workspace overlay.
     const resolved = resolveEnablement(required("plugin:gh-review/skill/pr-summary"), view);
     expect(resolved.effective).toBe(false);
     expect(resolved.winner?.scope.kind).toBe("private-overlay");
-    expect(resolved.shadowed.map((row) => row.scope.kind)).toEqual(["settings-profile"]);
+    expect(resolved.shadowed.map((row) => row.scope.kind)).toEqual(["runtime-host"]);
   });
 
   it("leaves the effective value absent when nothing is written — not false", () => {
@@ -38,7 +38,7 @@ describe("resolveEnablement", () => {
     expect(resolved.dropped[0]?.row.scope.kind).toBe("workspace-input");
     // The admissible profile row still resolves, so one bad line does not stop the work.
     expect(resolved.effective).toBe(true);
-    expect(resolved.winner?.scope.kind).toBe("settings-profile");
+    expect(resolved.winner?.scope.kind).toBe("runtime-host");
   });
 
   it("drops a setting that references a contribution which no longer exists", () => {
@@ -52,7 +52,7 @@ describe("resolveEnablement", () => {
     const resolved = resolveEnablement(required("plugin:gh-review/skill/pr-summary"), other);
     // The overlay row belongs to another workspace, so the profile row wins here.
     expect(resolved.effective).toBe(true);
-    expect(resolved.winner?.scope.kind).toBe("settings-profile");
+    expect(resolved.winner?.scope.kind).toBe("runtime-host");
   });
 
   it("never reconciles two contributions that share a local name", () => {
@@ -60,7 +60,7 @@ describe("resolveEnablement", () => {
     const fromLocal = required("local/mcp/linear");
     expect(fromPlugin.localName).toBe(fromLocal.localName);
     expect(fromPlugin.id).not.toBe(fromLocal.id);
-    expect(resolveEnablement(fromPlugin, view).winner?.scope.kind).toBe("settings-profile");
+    expect(resolveEnablement(fromPlugin, view).winner?.scope.kind).toBe("runtime-host");
     expect(resolveEnablement(fromLocal, view).winner?.scope.kind).toBe("private-overlay");
   });
 });
@@ -72,9 +72,10 @@ describe("cellPermitted", () => {
     expect(cellPermitted("skill", "workspace-input")).toBe(true);
   });
 
-  it("excludes the Runtime host for every contribution kind", () => {
+  it("lets the Runtime host hold every contribution kind", () => {
     const kinds = ["hook", "mcp-server", "skill", "rules", "command", "subagent"] as const;
-    for (const kind of kinds) expect(cellPermitted(kind, "runtime-host")).toBe(false);
+    // The machine is where a contribution's file lives, so it is the bottom rung for all six.
+    for (const kind of kinds) expect(cellPermitted(kind, "runtime-host")).toBe(true);
   });
 });
 
@@ -97,7 +98,7 @@ describe("resolveOperationSetting", () => {
     expect(resolved.refusedBy).toContain("locks permission-profile");
   });
 
-  it("takes harness at the Runtime host, which holds no other Operation setting", () => {
+  it("takes harness at the Runtime host", () => {
     const triage = placeholderConfiguration.operations.find((entry) => entry.id === "triage");
     if (!triage) throw new Error("fixture is missing the triage Operation");
     const harness = resolveOperationSetting(triage, "harness", view);

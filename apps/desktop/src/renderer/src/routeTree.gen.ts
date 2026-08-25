@@ -12,6 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppConnectionsRouteImport } from './routes/_app/connections'
+import { Route as AppCustomizeRouteImport } from './routes/_app/customize'
+import { Route as AppWorkflowsRouteImport } from './routes/_app/workflows'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 
@@ -29,6 +32,21 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppConnectionsRoute = AppConnectionsRouteImport.update({
+  id: '/connections',
+  path: '/connections',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppCustomizeRoute = AppCustomizeRouteImport.update({
+  id: '/customize',
+  path: '/customize',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppWorkflowsRoute = AppWorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,10 +61,16 @@ const SettingsSectionRoute = SettingsSectionRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsRouteRouteWithChildren
+  '/connections': typeof AppConnectionsRoute
+  '/customize': typeof AppCustomizeRoute
+  '/workflows': typeof AppWorkflowsRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/connections': typeof AppConnectionsRoute
+  '/customize': typeof AppCustomizeRoute
+  '/workflows': typeof AppWorkflowsRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
@@ -55,19 +79,38 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
+  '/_app/connections': typeof AppConnectionsRoute
+  '/_app/customize': typeof AppCustomizeRoute
+  '/_app/workflows': typeof AppWorkflowsRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/settings/$section' | '/settings/'
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/connections'
+    | '/customize'
+    | '/workflows'
+    | '/settings/$section'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/settings/$section' | '/' | '/settings'
+  to:
+    | '/connections'
+    | '/customize'
+    | '/workflows'
+    | '/settings/$section'
+    | '/'
+    | '/settings'
   id:
     | '__root__'
     | '/_app'
     | '/settings'
+    | '/_app/connections'
+    | '/_app/customize'
+    | '/_app/workflows'
     | '/settings/$section'
     | '/_app/'
     | '/settings/'
@@ -101,6 +144,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/connections': {
+      id: '/_app/connections'
+      path: '/connections'
+      fullPath: '/connections'
+      preLoaderRoute: typeof AppConnectionsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/customize': {
+      id: '/_app/customize'
+      path: '/customize'
+      fullPath: '/customize'
+      preLoaderRoute: typeof AppCustomizeRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/workflows': {
+      id: '/_app/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof AppWorkflowsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -119,10 +183,16 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteRouteChildren {
+  AppConnectionsRoute: typeof AppConnectionsRoute
+  AppCustomizeRoute: typeof AppCustomizeRoute
+  AppWorkflowsRoute: typeof AppWorkflowsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppConnectionsRoute: AppConnectionsRoute,
+  AppCustomizeRoute: AppCustomizeRoute,
+  AppWorkflowsRoute: AppWorkflowsRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

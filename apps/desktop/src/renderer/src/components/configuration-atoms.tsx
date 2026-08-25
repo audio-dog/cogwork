@@ -17,7 +17,6 @@ import {
   RiServerLine,
   RiSparkling2Line,
   RiTerminalBoxLine,
-  RiUserLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
 import {
@@ -44,7 +43,6 @@ export const kindIcons: Record<ContributionKind, ComponentType> = {
 };
 
 export const scopeIcons: Record<ScopeKind, ComponentType> = {
-  "settings-profile": RiUserLine,
   "runtime-host": RiComputerLine,
   "workspace-input": RiGitRepositoryLine,
   "private-overlay": RiFolderLine,

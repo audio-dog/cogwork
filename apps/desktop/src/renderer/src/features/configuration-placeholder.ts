@@ -64,7 +64,7 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/linear@1.4.0/mcp/linear.json",
     load: { _tag: "loaded" },
     readiness: { _tag: "ready" },
-    rows: [{ scope: { kind: "settings-profile" }, value: true, source: "Control store" }],
+    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
   {
     id: "plugin:linear/command/linear-triage",
@@ -74,7 +74,7 @@ const contributions: readonly Contribution[] = [
     summary: "Prompts for a triage pass over one Linear issue.",
     file: "~/.cogwork/plugins/linear@1.4.0/commands/linear-triage.md",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "settings-profile" }, value: true, source: "Control store" }],
+    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
 
   {
@@ -88,7 +88,7 @@ const contributions: readonly Contribution[] = [
     // On at the profile, off in this workspace's overlay. The overlay is the highest Scope, so it
     // wins whole — and turning it off here is what leaves `follow-up` unable to run.
     rows: [
-      { scope: { kind: "settings-profile" }, value: true, source: "Control store" },
+      { scope: { kind: "runtime-host" }, value: true, source: "Control store" },
       {
         scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
         value: false,
@@ -105,7 +105,7 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/gh-review@2.1.0/hooks/pre-push.json",
     load: { _tag: "loaded" },
     rows: [
-      { scope: { kind: "settings-profile" }, value: true, source: "Control store" },
+      { scope: { kind: "runtime-host" }, value: true, source: "Control store" },
       // A repository may ship a Hook file. It may never turn one on.
       {
         scope: { kind: "workspace-input", workspaceId: cogworkWorkspaceId },
@@ -183,7 +183,7 @@ const contributions: readonly Contribution[] = [
     summary: "Posts a desktop notification when a Codex turn ends.",
     file: "~/.cogwork/plugins/codex-extras@0.9.3/hooks/codex-notify.json",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "settings-profile" }, value: false, source: "Control store" }],
+    rows: [{ scope: { kind: "runtime-host" }, value: false, source: "Control store" }],
   },
   {
     id: "plugin:codex-extras/command/codex-login",
@@ -193,7 +193,7 @@ const contributions: readonly Contribution[] = [
     summary: "Walks the host-owned Codex CLI login.",
     file: "~/.cogwork/plugins/codex-extras@0.9.3/commands/codex-login.md",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "settings-profile" }, value: true, source: "Control store" }],
+    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
 
   {
@@ -204,7 +204,7 @@ const contributions: readonly Contribution[] = [
     summary: "First-party triage subagent shipped with the Engine.",
     file: "engine://subagents/triager",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "settings-profile" }, value: true, source: "Control store" }],
+    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
   {
     id: "engine/rules/house-style",
@@ -214,7 +214,7 @@ const contributions: readonly Contribution[] = [
     summary: "Always-apply guidance the Engine contributes to every Run.",
     file: "engine://rules/house-style",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "settings-profile" }, value: true, source: "Control store" }],
+    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
 
   {
@@ -556,7 +556,7 @@ const operations: readonly Operation[] = [
       {
         key: "enabled",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "on",
         source: "Control store",
       },
@@ -570,21 +570,21 @@ const operations: readonly Operation[] = [
       {
         key: "model",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "claude-sonnet-5",
         source: "Control store",
       },
       {
         key: "effort",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "medium",
         source: "Control store",
       },
       {
         key: "binding",
         level: "operation",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "tracker-read → plugin:linear/mcp/linear",
         source: "Control store",
       },
@@ -617,7 +617,7 @@ const operations: readonly Operation[] = [
       {
         key: "enabled",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "on",
         source: "Control store",
       },
@@ -633,7 +633,7 @@ const operations: readonly Operation[] = [
       {
         key: "model",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "claude-sonnet-5",
         source: "Control store",
       },
@@ -647,7 +647,7 @@ const operations: readonly Operation[] = [
       {
         key: "effort",
         level: "workflow",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "high",
         source: "Control store",
       },
@@ -683,7 +683,7 @@ const operations: readonly Operation[] = [
       {
         key: "enabled",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "on",
         source: "Control store",
       },
@@ -697,7 +697,7 @@ const operations: readonly Operation[] = [
       {
         key: "model",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "claude-sonnet-5",
         source: "Control store",
       },
@@ -721,7 +721,7 @@ const operations: readonly Operation[] = [
       {
         key: "enabled",
         level: "default",
-        scope: { kind: "settings-profile" },
+        scope: { kind: "runtime-host" },
         value: "off",
         source: "Control store",
       },

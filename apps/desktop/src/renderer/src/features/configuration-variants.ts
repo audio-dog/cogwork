@@ -1,58 +1,45 @@
-// PROTOTYPE — the variant registry for #131.
+// PROTOTYPE — the variant registry for the Customize page.
 //
-// Three structurally different answers to "what should Plugins and Customize look and behave
-// like". Each one owns a different set of settings sections, because "one surface or two" is part
-// of what is being decided. Switchable with `?variant=`; deleted with the losing variants.
+// The question these three answer is narrow and deliberate: **how does a person see the filter
+// axes, and swap between them?** Everything else on the page is held constant so the comparison is
+// about that and nothing else.
+//
+// There are three axes, not two, and noticing the third is half the problem:
+//   1. Contribution kind — six values, plus Plugins as a grouping over them.
+//   2. Scope — three rungs, and a *ladder* rather than a flat set, so "filtering" by it is a
+//      category error: a filter says what is visible, a ladder says what won.
+//   3. Workspace — two of the three Scopes are workspace-bound, so a Scope is not fully named
+//      until a workspace is.
 
 export const variantKeys = ["A", "B", "C"] as const;
 
 export type VariantKey = (typeof variantKeys)[number];
 
-export interface VariantSection {
-  readonly id: string;
-  readonly label: string;
-}
-
 export interface VariantDefinition {
   readonly key: VariantKey;
   readonly name: string;
-  /** The claim this variant makes, shown in the switcher so a reader knows what to judge. */
+  /** The claim, shown in the switcher so a reader knows what to judge. */
   readonly claim: string;
-  readonly sections: readonly VariantSection[];
 }
 
 export const variants: readonly VariantDefinition[] = [
   {
     key: "A",
-    name: "Facet bar",
+    name: "Two rows",
     claim:
-      "One surface. Plugins is a seventh pill beside the six contribution kinds, and Scope is a multi-select filter that unions what is in view.",
-    sections: [
-      { id: "plugins", label: "Plugins & contributions" },
-      { id: "workspaces", label: "Workspaces" },
-    ],
+      "Kind filters; Scope does not. Scope is the write target, always visible, and every row shows the whole three-rung ladder so nothing about resolution is hidden behind a filter.",
   },
   {
     key: "B",
-    name: "Scope spine",
+    name: "Scope tabs",
     claim:
-      "Two surfaces. Customize puts Scope on the spine, so you always edit exactly one Scope and the cells a Scope may not hold are shown as decisions rather than blanks.",
-    sections: [
-      { id: "plugins", label: "Plugins" },
-      { id: "customize", label: "Customize" },
-      { id: "workspaces", label: "Workspaces" },
-    ],
+      "Scope is the only filter, and kind becomes navigation: one long page per Scope with a jump list. The cells a Scope may not hold get stated as decisions instead of vanishing.",
   },
   {
     key: "C",
-    name: "Operation first",
+    name: "Group by",
     claim:
-      "Two surfaces, and Customize is an inspector. You start from Workflow to Operation and read what the Run Plan resolves to; Scope appears only as provenance.",
-    sections: [
-      { id: "plugins", label: "Plugins" },
-      { id: "workflows", label: "Workflows" },
-      { id: "workspaces", label: "Workspaces" },
-    ],
+      "No filters at all. Everything is always on screen and one control chooses how it is grouped — by kind, by Scope, or by Plugin. Search narrows; grouping organizes.",
   },
 ];
 
@@ -68,6 +55,5 @@ export function findVariant(key: VariantKey): VariantDefinition {
 
 export function nextVariant(key: VariantKey, step: 1 | -1): VariantKey {
   const index = variantKeys.indexOf(key);
-  const count = variantKeys.length;
-  return variantKeys[(index + step + count) % count];
+  return variantKeys[(index + step + variantKeys.length) % variantKeys.length];
 }

@@ -5,24 +5,45 @@
 // schemas: nothing here is decoded, persisted, or sent over RPC. When the surfaces are wired
 // to the daemon these types are replaced by the ones `@cogwork/contracts` owns.
 
-/** The four Scopes. Ordered low to high — the `override-scalar` direction from ADR 0013. */
-export const scopeOrder = ["settings-profile", "runtime-host", "workspace-input", "private-overlay"] as const;
+/**
+ * The Scopes a contribution can be configured at, low to high — the `override-scalar` direction.
+ *
+ * **Three rungs, not ADR 0013's four.** The Settings profile rung is gone: a contribution is a
+ * file on disk on this machine, and ADR 0014 already conceded that nothing synchronizes a Settings
+ * profile, so "principal-owned, shared across workspaces" and "this machine" never differed in
+ * practice. Collapsing them removes a tier that could only ever have been a fiction.
+ *
+ * ADR 0013 and ADR 0014 both need amending for this. See the #131 resolution.
+ */
+export const scopeOrder = ["runtime-host", "workspace-input", "private-overlay"] as const;
 
 export type ScopeKind = (typeof scopeOrder)[number];
 
 export const scopeLabels: Record<ScopeKind, string> = {
-  "settings-profile": "Settings profile",
   "runtime-host": "Runtime host",
   "workspace-input": "Workspace input",
   "private-overlay": "Private workspace overlay",
 };
 
+/** The short form, for a filter control that has no room for the full name. */
+export const scopeShortLabels: Record<ScopeKind, string> = {
+  "runtime-host": "This machine",
+  "workspace-input": "Repo",
+  "private-overlay": "Yours, here",
+};
+
 /** What each Scope's identity is minted from (#134). Rendered so a person can tell two clones apart. */
 export const scopeIdentity: Record<ScopeKind, string> = {
-  "settings-profile": "the Principal",
   "runtime-host": "a HostId, minted once and kept in this machine's ~/.cogwork",
   "workspace-input": "a WorkspaceId, minted at registration",
   "private-overlay": "the pair (Principal, WorkspaceId)",
+};
+
+/** One line on what a Scope is for, shown beside its filter control. */
+export const scopeDescriptions: Record<ScopeKind, string> = {
+  "runtime-host": "Installed here and available in every workspace on this machine.",
+  "workspace-input": "Committed to the repository, so everyone who clones it gets the same offer.",
+  "private-overlay": "Yours, for this workspace only, and never committed.",
 };
 
 /**
@@ -72,26 +93,32 @@ export const kindLabelsPlural: Record<ContributionKind, string> = {
  * Which Scopes may hold a contribution's on / off, by kind (ADR 0013).
  *
  * The Workspace input is excluded for Hook and MCP server because a repository you cloned
- * must not start a process on your machine. It may still *ship* the file. The excluded cells
- * are empty by decision, so a UI that renders them as unset is lying.
+ * must not start a process on your machine. It may still *ship* the file. That cell is empty by
+ * decision, so a UI that renders it as merely unset is lying.
  */
 export const enablementScopes: Record<ContributionKind, readonly ScopeKind[]> = {
-  skill: ["settings-profile", "workspace-input", "private-overlay"],
-  rules: ["settings-profile", "workspace-input", "private-overlay"],
-  command: ["settings-profile", "workspace-input", "private-overlay"],
-  subagent: ["settings-profile", "workspace-input", "private-overlay"],
-  hook: ["settings-profile", "private-overlay"],
-  "mcp-server": ["settings-profile", "private-overlay"],
+  skill: ["runtime-host", "workspace-input", "private-overlay"],
+  rules: ["runtime-host", "workspace-input", "private-overlay"],
+  command: ["runtime-host", "workspace-input", "private-overlay"],
+  subagent: ["runtime-host", "workspace-input", "private-overlay"],
+  hook: ["runtime-host", "private-overlay"],
+  "mcp-server": ["runtime-host", "private-overlay"],
 };
 
 /** Which Scopes may hold an Operation setting. The Runtime host takes `harness` and nothing else. */
+/**
+ * PARKED — dropping the Settings profile rung leaves this set undecided. ADR 0013 gave the Runtime
+ * host `harness` and nothing else *because* the profile held the rest; with the profile gone that
+ * reasoning has no subject. Operation settings live on the Workflows page, so the question is
+ * parked there rather than answered here.
+ */
 export const operationSettingScopes: Record<OperationSettingKey, readonly ScopeKind[]> = {
-  enabled: ["settings-profile", "private-overlay"],
-  harness: ["settings-profile", "runtime-host", "private-overlay"],
-  model: ["settings-profile", "private-overlay"],
-  effort: ["settings-profile", "private-overlay"],
-  "permission-profile": ["settings-profile", "private-overlay"],
-  binding: ["settings-profile", "private-overlay"],
+  enabled: ["runtime-host", "private-overlay"],
+  harness: ["runtime-host", "private-overlay"],
+  model: ["runtime-host", "private-overlay"],
+  effort: ["runtime-host", "private-overlay"],
+  "permission-profile": ["runtime-host", "private-overlay"],
+  binding: ["runtime-host", "private-overlay"],
 };
 
 export type OperationSettingKey =
