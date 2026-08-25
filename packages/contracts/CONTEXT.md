@@ -42,6 +42,11 @@ _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot neve
 
 ### Configuration
 
+**Control store**:
+The daemon's single local database of everything Cogwork itself has been told on this machine — install records, settings at every Scope that is not a file, Runtime host bindings, minted Scope identities, and the store's own schema metadata. One database per machine, under `~/.cogwork`.
+**It fails closed.** Unlike the Credential store it holds no secrets, and unlike the Run ledger it is not disposable — it is the authority the Engine resolves a Run Plan from, so a store it cannot open or trust stops dispatch rather than degrading it. The Run ledger's rows live here too, and stay disposable by policy rather than by sitting in a separate file. See ADR 0015.
+_Avoid_: Settings store (it holds identities and bindings, not only settings), Run ledger (that one is disposable), Credential store (that one is secret), Settings profile (a Scope, not a store), database, config
+
 **Settings profile**:
 The principal-owned configuration source for installed plugins, connections, and defaults shared across workspaces and agent activity.
 **Installing a Plugin writes here and nowhere else** — by elimination, since the Workspace input may not enable executable behaviour, the Runtime host holds no contributions, and the overlay is per-workspace while an install is not. "Shared across workspaces" is not shared across machines: nothing synchronizes a Settings profile today, so an install is machine-local in practice and no design may assume otherwise.
@@ -271,8 +276,8 @@ One execution of one run plan by one harness, captured with its events, outcome,
 _Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
-The daemon's local store of runs and their events — in-memory, or SQLite at `~/.cogwork/runs.db`. Holds run history, harness sessions, and token usage. It does not hold scheduling budgets (those live only in the scheduler's memory), and losing it is safe because the issue tracker stays authoritative for coordination.
-_Avoid_: Source of truth, database, backlog. Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
+The daemon's local store of runs and their events — in-memory, or a region of the Control store on disk. Holds run history, harness sessions, and token usage. It does not hold scheduling budgets (those live only in the scheduler's memory), and losing it is safe because the issue tracker stays authoritative for coordination.
+_Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it). Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
 
 **Run event**:
 One persisted, sequenced entry in a run's stream — an encoded harness event stored with a `seq` and timestamp.
