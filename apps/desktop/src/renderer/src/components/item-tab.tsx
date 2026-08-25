@@ -4,6 +4,7 @@ import type {
   PrSummary,
   RunSummary,
   TriageRole,
+  WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
@@ -15,9 +16,16 @@ import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { Textarea } from "@cogwork/ui/components/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
-import { RiArrowRightLine, RiExternalLinkLine, RiPulseLine, RiStopCircleLine } from "@remixicon/react";
+import {
+  RiArrowRightLine,
+  RiExternalLinkLine,
+  RiFileList2Line,
+  RiPulseLine,
+  RiStopCircleLine,
+} from "@remixicon/react";
 import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useRef, useState } from "react";
 import { cancelRunAtom, reclassifyAtom } from "../daemon/atoms";
@@ -38,10 +46,12 @@ import { statusLine, useRunActivity } from "../features/run-activity";
 import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
+import { useRightPanelStore } from "../store/right-panel";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
 import { Markdown } from "./markdown";
 import { PullRequest } from "./pull-request";
 import { RunDrillIn } from "./run-drill-in";
+import { SurfaceTab } from "./surface-tab";
 
 interface ItemTabState {
   readonly workspace: WorkspaceId;
@@ -697,5 +707,36 @@ export function ItemTab({
         <SubTabPanel />
       </div>
     </ItemTabProvider>
+  );
+}
+
+export function ItemSurfaceTab({
+  id,
+  workspace,
+  workItem,
+}: {
+  id: `item:${string}:${string}`;
+  workspace: WorkspaceId;
+  workItem: WorkItemId;
+}) {
+  const active = useRightPanelStore((state) => state.active === id);
+  const setActive = useRightPanelStore((state) => state.setActive);
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
+
+  return (
+    <SurfaceTab.Root active={active}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <SurfaceTab.Button onClick={() => setActive(id)}>
+              <RiFileList2Line data-icon="inline-start" />
+              <span className="truncate">{workItem}</span>
+            </SurfaceTab.Button>
+          }
+        />
+        <TooltipContent side="bottom">{workspace}</TooltipContent>
+      </Tooltip>
+      <SurfaceTab.Close label={workItem} onClick={() => closeSurface(id)} />
+    </SurfaceTab.Root>
   );
 }
