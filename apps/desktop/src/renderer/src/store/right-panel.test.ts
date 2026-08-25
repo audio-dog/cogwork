@@ -128,6 +128,30 @@ describe("right-panel store", () => {
     expect(useRightPanelStore.getState().active).toBe("item:acme:#50");
   });
 
+  it("keeps only the selected tab when closing other tabs", () => {
+    const { closeOtherSurfaces, openSurface } = useRightPanelStore.getState();
+    openSurface({ kind: "attention" });
+    openSurface({ kind: "activity" });
+    openSurface(item("acme", "#50"));
+    closeOtherSurfaces("activity");
+
+    const state = useRightPanelStore.getState();
+    expect(state.surfaces).toEqual([{ kind: "activity" }]);
+    expect(state.active).toBe("activity");
+  });
+
+  it("empties the panel without closing it when closing all tabs", () => {
+    const { closeAllSurfaces, openSurface } = useRightPanelStore.getState();
+    openSurface({ kind: "attention" });
+    openSurface(item("acme", "#50"));
+    closeAllSurfaces();
+
+    const state = useRightPanelStore.getState();
+    expect(state.open).toBe(true);
+    expect(state.surfaces).toEqual([]);
+    expect(state.active).toBeNull();
+  });
+
   it("toggling the panel clears the maximized state", () => {
     const { toggleMaximized, togglePanel } = useRightPanelStore.getState();
     toggleMaximized();
