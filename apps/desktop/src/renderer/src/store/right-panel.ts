@@ -1,88 +1,88 @@
 import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { create } from "zustand";
 
-export type Surface =
-  | { readonly kind: "attention" }
-  | { readonly kind: "activity" }
-  | { readonly kind: "terminal" }
-  | {
-      readonly kind: "item";
-      readonly workspace: WorkspaceId;
-      readonly workItem: WorkItemId;
-      readonly runId?: RunId;
-      readonly run?: RunSummary;
-    };
+type ToolKind = "attention" | "activity" | "terminal";
 
-export type SurfaceId = string;
+type ToolSurface = { readonly id: ToolKind; readonly kind: ToolKind };
 
-export function surfaceId(surface: Surface): SurfaceId {
-  return surface.kind === "item" ? `item:${surface.workspace}:${surface.workItem}` : surface.kind;
-}
+type ItemSurface = {
+  readonly id: `item:${string}:${string}`;
+  readonly kind: "item";
+  readonly workspace: WorkspaceId;
+  readonly workItem: WorkItemId;
+  readonly runId?: RunId;
+  readonly run?: RunSummary;
+};
 
-function updatedSurface(existing: Surface, next: Surface) {
-  if (existing.kind === "item" && next.kind === "item" && existing.runId && !next.runId) {
-    return existing;
-  }
-  return next;
-}
+type Surface = ToolSurface | ItemSurface;
 
-function upsertSurface(surfaces: readonly Surface[], next: Surface) {
-  const id = surfaceId(next);
-  const existing = surfaces.findIndex((surface) => surfaceId(surface) === id);
+type SurfaceId = Surface["id"];
 
+const itemSurfaceId = (workspace: WorkspaceId, workItem: WorkItemId) =>
+  `item:${workspace}:${workItem}` as const;
+
+const itemSurface = (
+  workspace: WorkspaceId,
+  workItem: WorkItemId,
+  run?: RunId | RunSummary,
+): ItemSurface => ({
+  id: itemSurfaceId(workspace, workItem),
+  kind: "item",
+  workspace,
+  workItem,
+  ...(typeof run === "string" ? { runId: run } : run ? { runId: run.id, run } : {}),
+});
+
+const upsertSurface = (surfaces: readonly Surface[], next: Surface) => {
+  const existing = surfaces.findIndex((surface) => surface.id === next.id);
   if (existing === -1) return [...surfaces, next];
+  return surfaces.map((surface, index) => (index === existing ? next : surface));
+};
 
-  return surfaces.map((surface, index) => (index === existing ? updatedSurface(surface, next) : surface));
-}
-
-function fallbackActiveSurfaceId(
+const fallbackActiveSurfaceId = (
   surfaces: readonly Surface[],
   closingId: SurfaceId,
   active: SurfaceId | null,
-) {
+) => {
   if (active !== closingId) return active;
-  const fallback = surfaces[surfaces.length - 1];
-  return fallback ? surfaceId(fallback) : null;
-}
+  return surfaces.at(-1)?.id ?? null;
+};
 
 export interface RightPanelState {
   readonly open: boolean;
   readonly maximized: boolean;
   readonly surfaces: readonly Surface[];
   readonly active: SurfaceId | null;
-  readonly openPanel: () => void;
-  readonly closePanel: () => void;
   readonly togglePanel: () => void;
-  readonly openSurface: (surface: Surface) => void;
+  readonly openItem: (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId | RunSummary) => void;
+  readonly openTool: (kind: ToolKind) => void;
   readonly closeSurface: (id: SurfaceId) => void;
   readonly setActive: (id: SurfaceId) => void;
   readonly toggleMaximized: () => void;
 }
+
+const open = (surfaces: readonly Surface[], next: Surface) => ({
+  open: true,
+  active: next.id,
+  surfaces: upsertSurface(surfaces, next),
+});
 
 export const useRightPanelStore = create<RightPanelState>((set) => ({
   open: false,
   maximized: false,
   surfaces: [],
   active: null,
-  openPanel: () => set({ open: true }),
-  closePanel: () => set({ open: false, maximized: false }),
   togglePanel: () => set((state) => ({ open: !state.open, maximized: false })),
-  openSurface: (surface) =>
-    set((state) => {
-      const id = surfaceId(surface);
-      return {
-        open: true,
-        active: id,
-        surfaces: upsertSurface(state.surfaces, surface),
-      };
-    }),
+  openItem: (workspace, workItem, run) =>
+    set((state) => open(state.surfaces, itemSurface(workspace, workItem, run))),
+  openTool: (kind) => set((state) => open(state.surfaces, { id: kind, kind })),
   closeSurface: (id) =>
     set((state) => {
-      const surfaces = state.surfaces.filter((entry) => surfaceId(entry) !== id);
+      const surfaces = state.surfaces.filter((surface) => surface.id !== id);
       if (surfaces.length === state.surfaces.length) return state;
       return { surfaces, active: fallbackActiveSurfaceId(surfaces, id, state.active) };
     }),
   setActive: (id) =>
-    set((state) => (state.surfaces.some((surface) => surfaceId(surface) === id) ? { active: id } : state)),
+    set((state) => (state.surfaces.some((surface) => surface.id === id) ? { active: id } : state)),
   toggleMaximized: () => set((state) => ({ maximized: !state.maximized })),
 }));
