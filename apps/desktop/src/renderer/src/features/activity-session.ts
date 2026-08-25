@@ -378,8 +378,8 @@ const recordEngineStatus = (status: Parameters<typeof enginePhase>[0], clock: ()
   );
 
 const subscribe = (listener: () => void, clock: () => number) => {
-  listeners.add(listener);
   const unsubscribeEngine = subscribeEngineStatus((status) => recordEngineStatus(status, clock));
+  listeners.add(listener);
   return () => {
     listeners.delete(listener);
     unsubscribeEngine();

@@ -683,7 +683,7 @@ export function ItemTab({ selection }: { selection: ItemSelection & { runId?: Ru
     selection.workspace,
     selection.workItem,
   );
-  const run = selectedRun ?? runForItem(board, selection.workspace, selection.workItem);
+  const run = selection.runId ? selectedRun : runForItem(board, selection.workspace, selection.workItem);
   const attempts = previousAttempts(
     runsForItem(board, selection.workspace, selection.workItem),
     run?.id ?? null,
