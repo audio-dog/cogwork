@@ -11,20 +11,15 @@ import { RiCloseLine } from "@remixicon/react";
 import type { ComponentProps, ReactNode } from "react";
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 
-const baseClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
+const baseClassName = "group/surface-tab flex h-7 shrink-0 items-center gap-0.5 rounded-md pl-2 pr-1 text-xs";
 
 function SurfaceTabActive({ children }: { children: ReactNode }) {
-  return <div className={cn(baseClassName, "bg-accent text-foreground pl-2 pr-1")}>{children}</div>;
+  return <div className={cn(baseClassName, "bg-accent text-foreground")}>{children}</div>;
 }
 
 function SurfaceTabInactive({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={cn(
-        baseClassName,
-        "text-muted-foreground hover:bg-accent/60 hover:text-foreground pl-2 pr-1",
-      )}
-    >
+    <div className={cn(baseClassName, "text-muted-foreground hover:bg-accent/60 hover:text-foreground")}>
       {children}
     </div>
   );
@@ -38,9 +33,17 @@ function SurfaceTabButton({ className, children, ...props }: ComponentProps<type
   );
 }
 
-function SurfaceTabClose({ label, onClick }: { label: string; onClick: () => void }) {
+function SurfaceTabClose({ className, ...props }: ComponentProps<typeof Button>) {
   return (
-    <Button aria-label={`Close ${label}`} size="icon-xs" variant="ghost" onClick={onClick}>
+    <Button
+      {...props}
+      className={cn(
+        "opacity-0 transition-none group-hover/surface-tab:opacity-100 focus-visible:opacity-100",
+        className,
+      )}
+      size="icon-xs"
+      variant="ghost"
+    >
       <RiCloseLine data-icon="inline-start" />
     </Button>
   );

@@ -12,7 +12,7 @@ import { TerminalCatalogCard, TerminalCatalogMenuItem } from "./terminal-surface
 
 export function SurfaceCatalogCards() {
   return (
-    <div className="grid gap-3 p-4 sm:grid-cols-2">
+    <div className="grid gap-3 sm:grid-cols-2">
       <AttentionCatalogCard />
       <ActivityCatalogCard />
       <TerminalCatalogCard />
@@ -30,7 +30,7 @@ export function SurfaceCatalogMenu() {
           </Button>
         }
       />
-      <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuContent align="start">
         <DropdownMenuGroup>
           <AttentionCatalogMenuItem />
           <ActivityCatalogMenuItem />

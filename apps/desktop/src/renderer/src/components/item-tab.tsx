@@ -737,7 +737,7 @@ export function ItemSurfaceTab({
         />
         <TooltipContent side="bottom">{workspace}</TooltipContent>
       </Tooltip>
-      <SurfaceTab.Close label={workItem} onClick={() => closeSurface(id)} />
+      <SurfaceTab.Close aria-label={`Close ${workItem}`} onClick={() => closeSurface(id)} />
     </Tab>
   );
 }
