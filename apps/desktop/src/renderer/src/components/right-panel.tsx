@@ -1,5 +1,12 @@
 import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Button } from "@cogwork/ui/components/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@cogwork/ui/components/context-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
@@ -58,19 +65,40 @@ function CloseTabButton({ label, onClick }: { label: string; onClick: () => void
   );
 }
 
+function TabContextMenu({ children, id }: { children: React.ReactNode; id: SurfaceId }) {
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
+  const closeOtherSurfaces = useRightPanelStore((state) => state.closeOtherSurfaces);
+  const closeAllSurfaces = useRightPanelStore((state) => state.closeAllSurfaces);
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuGroup>
+          <ContextMenuItem onClick={() => closeSurface(id)}>Close</ContextMenuItem>
+          <ContextMenuItem onClick={() => closeOtherSurfaces(id)}>Close others</ContextMenuItem>
+          <ContextMenuItem onClick={closeAllSurfaces}>Close all</ContextMenuItem>
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 function AttentionTab() {
   const active = useRightPanelStore((state) => state.active === "attention");
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
 
   return (
-    <div className={tabClassName(active, "pl-2 pr-1")}>
-      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("attention")}>
-        <RiFocus2Line className="size-3.5 shrink-0" />
-        <span className="truncate">Attention</span>
-      </Button>
-      <CloseTabButton label="Attention" onClick={() => closeSurface("attention")} />
-    </div>
+    <TabContextMenu id="attention">
+      <div className={tabClassName(active, "pl-2 pr-1")}>
+        <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("attention")}>
+          <RiFocus2Line className="size-3.5 shrink-0" />
+          <span className="truncate">Attention</span>
+        </Button>
+        <CloseTabButton label="Attention" onClick={() => closeSurface("attention")} />
+      </div>
+    </TabContextMenu>
   );
 }
 
@@ -80,13 +108,15 @@ function ActivityTab() {
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
 
   return (
-    <div className={tabClassName(active, "pl-2 pr-1")}>
-      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("activity")}>
-        <RiPulseLine className="size-3.5 shrink-0" />
-        <span className="truncate">Activity</span>
-      </Button>
-      <CloseTabButton label="Activity" onClick={() => closeSurface("activity")} />
-    </div>
+    <TabContextMenu id="activity">
+      <div className={tabClassName(active, "pl-2 pr-1")}>
+        <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("activity")}>
+          <RiPulseLine className="size-3.5 shrink-0" />
+          <span className="truncate">Activity</span>
+        </Button>
+        <CloseTabButton label="Activity" onClick={() => closeSurface("activity")} />
+      </div>
+    </TabContextMenu>
   );
 }
 
@@ -96,13 +126,15 @@ function TerminalTab() {
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
 
   return (
-    <div className={tabClassName(active, "pl-2 pr-1")}>
-      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("terminal")}>
-        <RiTerminalBoxLine className="size-3.5 shrink-0" />
-        <span className="truncate">Terminal</span>
-      </Button>
-      <CloseTabButton label="Terminal" onClick={() => closeSurface("terminal")} />
-    </div>
+    <TabContextMenu id="terminal">
+      <div className={tabClassName(active, "pl-2 pr-1")}>
+        <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive("terminal")}>
+          <RiTerminalBoxLine className="size-3.5 shrink-0" />
+          <span className="truncate">Terminal</span>
+        </Button>
+        <CloseTabButton label="Terminal" onClick={() => closeSurface("terminal")} />
+      </div>
+    </TabContextMenu>
   );
 }
 
@@ -113,24 +145,26 @@ function ItemTab({ surface }: { surface: Extract<Surface, { kind: "item" }> }) {
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
 
   return (
-    <div className={tabClassName(active, "pl-2 pr-1")}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <button
-              type="button"
-              className="flex min-w-0 cursor-pointer items-center gap-1.5"
-              onClick={() => setActive(id)}
-            >
-              <RiFileList2Line className="size-3.5 shrink-0" />
-              <span className="truncate">{surface.workItem}</span>
-            </button>
-          }
-        />
-        <TooltipContent side="bottom">{surface.workspace}</TooltipContent>
-      </Tooltip>
-      <CloseTabButton label={surface.workItem} onClick={() => closeSurface(id)} />
-    </div>
+    <TabContextMenu id={id}>
+      <div className={tabClassName(active, "pl-2 pr-1")}>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className="flex min-w-0 cursor-pointer items-center gap-1.5"
+                onClick={() => setActive(id)}
+              >
+                <RiFileList2Line className="size-3.5 shrink-0" />
+                <span className="truncate">{surface.workItem}</span>
+              </button>
+            }
+          />
+          <TooltipContent side="bottom">{surface.workspace}</TooltipContent>
+        </Tooltip>
+        <CloseTabButton label={surface.workItem} onClick={() => closeSurface(id)} />
+      </div>
+    </TabContextMenu>
   );
 }
 
