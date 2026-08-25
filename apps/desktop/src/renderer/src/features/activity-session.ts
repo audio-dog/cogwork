@@ -252,6 +252,11 @@ export const ingestDaemonEvent = (
   };
 };
 
+export const unprocessedDaemonEvents = (
+  processed: readonly DaemonEvent[] | null,
+  current: readonly DaemonEvent[],
+) => (processed === current ? null : current);
+
 const lifecycleRow = (
   kind: "engine" | "connection" | "stream",
   atMillis: number,
@@ -355,10 +360,12 @@ const activityState: {
   session: ActivitySession;
   lastResult: EventResult | null;
   lastPumpedResult: EventResult | null;
+  processedDaemonEvents: readonly DaemonEvent[] | null;
 } = {
   session: initialActivitySession,
   lastResult: null,
   lastPumpedResult: null,
+  processedDaemonEvents: null,
 };
 
 const publish = (next: ActivitySession) => {
@@ -370,7 +377,8 @@ const publish = (next: ActivitySession) => {
 const recordDaemonResult = (result: EventResult, clock: () => number) => {
   if (result === activityState.lastResult) return;
   activityState.lastResult = result;
-  if (result._tag === "Initial")
+  if (result._tag === "Initial") {
+    activityState.processedDaemonEvents = null;
     return publish(
       updateLifecycle(
         resetActivityFolds(activityState.session),
@@ -379,7 +387,9 @@ const recordDaemonResult = (result: EventResult, clock: () => number) => {
         clock(),
       ),
     );
-  if (result._tag === "Failure")
+  }
+  if (result._tag === "Failure") {
+    activityState.processedDaemonEvents = null;
     return publish(
       updateLifecycle(
         resetActivityFolds(activityState.session),
@@ -388,7 +398,11 @@ const recordDaemonResult = (result: EventResult, clock: () => number) => {
         clock(),
       ),
     );
-  const next = result.value.items.reduce(
+  }
+  const events = unprocessedDaemonEvents(activityState.processedDaemonEvents, result.value.items);
+  if (!events) return;
+  activityState.processedDaemonEvents = events;
+  const next = events.reduce(
     (current, event) => ingestDaemonEvent(current, event, clock()),
     activityState.session,
   );

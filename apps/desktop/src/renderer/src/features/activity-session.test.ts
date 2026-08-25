@@ -1,7 +1,12 @@
 import { type AgUiEvent, ClassifiedItem, DaemonEvent, RunSummary } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { ingestDaemonEvent, initialActivitySession, resetActivityFolds } from "./activity-session";
+import {
+  ingestDaemonEvent,
+  initialActivitySession,
+  resetActivityFolds,
+  unprocessedDaemonEvents,
+} from "./activity-session";
 import { previewMap } from "./run-activity";
 
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
@@ -98,6 +103,13 @@ describe("activity session", () => {
     );
 
     expect(withLateActivity.previews.has("run-1")).toBe(false);
+  });
+
+  it("does not re-fold an already processed daemon-event batch", () => {
+    const items = [event({ _tag: "RunChanged", run: run() })];
+
+    expect(unprocessedDaemonEvents(null, items)).toBe(items);
+    expect(unprocessedDaemonEvents(items, items)).toBeNull();
   });
 
   it("mints a distinct row identity for identical arrivals", () => {
