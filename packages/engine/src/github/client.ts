@@ -192,6 +192,10 @@ export const closingReferencesQuery = `
 query ClosingReferences($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
     pullRequests(first: 100, after: $cursor, states: OPEN) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       nodes {
         number
         closingIssuesReferences(first: 100) {

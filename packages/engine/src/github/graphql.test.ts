@@ -20,6 +20,7 @@ describe("closingReferencesFor", () => {
 
   it("queries closing references and keeps only references to the configured repository", () => {
     assert.include(closingReferencesQuery, "closingIssuesReferences");
+    assert.include(closingReferencesQuery, "pageInfo");
     assert.deepStrictEqual(
       closingReferencesFor(repo, {
         repository: {
