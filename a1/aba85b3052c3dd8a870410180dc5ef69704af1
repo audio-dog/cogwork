@@ -1,0 +1,26 @@
+packages/engine/src/classify.test.ts
+  s_989b09a36a7285::t_2a0f9e94031758 98-100
+  s_989b09a36a7285::t_9e58124be66a84 158-165,167-173
+packages/engine/src/classify.ts
+  s_989b09a36a7285::t_13906de1d006a4 55-56,101-108,111-118,126,150,166,171-179
+packages/engine/src/linear/linear.test.ts
+  s_989b09a36a7285::t_2a0f9e94031758 300-307
+packages/engine/src/github/github.test.ts
+  s_989b09a36a7285::t_2a0f9e94031758 406-413
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "a1aba85b3052c3dd8a870410180dc5ef69704af1",
+  "prompts": {},
+  "sessions": {
+    "s_989b09a36a7285": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03a03-bef0-7f42-a1cf-3f077075e396",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
