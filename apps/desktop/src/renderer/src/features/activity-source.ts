@@ -82,18 +82,20 @@ export const activityLabels: Record<ActivityKind, string> = {
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
 
-const classifiedStateByTag: Record<ClassifiedItem["_tag"], { text: string; severity: ActivitySeverity }> = {
-  Eligible: { text: "eligible", severity: "info" },
-  Claimed: { text: "claimed", severity: "info" },
-  Blocked: { text: "blocked", severity: "warn" },
-  NeedsHuman: { text: "needs a person", severity: "warn" },
+const classifiedStateByTag: {
+  [T in ClassifiedItem["_tag"]]: (item: Extract<ClassifiedItem, { _tag: T }>) => {
+    text: string;
+    severity: ActivitySeverity;
+  };
+} = {
+  Eligible: () => ({ text: "eligible", severity: "info" }),
+  Claimed: () => ({ text: "claimed", severity: "info" }),
+  Blocked: (item) => ({ text: `blocked · ${item.openBlockers} open`, severity: "warn" }),
+  NeedsHuman: () => ({ text: "needs a person", severity: "warn" }),
 };
 
-const classifiedState = (item: ClassifiedItem) => {
-  const state = classifiedStateByTag[item._tag];
-  if (item._tag !== "Blocked") return state;
-  return { ...state, text: `${state.text} · ${item.openBlockers} open` };
-};
+const classifiedState = <T extends ClassifiedItem["_tag"]>(item: Extract<ClassifiedItem, { _tag: T }>) =>
+  classifiedStateByTag[item._tag](item);
 
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
   running: "info",

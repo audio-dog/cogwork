@@ -289,10 +289,10 @@ function EnginePage() {
   );
 }
 
-const sectionPages: Record<SettingsSectionId, ComponentType> = {
-  general: GeneralPage,
-  appearance: AppearancePage,
-  engine: EnginePage,
+const sectionBodyById: Record<SettingsSectionId, () => ReactNode> = {
+  general: () => <GeneralPage />,
+  appearance: () => <AppearancePage />,
+  engine: () => <EnginePage />,
 };
 
 export function SettingsSectionView({
@@ -305,12 +305,11 @@ export function SettingsSectionView({
   jump?: number;
 }) {
   const section = findSection(sectionId);
-  const SectionBody = sectionPages[sectionId];
   return (
     <FocusedSettingContext value={{ focus, jump }}>
       <div className="flex flex-col gap-8">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">{section?.label}</h1>
-        <SectionBody />
+        {sectionBodyById[sectionId]()}
       </div>
     </FocusedSettingContext>
   );
