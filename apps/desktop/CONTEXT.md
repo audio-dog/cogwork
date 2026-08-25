@@ -95,7 +95,8 @@ panel is permanent now).
 **Surface catalog**:
 The set of Tool surfaces you can add to the side panel — today Attention, Activity, and a Terminal
 placeholder. An empty panel shows the catalog as a grid of cards; a panel that already has tabs shows
-the same catalog behind a Plus button on the tab strip. One list drives both, so they never drift.
+the same catalog behind a Plus button on the tab strip. Each surface's one module supplies both its
+card and its Plus-menu entry, so they never drift.
 _Avoid_: Fixed tabs, permanent tabs.
 
 **Tool surface**:
@@ -104,7 +105,8 @@ Activity, Terminal. You add it from the surface catalog; adding one that is alre
 Its identity is its kind alone (`surfaceId` = the kind). "Tool" describes its identity, not its
 content — Attention and Activity both stream live. Terminal is a placeholder today (a card that opens
 a "coming soon" body); when it is built for real it may become a Subject surface, one per shell
-session.
+session. In code, each Tool surface is one module owning its tab variant, catalog entry, and body;
+the panel composes them at a single point, and the store alone owns tab membership and order.
 _Avoid_: Fixed tab, static tab (the content can be live; only the identity is single).
 
 **Subject surface**:
