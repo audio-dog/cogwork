@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/components/activity-view.tsx
+  s_52779fb84edd00::t_1203b119d15194 60,91-95,98
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_52779fb84edd00::t_1203b119d15194 290-291
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_52779fb84edd00::t_1203b119d15194 135,145,159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "c96c36fa384e3ef76e56548eb9487f1415de0e75",
+  "prompts": {},
+  "sessions": {
+    "s_52779fb84edd00": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a036d6-46a2-7751-b94b-bf398b155f25",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
