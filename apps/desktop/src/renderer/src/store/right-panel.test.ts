@@ -1,18 +1,25 @@
 import { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Schema } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type Surface, surfaceId, useRightPanelStore } from "./right-panel";
+import { useRightPanelStore } from "./right-panel";
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const workItem = Schema.decodeSync(WorkItemId);
 const runId = Schema.decodeSync(RunId);
 
-const item = (ws: string, id: string, run?: string): Surface => ({
-  kind: "item",
-  workspace: workspace(ws),
-  workItem: workItem(id),
-  ...(run ? { runId: runId(run) } : {}),
-});
+const item = (ws: string, id: string, run?: string) =>
+  expect.objectContaining({
+    kind: "item" as const,
+    workspace: workspace(ws),
+    workItem: workItem(id),
+    ...(run ? { runId: runId(run) } : {}),
+  });
+
+const surfaceIdAt = (index: number) => {
+  const surface = useRightPanelStore.getState().surfaces[index];
+  if (!surface) throw new Error(`Missing surface at index ${index}`);
+  return surface.id;
+};
 
 const reset = () =>
   useRightPanelStore.setState({
@@ -32,29 +39,21 @@ describe("right-panel store", () => {
     expect(state.active).toBeNull();
   });
 
-  it("identifies an item tab by its workspace and work item", () => {
-    expect(surfaceId(item("acme", "#50"))).toBe("item:acme:#50");
-    expect(surfaceId(item("beta", "#50"))).not.toBe(surfaceId(item("acme", "#50")));
-    expect(surfaceId({ kind: "attention" })).toBe("attention");
-    expect(surfaceId({ kind: "activity" })).toBe("activity");
-    expect(surfaceId({ kind: "terminal" })).toBe("terminal");
-  });
-
   it("focuses an existing Tool surface instead of adding it twice", () => {
-    const { openSurface, setActive } = useRightPanelStore.getState();
-    openSurface({ kind: "attention" });
-    openSurface({ kind: "activity" });
+    const { openTool, setActive } = useRightPanelStore.getState();
+    openTool("attention");
+    openTool("activity");
     setActive("activity");
-    openSurface({ kind: "attention" });
+    openTool("attention");
 
     const state = useRightPanelStore.getState();
-    expect(state.surfaces).toEqual([{ kind: "attention" }, { kind: "activity" }]);
+    expect(state.surfaces.map((surface) => surface.id)).toEqual(["attention", "activity"]);
     expect(state.active).toBe("attention");
   });
 
   it("closes a Tool surface and clears active when it was the last tab", () => {
-    const { openSurface, closeSurface } = useRightPanelStore.getState();
-    openSurface({ kind: "terminal" });
+    const { openTool, closeSurface } = useRightPanelStore.getState();
+    openTool("terminal");
     closeSurface("terminal");
 
     const state = useRightPanelStore.getState();
@@ -63,87 +62,100 @@ describe("right-panel store", () => {
   });
 
   it("opens the panel and focuses an item tab when the item opens", () => {
-    useRightPanelStore.getState().openSurface(item("acme", "#50"));
+    useRightPanelStore.getState().openItem(workspace("acme"), workItem("#50"));
     const state = useRightPanelStore.getState();
     expect(state.open).toBe(true);
-    expect(state.active).toBe("item:acme:#50");
+    expect(state.active).toBe(surfaceIdAt(0));
     expect(state.surfaces).toEqual([item("acme", "#50")]);
   });
 
   it("focuses the existing tab on a second open of the same item", () => {
-    const { openSurface, setActive } = useRightPanelStore.getState();
-    openSurface(item("acme", "#50"));
-    openSurface(item("acme", "#51"));
-    setActive("item:acme:#51");
-    openSurface(item("acme", "#50"));
+    const { openItem, setActive } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"));
+    openItem(workspace("acme"), workItem("#51"));
+    setActive(surfaceIdAt(1));
+    openItem(workspace("acme"), workItem("#50"));
     const state = useRightPanelStore.getState();
     expect(state.surfaces).toEqual([item("acme", "#50"), item("acme", "#51")]);
-    expect(state.active).toBe("item:acme:#50");
+    expect(state.active).toBe(surfaceIdAt(0));
   });
 
-  it("keeps a selected run when the item opens again", () => {
-    const { openSurface } = useRightPanelStore.getState();
-    const historicalRun = item("acme", "#50", "run-1");
-    openSurface(historicalRun);
-    openSurface(item("acme", "#50"));
+  it("open resets a run pin", () => {
+    const { openItem } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"), runId("run-1"));
+    openItem(workspace("acme"), workItem("#50"));
 
-    expect(useRightPanelStore.getState().surfaces).toEqual([historicalRun]);
+    expect(useRightPanelStore.getState().surfaces).toEqual([item("acme", "#50")]);
+  });
+
+  it("focus preserves a run pin", () => {
+    const { openItem, openTool, setActive } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"), runId("run-1"));
+    openTool("attention");
+    setActive(surfaceIdAt(0));
+
+    expect(useRightPanelStore.getState().surfaces).toContainEqual(item("acme", "#50", "run-1"));
+    expect(useRightPanelStore.getState().surfaces.map((surface) => surface.id)).toEqual([
+      surfaceIdAt(0),
+      "attention",
+    ]);
   });
 
   it("tells apart the same work item id in different workspaces", () => {
-    const { openSurface } = useRightPanelStore.getState();
-    openSurface(item("acme", "#50"));
-    openSurface(item("beta", "#50"));
+    const { openItem } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"));
+    openItem(workspace("beta"), workItem("#50"));
     const state = useRightPanelStore.getState();
     expect(state.surfaces).toEqual([item("acme", "#50"), item("beta", "#50")]);
-    expect(state.active).toBe("item:beta:#50");
+    expect(state.active).toBe(surfaceIdAt(1));
   });
 
   it("keeps item tabs open until they are closed", () => {
-    const { openSurface, setActive, closeSurface } = useRightPanelStore.getState();
-    openSurface(item("acme", "#50"));
-    openSurface({ kind: "attention" });
+    const { openItem, openTool, setActive, closeSurface } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"));
+    openTool("attention");
     setActive("attention");
     expect(useRightPanelStore.getState().surfaces).toContainEqual(item("acme", "#50"));
-    closeSurface("item:acme:#50");
-    expect(useRightPanelStore.getState().surfaces).toEqual([{ kind: "attention" }]);
+    closeSurface(surfaceIdAt(0));
+    expect(useRightPanelStore.getState().surfaces.map((surface) => surface.id)).toEqual(["attention"]);
   });
 
   it("falls back to the last remaining tab when the active item closes", () => {
-    const { openSurface, closeSurface } = useRightPanelStore.getState();
-    openSurface(item("acme", "#50"));
-    openSurface(item("acme", "#51"));
-    closeSurface("item:acme:#51");
+    const { openItem, closeSurface } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"));
+    openItem(workspace("acme"), workItem("#51"));
+    closeSurface(surfaceIdAt(1));
     const state = useRightPanelStore.getState();
     expect(state.surfaces).toEqual([item("acme", "#50")]);
-    expect(state.active).toBe("item:acme:#50");
+    expect(state.active).toBe(surfaceIdAt(0));
   });
 
   it("keeps the active tab when a different item closes", () => {
-    const { openSurface, setActive, closeSurface } = useRightPanelStore.getState();
-    openSurface(item("acme", "#50"));
-    openSurface(item("acme", "#51"));
-    setActive("item:acme:#50");
-    closeSurface("item:acme:#51");
-    expect(useRightPanelStore.getState().active).toBe("item:acme:#50");
+    const { openItem, setActive, closeSurface } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"));
+    openItem(workspace("acme"), workItem("#51"));
+    const firstId = surfaceIdAt(0);
+    setActive(firstId);
+    closeSurface(surfaceIdAt(1));
+    expect(useRightPanelStore.getState().active).toBe(firstId);
   });
 
   it("keeps only the selected tab when closing other tabs", () => {
-    const { closeOtherSurfaces, openSurface } = useRightPanelStore.getState();
-    openSurface({ kind: "attention" });
-    openSurface({ kind: "activity" });
-    openSurface(item("acme", "#50"));
+    const { closeOtherSurfaces, openItem, openTool } = useRightPanelStore.getState();
+    openTool("attention");
+    openTool("activity");
+    openItem(workspace("acme"), workItem("#50"));
     closeOtherSurfaces("activity");
 
     const state = useRightPanelStore.getState();
-    expect(state.surfaces).toEqual([{ kind: "activity" }]);
+    expect(state.surfaces.map((surface) => surface.id)).toEqual(["activity"]);
     expect(state.active).toBe("activity");
   });
 
   it("empties the panel without closing it when closing all tabs", () => {
-    const { closeAllSurfaces, openSurface } = useRightPanelStore.getState();
-    openSurface({ kind: "attention" });
-    openSurface(item("acme", "#50"));
+    const { closeAllSurfaces, openItem, openTool } = useRightPanelStore.getState();
+    openTool("attention");
+    openItem(workspace("acme"), workItem("#50"));
     closeAllSurfaces();
 
     const state = useRightPanelStore.getState();
@@ -163,10 +175,10 @@ describe("right-panel store", () => {
   });
 
   it("closing the panel resets open and maximized", () => {
-    const { openSurface, toggleMaximized, closePanel } = useRightPanelStore.getState();
-    openSurface(item("acme", "#50"));
+    const { openItem, toggleMaximized, togglePanel } = useRightPanelStore.getState();
+    openItem(workspace("acme"), workItem("#50"));
     toggleMaximized();
-    closePanel();
+    togglePanel();
     const state = useRightPanelStore.getState();
     expect(state.open).toBe(false);
     expect(state.maximized).toBe(false);

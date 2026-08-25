@@ -3,7 +3,8 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { attentionCounts, attentionEntries, filterAttention } from "./attention";
 
-const daemonEvent = Schema.decodeSync(DaemonEvent);
+const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
+const daemonEvent = (value: Record<string, unknown>) => decodeDaemonEvent({ ...value, emittedAtMillis: 0 });
 
 const pr = (waitingSinceMillis: number) => ({
   number: 7,
@@ -14,7 +15,7 @@ const pr = (waitingSinceMillis: number) => ({
   waitingSinceMillis,
 });
 
-const board = (events: ReadonlyArray<Parameters<typeof daemonEvent>[0]>) =>
+const board = (events: ReadonlyArray<Record<string, unknown>>) =>
   events.map((event) => daemonEvent(event)).reduce(applyDaemonEvent, initialBoard);
 
 describe("attentionEntries", () => {

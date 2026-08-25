@@ -287,8 +287,8 @@ const FeedCompound = {
 };
 
 function FeedContent({ running, queued, done, previews }: FeedState) {
-  const openSurface = useRightPanelStore((state) => state.openSurface);
-  const select = (selection: ItemSelection) => openSurface({ kind: "item", ...selection });
+  const openItem = useRightPanelStore((state) => state.openItem);
+  const select = (selection: ItemSelection) => openItem(selection.workspace, selection.workItem);
   const now = useNow();
   return (
     <FeedCompound.Provider state={{ running, queued, done, previews }} actions={{ select }} meta={{ now }}>
