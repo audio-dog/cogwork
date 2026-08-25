@@ -29,7 +29,8 @@ import {
   synthesizeLifecycle,
 } from "./activity-source";
 
-const event = Schema.decodeSync(DaemonEvent);
+const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
+const event = (value: Record<string, unknown>) => decodeDaemonEvent({ ...value, emittedAtMillis: 0 });
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
 const runSummary = Schema.decodeSync(RunSummary);
 const schedulerStats = Schema.decodeSync(SchedulerStats);

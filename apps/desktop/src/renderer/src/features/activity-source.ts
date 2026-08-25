@@ -196,6 +196,7 @@ const itemRemovedRow = (workspace: WorkspaceId, id: WorkItemId, atMillis: number
 // decodes to null here.
 export const decodeEvent = (event: DaemonEvent, atMillis: number): ActivityRow | null => {
   switch (event._tag) {
+    case "SeedEnd":
     case "RunActivity":
       return null;
     case "ItemChanged":
