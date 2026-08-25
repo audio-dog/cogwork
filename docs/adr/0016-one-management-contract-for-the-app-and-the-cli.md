@@ -82,3 +82,19 @@ So: **no ADR 0013 amendment.** These are one durable row per limit, one authorit
 - Last write wins between the app and the CLI, deliberately. Every command returns the new picture and publishes the same value, so a stale panel is corrected within one event. The stated harm in the storage research was *silently* overwriting a newer value; the publication removes the silence, and there is no colleague to surprise — cogwork runs single-user and local.
 - `SchedulerStats.perWorkspace` must carry each workspace's **effective** limit beside its in-flight count. Until [#127](https://github.com/colonylabs/cogwork/issues/127) retires `WorkspaceConfig.concurrency`, the file wins, and the row's honesty depends on that read model rather than on the cutover.
 - The surface that owns workspace registration, the daemon limits and restore has **no name**. It is neither Plugins nor Customize, and `Settings` sits on Customize's *Avoid* line. Naming it is a domain-modeling act and is not performed here.
+
+## Amendment (2026-08-25) — Connection acts exist, so the count is three survivors, not zero
+
+This ADR listed four candidate commands and kept none, and its reason for dropping **Connection** was
+that the term was provisional with an *Avoid* line naming scoping, binding, granting and resolving.
+
+ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md) settles the term the same
+day. A Connection is now engine-owned, keyed by system and account, with a record in the Control store
+and real acts on a **Connections** surface: **establish**, **re-connect**, and **remove**. So this
+contract owes three commands it deliberately did not specify, and the "four candidates, zero
+survivors" tally reads only against the state of the glossary at the time.
+
+Nothing else here changes. `pin` still has no semantics, minting a Scope identity is still not an act,
+and the CLI-and-app parity rule this ADR fixes applies to the three Connection commands unchanged —
+including that **remove** carries the *dangling* warning naming the affected workspaces, because a
+warning a person cannot see is not parity.

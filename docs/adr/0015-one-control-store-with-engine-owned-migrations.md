@@ -173,3 +173,19 @@ every launch by design, so that spawning a daemon never silently spends budget.
 
 The four process arguments — socket, config home, ledger path, credentials path — stay flags. A
 daemon cannot read the location of its own store out of that store.
+
+## Amendment (2026-08-25) — the Control store gains a Connection record
+
+This ADR decided "no `SecretStore` and no Connection record", noting that *Connection* was marked
+*provisional, do not design against* and that [#172](https://github.com/colonylabs/cogwork/issues/172)
+owned it.
+
+That ticket defines the term, and the record is now needed. **The Control store holds a Connection
+record — id, system, account, status — and the Credential store keeps holding the secret.** No
+`SecretStore` is added, so half of this ADR's decision stands as written.
+
+Two reasons. A workspace references a Connection **by id**, so that id must exist outside a secret
+store whose backing layer becomes an OS keychain that can neither list records nor carry a status. And
+this ADR makes the Control store the authority the Engine resolves a Run Plan from, while a Run Plan
+requires Connections — so their existence and readiness must be resolvable from it. The closed field
+list widens by one table. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).

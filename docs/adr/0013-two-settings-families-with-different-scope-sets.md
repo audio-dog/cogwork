@@ -75,3 +75,17 @@ Supporting decisions:
 - `Connection` was to be scoped here and deliberately was not — the concept is undefined until [#172](https://github.com/colonylabs/cogwork/issues/172) and [#125](https://github.com/colonylabs/cogwork/issues/125) land. Its glossary entry is marked provisional. Scoping a concept before defining it is how the retracted "own scope ladder" claim entered the glossary.
 
 Full reasoning: [#134](https://github.com/colonylabs/cogwork/issues/134). Research: `docs/research/harness-config-scopes-and-rules.md`.
+
+## Amendment (2026-08-25) — a Connection has no Scope
+
+This ADR declined to scope `Connection`, because the concept was undefined, and named
+[#172](https://github.com/colonylabs/cogwork/issues/172).
+
+That ticket defines it, and the answer is that **a Connection has no Scope at all**. It is
+machine-level and engine-owned; a workspace references one by id, and **reference is not scoping**.
+The reason is this ADR's own — a cloned repository must not be able to enable executable behaviour on
+your machine, and it must equally not be able to authenticate as you.
+
+One further conflict class is confirmed rather than added: two first-party Plugins requiring one
+Connection is knowable with the manifests in hand, so it is a load-time diagnostic under this ADR's
+when-is-it-knowable rule. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
