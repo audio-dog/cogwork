@@ -1,0 +1,81 @@
+apps/cli/src/watch.test.ts
+  s_342ce08053f11c::t_c7436569b83022 186-187
+apps/desktop/src/renderer/src/components/activity-surface.tsx
+  s_342ce08053f11c::t_e2510dc85b134c 1-4,6-7,9-65
+apps/desktop/src/renderer/src/components/activity-transcript.tsx
+  s_342ce08053f11c::t_b32c80b70e07e7 27,35,63-69,315-327,352,402-419
+apps/desktop/src/renderer/src/components/activity-view.tsx
+  s_342ce08053f11c::t_0e7bee95f92412 57,88-92,95,106
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_342ce08053f11c::t_091972ca0f8146 135,145,159
+apps/desktop/src/renderer/src/components/attention-surface.tsx
+  s_342ce08053f11c::t_c1375930f93c10 1-67
+apps/desktop/src/renderer/src/components/catalog-entry.tsx
+  s_342ce08053f11c::t_f52601f0cfacac 1-2,5-6,9-10,13-15
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_342ce08053f11c::t_bd873e8f90a7aa 290-291
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_342ce08053f11c::t_068287fe24890f 7,19,22-28,49,54,712-743
+apps/desktop/src/renderer/src/components/right-panel.test.tsx
+  s_342ce08053f11c::t_526c53a7721275 1-26
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_342ce08053f11c::t_4b77d2be9cbc22 3-5,7,9-10,43-88,93,106-134,140
+apps/desktop/src/renderer/src/components/surface-catalog.tsx
+  s_342ce08053f11c::t_8bd26c168d57e5 8-11,16-18,35-37
+apps/desktop/src/renderer/src/components/surface-tab.test.tsx
+  s_342ce08053f11c::t_47589823d696f5 1-15
+apps/desktop/src/renderer/src/components/surface-tab.tsx
+  s_342ce08053f11c::t_595f4674201a70 1-80
+apps/desktop/src/renderer/src/components/terminal-surface.tsx
+  s_342ce08053f11c::t_36bc0bfa947df3 1-77
+apps/desktop/src/renderer/src/features/activity-source.test.ts
+  s_342ce08053f11c::t_8c4c00285ffd4b 32-33,494-495
+apps/desktop/src/renderer/src/features/activity-source.ts
+  s_342ce08053f11c::t_b4bc7eae523807 201,375-378
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_342ce08053f11c::t_28322de1053d83 6-7,18
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_342ce08053f11c::t_c88860bf50a7ac 6-7
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_342ce08053f11c::t_f9ca18a161ab66 4,10-22,43-45,47,50,55-56,65,68,73-77,80,83-86,88-101,105-107,110,114-116,119-120,124-127,130,134-140,144-147,151,156-158,178-179,181
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_342ce08053f11c::t_2de9863a73339f 4,6,8-15,17,19,21-22,24-40,42-48,52,54-55,63-64,72-77,84-86,89,95,101
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_342ce08053f11c::t_e6e4bad961de7f 6,66-92
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_342ce08053f11c::t_ab896033666b29 1-134
+docs/agents/technical-disposition.md
+  s_342ce08053f11c::t_2107b2b78ce334 92-99,130-136,248-259,288-294
+packages/contracts/CONTEXT.md
+  s_342ce08053f11c::t_4d53bb0606bf9f 47-48,89-112,364
+packages/contracts/src/board.test.ts
+  s_342ce08053f11c::t_35d819afdfcbd8 2,4,6,16-17,51-54,141-178
+packages/contracts/src/board.ts
+  s_342ce08053f11c::t_6fe0e232d3056f 1,54,71-73
+packages/contracts/src/daemon-event.ts
+  s_342ce08053f11c::t_fe5a68ce296853 43-49
+packages/engine/src/daemon-event-bus.test.ts
+  s_342ce08053f11c::t_b4e80e89a60fb5 17,70-73
+packages/engine/src/daemon-event-bus.ts
+  s_342ce08053f11c::t_4a2fa888fa67ad 3,27-31,44-47
+packages/engine/src/daemon.ts
+  s_342ce08053f11c::t_d6c469221dfd2d 83,99,107-111
+packages/engine/src/event-publisher.test.ts
+  s_342ce08053f11c::t_db6e384c39bed8 360-402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "12f128a56da6ebd4c3900c8e38da2a3adddb519a",
+  "prompts": {},
+  "sessions": {
+    "s_342ce08053f11c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1d6e3d47-9e7c-4485-9530-b9bab699ca70",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
