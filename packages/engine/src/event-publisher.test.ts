@@ -161,7 +161,7 @@ const schedulerSentinel = {
 const itemSentinelEvent = {
   _tag: "ItemChanged",
   workspace: workspaceId("marker"),
-  item: classifiedItem({ _tag: "Eligible", id: "AUD-marker", title: "marker", stage: "triage" }),
+  item: classifiedItem({ _tag: "Eligible", id: "AUD-marker", title: "marker", url: null, stage: "triage" }),
 } as const;
 
 const publisherLayer = (

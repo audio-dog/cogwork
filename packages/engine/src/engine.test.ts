@@ -582,7 +582,12 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(receipt.pendingWork, 0);
       assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.deepStrictEqual(status.workspaces[0]?.blocked, [
-        { id: id("AUD-8"), title: "waiting on a dependency", openBlockers: 2 },
+        {
+          id: id("AUD-8"),
+          title: "waiting on a dependency",
+          url: "https://linear.app/acme/issue/AUD-8",
+          openBlockers: 2,
+        },
       ]);
     }).pipe(Effect.provide(daemonLayer(observing([blockedItem]))), Effect.scoped),
   );
@@ -647,6 +652,7 @@ describe("daemon status over rpc", () => {
       assert.deepStrictEqual(blocked, {
         id: id("AUD-8"),
         title: "waiting on a dependency",
+        url: "https://linear.app/acme/issue/AUD-8",
         openBlockers: 2,
       });
       assert.notProperty(blocked, "pr");

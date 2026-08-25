@@ -34,6 +34,7 @@ const claim: Claim = { by: "cogwork", claimedAtMillis: 1000 };
 const eligibleWithPr: EligibleWork = {
   id: id("e-pr"),
   title: "eligible with pr",
+  url: "https://github.com/owner/repo/issues/e-pr",
   stage: "follow-up",
   priority: "medium",
   priorFailures: 2,
@@ -52,21 +53,29 @@ const eligibleWithPr: EligibleWork = {
 const eligibleNoPr: EligibleWork = {
   id: id("e"),
   title: "eligible",
+  url: null,
   stage: "implement",
   priority: "medium",
   priorFailures: 0,
 };
 
-const claimedWithPr: ClaimedItem = { id: id("c-pr"), title: "claimed with pr", claim, pr: prSummary };
-const claimedNoPr: ClaimedItem = { id: id("c"), title: "claimed", claim };
+const claimedWithPr: ClaimedItem = {
+  id: id("c-pr"),
+  title: "claimed with pr",
+  url: "https://github.com/owner/repo/issues/c-pr",
+  claim,
+  pr: prSummary,
+};
+const claimedNoPr: ClaimedItem = { id: id("c"), title: "claimed", url: null, claim };
 
 const blockedWithPr: BlockedItem = {
   id: id("b-pr"),
   title: "blocked with pr",
+  url: "https://github.com/owner/repo/issues/b-pr",
   openBlockers: 2,
   pr: prSummary,
 };
-const blockedNoPr: BlockedItem = { id: id("b"), title: "blocked", openBlockers: 1 };
+const blockedNoPr: BlockedItem = { id: id("b"), title: "blocked", url: null, openBlockers: 1 };
 
 const needsHumanWithPr: NeedsHumanItem = {
   id: id("h-pr"),
@@ -113,6 +122,7 @@ describe("classifiedItemsOf", () => {
       _tag: "Eligible",
       id: id("e-pr"),
       title: "eligible with pr",
+      url: "https://github.com/owner/repo/issues/e-pr",
       stage: "follow-up",
       pr: prSummary,
     });
@@ -128,6 +138,7 @@ describe("classifiedItemsOf", () => {
       _tag: "Eligible",
       id: id("e"),
       title: "eligible",
+      url: null,
       stage: "implement",
     });
     assert.deepStrictEqual(byId.get(id("c")), { _tag: "Claimed", ...claimedNoPr });
@@ -141,8 +152,14 @@ describe("workspaceInfoOf", () => {
     const info = workspaceInfoOf(workspace, state);
 
     assert.deepStrictEqual(info.eligible, [
-      { id: id("e-pr"), title: "eligible with pr", stage: "follow-up", pr: prSummary },
-      { id: id("e"), title: "eligible", stage: "implement" },
+      {
+        id: id("e-pr"),
+        title: "eligible with pr",
+        url: "https://github.com/owner/repo/issues/e-pr",
+        stage: "follow-up",
+        pr: prSummary,
+      },
+      { id: id("e"), title: "eligible", url: null, stage: "implement" },
     ]);
     assert.deepStrictEqual(info.claimed, [claimedWithPr, claimedNoPr]);
     assert.deepStrictEqual(info.blocked, [blockedWithPr, blockedNoPr]);
