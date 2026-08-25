@@ -78,6 +78,7 @@ export const prReview = (pull: RawPull, decision: ReviewDecision): PrReview => {
 };
 
 const freshPattern = /\/fresh\b/i;
+const numericIssue = /^#(\d+)$/;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
@@ -166,6 +167,8 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
       fresh: human.fresh,
       baseDivergence: baseDivergenceOf(mergeableState),
       waitingSinceMillis: pull.updatedAtMillis,
+      headRef: pull.headRef,
+      followable: pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase(),
     } satisfies PrSignals;
   });
 
@@ -174,12 +177,28 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
 
   // The final key is the PR number: the higher number is the newer PR, since GitHub numbers them in
   // creation order.
-  const rank = (target: GitHubTarget, branch: string, pull: RawPull) =>
-    [pull.headRef === branch ? 1 : 0, pull.authorLogin === target.actorLogin ? 1 : 0, pull.number] as const;
+  const closesItem = (item: OwnedItem, pull: RawPull) => {
+    const match = numericIssue.exec(item.id);
+    return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
+  };
 
-  const outranks = (target: GitHubTarget, branch: string, a: RawPull, b: RawPull) => {
-    const [aExact, aBot, aNumber] = rank(target, branch, a);
-    const [bExact, bBot, bNumber] = rank(target, branch, b);
+  const sameRepositoryHead = (target: GitHubTarget, pull: RawPull) =>
+    pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
+
+  const rank = (target: GitHubTarget, item: OwnedItem, branch: string, pull: RawPull) =>
+    [
+      sameRepositoryHead(target, pull) ? 1 : 0,
+      closesItem(item, pull) ? 1 : 0,
+      pull.headRef === branch ? 1 : 0,
+      pull.authorLogin === target.actorLogin ? 1 : 0,
+      pull.number,
+    ] as const;
+
+  const outranks = (target: GitHubTarget, item: OwnedItem, branch: string, a: RawPull, b: RawPull) => {
+    const [aSameRepository, aClosing, aExact, aBot, aNumber] = rank(target, item, branch, a);
+    const [bSameRepository, bClosing, bExact, bBot, bNumber] = rank(target, item, branch, b);
+    if (aSameRepository !== bSameRepository) return aSameRepository > bSameRepository;
+    if (aClosing !== bClosing) return aClosing > bClosing;
     if (aExact !== bExact) return aExact > bExact;
     if (aBot !== bBot) return aBot > bBot;
     return aNumber > bNumber;
@@ -189,9 +208,9 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     const slug = ticketSlug(item.id);
     const branch = branchName(item);
     const better = (best: RawPull | null, pull: RawPull) => {
-      if (!branchBelongsToSlug(pull.headRef, slug)) return best;
+      if (!closesItem(item, pull) && !branchBelongsToSlug(pull.headRef, slug)) return best;
       if (best === null) return pull;
-      return outranks(target, branch, pull, best) ? pull : best;
+      return outranks(target, item, branch, pull, best) ? pull : best;
     };
     return trusted.reduce<RawPull | null>(better, null);
   };

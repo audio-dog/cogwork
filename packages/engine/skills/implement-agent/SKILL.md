@@ -11,7 +11,7 @@ The **work source** is whatever ticket provider this workspace is bound to (GitH
 
 The engine has already done the setup for you: you are in a **worktree on a fresh branch dedicated to this ticket**, cut from the current base branch. **The engine owns that branch — it creates and names it, and you must never create, rename, or switch branches.** Build on the one you are on.
 
-This is not a style preference. The source control provider links your pull request back to the ticket by the branch's prefix — `ticketSlug(item.id)`, the stable head the engine cut — so a branch you rename or replace is a PR the daemon can no longer find. The engine also enforces the naming with a branch-name guard, so an off-convention branch is a hard error, not a quiet mismatch. Leave the branch to the engine and spend your changes on the code.
+This is not a style preference. The source control provider can use the branch's `ticketSlug(item.id)` prefix as a fallback, but the engine must own the branch it prepares. Leave the branch to the engine and spend your changes on the code.
 
 ## Authority boundary
 

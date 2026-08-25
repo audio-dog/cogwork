@@ -11,6 +11,7 @@ const okPoll = { status: "ok" as const };
 const actionableOf = (work: EligibleWork): ActionableItem => ({
   id: work.id,
   title: work.title,
+  ...(work.url !== undefined ? { url: work.url } : {}),
   stage: work.stage,
   ...(work.pr ? { pr: work.pr } : {}),
 });

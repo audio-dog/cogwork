@@ -7,8 +7,12 @@ out/
 # Consumer artifact written by `npx skills add`, not authored here
 skills-lock.json
 
-# Local generator output when targeting this repo as a project dir
-/.claude/
+# Local generator output when targeting this repo as a project dir.
+# `settings.json` is authored here (it carries the worktree-setup hook), so it is
+# re-included — which needs `/*` rather than `/`, since git cannot un-ignore a file
+# inside an ignored directory.
+/.claude/*
+!/.claude/settings.json
 /.mcp.json
 
 .DS_Store

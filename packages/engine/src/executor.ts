@@ -107,6 +107,13 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
+const resumeWorktreeOptions = (item: EligibleWork) => {
+  if (item.stage === "follow-up" && item.followUpBranch) {
+    return { resume: true, branch: item.followUpBranch };
+  }
+  return { resume: true };
+};
+
 const appendStructuredOutput = (acc: Pick<RunAccumulator, "structuredOutputs">, event: AgUiEvent) => {
   if (!agUiIsStructuredOutputComplete(event)) return acc.structuredOutputs;
   return [...acc.structuredOutputs, event.value];
@@ -617,7 +624,7 @@ export const make = Effect.gen(function* () {
     context: FollowUpContext,
     prompt: string,
   ) {
-    const worktree = yield* worktrees.ensure(workspace, item);
+    const worktree = yield* worktrees.ensure(workspace, item, { branch });
     const last = yield* latestResumableBranchRun(workspace, branch);
     const session = last?.session ? yield* ledger.getSession(last.session) : null;
     const now = yield* Clock.currentTimeMillis;
@@ -643,7 +650,7 @@ export const make = Effect.gen(function* () {
   });
 
   const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
-    const branch = branchName(item);
+    const branch = item.followUpBranch ?? branchName(item);
     const context = item.followUp ?? defaultFollowUp;
     const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {
@@ -688,7 +695,7 @@ export const make = Effect.gen(function* () {
         item.stage,
       );
     }
-    const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
+    const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
     return yield* harnessRequest(
       workspace,
       resolved,
@@ -715,7 +722,7 @@ export const make = Effect.gen(function* () {
         item.stage,
       );
     }
-    const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
+    const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
     return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null, item.stage);
   });
 

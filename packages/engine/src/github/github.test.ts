@@ -251,6 +251,8 @@ const pull = (over: Partial<RawPull> & { readonly number: number; readonly headR
   authorAssociation: "MEMBER",
   draft: false,
   headSha: `sha-${over.number}`,
+  headRepository: "owner/repo",
+  closingIssueNumbers: [],
   updatedAtMillis: 0,
   ...over,
 });
@@ -403,7 +405,14 @@ describe("github work source adapter", () => {
       assert.strictEqual(items.find((item) => item.id === "#30")?.openBlockers, 1);
       assert.strictEqual(items.find((item) => item.id === "#31")?.openBlockers, 0);
       const { eligible, blocked } = classify(items);
-      assert.deepStrictEqual(blocked, [{ id: id("#30"), title: "waits on #31", openBlockers: 1 }]);
+      assert.deepStrictEqual(blocked, [
+        {
+          id: id("#30"),
+          title: "waits on #31",
+          url: "https://github.com/owner/repo/issues/30",
+          openBlockers: 1,
+        },
+      ]);
       assert.deepStrictEqual(
         eligible.map((entry) => entry.id),
         [id("#31")],
@@ -691,6 +700,141 @@ describe("github work source adapter", () => {
             { pull: 311, state: "APPROVED" },
             { pull: 320, state: "APPROVED" },
             { pull: 321, state: "CHANGES_REQUESTED" },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("resolves a trusted closing reference ahead of a branch-prefix match", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#43");
+      assert.strictEqual(observed?.pr?.number, 331);
+      assert.strictEqual(observed?.pr?.headRef, "claude/github-issue-43-a1b2c3");
+      assert.isTrue(observed?.pr?.followable);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 43, title: "closing link", labels: ["ready-for-agent"] }],
+          pulls: [
+            pull({ number: 330, headRef: "43-closing-link" }),
+            pull({
+              number: 331,
+              headRef: "claude/github-issue-43-a1b2c3",
+              closingIssueNumbers: [43],
+            }),
+          ],
+          comments: [
+            {
+              issue: 43,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("does not route a fork-head closing reference to follow-up", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#44");
+      assert.strictEqual(observed?.pr?.headRef, "claude/github-issue-44-a1b2c3");
+      assert.isFalse(observed?.pr?.followable ?? true);
+      assert.isUndefined(classify(items).eligible.find((item) => item.id === "#44"));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 44, title: "fork branch", labels: ["ready-for-agent"] }],
+          pulls: [
+            pull({
+              number: 340,
+              headRef: "claude/github-issue-44-a1b2c3",
+              headRepository: "contributor/repo",
+              closingIssueNumbers: [44],
+            }),
+          ],
+          comments: [
+            {
+              issue: 44,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
+            },
+          ],
+          reviews: [{ pull: 340, state: "CHANGES_REQUESTED" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("prefers a followable branch-prefix PR over a fork closing reference", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#45");
+      assert.strictEqual(observed?.pr?.number, 350);
+      assert.isTrue(observed?.pr?.followable);
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 45, title: "followable match", labels: ["ready-for-agent"] }],
+          pulls: [
+            pull({ number: 350, headRef: "45-followable-match" }),
+            pull({
+              number: 351,
+              headRef: "contributor/github-issue-45-a1b2c3",
+              headRepository: "contributor/repo",
+              closingIssueNumbers: [45],
+            }),
+          ],
+          comments: [
+            {
+              issue: 45,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
+            },
+          ],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("refuses to adopt an untrusted closing-reference pull request", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#45");
+      assert.isNull(observed?.pr ?? null);
+      assert.isUndefined(
+        classify(items).eligible.find((entry) => entry.id === "#45" && entry.stage === "follow-up"),
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [{ number: 45, title: "hostile closing link", labels: ["ready-for-agent"] }],
+          pulls: [
+            pull({
+              number: 341,
+              authorLogin: "drive-by",
+              authorAssociation: "NONE",
+              headRef: "claude/github-issue-45-a1b2c3",
+              closingIssueNumbers: [45],
+            }),
+          ],
+          comments: [
+            {
+              issue: 45,
+              authorLogin: bot.login,
+              body: coordinationBody([
+                serializeAttempt({ stage: "implement", outcome: "succeeded", atMillis: 1 }),
+              ]),
+            },
           ],
         }),
       ),

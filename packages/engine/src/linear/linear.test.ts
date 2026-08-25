@@ -297,7 +297,14 @@ describe("linear work source adapter", () => {
       assert.strictEqual(items.find((item) => item.id === "AUD-30")?.openBlockers, 1);
       assert.strictEqual(items.find((item) => item.id === "AUD-31")?.openBlockers, 0);
       const { eligible, blocked } = classify(items);
-      assert.deepStrictEqual(blocked, [{ id: id("AUD-30"), title: "waits on AUD-31", openBlockers: 1 }]);
+      assert.deepStrictEqual(blocked, [
+        {
+          id: id("AUD-30"),
+          title: "waits on AUD-31",
+          url: "https://linear.app/acme/issue/AUD-30",
+          openBlockers: 1,
+        },
+      ]);
       assert.deepStrictEqual(
         eligible.map((entry) => entry.id),
         [id("AUD-31")],

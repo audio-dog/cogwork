@@ -34,7 +34,7 @@ const readyPr = {
 
 describe("describeItemState", () => {
   it("reads Running · stage when a live run is going, whatever the tag", () => {
-    const item = classifiedItem({ _tag: "Blocked", id: "42", title: "t", openBlockers: 3 });
+    const item = classifiedItem({ _tag: "Blocked", id: "42", title: "t", url: null, openBlockers: 3 });
     const state = describeItemState(item, run({ status: "running", stage: "follow-up" }));
     expect(state).toEqual({ label: "Running · follow-up", tone: "live", running: true });
   });
@@ -56,15 +56,22 @@ describe("describeItemState", () => {
   });
 
   it("counts open blockers, pluralized", () => {
-    const one = classifiedItem({ _tag: "Blocked", id: "1", title: "t", openBlockers: 1 });
-    const many = classifiedItem({ _tag: "Blocked", id: "2", title: "t", openBlockers: 2 });
+    const one = classifiedItem({ _tag: "Blocked", id: "1", title: "t", url: null, openBlockers: 1 });
+    const many = classifiedItem({ _tag: "Blocked", id: "2", title: "t", url: null, openBlockers: 2 });
     expect(describeItemState(one, null).label).toBe("Blocked · 1 open blocker");
     expect(describeItemState(many, null).label).toBe("Blocked · 2 open blockers");
     expect(describeItemState(one, null).tone).toBe("muted");
   });
 
   it("reads Ready to merge when the PR is ready", () => {
-    const item = classifiedItem({ _tag: "Eligible", id: "42", title: "t", stage: "verify", pr: readyPr });
+    const item = classifiedItem({
+      _tag: "Eligible",
+      id: "42",
+      title: "t",
+      url: null,
+      stage: "verify",
+      pr: readyPr,
+    });
     expect(describeItemState(item, null)).toEqual({
       label: "Ready to merge",
       tone: "ready",
@@ -73,7 +80,7 @@ describe("describeItemState", () => {
   });
 
   it("falls back to a calm queued/working chip for eligible and claimed items", () => {
-    const eligible = classifiedItem({ _tag: "Eligible", id: "42", title: "t", stage: "triage" });
+    const eligible = classifiedItem({ _tag: "Eligible", id: "42", title: "t", url: null, stage: "triage" });
     expect(describeItemState(eligible, null)).toEqual({
       label: "Queued · triage",
       tone: "muted",
@@ -83,6 +90,7 @@ describe("describeItemState", () => {
       _tag: "Claimed",
       id: "42",
       title: "t",
+      url: null,
       claim: { by: "agent", claimedAtMillis: 0, stage: "implement" },
     });
     expect(describeItemState(claimed, null).label).toBe("Working · implement");

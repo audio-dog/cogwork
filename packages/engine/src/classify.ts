@@ -25,6 +25,7 @@ export interface EligibleWork extends ActionableItem {
   readonly priorFailures: number;
   readonly followUp?: FollowUpContext;
   readonly resume?: ResumeContext;
+  readonly followUpBranch?: string;
 }
 
 export interface Classification {
@@ -52,7 +53,10 @@ const prSummaryOf = (pr: ObservedPr): PrSummary => ({
 
 const prFields = (item: ObservedItem) => (item.pr ? { pr: prSummaryOf(item.pr) } : {});
 
+const trackerUrl = (item: ObservedItem) => ({ url: item.url });
+
 const prStage = (pr: ObservedPr) => {
+  if (pr.followable === false) return null;
   if (triggersFollowUp(pr)) return "follow-up";
   if (pr.review === "ready") return "verify";
   return null;
@@ -96,10 +100,24 @@ const classifyOne = (item: ObservedItem, allowlist: ReadonlyArray<string> | unde
 export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
   const outcome = classifyOne(item, undefined);
   if (outcome.kind === "eligible") {
-    return { _tag: "Eligible", id: item.id, title: item.title, stage: outcome.stage, ...prFields(item) };
+    return {
+      _tag: "Eligible",
+      id: item.id,
+      title: item.title,
+      stage: outcome.stage,
+      ...trackerUrl(item),
+      ...prFields(item),
+    };
   }
   if (outcome.kind === "claimed") {
-    return { _tag: "Claimed", id: item.id, title: item.title, claim: outcome.claim, ...prFields(item) };
+    return {
+      _tag: "Claimed",
+      id: item.id,
+      title: item.title,
+      claim: outcome.claim,
+      ...trackerUrl(item),
+      ...prFields(item),
+    };
   }
   if (outcome.kind === "blocked") {
     return {
@@ -107,6 +125,7 @@ export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
       id: item.id,
       title: item.title,
       openBlockers: item.openBlockers,
+      ...trackerUrl(item),
       ...prFields(item),
     };
   }
@@ -130,10 +149,12 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   return {
     id: item.id,
     title: item.title,
+    ...trackerUrl(item),
     stage,
     priority: item.priority,
     priorFailures,
     ...(followUp ? { followUp } : {}),
+    ...(stage === "follow-up" && item.pr?.followable !== false ? { followUpBranch: item.pr?.headRef } : {}),
     ...prFields(item),
   };
 };
@@ -145,12 +166,20 @@ export const classify = (items: ReadonlyArray<ObservedItem>, allowlist?: Readonl
     .sort(byStageThenPriority);
   const claimed = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "claimed"
-      ? [{ id: item.id, title: item.title, claim: outcome.claim, ...prFields(item) }]
+      ? [{ id: item.id, title: item.title, claim: outcome.claim, ...trackerUrl(item), ...prFields(item) }]
       : [],
   );
   const blocked = outcomes.flatMap(({ item, outcome }) =>
     outcome.kind === "blocked"
-      ? [{ id: item.id, title: item.title, openBlockers: item.openBlockers, ...prFields(item) }]
+      ? [
+          {
+            id: item.id,
+            title: item.title,
+            openBlockers: item.openBlockers,
+            ...trackerUrl(item),
+            ...prFields(item),
+          },
+        ]
       : [],
   );
   const needsHuman = outcomes.flatMap(({ item, outcome }) =>

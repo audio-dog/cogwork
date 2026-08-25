@@ -21,8 +21,8 @@ A single unit of backlog work observed from an issue tracker, identified by a br
 _Avoid_: Task, job, ticket (except when naming the tracker's own UI)
 
 **Link key**:
-The stable key tying a work item to its pull request across systems: `ticketSlug(item.id)`, the item-id-derived prefix of the branch the engine cuts for it (`fel-157-…`, `13-…`). The source control provider finds the open PR whose head branch starts with this slug. Stable because it derives from the immutable item id rather than the title, and enforced because the engine — not the agent — creates the branch.
-_Avoid_: Closing keyword (`Closes #N`, the GitHub-only match this replaces), PR reference, branch name (the full branch also carries a title slug that can drift)
+The stable key tying a work item to its pull request across systems. GitHub numeric work items first match an open PR's GitHub-resolved closing reference (`Closes #N`); all items retain the `ticketSlug(item.id)` branch-prefix fallback (`fel-157-…`, `13-…`). The engine-cut branch remains stable because it derives from the immutable item id rather than the title. A same-repository closing-reference match carries its actual head branch into follow-up.
+_Avoid_: PR reference, branch name (the full branch also carries a title slug that can drift)
 
 **Workspace**:
 A repo registered with the daemon: a checkout path bound to an issue tracker and, optionally, a source control provider, plus workflow and operation settings. The unit of isolation and per-repo configuration.
