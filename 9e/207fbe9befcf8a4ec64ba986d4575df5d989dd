@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_c569c86617476a::t_6fbb7d14806bfa 1,22,110-112,117,120-129,137-139
+  s_f895b1cababf1e::t_9bcf1c54cad323 140-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "9e207fbe9befcf8a4ec64ba986d4575df5d989dd",
+  "prompts": {},
+  "sessions": {
+    "s_c569c86617476a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03743-ee38-7940-8f71-13a89a83099d",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f895b1cababf1e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a036ea-bfb4-7f60-9591-c6a836ca1dc1",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
