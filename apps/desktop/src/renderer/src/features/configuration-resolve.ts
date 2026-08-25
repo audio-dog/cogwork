@@ -236,3 +236,37 @@ export function scopeTally(
   );
   return { written: written.length, winning: winning.length };
 }
+
+/**
+ * Where this contribution's on / off should be written.
+ *
+ * Normally the same place its file lives — you turn a thing on where it is. The exception is the
+ * one ADR 0013 cares about: a repository may ship an executable contribution but may never enable
+ * one, so a repo-defined Hook or MCP server is switched on in your own overlay instead.
+ */
+export function enableScopeFor(contribution: Contribution, workspaceId?: WorkspaceId): ScopeRef | undefined {
+  const permitted = enablementScopes[contribution.kind];
+  const preferred = permitted.includes(contribution.definedAt) ? contribution.definedAt : permitted.at(-1);
+  if (preferred === undefined) return undefined;
+  if (preferred === "runtime-host") return { kind: preferred };
+  if (workspaceId === undefined) return undefined;
+  return { kind: preferred, workspaceId };
+}
+
+/** True when a repository offers this but cannot be the place it is turned on. */
+export function offeredElsewhere(contribution: Contribution): boolean {
+  return !enablementScopes[contribution.kind].includes(contribution.definedAt);
+}
+
+/**
+ * The exception worth a badge: one identity carrying a setting at more than one Scope. This is the
+ * only case ADR 0013's direction ever decides, and it is rare enough to render as an exception
+ * rather than as the shape of the whole page.
+ */
+export function settingsSpreadAcross(contribution: Contribution, view: ViewContext): readonly ScopeKind[] {
+  const resolved = resolveEnablement(contribution, view);
+  if (resolved.shadowed.length === 0) return [];
+  return [resolved.winner, ...resolved.shadowed]
+    .filter((row) => row !== undefined)
+    .map((row) => row.scope.kind);
+}

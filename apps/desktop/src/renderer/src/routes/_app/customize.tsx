@@ -3,7 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CustomizeVariantA } from "../../components/customize-variant-a";
 import { CustomizeVariantB } from "../../components/customize-variant-b";
 import { CustomizeVariantC } from "../../components/customize-variant-c";
-import { CustomizeVariantD } from "../../components/customize-variant-d";
 import { PrototypeSwitcher } from "../../components/prototype-switcher";
 import { defaultVariant, isVariantKey, type VariantKey } from "../../features/configuration-variants";
 
@@ -23,7 +22,6 @@ const bodyByVariant: Record<VariantKey, () => React.ReactNode> = {
   A: () => <CustomizeVariantA />,
   B: () => <CustomizeVariantB />,
   C: () => <CustomizeVariantC />,
-  D: () => <CustomizeVariantD />,
 };
 
 function CustomizePage() {

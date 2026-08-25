@@ -62,6 +62,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "linear" },
     summary: "Reads and writes Linear issues, projects, and cycles.",
     file: "~/.cogwork/plugins/linear@1.4.0/mcp/linear.json",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     readiness: { _tag: "ready" },
     rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
@@ -73,6 +74,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "linear" },
     summary: "Prompts for a triage pass over one Linear issue.",
     file: "~/.cogwork/plugins/linear@1.4.0/commands/linear-triage.md",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
@@ -84,6 +86,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "gh-review" },
     summary: "Summarizes a pull request's checks, reviews, and divergence.",
     file: "~/.cogwork/plugins/gh-review@2.1.0/skills/pr-summary/SKILL.md",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     // On at the profile, off in this workspace's overlay. The overlay is the highest Scope, so it
     // wins whole — and turning it off here is what leaves `follow-up` unable to run.
@@ -103,6 +106,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "gh-review" },
     summary: "Runs the review checklist before a push leaves the worktree.",
     file: "~/.cogwork/plugins/gh-review@2.1.0/hooks/pre-push.json",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     rows: [
       { scope: { kind: "runtime-host" }, value: true, source: "Control store" },
@@ -127,6 +131,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "gh-review" },
     summary: "Advisory review conventions, scoped by glob to `src/**`.",
     file: "~/.cogwork/plugins/gh-review@2.1.0/rules/review-style.md",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     rows: [
       {
@@ -143,6 +148,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "gh-review" },
     summary: "Delegated reviewer for a single diff.",
     file: "~/.cogwork/plugins/gh-review@2.1.0/subagents/reviewer.md",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     // Nothing written at any Scope. Not off — not there.
     rows: [],
@@ -155,6 +161,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "granola" },
     summary: "Reads meeting notes so a ticket can be drafted from them.",
     file: "~/dev/granola-plugin/mcp/granola.json",
+    definedAt: "runtime-host",
     // A malformed pointed-at file yields no contribution, so the setting written for it dangles.
     load: {
       _tag: "failed",
@@ -182,6 +189,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "codex-extras" },
     summary: "Posts a desktop notification when a Codex turn ends.",
     file: "~/.cogwork/plugins/codex-extras@0.9.3/hooks/codex-notify.json",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     rows: [{ scope: { kind: "runtime-host" }, value: false, source: "Control store" }],
   },
@@ -192,6 +200,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "plugin", pluginId: "codex-extras" },
     summary: "Walks the host-owned Codex CLI login.",
     file: "~/.cogwork/plugins/codex-extras@0.9.3/commands/codex-login.md",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
@@ -203,6 +212,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "engine" },
     summary: "First-party triage subagent shipped with the Engine.",
     file: "engine://subagents/triager",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
@@ -213,6 +223,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "engine" },
     summary: "Always-apply guidance the Engine contributes to every Run.",
     file: "engine://rules/house-style",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
   },
@@ -226,6 +237,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "local" },
     summary: "A hand-configured Linear server, added before the Plugin existed.",
     file: "~/.cogwork/mcp/linear.json",
+    definedAt: "runtime-host",
     load: { _tag: "loaded" },
     readiness: {
       _tag: "not-ready",
@@ -246,6 +258,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "local" },
     summary: "Turns a merged range into release notes.",
     file: ".cogwork/skills/release-notes/SKILL.md",
+    definedAt: "workspace-input",
     load: { _tag: "loaded" },
     rows: [
       {
@@ -263,8 +276,27 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "local" },
     summary: "Runs biome over the staged set before a commit.",
     file: ".cogwork/hooks/lint-staged.json",
+    definedAt: "workspace-input",
     load: { _tag: "loaded" },
     rows: [],
+  },
+  {
+    // Defined in the overlay: a file you keep beside the workspace and never commit.
+    id: "local/skill/scratch-notes",
+    kind: "skill",
+    localName: "scratch-notes",
+    authority: { _tag: "local" },
+    summary: "Your own scratch conventions for this checkout.",
+    file: "~/.cogwork/overlays/ws_01H8Z3/skills/scratch-notes/SKILL.md",
+    definedAt: "private-overlay",
+    load: { _tag: "loaded" },
+    rows: [
+      {
+        scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
+        value: true,
+        source: "Control store",
+      },
+    ],
   },
   {
     id: "local/command/ship",
@@ -273,6 +305,7 @@ const contributions: readonly Contribution[] = [
     authority: { _tag: "local" },
     summary: "Prompts for a release checklist.",
     file: ".cogwork/settings.json",
+    definedAt: "workspace-input",
     load: { _tag: "loaded" },
     rows: [
       {

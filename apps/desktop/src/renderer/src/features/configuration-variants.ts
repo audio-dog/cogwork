@@ -11,7 +11,7 @@
 //   3. Workspace — two of the three Scopes are workspace-bound, so a Scope is not fully named
 //      until a workspace is.
 
-export const variantKeys = ["A", "B", "C", "D"] as const;
+export const variantKeys = ["A", "B", "C"] as const;
 
 export type VariantKey = (typeof variantKeys)[number];
 
@@ -25,27 +25,21 @@ export interface VariantDefinition {
 export const variants: readonly VariantDefinition[] = [
   {
     key: "A",
-    name: "Two rows",
+    name: "Location rail",
     claim:
-      "Kept as the reference point. Kind filters; Scope names the write target and every row carries the whole ladder. The level switch is still a mode, which is what the other three try to remove.",
+      "Three equal cards down the left — no indent and no ladder, because these are places a file lives, not rungs. Multi-select: it narrows what is on screen and never decides where a change lands.",
   },
   {
     key: "B",
-    name: "Layer rail",
+    name: "Location columns",
     claim:
-      "The mode gets a place to live. Three stacked layer cards down the left, each carrying its name, what it means, how much is written there, and how much of it wins. Switching is one click on a thing you can always see.",
+      "One column per place, and a row sits in the column it lives in. The headings are the filter. When a repository ships something it cannot enable, the marker and the switch land in different columns.",
   },
   {
     key: "C",
-    name: "Three columns",
+    name: "Split dropdown",
     claim:
-      "No mode at all. One column per level, side by side, so the ladder is taught by the layout itself. Every cell is always editable, and swapping levels means moving your cursor.",
-  },
-  {
-    key: "D",
-    name: "Effective first",
-    claim:
-      "One switch per row and a chip saying where the value came from. The three levels stay out of the way until a row is opened, so the common case never asks about them at all.",
+      "One divided pill inline with the kind filters, and a menu split the same way — machine on top, workspaces below. The only control that can name a workspace and a place in a single click.",
   },
 ];
 

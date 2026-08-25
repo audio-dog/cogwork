@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { Contribution, ScopeRef, WorkspaceId } from "./configuration-model";
+import { type Contribution, type ScopeRef, scopeOrder, type WorkspaceId } from "./configuration-model";
 import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "./configuration-placeholder";
 import {
   cellPermitted,
   collectAttention,
+  enableScopeFor,
+  offeredElsewhere,
   resolveEnablement,
   resolveOperationSetting,
+  settingsSpreadAcross,
 } from "./configuration-resolve";
 
 const view = { workspaceId: cogworkWorkspaceId };
@@ -150,5 +153,52 @@ describe("the fixture itself", () => {
     const scope: ScopeRef = { kind: "private-overlay", workspaceId: cogworkWorkspaceId };
     expect(scope.workspaceId).toBe(cogworkWorkspaceId);
     expect(String(cogworkWorkspaceId).startsWith("ws_")).toBe(true);
+  });
+});
+
+describe("where a contribution lives, and where it is turned on", () => {
+  it("turns a thing on where it lives, for the ordinary case", () => {
+    const skill = required("local/skill/release-notes");
+    expect(skill.definedAt).toBe("workspace-input");
+    // A Skill may be enabled at the repo, so nothing is redirected.
+    expect(enableScopeFor(skill, cogworkWorkspaceId)?.kind).toBe("workspace-input");
+    expect(offeredElsewhere(skill)).toBe(false);
+  });
+
+  it("redirects a repo-shipped Hook to a Scope that may enable it", () => {
+    const hook = required("local/hook/lint-staged");
+    expect(hook.definedAt).toBe("workspace-input");
+    // A repository may ship the file and may never start a process on your machine.
+    expect(offeredElsewhere(hook)).toBe(true);
+    expect(enableScopeFor(hook, cogworkWorkspaceId)?.kind).toBe("private-overlay");
+  });
+
+  it("keeps a machine-defined contribution on the machine", () => {
+    const mcp = required("plugin:linear/mcp/linear");
+    expect(mcp.definedAt).toBe("runtime-host");
+    expect(enableScopeFor(mcp, cogworkWorkspaceId)?.kind).toBe("runtime-host");
+  });
+
+  it("puts every contribution in exactly one place", () => {
+    for (const contribution of placeholderConfiguration.contributions) {
+      expect(scopeOrder).toContain(contribution.definedAt);
+    }
+  });
+
+  it("represents all three places in the fixture", () => {
+    const places = new Set(placeholderConfiguration.contributions.map((entry) => entry.definedAt));
+    expect(places.size).toBe(scopeOrder.length);
+  });
+});
+
+describe("settingsSpreadAcross", () => {
+  it("stays empty for the ordinary case of one value in one place", () => {
+    expect(settingsSpreadAcross(required("plugin:linear/mcp/linear"), view)).toEqual([]);
+  });
+
+  it("names every Scope when one identity carries a value in more than one", () => {
+    // The exception ADR 0013's direction exists for. It is a badge, not the shape of the page.
+    const spread = settingsSpreadAcross(required("plugin:gh-review/skill/pr-summary"), view);
+    expect(spread).toEqual(["private-overlay", "runtime-host"]);
   });
 });

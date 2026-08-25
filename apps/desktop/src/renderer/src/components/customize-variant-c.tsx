@@ -1,30 +1,31 @@
-// PROTOTYPE — Customize, Variant C: three columns.
+// PROTOTYPE — Customize, Variant C: the split dropdown.
 //
-// The mode is deleted rather than relocated. One column per level, side by side, so the ladder is
-// taught by the layout before any label is read: three columns, left to right, and the one that
-// wins is ringed. "Swapping levels" stops being an action — you move your cursor.
+// The Cursor thread. One pill sits inline with the kind pills, divided from them, exactly as in the
+// screenshot: a summary segment and a caret segment. The menu is split the same way the screenshot
+// splits it — the machine on top, a divider, then a Workspaces section.
 //
-// The honest costs: a table is denser than a list and gives a contribution's own description less
-// room, and the layout only survives because the ladder lost a rung. At four levels this would not fit.
+// The advantage over a rail is not compactness, though it is compact. It is that **one control can
+// name a workspace and a place at the same time**. The rail has to hand the workspace question to a
+// second control below it, because "Repository" is not a complete answer until you say which one.
+// Here "cogwork › Repository" is a single row and a single click.
+//
+// The cost is that the current selection is a summary string until you open it, so a person who has
+// forgotten what is checked has to go and look.
 
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
+import { Checkbox } from "@cogwork/ui/components/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
+import { ItemGroup } from "@cogwork/ui/components/item";
+import { Label } from "@cogwork/ui/components/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@cogwork/ui/components/popover";
 import { Separator } from "@cogwork/ui/components/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiBox3Line, RiSearchLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiSearchLine } from "@remixicon/react";
 import { useState } from "react";
-import { cycleCell, draftCellAt, withDraft } from "../features/configuration-draft";
 import {
-  type Contribution,
-  type ContributionKind,
-  contributionKinds,
-  kindLabelsPlural,
   type ScopeKind,
-  type ScopeRef,
   scopeDescriptions,
   scopeLabels,
   scopeOrder,
@@ -32,238 +33,203 @@ import {
   type WorkspaceId,
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
-import { cellPermitted, resolveEnablement } from "../features/configuration-resolve";
-import { useConfigurationDraftStore } from "../store/configuration-draft";
-import { AuthorityBadge, DiagnosticBadge, kindIcons, ReadinessBadge } from "./configuration-atoms";
+import { useCustomizeViewStore } from "../store/customize-view";
+import { scopeIcons } from "./configuration-atoms";
 import { PluginsPanel } from "./configuration-plugins-panel";
-import { useWorkspaceId, WorkspacePicker } from "./customize-atoms";
+import { definedAtCount, type Facet, visibleContributions } from "./customize-filter";
+import { KindPills } from "./customize-kind-pills";
+import { CustomizeRow } from "./customize-row";
 
-type Facet = "plugins" | ContributionKind;
-
-const { contributions } = placeholderConfiguration;
+const { workspaces } = placeholderConfiguration;
 
 const workspaceBound: readonly ScopeKind[] = ["workspace-input", "private-overlay"];
 
-function scopeAt(kind: ScopeKind, workspaceId: WorkspaceId): ScopeRef {
-  return workspaceBound.includes(kind) ? { kind, workspaceId } : { kind };
+const MachineIcon = scopeIcons["runtime-host"];
+
+function summarize(places: readonly ScopeKind[], workspaceName: string): string {
+  if (places.length === 0) return "Nowhere";
+  if (places.length === scopeOrder.length) return "Everywhere";
+  const [first, ...rest] = places;
+  const head = workspaceBound.includes(first)
+    ? `${workspaceName} · ${scopeShortLabels[first]}`
+    : scopeShortLabels[first];
+  return rest.length === 0 ? head : `${head} +${rest.length}`;
 }
 
-const cellText: Record<string, string> = { on: "On", off: "Off", unset: "—" };
-
-function LevelCell({
-  contribution,
+function PlaceRow({
   kind,
-  wins,
+  checked,
+  count,
+  onToggle,
+  indented,
 }: {
-  contribution: Contribution;
   kind: ScopeKind;
-  wins: boolean;
+  checked: boolean;
+  count: number;
+  onToggle: () => void;
+  indented?: boolean;
 }) {
-  const cells = useConfigurationDraftStore((state) => state.cells);
-  const setCell = useConfigurationDraftStore((state) => state.setCell);
-  const workspaceId = useWorkspaceId();
-
-  const permitted = cellPermitted(contribution.kind, kind);
-  const failed = contribution.load._tag === "failed";
-  const scope = scopeAt(kind, workspaceId);
-  const cell = permitted ? draftCellAt(contribution, scope, cells) : "unset";
-
-  if (!permitted) {
-    return (
-      <TableCell className="text-center">
-        <Tooltip>
-          <TooltipTrigger
-            render={<span className="inline-block cursor-help px-2 text-muted-foreground/60" />}
-          >
-            ✕
-          </TooltipTrigger>
-          <TooltipContent className="max-w-72">
-            A {kindLabelsPlural[contribution.kind]} value may not be written at {scopeLabels[kind]}. A cloned
-            repository may ship the file; it may never turn it on. This cell is empty by decision, not merely
-            unset.
-          </TooltipContent>
-        </Tooltip>
-      </TableCell>
-    );
-  }
-
+  const Icon = scopeIcons[kind];
   return (
-    <TableCell className="text-center">
-      <Button
-        variant={cell === "unset" ? "ghost" : "outline"}
-        size="sm"
-        disabled={failed}
-        onClick={() => setCell(contribution.id, scope, cycleCell(cell))}
-        className={cn("w-20 justify-center", wins && "border-primary ring-1 ring-primary/40")}
-      >
-        {cellText[cell]}
-      </Button>
-    </TableCell>
+    <Label
+      className={cn(
+        "flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-accent",
+        indented && "ps-6",
+      )}
+    >
+      {indented ? null : <Icon />}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-normal">
+          {indented ? scopeShortLabels[kind] : scopeLabels[kind]}
+        </span>
+        <span className="truncate text-xs text-muted-foreground">{scopeDescriptions[kind]}</span>
+      </span>
+      <Badge variant="ghost" className="px-1">
+        {count}
+      </Badge>
+      <Checkbox checked={checked} onCheckedChange={onToggle} />
+    </Label>
   );
 }
 
-function ContributionRow({ contribution }: { contribution: Contribution }) {
-  const cells = useConfigurationDraftStore((state) => state.cells);
-  const workspaceId = useWorkspaceId();
-  const resolved = resolveEnablement(withDraft(contribution, cells), { workspaceId });
-  const failed = contribution.load._tag === "failed";
-  const Icon = kindIcons[contribution.kind];
+function SplitPlacePicker({
+  places,
+  facet,
+  onToggle,
+  onSetAll,
+}: {
+  places: readonly ScopeKind[];
+  facet: Facet;
+  onToggle: (kind: ScopeKind) => void;
+  onSetAll: (next: readonly ScopeKind[]) => void;
+}) {
+  const workspaceId = useCustomizeViewStore((state) => state.workspaceId);
+  const setWorkspaceId = useCustomizeViewStore((state) => state.setWorkspaceId);
+  const active = workspaces.find((workspace) => workspace.id === workspaceId) ?? workspaces[0];
+  const everywhere = places.length === scopeOrder.length;
 
   return (
-    <TableRow>
-      <TableCell className="max-w-80">
-        <div className="flex items-start gap-2">
-          <Icon />
-          <div className="flex min-w-0 flex-col">
-            <span className="flex flex-wrap items-center gap-1.5">
-              <span className="font-medium">{contribution.localName}</span>
-              <AuthorityBadge authority={contribution.authority} />
-              {contribution.readiness ? <ReadinessBadge readiness={contribution.readiness} /> : null}
-              {resolved.dropped.map((entry) => (
-                <DiagnosticBadge key={entry.diagnostic._tag} diagnostic={entry.diagnostic} />
-              ))}
-              {failed ? <Badge variant="destructive">Failed to load</Badge> : null}
-            </span>
-            <span className="text-xs text-muted-foreground">{contribution.summary}</span>
-            {failed && contribution.load._tag === "failed" ? (
-              <span className="text-xs text-destructive">{contribution.load.reason}</span>
-            ) : null}
+    <div className="flex items-stretch rounded-full border border-input">
+      {/* Left half of the split: the summary, and a one-click way back to everything. */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="rounded-s-full rounded-e-none border-0 pe-2"
+        onClick={() => onSetAll(everywhere ? [] : scopeOrder)}
+      >
+        <MachineIcon />
+        <span className="max-w-48 truncate">{summarize(places, active.name)}</span>
+      </Button>
+      <Separator orientation="vertical" />
+      {/* Right half: the menu, split the way the screenshot splits it. */}
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-s-none rounded-e-full border-0 px-1.5"
+              aria-label="Choose where to look"
+            />
+          }
+        >
+          <RiArrowDownSLine />
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[26rem] p-0">
+          <div className="flex flex-col gap-0.5 p-2">
+            <PlaceRow
+              kind="runtime-host"
+              checked={places.includes("runtime-host")}
+              count={definedAtCount("runtime-host", facet)}
+              onToggle={() => onToggle("runtime-host")}
+            />
           </div>
-        </div>
-      </TableCell>
-      {scopeOrder.map((kind) => (
-        <LevelCell
-          key={kind}
-          contribution={contribution}
-          kind={kind}
-          wins={resolved.winner?.scope.kind === kind}
-        />
-      ))}
-      <TableCell className="text-center">
-        {resolved.effective === undefined ? (
-          <Tooltip>
-            <TooltipTrigger render={<Badge variant="ghost" className="cursor-help" />}>
-              nothing
-            </TooltipTrigger>
-            <TooltipContent className="max-w-72">
-              Nothing is written at any level. That is not the same as off — a level that says nothing shadows
-              nothing.
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <Badge variant={resolved.effective ? "secondary" : "outline"}>
-            {resolved.effective ? "On" : "Off"}
-          </Badge>
-        )}
-      </TableCell>
-    </TableRow>
+          <Separator />
+          <div className="flex flex-col gap-0.5 p-2">
+            <span className="px-2 py-1 text-xs text-muted-foreground">Workspaces</span>
+            {workspaces.map((workspace) => (
+              <div key={workspace.id} className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceId(workspace.id as WorkspaceId)}
+                  className={cn(
+                    "flex flex-col rounded-md px-2 py-1 text-start hover:bg-accent",
+                    workspace.id === active.id && "bg-accent/60",
+                  )}
+                >
+                  <span className="text-sm font-medium">{workspace.name}</span>
+                  {/* The path, not the remote: two of these share one remote. */}
+                  <span className="font-mono text-xs text-muted-foreground">{workspace.checkoutPath}</span>
+                </button>
+                {workspace.id === active.id
+                  ? workspaceBound.map((kind) => (
+                      <PlaceRow
+                        key={kind}
+                        kind={kind}
+                        indented
+                        checked={places.includes(kind)}
+                        count={definedAtCount(kind, facet)}
+                        onToggle={() => onToggle(kind)}
+                      />
+                    ))
+                  : null}
+              </div>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
 export function CustomizeVariantC() {
   const [facet, setFacet] = useState<Facet>("skill");
+  const [places, setPlaces] = useState<readonly ScopeKind[]>(scopeOrder);
   const [query, setQuery] = useState("");
 
-  const needle = query.trim().toLowerCase();
-  const visible = contributions
-    .filter((contribution) => facet !== "plugins" && contribution.kind === facet)
-    .filter((contribution) =>
-      needle === ""
-        ? true
-        : `${contribution.localName} ${contribution.summary}`.toLowerCase().includes(needle),
+  const toggle = (kind: ScopeKind) =>
+    setPlaces((current) =>
+      current.includes(kind) ? current.filter((entry) => entry !== kind) : [...current, kind],
     );
+
+  const visible = visibleContributions(facet, places, query);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <InputGroup className="min-w-64 flex-1">
-          <InputGroupInput
-            placeholder="Search contributions…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <InputGroupAddon>
-            <RiSearchLine />
-          </InputGroupAddon>
-        </InputGroup>
-        <WorkspacePicker />
-      </div>
+      <InputGroup>
+        <InputGroupInput
+          placeholder="Search contributions…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <InputGroupAddon>
+          <RiSearchLine />
+        </InputGroupAddon>
+      </InputGroup>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant={facet === "plugins" ? "secondary" : "outline"}
-          size="sm"
-          className="rounded-full"
-          onClick={() => setFacet("plugins")}
-        >
-          <RiBox3Line data-icon="inline-start" />
-          Plugins
-        </Button>
-        <Separator orientation="vertical" className="h-6" />
-        {contributionKinds.map((kind) => (
-          <Button
-            key={kind}
-            variant={facet === kind ? "secondary" : "outline"}
-            size="sm"
-            className="rounded-full"
-            onClick={() => setFacet(kind)}
-          >
-            {kindLabelsPlural[kind]}
-            <Badge variant="ghost" className="ms-1 px-1">
-              {contributions.filter((contribution) => contribution.kind === kind).length}
-            </Badge>
-          </Button>
-        ))}
-      </div>
+      <KindPills facet={facet} places={places} onSelect={setFacet}>
+        <SplitPlacePicker places={places} facet={facet} onToggle={toggle} onSetAll={setPlaces} />
+      </KindPills>
 
       {facet === "plugins" ? (
         <PluginsPanel />
       ) : visible.length === 0 ? (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No {kindLabelsPlural[facet]}</EmptyTitle>
-            <EmptyDescription>Nothing matches this search.</EmptyDescription>
+            <EmptyTitle>Nothing here</EmptyTitle>
+            <EmptyDescription>
+              {places.length === 0
+                ? "No place is checked, so nothing can show."
+                : "Nothing of this kind lives in the checked places."}
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        <>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Contribution</TableHead>
-                  {scopeOrder.map((kind, index) => (
-                    <TableHead key={kind} className="text-center">
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={<span className="inline-flex cursor-help flex-col items-center" />}
-                        >
-                          <span>{scopeShortLabels[kind]}</span>
-                          <span className="text-[10px] font-normal text-muted-foreground">
-                            {index + 1} of {scopeOrder.length}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-72">
-                          <span className="font-medium">{scopeLabels[kind]}</span> — {scopeDescriptions[kind]}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-center">A Run gets</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((contribution) => (
-                  <ContributionRow key={contribution.id} contribution={contribution} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Columns run low to high, left to right, and the higher level wins whole. Click a cell to cycle it
-            through On, Off, and not set. The ringed cell is the one a Run actually reads.
-          </p>
-        </>
+        <ItemGroup className="gap-2">
+          {visible.map((contribution) => (
+            <CustomizeRow key={contribution.id} contribution={contribution} />
+          ))}
+        </ItemGroup>
       )}
     </div>
   );

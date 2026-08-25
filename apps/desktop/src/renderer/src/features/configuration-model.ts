@@ -39,11 +39,25 @@ export const scopeIdentity: Record<ScopeKind, string> = {
   "private-overlay": "the pair (Principal, WorkspaceId)",
 };
 
-/** One line on what a Scope is for, shown beside its filter control. */
+/**
+ * One line on what a Scope is, shown beside its filter control.
+ *
+ * These say **where a thing lives**, not which value wins. A contribution's file sits in exactly
+ * one of these places; the levels are locations, not a cascade. ADR 0013's `override-scalar`
+ * direction still exists, but it only ever applies to one identity carrying settings at more than
+ * one Scope — an exception, and rendered as one.
+ */
 export const scopeDescriptions: Record<ScopeKind, string> = {
-  "runtime-host": "Installed here and available in every workspace on this machine.",
-  "workspace-input": "Committed to the repository, so everyone who clones it gets the same offer.",
+  "runtime-host": "Installed on this machine, and available in every workspace on it.",
+  "workspace-input": "Committed to the repository, so everyone who clones it gets the same files.",
   "private-overlay": "Yours, for this workspace only, and never committed.",
+};
+
+/** Phrased as a place, for a row that says where one contribution came from. */
+export const scopeOriginLabels: Record<ScopeKind, string> = {
+  "runtime-host": "on this machine",
+  "workspace-input": "in the repository",
+  "private-overlay": "in your private overlay",
 };
 
 /**
@@ -180,6 +194,15 @@ export interface Contribution {
   readonly summary: string;
   /** The file the manifest points at. A Plugin references files; it never inlines them. */
   readonly file: string;
+  /**
+   * Which Scope the file itself sits in. A contribution's file lives in exactly one place, which
+   * is why the level control is a filter over locations rather than a precedence ladder.
+   *
+   * The glossary has no term for this: `Scope` is where a *setting* lives and `Plugin source` is
+   * where a *Plugin's* files come from. Naming it is a `/domain-modeling` act, so this field uses
+   * a plain description instead of minting one.
+   */
+  readonly definedAt: ScopeKind;
   readonly load: LoadState;
   readonly rows: readonly EnablementRow[];
   /** Engine-owned, MCP servers only. Clients show Operation availability from the same result. */
