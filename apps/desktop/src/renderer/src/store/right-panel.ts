@@ -21,6 +21,12 @@ type SurfaceId = Surface["id"];
 const itemSurfaceId = (workspace: WorkspaceId, workItem: WorkItemId) =>
   `item:${workspace}:${workItem}` as const;
 
+const runFields = (run?: RunId | RunSummary) => {
+  if (!run) return {};
+  if (typeof run === "string") return { runId: run };
+  return { runId: run.id, run };
+};
+
 const itemSurface = (
   workspace: WorkspaceId,
   workItem: WorkItemId,
@@ -30,7 +36,7 @@ const itemSurface = (
   kind: "item",
   workspace,
   workItem,
-  ...(typeof run === "string" ? { runId: run } : run ? { runId: run.id, run } : {}),
+  ...runFields(run),
 });
 
 const upsertSurface = (surfaces: readonly Surface[], next: Surface) => {
