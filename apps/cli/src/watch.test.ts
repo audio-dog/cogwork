@@ -183,7 +183,8 @@ describe("stepWatch", () => {
   });
 });
 
-const daemonEvent = Schema.decodeSync(DaemonEvent);
+const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
+const daemonEvent = (value: Record<string, unknown>) => decodeDaemonEvent({ ...value, emittedAtMillis: 0 });
 
 const foldBoard = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
