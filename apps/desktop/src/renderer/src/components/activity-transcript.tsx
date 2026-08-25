@@ -24,7 +24,7 @@ import {
   RiWifiLine,
 } from "@remixicon/react";
 import type { ComponentType, ReactNode } from "react";
-import { useState } from "react";
+import { createContext, use, useState } from "react";
 import {
   type ActivityKind,
   type ActivityRow,
@@ -59,6 +59,13 @@ const connectionCopy: Record<NowState["connection"], string> = {
   connecting: "Connecting",
   lost: "Disconnected",
 };
+
+const TimestampClockContext = createContext<number | null>(null);
+
+function TimestampClockProvider({ children }: { children: ReactNode }) {
+  const now = useNow();
+  return <TimestampClockContext value={now}>{children}</TimestampClockContext>;
+}
 
 function EnginePulse({ engine }: { engine: NowState["engine"] }) {
   return (
@@ -306,7 +313,8 @@ function EmptyEvents() {
 }
 
 function RelativeTimestamp({ atMillis }: { atMillis: number }) {
-  const now = useNow();
+  const now = use(TimestampClockContext);
+  if (now === null) throw new Error("RelativeTimestamp must render inside TimestampClockProvider.");
   return (
     <time
       className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
@@ -391,21 +399,23 @@ export function ActivityTranscript() {
   const { state, meta } = useActivityView();
   const groups = groupRows(state.rows);
   return (
-    <FunnelFilter.Provider value={meta.filter}>
-      <div className="flex h-full min-h-0 flex-col">
-        <NowPanel />
-        <Toolbar />
-        <FunnelFilter.Banner />
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-1 px-3 py-2">
-            {groups.length === 0 ? (
-              <EmptyEvents />
-            ) : (
-              groups.map((group) => <TranscriptGroup key={group[0]?.id} rows={group} />)
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-    </FunnelFilter.Provider>
+    <TimestampClockProvider>
+      <FunnelFilter.Provider value={meta.filter}>
+        <div className="flex h-full min-h-0 flex-col">
+          <NowPanel />
+          <Toolbar />
+          <FunnelFilter.Banner />
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col gap-1 px-3 py-2">
+              {groups.length === 0 ? (
+                <EmptyEvents />
+              ) : (
+                groups.map((group) => <TranscriptGroup key={group[0]?.id} rows={group} />)
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </FunnelFilter.Provider>
+    </TimestampClockProvider>
   );
 }
