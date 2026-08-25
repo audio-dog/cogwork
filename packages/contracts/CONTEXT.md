@@ -105,15 +105,17 @@ _Avoid_: Marketplace, registry, remote, catalog (unqualified)
 
 **Plugin catalog**:
 The one first-party document listing the Plugins on offer. Each entry carries a name, a pointer to the source, a **computed digest** of the bundle, and a status of `active`, `deprecated`, or `deleted` with an optional message — the state set the MCP Registry uses, adopted so a Plugin and an MCP server report the same way. The digest is what makes update detection one fetch rather than one per Plugin; it is computed rather than authored, so it can only be stale, never in disagreement, and the fetched bundle always wins with a diagnostic naming the entry. The document is fetched and cached, and a refresh that fails after a good load serves the stale copy.
+A refresh runs **only on an explicit act** — never on a timer and never lazily on read. A *convergence*: Codex spells it `plugin marketplace upgrade` and Claude Code keeps a durable `known_marketplaces.json`, independently arriving at a snapshot a person refreshes. The read reports three arms, because two of them must not render alike: *fetched* with its instant and entries, *stale* with its instant, entries and last failure, and *never fetched*, which is its own arm.
 Qualified because bare *catalog* is spent twice — the desktop's **Surface catalog** and the engine's **Model catalog**.
 _Avoid_: Marketplace, registry, Surface catalog, Model catalog, index
 
 **Plugins**:
 The surface that owns Plugin **membership** — install, update, pin, uninstall — and the setup that follows an install. It is the only surface permitted to change what is installed.
+"Permitted" is a **client-surface rule, and the daemon does not enforce it**: it sees one `Principal` and cannot tell which panel called. What holds the split is the act list — membership and settings are different commands, so a surface that calls only settings commands has no branch that could change membership. Do not build a caller-kind check to satisfy this line.
 _Avoid_: Marketplace, Customize, Plugin store; and the lowercase plural *plugins*, which means the bundles
 
 **Customize**:
-The surface that owns **contribution settings** — a contribution's on / off, and Operation settings. The kind is the view and the authority is a badge on the row. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it.
+The surface that owns **contribution settings** — a contribution's on / off, and Operation settings. The kind is the view and the authority is a badge on the row. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
 _Avoid_: Plugins, Settings, preferences
 
 **Contribution kind**:
