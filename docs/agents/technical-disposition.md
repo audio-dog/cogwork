@@ -48,8 +48,9 @@ own ticket, and went to [#172](https://github.com/colonylabs/cogwork/issues/172)
 **Defer it** — to the open ticket that owns defining the concept — when the question is undecidable
 rather than hard: what it asks about is not yet defined, so no answer would be sound. Escalation
 waits on a person's judgment; deferral waits on a definition. Say so, mark the term provisional in
-the glossary, and name the ticket. Scoping a thing before defining it is how a glossary acquires
-claims no ticket ever decided.
+the glossary, and name the ticket — one that can hold it, since a planning decision cannot live on
+an implementation ticket. Scoping a thing before defining it is how a glossary acquires claims no
+ticket ever decided.
 
 The escalation test and the harvest destination are the same documents, which is what stops a
 question escalating twice.
@@ -96,6 +97,12 @@ handles a problem, look for its artifact: `~/.codex/`, `~/.cursor/`, `~/.claude/
 Four of [#125](https://github.com/colonylabs/cogwork/issues/125)'s answers were reasoned out — one
 escalated as an open fork — where three folders on disk settled the question in minutes. A folder
 beats a paragraph.
+
+**Declared is not reachable.** A symbol, stage, config key, or field existing in the code is no
+evidence that anything reaches it. A dispatch table missing an entry, a branch nothing selects, or a
+resolver returning null kills the whole path while every definition upstream still reads as live.
+Trace forward to where the work is dispatched before calling a path live, and rank the definition
+site as the weakest evidence there is.
 
 **Record the strength of a borrow.** When a decision copies prior art, say which of three it is: a
 **standard** (a published spec others conform to), a **convergence** (independent implementations
@@ -257,6 +264,12 @@ implementations, no spec between them — a **convergence**.
 (supersedes the open fork this section carried; the lifecycle detail lands with
 [#125](https://github.com/colonylabs/cogwork/issues/125), update-time consent with
 [#135](https://github.com/colonylabs/cogwork/issues/135))
+
+**Approval names what it approves.** When you require a human to approve something, what makes the
+approval real is that it names the specific thing it is approving — not that a human was sitting at
+a keyboard. The reflex to resist is "require an interactive prompt", which is the wrong axis for a
+product whose agents run unattended. A prompt nobody read approves nothing. A scripted approval that
+echoes back the exact change is the real thing.
 
 ### Failures
 
