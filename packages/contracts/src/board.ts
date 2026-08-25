@@ -23,6 +23,22 @@ export const initialBoard: Board = {
   scheduler: null,
 };
 
+export const settledRunLimit = 20;
+
+const settled = (run: RunSummary) => run.status !== "running";
+
+const retainRuns = (runs: ReadonlyMap<string, RunSummary>) => {
+  const active = [...runs.entries()].filter(([, run]) => !settled(run));
+  const recent = [...runs.entries()]
+    .filter(([, run]) => settled(run))
+    .sort(
+      ([, left], [, right]) =>
+        (right.endedAtMillis ?? right.startedAtMillis) - (left.endedAtMillis ?? left.startedAtMillis),
+    )
+    .slice(0, settledRunLimit);
+  return new Map([...active, ...recent]);
+};
+
 export const itemKey = (workspace: WorkspaceId, id: string) => `${workspace}::${id}`;
 
 export const workspaceKey = (state: WorkspaceState) =>
@@ -61,7 +77,10 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
       ...board,
       items: withoutItem(board.items, itemKey(workspace, id)),
     }),
-    RunChanged: ({ run }) => ({ ...board, runs: new Map(board.runs).set(run.id, run) }),
+    RunChanged: ({ run }) => ({
+      ...board,
+      runs: retainRuns(new Map(board.runs).set(run.id, run)),
+    }),
     WorkspaceChanged: ({ workspace }) => ({
       ...board,
       workspaces: new Map(board.workspaces).set(workspaceKey(workspace), workspace),

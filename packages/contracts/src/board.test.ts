@@ -210,6 +210,52 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(board.scheduler?.globalInFlight, 1);
   });
 
+  it("keeps running runs and only the recent settled run window", () => {
+    const runs = Array.from({ length: 25 }, (_, index) =>
+      event({
+        _tag: "RunChanged",
+        run: runSummary({
+          id: `run-${index}`,
+          workspace: "acme",
+          workItem: "1",
+          stage: "implement",
+          harness: "cursor",
+          branch: null,
+          session: null,
+          usage: null,
+          status: "succeeded",
+          startedAtMillis: index,
+          endedAtMillis: index,
+          eventCount: 0,
+        }),
+      }),
+    );
+    const board = fold([
+      ...runs,
+      event({
+        _tag: "RunChanged",
+        run: runSummary({
+          id: "running",
+          workspace: "acme",
+          workItem: "1",
+          stage: "implement",
+          harness: "cursor",
+          branch: null,
+          session: null,
+          usage: null,
+          status: "running",
+          startedAtMillis: 26,
+          endedAtMillis: null,
+          eventCount: 0,
+        }),
+      }),
+    ]);
+
+    assert.strictEqual(board.runs.has("running"), true);
+    assert.strictEqual(board.runs.has("run-0"), false);
+    assert.strictEqual(board.runs.has("run-24"), true);
+  });
+
   it("records the latest workspace state per key, registered by name", () => {
     const board = fold([
       event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
