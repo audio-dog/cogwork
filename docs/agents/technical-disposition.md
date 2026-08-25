@@ -295,6 +295,18 @@ retention for data whose loss is expensive rather than merely inconvenient.
 **Pay for capability; reject security theater.** Auth is a fair price for going remote. Crippling a
 payload, or capping a legitimate axis, to avoid that cost is the wrong trade.
 
+**Relieve crowding with a loading mechanism, never a scoping gate.** When a set the user assembles
+grows large — enabled contributions, tools in a context window — the fix is a mechanism that loads on
+demand, not a second control surface that narrows the set per consumer. A per-consumer gate turns the
+user's one setting into a request the system may decline, and it has to be designed, rendered, and
+maintained forever; lazy loading costs the user nothing and is simply the right way to build it.
+Where the loading mechanism is not ours yet, say so and wait for it rather than shipping the gate in
+its place. Resolved on [#130](https://github.com/colonylabs/cogwork/issues/130): every enabled
+contribution flows into every Run Plan for its workspace, and `TextOptions.lazyToolsConfig` is the
+mechanism now that the owned model loop exists. Note the corollary — **requiring is not narrowing**.
+An Operation Definition declaring a required need is a precondition, and it never implies the power
+to exclude everything it did not name.
+
 🛑 **Open fork — cost and latency against correctness.** Undecided. Live options: correctness wins
 outright because the pipeline is unattended and nobody is waiting; cost and latency are first-class
 and an expensive-but-right design is rejected; or the answer splits by surface, with the AFK pipeline
