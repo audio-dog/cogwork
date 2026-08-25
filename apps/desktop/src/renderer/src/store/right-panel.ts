@@ -1,4 +1,4 @@
-import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import type { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { create } from "zustand";
 
 type ToolKind = "attention" | "activity" | "terminal";
@@ -11,7 +11,6 @@ type ItemSurface = {
   readonly workspace: WorkspaceId;
   readonly workItem: WorkItemId;
   readonly runId?: RunId;
-  readonly run?: RunSummary;
 };
 
 type Surface = ToolSurface | ItemSurface;
@@ -21,17 +20,12 @@ type SurfaceId = Surface["id"];
 const itemSurfaceId = (workspace: WorkspaceId, workItem: WorkItemId) =>
   `item:${workspace}:${workItem}` as const;
 
-const runFields = (run?: RunId | RunSummary) => {
+const runFields = (run?: RunId) => {
   if (!run) return {};
-  if (typeof run === "string") return { runId: run };
-  return { runId: run.id, run };
+  return { runId: run };
 };
 
-const itemSurface = (
-  workspace: WorkspaceId,
-  workItem: WorkItemId,
-  run?: RunId | RunSummary,
-): ItemSurface => ({
+const itemSurface = (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId): ItemSurface => ({
   id: itemSurfaceId(workspace, workItem),
   kind: "item",
   workspace,
@@ -60,7 +54,7 @@ export interface RightPanelState {
   readonly surfaces: readonly Surface[];
   readonly active: SurfaceId | null;
   readonly togglePanel: () => void;
-  readonly openItem: (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId | RunSummary) => void;
+  readonly openItem: (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId) => void;
   readonly openTool: (kind: ToolKind) => void;
   readonly closeSurface: (id: SurfaceId) => void;
   readonly closeOtherSurfaces: (id: SurfaceId) => void;
