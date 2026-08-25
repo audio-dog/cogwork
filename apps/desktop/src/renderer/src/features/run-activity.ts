@@ -38,59 +38,73 @@ interface TextBuffer {
   readonly text: string;
 }
 
-interface PreviewFold {
-  readonly previews: Map<string, RunActivityPreview>;
-  readonly texts: Map<string, TextBuffer>;
-  readonly tools: Map<string, string>;
+interface PreviewEntry {
+  readonly preview: RunActivityPreview;
+  readonly text: TextBuffer | null;
+  readonly tools: ReadonlyMap<string, string>;
 }
+
+export type RunPreviewState = ReadonlyMap<string, PreviewEntry>;
 
 const toolKey = (runId: string, event: AgUiEvent) => `${runId}:${event.toolCallId ?? ""}`;
 
-const setPreview = (fold: PreviewFold, runId: string, label: string, text: string) => {
-  fold.previews.set(runId, { label, text: clip(oneLine(text)) });
-};
+const entryFor = (state: RunPreviewState, runId: string): PreviewEntry =>
+  state.get(runId) ?? { preview: { label: "starting", text: "" }, text: null, tools: new Map() };
 
-type PreviewHandler = (fold: PreviewFold, activity: RunActivity) => void;
+const setPreview = (
+  state: RunPreviewState,
+  runId: string,
+  entry: PreviewEntry,
+  label: string,
+  text: string,
+) => new Map(state).set(runId, { ...entry, preview: { label, text: clip(oneLine(text)) } });
 
-const onRunStarted: PreviewHandler = (fold, { runId }) => setPreview(fold, runId, "starting", "");
+const onRunStarted = (state: RunPreviewState, { runId }: RunActivity) =>
+  setPreview(state, runId, entryFor(state, runId), "starting", "");
 
-const onText: PreviewHandler = (fold, { runId, event, correlation }) => {
+const onText = (state: RunPreviewState, { runId, event, correlation }: RunActivity) => {
+  const entry = entryFor(state, runId);
   const messageId = event.messageId ?? correlation.messageId ?? null;
-  const previous = fold.texts.get(runId);
+  const previous = entry.text;
   const base = previous?.messageId === messageId ? previous.text : "";
   const text = base.length >= maxTextLength ? base : base + agUiTextDelta(event);
-  fold.texts.set(runId, { messageId, text });
-  setPreview(fold, runId, "responding", text);
+  const next = setPreview(state, runId, entry, "responding", text);
+  return new Map(next).set(runId, { ...entryFor(next, runId), text: { messageId, text } });
 };
 
-const onToolStart: PreviewHandler = (fold, { runId, event }) => {
+const onToolStart = (state: RunPreviewState, { runId, event }: RunActivity) => {
+  const entry = entryFor(state, runId);
   const name = event.toolCallName ?? "tool";
-  fold.tools.set(toolKey(runId, event), name);
-  setPreview(fold, runId, name, "");
+  const next = setPreview(state, runId, entry, name, "");
+  return new Map(next).set(runId, {
+    ...entryFor(next, runId),
+    tools: new Map(entry.tools).set(toolKey(runId, event), name),
+  });
 };
 
-const onToolEnd: PreviewHandler = (fold, { runId, event }) => {
-  const name = fold.tools.get(toolKey(runId, event)) ?? event.toolCallName ?? "tool";
-  setPreview(fold, runId, name, resultText(event));
+const onToolEnd = (state: RunPreviewState, { runId, event }: RunActivity) => {
+  const entry = entryFor(state, runId);
+  const name = entry.tools.get(toolKey(runId, event)) ?? event.toolCallName ?? "tool";
+  return setPreview(state, runId, entry, name, resultText(event));
 };
 
-const onStep: PreviewHandler = (fold, { runId, event }) => {
-  if (!event.stepName) return;
-  setPreview(fold, runId, "step", event.stepName);
+const onStep = (state: RunPreviewState, { runId, event }: RunActivity) => {
+  if (!event.stepName) return state;
+  return setPreview(state, runId, entryFor(state, runId), "step", event.stepName);
 };
 
-const onCustom: PreviewHandler = (fold, { runId, event }) => {
-  if (event.name?.endsWith(".session-id")) return;
-  setPreview(fold, runId, event.name ?? "custom", compact(event.value));
+const onCustom = (state: RunPreviewState, { runId, event }: RunActivity) => {
+  if (event.name?.endsWith(".session-id")) return state;
+  return setPreview(state, runId, entryFor(state, runId), event.name ?? "custom", compact(event.value));
 };
 
-const onRunFinished: PreviewHandler = (fold, { runId, event }) =>
-  setPreview(fold, runId, "finished", event.finishReason ?? "");
+const onRunFinished = (state: RunPreviewState, { runId, event }: RunActivity) =>
+  setPreview(state, runId, entryFor(state, runId), "finished", event.finishReason ?? "");
 
-const onRunError: PreviewHandler = (fold, { runId, event }) =>
-  setPreview(fold, runId, "error", event.message ?? "run error");
+const onRunError = (state: RunPreviewState, { runId, event }: RunActivity) =>
+  setPreview(state, runId, entryFor(state, runId), "error", event.message ?? "run error");
 
-const previewHandlers = new Map<string, PreviewHandler>([
+const previewHandlers = new Map<string, (state: RunPreviewState, activity: RunActivity) => RunPreviewState>([
   ["RUN_STARTED", onRunStarted],
   ["TEXT_MESSAGE_CONTENT", onText],
   ["TOOL_CALL_START", onToolStart],
@@ -102,13 +116,25 @@ const previewHandlers = new Map<string, PreviewHandler>([
   ["RUN_ERROR", onRunError],
 ]);
 
+export const applyRunPreview = (state: RunPreviewState, activity: RunActivity) =>
+  previewHandlers.get(activity.event.type)?.(state, activity) ?? state;
+
+export const previewMap = (state: RunPreviewState): ReadonlyMap<string, RunActivityPreview> =>
+  new Map([...state].map(([runId, entry]) => [runId, entry.preview]));
+
+export const withoutRunPreview = (state: RunPreviewState, runId: string) => {
+  if (!state.has(runId)) return state;
+  const next = new Map(state);
+  next.delete(runId);
+  return next;
+};
+
 export const runPreviews = (events: ReadonlyArray<DaemonEvent>): ReadonlyMap<string, RunActivityPreview> => {
-  const fold: PreviewFold = { previews: new Map(), texts: new Map(), tools: new Map() };
-  for (const event of events) {
-    if (event._tag !== "RunActivity") continue;
-    previewHandlers.get(event.activity.event.type)?.(fold, event.activity);
-  }
-  return fold.previews;
+  const fold = events.reduce<RunPreviewState>(
+    (state, event) => (event._tag === "RunActivity" ? applyRunPreview(state, event.activity) : state),
+    new Map<string, PreviewEntry>(),
+  );
+  return previewMap(fold);
 };
 
 const FILE_DIFF_EVENT = "sandbox.file.diff";
