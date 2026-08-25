@@ -1,4 +1,12 @@
-import { RiCpuLine, RiPaletteLine, RiSettings3Line } from "@remixicon/react";
+import {
+  RiBox3Line,
+  RiCpuLine,
+  RiEqualizerLine,
+  RiGitRepositoryLine,
+  RiNodeTree,
+  RiPaletteLine,
+  RiSettings3Line,
+} from "@remixicon/react";
 import type { ComponentType } from "react";
 
 export interface SettingsSection {
@@ -11,7 +19,20 @@ export const settingsSections = [
   { id: "general", label: "General", icon: RiSettings3Line },
   { id: "appearance", label: "Appearance", icon: RiPaletteLine },
   { id: "engine", label: "Engine", icon: RiCpuLine },
+  // The configuration surfaces prototyped for #131. Which of these the sidebar shows depends on
+  // the active variant, because "one surface or two" is part of what is being decided.
+  { id: "plugins", label: "Plugins", icon: RiBox3Line },
+  { id: "customize", label: "Customize", icon: RiEqualizerLine },
+  { id: "workflows", label: "Workflows", icon: RiNodeTree },
+  { id: "workspaces", label: "Workspaces", icon: RiGitRepositoryLine },
 ] as const satisfies readonly SettingsSection[];
+
+/** The sections the #131 variants own. The rest are the app's existing settings. */
+export const configurationSectionIds = ["plugins", "customize", "workflows", "workspaces"] as const;
+
+export function isConfigurationSection(id: string): boolean {
+  return (configurationSectionIds as readonly string[]).includes(id);
+}
 
 export type SettingsSectionId = (typeof settingsSections)[number]["id"];
 
@@ -58,6 +79,34 @@ export const settingsIndex = [
     title: "Daily budget",
     description: "How many runs the scheduler starts per day before it pauses new work.",
     keywords: ["budget", "spend", "cost", "runs", "daily", "cap"],
+  },
+  {
+    id: "installed-plugins",
+    sectionId: "plugins",
+    title: "Installed Plugins",
+    description: "Install, update, and uninstall Plugins, and the setup that follows an install.",
+    keywords: ["plugin", "install", "uninstall", "update", "catalog", "marketplace", "setup"],
+  },
+  {
+    id: "contribution-enablement",
+    sectionId: "customize",
+    title: "Contribution on / off",
+    description: "Turn a Skill, Rules, Command, Subagent, Hook, or MCP server on or off at a Scope.",
+    keywords: ["skill", "rules", "command", "subagent", "hook", "mcp", "scope", "enable", "customize"],
+  },
+  {
+    id: "operation-settings",
+    sectionId: "workflows",
+    title: "Operation settings",
+    description: "Harness, model, effort, permission profile, and the contributions bound to a need.",
+    keywords: ["operation", "workflow", "harness", "model", "effort", "binding", "run plan"],
+  },
+  {
+    id: "registered-workspaces",
+    sectionId: "workspaces",
+    title: "Registered workspaces",
+    description: "Register, deregister, and re-bind a workspace checkout path.",
+    keywords: ["workspace", "register", "deregister", "re-bind", "checkout", "repository"],
   },
 ] as const satisfies readonly SettingEntry[];
 

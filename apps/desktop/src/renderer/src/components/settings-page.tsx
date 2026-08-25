@@ -24,6 +24,7 @@ import { parseCount, sanitizeCountDraft } from "../features/settings-values";
 import { useBoard } from "../features/use-board";
 import { useSchedulerConfig } from "../features/use-scheduler-config";
 import { useWindowPreferences } from "../features/use-window-preferences";
+import { ConfigurationSection, useSectionLabel } from "./configuration-section";
 import { type Theme, useTheme } from "./theme-provider";
 
 const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});
@@ -293,6 +294,11 @@ const sectionBodyById: Record<SettingsSectionId, () => ReactNode> = {
   general: () => <GeneralPage />,
   appearance: () => <AppearancePage />,
   engine: () => <EnginePage />,
+  // PROTOTYPE — the #131 configuration surfaces. Each resolves against the active variant.
+  plugins: () => <ConfigurationSection sectionId="plugins" />,
+  customize: () => <ConfigurationSection sectionId="customize" />,
+  workflows: () => <ConfigurationSection sectionId="workflows" />,
+  workspaces: () => <ConfigurationSection sectionId="workspaces" />,
 };
 
 export function SettingsSectionView({
@@ -305,10 +311,14 @@ export function SettingsSectionView({
   jump?: number;
 }) {
   const section = findSection(sectionId);
+  // PROTOTYPE — a variant may rename a configuration section it fuses with another.
+  const variantLabel = useSectionLabel(sectionId);
   return (
     <FocusedSettingContext value={{ focus, jump }}>
       <div className="flex flex-col gap-8">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">{section?.label}</h1>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          {variantLabel ?? section?.label}
+        </h1>
         {sectionBodyById[sectionId]()}
       </div>
     </FocusedSettingContext>
