@@ -1,5 +1,23 @@
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { cn } from "@cogwork/ui/lib/utils";
+import type { DragEndEvent } from "@dnd-kit/core";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import {
+  horizontalListSortingStrategy,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
@@ -86,11 +104,55 @@ function ActiveSurfaceBody({ surface }: { surface: RightPanelState["surfaces"][n
   }
 }
 
+function SortableSurfaceTab({ surface }: { surface: RightPanelState["surfaces"][number] }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: surface.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+    >
+      <SurfaceTab.ContextMenu id={surface.id}>
+        <SurfaceTabContent surface={surface} />
+      </SurfaceTab.ContextMenu>
+    </div>
+  );
+}
+
+function SurfaceTabContent({ surface }: { surface: RightPanelState["surfaces"][number] }) {
+  switch (surface.kind) {
+    case "attention":
+      return <AttentionSurfaceTab />;
+    case "activity":
+      return <ActivitySurfaceTab />;
+    case "terminal":
+      return <TerminalSurfaceTab />;
+    case "item":
+      return <ItemSurfaceTab {...surface} />;
+  }
+}
+
 export function RightPanel() {
   const surfaces = useRightPanelStore((state) => state.surfaces);
   const active = useRightPanelStore((state) => state.active);
   const maximized = useRightPanelStore((state) => state.maximized);
+  const reorderSurface = useRightPanelStore((state) => state.reorderSurface);
+  const surfaceIds = surfaces.map((surface) => surface.id);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const current = surfaces.find((surface) => surface.id === active) ?? surfaces[0];
+
+  const handleDragEnd = ({ active: dragged, over }: DragEndEvent) => {
+    const activeSurface = surfaces.find((surface) => surface.id === dragged.id);
+    const overSurface = surfaces.find((surface) => surface.id === over?.id);
+    if (!activeSurface || !overSurface) return;
+    reorderSurface(activeSurface.id, overSurface.id);
+  };
 
   if (!current) return <EmptySurfaceCatalog />;
 
@@ -103,36 +165,18 @@ export function RightPanel() {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [-webkit-app-region:no-drag]">
-          {surfaces.map((surface) => {
-            switch (surface.kind) {
-              case "attention":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <AttentionSurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "activity":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <ActivitySurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "terminal":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <TerminalSurfaceTab />
-                  </SurfaceTab.ContextMenu>
-                );
-              case "item":
-                return (
-                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
-                    <ItemSurfaceTab {...surface} />
-                  </SurfaceTab.ContextMenu>
-                );
-              default:
-                return null;
-            }
-          })}
+          <DndContext
+            collisionDetection={closestCenter}
+            modifiers={[restrictToHorizontalAxis]}
+            sensors={sensors}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={surfaceIds} strategy={horizontalListSortingStrategy}>
+              {surfaces.map((surface) => (
+                <SortableSurfaceTab key={surface.id} surface={surface} />
+              ))}
+            </SortableContext>
+          </DndContext>
           <SurfaceCatalogMenu />
         </div>
       </div>
