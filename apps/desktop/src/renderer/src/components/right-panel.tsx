@@ -175,9 +175,9 @@ function EmptySurfaceCatalog() {
       >
         <div className="[-webkit-app-region:no-drag]">
           <h2 className="font-heading text-sm font-medium">Open a surface</h2>
-          <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
         </div>
       </div>
+      <p className="px-4 pt-3 text-sm text-muted-foreground">Choose what to show in the right panel.</p>
       <SurfaceCatalogCards />
     </div>
   );
