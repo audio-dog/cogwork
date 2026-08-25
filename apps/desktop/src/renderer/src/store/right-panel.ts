@@ -4,6 +4,7 @@ import { create } from "zustand";
 export type Surface =
   | { readonly kind: "attention" }
   | { readonly kind: "activity" }
+  | { readonly kind: "terminal" }
   | {
       readonly kind: "item";
       readonly workspace: WorkspaceId;
@@ -17,10 +18,6 @@ export type SurfaceId = string;
 export function surfaceId(surface: Surface): SurfaceId {
   return surface.kind === "item" ? `item:${surface.workspace}:${surface.workItem}` : surface.kind;
 }
-
-export const FIXED_SURFACES: readonly Surface[] = [{ kind: "attention" }, { kind: "activity" }];
-
-const DEFAULT_ACTIVE = surfaceId({ kind: "attention" });
 
 function updatedSurface(existing: Surface, next: Surface) {
   if (existing.kind === "item" && next.kind === "item" && existing.runId && !next.runId) {
@@ -38,16 +35,21 @@ function upsertSurface(surfaces: readonly Surface[], next: Surface) {
   return surfaces.map((surface, index) => (index === existing ? updatedSurface(surface, next) : surface));
 }
 
-function fallbackActiveSurfaceId(surfaces: readonly Surface[], closingId: SurfaceId, active: SurfaceId) {
+function fallbackActiveSurfaceId(
+  surfaces: readonly Surface[],
+  closingId: SurfaceId,
+  active: SurfaceId | null,
+) {
   if (active !== closingId) return active;
-  return surfaceId(surfaces[surfaces.length - 1] ?? FIXED_SURFACES[0]);
+  const fallback = surfaces[surfaces.length - 1];
+  return fallback ? surfaceId(fallback) : null;
 }
 
 export interface RightPanelState {
   readonly open: boolean;
   readonly maximized: boolean;
   readonly surfaces: readonly Surface[];
-  readonly active: SurfaceId;
+  readonly active: SurfaceId | null;
   readonly openPanel: () => void;
   readonly closePanel: () => void;
   readonly togglePanel: () => void;
@@ -60,8 +62,8 @@ export interface RightPanelState {
 export const useRightPanelStore = create<RightPanelState>((set) => ({
   open: false,
   maximized: false,
-  surfaces: FIXED_SURFACES,
-  active: DEFAULT_ACTIVE,
+  surfaces: [],
+  active: null,
   openPanel: () => set({ open: true }),
   closePanel: () => set({ open: false, maximized: false }),
   togglePanel: () => set((state) => ({ open: !state.open, maximized: false })),
@@ -76,11 +78,11 @@ export const useRightPanelStore = create<RightPanelState>((set) => ({
     }),
   closeSurface: (id) =>
     set((state) => {
-      const target = state.surfaces.find((entry) => surfaceId(entry) === id);
-      if (target?.kind !== "item") return state;
       const surfaces = state.surfaces.filter((entry) => surfaceId(entry) !== id);
+      if (surfaces.length === state.surfaces.length) return state;
       return { surfaces, active: fallbackActiveSurfaceId(surfaces, id, state.active) };
     }),
-  setActive: (id) => set({ active: id }),
+  setActive: (id) =>
+    set((state) => (state.surfaces.some((surface) => surfaceId(surface) === id) ? { active: id } : state)),
   toggleMaximized: () => set((state) => ({ maximized: !state.maximized })),
 }));
