@@ -63,6 +63,8 @@ export interface RightPanelState {
   readonly openItem: (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId | RunSummary) => void;
   readonly openTool: (kind: ToolKind) => void;
   readonly closeSurface: (id: SurfaceId) => void;
+  readonly closeOtherSurfaces: (id: SurfaceId) => void;
+  readonly closeAllSurfaces: () => void;
   readonly setActive: (id: SurfaceId) => void;
   readonly toggleMaximized: () => void;
 }
@@ -88,6 +90,13 @@ export const useRightPanelStore = create<RightPanelState>((set) => ({
       if (surfaces.length === state.surfaces.length) return state;
       return { surfaces, active: fallbackActiveSurfaceId(surfaces, id, state.active) };
     }),
+  closeOtherSurfaces: (id) =>
+    set((state) => {
+      const surface = state.surfaces.find((entry) => entry.id === id);
+      if (!surface) return state;
+      return { surfaces: [surface], active: id };
+    }),
+  closeAllSurfaces: () => set({ surfaces: [], active: null }),
   setActive: (id) =>
     set((state) => (state.surfaces.some((surface) => surface.id === id) ? { active: id } : state)),
   toggleMaximized: () => set((state) => ({ maximized: !state.maximized })),

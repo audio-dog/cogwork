@@ -6,6 +6,7 @@ import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
 import { CompactEngineGate } from "./engine-gate";
 import { ItemSurfaceTab, ItemTab } from "./item-tab";
 import { SurfaceCatalogCards, SurfaceCatalogMenu } from "./surface-catalog";
+import { SurfaceTab } from "./surface-tab";
 import { TerminalSurfaceBody, TerminalSurfaceTab } from "./terminal-surface";
 
 function PanelSkeleton() {
@@ -105,13 +106,29 @@ export function RightPanel() {
           {surfaces.map((surface) => {
             switch (surface.kind) {
               case "attention":
-                return <AttentionSurfaceTab key={surface.id} />;
+                return (
+                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
+                    <AttentionSurfaceTab />
+                  </SurfaceTab.ContextMenu>
+                );
               case "activity":
-                return <ActivitySurfaceTab key={surface.id} />;
+                return (
+                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
+                    <ActivitySurfaceTab />
+                  </SurfaceTab.ContextMenu>
+                );
               case "terminal":
-                return <TerminalSurfaceTab key={surface.id} />;
+                return (
+                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
+                    <TerminalSurfaceTab />
+                  </SurfaceTab.ContextMenu>
+                );
               case "item":
-                return <ItemSurfaceTab key={surface.id} {...surface} />;
+                return (
+                  <SurfaceTab.ContextMenu key={surface.id} id={surface.id}>
+                    <ItemSurfaceTab {...surface} />
+                  </SurfaceTab.ContextMenu>
+                );
               default:
                 return null;
             }

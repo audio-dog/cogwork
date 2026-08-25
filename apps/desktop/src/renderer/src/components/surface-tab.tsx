@@ -1,7 +1,15 @@
 import { Button } from "@cogwork/ui/components/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@cogwork/ui/components/context-menu";
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiCloseLine } from "@remixicon/react";
 import type { ComponentProps, ReactNode } from "react";
+import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 
 const baseClassName = "flex h-7 shrink-0 items-center gap-0.5 rounded-md text-xs";
 
@@ -38,9 +46,35 @@ function SurfaceTabClose({ label, onClick }: { label: string; onClick: () => voi
   );
 }
 
+function SurfaceTabContextMenu({
+  id,
+  children,
+}: {
+  id: RightPanelState["surfaces"][number]["id"];
+  children: ReactNode;
+}) {
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
+  const closeOtherSurfaces = useRightPanelStore((state) => state.closeOtherSurfaces);
+  const closeAllSurfaces = useRightPanelStore((state) => state.closeAllSurfaces);
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuGroup>
+          <ContextMenuItem onClick={() => closeSurface(id)}>Close</ContextMenuItem>
+          <ContextMenuItem onClick={() => closeOtherSurfaces(id)}>Close others</ContextMenuItem>
+          <ContextMenuItem onClick={closeAllSurfaces}>Close all</ContextMenuItem>
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
 export const SurfaceTab = {
   Active: SurfaceTabActive,
   Inactive: SurfaceTabInactive,
   Button: SurfaceTabButton,
   Close: SurfaceTabClose,
+  ContextMenu: SurfaceTabContextMenu,
 };
