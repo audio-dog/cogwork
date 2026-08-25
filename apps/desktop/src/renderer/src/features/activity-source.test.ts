@@ -90,6 +90,7 @@ describe("decodeEvent — human summaries", () => {
           _tag: "Claimed",
           id: "42",
           title: "Add rate limiting",
+          url: null,
           claim: { by: "agent", claimedAtMillis: 0 },
         }),
       }),
@@ -107,7 +108,13 @@ describe("decodeEvent — human summaries", () => {
       event({
         _tag: "ItemChanged",
         workspace: "acme",
-        item: classifiedItem({ _tag: "Blocked", id: "7", title: "Upgrade Effect", openBlockers: 2 }),
+        item: classifiedItem({
+          _tag: "Blocked",
+          id: "7",
+          title: "Upgrade Effect",
+          url: null,
+          openBlockers: 2,
+        }),
       }),
       1_000,
     );
@@ -231,7 +238,13 @@ describe("decodeEvent — low-signal classification", () => {
       event({
         _tag: "ItemChanged",
         workspace: "acme",
-        item: classifiedItem({ _tag: "Eligible", id: "1", title: "Tidy the fold", stage: "implement" }),
+        item: classifiedItem({
+          _tag: "Eligible",
+          id: "1",
+          title: "Tidy the fold",
+          url: null,
+          stage: "implement",
+        }),
       }),
       0,
     );
@@ -243,6 +256,7 @@ describe("decodeEvent — low-signal classification", () => {
           _tag: "Claimed",
           id: "1",
           title: "Tidy the fold",
+          url: null,
           claim: { by: "agent", claimedAtMillis: 0 },
         }),
       }),

@@ -403,7 +403,14 @@ describe("github work source adapter", () => {
       assert.strictEqual(items.find((item) => item.id === "#30")?.openBlockers, 1);
       assert.strictEqual(items.find((item) => item.id === "#31")?.openBlockers, 0);
       const { eligible, blocked } = classify(items);
-      assert.deepStrictEqual(blocked, [{ id: id("#30"), title: "waits on #31", openBlockers: 1 }]);
+      assert.deepStrictEqual(blocked, [
+        {
+          id: id("#30"),
+          title: "waits on #31",
+          url: "https://github.com/owner/repo/issues/30",
+          openBlockers: 1,
+        },
+      ]);
       assert.deepStrictEqual(
         eligible.map((entry) => entry.id),
         [id("#31")],

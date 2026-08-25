@@ -95,7 +95,9 @@ describe("classify", () => {
     ]);
     assert.strictEqual(eligible.length, 0);
     assert.strictEqual(needsHuman.length, 0);
-    assert.deepStrictEqual(blocked, [{ id: id("1"), title: "item 1", openBlockers: 2 }]);
+    assert.deepStrictEqual(blocked, [
+      { id: id("1"), title: "item 1", url: "https://github.com/owner/repo/issues/1", openBlockers: 2 },
+    ]);
   });
 
   it("makes the same item eligible once its last blocker closes, with no role change", () => {
@@ -153,11 +155,22 @@ describe("classify", () => {
     assert.strictEqual(reasons["2"], "ready-for-human");
   });
 
-  it("carries the tracker ticket URL onto a needs-human item", () => {
-    const { needsHuman } = classify([
-      item({ id: "1", roles: ["needs-info"], url: "https://linear.app/acme/issue/AUD-1" }),
+  it("carries the tracker ticket URL onto every classified item", () => {
+    const trackerUrl = "https://linear.app/acme/issue/AUD-1";
+    const claim: Claim = { by: "cogwork", claimedAtMillis: 1 };
+    const result = classify([
+      item({ id: "eligible", roles: ["ready-for-agent"], url: trackerUrl }),
+      item({ id: "claimed", roles: ["ready-for-agent"], claim, url: trackerUrl }),
+      item({ id: "blocked", roles: ["ready-for-agent"], openBlockers: 1, url: trackerUrl }),
+      item({ id: "needs-human", roles: ["needs-info"], url: trackerUrl }),
     ]);
-    assert.strictEqual(needsHuman[0]?.url, "https://linear.app/acme/issue/AUD-1");
+
+    assert.deepStrictEqual(
+      [result.eligible[0], result.claimed[0], result.blocked[0], result.needsHuman[0]].map(
+        (entry) => entry?.url,
+      ),
+      [trackerUrl, trackerUrl, trackerUrl, trackerUrl],
+    );
   });
 
   it("carries the triage proposal onto a self-halted item and null when there is none", () => {
