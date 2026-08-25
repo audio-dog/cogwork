@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/components/activity-view.tsx
+  s_ccff80ed511cea::t_968eedbf68ee11 108
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_ccff80ed511cea::t_968eedbf68ee11 1-134
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_ccff80ed511cea::t_968eedbf68ee11 6,66-92
+apps/desktop/src/renderer/src/components/activity-transcript.tsx
+  s_ccff80ed511cea::t_968eedbf68ee11 27,35,63-69,324-336,361,411-428
+docs/agents/technical-disposition.md
+  s_ccff80ed511cea::t_968eedbf68ee11 92-99,130-136,248-259,288-293
+  s_ccff80ed511cea::t_e94ab9644eed31 294
+packages/contracts/CONTEXT.md
+  s_ccff80ed511cea::t_968eedbf68ee11 47-48,89-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7e45823fd3544a14f815f23b86833f9649bd6554",
+  "prompts": {},
+  "sessions": {
+    "s_ccff80ed511cea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03743-ee43-7c60-bb5b-e05bfc056adf",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
