@@ -8,7 +8,6 @@ import {
   type NowState,
   useActivitySession,
 } from "../features/activity-session";
-import { useNow } from "../features/use-now";
 import { useRightPanelStore } from "../store/right-panel";
 import { type FunnelFilterContextValue, funnelSelectionMatches, useFunnelSelection } from "./funnel-filter";
 
@@ -26,7 +25,6 @@ interface ActivityViewState {
   readonly query: string;
   readonly verbose: boolean;
   readonly frozen: boolean;
-  readonly clock: number;
 }
 
 interface ActivityViewActions {
@@ -58,7 +56,6 @@ export function useActivityView() {
 export function ActivityViewProvider({ children }: { children: ReactNode }) {
   const session = useActivitySession();
   const feed = { now: activityNow(session), log: session.log };
-  const clock = useNow();
   const openItem = useRightPanelStore((state) => state.openItem);
   const [query, setQuery] = useState("");
   const [verbose, setVerbose] = useState(false);
@@ -108,7 +105,7 @@ export function ActivityViewProvider({ children }: { children: ReactNode }) {
   return (
     <ActivityViewContext
       value={{
-        state: { now: feed.now, rows, query, verbose, frozen, clock },
+        state: { now: feed.now, rows, query, verbose, frozen },
         actions: {
           setQuery,
           toggleVerbose: () => setVerbose((current) => !current),

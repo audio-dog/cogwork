@@ -89,6 +89,14 @@ being right, and costs a correction later. Two of
 [#132](https://github.com/colonylabs/cogwork/issues/132)'s answers were reversed by research after a
 confident first recommendation.
 
+**What a tool writes to disk outranks what it says.** The strongest prior art is not the vendored
+source or the docs — it is the data the shipped product leaves on this machine, because that is the
+design after every compromise. Before escalating or inferring anything about how a mature tool
+handles a problem, look for its artifact: `~/.codex/`, `~/.cursor/`, `~/.claude/`. Read the files.
+Four of [#125](https://github.com/colonylabs/cogwork/issues/125)'s answers were reasoned out — one
+escalated as an open fork — where three folders on disk settled the question in minutes. A folder
+beats a paragraph.
+
 **Record the strength of a borrow.** When a decision copies prior art, say which of three it is: a
 **standard** (a published spec others conform to), a **convergence** (independent implementations
 arriving at the same shape, with no spec between them), or a **borrow** (one vendor's private choice
@@ -118,6 +126,13 @@ seam, two means a real one** — do not introduce a seam until something actuall
 Second corollary: before building a mechanism to reconcile something, check whether a decision
 already made means the collision cannot occur.
 (ADR [0013](../adr/0013-two-settings-families-with-different-scope-sets.md))
+
+**The ask bounds the design.** Answer the question that was asked, at the scope it was asked at. A
+capability nobody requested is not a free bonus: it becomes a premise the next twenty answers are
+built on, and unwinding it costs more than the rounds it saved. #125 assumed installs sync between
+machines — no harness does this, and no map asked for it — and then spent four answers on the
+portability problem that assumption created. The test: **which line of the ask does this serve?** No
+answer means cut it.
 
 **Split along independent concerns once product judgment is pinned.** Push the mechanical slices to
 `ready-for-agent`; keep only the vision- or direction-setting piece as `ready-for-human`. Small,
@@ -230,11 +245,18 @@ engine, not the agent, cuts the branch.
 (engine ADRs [0005](../../packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md)
 and [0010](../../packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md))
 
-🛑 **Open fork — who owns a secret across an update.** Undecided. Live options: the Plugin declares a
-requirement and the engine owns every credential; the Plugin owns its own and the engine brokers; or
-ownership follows the Connection. Escalate rather than infer; the concept lands with
-[#125](https://github.com/colonylabs/cogwork/issues/125) and
-[#135](https://github.com/colonylabs/cogwork/issues/135).
+**A bundle names a secret; the engine holds it.** A Plugin declares which credential it needs and
+never carries one, so the engine owns every credential and hands it in at dispatch. This is what
+keeps a bundle publishable — a bundle that held a token would itself be a secret file — and it is
+the only arrangement where an update that widens access is visible to compare and consent to before
+it runs. Settled by reading what the shipped harnesses write to disk: every plugin bundle under
+`~/.codex/plugins/`, `~/.cursor/plugins/`, and `~/.claude/plugins/` carries env-var *names*
+(`${DD_API_KEY}`) and public OAuth client ids, never values, while the tokens sit in one file per
+harness outside every bundle (`~/.codex/auth.json`, `~/.cursor/cli-config.json`). Three independent
+implementations, no spec between them — a **convergence**.
+(supersedes the open fork this section carried; the lifecycle detail lands with
+[#125](https://github.com/colonylabs/cogwork/issues/125), update-time consent with
+[#135](https://github.com/colonylabs/cogwork/issues/135))
 
 ### Failures
 
@@ -262,6 +284,13 @@ invest in the agent's self-halt judgment rather than building a gate.
 actually grows. An axis that grows with the user's own work — open UI windows, not workload — is not
 the thing to cap; bound what each one holds instead, so one stuck client cannot hurt the daemon.
 Artificial limits on legitimate axes are a smell.
+
+**Weigh the cost at scale, the benefit at the margin.** When a choice trades tidiness for a
+convenience, count both sides at the size the product is going to be. A dead row retained per user
+"just in case they roll back" is one row in a demo and millions of rows of cruft at scale — harder
+maintenance, weirder bugs, a schema nobody trusts — bought for the fraction of users who ever hit the
+edge case. Prefer the simpler state: delete it, and let the rare case pay the rare cost. Reserve
+retention for data whose loss is expensive rather than merely inconvenient.
 
 **Pay for capability; reject security theater.** Auth is a fair price for going remote. Crippling a
 payload, or capping a legitimate axis, to avoid that cost is the wrong trade.
