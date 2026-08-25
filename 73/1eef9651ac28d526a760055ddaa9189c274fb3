@@ -1,0 +1,29 @@
+packages/engine/src/worktree.test.ts
+  s_c454b6a72caed7::t_157bc07b2bb03b 411-427
+packages/engine/src/daemon.ts
+  s_291b4152ffb9e1::t_1ed24d7c5cc764 233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "731eef9651ac28d526a760055ddaa9189c274fb3",
+  "prompts": {},
+  "sessions": {
+    "s_291b4152ffb9e1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03744-f101-7f10-806a-174be79b48e0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c454b6a72caed7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a039c3-d513-71c2-a10e-df9f8bde507a",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
