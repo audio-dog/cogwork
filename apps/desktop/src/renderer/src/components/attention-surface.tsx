@@ -16,10 +16,11 @@ export function AttentionSurfaceTab() {
 
   return (
     <Tab>
-      <SurfaceTab.Lead icon={Icon} label={title} onClose={() => closeSurface("attention")} />
       <SurfaceTab.Button onClick={() => setActive("attention")}>
+        <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
+      <SurfaceTab.Close label={title} onClick={() => closeSurface("attention")} />
     </Tab>
   );
 }

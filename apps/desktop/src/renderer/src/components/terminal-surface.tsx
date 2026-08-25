@@ -16,10 +16,11 @@ export function TerminalSurfaceTab() {
 
   return (
     <Tab>
-      <SurfaceTab.Lead icon={Icon} label={title} onClose={() => closeSurface("terminal")} />
       <SurfaceTab.Button onClick={() => setActive("terminal")}>
+        <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
+      <SurfaceTab.Close label={title} onClick={() => closeSurface("terminal")} />
     </Tab>
   );
 }
