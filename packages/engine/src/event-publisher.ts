@@ -95,9 +95,10 @@ export const make = Effect.gen(function* () {
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
     const stats = schedulerStatsOf(yield* scheduler.config, yield* scheduler.stats);
     const signature = encodeStats(stats);
-    if ((yield* Ref.get(lastScheduler)) === signature) return;
+    if ((yield* Ref.get(lastScheduler)) === signature) return stats;
     yield* Ref.set(lastScheduler, signature);
     yield* bus.publish({ _tag: "SchedulerChanged", scheduler: stats });
+    return stats;
   });
 
   return { publishItems, publishWorkspaces, publishScheduler } as const;

@@ -495,6 +495,7 @@ describe("daemon status over rpc", () => {
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
+      Layer.provideMerge(EventPublisher.layer),
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
