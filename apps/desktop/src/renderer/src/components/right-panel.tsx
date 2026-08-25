@@ -1,4 +1,5 @@
 import type { RunId, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
@@ -53,14 +54,9 @@ function tabClassName(active: boolean, padding: string) {
 
 function CloseTabButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      aria-label={`Close ${label}`}
-      className="grid size-4 shrink-0 cursor-pointer place-items-center rounded-sm hover:bg-muted"
-      onClick={onClick}
-    >
+    <Button aria-label={`Close ${label}`} size="icon-xs" variant="ghost" onClick={onClick}>
       <RiCloseLine className="size-3" />
-    </button>
+    </Button>
   );
 }
 
@@ -76,14 +72,10 @@ function ToolTab({ surface }: { surface: ToolSurface }) {
   const { Icon, title } = descriptor;
   return (
     <div className={tabClassName(active, "pl-2 pr-1")}>
-      <button
-        type="button"
-        className="flex min-w-0 cursor-pointer items-center gap-1.5"
-        onClick={() => setActive(id)}
-      >
+      <Button className="min-w-0" size="xs" variant="ghost" onClick={() => setActive(id)}>
         <Icon className="size-3.5 shrink-0" />
         <span className="truncate">{title}</span>
-      </button>
+      </Button>
       <CloseTabButton label={title} onClick={() => closeSurface(id)} />
     </div>
   );
@@ -152,7 +144,7 @@ function EmptySurfaceCatalog() {
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="border-b px-4 py-3">
         <h2 className="font-heading text-sm font-medium">Open a surface</h2>
-        <p className="text-sm text-muted-foreground">Choose what to show in the side panel.</p>
+        <p className="text-sm text-muted-foreground">Choose what to show in the right panel.</p>
       </div>
       <SurfaceCatalogCards onSelect={openSurface} />
     </div>
@@ -193,27 +185,30 @@ export function RightPanel() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <CompactEngineGate.Provider>
-          <CompactEngineGate.Live>
-            {current.kind === "attention" && <AttentionPanelBody />}
-            {current.kind === "activity" && <ActivityTabBody />}
-            {current.kind === "terminal" && <TerminalPanelBody />}
-            {current.kind === "item" && (
-              <ItemPanelBody
-                key={`${surfaceId(current)}:${current.runId ?? ""}`}
-                workspace={current.workspace}
-                workItem={current.workItem}
-                runId={current.runId}
-                run={current.run}
-              />
-            )}
-          </CompactEngineGate.Live>
-          <CompactEngineGate.Connecting>
-            <PanelSkeleton />
-          </CompactEngineGate.Connecting>
-          <CompactEngineGate.Off />
-          <CompactEngineGate.Broken />
-        </CompactEngineGate.Provider>
+        {current.kind === "terminal" ? (
+          <TerminalPanelBody />
+        ) : (
+          <CompactEngineGate.Provider>
+            <CompactEngineGate.Live>
+              {current.kind === "attention" && <AttentionPanelBody />}
+              {current.kind === "activity" && <ActivityTabBody />}
+              {current.kind === "item" && (
+                <ItemPanelBody
+                  key={`${surfaceId(current)}:${current.runId ?? ""}`}
+                  workspace={current.workspace}
+                  workItem={current.workItem}
+                  runId={current.runId}
+                  run={current.run}
+                />
+              )}
+            </CompactEngineGate.Live>
+            <CompactEngineGate.Connecting>
+              <PanelSkeleton />
+            </CompactEngineGate.Connecting>
+            <CompactEngineGate.Off />
+            <CompactEngineGate.Broken />
+          </CompactEngineGate.Provider>
+        )}
       </div>
     </div>
   );

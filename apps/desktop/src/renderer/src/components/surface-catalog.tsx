@@ -1,8 +1,9 @@
 import { Button } from "@cogwork/ui/components/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@cogwork/ui/components/card";
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@cogwork/ui/components/dropdown-menu";
@@ -14,29 +15,35 @@ type ToolSurface = Exclude<Surface, { kind: "item" }>;
 
 export const surfaceCatalog = [
   {
+    id: "attention",
     surface: { kind: "attention" },
     title: "Attention",
     description: "See work that needs a decision or is ready to merge.",
     Icon: RiFocus2Line,
   },
   {
+    id: "activity",
     surface: { kind: "activity" },
     title: "Activity",
     description: "Follow the raw daemon event stream.",
     Icon: RiPulseLine,
   },
   {
+    id: "terminal",
     surface: { kind: "terminal" },
     title: "Terminal",
     description: "Run commands in this workspace when it is ready.",
     Icon: RiTerminalBoxLine,
   },
 ] as const satisfies ReadonlyArray<{
+  readonly id: ToolSurface["kind"];
   readonly surface: ToolSurface;
   readonly title: string;
   readonly description: string;
   readonly Icon: ComponentType<{ className?: string }>;
 }>;
+
+const [attentionSurface, activitySurface, terminalSurface] = surfaceCatalog;
 
 export function toolSurfaceDescriptor(surface: ToolSurface) {
   return surfaceCatalog.find((descriptor) => descriptor.surface.kind === surface.kind);
@@ -45,22 +52,9 @@ export function toolSurfaceDescriptor(surface: ToolSurface) {
 export function SurfaceCatalogCards({ onSelect }: { onSelect: (surface: ToolSurface) => void }) {
   return (
     <div className="grid gap-3 p-4 sm:grid-cols-2">
-      {surfaceCatalog.map(({ surface, title, description, Icon }) => (
-        <Card key={surface.kind} size="sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Icon className="size-4" />
-              {title}
-            </CardTitle>
-            <CardDescription>{description}</CardDescription>
-          </CardHeader>
-          <div className="px-3">
-            <Button className="w-full" size="sm" variant="outline" onClick={() => onSelect(surface)}>
-              Open {title}
-            </Button>
-          </div>
-        </Card>
-      ))}
+      <SurfaceCatalogCard descriptor={attentionSurface} onSelect={onSelect} />
+      <SurfaceCatalogCard descriptor={activitySurface} onSelect={onSelect} />
+      <SurfaceCatalogCard descriptor={terminalSurface} onSelect={onSelect} />
     </div>
   );
 }
@@ -76,16 +70,59 @@ export function SurfaceCatalogMenu({ onSelect }: { onSelect: (surface: ToolSurfa
         }
       />
       <DropdownMenuContent align="start" className="w-64">
-        {surfaceCatalog.map(({ surface, title, description, Icon }) => (
-          <DropdownMenuItem key={surface.kind} onClick={() => onSelect(surface)}>
-            <Icon className="size-4" />
-            <span className="flex flex-col">
-              <span>{title}</span>
-              <span className="text-xs text-muted-foreground">{description}</span>
-            </span>
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuGroup>
+          <SurfaceCatalogMenuItem descriptor={attentionSurface} onSelect={onSelect} />
+          <SurfaceCatalogMenuItem descriptor={activitySurface} onSelect={onSelect} />
+          <SurfaceCatalogMenuItem descriptor={terminalSurface} onSelect={onSelect} />
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function SurfaceCatalogCard({
+  descriptor,
+  onSelect,
+}: {
+  descriptor: (typeof surfaceCatalog)[number];
+  onSelect: (surface: ToolSurface) => void;
+}) {
+  const { surface, title, description, Icon } = descriptor;
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon className="size-4" />
+          {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardFooter>
+        <Button className="w-full" size="sm" variant="outline" onClick={() => onSelect(surface)}>
+          Open {title}
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+function SurfaceCatalogMenuItem({
+  descriptor,
+  onSelect,
+}: {
+  descriptor: (typeof surfaceCatalog)[number];
+  onSelect: (surface: ToolSurface) => void;
+}) {
+  const { surface, title, description, Icon } = descriptor;
+
+  return (
+    <DropdownMenuItem onClick={() => onSelect(surface)}>
+      <Icon className="size-4" />
+      <span className="flex flex-col">
+        <span>{title}</span>
+        <span className="text-xs text-muted-foreground">{description}</span>
+      </span>
+    </DropdownMenuItem>
   );
 }
