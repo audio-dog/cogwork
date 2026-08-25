@@ -408,6 +408,23 @@ describe("Worktree.reconcile", () => {
       assert.deepStrictEqual(removed, []);
     }),
   );
+
+  it.effect("keeps an active worktree on an externally linked branch", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const branch = "claude/github-issue-13-a1b2c3";
+      const manager = yield* Effect.provide(
+        Worktree.make,
+        provide(
+          fakeGit(recorder, { worktrees: [{ path: `/repo.worktrees/${branch}`, branch }] }),
+          fakeFs(recorder, {}),
+        ),
+      );
+      const outcome = yield* manager.reconcile(workspaceWith(), ["13", branch], 10_000);
+      assert.deepStrictEqual(outcome.tornDown, []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
+    }),
+  );
 });
 
 describe("Worktree.remove", () => {
