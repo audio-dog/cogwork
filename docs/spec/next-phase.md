@@ -43,11 +43,11 @@ Three phases get there:
 
 - **Architect hosted-ready, build local-first.** No single-user or single-machine assumption in any
   seam that is expensive to reopen; build no hosting, auth systems, or tenancy.
-  (technical-disposition principle 10)
+  (technical-disposition *take the shape that survives the turn you can see coming*)
 - **Autonomous-with-override, never approval-gated.** Agents run unattended end-to-end; triage
   *self-halts* with its reasoning when work isn't AFK-able; the one hard human gate is PR review +
   merge. New surfaces inform and offer override — they do not block agents behind approvals.
-  (ADR 0007, principle 11)
+  (ADR 0007, technical-disposition *self-halt over gates*)
 - **Utility model calls go through the owned provider layer, never a CLI harness.** Harnesses exist
   solely to run coding sessions. (engine ADR 0006, principle 9)
 - **Session contracts are interactive-ready** even though everything in this phase is AFK-only.
