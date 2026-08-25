@@ -1,0 +1,30 @@
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_ccff80ed511cea::t_317ef70309401f 1,23,25,28,57
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_ccff80ed511cea::t_317ef70309401f 682
+  s_a37449beb487fd::t_55da24271c773f 673
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "d13d137442c8ca9e8c45ca0389e733f7b410832c",
+  "prompts": {},
+  "sessions": {
+    "s_a37449beb487fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03746-ffa3-7270-b62f-946a424f859a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ccff80ed511cea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03743-ee43-7c60-bb5b-e05bfc056adf",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
