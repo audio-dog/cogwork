@@ -1,48 +1,32 @@
-import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
-import type { RemixiconComponentType } from "@remixicon/react";
+import type { ReactNode } from "react";
 
-function CatalogEntryCard({
-  description,
-  icon: Icon,
-  title,
-  onClick,
-}: {
-  description: string;
-  icon: RemixiconComponentType;
-  title: string;
-  onClick: () => void;
-}) {
+function CatalogEntryCard({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return (
     <button
       className="flex flex-col items-start gap-1 rounded-xl bg-card p-4 text-left ring-1 ring-foreground/10 transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
       type="button"
       onClick={onClick}
     >
-      <Icon className="mb-2 size-5" />
-      <span className="font-heading text-sm font-medium">{title}</span>
-      <span className="text-sm text-muted-foreground">{description}</span>
+      {children}
     </button>
   );
 }
 
-function CatalogEntryMenuItem({
-  icon: Icon,
-  title,
-  onClick,
-}: {
-  icon: RemixiconComponentType;
-  title: string;
-  onClick: () => void;
-}) {
-  return (
-    <DropdownMenuItem onClick={onClick}>
-      <Icon />
-      {title}
-    </DropdownMenuItem>
-  );
+function CatalogEntryMedia({ children }: { children: ReactNode }) {
+  return <span className="mb-2 [&_svg]:size-5">{children}</span>;
+}
+
+function CatalogEntryTitle({ children }: { children: ReactNode }) {
+  return <span className="font-heading text-sm font-medium">{children}</span>;
+}
+
+function CatalogEntryDescription({ children }: { children: ReactNode }) {
+  return <span className="text-sm text-muted-foreground">{children}</span>;
 }
 
 export const CatalogEntry = {
   Card: CatalogEntryCard,
-  MenuItem: CatalogEntryMenuItem,
+  Media: CatalogEntryMedia,
+  Title: CatalogEntryTitle,
+  Description: CatalogEntryDescription,
 };

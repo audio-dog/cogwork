@@ -33,14 +33,16 @@ function SurfaceTabButton({ className, children, ...props }: ComponentProps<type
   );
 }
 
-function SurfaceTabClose({ label, onClick }: { label: string; onClick: () => void }) {
+function SurfaceTabClose({ className, ...props }: ComponentProps<typeof Button>) {
   return (
     <Button
-      aria-label={`Close ${label}`}
-      className="opacity-0 transition-none group-hover/surface-tab:opacity-100 focus-visible:opacity-100"
+      {...props}
+      className={cn(
+        "opacity-0 transition-none group-hover/surface-tab:opacity-100 focus-visible:opacity-100",
+        className,
+      )}
       size="icon-xs"
       variant="ghost"
-      onClick={onClick}
     >
       <RiCloseLine data-icon="inline-start" />
     </Button>

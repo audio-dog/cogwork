@@ -1,3 +1,4 @@
+import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiTerminalBoxLine } from "@remixicon/react";
 import { useRightPanelStore } from "../store/right-panel";
@@ -20,7 +21,7 @@ export function TerminalSurfaceTab() {
         <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
-      <SurfaceTab.Close label={title} onClick={() => closeSurface("terminal")} />
+      <SurfaceTab.Close aria-label={`Close ${title}`} onClick={() => closeSurface("terminal")} />
     </Tab>
   );
 }
@@ -29,19 +30,25 @@ export function TerminalCatalogCard() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
   return (
-    <CatalogEntry.Card
-      description={description}
-      icon={Icon}
-      title={title}
-      onClick={() => openTool("terminal")}
-    />
+    <CatalogEntry.Card onClick={() => openTool("terminal")}>
+      <CatalogEntry.Media>
+        <Icon />
+      </CatalogEntry.Media>
+      <CatalogEntry.Title>{title}</CatalogEntry.Title>
+      <CatalogEntry.Description>{description}</CatalogEntry.Description>
+    </CatalogEntry.Card>
   );
 }
 
 export function TerminalCatalogMenuItem() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
-  return <CatalogEntry.MenuItem icon={Icon} title={title} onClick={() => openTool("terminal")} />;
+  return (
+    <DropdownMenuItem onClick={() => openTool("terminal")}>
+      <Icon />
+      {title}
+    </DropdownMenuItem>
+  );
 }
 
 export function TerminalSurfaceBody() {

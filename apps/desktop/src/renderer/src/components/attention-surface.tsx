@@ -1,3 +1,4 @@
+import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
 import { RiFocus2Line } from "@remixicon/react";
 import { useRightPanelStore } from "../store/right-panel";
 import { AttentionList } from "./attention-rail";
@@ -20,7 +21,7 @@ export function AttentionSurfaceTab() {
         <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
-      <SurfaceTab.Close label={title} onClick={() => closeSurface("attention")} />
+      <SurfaceTab.Close aria-label={`Close ${title}`} onClick={() => closeSurface("attention")} />
     </Tab>
   );
 }
@@ -29,19 +30,25 @@ export function AttentionCatalogCard() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
   return (
-    <CatalogEntry.Card
-      description={description}
-      icon={Icon}
-      title={title}
-      onClick={() => openTool("attention")}
-    />
+    <CatalogEntry.Card onClick={() => openTool("attention")}>
+      <CatalogEntry.Media>
+        <Icon />
+      </CatalogEntry.Media>
+      <CatalogEntry.Title>{title}</CatalogEntry.Title>
+      <CatalogEntry.Description>{description}</CatalogEntry.Description>
+    </CatalogEntry.Card>
   );
 }
 
 export function AttentionCatalogMenuItem() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
-  return <CatalogEntry.MenuItem icon={Icon} title={title} onClick={() => openTool("attention")} />;
+  return (
+    <DropdownMenuItem onClick={() => openTool("attention")}>
+      <Icon />
+      {title}
+    </DropdownMenuItem>
+  );
 }
 
 export function AttentionSurfaceBody() {

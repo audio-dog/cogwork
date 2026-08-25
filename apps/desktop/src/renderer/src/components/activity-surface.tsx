@@ -1,3 +1,4 @@
+import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
 import { RiPulseLine } from "@remixicon/react";
 import { useRightPanelStore } from "../store/right-panel";
 import { ActivityTranscript } from "./activity-transcript";
@@ -20,7 +21,7 @@ export function ActivitySurfaceTab() {
         <Icon data-icon="inline-start" />
         <span className="truncate">{title}</span>
       </SurfaceTab.Button>
-      <SurfaceTab.Close label={title} onClick={() => closeSurface("activity")} />
+      <SurfaceTab.Close aria-label={`Close ${title}`} onClick={() => closeSurface("activity")} />
     </Tab>
   );
 }
@@ -29,19 +30,25 @@ export function ActivityCatalogCard() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
   return (
-    <CatalogEntry.Card
-      description={description}
-      icon={Icon}
-      title={title}
-      onClick={() => openTool("activity")}
-    />
+    <CatalogEntry.Card onClick={() => openTool("activity")}>
+      <CatalogEntry.Media>
+        <Icon />
+      </CatalogEntry.Media>
+      <CatalogEntry.Title>{title}</CatalogEntry.Title>
+      <CatalogEntry.Description>{description}</CatalogEntry.Description>
+    </CatalogEntry.Card>
   );
 }
 
 export function ActivityCatalogMenuItem() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
-  return <CatalogEntry.MenuItem icon={Icon} title={title} onClick={() => openTool("activity")} />;
+  return (
+    <DropdownMenuItem onClick={() => openTool("activity")}>
+      <Icon />
+      {title}
+    </DropdownMenuItem>
+  );
 }
 
 export function ActivitySurfaceBody() {
