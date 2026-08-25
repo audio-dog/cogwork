@@ -1,0 +1,32 @@
+docs/spec/next-phase.md
+  s_394ee14942e4a5::t_fe2ab71a7a9d62 273-274
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_394ee14942e4a5::t_49d989af489571 135-160
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_394ee14942e4a5::t_49d989af489571 93-108
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_394ee14942e4a5::t_49d989af489571 146-161
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_394ee14942e4a5::t_49d989af489571 78-91
+docs/adr/0016-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_394ee14942e4a5::t_4ff258bb73fdb8 1-198
+packages/contracts/CONTEXT.md
+  s_394ee14942e4a5::t_fe2ab71a7a9d62 46,271
+  s_394ee14942e4a5::t_c30d1757c7c421 93,112,119-122,128-135,150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "e41f451e26fc6d1c606fc86802262f93b13a69bb",
+  "prompts": {},
+  "sessions": {
+    "s_394ee14942e4a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3796196b-3965-4c19-951d-132cf7baf89b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
