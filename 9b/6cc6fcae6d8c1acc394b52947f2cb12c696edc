@@ -1,0 +1,31 @@
+apps/cli/src/status.ts
+  s_3f74fa6eb5094f::t_355f58475a9f83 30-34
+packages/engine/src/read-model.test.ts
+  s_3f74fa6eb5094f::t_98f860c798e811 169,172
+packages/engine/src/read-model.ts
+  s_3f74fa6eb5094f::t_355f58475a9f83 9,36
+packages/contracts/src/daemon.ts
+  s_3f74fa6eb5094f::t_355f58475a9f83 76
+packages/engine/src/recovery.ts
+  s_3f74fa6eb5094f::t_754e33dcf6b67b 1
+  s_3f74fa6eb5094f::t_8ab5ecba1b2028 188-190,193,195
+packages/engine/src/engine.test.ts
+  s_3f74fa6eb5094f::t_4b14535259cdeb 518,525-530
+  s_3f74fa6eb5094f::t_ac364b208689b9 531-533
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "9b6cc6fcae6d8c1acc394b52947f2cb12c696edc",
+  "prompts": {},
+  "sessions": {
+    "s_3f74fa6eb5094f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bf1a034f-ce92-447f-9458-86909cf7c50a",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
