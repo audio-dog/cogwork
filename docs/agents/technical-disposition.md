@@ -230,11 +230,18 @@ engine, not the agent, cuts the branch.
 (engine ADRs [0005](../../packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md)
 and [0010](../../packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md))
 
-🛑 **Open fork — who owns a secret across an update.** Undecided. Live options: the Plugin declares a
-requirement and the engine owns every credential; the Plugin owns its own and the engine brokers; or
-ownership follows the Connection. Escalate rather than infer; the concept lands with
-[#125](https://github.com/colonylabs/cogwork/issues/125) and
-[#135](https://github.com/colonylabs/cogwork/issues/135).
+**A bundle names a secret; the engine holds it.** A Plugin declares which credential it needs and
+never carries one, so the engine owns every credential and hands it in at dispatch. This is what
+keeps a bundle publishable — a bundle that held a token would itself be a secret file — and it is
+the only arrangement where an update that widens access is visible to compare and consent to before
+it runs. Settled by reading what the shipped harnesses write to disk: every plugin bundle under
+`~/.codex/plugins/`, `~/.cursor/plugins/`, and `~/.claude/plugins/` carries env-var *names*
+(`${DD_API_KEY}`) and public OAuth client ids, never values, while the tokens sit in one file per
+harness outside every bundle (`~/.codex/auth.json`, `~/.cursor/cli-config.json`). Three independent
+implementations, no spec between them — a **convergence**.
+(supersedes the open fork this section carried; the lifecycle detail lands with
+[#125](https://github.com/colonylabs/cogwork/issues/125), update-time consent with
+[#135](https://github.com/colonylabs/cogwork/issues/135))
 
 ### Failures
 
