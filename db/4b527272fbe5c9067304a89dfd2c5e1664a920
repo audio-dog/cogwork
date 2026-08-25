@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/features/activity-source.test.ts
+  s_989b09a36a7285::t_20f659aa2861f6 93,111-117,241-247,259
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_989b09a36a7285::t_20f659aa2861f6 28,58,90
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_989b09a36a7285::t_20f659aa2861f6 37,59-60,67-74,83,93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "db4b527272fbe5c9067304a89dfd2c5e1664a920",
+  "prompts": {},
+  "sessions": {
+    "s_989b09a36a7285": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03a03-bef0-7f42-a1cf-3f077075e396",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
