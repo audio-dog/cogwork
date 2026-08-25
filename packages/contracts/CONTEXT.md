@@ -170,7 +170,7 @@ A reusable end-to-end automation made of operations and the transitions between 
 _Avoid_: Playbook, pipeline, run
 
 **Operation**:
-One selectable kind of agent work within a workflow, such as triage, implementation, follow-up, or validation. A run executes one operation.
+One selectable kind of agent work within a workflow, such as triage, implementation, follow-up, or verify. A run executes one operation.
 _Avoid_: Lifecycle stage, stage, step, task type
 
 **Transition**:
