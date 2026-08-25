@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/components/surface-tab.tsx
+  s_52779fb84edd00::t_29ae093395d5ac 1-34,36-44
+  s_52779fb84edd00::t_39315123675a0d 35
+apps/desktop/src/renderer/src/components/catalog-entry.tsx
+  s_52779fb84edd00::t_29ae093395d5ac 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "971b9a14952c525764bedd0e818e79999b01a15b",
+  "prompts": {},
+  "sessions": {
+    "s_52779fb84edd00": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a036d6-46a2-7751-b94b-bf398b155f25",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
