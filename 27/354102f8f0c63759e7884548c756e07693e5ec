@@ -1,0 +1,25 @@
+docs/spec/next-phase.md
+  s_865f057f92d6c8::t_2fb207b6e72413 46,50
+packages/engine/CONTEXT.md
+  s_865f057f92d6c8::t_2fb207b6e72413 161
+docs/agents/technical-disposition.md
+  s_865f057f92d6c8::t_965119771c32ba 3,5-9,11-12,14,16-20,22,24-29,33-34,36-38,40-46,48-52,54-55,57,59-63,65,67-330
+AGENTS.md
+  s_865f057f92d6c8::t_bfca910f1d54c1 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "27354102f8f0c63759e7884548c756e07693e5ec",
+  "prompts": {},
+  "sessions": {
+    "s_865f057f92d6c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0f81f9b-efa5-48de-8e62-20ac9e056bc3",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
