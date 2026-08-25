@@ -1,0 +1,22 @@
+configs/lint/no-switch.grit
+  s_3e1636055f19de::t_bc7d8f88055449 1-3,5
+  s_3e1636055f19de::t_b8372b37d20e65 4
+biome.json
+  s_3e1636055f19de::t_bc7d8f88055449 57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "419ab0ac85f07e9f2eb6240b7c5300fc2186c936",
+  "prompts": {},
+  "sessions": {
+    "s_3e1636055f19de": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11f5d1e0-609a-4a14-91e8-53c9205fd457",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
