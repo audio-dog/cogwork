@@ -41,15 +41,7 @@ export function ActivityCatalogCard() {
 export function ActivityCatalogMenuItem() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
-  return (
-    <CatalogEntry.MenuItem onClick={() => openTool("activity")}>
-      <Icon />
-      <span className="flex flex-col">
-        <span>{title}</span>
-        <span className="text-xs text-muted-foreground">{description}</span>
-      </span>
-    </CatalogEntry.MenuItem>
-  );
+  return <CatalogEntry.MenuItem icon={Icon} title={title} onClick={() => openTool("activity")} />;
 }
 
 export function ActivitySurfaceBody() {

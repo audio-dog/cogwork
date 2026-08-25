@@ -1,6 +1,5 @@
 import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
 import type { RemixiconComponentType } from "@remixicon/react";
-import type { ReactNode } from "react";
 
 function CatalogEntryCard({
   description,
@@ -26,8 +25,21 @@ function CatalogEntryCard({
   );
 }
 
-function CatalogEntryMenuItem({ children, onClick }: { children: ReactNode; onClick: () => void }) {
-  return <DropdownMenuItem onClick={onClick}>{children}</DropdownMenuItem>;
+function CatalogEntryMenuItem({
+  icon: Icon,
+  title,
+  onClick,
+}: {
+  icon: RemixiconComponentType;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <DropdownMenuItem onClick={onClick}>
+      <Icon />
+      {title}
+    </DropdownMenuItem>
+  );
 }
 
 export const CatalogEntry = {

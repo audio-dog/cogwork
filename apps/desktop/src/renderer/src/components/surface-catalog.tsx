@@ -30,7 +30,7 @@ export function SurfaceCatalogMenu() {
           </Button>
         }
       />
-      <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuContent align="start">
         <DropdownMenuGroup>
           <AttentionCatalogMenuItem />
           <ActivityCatalogMenuItem />

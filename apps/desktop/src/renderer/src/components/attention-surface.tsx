@@ -41,15 +41,7 @@ export function AttentionCatalogCard() {
 export function AttentionCatalogMenuItem() {
   const openTool = useRightPanelStore((state) => state.openTool);
 
-  return (
-    <CatalogEntry.MenuItem onClick={() => openTool("attention")}>
-      <Icon />
-      <span className="flex flex-col">
-        <span>{title}</span>
-        <span className="text-xs text-muted-foreground">{description}</span>
-      </span>
-    </CatalogEntry.MenuItem>
-  );
+  return <CatalogEntry.MenuItem icon={Icon} title={title} onClick={() => openTool("attention")} />;
 }
 
 export function AttentionSurfaceBody() {
