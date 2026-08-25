@@ -1,0 +1,42 @@
+apps/desktop/src/renderer/src/components/activity-view.tsx
+  s_ddeb1545b195ff::t_5ce675fed3b674 106
+apps/desktop/src/renderer/src/components/activity-transcript.tsx
+  s_ddeb1545b195ff::t_5ce675fed3b674 27,35,63-69,315-327,352,402-419
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_ddeb1545b195ff::t_5ce675fed3b674 6,66-92
+apps/desktop/src/renderer/src/features/activity-source.ts
+  s_ddeb1545b195ff::t_5ce675fed3b674 85-94,97-99,197-210,213-216
+  s_ddeb1545b195ff::t_4f7556ab698931 217
+docs/agents/technical-disposition.md
+  s_ddeb1545b195ff::t_5ce675fed3b674 92-99,130-136,248-259,288-293
+  s_ddeb1545b195ff::t_825b4fcd17a77a 294
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_ddeb1545b195ff::t_5ce675fed3b674 1-134
+biome.json
+  s_ddeb1545b195ff::t_5ce675fed3b674 57-58
+packages/contracts/CONTEXT.md
+  s_ddeb1545b195ff::t_5ce675fed3b674 47-48,89-112
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_ddeb1545b195ff::t_5ce675fed3b674 292-296,312
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_ddeb1545b195ff::t_5ce675fed3b674 21,62-72,75-111,178
+  s_ddeb1545b195ff::t_805d2c34432b1b 112-114,116,122,124-125,127
+configs/lint/no-switch.grit
+  s_ddeb1545b195ff::t_5ce675fed3b674 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "8937e8bac634c35f8377b18d3d4c97f052aa9ecc",
+  "prompts": {},
+  "sessions": {
+    "s_ddeb1545b195ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1d95e8c-6237-44db-aaae-1d26f927869c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
