@@ -1707,6 +1707,36 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("resumes a linked external branch", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const requests = yield* Ref.make<ReadonlyArray<HarnessRequest>>([]);
+      const branches = yield* Ref.make<ReadonlyArray<string | undefined>>([]);
+      const externalBranch = "claude/github-issue-5-a1b2c3";
+      const worktree: WorktreeManagerService = {
+        ...worktreeStubCreated(false),
+        ensure: (_workspace, _item, options) =>
+          Ref.update(branches, (values) => [...values, options?.branch]).pipe(
+            Effect.map(() => ({ branch: externalBranch, path: `/wt/${externalBranch}`, created: false })),
+          ),
+      };
+      const resumeItem: EligibleWork = {
+        ...followUpItem,
+        followUpBranch: externalBranch,
+        resume: { session: previousSession, reason: "interrupted" },
+      };
+      const layer = provide(recorder(calls), [capturingRunner(requests, followUpEvents)], worktree);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* seedResumeSession();
+        yield* executor.execute(followUpWorkspace, resumeItem);
+
+        assert.deepStrictEqual(yield* Ref.get(branches), [externalBranch]);
+        assert.strictEqual((yield* Ref.get(requests))[0]?.checkoutPath, `/wt/${externalBranch}`);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it.effect("does not resurrect an older follow-up session after an interrupted harness switch", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);

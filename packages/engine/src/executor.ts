@@ -107,6 +107,13 @@ const defaultFollowUp: FollowUpContext = {
   baseDivergence: "none",
 };
 
+const resumeWorktreeOptions = (item: EligibleWork) => {
+  if (item.stage === "follow-up" && item.followUpBranch) {
+    return { resume: true, branch: item.followUpBranch };
+  }
+  return { resume: true };
+};
+
 const appendStructuredOutput = (acc: Pick<RunAccumulator, "structuredOutputs">, event: AgUiEvent) => {
   if (!agUiIsStructuredOutputComplete(event)) return acc.structuredOutputs;
   return [...acc.structuredOutputs, event.value];
@@ -688,7 +695,7 @@ export const make = Effect.gen(function* () {
         item.stage,
       );
     }
-    const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
+    const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
     return yield* harnessRequest(
       workspace,
       resolved,
@@ -715,7 +722,7 @@ export const make = Effect.gen(function* () {
         item.stage,
       );
     }
-    const worktree = yield* worktrees.ensure(workspace, item, { resume: true });
+    const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
     return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null, item.stage);
   });
 
