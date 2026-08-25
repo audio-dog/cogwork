@@ -361,20 +361,26 @@ const publish = (next: ActivitySession) => {
   for (const listener of listeners) listener();
 };
 
-const resetForFreshSeed = () => {
-  activityState.lastResult = null;
-  activityState.lastPumpedResult = null;
-  publish(resetActivityFolds(activityState.session));
-};
-
 const recordDaemonResult = (result: EventResult, clock: () => number) => {
   if (result === activityState.lastResult) return;
   activityState.lastResult = result;
-  if (result._tag === "Failure")
-    return publish(updateLifecycle(activityState.session, activityState.session.engine, "lost", clock()));
-  if (result._tag !== "Success")
+  if (result._tag === "Initial")
     return publish(
-      updateLifecycle(activityState.session, activityState.session.engine, "connecting", clock()),
+      updateLifecycle(
+        resetActivityFolds(activityState.session),
+        activityState.session.engine,
+        "connecting",
+        clock(),
+      ),
+    );
+  if (result._tag === "Failure")
+    return publish(
+      updateLifecycle(
+        resetActivityFolds(activityState.session),
+        activityState.session.engine,
+        "lost",
+        clock(),
+      ),
     );
   const next = result.value.items.reduce(
     (current, event) => ingestDaemonEvent(current, event, clock()),
@@ -388,26 +394,11 @@ const recordEngineStatus = (status: Parameters<typeof enginePhase>[0], clock: ()
     updateLifecycle(activityState.session, enginePhase(status), activityState.session.connection, clock()),
   );
 
-const pumpDaemonResult = (
-  current: EventResult,
-  clock: () => number,
-  pull: () => void,
-  resubscribe: () => void,
-) => {
+const pumpDaemonResult = (current: EventResult, pull: () => void, resubscribe: () => void) => {
   if (current.waiting) return;
   if (current === activityState.lastPumpedResult) return;
   activityState.lastPumpedResult = current;
-  if (current._tag === "Failure") {
-    publish(
-      updateLifecycle(
-        resetActivityFolds(activityState.session),
-        activityState.session.engine,
-        "connecting",
-        clock(),
-      ),
-    );
-    return resubscribe();
-  }
+  if (current._tag === "Failure") return resubscribe();
   if (current._tag === "Success" && !current.value.done) pull();
 };
 
@@ -417,7 +408,6 @@ const subscribe = (listener: () => void, clock: () => number) => {
   return () => {
     listeners.delete(listener);
     unsubscribeEngine();
-    if (listeners.size === 0) resetForFreshSeed();
   };
 };
 
@@ -428,8 +418,8 @@ export function useActivitySession(clock: () => number = Date.now) {
   const pull = useAtomSet(daemonEventAtom);
   const resubscribe = useAtomRefresh(daemonEventAtom);
   const pump = useCallback(
-    (current: EventResult) => pumpDaemonResult(current, clock, pull, resubscribe),
-    [clock, pull, resubscribe],
+    (current: EventResult) => pumpDaemonResult(current, pull, resubscribe),
+    [pull, resubscribe],
   );
   const sessionSubscribe = useCallback((listener: () => void) => subscribe(listener, clock), [clock]);
   useAtomSubscribe(daemonEventAtom, (result) => recordDaemonResult(result, clock), { immediate: true });
