@@ -24,6 +24,7 @@ describe("closingReferencesFor", () => {
       closingReferencesFor(repo, {
         repository: {
           pullRequests: {
+            pageInfo: { hasNextPage: false, endCursor: null },
             nodes: [
               {
                 number: 7,

@@ -161,6 +161,10 @@ const ClosingReferencesPayload = Schema.Struct({
   repository: Schema.NullOr(
     Schema.Struct({
       pullRequests: Schema.Struct({
+        pageInfo: Schema.Struct({
+          hasNextPage: Schema.Boolean,
+          endCursor: Schema.NullOr(Schema.String),
+        }),
         nodes: Schema.Array(
           Schema.NullOr(
             Schema.Struct({
@@ -185,9 +189,9 @@ const ClosingReferencesPayload = Schema.Struct({
 const decodeClosingReferences = Schema.decodeUnknownEffect(ClosingReferencesPayload);
 
 export const closingReferencesQuery = `
-query ClosingReferences($owner: String!, $name: String!) {
+query ClosingReferences($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
-    pullRequests(first: 100, states: OPEN) {
+    pullRequests(first: 100, after: $cursor, states: OPEN) {
       nodes {
         number
         closingIssuesReferences(first: 100) {
@@ -212,6 +216,11 @@ export const closingReferencesFor = (repo: GitHubRepoRef, payload: typeof Closin
       return [[pull.number, references] as const];
     }),
   );
+};
+
+const closingReferencesCursor = (payload: typeof ClosingReferencesPayload.Type) => {
+  const page = payload.repository?.pullRequests.pageInfo;
+  return page?.hasNextPage ? page.endCursor : null;
 };
 
 export const graphQlData = (
@@ -467,10 +476,23 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return result;
   });
 
-  const pullClosingReferences = Effect.fn("github.pullClosingReferences")(function* (repo: GitHubRepoRef) {
-    const data = yield* graphql(repo, closingReferencesQuery, { owner: repo.owner, name: repo.name });
+  const pullClosingReferences: (
+    repo: GitHubRepoRef,
+    cursor?: string | null,
+  ) => Effect.Effect<ReadonlyMap<number, ReadonlyArray<number>>, IssueTrackerError> = Effect.fn(
+    "github.pullClosingReferences",
+  )(function* (repo: GitHubRepoRef, cursor: string | null = null) {
+    const data = yield* graphql(repo, closingReferencesQuery, {
+      owner: repo.owner,
+      name: repo.name,
+      cursor,
+    });
     const payload = yield* Effect.mapError(decodeClosingReferences(data), toUnavailable);
-    return closingReferencesFor(repo, payload);
+    const nextCursor = closingReferencesCursor(payload);
+    const current = closingReferencesFor(repo, payload);
+    if (nextCursor === null) return current;
+    const remaining = yield* pullClosingReferences(repo, nextCursor);
+    return new Map([...current, ...remaining]);
   });
 
   return {
@@ -479,9 +501,12 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       return yield* parseIssues(repo, json);
     }),
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef) {
-      const json = yield* fetchJson(repo, repoPath(repo, "/pulls?state=open&per_page=100"));
-      const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
+      const json = yield* fetchJson(
+        repo,
+        repoPath(repo, "/pulls?state=open&per_page=100&sort=updated&direction=desc"),
+      );
       const references = yield* pullClosingReferences(repo);
+      const pulls = yield* Effect.mapError(decodePulls(json), toUnavailable);
       return pulls.map(
         (pull): RawPull => ({
           number: pull.number,
