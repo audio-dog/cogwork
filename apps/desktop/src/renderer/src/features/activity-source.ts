@@ -82,18 +82,20 @@ export const activityLabels: Record<ActivityKind, string> = {
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
 
-const classifiedState = (item: ClassifiedItem): { text: string; severity: ActivitySeverity } => {
-  switch (item._tag) {
-    case "Eligible":
-      return { text: "eligible", severity: "info" };
-    case "Claimed":
-      return { text: "claimed", severity: "info" };
-    case "Blocked":
-      return { text: `blocked · ${item.openBlockers} open`, severity: "warn" };
-    case "NeedsHuman":
-      return { text: "needs a person", severity: "warn" };
-  }
+const classifiedStateByTag: {
+  [T in ClassifiedItem["_tag"]]: (item: Extract<ClassifiedItem, { _tag: T }>) => {
+    text: string;
+    severity: ActivitySeverity;
+  };
+} = {
+  Eligible: () => ({ text: "eligible", severity: "info" }),
+  Claimed: () => ({ text: "claimed", severity: "info" }),
+  Blocked: (item) => ({ text: `blocked · ${item.openBlockers} open`, severity: "warn" }),
+  NeedsHuman: () => ({ text: "needs a person", severity: "warn" }),
 };
+
+const classifiedState = <T extends ClassifiedItem["_tag"]>(item: Extract<ClassifiedItem, { _tag: T }>) =>
+  classifiedStateByTag[item._tag](item);
 
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
   running: "info",
@@ -192,25 +194,26 @@ const itemRemovedRow = (workspace: WorkspaceId, id: WorkItemId, atMillis: number
   lowSignal: true,
 });
 
-// Run activity feeds the Now-zone heartbeat, not a per-delta log row, so it
-// decodes to null here.
-export const decodeEvent = (event: DaemonEvent, atMillis: number): ActivityRow | null => {
-  switch (event._tag) {
-    case "SeedEnd":
-    case "RunActivity":
-      return null;
-    case "ItemChanged":
-      return itemChangedRow(event.workspace, event.item, atMillis);
-    case "ItemRemoved":
-      return itemRemovedRow(event.workspace, event.id, atMillis);
-    case "RunChanged":
-      return runRow(event.run);
-    case "WorkspaceChanged":
-      return workspaceRow(event.workspace, atMillis);
-    case "SchedulerChanged":
-      return schedulerRow(event.scheduler, atMillis);
-  }
+const eventDecoderByTag: {
+  [T in DaemonEvent["_tag"]]: (
+    event: Extract<DaemonEvent, { _tag: T }>,
+    atMillis: number,
+  ) => ActivityRow | null;
+} = {
+  SeedEnd: () => null,
+  // Run activity feeds the Now-zone heartbeat, not a per-delta log row.
+  RunActivity: () => null,
+  ItemChanged: (event, atMillis) => itemChangedRow(event.workspace, event.item, atMillis),
+  ItemRemoved: (event, atMillis) => itemRemovedRow(event.workspace, event.id, atMillis),
+  RunChanged: (event) => runRow(event.run),
+  WorkspaceChanged: (event, atMillis) => workspaceRow(event.workspace, atMillis),
+  SchedulerChanged: (event, atMillis) => schedulerRow(event.scheduler, atMillis),
 };
+
+export const decodeEvent = <T extends DaemonEvent["_tag"]>(
+  event: Extract<DaemonEvent, { _tag: T }>,
+  atMillis: number,
+) => eventDecoderByTag[event._tag](event, atMillis);
 
 const engineSynth: Record<EnginePhase, { summary: string; severity: ActivitySeverity }> = {
   up: { summary: "Engine started", severity: "success" },

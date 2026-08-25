@@ -3,6 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-08-24
 - **Amended:** 2026-08-24 — resolution narrows, see [Amendment](#amendment-2026-08-24--resolution-is-per-settings-family-and-merge-by-key-is-retired)
+- **Amended:** 2026-08-25 — the Plugin-supplied settings-blob schema governs an empty set, see [Amendment](#amendment-2026-08-25--the-plugin-supplied-settings-blob-schema-governs-an-empty-set)
 
 ## Context
 
@@ -62,3 +63,30 @@ This ADR declared resolution *per contribution kind* and listed five operators. 
 **Five operators become four.** `merge-by-key` is retired. It existed to answer how entries sharing a key combine across Scopes, and that question dissolved: identity carries Authority, so two contributions sharing a local name are two different things, and composing the set across Scopes is a `union-values` with nothing to reconcile. A single identity with settings at more than one Scope resolves whole, by `override-scalar` — a configuration assembled field-wise from two files is one no person authored. The remaining operators are `override-scalar`, `append-sources`, `union-values`, `constrain`.
 
 This does not change the two lists, the identity scheme, the file-pointing manifest, or the provenance rule. It narrows how their settings resolve.
+
+## Amendment (2026-08-25) — the Plugin-supplied settings-blob schema governs an empty set
+
+This ADR declared schemas layered: the Engine owns a per-kind envelope and validates it always, and
+the Plugin supplies a JSON Schema for its own settings blob, validated at Run Plan resolution.
+
+[#134](https://github.com/colonylabs/cogwork/issues/134) then enumerated every setting a person can
+write and found five of six kinds have exactly one — on / off — and the sixth has one setting and a
+file. On / off is the Engine's envelope. **So the Plugin-supplied blob currently governs an empty
+set:** there is nothing written against it for a schema change to break, and there is no per-Plugin
+parameter step at setup, because a parameter would be that set's first member.
+
+The field stays, unused, on the same reasoning that keeps the Connection-requirements field: an
+unused optional field leaves a door unbolted at no cost. Two things change if it ever fills.
+
+**Validation moves to install and update.** ADR
+[0013](./0013-two-settings-families-with-different-scope-sets.md) assigns a conflict class by *when
+the failure is knowable*, and notes that only *unsatisfiable* depends on the selected Operation. A
+settings blob failing its schema is knowable with the manifest in hand, so it is a load-time
+diagnostic — not a Run Plan rejection, where this ADR originally put it.
+
+**The first parameter arrives as a setup step.** ADR
+[0014](./0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md) says setup is
+establishing required Connections and nothing else. That holds only while the blob is empty.
+
+This changes nothing about the two lists, the identity scheme, the file-pointing manifest, or the
+provenance rule.
