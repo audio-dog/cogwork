@@ -15,7 +15,7 @@ import {
 import { useAtomRefresh, useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import type * as Cause from "effect/Cause";
 import type * as Atom from "effect/unstable/reactivity/Atom";
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
 import {
   applyRunPreview,
@@ -345,9 +345,14 @@ export const activityNow = (session: ActivitySession): NowState => ({
 
 type EventResult = typeof daemonEventAtom extends Atom.Atom<infer Value> ? Value : never;
 const listeners = new Set<() => void>();
-const activityState: { session: ActivitySession; lastResult: EventResult | null } = {
+const activityState: {
+  session: ActivitySession;
+  lastResult: EventResult | null;
+  lastPumpedResult: EventResult | null;
+} = {
   session: initialActivitySession,
   lastResult: null,
+  lastPumpedResult: null,
 };
 
 const publish = (next: ActivitySession) => {
@@ -377,6 +382,29 @@ const recordEngineStatus = (status: Parameters<typeof enginePhase>[0], clock: ()
     updateLifecycle(activityState.session, enginePhase(status), activityState.session.connection, clock()),
   );
 
+const pumpDaemonResult = (
+  current: EventResult,
+  clock: () => number,
+  pull: () => void,
+  resubscribe: () => void,
+) => {
+  if (current === activityState.lastPumpedResult) return;
+  activityState.lastPumpedResult = current;
+  if (current.waiting) return;
+  if (current._tag === "Failure") {
+    publish(
+      updateLifecycle(
+        resetActivityFolds(activityState.session),
+        activityState.session.engine,
+        "connecting",
+        clock(),
+      ),
+    );
+    return resubscribe();
+  }
+  if (current._tag === "Success" && !current.value.done) pull();
+};
+
 const subscribe = (listener: () => void, clock: () => number) => {
   const unsubscribeEngine = subscribeEngineStatus((status) => recordEngineStatus(status, clock));
   listeners.add(listener);
@@ -392,21 +420,10 @@ export function useActivitySession(clock: () => number = Date.now) {
   useAtomValue(daemonEventAtom);
   const pull = useAtomSet(daemonEventAtom);
   const resubscribe = useAtomRefresh(daemonEventAtom);
-  const pump = (current: EventResult) => {
-    if (current.waiting) return;
-    if (current._tag === "Failure") {
-      publish(
-        updateLifecycle(
-          resetActivityFolds(activityState.session),
-          activityState.session.engine,
-          "connecting",
-          clock(),
-        ),
-      );
-      return resubscribe();
-    }
-    if (current._tag === "Success" && !current.value.done) pull();
-  };
+  const pump = useCallback(
+    (current: EventResult) => pumpDaemonResult(current, clock, pull, resubscribe),
+    [clock, pull, resubscribe],
+  );
   useAtomSubscribe(daemonEventAtom, (result) => recordDaemonResult(result, clock), { immediate: true });
   useAtomSubscribe(daemonEventAtom, pump, { immediate: true });
   return useSyncExternalStore((listener) => subscribe(listener, clock), getSession);
