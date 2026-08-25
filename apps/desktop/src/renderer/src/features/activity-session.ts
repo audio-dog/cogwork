@@ -361,6 +361,12 @@ const publish = (next: ActivitySession) => {
   for (const listener of listeners) listener();
 };
 
+const resetForFreshSeed = () => {
+  activityState.lastResult = null;
+  activityState.lastPumpedResult = null;
+  publish(resetActivityFolds(activityState.session));
+};
+
 const recordDaemonResult = (result: EventResult, clock: () => number) => {
   if (result === activityState.lastResult) return;
   activityState.lastResult = result;
@@ -388,9 +394,9 @@ const pumpDaemonResult = (
   pull: () => void,
   resubscribe: () => void,
 ) => {
+  if (current.waiting) return;
   if (current === activityState.lastPumpedResult) return;
   activityState.lastPumpedResult = current;
-  if (current.waiting) return;
   if (current._tag === "Failure") {
     publish(
       updateLifecycle(
@@ -411,6 +417,7 @@ const subscribe = (listener: () => void, clock: () => number) => {
   return () => {
     listeners.delete(listener);
     unsubscribeEngine();
+    if (listeners.size === 0) resetForFreshSeed();
   };
 };
 
@@ -424,9 +431,10 @@ export function useActivitySession(clock: () => number = Date.now) {
     (current: EventResult) => pumpDaemonResult(current, clock, pull, resubscribe),
     [clock, pull, resubscribe],
   );
+  const sessionSubscribe = useCallback((listener: () => void) => subscribe(listener, clock), [clock]);
   useAtomSubscribe(daemonEventAtom, (result) => recordDaemonResult(result, clock), { immediate: true });
   useAtomSubscribe(daemonEventAtom, pump, { immediate: true });
-  return useSyncExternalStore((listener) => subscribe(listener, clock), getSession);
+  return useSyncExternalStore(sessionSubscribe, getSession);
 }
 
 export type BoardResult =
