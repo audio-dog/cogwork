@@ -4,9 +4,10 @@ import {
   type ActivityCategory,
   type ActivityRow,
   activityCategory,
+  activityNow,
   type NowState,
-  useActivityFeed,
-} from "../features/activity-source";
+  useActivitySession,
+} from "../features/activity-session";
 import { useNow } from "../features/use-now";
 import { useRightPanelStore } from "../store/right-panel";
 import { type FunnelFilterContextValue, funnelSelectionMatches, useFunnelSelection } from "./funnel-filter";
@@ -55,7 +56,8 @@ export function useActivityView() {
 }
 
 export function ActivityViewProvider({ children }: { children: ReactNode }) {
-  const feed = useActivityFeed();
+  const session = useActivitySession();
+  const feed = { now: activityNow(session), log: session.log };
   const clock = useNow();
   const openItem = useRightPanelStore((state) => state.openItem);
   const [query, setQuery] = useState("");
@@ -91,7 +93,7 @@ export function ActivityViewProvider({ children }: { children: ReactNode }) {
     openItem(
       entity.workspace,
       entity.type === "run" ? entity.workItem : entity.id,
-      entity.type === "run" ? entity.run : undefined,
+      entity.type === "run" ? entity.id : undefined,
     );
   };
   const openRun = (run: NowState["runs"][number]) => {
