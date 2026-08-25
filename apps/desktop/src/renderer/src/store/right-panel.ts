@@ -1,6 +1,7 @@
 import type { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { arrayMove } from "@dnd-kit/sortable";
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 type ToolKind = "attention" | "activity" | "terminal";
 
@@ -49,6 +50,16 @@ const fallbackActiveSurfaceId = (
   return surfaces.at(-1)?.id ?? null;
 };
 
+const persistedSurface = (surface: Surface) => {
+  if (surface.kind !== "item") return surface;
+  return {
+    id: surface.id,
+    kind: surface.kind,
+    workspace: surface.workspace,
+    workItem: surface.workItem,
+  };
+};
+
 const reorderSurfaces = (surfaces: readonly Surface[], activeId: SurfaceId, overId: SurfaceId) => {
   const activeIndex = surfaces.findIndex((surface) => surface.id === activeId);
   const overIndex = surfaces.findIndex((surface) => surface.id === overId);
@@ -78,31 +89,42 @@ const open = (surfaces: readonly Surface[], next: Surface) => ({
   surfaces: upsertSurface(surfaces, next),
 });
 
-export const useRightPanelStore = create<RightPanelState>((set) => ({
-  open: false,
-  maximized: false,
-  surfaces: [],
-  active: null,
-  togglePanel: () => set((state) => ({ open: !state.open, maximized: false })),
-  openItem: (workspace, workItem, run) =>
-    set((state) => open(state.surfaces, itemSurface(workspace, workItem, run))),
-  openTool: (kind) => set((state) => open(state.surfaces, { id: kind, kind })),
-  closeSurface: (id) =>
-    set((state) => {
-      const surfaces = state.surfaces.filter((surface) => surface.id !== id);
-      if (surfaces.length === state.surfaces.length) return state;
-      return { surfaces, active: fallbackActiveSurfaceId(surfaces, id, state.active) };
+export const useRightPanelStore = create<RightPanelState>()(
+  persist(
+    (set) => ({
+      open: false,
+      maximized: false,
+      surfaces: [],
+      active: null,
+      togglePanel: () => set((state) => ({ open: !state.open, maximized: false })),
+      openItem: (workspace, workItem, run) =>
+        set((state) => open(state.surfaces, itemSurface(workspace, workItem, run))),
+      openTool: (kind) => set((state) => open(state.surfaces, { id: kind, kind })),
+      closeSurface: (id) =>
+        set((state) => {
+          const surfaces = state.surfaces.filter((surface) => surface.id !== id);
+          if (surfaces.length === state.surfaces.length) return state;
+          return { surfaces, active: fallbackActiveSurfaceId(surfaces, id, state.active) };
+        }),
+      closeOtherSurfaces: (id) =>
+        set((state) => {
+          const surface = state.surfaces.find((entry) => entry.id === id);
+          if (!surface) return state;
+          return { surfaces: [surface], active: id };
+        }),
+      closeAllSurfaces: () => set({ surfaces: [], active: null }),
+      reorderSurface: (activeId, overId) =>
+        set((state) => ({ surfaces: reorderSurfaces(state.surfaces, activeId, overId) })),
+      setActive: (id) =>
+        set((state) => (state.surfaces.some((surface) => surface.id === id) ? { active: id } : state)),
+      toggleMaximized: () => set((state) => ({ maximized: !state.maximized })),
     }),
-  closeOtherSurfaces: (id) =>
-    set((state) => {
-      const surface = state.surfaces.find((entry) => entry.id === id);
-      if (!surface) return state;
-      return { surfaces: [surface], active: id };
-    }),
-  closeAllSurfaces: () => set({ surfaces: [], active: null }),
-  reorderSurface: (activeId, overId) =>
-    set((state) => ({ surfaces: reorderSurfaces(state.surfaces, activeId, overId) })),
-  setActive: (id) =>
-    set((state) => (state.surfaces.some((surface) => surface.id === id) ? { active: id } : state)),
-  toggleMaximized: () => set((state) => ({ maximized: !state.maximized })),
-}));
+    {
+      name: "right-panel",
+      partialize: (state) => ({
+        surfaces: state.surfaces.map(persistedSurface),
+        active: state.active,
+      }),
+    },
+  ),
+);
