@@ -1,0 +1,20 @@
+packages/contracts/CONTEXT.md
+  s_100147228de293::t_0683c8658d5bdf 98
+  s_100147228de293::t_4d5e86154ea8c3 69,99-100,104-106,109-110,115,117,120,124-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "f6352394524b3ba1608d24191116278d57985bc1",
+  "prompts": {},
+  "sessions": {
+    "s_100147228de293": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb8da924-469c-4d15-9429-c25b17ea5330",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
