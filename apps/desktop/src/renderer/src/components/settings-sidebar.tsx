@@ -17,26 +17,26 @@ import {
 } from "@cogwork/ui/components/sidebar";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftLine, RiCloseLine, RiSearchLine } from "@remixicon/react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   findSection,
   type SettingEntry,
+  type SettingsSection,
   searchSettings,
   settingsSections,
 } from "../features/settings-catalog";
-import { useActiveSectionId } from "../features/use-settings-route";
+import { useActiveSection } from "../features/use-settings-route";
 
-function SectionNav({ activeSectionId }: { activeSectionId: string }) {
-  const navigate = useNavigate();
+function SectionNav({ active }: { active?: SettingsSection }) {
   return (
     <SidebarMenu>
       {settingsSections.map((section) => (
         <SidebarMenuItem key={section.id}>
           <SidebarMenuButton
-            isActive={section.id === activeSectionId}
+            isActive={section.id === active?.id}
             tooltip={section.label}
-            onClick={() => navigate({ to: "/settings/$section", params: { section: section.id } })}
+            render={<Link {...section.link} />}
           >
             <section.icon />
             <span>{section.label}</span>
@@ -85,17 +85,15 @@ function SearchResults({ query, onSelect }: { query: string; onSelect: (entry: S
 
 export function SettingsSidebar() {
   const navigate = useNavigate();
-  const activeSectionId = useActiveSectionId();
+  const active = useActiveSection();
   const [query, setQuery] = useState("");
   const searching = query.trim() !== "";
 
   const openSetting = (entry: SettingEntry) => {
+    const section = findSection(entry.sectionId);
+    if (!section) return;
     setQuery("");
-    navigate({
-      to: "/settings/$section",
-      params: { section: entry.sectionId },
-      search: { focus: entry.id, jump: Date.now() },
-    });
+    navigate({ ...section.link, search: { focus: entry.id, jump: Date.now() } });
   };
 
   return (
@@ -135,7 +133,7 @@ export function SettingsSidebar() {
             {searching ? (
               <SearchResults query={query} onSelect={openSetting} />
             ) : (
-              <SectionNav activeSectionId={activeSectionId} />
+              <SectionNav active={active} />
             )}
           </SidebarGroup>
         </SidebarContent>

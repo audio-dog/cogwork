@@ -18,11 +18,12 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
 import { CompactEngineGate } from "./engine-gate";
+import { FileSurfaceBody, FileSurfaceTab } from "./file-surface";
 import { ItemSurfaceTab, ItemTab } from "./item-tab";
 import { SurfaceCatalogCards, SurfaceCatalogMenu } from "./surface-catalog";
 import { SurfaceTab } from "./surface-tab";
@@ -78,11 +79,16 @@ function GatedBody({ children }: { children: ReactNode }) {
 
 type Surface = RightPanelState["surfaces"][number];
 
-type SurfaceRenderers = {
-  [K in Surface["kind"]]: (surface: Extract<Surface, { kind: K }>) => ReactNode;
+/**
+ * Component references, not thunks. Calling a component as a function folds its output into the
+ * parent, so it gets no mount of its own — and switching surfaces could reuse the previous one's
+ * state. Rendering `<Body />` gives each surface a real identity, hook scope and error boundary.
+ */
+type SurfaceComponents = {
+  [K in Surface["kind"]]: ComponentType<{ surface: Extract<Surface, { kind: K }> }>;
 };
 
-const surfaceBodyByKind: SurfaceRenderers = {
+const surfaceBodyByKind: SurfaceComponents = {
   attention: () => (
     <GatedBody>
       <AttentionSurfaceBody />
@@ -94,25 +100,33 @@ const surfaceBodyByKind: SurfaceRenderers = {
     </GatedBody>
   ),
   terminal: () => <TerminalSurfaceBody />,
-  item: (surface) => (
+  // Not gated: a file is not a Run, so it does not wait on the engine.
+  file: ({ surface }) => <FileSurfaceBody contributionId={surface.contributionId} path={surface.path} />,
+  item: ({ surface }) => (
     <GatedBody>
       <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />
     </GatedBody>
   ),
 };
 
-const surfaceTabByKind: SurfaceRenderers = {
+const surfaceTabByKind: SurfaceComponents = {
   attention: () => <AttentionSurfaceTab />,
   activity: () => <ActivitySurfaceTab />,
   terminal: () => <TerminalSurfaceTab />,
-  item: (surface) => <ItemSurfaceTab {...surface} />,
+  file: ({ surface }) => <FileSurfaceTab id={surface.id} title={surface.title} />,
+  item: ({ surface }) => <ItemSurfaceTab {...surface} />,
 };
 
-const surfaceBody = <K extends Surface["kind"]>(surface: Extract<Surface, { kind: K }>) =>
-  surfaceBodyByKind[surface.kind](surface);
+// One contained cast: TypeScript cannot narrow the map and the surface together on a lookup.
+function SurfaceBody({ surface }: { surface: Surface }) {
+  const Body = surfaceBodyByKind[surface.kind] as ComponentType<{ surface: Surface }>;
+  return <Body surface={surface} />;
+}
 
-const surfaceTab = <K extends Surface["kind"]>(surface: Extract<Surface, { kind: K }>) =>
-  surfaceTabByKind[surface.kind](surface);
+function SurfaceTabFor({ surface }: { surface: Surface }) {
+  const Tab = surfaceTabByKind[surface.kind] as ComponentType<{ surface: Surface }>;
+  return <Tab surface={surface} />;
+}
 
 function SortableSurfaceTab({ surface }: { surface: Surface }) {
   const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
@@ -128,7 +142,9 @@ function SortableSurfaceTab({ surface }: { surface: Surface }) {
       {...attributes}
       {...listeners}
     >
-      <SurfaceTab.ContextMenu id={surface.id}>{surfaceTab(surface)}</SurfaceTab.ContextMenu>
+      <SurfaceTab.ContextMenu id={surface.id}>
+        <SurfaceTabFor surface={surface} />
+      </SurfaceTab.ContextMenu>
     </div>
   );
 }
@@ -179,7 +195,9 @@ export function RightPanel() {
           <SurfaceCatalogMenu />
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">{surfaceBody(current)}</div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <SurfaceBody surface={current} />
+      </div>
     </div>
   );
 }

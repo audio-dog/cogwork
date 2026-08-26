@@ -12,8 +12,17 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppConnectionsRouteImport } from './routes/_app/connections'
+import { Route as AppCustomizeRouteRouteImport } from './routes/_app/customize/route'
+import { Route as AppWorkflowsRouteImport } from './routes/_app/workflows'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
-import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
+import { Route as SettingsSplatRouteImport } from './routes/settings/$'
+import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
+import { Route as SettingsEngineRouteImport } from './routes/settings/engine'
+import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
+import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
+import { Route as AppCustomizeFacetRouteImport } from './routes/_app/customize/$facet'
+import { Route as AppCustomizePluginPluginIdRouteImport } from './routes/_app/customize/plugin.$pluginId'
 
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/_app',
@@ -29,48 +38,153 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppConnectionsRoute = AppConnectionsRouteImport.update({
+  id: '/connections',
+  path: '/connections',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppCustomizeRouteRoute = AppCustomizeRouteRouteImport.update({
+  id: '/customize',
+  path: '/customize',
+  getParentRoute: () => AppRouteRoute,
+} as any)
+const AppWorkflowsRoute = AppWorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
-const SettingsSectionRoute = SettingsSectionRouteImport.update({
-  id: '/$section',
-  path: '/$section',
+const SettingsSplatRoute = SettingsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
+const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsEngineRoute = SettingsEngineRouteImport.update({
+  id: '/engine',
+  path: '/engine',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const AppCustomizeIndexRoute = AppCustomizeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppCustomizeRouteRoute,
+} as any)
+const AppCustomizeFacetRoute = AppCustomizeFacetRouteImport.update({
+  id: '/$facet',
+  path: '/$facet',
+  getParentRoute: () => AppCustomizeRouteRoute,
+} as any)
+const AppCustomizePluginPluginIdRoute =
+  AppCustomizePluginPluginIdRouteImport.update({
+    id: '/plugin/$pluginId',
+    path: '/plugin/$pluginId',
+    getParentRoute: () => AppCustomizeRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsRouteRouteWithChildren
-  '/settings/$section': typeof SettingsSectionRoute
+  '/customize': typeof AppCustomizeRouteRouteWithChildren
+  '/connections': typeof AppConnectionsRoute
+  '/workflows': typeof AppWorkflowsRoute
+  '/settings/$': typeof SettingsSplatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/engine': typeof SettingsEngineRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/settings/': typeof SettingsIndexRoute
+  '/customize/$facet': typeof AppCustomizeFacetRoute
+  '/customize/': typeof AppCustomizeIndexRoute
+  '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRoutesByTo {
-  '/settings/$section': typeof SettingsSectionRoute
+  '/connections': typeof AppConnectionsRoute
+  '/workflows': typeof AppWorkflowsRoute
+  '/settings/$': typeof SettingsSplatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/engine': typeof SettingsEngineRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
+  '/customize/$facet': typeof AppCustomizeFacetRoute
+  '/customize': typeof AppCustomizeIndexRoute
+  '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
-  '/settings/$section': typeof SettingsSectionRoute
+  '/_app/customize': typeof AppCustomizeRouteRouteWithChildren
+  '/_app/connections': typeof AppConnectionsRoute
+  '/_app/workflows': typeof AppWorkflowsRoute
+  '/settings/$': typeof SettingsSplatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/engine': typeof SettingsEngineRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/_app/customize/$facet': typeof AppCustomizeFacetRoute
+  '/_app/customize/': typeof AppCustomizeIndexRoute
+  '/_app/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/settings/$section' | '/settings/'
+  fullPaths:
+    | '/'
+    | '/settings'
+    | '/customize'
+    | '/connections'
+    | '/workflows'
+    | '/settings/$'
+    | '/settings/appearance'
+    | '/settings/engine'
+    | '/settings/general'
+    | '/settings/'
+    | '/customize/$facet'
+    | '/customize/'
+    | '/customize/plugin/$pluginId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/settings/$section' | '/' | '/settings'
+  to:
+    | '/connections'
+    | '/workflows'
+    | '/settings/$'
+    | '/settings/appearance'
+    | '/settings/engine'
+    | '/settings/general'
+    | '/'
+    | '/settings'
+    | '/customize/$facet'
+    | '/customize'
+    | '/customize/plugin/$pluginId'
   id:
     | '__root__'
     | '/_app'
     | '/settings'
-    | '/settings/$section'
+    | '/_app/customize'
+    | '/_app/connections'
+    | '/_app/workflows'
+    | '/settings/$'
+    | '/settings/appearance'
+    | '/settings/engine'
+    | '/settings/general'
     | '/_app/'
     | '/settings/'
+    | '/_app/customize/$facet'
+    | '/_app/customize/'
+    | '/_app/customize/plugin/$pluginId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -101,6 +215,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/connections': {
+      id: '/_app/connections'
+      path: '/connections'
+      fullPath: '/connections'
+      preLoaderRoute: typeof AppConnectionsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/customize': {
+      id: '/_app/customize'
+      path: '/customize'
+      fullPath: '/customize'
+      preLoaderRoute: typeof AppCustomizeRouteRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
+    '/_app/workflows': {
+      id: '/_app/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof AppWorkflowsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/settings/': {
       id: '/settings/'
       path: '/'
@@ -108,21 +243,84 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsIndexRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
-    '/settings/$section': {
-      id: '/settings/$section'
-      path: '/$section'
-      fullPath: '/settings/$section'
-      preLoaderRoute: typeof SettingsSectionRouteImport
+    '/settings/$': {
+      id: '/settings/$'
+      path: '/$'
+      fullPath: '/settings/$'
+      preLoaderRoute: typeof SettingsSplatRouteImport
       parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/appearance': {
+      id: '/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/engine': {
+      id: '/settings/engine'
+      path: '/engine'
+      fullPath: '/settings/engine'
+      preLoaderRoute: typeof SettingsEngineRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/general': {
+      id: '/settings/general'
+      path: '/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof SettingsGeneralRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/_app/customize/': {
+      id: '/_app/customize/'
+      path: '/'
+      fullPath: '/customize/'
+      preLoaderRoute: typeof AppCustomizeIndexRouteImport
+      parentRoute: typeof AppCustomizeRouteRoute
+    }
+    '/_app/customize/$facet': {
+      id: '/_app/customize/$facet'
+      path: '/$facet'
+      fullPath: '/customize/$facet'
+      preLoaderRoute: typeof AppCustomizeFacetRouteImport
+      parentRoute: typeof AppCustomizeRouteRoute
+    }
+    '/_app/customize/plugin/$pluginId': {
+      id: '/_app/customize/plugin/$pluginId'
+      path: '/plugin/$pluginId'
+      fullPath: '/customize/plugin/$pluginId'
+      preLoaderRoute: typeof AppCustomizePluginPluginIdRouteImport
+      parentRoute: typeof AppCustomizeRouteRoute
     }
   }
 }
 
+interface AppCustomizeRouteRouteChildren {
+  AppCustomizeFacetRoute: typeof AppCustomizeFacetRoute
+  AppCustomizeIndexRoute: typeof AppCustomizeIndexRoute
+  AppCustomizePluginPluginIdRoute: typeof AppCustomizePluginPluginIdRoute
+}
+
+const AppCustomizeRouteRouteChildren: AppCustomizeRouteRouteChildren = {
+  AppCustomizeFacetRoute: AppCustomizeFacetRoute,
+  AppCustomizeIndexRoute: AppCustomizeIndexRoute,
+  AppCustomizePluginPluginIdRoute: AppCustomizePluginPluginIdRoute,
+}
+
+const AppCustomizeRouteRouteWithChildren =
+  AppCustomizeRouteRoute._addFileChildren(AppCustomizeRouteRouteChildren)
+
 interface AppRouteRouteChildren {
+  AppCustomizeRouteRoute: typeof AppCustomizeRouteRouteWithChildren
+  AppConnectionsRoute: typeof AppConnectionsRoute
+  AppWorkflowsRoute: typeof AppWorkflowsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppCustomizeRouteRoute: AppCustomizeRouteRouteWithChildren,
+  AppConnectionsRoute: AppConnectionsRoute,
+  AppWorkflowsRoute: AppWorkflowsRoute,
   AppIndexRoute: AppIndexRoute,
 }
 
@@ -131,12 +329,18 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
 )
 
 interface SettingsRouteRouteChildren {
-  SettingsSectionRoute: typeof SettingsSectionRoute
+  SettingsSplatRoute: typeof SettingsSplatRoute
+  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsEngineRoute: typeof SettingsEngineRoute
+  SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
-  SettingsSectionRoute: SettingsSectionRoute,
+  SettingsSplatRoute: SettingsSplatRoute,
+  SettingsAppearanceRoute: SettingsAppearanceRoute,
+  SettingsEngineRoute: SettingsEngineRoute,
+  SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 
