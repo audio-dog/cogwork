@@ -193,6 +193,30 @@ const contributions: readonly Contribution[] = [
   },
 
   {
+    // Yours, on the machine, and nothing to do with a Plugin. Without one of these the "User"
+    // section never appears, which is the whole thing the source grouping exists to show.
+    id: "local/skill/commit-style",
+    kind: "skill",
+    localName: "commit-style",
+    authority: { _tag: "local" },
+    summary: "How you like commit messages written.",
+    file: "~/.cogwork/skills/commit-style/SKILL.md",
+    definedAt: "runtime-host",
+    load: { _tag: "loaded" },
+    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+  },
+  {
+    id: "local/command/scratch",
+    kind: "command",
+    localName: "scratch",
+    authority: { _tag: "local" },
+    summary: "Opens a scratch prompt you keep on this machine.",
+    file: "~/.cogwork/commands/scratch.md",
+    definedAt: "runtime-host",
+    load: { _tag: "loaded" },
+    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+  },
+  {
     // Same local name as `plugin:linear/mcp/linear`, and a different contribution. Identity
     // carries Authority, so the set composes by union and cogwork never reconciles the two.
     id: "local/mcp/linear",

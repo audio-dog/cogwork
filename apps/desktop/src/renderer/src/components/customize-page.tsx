@@ -16,7 +16,7 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiBox3Line, RiPulseLine, RiSearchLine } from "@remixicon/react";
 import { useState } from "react";
 import { contributionKinds, kindLabelsPlural } from "../features/configuration-model";
-import { allPlaceKeys, type Facet, groupByPlace, kindCount } from "../features/customize-places";
+import { allPlaceKeys, type Facet, groupContributions, kindCount } from "../features/customize-places";
 import { kindIcons } from "./configuration-atoms";
 import { ListRows, ListSection } from "./customize-list";
 import { CustomizePlaceMenu } from "./customize-place-menu";
@@ -29,7 +29,7 @@ export function CustomizePage() {
   const [places, setPlaces] = useState<readonly string[]>(allPlaceKeys);
   const [query, setQuery] = useState("");
 
-  const groups = groupByPlace(facet, places, query);
+  const groups = groupContributions(facet, places, query);
   const plugins = facet === "plugins";
   const FacetIcon = plugins ? RiBox3Line : kindIcons[facet];
 
@@ -121,8 +121,9 @@ export function CustomizePage() {
             </EmptyHeader>
           </Empty>
         ) : (
-          // One section per place. The filter says which places are in view; the heading says which
-          // one a row came from, which is what makes two places on screen at once readable.
+          // One section per source. A Plugin's contributions are its own, so a Skill it ships never
+          // sits in the same list as one you wrote — which place-grouping alone could not do,
+          // because an install is machine-local and puts them all at the machine.
           <div className="flex flex-col gap-6">
             {groups.map((group) => (
               <ListSection key={group.key} title={group.label} count={group.rows.length}>

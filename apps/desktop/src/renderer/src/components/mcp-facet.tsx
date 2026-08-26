@@ -6,21 +6,21 @@
 //
 // Readiness is the Engine's own conclusion, so it is reported here and edited nowhere. The switch is
 // the only thing a person changes, and the dialog behind the row says the rest.
+//
+// No catalog section: what a person adds is a Plugin, and a server arrives with one.
 
-import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { Switch } from "@cogwork/ui/components/switch";
 import { RiServerLine } from "@remixicon/react";
 import { draftCellAt, withDraft } from "../features/configuration-draft";
-import { type CatalogEntry, type Contribution, scopeCopy } from "../features/configuration-model";
+import { type Contribution, scopeCopy } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { enableScopeFor, resolveEnablement } from "../features/configuration-resolve";
-import { addedEntryIds } from "../features/plugins-view";
 import { useConfigurationDraftStore } from "../store/configuration-draft";
 import { ContributionRow } from "./contribution-row";
-import { ListRow, ListRows, ListSection } from "./customize-list";
+import { ListRows, ListSection } from "./customize-list";
 
-const { contributions, catalog, workspaces } = placeholderConfiguration;
+const { contributions, workspaces } = placeholderConfiguration;
 
 const servers = contributions.filter((contribution) => contribution.kind === "mcp-server");
 
@@ -69,29 +69,9 @@ function ServerRow({ contribution }: { contribution: Contribution }) {
   );
 }
 
-function CatalogRow({ entry }: { entry: CatalogEntry }) {
-  return (
-    <ListRow
-      icon={<RiServerLine />}
-      title={entry.name}
-      detail={entry.summary}
-      trailing={
-        <Button size="sm" variant="outline">
-          Add
-        </Button>
-      }
-    />
-  );
-}
-
 export function McpFacet() {
   const attention = servers.filter(troubled);
   const connected = servers.filter((contribution) => !troubled(contribution));
-  const added = addedEntryIds();
-  const offered = catalog.filter(
-    (entry) => entry.contributes.includes("mcp-server") && !added.includes(entry.id),
-  );
-
   return (
     <div className="flex flex-col gap-6">
       {attention.length > 0 ? (
@@ -123,31 +103,6 @@ export function McpFacet() {
           </ListRows>
         )}
       </ListSection>
-
-      <ListSection title="Catalog" count={offered.length}>
-        {offered.length === 0 ? (
-          <Empty className="py-10">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <RiServerLine />
-              </EmptyMedia>
-              <EmptyTitle>You have them all</EmptyTitle>
-              <EmptyDescription>Every Plugin with a server is already added.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <ListRows>
-            {offered.map((entry) => (
-              <CatalogRow key={entry.id} entry={entry} />
-            ))}
-          </ListRows>
-        )}
-      </ListSection>
-
-      <p className="text-xs text-muted-foreground">
-        Whether a server is reachable is the Engine's call, not a setting. The switch says whether you want
-        it; the status says whether it works.
-      </p>
     </div>
   );
 }

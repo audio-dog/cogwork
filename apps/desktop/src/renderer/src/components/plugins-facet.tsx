@@ -109,12 +109,6 @@ export function PluginsFacet() {
           ))}
         </ListRows>
       </ListSection>
-
-      <p className="text-xs text-muted-foreground">
-        {/* Worth stating on the page, because the shape of the list depends on it. */}
-        Every Plugin is built by us and ships with cogwork. Adding one turns on what it contributes; it does
-        not download anything.
-      </p>
     </div>
   );
 }

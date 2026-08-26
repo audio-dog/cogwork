@@ -20,7 +20,7 @@ import { definedScope } from "./configuration-resolve";
 
 export type Facet = "plugins" | ContributionKind;
 
-const { contributions, workspaces } = placeholderConfiguration;
+const { contributions, workspaces, plugins } = placeholderConfiguration;
 
 export const workspaceScopeKinds: readonly ScopeKind[] = ["workspace-input", "private-overlay"];
 
@@ -99,33 +99,65 @@ export function summarize(places: readonly string[]): string {
 /** How many places exist, for a menu footer that reports the selection honestly. */
 export const placeCount = allPlaceKeys.length;
 
-export interface PlaceGroup {
+export interface ContributionGroup {
   readonly key: string;
   readonly label: string;
   readonly rows: readonly Contribution[];
 }
 
 /**
- * The visible contributions, grouped by the place they live in.
+ * The visible contributions, grouped by where they came from.
  *
- * The filter says which places are in view; the grouping says which one each row came from. Cursor
- * does the same on its Subagents and Hooks facets, and it is what makes a union filter worth having
- * — two places on screen at once are only useful if you can tell them apart.
+ * **Author first, then place.** Grouping by place alone put a Plugin's Skill in the same list as one
+ * you wrote yourself, because an install is machine-local and so every Plugin contribution lives at
+ * the machine. The thing a person actually wants to tell apart is *who made this*, so a Plugin gets
+ * its own section and only your own files are grouped by the place they sit in.
  *
- * Empty groups are dropped. A checked place with nothing in it is not worth a heading.
+ * Order runs yours, ours, each Plugin's, then each repository's — nearest to furthest from you.
+ * Empty groups are dropped; a checked place with nothing in it is not worth a heading.
  */
-export function groupByPlace(facet: Facet, places: readonly string[], query: string): readonly PlaceGroup[] {
+export function groupContributions(
+  facet: Facet,
+  places: readonly string[],
+  query: string,
+): readonly ContributionGroup[] {
   const visible = visibleContributions(facet, places, query);
-  return allPlaces
+
+  const mine = visible.filter(
+    (contribution) => contribution.authority._tag === "local" && contribution.definedAt === "runtime-host",
+  );
+  const builtIn = visible.filter((contribution) => contribution.authority._tag === "engine");
+
+  const fromPlugins = [...plugins]
+    .toSorted((a, b) => a.name.localeCompare(b.name))
+    .map((plugin) => ({
+      key: `plugin:${plugin.record.pluginId}`,
+      label: plugin.name,
+      rows: visible.filter(
+        (contribution) =>
+          contribution.authority._tag === "plugin" &&
+          contribution.authority.pluginId === plugin.record.pluginId,
+      ),
+    }));
+
+  const inRepos = allPlaces
+    .filter((place) => place.workspaceId !== undefined)
     .map((place) => {
       const key = scopeKey(place);
       const workspace = workspaces.find((entry) => entry.id === place.workspaceId);
-      const name = scopeCopy[place.kind].name;
       return {
         key,
-        label: workspace ? `${workspace.name} · ${name}` : name,
-        rows: visible.filter((contribution) => placeOf(contribution) === key),
+        label: `${workspace?.name ?? "Unknown"} · ${scopeCopy[place.kind].name}`,
+        rows: visible.filter(
+          (contribution) => contribution.authority._tag !== "plugin" && placeOf(contribution) === key,
+        ),
       };
-    })
-    .filter((group) => group.rows.length > 0);
+    });
+
+  return [
+    { key: "runtime-host", label: scopeCopy["runtime-host"].name, rows: mine },
+    { key: "engine", label: "Built in", rows: builtIn },
+    ...fromPlugins,
+    ...inRepos,
+  ].filter((group) => group.rows.length > 0);
 }

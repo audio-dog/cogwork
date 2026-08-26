@@ -9,7 +9,7 @@ import {
 import {
   allPlaceKeys,
   allPlaces,
-  groupByPlace,
+  groupContributions,
   placeOf,
   summarize,
   toggle,
@@ -116,34 +116,59 @@ describe("toggle", () => {
   });
 });
 
-describe("groupByPlace", () => {
+describe("groupContributions", () => {
   it("drops empty groups — a checked place with nothing in it needs no heading", () => {
-    const groups = groupByPlace("hook", allPlaceKeys, "");
+    const groups = groupContributions("command", allPlaceKeys, "");
     for (const group of groups) expect(group.rows.length).toBeGreaterThan(0);
   });
 
-  it("names a workspace group by its workspace and its place", () => {
-    const groups = groupByPlace("skill", allPlaceKeys, "");
-    const labels = groups.map((group) => group.label);
+  it("gives a Plugin its own section instead of lumping it in with your own files", () => {
+    // Every Plugin contribution sits at the machine, because an install is machine-local — so
+    // grouping by place alone could not tell a Plugin's Skill from one you wrote.
+    const groups = groupContributions("skill", allPlaceKeys, "");
+    const byPlugin = groups.find((group) => group.label === "GitHub review pack");
+    expect(byPlugin?.rows.map((row) => row.id)).toEqual(["plugin:gh-review/skill/pr-summary"]);
+    // And nothing a Plugin ships appears in any group that is not that Plugin's.
+    const elsewhere = groups
+      .filter((group) => group.label !== "GitHub review pack")
+      .flatMap((group) => group.rows);
+    expect(elsewhere.every((row) => row.authority._tag !== "plugin")).toBe(true);
+  });
+
+  it("keeps your own machine-level files in the User group", () => {
+    const groups = groupContributions("skill", allPlaceKeys, "");
+    const mine = groups.find((group) => group.label === "User");
+    expect(mine?.rows.map((row) => row.id)).toEqual(["local/skill/commit-style"]);
+  });
+
+  it("names engine-authored contributions as built in", () => {
+    const groups = groupContributions("rules", allPlaceKeys, "");
+    const builtIn = groups.find((group) => group.label === "Built in");
+    expect(builtIn?.rows.map((row) => row.id)).toEqual(["engine/rules/house-style"]);
+  });
+
+  it("orders groups from nearest to furthest — yours, ours, plugins', repos'", () => {
+    const labels = groupContributions("rules", allPlaceKeys, "").map((group) => group.label);
+    expect(labels.indexOf("Built in")).toBeLessThan(labels.indexOf("GitHub review pack"));
+    expect(labels.indexOf("GitHub review pack")).toBeLessThan(labels.indexOf("clanker-forge · Everyone"));
+  });
+
+  it("names a repository group by its workspace and its place", () => {
+    const labels = groupContributions("skill", allPlaceKeys, "").map((group) => group.label);
     expect(labels).toContain("cogwork · Everyone");
     expect(labels).toContain("cogwork · Just me");
   });
 
-  it("labels the machine group with the machine's own name", () => {
-    const groups = groupByPlace("mcp-server", allPlaceKeys, "");
-    expect(groups.map((group) => group.label)).toContain("User");
-  });
-
   it("puts every visible contribution in exactly one group", () => {
     const visible = visibleContributions("skill", allPlaceKeys, "");
-    const grouped = groupByPlace("skill", allPlaceKeys, "").flatMap((group) => group.rows);
+    const grouped = groupContributions("skill", allPlaceKeys, "").flatMap((group) => group.rows);
     expect(grouped).toHaveLength(visible.length);
     expect(new Set(grouped.map((row) => row.id)).size).toBe(visible.length);
   });
 
   it("honours the place filter", () => {
     const repo = scopeKey({ kind: "workspace-input", workspaceId: cogworkWorkspaceId });
-    const groups = groupByPlace("skill", [repo], "");
+    const groups = groupContributions("skill", [repo], "");
     expect(groups).toHaveLength(1);
     expect(groups[0].label).toBe("cogwork · Everyone");
   });
