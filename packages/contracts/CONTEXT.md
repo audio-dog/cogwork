@@ -95,9 +95,9 @@ A Plugin is **a collection of contributions and nothing more**: it contributes n
 _Avoid_: Capability (retired — there is no umbrella noun), component, marketplace listing, Plugin enablement
 
 **Install record**:
-The authority for *this Plugin is installed*, held in the Settings profile. Keyed by `pluginId` alone, so **one resolved identity is installed at a time** — a second would give two contributions the same `<authority>/<kind>/<localName>`, which is the *ambiguous* class. It carries the Plugin source, the resolved identity, whether that identity is pinned, the owning `Principal`, and a revision for stale-write detection. Reverting is an install at a named resolved identity, not a distinct operation, so no install history is kept.
+The authority for *this Plugin is installed*, held in the Settings profile. Keyed by `pluginId` alone, so **one resolved identity is installed at a time** — a second would give two contributions the same `<authority>/<kind>/<localName>`, which is the *ambiguous* class. It carries the Plugin source, the resolved identity, the owning `Principal`, and a revision for stale-write detection. Reverting is an install at a named resolved identity, not a distinct operation, so no install history is kept.
 Update may rewrite the resolved identity and the revision, and **never** the `pluginId` or the Plugin source. A source that changes under a stable name is a proposal that needs an explicit act, because the source is the provenance the plugin layer is trusted by.
-_Avoid_: Plugin (the bundle, not the record), install cache, provisioned path, Plugin state
+_Avoid_: Plugin (the bundle, not the record), install cache, provisioned path, Plugin state, `pinned` (retired — see **Plugins**)
 
 **Plugin source**:
 Where a Plugin's files come from. Two members: an entry in the **Plugin catalog**, or a local path. Both resolve to one identity scheme and neither is copied into the record — the manifest points at files either way, and placing those files on a host is engine-owned provision. A local path is added explicitly and never found by scanning a directory.
@@ -110,9 +110,9 @@ Qualified because bare *catalog* is spent twice — the desktop's **Surface cata
 _Avoid_: Marketplace, registry, Surface catalog, Model catalog, index
 
 **Plugins**:
-The surface that owns Plugin **membership** — install, update, pin, uninstall — and the setup that follows an install. It is the only surface permitted to change what is installed.
+The surface that owns Plugin **membership** — install, update, uninstall — and the setup that follows an install. It is the only surface permitted to change what is installed.
 "Permitted" is a **client-surface rule, and the daemon does not enforce it**: it sees one `Principal` and cannot tell which panel called. What holds the split is the act list — membership and settings are different commands, so a surface that calls only settings commands has no branch that could change membership. Do not build a caller-kind check to satisfy this line.
-_Avoid_: Marketplace, Customize, Plugin store; and the lowercase plural *plugins*, which means the bundles
+_Avoid_: Marketplace, Customize, Plugin store; `pin` (retired — no harness exposes version pinning to a person, and every update is already an explicit, declinable act); and the lowercase plural *plugins*, which means the bundles
 
 **Customize**:
 The surface that owns **contribution settings** — a contribution's on / off, and Operation settings. The kind is the view and the authority is a badge on the row. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
