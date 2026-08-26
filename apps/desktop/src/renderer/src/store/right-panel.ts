@@ -15,7 +15,19 @@ type ItemSurface = {
   readonly runId?: RunId;
 };
 
-type Surface = ToolSurface | ItemSurface;
+/**
+ * A file open in the panel. The first surface that is not about a Run — a placeholder for the Files
+ * feature, which will own reading and editing anything on disk. Keyed by path, so opening the same
+ * file twice reuses its tab.
+ */
+type FileSurface = {
+  readonly id: `file:${string}`;
+  readonly kind: "file";
+  readonly path: string;
+  readonly title: string;
+};
+
+type Surface = ToolSurface | ItemSurface | FileSurface;
 
 type SurfaceId = Surface["id"];
 
@@ -33,6 +45,13 @@ const itemSurface = (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId):
   workspace,
   workItem,
   ...runFields(run),
+});
+
+const fileSurface = (path: string, title: string): FileSurface => ({
+  id: `file:${path}`,
+  kind: "file",
+  path,
+  title,
 });
 
 const upsertSurface = (surfaces: readonly Surface[], next: Surface) => {
@@ -75,6 +94,7 @@ export interface RightPanelState {
   readonly togglePanel: () => void;
   readonly openItem: (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId) => void;
   readonly openTool: (kind: ToolKind) => void;
+  readonly openFile: (path: string, title: string) => void;
   readonly closeSurface: (id: SurfaceId) => void;
   readonly closeOtherSurfaces: (id: SurfaceId) => void;
   readonly closeAllSurfaces: () => void;
@@ -100,6 +120,7 @@ export const useRightPanelStore = create<RightPanelState>()(
       openItem: (workspace, workItem, run) =>
         set((state) => open(state.surfaces, itemSurface(workspace, workItem, run))),
       openTool: (kind) => set((state) => open(state.surfaces, { id: kind, kind })),
+      openFile: (path, title) => set((state) => open(state.surfaces, fileSurface(path, title))),
       closeSurface: (id) =>
         set((state) => {
           const surfaces = state.surfaces.filter((surface) => surface.id !== id);

@@ -23,6 +23,7 @@ import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";
 import { CompactEngineGate } from "./engine-gate";
+import { FileSurfaceBody, FileSurfaceTab } from "./file-surface";
 import { ItemSurfaceTab, ItemTab } from "./item-tab";
 import { SurfaceCatalogCards, SurfaceCatalogMenu } from "./surface-catalog";
 import { SurfaceTab } from "./surface-tab";
@@ -94,6 +95,8 @@ const surfaceBodyByKind: SurfaceRenderers = {
     </GatedBody>
   ),
   terminal: () => <TerminalSurfaceBody />,
+  // Not gated: a file is not a Run, so it does not wait on the engine.
+  file: (surface) => <FileSurfaceBody path={surface.path} />,
   item: (surface) => (
     <GatedBody>
       <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />
@@ -105,6 +108,7 @@ const surfaceTabByKind: SurfaceRenderers = {
   attention: () => <AttentionSurfaceTab />,
   activity: () => <ActivitySurfaceTab />,
   terminal: () => <TerminalSurfaceTab />,
+  file: (surface) => <FileSurfaceTab id={surface.id} title={surface.title} />,
   item: (surface) => <ItemSurfaceTab {...surface} />,
 };
 

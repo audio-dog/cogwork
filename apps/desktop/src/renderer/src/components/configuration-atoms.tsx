@@ -22,7 +22,6 @@ import type { ComponentType } from "react";
 import {
   type Authority,
   authorityLabel,
-  type CatalogStatus,
   type ContributionKind,
   type Diagnostic,
   diagnosticLabels,
@@ -78,19 +77,6 @@ export function ReadinessBadge({ readiness }: { readiness: McpReadiness }) {
     <Tooltip>
       <TooltipTrigger render={<Badge variant="destructive" />}>Not ready</TooltipTrigger>
       <TooltipContent className="max-w-80">{readiness.reason}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-export function CatalogStatusBadge({ status }: { status: CatalogStatus }) {
-  if (status._tag === "active") return null;
-  const variant = status._tag === "deleted" ? "destructive" : "secondary";
-  const label = status._tag === "deleted" ? "Withdrawn" : "Deprecated";
-  if (!status.message) return <Badge variant={variant}>{label}</Badge>;
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<Badge variant={variant} />}>{label}</TooltipTrigger>
-      <TooltipContent className="max-w-80">{status.message}</TooltipContent>
     </Tooltip>
   );
 }

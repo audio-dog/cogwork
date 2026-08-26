@@ -226,33 +226,9 @@ export interface InstallRecord {
   readonly pluginId: string;
   readonly source: PluginSource;
   readonly resolvedIdentity: string;
-  readonly pinned: boolean;
   readonly principal: string;
   readonly revision: number;
   readonly installedAt: string;
-}
-
-/**
- * Update state. `staged` is ADR 0014's atomic provision seen mid-flight: the bytes are at a key
- * nothing points at, and one act accepts or declines them.
- */
-export type UpdateState =
-  | { readonly _tag: "current" }
-  | { readonly _tag: "available"; readonly resolvedIdentity: string }
-  | { readonly _tag: "staged"; readonly resolvedIdentity: string; readonly reach: ReachDiff };
-
-/**
- * A diff of reach over the contributions currently **on** — the only ones that run under the new
- * bytes with no further act. Additions and drops are enumerated beside it without their reach.
- */
-export interface ReachDiff {
-  readonly changed: readonly {
-    readonly contributionId: string;
-    readonly before: string;
-    readonly after: string;
-  }[];
-  readonly added: readonly { readonly contributionId: string; readonly kind: ContributionKind }[];
-  readonly dropped: readonly { readonly contributionId: string; readonly kind: ContributionKind }[];
 }
 
 /**
@@ -273,7 +249,6 @@ export interface InstalledPlugin {
   readonly permissions: readonly PermissionRow[];
   /** Names a required Connection and nothing about the grant. */
   readonly requiredConnections: readonly string[];
-  readonly update: UpdateState;
   readonly setup: readonly SetupStep[];
 }
 
@@ -284,32 +259,17 @@ export interface SetupStep {
   readonly done: boolean;
 }
 
-export type CatalogStatus =
-  | { readonly _tag: "active" }
-  | { readonly _tag: "deprecated"; readonly message?: string }
-  | { readonly _tag: "deleted"; readonly message?: string };
-
+/**
+ * One first-party Plugin cogwork ships. No digest, no status, no publisher: the catalog is a
+ * document in the app, so there is nothing to fetch, nothing to go stale and nobody to withdraw
+ * anything. It lists what you can turn on, and whether you already have.
+ */
 export interface CatalogEntry {
   readonly id: string;
   readonly name: string;
   readonly summary: string;
-  readonly source: PluginSource;
-  /** Computed, not authored — so it can only be stale, never in disagreement. */
-  readonly digest: string;
-  readonly status: CatalogStatus;
   readonly contributes: readonly ContributionKind[];
 }
-
-/** Three arms, because two of them must not render alike (#125). */
-export type CatalogRead =
-  | { readonly _tag: "fetched"; readonly at: string; readonly entries: readonly CatalogEntry[] }
-  | {
-      readonly _tag: "stale";
-      readonly at: string;
-      readonly entries: readonly CatalogEntry[];
-      readonly lastFailure: string;
-    }
-  | { readonly _tag: "never-fetched" };
 
 export interface Workspace {
   readonly id: WorkspaceId;
@@ -383,7 +343,7 @@ export interface ConfigurationPicture {
   readonly workspaces: readonly Workspace[];
   readonly plugins: readonly InstalledPlugin[];
   readonly contributions: readonly Contribution[];
-  readonly catalog: CatalogRead;
+  readonly catalog: readonly CatalogEntry[];
   readonly workflows: readonly Workflow[];
   readonly operations: readonly Operation[];
   readonly limits: DaemonLimits;

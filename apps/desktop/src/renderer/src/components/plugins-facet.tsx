@@ -1,24 +1,17 @@
-// The Plugins facet: what is installed, what needs you, and what is on offer.
+// The Plugins facet: what is on, what needs you, and what else ships with cogwork.
 //
-// Grouped by status rather than laid out flat, because a row that needs nothing said about it
-// should not compete with one holding staged bytes. A row leads to the Plugin's own page; the
-// section header holds the acts that belong to the whole list.
+// Every Plugin is first-party. There is no marketplace, no update to stage, decline or pin, and no
+// catalog to fetch — the catalog is a document in the app. So the only states a row can be in are
+// *fine*, *its file will not load*, and *its setup is unfinished*.
 
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
-import { RiAddLine, RiBox3Line, RiDownloadLine, RiErrorWarningLine, RiLoopLeftLine } from "@remixicon/react";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
+import { RiBox3Line } from "@remixicon/react";
 import { useNavigate } from "@tanstack/react-router";
 import type { CatalogEntry, InstalledPlugin } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
-import {
-  attentionAction,
-  attentionLine,
-  attentionOf,
-  needsAttention,
-  sourceLine,
-} from "../features/plugins-view";
-import { CatalogStatusBadge, IdentityBadge } from "./configuration-atoms";
+import { attentionAction, attentionLine, attentionOf, needsAttention } from "../features/plugins-view";
 import { ListRow, ListRows, ListSection } from "./customize-list";
 
 const { plugins, catalog } = placeholderConfiguration;
@@ -34,8 +27,7 @@ function PluginRow({ plugin, showAttention }: { plugin: InstalledPlugin; showAtt
       icon={<RiBox3Line />}
       status={showAttention ? (failed ? "error" : "attention") : "ok"}
       title={plugin.name}
-      badge={<IdentityBadge identity={plugin.record.resolvedIdentity} />}
-      detail={showAttention ? attentionLine(attention) : sourceLine(plugin)}
+      detail={showAttention ? attentionLine(attention) : plugin.summary}
       trailing={
         showAttention && action ? (
           <Button size="sm" variant={failed ? "outline" : "default"}>
@@ -49,23 +41,17 @@ function PluginRow({ plugin, showAttention }: { plugin: InstalledPlugin; showAtt
 }
 
 function CatalogRow({ entry, installed }: { entry: CatalogEntry; installed: boolean }) {
-  const withdrawn = entry.status._tag === "deleted";
   return (
     <ListRow
-      icon={<RiDownloadLine />}
+      icon={<RiBox3Line />}
       title={entry.name}
-      badge={
-        <>
-          <CatalogStatusBadge status={entry.status} />
-          {installed ? <Badge variant="secondary">Installed</Badge> : null}
-        </>
-      }
       detail={entry.summary}
       trailing={
-        installed ? null : (
-          // `deleted` bounds what an install may resolve; it never disables what is already there.
-          <Button size="sm" variant="outline" disabled={withdrawn}>
-            {withdrawn ? "Withdrawn" : "Install"}
+        installed ? (
+          <Badge variant="ghost">Added</Badge>
+        ) : (
+          <Button size="sm" variant="outline">
+            Add
           </Button>
         )
       }
@@ -76,7 +62,7 @@ function CatalogRow({ entry, installed }: { entry: CatalogEntry; installed: bool
 export function PluginsFacet() {
   const attention = plugins.filter(needsAttention);
   const settled = plugins.filter((plugin) => !needsAttention(plugin));
-  const installedEntryIds = plugins
+  const added = plugins
     .map((plugin) => plugin.record.source)
     .filter((source) => source._tag === "catalog")
     .map((source) => source.entryId);
@@ -84,7 +70,7 @@ export function PluginsFacet() {
   return (
     <div className="flex flex-col gap-6">
       {attention.length > 0 ? (
-        <ListSection title="Needs attention" count={attention.length}>
+        <ListSection title="Needs you" count={attention.length}>
           <ListRows>
             {attention.map((plugin) => (
               <PluginRow key={plugin.record.pluginId} plugin={plugin} showAttention />
@@ -93,21 +79,15 @@ export function PluginsFacet() {
         </ListSection>
       ) : null}
 
-      <ListSection
-        title="Installed"
-        count={settled.length}
-        action={
-          <Button size="sm" variant="outline">
-            <RiAddLine data-icon="inline-start" />
-            Add from a path
-          </Button>
-        }
-      >
+      <ListSection title="Added" count={settled.length}>
         {settled.length === 0 ? (
-          <Empty className="py-8">
+          <Empty className="py-10">
             <EmptyHeader>
-              <EmptyTitle>Nothing settled</EmptyTitle>
-              <EmptyDescription>Every installed Plugin is waiting on you above.</EmptyDescription>
+              <EmptyMedia variant="icon">
+                <RiBox3Line />
+              </EmptyMedia>
+              <EmptyTitle>Every Plugin needs something</EmptyTitle>
+              <EmptyDescription>They are all in the list above.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -119,51 +99,19 @@ export function PluginsFacet() {
         )}
       </ListSection>
 
-      <ListSection
-        title="Catalog"
-        count={catalog._tag === "never-fetched" ? undefined : catalog.entries.length}
-        action={
-          <>
-            {/* `stale` and `fetched` must not read alike, so the state sits in the header rather
-                than in a banner over the list. */}
-            <span className="text-xs text-muted-foreground">
-              {catalog._tag === "never-fetched"
-                ? "Never fetched"
-                : catalog._tag === "stale"
-                  ? `Stale — last refresh failed ${catalog.lastFailure}`
-                  : `Fetched ${catalog.at}`}
-            </span>
-            <Button size="sm" variant="outline">
-              <RiLoopLeftLine data-icon="inline-start" />
-              Refresh
-            </Button>
-          </>
-        }
-      >
-        {catalog._tag === "never-fetched" ? (
-          <Empty className="py-8">
-            <EmptyHeader>
-              <EmptyTitle>The catalog has never been fetched</EmptyTitle>
-              <EmptyDescription>
-                A refresh runs only when you ask for one — never on a timer, and never on read.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <ListRows>
-            {catalog.entries.map((entry) => (
-              <CatalogRow key={entry.id} entry={entry} installed={installedEntryIds.includes(entry.id)} />
-            ))}
-          </ListRows>
-        )}
+      <ListSection title="Ships with cogwork" count={catalog.length}>
+        <ListRows>
+          {catalog.map((entry) => (
+            <CatalogRow key={entry.id} entry={entry} installed={added.includes(entry.id)} />
+          ))}
+        </ListRows>
       </ListSection>
 
-      {catalog._tag === "stale" ? (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <RiErrorWarningLine className="size-3.5" />
-          Serving the copy fetched {catalog.at}. A refresh that fails after a good load keeps the good load.
-        </p>
-      ) : null}
+      <p className="text-xs text-muted-foreground">
+        {/* Worth stating on the page, because the shape of the list depends on it. */}
+        Every Plugin is built by us and ships with cogwork. Adding one turns on what it contributes; it does
+        not download anything.
+      </p>
     </div>
   );
 }

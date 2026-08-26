@@ -1,0 +1,77 @@
+// A file, open in the right panel.
+//
+// The first surface here that is not about a Run. Deliberately thin: the Files feature will own
+// reading and editing anything on disk, and this is the seam it will grow into. For now it names the
+// file and shows what cogwork already knows about it, which is enough to answer "which one is this".
+
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
+import { RiFileTextLine } from "@remixicon/react";
+import { authorityLabel, kindLabels, scopeCopy } from "../features/configuration-model";
+import { placeholderConfiguration } from "../features/configuration-placeholder";
+import { useRightPanelStore } from "../store/right-panel";
+import { SurfaceTab } from "./surface-tab";
+
+const Icon = RiFileTextLine;
+
+export function FileSurfaceTab({ id, title }: { id: `file:${string}`; title: string }) {
+  const active = useRightPanelStore((state) => state.active === id);
+  const setActive = useRightPanelStore((state) => state.setActive);
+  const closeSurface = useRightPanelStore((state) => state.closeSurface);
+  const Tab = active ? SurfaceTab.Active : SurfaceTab.Inactive;
+
+  return (
+    <Tab>
+      <SurfaceTab.Button onClick={() => setActive(id)}>
+        <Icon data-icon="inline-start" />
+        <span className="truncate">{title}</span>
+      </SurfaceTab.Button>
+      <SurfaceTab.Close aria-label={`Close ${title}`} onClick={() => closeSurface(id)} />
+    </Tab>
+  );
+}
+
+function Property({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-3 py-1.5">
+      <span className="w-28 shrink-0 text-xs text-muted-foreground">{label}</span>
+      <span className="min-w-0 flex-1 text-xs">{value}</span>
+    </div>
+  );
+}
+
+export function FileSurfaceBody({ path }: { path: string }) {
+  const contribution = placeholderConfiguration.contributions.find((entry) => entry.file === path);
+  const workspace = placeholderConfiguration.workspaces.find((entry) => entry.id === contribution?.definedIn);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
+      <div className="flex flex-col gap-3 border-b p-4">
+        <span className="font-mono text-xs break-all text-muted-foreground">{path}</span>
+        {contribution ? (
+          <div className="flex flex-col divide-y divide-border/60">
+            <Property label="Name" value={contribution.localName} />
+            <Property label="Kind" value={kindLabels[contribution.kind]} />
+            <Property label="Description" value={contribution.summary} />
+            <Property label="Author" value={authorityLabel(contribution.authority)} />
+            <Property
+              label="Lives in"
+              value={`${workspace ? `${workspace.name} · ` : ""}${scopeCopy[contribution.definedAt].name}`}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <Empty className="flex-1 py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Icon />
+          </EmptyMedia>
+          <EmptyTitle>Nothing to read yet</EmptyTitle>
+          <EmptyDescription>
+            Opening and editing files lands with the Files panel. This tab is where it will show up.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    </div>
+  );
+}

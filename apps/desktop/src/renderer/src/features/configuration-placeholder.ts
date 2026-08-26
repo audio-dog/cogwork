@@ -9,7 +9,7 @@
 // Replace with the real picture when the surfaces are wired to `@cogwork/contracts`.
 
 import type {
-  CatalogRead,
+  CatalogEntry,
   ConfigurationPicture,
   Contribution,
   InstalledPlugin,
@@ -100,31 +100,6 @@ const contributions: readonly Contribution[] = [
     ],
   },
   {
-    id: "plugin:gh-review/hook/pre-push",
-    kind: "hook",
-    localName: "pre-push",
-    authority: { _tag: "plugin", pluginId: "gh-review" },
-    summary: "Runs the review checklist before a push leaves the worktree.",
-    file: "~/.cogwork/plugins/gh-review@2.1.0/hooks/pre-push.json",
-    definedAt: "runtime-host",
-    load: { _tag: "loaded" },
-    rows: [
-      { scope: { kind: "runtime-host" }, value: true, source: "Control store" },
-      // A repository may ship a Hook file. It may never turn one on.
-      {
-        scope: { kind: "workspace-input", workspaceId: cogworkWorkspaceId },
-        value: true,
-        source: ".cogwork/settings.json",
-        diagnostic: {
-          _tag: "inadmissible",
-          detail:
-            "A Hook's on / off may not be written at the Workspace input Scope. The value was dropped; the file may still ship the Hook.",
-          source: ".cogwork/settings.json",
-        },
-      },
-    ],
-  },
-  {
     id: "plugin:gh-review/rules/review-style",
     kind: "rules",
     localName: "review-style",
@@ -182,17 +157,6 @@ const contributions: readonly Contribution[] = [
     ],
   },
 
-  {
-    id: "plugin:codex-extras/hook/codex-notify",
-    kind: "hook",
-    localName: "codex-notify",
-    authority: { _tag: "plugin", pluginId: "codex-extras" },
-    summary: "Posts a desktop notification when a Codex turn ends.",
-    file: "~/.cogwork/plugins/codex-extras@0.9.3/hooks/codex-notify.json",
-    definedAt: "runtime-host",
-    load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "runtime-host" }, value: false, source: "Control store" }],
-  },
   {
     id: "plugin:codex-extras/command/codex-login",
     kind: "command",
@@ -252,6 +216,34 @@ const contributions: readonly Contribution[] = [
     ],
   },
   {
+    // A repository may ship an executable contribution but may never enable one, so this one's
+    // switch writes to the private overlay instead. The `enabled: true` someone committed for it is
+    // inadmissible: dropped with a diagnostic naming the file, never silently ignored.
+    id: "local/mcp/repo-tools",
+    kind: "mcp-server",
+    localName: "repo-tools",
+    authority: { _tag: "local" },
+    summary: "Repository-specific tools, configured in the repo for anyone who clones it.",
+    file: ".cogwork/mcp/repo-tools.json",
+    definedAt: "workspace-input",
+    definedIn: cogworkWorkspaceId,
+    load: { _tag: "loaded" },
+    readiness: { _tag: "ready" },
+    rows: [
+      {
+        scope: { kind: "workspace-input", workspaceId: cogworkWorkspaceId },
+        value: true,
+        source: ".cogwork/settings.json",
+        diagnostic: {
+          _tag: "inadmissible",
+          detail:
+            "An MCP server's on / off may not be written here. The value was dropped; the file may still ship the server.",
+          source: ".cogwork/settings.json",
+        },
+      },
+    ],
+  },
+  {
     id: "local/skill/release-notes",
     kind: "skill",
     localName: "release-notes",
@@ -268,19 +260,6 @@ const contributions: readonly Contribution[] = [
         source: ".cogwork/settings.json",
       },
     ],
-  },
-  {
-    // The offer-versus-enable row: this repository offers this Hook. It is off. You can turn it on.
-    id: "local/hook/lint-staged",
-    kind: "hook",
-    localName: "lint-staged",
-    authority: { _tag: "local" },
-    summary: "Runs biome over the staged set before a commit.",
-    file: ".cogwork/hooks/lint-staged.json",
-    definedAt: "workspace-input",
-    definedIn: cogworkWorkspaceId,
-    load: { _tag: "loaded" },
-    rows: [],
   },
   {
     // Defined in the overlay: a file you keep beside the workspace and never commit.
@@ -352,7 +331,6 @@ const plugins: readonly InstalledPlugin[] = [
       pluginId: "linear",
       source: { _tag: "catalog", entryId: "linear" },
       resolvedIdentity: "linear@1.4.0",
-      pinned: false,
       principal: "taylor",
       revision: 7,
       installedAt: "2026-06-02T09:12:00Z",
@@ -379,7 +357,6 @@ const plugins: readonly InstalledPlugin[] = [
       },
     ],
     requiredConnections: ["linear"],
-    update: { _tag: "current" },
     setup: [
       { id: "connect", label: "Connect Linear", detail: "Authenticate the Linear Connection.", done: true },
       {
@@ -395,7 +372,6 @@ const plugins: readonly InstalledPlugin[] = [
       pluginId: "gh-review",
       source: { _tag: "catalog", entryId: "gh-review" },
       resolvedIdentity: "gh-review@2.1.0",
-      pinned: false,
       principal: "taylor",
       revision: 3,
       installedAt: "2026-05-18T14:41:00Z",
@@ -404,7 +380,6 @@ const plugins: readonly InstalledPlugin[] = [
     summary: "Review conventions, a pull-request summary Skill, and a pre-push Hook.",
     contributionIds: [
       "plugin:gh-review/skill/pr-summary",
-      "plugin:gh-review/hook/pre-push",
       "plugin:gh-review/rules/review-style",
       "plugin:gh-review/subagent/reviewer",
     ],
@@ -428,22 +403,6 @@ const plugins: readonly InstalledPlugin[] = [
       },
     ],
     requiredConnections: [],
-    update: {
-      _tag: "staged",
-      resolvedIdentity: "gh-review@2.2.0",
-      reach: {
-        // Reach over the contributions currently **on**. Additions and drops sit beside it.
-        changed: [
-          {
-            contributionId: "plugin:gh-review/hook/pre-push",
-            before: "Reads the worktree.",
-            after: "Reads the worktree and reaches the network.",
-          },
-        ],
-        added: [{ contributionId: "plugin:gh-review/command/gh-backport", kind: "command" }],
-        dropped: [{ contributionId: "plugin:gh-review/skill/pr-labels", kind: "skill" }],
-      },
-    },
     setup: [],
   },
   {
@@ -452,7 +411,6 @@ const plugins: readonly InstalledPlugin[] = [
       source: { _tag: "local-path", path: "~/dev/granola-plugin" },
       // No declared version, so the bundle is identified by content revision.
       resolvedIdentity: "granola@rev:9f21c4e",
-      pinned: false,
       principal: "taylor",
       revision: 1,
       installedAt: "2026-08-21T11:03:00Z",
@@ -474,7 +432,6 @@ const plugins: readonly InstalledPlugin[] = [
       },
     ],
     requiredConnections: ["granola"],
-    update: { _tag: "current" },
     setup: [
       {
         id: "connect",
@@ -489,14 +446,13 @@ const plugins: readonly InstalledPlugin[] = [
       pluginId: "codex-extras",
       source: { _tag: "catalog", entryId: "codex-extras" },
       resolvedIdentity: "codex-extras@0.9.3",
-      pinned: true,
       principal: "taylor",
       revision: 2,
       installedAt: "2026-04-07T08:20:00Z",
     },
     name: "Codex harness extras",
     summary: "Notifications and a login walk-through for the host-owned Codex CLI.",
-    contributionIds: ["plugin:codex-extras/hook/codex-notify", "plugin:codex-extras/command/codex-login"],
+    contributionIds: ["plugin:codex-extras/command/codex-login"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
       {
@@ -516,82 +472,49 @@ const plugins: readonly InstalledPlugin[] = [
       },
     ],
     requiredConnections: [],
-    update: { _tag: "available", resolvedIdentity: "codex-extras@0.9.4" },
     setup: [],
   },
 ];
 
-/**
- * The stale arm: a good load, then a failed refresh. It serves the copy it has and says so,
- * because *stale* and *fetched* must not render alike.
- */
-const catalog: CatalogRead = {
-  _tag: "stale",
-  at: "2026-08-18T07:02:00Z",
-  lastFailure: "2026-08-25T09:14:00Z — the catalog host did not answer.",
-  entries: [
-    {
-      id: "linear",
-      name: "Linear",
-      summary: "Track work in Linear and let cogwork read and write its issues.",
-      source: { _tag: "catalog", entryId: "linear" },
-      digest: "sha256:4f1c…9ab2",
-      status: { _tag: "active" },
-      contributes: ["mcp-server", "command"],
-    },
-    {
-      id: "gh-review",
-      name: "GitHub review pack",
-      summary: "Review conventions, a pull-request summary Skill, and a pre-push Hook.",
-      source: { _tag: "catalog", entryId: "gh-review" },
-      digest: "sha256:b77e…1c40",
-      status: { _tag: "active" },
-      contributes: ["skill", "hook", "rules", "subagent"],
-    },
-    {
-      id: "codex-extras",
-      name: "Codex harness extras",
-      summary: "Notifications and a login walk-through for the host-owned Codex CLI.",
-      source: { _tag: "catalog", entryId: "codex-extras" },
-      digest: "sha256:0d3a…77fe",
-      status: {
-        _tag: "deprecated",
-        message: "Superseded by the built-in Codex adapter. Still installable and still resolvable.",
-      },
-      contributes: ["hook", "command"],
-    },
-    {
-      id: "notion",
-      name: "Notion",
-      summary: "Read Notion pages and databases as Work Context.",
-      source: { _tag: "catalog", entryId: "notion" },
-      digest: "sha256:91cc…b0d5",
-      status: { _tag: "active" },
-      contributes: ["mcp-server"],
-    },
-    {
-      id: "sentry",
-      name: "Sentry",
-      summary: "Turn an unhandled exception into a triaged ticket.",
-      source: { _tag: "catalog", entryId: "sentry" },
-      digest: "sha256:2ab8…4e19",
-      status: {
-        _tag: "deleted",
-        message: "Withdrawn by its publisher on 2026-07-30. Install and update refuse this entry.",
-      },
-      contributes: ["mcp-server", "skill"],
-    },
-    {
-      id: "slack",
-      name: "Slack",
-      summary: "Post a Run's outcome into a channel.",
-      source: { _tag: "catalog", entryId: "slack" },
-      digest: "sha256:cd50…8f31",
-      status: { _tag: "active" },
-      contributes: ["mcp-server", "hook"],
-    },
-  ],
-};
+/** The first-party Plugins cogwork ships. A document in the app, not a fetched index. */
+const catalog: readonly CatalogEntry[] = [
+  {
+    id: "linear",
+    name: "Linear",
+    summary: "Track work in Linear and let cogwork read and write its issues.",
+    contributes: ["mcp-server", "command"],
+  },
+  {
+    id: "gh-review",
+    name: "GitHub review pack",
+    summary: "Review conventions, a pull-request summary Skill, and a reviewer Subagent.",
+    contributes: ["skill", "rules", "subagent"],
+  },
+  {
+    id: "codex-extras",
+    name: "Codex harness extras",
+    summary: "A login walk-through for the host-owned Codex CLI.",
+    contributes: ["command"],
+  },
+  {
+    id: "granola",
+    name: "Granola notes",
+    summary: "Draft a ticket from a meeting note.",
+    contributes: ["mcp-server"],
+  },
+  {
+    id: "notion",
+    name: "Notion",
+    summary: "Read Notion pages and databases as Work Context.",
+    contributes: ["mcp-server"],
+  },
+  {
+    id: "slack",
+    name: "Slack",
+    summary: "Post a Run's outcome into a channel.",
+    contributes: ["mcp-server"],
+  },
+];
 
 const operations: readonly Operation[] = [
   {

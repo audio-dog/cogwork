@@ -9,14 +9,15 @@
 
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
 import { Separator } from "@cogwork/ui/components/separator";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
-import { RiBox3Line, RiSearchLine } from "@remixicon/react";
+import { RiBox3Line, RiPulseLine, RiSearchLine } from "@remixicon/react";
 import { useState } from "react";
 import { contributionKinds, kindLabelsPlural } from "../features/configuration-model";
 import { allPlaceKeys, type Facet, groupByPlace, kindCount } from "../features/customize-places";
+import { kindIcons } from "./configuration-atoms";
 import { ListRows, ListSection } from "./customize-list";
 import { CustomizePlaceMenu } from "./customize-place-menu";
 import { CustomizeRow } from "./customize-row";
@@ -29,6 +30,7 @@ export function CustomizePage() {
 
   const groups = groupByPlace(facet, places, query);
   const plugins = facet === "plugins";
+  const FacetIcon = plugins ? RiBox3Line : kindIcons[facet];
 
   return (
     <TooltipProvider>
@@ -90,14 +92,32 @@ export function CustomizePage() {
 
         {plugins ? (
           <PluginsFacet />
-        ) : groups.length === 0 ? (
-          <Empty>
+        ) : facet === "hook" ? (
+          // Hooks are out of scope for this map. Saying so beats an empty list that looks broken.
+          <Empty className="py-16">
             <EmptyHeader>
-              <EmptyTitle>Nothing here</EmptyTitle>
+              <EmptyMedia variant="icon">
+                <RiPulseLine />
+              </EmptyMedia>
+              <EmptyTitle>Hooks aren't wired up yet</EmptyTitle>
+              <EmptyDescription>
+                A Plugin can ship one, but cogwork can't run them. They'll turn up here when it can.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : groups.length === 0 ? (
+          <Empty className="py-16">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FacetIcon />
+              </EmptyMedia>
+              <EmptyTitle>
+                {places.length === 0 ? "Nowhere to look" : `No ${kindLabelsPlural[facet].toLowerCase()} here`}
+              </EmptyTitle>
               <EmptyDescription>
                 {places.length === 0
-                  ? "No place is selected, so nothing can show."
-                  : `No ${kindLabelsPlural[facet].toLowerCase()} live in the selected places.`}
+                  ? "Pick at least one place from the filter."
+                  : "Nothing of this kind lives in the places you're looking at."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

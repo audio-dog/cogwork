@@ -35,13 +35,13 @@ describe("resolveEnablement", () => {
     expect(resolved.shadowed).toEqual([]);
   });
 
-  it("drops a Hook enablement written at the Workspace input Scope", () => {
-    const resolved = resolveEnablement(required("plugin:gh-review/hook/pre-push"), view);
+  it("drops an MCP server enablement written at the repository", () => {
+    // A cloned repository may ship the file but may never start a process on your machine.
+    const resolved = resolveEnablement(required("local/mcp/repo-tools"), view);
     expect(resolved.dropped.map((entry) => entry.diagnostic._tag)).toEqual(["inadmissible"]);
     expect(resolved.dropped[0]?.row.scope.kind).toBe("workspace-input");
-    // The admissible profile row still resolves, so one bad line does not stop the work.
-    expect(resolved.effective).toBe(true);
-    expect(resolved.winner?.scope.kind).toBe("runtime-host");
+    // Dropped, so nothing resolves — and that is not the same as off.
+    expect(resolved.effective).toBeUndefined();
   });
 
   it("drops a setting that references a contribution which no longer exists", () => {
@@ -113,7 +113,6 @@ describe("collectAttention", () => {
   const items = collectAttention(
     placeholderConfiguration.contributions,
     placeholderConfiguration.operations,
-    placeholderConfiguration.plugins,
     view,
   );
 
@@ -130,17 +129,15 @@ describe("collectAttention", () => {
       "need:verify:test-runner",
     ]);
   });
-
-  it("surfaces a staged update but not an available one", () => {
-    const updates = items.filter((item) => item.id.startsWith("update:"));
-    expect(updates.map((item) => item.id)).toEqual(["update:GitHub review pack"]);
-  });
 });
 
 describe("the fixture itself", () => {
-  it("puts every contribution kind on screen", () => {
+  it("covers every contribution kind cogwork can run today", () => {
+    // Five of the six. Hooks are out of scope for this map, so the fixture holds none and the
+    // facet says so rather than showing an empty list.
     const kinds = new Set(placeholderConfiguration.contributions.map((entry) => entry.kind));
-    expect(kinds.size).toBe(6);
+    expect(kinds.has("hook")).toBe(false);
+    expect(kinds.size).toBe(5);
   });
 
   it("keeps two workspaces that share one git remote", () => {
@@ -165,15 +162,15 @@ describe("where a contribution lives, and where it is turned on", () => {
     expect(offeredElsewhere(skill)).toBe(false);
   });
 
-  it("redirects a repo-shipped Hook to a Scope that may enable it", () => {
-    const hook = required("local/hook/lint-staged");
-    expect(hook.definedAt).toBe("workspace-input");
+  it("redirects a repo-shipped MCP server to a Scope that may enable it", () => {
+    const server = required("local/mcp/repo-tools");
+    expect(server.definedAt).toBe("workspace-input");
     // A repository may ship the file and may never start a process on your machine.
-    expect(offeredElsewhere(hook)).toBe(true);
-    const target = enableScopeFor(hook);
+    expect(offeredElsewhere(server)).toBe(true);
+    const target = enableScopeFor(server);
     expect(target?.kind).toBe("private-overlay");
     // The overlay of the workspace it lives in — not of whichever workspace a picker had selected.
-    expect(target?.workspaceId).toBe(hook.definedIn);
+    expect(target?.workspaceId).toBe(server.definedIn);
   });
 
   it("keeps a machine-defined contribution on the machine", () => {

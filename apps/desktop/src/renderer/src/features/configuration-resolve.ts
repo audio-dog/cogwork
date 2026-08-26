@@ -162,7 +162,6 @@ export interface AttentionItem {
 export function collectAttention(
   contributions: readonly Contribution[],
   operations: readonly Operation[],
-  plugins: readonly { readonly name: string; readonly update: { readonly _tag: string } }[],
   view: ViewContext,
 ): readonly AttentionItem[] {
   const failedLoads = contributions
@@ -197,17 +196,7 @@ export function collectAttention(
       })),
   );
 
-  const staged = plugins
-    .filter((plugin) => plugin.update._tag === "staged")
-    .map((plugin) => ({
-      id: `update:${plugin.name}`,
-      severity: "warning" as const,
-      title: `${plugin.name} has an update waiting`,
-      detail: "The bytes are staged. Accepting repoints the install record; declining discards them.",
-      surface: "plugins" as const,
-    }));
-
-  return [...failedLoads, ...diagnostics, ...unmet, ...staged];
+  return [...failedLoads, ...diagnostics, ...unmet];
 }
 
 /**

@@ -11,25 +11,21 @@ function plugin(pluginId: string) {
 }
 
 describe("attentionOf", () => {
+  it("settles a Plugin that loads and is set up", () => {
+    // No update state: every Plugin ships with cogwork, so there is nothing to stage or offer.
+    expect(attentionOf(plugin("gh-review"))).toEqual({ _tag: "settled" });
+    expect(attentionOf(plugin("codex-extras"))).toEqual({ _tag: "settled" });
+  });
+
   it("puts a file that will not load ahead of everything else", () => {
     // Granola has both a failed contribution and an unfinished setup step.
     const attention = attentionOf(plugin("granola"));
     expect(attention._tag).toBe("load-failed");
   });
 
-  it("reports staged bytes, which are waiting on a person", () => {
-    const attention = attentionOf(plugin("gh-review"));
-    expect(attention).toEqual({ _tag: "update-staged", identity: "gh-review@2.2.0" });
-  });
-
   it("reports an unfinished setup", () => {
     const attention = attentionOf(plugin("linear"));
     expect(attention).toEqual({ _tag: "setup-unfinished", remaining: 1 });
-  });
-
-  it("ranks an update merely on offer below everything else", () => {
-    const attention = attentionOf(plugin("codex-extras"));
-    expect(attention).toEqual({ _tag: "update-available", identity: "codex-extras@0.9.4" });
   });
 });
 
@@ -44,7 +40,7 @@ describe("needsAttention", () => {
 
 describe("attentionLine and attentionAction", () => {
   it("names the act the state calls for", () => {
-    expect(attentionAction(attentionOf(plugin("gh-review")))).toBe("Review");
+    expect(attentionAction(attentionOf(plugin("granola")))).toBe("Show the file");
     expect(attentionAction(attentionOf(plugin("linear")))).toBe("Finish setup");
     expect(attentionAction(attentionOf({ ...plugin("linear"), setup: [] }))).toBeUndefined();
   });
