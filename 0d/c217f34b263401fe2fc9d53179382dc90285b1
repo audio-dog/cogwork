@@ -1,0 +1,66 @@
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_05fbe5432690d4::t_9ff254d7e61c90 26,98-99,111
+apps/desktop/src/renderer/src/components/customize-row.tsx
+  s_05fbe5432690d4::t_6a5e1cc77d46c2 1,4-6,10-11,13,20,25-28,31-32
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_05fbe5432690d4::t_9ff254d7e61c90 18-30,50-56,97,123
+apps/desktop/src/renderer/src/components/file-surface.tsx
+  s_05fbe5432690d4::t_9ff254d7e61c90 1-43,45-77
+  s_05fbe5432690d4::t_96158cb2b0513c 44
+packages/ui/src/components/dialog.tsx
+  s_05fbe5432690d4::t_556beb6932b4b8 6-7,9-11,13-15,17-19,21-22,24-28,30-32,34-41,43-50,52-58,60,62-66,68-70,72-79,81-86,88-92,94-95,97-102,104-105,107-108,110-114,116-118,120-132
+  s_05fbe5432690d4::t_96158cb2b0513c 1-5,8,12,16,20,23,29,33,42,51,59,61,67,71,80,87,93,96,103,106,109,115,119,133
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_05fbe5432690d4::t_ec841cc69b943f 262-266,346
+apps/desktop/src/renderer/src/components/plugins-facet.tsx
+  s_05fbe5432690d4::t_e5380b8d1368fa 1,3-5,9-10,30,46,50-54,65,73,82,84,86-90,102-107,110-111,114
+  s_05fbe5432690d4::t_96158cb2b0513c 14,112-113
+apps/desktop/src/renderer/src/components/customize-page.tsx
+  s_05fbe5432690d4::t_93b12d0836c139 16,33,95-107,109,111-116,119-120
+  s_05fbe5432690d4::t_96158cb2b0513c 12,20
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_05fbe5432690d4::t_bebb8e9abf3244 38-40,43-44,135-137,139-140,165-167,169-170,173
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_05fbe5432690d4::t_45f29517e14e10 4-5,7-8
+  s_05fbe5432690d4::t_96158cb2b0513c 26
+  s_05fbe5432690d4::t_6a5e1cc77d46c2 28-29
+apps/desktop/src/renderer/src/features/plugins-view.ts
+  s_05fbe5432690d4::t_187dd275bb3aa1 4-8,26,39,42,44,47,52
+  s_05fbe5432690d4::t_e5380b8d1368fa 59,62
+apps/desktop/src/renderer/src/components/contribution-row.tsx
+  s_05fbe5432690d4::t_96158cb2b0513c 76-77,85
+  s_05fbe5432690d4::t_6a5e1cc77d46c2 1-75,78-84,86-92
+apps/desktop/src/renderer/src/components/mcp-configure-dialog.tsx
+  s_05fbe5432690d4::t_47136dcc216686 1-24,26-46,49-50,53-69,73-75,77-110,113-159
+  s_05fbe5432690d4::t_96158cb2b0513c 25,70-72,111-112
+  s_05fbe5432690d4::t_6a5e1cc77d46c2 47-48,51-52,76
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_05fbe5432690d4::t_96977348662cfe 455
+  s_05fbe5432690d4::t_e25743c697b0cd 12,219-224,226-227,231,237-242,479-517
+  s_05fbe5432690d4::t_17ec20955d9719 247-249,251-252,256-262
+apps/desktop/src/renderer/src/features/configuration-resolve.ts
+  s_05fbe5432690d4::t_45f29517e14e10 199
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_05fbe5432690d4::t_bebb8e9abf3244 14-19,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0dc217f34b263401fe2fc9d53179382dc90285b1",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

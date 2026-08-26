@@ -1,0 +1,40 @@
+apps/desktop/src/renderer/src/features/configuration-draft.ts
+  s_05fbe5432690d4::t_60dd43cadd7967 13-19
+apps/desktop/src/renderer/src/routes/_app/customize.tsx
+  s_05fbe5432690d4::t_ec100cb499eb14 6,26
+apps/desktop/src/renderer/src/features/configuration-resolve.ts
+  s_05fbe5432690d4::t_60dd43cadd7967 220-238
+apps/desktop/src/renderer/src/features/configuration-variants.ts
+  s_05fbe5432690d4::t_60dd43cadd7967 14,30,34,36,40,42-48
+apps/desktop/src/renderer/src/components/customize-variant-b.tsx
+  s_05fbe5432690d4::t_5b2a9c3794a835 1,3-6,8-10,15,27,29,43,46,58-60,64-119,130-196,199,204-206,231-233,237,240,246,258,264-267,269-274,276-279,283,286-298,300,302-303,308-309,312,314-315,317-319,323,325-344,346-348
+  s_05fbe5432690d4::t_dc01e9c05ff2cc 53,121-129,280-282
+apps/desktop/src/renderer/src/components/customize-variant-d.tsx
+  s_05fbe5432690d4::t_7f5712009a6cdf 117,212
+  s_05fbe5432690d4::t_dc01e9c05ff2cc 93-97,242-243,250-251,268-270
+  s_05fbe5432690d4::t_ec100cb499eb14 1-92,98-116,118-211,213-241,244-249,252-267,271-333
+apps/desktop/src/renderer/src/components/customize-variant-c.tsx
+  s_05fbe5432690d4::t_571303c44d9f72 1,3-5,7-8,14,18,20,23,28,41,43,47-48,51-61,66-69,71-74,78-80,84-88,90-101,113-144,148,151-152,154-156,158-159,164,168-169,181,192-217,219-221,224-225,229-237,241-256,259-262,265-266
+  s_05fbe5432690d4::t_dc01e9c05ff2cc 15,75-76,81-83,145-147,149-150,173,238-240,263-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "1f3888f63559e405bf9b889639d72846ea6358be",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

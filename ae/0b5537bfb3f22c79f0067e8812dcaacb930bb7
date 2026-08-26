@@ -1,0 +1,58 @@
+apps/desktop/src/renderer/src/components/customize-row.tsx
+  s_05fbe5432690d4::t_cd2cfe349ff436 1,3-4,6-9,16,24-25,31,41-48,50-55,74-77,85-86
+  s_05fbe5432690d4::t_99b1063637df1c 70
+apps/desktop/src/renderer/src/components/customize-page.tsx
+  s_05fbe5432690d4::t_6a9e96b71a4619 19-20,30,92-93,105-115,117
+  s_05fbe5432690d4::t_99b1063637df1c 23
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_05fbe5432690d4::t_460d2edc725722 162-164,169-171
+apps/desktop/src/renderer/src/features/plugins-view.ts
+  s_05fbe5432690d4::t_38738399487447 1-76
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_05fbe5432690d4::t_d7a6d0d21b1276 12,118-149
+  s_05fbe5432690d4::t_4562d0f2f1c75c 150
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_05fbe5432690d4::t_d7a6d0d21b1276 1-63
+apps/desktop/src/renderer/src/routes/_app/customize/route.tsx
+  s_05fbe5432690d4::t_60ef5b9532287d 1-13
+apps/desktop/src/renderer/src/features/customize-places.ts
+  s_05fbe5432690d4::t_cd2cfe349ff436 101-116,118-131
+  s_05fbe5432690d4::t_99b1063637df1c 117
+apps/desktop/src/renderer/src/routes/_app/customize/index.tsx
+  s_05fbe5432690d4::t_60ef5b9532287d 1-19
+apps/desktop/src/renderer/src/components/customize-list.tsx
+  s_05fbe5432690d4::t_aba22b5af01a04 1-64,71-154
+  s_05fbe5432690d4::t_99b1063637df1c 65-70
+apps/desktop/src/renderer/src/routes/_app/customize/$pluginId.tsx
+  s_05fbe5432690d4::t_60ef5b9532287d 1-16,18-20
+  s_05fbe5432690d4::t_99b1063637df1c 17
+apps/desktop/src/renderer/src/components/plugins-facet.tsx
+  s_05fbe5432690d4::t_99b1063637df1c 164
+  s_05fbe5432690d4::t_1e75285966ab71 1-163,165-169
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_05fbe5432690d4::t_60ef5b9532287d 16,20-21,42,62-71,76,81-82,90-91,97,103-104,112,116-117,125-126,132,137-138,180,204-217,221-233,235,242
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_05fbe5432690d4::t_99b1063637df1c 24,54-55,134-136,233-234
+  s_05fbe5432690d4::t_60ef5b9532287d 1-23,25-53,56-133,137-232,235-239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "ae0b5537bfb3f22c79f0067e8812dcaacb930bb7",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

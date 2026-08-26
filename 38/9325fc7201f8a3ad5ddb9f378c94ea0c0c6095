@@ -1,0 +1,55 @@
+apps/desktop/src/renderer/src/components/customize-row.tsx
+  s_05fbe5432690d4::t_301bdda71fe07b 30
+  s_05fbe5432690d4::t_5edb22381b5fb7 49-52,57,74-76,78-80
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_05fbe5432690d4::t_c08edc575beb55 262,281,294
+  s_05fbe5432690d4::t_2007346b297eb0 305-322,331
+  s_05fbe5432690d4::t_ba50fe50e23eed 304
+apps/desktop/src/renderer/src/features/configuration-variants.ts
+  s_05fbe5432690d4::t_1a577e2e353fa5 28,30,34,36,40,42
+apps/desktop/src/renderer/src/features/configuration-resolve.ts
+  s_05fbe5432690d4::t_473b667035098d 247,252-262
+apps/desktop/src/renderer/src/components/customize-variant-a.tsx
+  s_05fbe5432690d4::t_71d5a8c3997c06 1,3-5,7-9,16,19-26,28-37,39-40,42-45,47-49,51,54-67,69,71,73-87,89-96,98-121,126-128,130-131,135-153
+  s_05fbe5432690d4::t_301bdda71fe07b 122-125
+  s_05fbe5432690d4::t_24997072ca8d50 154-155
+apps/desktop/src/renderer/src/components/customize-variant-b.tsx
+  s_05fbe5432690d4::t_4723e244a4833f 1,3-6,8-12,15-17,19,23-24,26,28-30,32-38,40-41,43,45-55,57,59-72,74-77,79-100,102-137,142-159,165,169-180
+  s_05fbe5432690d4::t_301bdda71fe07b 73,138-141
+apps/desktop/src/renderer/src/components/customize-variant-c.tsx
+  s_05fbe5432690d4::t_1a577e2e353fa5 1,3-5,7-9,14,16,21-22,29,42-43,45,47,51,53,56-57,59-79,83,86,88,90,92,95-96,98-137,139-140,147,151-162
+  s_05fbe5432690d4::t_301bdda71fe07b 30-37
+apps/desktop/src/renderer/src/components/customize-places.ts
+  s_05fbe5432690d4::t_055b0fe3522e62 1-44,46-64,68-87
+  s_05fbe5432690d4::t_301bdda71fe07b 45,65-67
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_05fbe5432690d4::t_d3008f8e2b9b7c 164,173-176,182
+apps/desktop/src/renderer/src/components/customize-places.test.ts
+  s_05fbe5432690d4::t_1a781433d6330c 1-8,17-65,70-98
+  s_05fbe5432690d4::t_a3f9c720088586 9-16,66-69
+apps/desktop/src/renderer/src/components/customize-atoms.tsx
+  s_05fbe5432690d4::t_b515e787d93ce1 1,3-4,6-19,21,23-40,42-47,49-69,74-154
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_05fbe5432690d4::t_c08edc575beb55 56-62,213-218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "389325fc7201f8a3ad5ddb9f378c94ea0c0c6095",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

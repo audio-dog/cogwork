@@ -1,0 +1,29 @@
+apps/desktop/src/renderer/src/routes/_app/customize.tsx
+  s_05fbe5432690d4::t_945406ed2decff 6,26
+apps/desktop/src/renderer/src/features/configuration-variants.ts
+  s_05fbe5432690d4::t_945406ed2decff 14,44-48
+  s_05fbe5432690d4::t_8f809c0787e338 49
+apps/desktop/src/renderer/src/components/customize-variant-d.tsx
+  s_05fbe5432690d4::t_945406ed2decff 1-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "702fa6dd95d46dc3131b516d71a37db40849d439",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

@@ -1,0 +1,93 @@
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_05fbe5432690d4::t_a9d27a0679b055 209,212
+  s_05fbe5432690d4::t_c9b55998da0d32 12,14-15,179-208,210-211,213-221
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_05fbe5432690d4::t_3d917b0608f31d 490-493
+apps/desktop/src/renderer/src/components/contribution-file-row.tsx
+  s_05fbe5432690d4::t_ddab7ed427fd0d 24-25
+  s_05fbe5432690d4::t_50c90f9619f52c 15
+apps/desktop/src/renderer/src/components/customize-facet-view.tsx
+  s_05fbe5432690d4::t_c3a07573c3d426 134
+  s_05fbe5432690d4::t_f0ac8d7b068afc 102-103
+  s_05fbe5432690d4::t_ddab7ed427fd0d 26
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_05fbe5432690d4::t_ddab7ed427fd0d 72,205
+  s_05fbe5432690d4::t_860dcb3f768527 40
+  s_05fbe5432690d4::t_50c90f9619f52c 19
+  s_05fbe5432690d4::t_c3a07573c3d426 93,98,113,230
+  s_05fbe5432690d4::t_f75f9ff4e924b0 127,132,136,188
+apps/desktop/src/renderer/src/features/configuration-resolve.ts
+  s_05fbe5432690d4::t_7ea4a28d93b02f 62
+  s_05fbe5432690d4::t_f36e0897e74315 84-88
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_05fbe5432690d4::t_363571abcf0d9b 37-40
+  s_05fbe5432690d4::t_ddab7ed427fd0d 129
+  s_05fbe5432690d4::t_833bd4f87aad70 18,66,68,82-84
+  s_05fbe5432690d4::t_bf36441ad7c39e 41
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_05fbe5432690d4::t_50c90f9619f52c 99
+apps/desktop/src/renderer/src/components/contribution-badges.tsx
+  s_05fbe5432690d4::t_f36e0897e74315 73-76
+  s_05fbe5432690d4::t_363571abcf0d9b 5-14,17-44,66
+apps/desktop/src/renderer/src/components/file-surface.tsx
+  s_05fbe5432690d4::t_50c90f9619f52c 36
+  s_05fbe5432690d4::t_7ea4a28d93b02f 4,37-38
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_05fbe5432690d4::t_50c90f9619f52c 21,46-47,49,113,139-140
+  s_05fbe5432690d4::t_eb3426d1e0ea89 69-87,166-173
+apps/desktop/src/renderer/src/components/mcp-server-row.tsx
+  s_05fbe5432690d4::t_7ea4a28d93b02f 6,19
+  s_05fbe5432690d4::t_363571abcf0d9b 5,50-61
+apps/desktop/src/renderer/src/components/plugin-list-rows.tsx
+  s_05fbe5432690d4::t_ddab7ed427fd0d 47
+apps/desktop/src/renderer/src/components/plugins-facet.tsx
+  s_05fbe5432690d4::t_f0ac8d7b068afc 10-19,59,61
+apps/desktop/src/renderer/src/components/configuration-workspaces-panel.tsx
+  s_05fbe5432690d4::t_833bd4f87aad70 32-39,43-68,72-83
+  s_05fbe5432690d4::t_83c51b0aaf9b79 40-42,69-71
+  s_05fbe5432690d4::t_eb413bd14f6bb8 27,115
+  s_05fbe5432690d4::t_4f6efafcada0d8 209
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_05fbe5432690d4::t_f0ac8d7b068afc 5,15-16
+apps/desktop/src/renderer/src/features/customize-facets.test.ts
+  s_05fbe5432690d4::t_c9b55998da0d32 1-2,4-33
+  s_05fbe5432690d4::t_83c51b0aaf9b79 3
+apps/desktop/src/renderer/src/store/right-panel-restore.test.ts
+  s_05fbe5432690d4::t_901d029891c64a 28-34
+  s_05fbe5432690d4::t_afb3609b929ede 1-27,35-66
+apps/desktop/src/renderer/src/components/mcp-configure-dialog.tsx
+  s_05fbe5432690d4::t_3f25b91724a62e 22
+  s_05fbe5432690d4::t_3d917b0608f31d 17,68
+apps/desktop/src/renderer/src/features/customize-places.ts
+  s_05fbe5432690d4::t_3d917b0608f31d 9,115
+  s_05fbe5432690d4::t_41c795018466e9 31
+  s_05fbe5432690d4::t_83c51b0aaf9b79 33-34
+  s_05fbe5432690d4::t_860dcb3f768527 44,50,88,92
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_05fbe5432690d4::t_41c795018466e9 4,97,103
+  s_05fbe5432690d4::t_f0ac8d7b068afc 168,172,177
+  s_05fbe5432690d4::t_7ea4a28d93b02f 44
+apps/desktop/src/renderer/src/components/configuration-atoms.tsx
+  s_05fbe5432690d4::t_901d029891c64a 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "be3e9eb26d0fe5e44e8f33c42ed325f4a6609883",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
