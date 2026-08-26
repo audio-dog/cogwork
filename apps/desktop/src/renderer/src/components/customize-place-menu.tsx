@@ -24,6 +24,7 @@ import {
 import { Label } from "@cogwork/ui/components/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@cogwork/ui/components/popover";
 import { Separator } from "@cogwork/ui/components/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiArrowDownSLine, RiArrowRightSLine, RiCheckDoubleLine } from "@remixicon/react";
 import { useState } from "react";
 import {
@@ -141,10 +142,13 @@ export function CustomizePlaceMenu({
   places,
   facet,
   onChange,
+  unavailable,
 }: {
   places: readonly string[];
   facet: Facet;
   onChange: (next: readonly string[]) => void;
+  /** Why this facet cannot be filtered by place, when it cannot. */
+  unavailable?: string;
 }) {
   const [highlight, setHighlight] = useState<Highlight>({ _tag: "user" });
 
@@ -155,14 +159,30 @@ export function CustomizePlaceMenu({
   const shown = placesOf(highlight, workspace);
   const user = highlight._tag === "user";
 
+  // The same button either way, so switching facet never reflows the row it sits in. The label
+  // keeps saying what the filter holds even where it does not apply, so it does not flicker either.
+  const trigger = (
+    <Button variant="outline" size="sm" className="rounded-full" disabled={unavailable !== undefined}>
+      <MachineIcon data-icon="inline-start" />
+      {/* Fixed width: a label that resizes shoves every kind pill after it along the row. */}
+      <span className="w-32 truncate text-start">{summarize(places)}</span>
+      <RiArrowDownSLine data-icon="inline-end" />
+    </Button>
+  );
+
+  if (unavailable !== undefined) {
+    return (
+      <Tooltip>
+        {/* A disabled button emits no pointer events, so the span is what the tooltip listens on. */}
+        <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
+        <TooltipContent className="max-w-72">{unavailable}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="sm" className="rounded-full" />}>
-        <MachineIcon data-icon="inline-start" />
-        {/* Fixed width: a label that resizes shoves every kind pill after it along the row. */}
-        <span className="w-32 truncate text-start">{summarize(places)}</span>
-        <RiArrowDownSLine data-icon="inline-end" />
-      </PopoverTrigger>
+      <PopoverTrigger render={trigger} />
       {/* `align="start"` pins the popup's leading edge to the trigger's, which does not move. */}
       <PopoverContent align="start" className="w-136 gap-0 p-0">
         <div className="flex h-64">
