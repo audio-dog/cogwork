@@ -1,0 +1,35 @@
+apps/desktop/src/renderer/src/features/customize-places.ts
+  s_05fbe5432690d4::t_bd5c7572a25b5e 152
+  s_05fbe5432690d4::t_3c9a735ef088ef 23,102,109,111-114,116-117,119-123,125-144,150-151,153,155-162
+apps/desktop/src/renderer/src/components/customize-page.tsx
+  s_05fbe5432690d4::t_3c9a735ef088ef 19,32,124-126
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_05fbe5432690d4::t_8c0f23bea65aae 195-218
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_05fbe5432690d4::t_397da80860979f 9-10,16,21,23
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_05fbe5432690d4::t_bd5c7572a25b5e 153
+  s_05fbe5432690d4::t_b4c61b6734f187 12,119,121,125-130,140,142-152,156-159,164,171
+  s_05fbe5432690d4::t_8c0f23bea65aae 131-139,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "18184291be7381ec16bd5e838cddb78a60d82b3c",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
