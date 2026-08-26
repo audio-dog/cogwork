@@ -1,0 +1,36 @@
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_842058e5bdfdb0::t_08d115477a924a 78-91
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_842058e5bdfdb0::t_08d115477a924a 135-160
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_842058e5bdfdb0::t_08d115477a924a 1-202
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_842058e5bdfdb0::t_08d115477a924a 176-191
+docs/spec/next-phase.md
+  s_842058e5bdfdb0::t_08d115477a924a 273-274
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_842058e5bdfdb0::t_544af36f65dd6f 29,98,101-116
+  s_842058e5bdfdb0::t_08d115477a924a 85-96,99-100
+  s_842058e5bdfdb0::t_bcb392e3e05de9 97
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_842058e5bdfdb0::t_08d115477a924a 93-108
+packages/contracts/CONTEXT.md
+  s_842058e5bdfdb0::t_08d115477a924a 46,93,121-124,130-137,152,273
+  s_842058e5bdfdb0::t_e53960ebb496d4 113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b11b230d01ac0186634dd627a8360e712057bd3a",
+  "prompts": {},
+  "sessions": {
+    "s_842058e5bdfdb0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c712283c-1200-4918-88bf-ea91c4919b15",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
