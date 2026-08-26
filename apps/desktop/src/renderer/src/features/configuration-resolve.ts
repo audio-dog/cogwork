@@ -114,6 +114,9 @@ export interface ResolvedOperationSetting {
 }
 
 /**
+ * PARKED — Operation settings live on the Workflows page, which is a placeholder. Kept because it
+ * encodes #134's level-before-Scope rule and its tests are the record of that decision.
+ *
  * The most specific level wins *before* Scope is consulted. A default must never outrank a value
  * that names the work, or one global value in your overlay silently replaces every per-Operation
  * value in your own profile.
@@ -163,6 +166,10 @@ export interface AttentionItem {
 }
 
 /**
+ * PARKED — nothing renders this yet. #131's brief asked for needs-attention states and the
+ * Workflows page is where they land; the tests hold the shape until it exists. Delete it with the
+ * prototype if that page takes a different route.
+ *
  * Everything a person should be told without being asked, gathered from the same rows the
  * surfaces render. Load-time classes appear here; `unsatisfiable` does too, because a rejected
  * Run Plan is the one class that only a Run can discover.
@@ -216,25 +223,6 @@ export function collectAttention(
     }));
 
   return [...failedLoads, ...diagnostics, ...unmet, ...staged];
-}
-
-/**
- * How many contributions have a value written at one Scope, and how many of those win there.
- * The layer rail needs both: "what lives here" and "what of it actually takes effect".
- */
-export function scopeTally(
-  contributions: readonly Contribution[],
-  scope: ScopeRef,
-  view: ViewContext,
-): { readonly written: number; readonly winning: number } {
-  const relevant = contributions.filter((contribution) => cellPermitted(contribution.kind, scope.kind));
-  const written = relevant.filter((contribution) =>
-    contribution.rows.some((row) => sameScope(row.scope, scope)),
-  );
-  const winning = written.filter(
-    (contribution) => resolveEnablement(contribution, view).winner?.scope.kind === scope.kind,
-  );
-  return { written: written.length, winning: winning.length };
 }
 
 /**

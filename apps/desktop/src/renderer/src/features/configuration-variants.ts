@@ -11,7 +11,7 @@
 //   3. Workspace — two of the three Scopes are workspace-bound, so a Scope is not fully named
 //      until a workspace is.
 
-export const variantKeys = ["A", "B", "C", "D"] as const;
+export const variantKeys = ["A", "B", "C", "D", "E"] as const;
 
 export type VariantKey = (typeof variantKeys)[number];
 
@@ -25,27 +25,33 @@ export interface VariantDefinition {
 export const variants: readonly VariantDefinition[] = [
   {
     key: "A",
-    name: "Cards that fill",
+    name: "Cards, checkbox",
     claim:
-      "The right pane answers its leftover space with geometry: each place takes an equal share of the height. Cheapest, and the only one that cannot scroll — but a bigger card tells you nothing new.",
+      "The reference. Filling cards with a checkbox in each corner — the shape that works, with the control that reads as busy because the fill already says what the box says.",
   },
   {
     key: "B",
-    name: "Preview",
+    name: "Cards, pressed",
     claim:
-      "The space fills with information — under each place, what actually lives there. A count says three Skills are in the repo; this says one of them is the one you were looking for.",
+      "The card is the control, the way the theme tiles in Settings already work. A check appears only when it is on: one glyph, and only in the state that needs confirming.",
   },
   {
     key: "C",
-    name: "Detail pane",
+    name: "Cards, dimmed",
     claim:
-      "Stops treating the space as a gap. Places sit at their natural height and a summary pins to the bottom, carrying the tracker, the shared-remote warning, and a tally across every kind rather than just the filtered one.",
+      "No glyph at all. A card that is on is simply present; one that is off recedes. Quietest of the four, and the one that asks a reader to notice contrast rather than read a mark.",
   },
   {
     key: "D",
     name: "Plain rows",
     claim:
-      "The control: the header and the place rows at their natural height, and nothing else. The last round's right pane, unchanged — worth judging now that the left pane no longer unbalances it.",
+      "The control: the header and the place rows at their natural height, and nothing else. No cards, no filling, no glyph beyond the checkbox.",
+  },
+  {
+    key: "E",
+    name: "Cards, show/hide",
+    claim:
+      "An eye rather than a checkbox, because this menu is a filter: unchecking a box does not deselect a place, it hides it. Smaller glyph than a checkbox, and it names the actual verb.",
   },
 ];
 

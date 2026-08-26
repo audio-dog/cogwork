@@ -44,14 +44,18 @@ export const scopeShortLabels: Record<ScopeKind, string> = {
  * is now the chosen label for the Scope that absorbed it. A `/domain-modeling` act should settle
  * whether the glossary follows the copy or the copy keeps its distance.
  *
- * "Shared" and "Private" are deliberately relative: in the menu they sit nested under a named
- * workspace, so they need no noun of their own — and inventing "Project" would have collided with
- * `Workspace`, which the glossary already owns.
+ * **The other two are named by audience, not by mechanism.** "Shared" and "Private" begged the
+ * question — shared with whom, private from whom — and left the answer off screen. These two rows
+ * always sit under a named workspace, so the only thing that separates them is who else gets the
+ * file, and saying that outright makes each one define the other. "Checked in" and "Local" were the
+ * runner-up: precise, and a mechanism a newcomer has to already understand.
+ *
+ * The hints are one clause each and parallel, so the three can be compared by reading down.
  */
 export const scopeCopy: Record<ScopeKind, { readonly name: string; readonly hint: string }> = {
-  "runtime-host": { name: "User", hint: "Available in every workspace on this machine" },
-  "workspace-input": { name: "Shared", hint: "Committed, so everyone who clones the repo gets it" },
-  "private-overlay": { name: "Private", hint: "Only yours, and never committed" },
+  "runtime-host": { name: "User", hint: "On this machine, in every workspace." },
+  "workspace-input": { name: "Everyone", hint: "In the repo, for anyone who clones it." },
+  "private-overlay": { name: "Just me", hint: "On your machine, never committed." },
 };
 
 /** Phrased as a place, for a row that says where one contribution came from. */
