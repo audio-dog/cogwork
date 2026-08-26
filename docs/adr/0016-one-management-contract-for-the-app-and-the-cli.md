@@ -26,7 +26,7 @@ Meanwhile the shipped surface has no contract at all. Three authorities claim th
 
 Staging and accepting are two commands rather than one flag: a resolved identity comes into existence only at staging, so an accept that names it is necessarily the second round trip. That pair is what makes an accept attributable without an interactive prompt, and one pair serves both clients.
 
-Three things are deliberately absent. **`pin`** has a verb and a field and no semantics — [#203](https://github.com/colonylabs/cogwork/issues/203) owns it, and giving it a command here would design a surface for a concept nobody has defined. *(Amended 2026-08-26 — #203 is closed unresolved: `pin` was ruled out of scope and the verb and the field are deleted, so this absence is now permanent rather than pending. No coding harness exposes version pinning to a person, and Plugin install sits outside the current requirements while every Plugin is a first-party pack shipping with Cogwork.)* **Connection** is marked provisional in the glossary with an *Avoid* line naming scoping, binding, granting and resolving; this contract specifies no Connection act. **Minting a Scope identity** is not an act: `PrincipalId` is a constant, `HostId` is minted at the store's first open, `WorkspaceId` is minted by register, and the overlay key is a pair of two identities that already exist. Four candidate commands, zero survivors.
+Three things are deliberately absent. **`pin`** has a verb and a field and no semantics — [#203](https://github.com/colonylabs/cogwork/issues/203) owns it, and giving it a command here would design a surface for a concept nobody has defined. **Connection** is marked provisional in the glossary with an *Avoid* line naming scoping, binding, granting and resolving; this contract specifies no Connection act. **Minting a Scope identity** is not an act: `PrincipalId` is a constant, `HostId` is minted at the store's first open, `WorkspaceId` is minted by register, and the overlay key is a pair of two identities that already exist. Four candidate commands, zero survivors.
 
 `CancelRun`, `Reclassify` and `SetScheduling` are neighbours in the same RPC group, not members of this contract. All three change what the daemon is *doing now* rather than what it is *configured to be*, and none survives a restart by design. `DaemonCommands` is a CQS split — a guard boundary for authorization — not a subject boundary.
 
@@ -82,3 +82,35 @@ So: **no ADR 0013 amendment.** These are one durable row per limit, one authorit
 - Last write wins between the app and the CLI, deliberately. Every command returns the new picture and publishes the same value, so a stale panel is corrected within one event. The stated harm in the storage research was *silently* overwriting a newer value; the publication removes the silence, and there is no colleague to surprise — cogwork runs single-user and local.
 - `SchedulerStats.perWorkspace` must carry each workspace's **effective** limit beside its in-flight count. Until [#127](https://github.com/colonylabs/cogwork/issues/127) retires `WorkspaceConfig.concurrency`, the file wins, and the row's honesty depends on that read model rather than on the cutover.
 - The surface that owns workspace registration, the daemon limits and restore has **no name**. It is neither Plugins nor Customize, and `Settings` sits on Customize's *Avoid* line. Naming it is a domain-modeling act and is not performed here.
+
+## Amendment (2026-08-25) — Connection acts exist, so the count is three survivors, not zero
+
+This ADR listed four candidate commands and kept none, and its reason for dropping **Connection** was
+that the term was provisional with an *Avoid* line naming scoping, binding, granting and resolving.
+
+ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md) settles the term the same
+day. A Connection is now engine-owned, keyed by system and account, with a record in the Control store
+and real acts on a **Connections** surface: **establish**, **re-connect**, and **remove**. So this
+contract owes three commands it deliberately did not specify, and the "four candidates, zero
+survivors" tally reads only against the state of the glossary at the time.
+
+Nothing else here changes. Minting a Scope identity is still not an act, and the CLI-and-app
+parity rule this ADR fixes applies to the three Connection commands unchanged —
+including that **remove** carries the *dangling* warning naming the affected workspaces, because a
+warning a person cannot see is not parity.
+
+## Amendment (2026-08-26) — `pin`'s absence is permanent, not pending
+
+The Decision recorded `pin` as deliberately absent because it "has a verb and a field and no
+semantics" and [#203](https://github.com/colonylabs/cogwork/issues/203) owned defining it. #203 is
+closed **unresolved**: the question was ruled out of scope rather than answered, and the verb on
+**Plugins** and the `pinned` field on the **Install record** are deleted from the glossary.
+
+Two reasons, neither of which this contract could have supplied. No coding harness exposes version
+pinning to a person — Claude Code's `version` gates the author and its source `sha` is an install
+address, Cursor consumes `version` nowhere, Codex uses it as a path segment. And Plugin install sits
+outside the current requirements while every Plugin is a first-party pack that ships with Cogwork, so
+a control for declining updates to a separately-installed bundle has nothing to act on.
+
+The act list is unchanged — the absence was already correct, and it stops being provisional. The
+"four candidates, zero survivors" tally is unaffected: `pin` was never a survivor.

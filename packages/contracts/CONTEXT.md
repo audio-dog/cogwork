@@ -43,7 +43,7 @@ _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot neve
 ### Configuration
 
 **Control store**:
-The daemon's single local database of everything Cogwork itself has been told on this machine — install records, settings at every Scope that is not a file, Runtime host bindings, minted Scope identities, and the store's own schema metadata. One database per machine, under `~/.cogwork`.
+The daemon's single local database of everything Cogwork itself has been told on this machine — install records, Connection records, settings at every Scope that is not a file, Runtime host bindings, minted Scope identities, and the store's own schema metadata. One database per machine, under `~/.cogwork`.
 **It fails closed.** Unlike the Credential store it holds no secrets, and unlike the Run ledger it is not disposable — it is the authority the Engine resolves a Run Plan from, so a store it cannot open or trust stops dispatch rather than degrading it. The Run ledger's rows live here too, and stay disposable by policy rather than by sitting in a separate file. See ADR 0015.
 _Avoid_: Settings store (it holds identities and bindings, not only settings), Run ledger (that one is disposable), Credential store (that one is secret), Settings profile (a Scope, not a store), database, config
 
@@ -90,7 +90,7 @@ Direction, low to high: **Settings profile → Runtime host → Workspace input 
 _Avoid_: Merge (only one of the operators), precedence (only one axis of three), override, `merge-by-key` (retired — nothing field-merges across Scopes)
 
 **Plugin**:
-A first-party install-and-setup bundle. Its manifest **points at files** rather than inlining definitions, and declares which Connections it requires. `version` is optional — a Plugin is identified by its declared version or, absent one, by content revision. Each contribution has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
+A first-party install-and-setup bundle. Its manifest **points at files** rather than inlining definitions, and declares which Connections it requires. **At most one first-party Plugin may require a given Connection**, which is what makes its pairing derivable from that declaration alone — no pairing field exists anywhere. `version` is optional — a Plugin is identified by its declared version or, absent one, by content revision. Each contribution has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
 A Plugin is **a collection of contributions and nothing more**: it contributes no behaviour of its own, so **there is no human-written Plugin on / off**. Install and uninstall are the only Plugin-level states a person writes. Where a Plugin-level "off" ever appears it is Engine-observed status, never a setting competing with a contribution's own.
 _Avoid_: Capability (retired — there is no umbrella noun), component, marketplace listing, Plugin enablement
 
@@ -110,7 +110,7 @@ Qualified because bare *catalog* is spent twice — the desktop's **Surface cata
 _Avoid_: Marketplace, registry, Surface catalog, Model catalog, index
 
 **Plugins**:
-The surface that owns Plugin **membership** — install, update, uninstall — and the setup that follows an install. It is the only surface permitted to change what is installed.
+The surface that owns Plugin **membership** — install, update, uninstall — and the setup that follows an install. It and **Connections** are the only surfaces permitted to change what is installed.
 "Permitted" is a **client-surface rule, and the daemon does not enforce it**: it sees one `Principal` and cannot tell which panel called. What holds the split is the act list — membership and settings are different commands, so a surface that calls only settings commands has no branch that could change membership. Do not build a caller-kind check to satisfy this line.
 _Avoid_: Marketplace, Customize, Plugin store; `pin` (retired — no harness exposes version pinning to a person, and every update is already an explicit, declinable act); and the lowercase plural *plugins*, which means the bundles
 
@@ -118,15 +118,23 @@ _Avoid_: Marketplace, Customize, Plugin store; `pin` (retired — no harness exp
 The surface that owns **contribution settings** — a contribution's on / off, and Operation settings. The kind is the view and the authority is a badge on the row. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
 _Avoid_: Plugins, Settings, preferences
 
+**Connections**:
+The surface that owns Connection **establishment** — connect, re-connect, remove — with one card per system and no container noun over it. It may write Plugin membership, but only through the **paired install**: establishing a Connection installs the one first-party Plugin that requires it and turns on that Plugin's contributions.
+_Avoid_: Integration, connector, Customize, Plugins, setup wizard
+
 **Contribution kind**:
 One of the six types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Command, Hook**. The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
 A contribution has exactly **one** setting — on or off — written as a default and nowhere else. Everything else about it lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
 _Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed), per-Operation enablement (say binding)
 
-**Connection** — _provisional, do not design against_:
-The established, authenticated binding to an external system — engine-owned, and not a contribution kind. It is never the credential itself: secret material stays in the credential store, keyed by account, and reaches a Run over a channel that is never persisted to the run ledger or event log. Other contributions reference a Connection by id rather than carrying secrets. The noun exists because Cogwork authenticates external systems that are not MCP servers, such as the Linear issue tracker.
-**This term is not settled.** What a Connection *is* depends on whether a first-party integration such as the Linear issue tracker stays an engine-owned port or becomes something a person installs and authenticates themselves — [#172](https://github.com/colonylabs/cogwork/issues/172) — and its establishment, health, refresh, and revocation belong to [#125](https://github.com/colonylabs/cogwork/issues/125). Both are open. Until they resolve, Connection names a gap, not a design.
-_Avoid_: Plugin, credential, MCP server, contribution kind. Also avoid **scoping, binding, granting, or resolving** a Connection, and avoid giving it a Scope ladder of its own — [#134](https://github.com/colonylabs/cogwork/issues/134) deliberately declined to scope it, because the concept must be defined before it can be scoped.
+**Connection**:
+The established, authenticated binding to one external system, keyed by **system and account** (`linear/acme`) — engine-owned, and not a contribution kind. It is never the credential itself: its record lives in the Control store (id, system, account, status) and its secret in the Credential store, reaching a Run over a channel that is never persisted to the run ledger or event log. Both a Plugin's contributions and the Engine's own ports — the issue tracker, the source control provider — authenticate through one and reference it **by id**. A Plugin may *require* a Connection; it may never define one.
+**A Connection has no Scope**, and reference is not scoping: it is machine-level, a workspace references one, and a repository can never establish or override one. One grant serves every port on one account. Establishment accepts any source the Credential store accepts — a browser login where the system offers one, an API key where it does not. Removal cascades to each Plugin that requires it and leaves a bound workspace *dangling*; a grant revoked outside cogwork is a readiness state, not a removal. See ADR 0017.
+_Avoid_: Plugin (a Plugin requires a Connection, never contains one), credential (that is the secret it holds), MCP server, contribution kind, provider key (that one buys inference, not access to the work), Integration, connector
+
+**Connection readiness**:
+The Engine-owned conclusion that a Connection is established, unrevoked, and usable. It is an **input** to MCP server readiness for a contributed server that requires one, and it stands alone for an Engine port, where it gates the reconcile heartbeat. Deliberately **not** generalized: there is no `Readiness` umbrella, because the two are not peers — one feeds the other.
+_Avoid_: Readiness (unqualified), MCP server readiness, established (one of its inputs)
 
 **Tool**:
 A typed function an agent may call during a Run. A Tool may be engine-owned, provider-native, or exposed by an MCP server, but its source remains explicit.
@@ -141,7 +149,7 @@ One configured Model Context Protocol server instance made available to a Run so
 _Avoid_: MCP skill, Tool, Connection, Plugin
 
 **MCP server readiness**:
-The Engine-owned conclusion that a configured MCP server is enabled, launchable or reachable, authenticated, protocol-compatible, exposes the expected MCP features, and can be projected by the selected Harness. Required servers must be ready before a Run Plan is accepted; clients use the same result and reason to show Operation availability.
+The Engine-owned conclusion that a configured MCP server is enabled, launchable or reachable, authenticated, protocol-compatible, exposes the expected MCP features, and can be projected by the selected Harness. Its *authenticated* input is **Connection readiness** when the server requires a Connection. Required servers must be ready before a Run Plan is accepted; clients use the same result and reason to show Operation availability.
 _Avoid_: Installed, runtime `serverInfo`, UI-only validation
 
 **Command**:
@@ -262,7 +270,7 @@ _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
 ### Credentials
 
 **Credential store**:
-The daemon's durable, secret store of credentials for the external systems a workspace binds — an OAuth token pair (access + refresh) or a client-credentials token — keyed by the system's account (a Linear organization). A seam: the backing layer is a `0600` file today, an OS keychain on desktop, a per-user database row on a hosted server. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo. Only the Linear issue tracker resolves through it today; GitHub still reads its token from the environment.
+The daemon's durable, secret store of credentials for the external systems a workspace binds — an OAuth token pair (access + refresh) or a client-credentials token — keyed by the system's account (a Linear organization). A seam: the backing layer is a `0600` file today, an OS keychain on desktop, a per-user database row on a hosted server. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo. Only the Linear issue tracker resolves through it today; GitHub still reads its token from the environment. It holds the secret half of a **Connection**, whose non-secret record lives in the Control store.
 _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id` lives in config, not here), keychain (only one possible backing layer).
 
 ### Runs

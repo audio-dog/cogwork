@@ -270,7 +270,8 @@ Marked so future work knows the reopen cost; none of this is in scope to build:
 
 - **The issue tracker plays three roles** — sensor, work-item identity, coordination store. Non-
   coding work has no tracker, so the roles must separate eventually (reference: t3code's
-  command/event split). Deferred.
+  command/event split). Deferred. ADR 0017 does not split them; it fixes that **no** role is ever
+  Plugin-supplied — every external system the Engine reads is an Engine port over a Connection.
 - **"Act" generalizes to an actuator.** The coding harness is one actuator; the owned provider layer
   is another. Nothing may assume act == run a harness.
 - **Owned coordination store** — needed when a work item has no tracker. The phase-3 ingestion
