@@ -23,7 +23,7 @@ import {
   type RunPreviewState,
   withoutRunPreview,
 } from "./run-activity";
-import { type EnginePhase, enginePhase, useEngineStatusListener } from "./use-engine-status";
+import { type EnginePhase, enginePhase, useEngineStatus } from "./use-engine-status";
 
 export type ActivityKind =
   | "item"
@@ -451,13 +451,13 @@ export function ActivitySessionProvider({
     (current: EventResult) => pumpDaemonResult(cell, current, pull, resubscribe),
     [cell, pull, resubscribe],
   );
-  const engineStatus = useCallback(
-    (status: Parameters<typeof enginePhase>[0]) => recordEngineStatus(cell, publish, status, clock),
-    [cell, publish, clock],
-  );
   useAtomSubscribe(daemonEventAtom, record, { immediate: true });
   useAtomSubscribe(daemonEventAtom, pump, { immediate: true });
-  useEngineStatusListener(engineStatus);
+  // Engine transitions fold during render: a status change re-renders via useEngineStatus's store
+  // read, updateLifecycle returns the identical session when the phase is unchanged, and publish
+  // skips identical sessions — so this cannot loop.
+  const { status } = useEngineStatus();
+  recordEngineStatus(cell, publish, status, clock);
   return <ActivitySessionContext value={session}>{children}</ActivitySessionContext>;
 }
 

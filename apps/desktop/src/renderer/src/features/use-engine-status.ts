@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import type { EngineStatus } from "../../../shared/ipc";
 import { reportRendererError } from "./report-error";
 
@@ -8,7 +8,6 @@ let currentStatus: EngineStatusValue = "unknown";
 let restarting = false;
 let unsubscribeIpc: (() => void) | null = null;
 const listeners = new Set<() => void>();
-const statusListeners = new Set<(status: EngineStatusValue) => void>();
 
 function notifyListeners() {
   for (const listener of listeners) {
@@ -25,7 +24,6 @@ function setStatus(next: EngineStatusValue) {
   }
   currentStatus = next;
   notifyListeners();
-  for (const listener of statusListeners) listener(next);
 }
 
 function setRestarting(next: boolean) {
@@ -48,7 +46,7 @@ function startStatusSubscription() {
 }
 
 function stopStatusSubscription() {
-  if (listeners.size === 0 && statusListeners.size === 0 && unsubscribeIpc) {
+  if (listeners.size === 0 && unsubscribeIpc) {
     unsubscribeIpc();
     unsubscribeIpc = null;
   }
@@ -61,24 +59,6 @@ function subscribe(onStoreChange: () => void): () => void {
     listeners.delete(onStoreChange);
     stopStatusSubscription();
   };
-}
-
-export function subscribeEngineStatus(listener: (status: EngineStatusValue) => void) {
-  statusListeners.add(listener);
-  startStatusSubscription();
-  listener(currentStatus);
-  return () => {
-    statusListeners.delete(listener);
-    stopStatusSubscription();
-  };
-}
-
-// For consumers that fold status *transitions* as events (the activity session's lifecycle rows);
-// a render-time read of the current status cannot see them. A changed listener re-subscribes and
-// replays the current status, so pass a referentially stable one.
-export function useEngineStatusListener(listener: (status: EngineStatusValue) => void) {
-  // biome-ignore lint/plugin/no-use-effect: subscribes to the engine-status IPC store, an external system
-  useEffect(() => subscribeEngineStatus(listener), [listener]);
 }
 
 function getSnapshot(): EngineStatusValue {
