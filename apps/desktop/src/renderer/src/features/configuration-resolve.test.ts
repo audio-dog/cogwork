@@ -8,10 +8,12 @@ import {
 } from "./configuration-model";
 import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "./configuration-placeholder";
 import {
+  diagnosticsOf,
   enableScopeFor,
   offeredElsewhere,
   resolveEnablement,
   settingsSpreadAcross,
+  viewOf,
 } from "./configuration-resolve";
 
 const view = { workspaceId: cogworkWorkspaceId };
@@ -165,5 +167,30 @@ describe("settingsSpreadAcross", () => {
     // The exception ADR 0013's direction exists for. It is a badge, not the shape of the page.
     const spread = settingsSpreadAcross(required("plugin:linear/mcp/linear"));
     expect(spread).toEqual(["private-overlay", "settings-profile"]);
+  });
+});
+
+describe("diagnosticsOf", () => {
+  it("reports a machine-level contribution's overlay diagnostic, which its own view hides", () => {
+    // Granola sits at the Settings profile, so it has no `definedIn` and every workspace-scoped row
+    // falls outside its own view. Resolving still drops the row — but the reason must still show.
+    const granola = required("plugin:granola/mcp/granola");
+    expect(granola.definedIn).toBeUndefined();
+
+    const inItsOwnView = resolveEnablement(granola, viewOf(granola)).dropped;
+    expect(inItsOwnView).toHaveLength(0);
+
+    const reported = diagnosticsOf(granola);
+    expect(reported.map((entry) => entry.diagnostic._tag)).toEqual(["dangling"]);
+    expect(reported[0].row.scope.workspaceId).toBe(cogworkWorkspaceId);
+  });
+
+  it("still reports a row the view does include", () => {
+    const repoTools = required("local:repo/mcp/repo-tools");
+    expect(diagnosticsOf(repoTools).length).toBeGreaterThan(0);
+  });
+
+  it("says nothing about a contribution whose settings are all admissible", () => {
+    expect(diagnosticsOf(required("plugin:linear/mcp/linear"))).toEqual([]);
   });
 });

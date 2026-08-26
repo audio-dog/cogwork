@@ -155,13 +155,6 @@ export interface SetupStep {
   readonly done: boolean;
 }
 
-export interface CatalogEntry {
-  readonly id: string;
-  readonly name: string;
-  readonly summary: string;
-  readonly contributes: readonly ContributionKind[];
-}
-
 export interface Workspace {
   readonly id: WorkspaceId;
   readonly name: string;
@@ -175,5 +168,4 @@ export interface ConfigurationPicture {
   readonly workspaces: readonly Workspace[];
   readonly plugins: readonly InstalledPlugin[];
   readonly contributions: readonly Contribution[];
-  readonly catalog: readonly CatalogEntry[];
 }

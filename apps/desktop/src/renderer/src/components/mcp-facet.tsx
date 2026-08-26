@@ -1,19 +1,30 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiServerLine } from "@remixicon/react";
 import type { Contribution } from "../features/configuration-model";
-import { resolveEnablement } from "../features/configuration-resolve";
-import { visibleContributions } from "../features/customize-places";
+import { diagnosticsOf } from "../features/configuration-resolve";
+import { useConfiguration } from "./configuration-provider";
+import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionBody, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { McpServerRow } from "./mcp-server-row";
 
+/** Whether a server needs a look. Like a diagnostic, this is a fact about the server, not the view. */
 function troubled(contribution: Contribution) {
   if (contribution.load._tag === "failed") return true;
   if (contribution.readiness?._tag === "not-ready") return true;
-  return resolveEnablement(contribution, { workspaceId: contribution.definedIn }).dropped.length > 0;
+  return diagnosticsOf(contribution).length > 0;
 }
 
-export function McpFacet({ places, query }: { places: readonly string[]; query: string }) {
-  const servers = visibleContributions("mcp-server", places, query);
+const contributionKey = (contribution: Contribution) => contribution.id;
+
+export function McpFacet() {
+  const {
+    meta: { places },
+  } = useConfiguration();
+  const {
+    state: { places: selected, query },
+  } = useCustomizeFilter();
+
+  const servers = places.visibleContributions("mcp-server", selected, query);
   const attention = servers.filter(troubled);
   const connected = servers.filter((contribution) => !troubled(contribution));
 
@@ -22,10 +33,8 @@ export function McpFacet({ places, query }: { places: readonly string[]; query: 
       {attention.length > 0 ? (
         <ListSection>
           <ListSectionHeader title="Needs Attention" count={attention.length} />
-          <ListSectionRows>
-            {attention.map((contribution) => (
-              <McpServerRow key={contribution.id} contribution={contribution} />
-            ))}
+          <ListSectionRows items={attention} keyOf={contributionKey}>
+            {(contribution) => <McpServerRow contribution={contribution} />}
           </ListSectionRows>
         </ListSection>
       ) : null}
@@ -45,10 +54,8 @@ export function McpFacet({ places, query }: { places: readonly string[]; query: 
             </Empty>
           </ListSectionBody>
         ) : (
-          <ListSectionRows>
-            {connected.map((contribution) => (
-              <McpServerRow key={contribution.id} contribution={contribution} />
-            ))}
+          <ListSectionRows items={connected} keyOf={contributionKey}>
+            {(contribution) => <McpServerRow contribution={contribution} />}
           </ListSectionRows>
         )}
       </ListSection>

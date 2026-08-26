@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { findSection, isSettingsSectionId, searchSettings, settingsForSection } from "./settings-catalog";
+import {
+  findSection,
+  searchSettings,
+  settingsForSection,
+  settingsIndex,
+  settingsSections,
+} from "./settings-catalog";
 
 describe("searchSettings", () => {
   it("returns nothing for an empty or whitespace query", () => {
@@ -44,11 +50,16 @@ describe("searchSettings", () => {
 });
 
 describe("catalog helpers", () => {
-  it("recognizes real section ids and rejects unknown ones", () => {
-    expect(isSettingsSectionId("general")).toBe(true);
-    expect(isSettingsSectionId("appearance")).toBe(true);
-    expect(isSettingsSectionId("engine")).toBe(true);
-    expect(isSettingsSectionId("nope")).toBe(false);
+  it("gives every section a route of its own, so the router does the dispatch", () => {
+    expect(settingsSections.map((section) => section.link.to)).toEqual([
+      "/settings/general",
+      "/settings/appearance",
+      "/settings/engine",
+    ]);
+  });
+
+  it("files every setting under a section that exists", () => {
+    for (const entry of settingsIndex) expect(findSection(entry.sectionId)).toBeDefined();
   });
 
   it("lists the settings that belong to a section", () => {

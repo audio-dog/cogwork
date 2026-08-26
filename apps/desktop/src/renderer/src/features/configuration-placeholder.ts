@@ -1,5 +1,4 @@
 import type {
-  CatalogEntry,
   ConfigurationPicture,
   Contribution,
   InstalledPlugin,
@@ -106,7 +105,7 @@ const contributions: readonly Contribution[] = [
     localName: "granola",
     authority: { _tag: "plugin", pluginId: "granola" },
     summary: "Reads meeting notes so a ticket can be drafted from them.",
-    file: "~/dev/granola-plugin/mcp/granola.json",
+    file: "~/.cogwork/plugins/granola@0.4.2/mcp/granola.json",
     definedAt: "settings-profile",
     load: {
       _tag: "failed",
@@ -360,7 +359,7 @@ const plugins: readonly InstalledPlugin[] = [
   {
     record: {
       pluginId: "granola",
-      resolvedIdentity: "granola@rev:9f21c4e",
+      resolvedIdentity: "granola@0.4.2",
       principal: "taylor",
       installedAt: "2026-08-21T11:03:00Z",
     },
@@ -423,52 +422,12 @@ const plugins: readonly InstalledPlugin[] = [
   },
 ];
 
-const catalog: readonly CatalogEntry[] = [
-  {
-    id: "linear",
-    name: "Linear",
-    summary: "Track work in Linear and let cogwork read and write its issues.",
-    contributes: ["mcp-server", "command"],
-  },
-  {
-    id: "gh-review",
-    name: "GitHub review pack",
-    summary: "Review conventions, a pull-request summary Skill, and a reviewer Subagent.",
-    contributes: ["skill", "rules", "subagent"],
-  },
-  {
-    id: "codex-extras",
-    name: "Codex harness extras",
-    summary: "A login walk-through for the host-owned Codex CLI.",
-    contributes: ["command"],
-  },
-  {
-    id: "granola",
-    name: "Granola notes",
-    summary: "Draft a ticket from a meeting note.",
-    contributes: ["mcp-server"],
-  },
-  {
-    id: "notion",
-    name: "Notion",
-    summary: "Read Notion pages and databases as Work Context.",
-    contributes: ["mcp-server"],
-  },
-  {
-    id: "slack",
-    name: "Slack",
-    summary: "Post a Run's outcome into a channel.",
-    contributes: ["mcp-server"],
-  },
-];
-
 export const placeholderConfiguration: ConfigurationPicture = {
   principal: "taylor",
   hostId: "host_01H7QK",
   workspaces,
   plugins,
   contributions,
-  catalog,
 };
 
 export function workspaceById(workspaceId?: WorkspaceId) {

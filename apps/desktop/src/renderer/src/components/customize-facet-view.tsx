@@ -6,18 +6,26 @@ import { Separator } from "@cogwork/ui/components/separator";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiBox3Line, RiEqualizerLine, RiPulseLine, RiSearchLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import type { ReactNode } from "react";
+import { kindIcons } from "../features/configuration-icons";
 import { type ContributionKind, kindLabelsPlural } from "../features/configuration-model";
 import { type Facet, facetLabel, facetSlug, facets } from "../features/customize-facets";
-import { allPlaceKeys, groupContributions, kindCount } from "../features/customize-places";
-import { kindIcons } from "./configuration-atoms";
+import { useConfiguration } from "./configuration-provider";
 import { ContributionFileRow } from "./contribution-file-row";
+import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionHeader, ListSectionRows } from "./customize-list";
-import { CustomizePlaceMenu } from "./customize-place-menu";
+import { CustomizePlaceMenu, PlaceFilterNotApplicable } from "./customize-place-menu";
 import { McpFacet } from "./mcp-facet";
 import { PluginsFacet } from "./plugins-facet";
 
-function FacetPill({ facet, active, places }: { facet: Facet; active: boolean; places: readonly string[] }) {
+function FacetPill({ facet, active }: { facet: Facet; active: boolean }) {
+  const {
+    meta: { places },
+  } = useConfiguration();
+  const {
+    state: { places: selected },
+  } = useCustomizeFilter();
+
   return (
     <Button
       variant={active ? "secondary" : "outline"}
@@ -30,29 +38,67 @@ function FacetPill({ facet, active, places }: { facet: Facet; active: boolean; p
       {facetLabel(facet)}
       {facet === "plugins" ? null : (
         <Badge variant="ghost" className="ms-1 w-4 justify-center px-0 tabular-nums">
-          {kindCount(facet, places)}
+          {places.kindCount(facet, selected)}
         </Badge>
       )}
     </Button>
   );
 }
 
-function HooksEmpty() {
+function CustomizeSearch() {
+  const {
+    state: { query },
+    actions: { setQuery },
+  } = useCustomizeFilter();
+
   return (
-    <Empty className="py-16">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <RiPulseLine />
-        </EmptyMedia>
-        <EmptyTitle>Hooks aren't ready yet</EmptyTitle>
-        <EmptyDescription>We're still building them.</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
+    <InputGroup>
+      <InputGroupInput
+        placeholder="Search Plugins, Skills, MCPs..."
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      <InputGroupAddon>
+        <RiSearchLine />
+      </InputGroupAddon>
+    </InputGroup>
   );
 }
 
-function NothingHere({ kind, anyPlace }: { kind: ContributionKind; anyPlace: boolean }) {
+/** The Place control for this Facet, then the Facet pills. `children` is the Place control. */
+function CustomizeFilters({ active, children }: { active: Facet; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {children}
+      <Separator orientation="vertical" className="h-6" />
+      {facets.map((facet) => (
+        <FacetPill key={facet} facet={facet} active={facet === active} />
+      ))}
+    </div>
+  );
+}
+
+function CustomizeFrame({ children }: { children: ReactNode }) {
+  return (
+    <TooltipProvider>
+      <div className="flex flex-col gap-6">
+        <div className="flex items-center gap-2">
+          <RiEqualizerLine />
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">Customize</h1>
+        </div>
+        {children}
+      </div>
+    </TooltipProvider>
+  );
+}
+
+function NothingHere({ kind }: { kind: ContributionKind }) {
+  const {
+    state: { places },
+  } = useCustomizeFilter();
   const Icon = kindIcons[kind];
+  const anyPlace = places.length > 0;
+
   return (
     <Empty className="py-16">
       <EmptyHeader>
@@ -70,27 +116,24 @@ function NothingHere({ kind, anyPlace }: { kind: ContributionKind; anyPlace: boo
   );
 }
 
-function ContributionGroups({
-  kind,
-  places,
-  query,
-}: {
-  kind: ContributionKind;
-  places: readonly string[];
-  query: string;
-}) {
-  const groups = groupContributions(kind, places, query);
-  if (groups.length === 0) return <NothingHere kind={kind} anyPlace={places.length > 0} />;
+function ContributionGroups({ kind }: { kind: ContributionKind }) {
+  const {
+    meta: { places },
+  } = useConfiguration();
+  const {
+    state: { places: selected, query },
+  } = useCustomizeFilter();
+
+  const groups = places.groupContributions(kind, selected, query);
+  if (groups.length === 0) return <NothingHere kind={kind} />;
 
   return (
     <div className="flex flex-col gap-6">
       {groups.map((group) => (
         <ListSection key={group.key}>
           <ListSectionHeader title={group.label} count={group.rows.length} />
-          <ListSectionRows>
-            {group.rows.map((contribution) => (
-              <ContributionFileRow key={contribution.id} contribution={contribution} />
-            ))}
+          <ListSectionRows items={group.rows} keyOf={(contribution) => contribution.id}>
+            {(contribution) => <ContributionFileRow contribution={contribution} />}
           </ListSectionRows>
         </ListSection>
       ))}
@@ -98,55 +141,62 @@ function ContributionGroups({
   );
 }
 
-function FacetBody({ facet, places, query }: { facet: Facet; places: readonly string[]; query: string }) {
-  if (facet === "plugins") return <PluginsFacet query={query} />;
-  if (facet === "mcp-server") return <McpFacet places={places} query={query} />;
-  if (facet === "hook") return <HooksEmpty />;
-  return <ContributionGroups kind={facet} places={places} query={query} />;
+export function PluginsFacetView() {
+  return (
+    <CustomizeFrame>
+      <CustomizeSearch />
+      <CustomizeFilters active="plugins">
+        <PlaceFilterNotApplicable>
+          Plugins are not filtered by place. An install is machine-local, so every installed Plugin is on this
+          machine.
+        </PlaceFilterNotApplicable>
+      </CustomizeFilters>
+      <PluginsFacet />
+    </CustomizeFrame>
+  );
 }
 
-export function CustomizeFacetView({ facet }: { facet: Facet }) {
-  const [places, setPlaces] = useState<readonly string[]>(allPlaceKeys);
-  const [query, setQuery] = useState("");
-
+export function McpServersFacetView() {
   return (
-    <TooltipProvider>
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-2">
-          <RiEqualizerLine />
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">Customize</h1>
-        </div>
+    <CustomizeFrame>
+      <CustomizeSearch />
+      <CustomizeFilters active="mcp-server">
+        <CustomizePlaceMenu kind="mcp-server" />
+      </CustomizeFilters>
+      <McpFacet />
+    </CustomizeFrame>
+  );
+}
 
-        <InputGroup>
-          <InputGroupInput
-            placeholder="Search Plugins, Skills, MCPs..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <InputGroupAddon>
-            <RiSearchLine />
-          </InputGroupAddon>
-        </InputGroup>
+export function HooksFacetView() {
+  return (
+    <CustomizeFrame>
+      <CustomizeSearch />
+      <CustomizeFilters active="hook">
+        <CustomizePlaceMenu kind="hook" />
+      </CustomizeFilters>
+      <Empty className="py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <RiPulseLine />
+          </EmptyMedia>
+          <EmptyTitle>Hooks aren't ready yet</EmptyTitle>
+          <EmptyDescription>We're still building them.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    </CustomizeFrame>
+  );
+}
 
-        <div className="flex flex-wrap items-center gap-2">
-          <CustomizePlaceMenu
-            places={places}
-            kind={facet === "plugins" ? undefined : facet}
-            onChange={setPlaces}
-            unavailable={
-              facet === "plugins"
-                ? "Plugins are not filtered by place. An install is machine-local, so every installed Plugin is on this machine."
-                : undefined
-            }
-          />
-          <Separator orientation="vertical" className="h-6" />
-          {facets.map((entry) => (
-            <FacetPill key={entry} facet={entry} active={entry === facet} places={places} />
-          ))}
-        </div>
-
-        <FacetBody facet={facet} places={places} query={query} />
-      </div>
-    </TooltipProvider>
+/** Skills, Subagents, Rules and Commands are one view: the kind is data, not a mode. */
+export function ContributionFacetView({ kind }: { kind: ContributionKind }) {
+  return (
+    <CustomizeFrame>
+      <CustomizeSearch />
+      <CustomizeFilters active={kind}>
+        <CustomizePlaceMenu kind={kind} />
+      </CustomizeFilters>
+      <ContributionGroups kind={kind} />
+    </CustomizeFrame>
   );
 }

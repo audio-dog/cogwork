@@ -1,6 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { CustomizeFacetView } from "../../../components/customize-facet-view";
-import { defaultFacet, facetFromSlug, facetSlug } from "../../../features/customize-facets";
+import {
+  ContributionFacetView,
+  HooksFacetView,
+  McpServersFacetView,
+  PluginsFacetView,
+} from "../../../components/customize-facet-view";
+import { defaultFacet, type Facet, facetFromSlug, facetSlug } from "../../../features/customize-facets";
 
 export const Route = createFileRoute("/_app/customize/$facet")({
   beforeLoad: ({ params }) => {
@@ -10,8 +15,16 @@ export const Route = createFileRoute("/_app/customize/$facet")({
   component: CustomizeFacetRoute,
 });
 
+/** Each Facet is a whole view, not one view in a mode. The route picks which. */
+function facetView(facet: Facet) {
+  if (facet === "plugins") return <PluginsFacetView />;
+  if (facet === "mcp-server") return <McpServersFacetView />;
+  if (facet === "hook") return <HooksFacetView />;
+  return <ContributionFacetView kind={facet} />;
+}
+
 function CustomizeFacetRoute() {
   const facet = facetFromSlug(Route.useParams().facet);
   if (!facet) return null;
-  return <CustomizeFacetView facet={facet} />;
+  return facetView(facet);
 }

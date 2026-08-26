@@ -1,8 +1,8 @@
 import { Button } from "@cogwork/ui/components/button";
-import { Item, ItemMedia } from "@cogwork/ui/components/item";
+import { Item, ItemActions, ItemMedia } from "@cogwork/ui/components/item";
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiArrowDownSLine } from "@remixicon/react";
-import { type ReactNode, useState } from "react";
+import { type ComponentProps, Fragment, type ReactNode, useState } from "react";
 
 const collapseAt = 5;
 
@@ -51,14 +51,28 @@ function ShowLess({ onCollapse }: { onCollapse: () => void }) {
   );
 }
 
-export function ListSectionRows({ children }: { children: readonly ReactNode[] }) {
+/**
+ * Takes the rows as data rather than reading `children`. Counting nodes counted a Fragment, a
+ * conditional and an adjacent element as rows, so "Show 3 more" could disagree with the list.
+ */
+export function ListSectionRows<T>({
+  items,
+  keyOf,
+  children,
+}: {
+  items: readonly T[];
+  keyOf: (item: T) => string;
+  children: (item: T) => ReactNode;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const hidden = children.length - collapseAt;
-  const shown = hidden > 0 && !expanded ? children.slice(0, collapseAt) : children;
+  const hidden = items.length - collapseAt;
+  const shown = hidden > 0 && !expanded ? items.slice(0, collapseAt) : items;
 
   return (
     <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-lg bg-muted/40">
-      {shown}
+      {shown.map((item) => (
+        <Fragment key={keyOf(item)}>{children(item)}</Fragment>
+      ))}
       {hidden > 0 &&
         (expanded ? (
           <ShowLess onCollapse={() => setExpanded(false)} />
@@ -75,11 +89,6 @@ export function ListSectionBody({ children }: { children: ReactNode }) {
 
 export type RowStatus = "ok" | "attention" | "error";
 
-const dotColor: Record<Exclude<RowStatus, "ok">, string> = {
-  error: "bg-destructive",
-  attention: "bg-primary",
-};
-
 export function ListRowMedia({ status = "ok", children }: { status?: RowStatus; children: ReactNode }) {
   return (
     <ItemMedia className="relative">
@@ -90,7 +99,8 @@ export function ListRowMedia({ status = "ok", children }: { status?: RowStatus; 
         <span
           className={cn(
             "absolute -end-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-muted",
-            dotColor[status],
+            status === "error" && "bg-destructive",
+            status === "attention" && "bg-primary",
           )}
           aria-hidden
         />
@@ -99,33 +109,43 @@ export function ListRowMedia({ status = "ok", children }: { status?: RowStatus; 
   );
 }
 
-export function ListRow({ children }: { children: ReactNode }) {
-  return (
-    <Item size="sm" className="rounded-none border-transparent">
-      {children}
-    </Item>
-  );
-}
-
-export function ListRowButton({
-  onOpen,
-  muted,
-  children,
-}: {
-  onOpen: () => void;
-  muted?: boolean;
-  children: ReactNode;
-}) {
+export function ListRow({ children, muted }: { children: ReactNode; muted?: boolean }) {
   return (
     <Item
       size="sm"
-      render={<button type="button" onClick={onOpen} />}
       className={cn(
-        "cursor-pointer rounded-none border-transparent text-left hover:bg-muted",
+        "relative rounded-none border-transparent",
+        // The overlay is transparent, so the row itself carries the hover tint. Keying it to the
+        // overlay leaves a row without one — a setup step, say — unhighlighted, as before.
+        "has-[[data-slot=list-row-open]:hover]:bg-muted",
         muted && "opacity-60",
       )}
     >
       {children}
     </Item>
   );
+}
+
+/**
+ * A transparent button covering the row, so the whole row opens without a `<button>` wrapping the
+ * controls inside it. Interactive siblings need {@link ListRowActions} to sit above it.
+ */
+export function ListRowOpen({ label, className, ...props }: ComponentProps<"button"> & { label: string }) {
+  return (
+    <button
+      data-slot="list-row-open"
+      type="button"
+      {...props}
+      className={cn(
+        "absolute inset-0 cursor-pointer rounded-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+        className,
+      )}
+    >
+      <span className="sr-only">{label}</span>
+    </button>
+  );
+}
+
+export function ListRowActions({ children }: { children: ReactNode }) {
+  return <ItemActions className="relative">{children}</ItemActions>;
 }

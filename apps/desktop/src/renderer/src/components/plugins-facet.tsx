@@ -1,33 +1,38 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiBox3Line } from "@remixicon/react";
-import { placeholderConfiguration } from "../features/configuration-placeholder";
-import { addedEntryIds, needsAttention } from "../features/plugins-view";
+import type { InstalledPlugin } from "../features/configuration-model";
+import { useConfiguration } from "./configuration-provider";
+import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionBody, ListSectionHeader, ListSectionRows } from "./customize-list";
-import { CatalogPluginRow, PluginAttentionRow, PluginRow } from "./plugin-list-rows";
-
-const { plugins, catalog } = placeholderConfiguration;
+import { PluginAttentionRow, PluginRow } from "./plugin-list-rows";
 
 const matches = (query: string, ...fields: readonly string[]) => {
   const needle = query.trim().toLowerCase();
   return needle === "" || fields.join(" ").toLowerCase().includes(needle);
 };
 
-export function PluginsFacet({ query }: { query: string }) {
-  const found = plugins.filter((plugin) => matches(query, plugin.name, plugin.summary));
-  const attention = found.filter(needsAttention);
-  const settled = found.filter((plugin) => !needsAttention(plugin));
-  const offered = catalog.filter((entry) => matches(query, entry.name, entry.summary));
-  const added = addedEntryIds();
+const pluginKey = (plugin: InstalledPlugin) => plugin.record.pluginId;
+
+export function PluginsFacet() {
+  const {
+    state: { picture },
+    meta: { plugins: pluginAxis },
+  } = useConfiguration();
+  const {
+    state: { query },
+  } = useCustomizeFilter();
+
+  const found = picture.plugins.filter((plugin) => matches(query, plugin.name, plugin.summary));
+  const attention = found.filter(pluginAxis.needsAttention);
+  const settled = found.filter((plugin) => !pluginAxis.needsAttention(plugin));
 
   return (
     <div className="flex flex-col gap-6">
       {attention.length > 0 ? (
         <ListSection>
           <ListSectionHeader title="Needs Attention" count={attention.length} />
-          <ListSectionRows>
-            {attention.map((plugin) => (
-              <PluginAttentionRow key={plugin.record.pluginId} plugin={plugin} />
-            ))}
+          <ListSectionRows items={attention} keyOf={pluginKey}>
+            {(plugin) => <PluginAttentionRow plugin={plugin} />}
           </ListSectionRows>
         </ListSection>
       ) : null}
@@ -47,21 +52,10 @@ export function PluginsFacet({ query }: { query: string }) {
             </Empty>
           </ListSectionBody>
         ) : (
-          <ListSectionRows>
-            {settled.map((plugin) => (
-              <PluginRow key={plugin.record.pluginId} plugin={plugin} />
-            ))}
+          <ListSectionRows items={settled} keyOf={pluginKey}>
+            {(plugin) => <PluginRow plugin={plugin} />}
           </ListSectionRows>
         )}
-      </ListSection>
-
-      <ListSection>
-        <ListSectionHeader title="Catalog" count={offered.length} />
-        <ListSectionRows>
-          {offered.map((entry) => (
-            <CatalogPluginRow key={entry.id} entry={entry} added={added.includes(entry.id)} />
-          ))}
-        </ListSectionRows>
       </ListSection>
     </div>
   );

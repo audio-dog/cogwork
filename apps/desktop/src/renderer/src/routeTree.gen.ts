@@ -16,7 +16,10 @@ import { Route as AppConnectionsRouteImport } from './routes/_app/connections'
 import { Route as AppCustomizeRouteRouteImport } from './routes/_app/customize/route'
 import { Route as AppWorkflowsRouteImport } from './routes/_app/workflows'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
-import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
+import { Route as SettingsSplatRouteImport } from './routes/settings/$'
+import { Route as SettingsAppearanceRouteImport } from './routes/settings/appearance'
+import { Route as SettingsEngineRouteImport } from './routes/settings/engine'
+import { Route as SettingsGeneralRouteImport } from './routes/settings/general'
 import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
 import { Route as AppCustomizeFacetRouteImport } from './routes/_app/customize/$facet'
 import { Route as AppCustomizePluginPluginIdRouteImport } from './routes/_app/customize/plugin.$pluginId'
@@ -55,9 +58,24 @@ const SettingsIndexRoute = SettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
-const SettingsSectionRoute = SettingsSectionRouteImport.update({
-  id: '/$section',
-  path: '/$section',
+const SettingsSplatRoute = SettingsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsEngineRoute = SettingsEngineRouteImport.update({
+  id: '/engine',
+  path: '/engine',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsGeneralRoute = SettingsGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
 const AppCustomizeIndexRoute = AppCustomizeIndexRouteImport.update({
@@ -83,7 +101,10 @@ export interface FileRoutesByFullPath {
   '/customize': typeof AppCustomizeRouteRouteWithChildren
   '/connections': typeof AppConnectionsRoute
   '/workflows': typeof AppWorkflowsRoute
-  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/$': typeof SettingsSplatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/engine': typeof SettingsEngineRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/settings/': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
   '/customize/': typeof AppCustomizeIndexRoute
@@ -92,7 +113,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/connections': typeof AppConnectionsRoute
   '/workflows': typeof AppWorkflowsRoute
-  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/$': typeof SettingsSplatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/engine': typeof SettingsEngineRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
   '/customize/$facet': typeof AppCustomizeFacetRoute
@@ -106,7 +130,10 @@ export interface FileRoutesById {
   '/_app/customize': typeof AppCustomizeRouteRouteWithChildren
   '/_app/connections': typeof AppConnectionsRoute
   '/_app/workflows': typeof AppWorkflowsRoute
-  '/settings/$section': typeof SettingsSectionRoute
+  '/settings/$': typeof SettingsSplatRoute
+  '/settings/appearance': typeof SettingsAppearanceRoute
+  '/settings/engine': typeof SettingsEngineRoute
+  '/settings/general': typeof SettingsGeneralRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
   '/_app/customize/$facet': typeof AppCustomizeFacetRoute
@@ -121,7 +148,10 @@ export interface FileRouteTypes {
     | '/customize'
     | '/connections'
     | '/workflows'
-    | '/settings/$section'
+    | '/settings/$'
+    | '/settings/appearance'
+    | '/settings/engine'
+    | '/settings/general'
     | '/settings/'
     | '/customize/$facet'
     | '/customize/'
@@ -130,7 +160,10 @@ export interface FileRouteTypes {
   to:
     | '/connections'
     | '/workflows'
-    | '/settings/$section'
+    | '/settings/$'
+    | '/settings/appearance'
+    | '/settings/engine'
+    | '/settings/general'
     | '/'
     | '/settings'
     | '/customize/$facet'
@@ -143,7 +176,10 @@ export interface FileRouteTypes {
     | '/_app/customize'
     | '/_app/connections'
     | '/_app/workflows'
-    | '/settings/$section'
+    | '/settings/$'
+    | '/settings/appearance'
+    | '/settings/engine'
+    | '/settings/general'
     | '/_app/'
     | '/settings/'
     | '/_app/customize/$facet'
@@ -207,11 +243,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsIndexRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
-    '/settings/$section': {
-      id: '/settings/$section'
-      path: '/$section'
-      fullPath: '/settings/$section'
-      preLoaderRoute: typeof SettingsSectionRouteImport
+    '/settings/$': {
+      id: '/settings/$'
+      path: '/$'
+      fullPath: '/settings/$'
+      preLoaderRoute: typeof SettingsSplatRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/appearance': {
+      id: '/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/engine': {
+      id: '/settings/engine'
+      path: '/engine'
+      fullPath: '/settings/engine'
+      preLoaderRoute: typeof SettingsEngineRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/general': {
+      id: '/settings/general'
+      path: '/general'
+      fullPath: '/settings/general'
+      preLoaderRoute: typeof SettingsGeneralRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
     '/_app/customize/': {
@@ -272,12 +329,18 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
 )
 
 interface SettingsRouteRouteChildren {
-  SettingsSectionRoute: typeof SettingsSectionRoute
+  SettingsSplatRoute: typeof SettingsSplatRoute
+  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsEngineRoute: typeof SettingsEngineRoute
+  SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
-  SettingsSectionRoute: SettingsSectionRoute,
+  SettingsSplatRoute: SettingsSplatRoute,
+  SettingsAppearanceRoute: SettingsAppearanceRoute,
+  SettingsEngineRoute: SettingsEngineRoute,
+  SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsIndexRoute: SettingsIndexRoute,
 }
 

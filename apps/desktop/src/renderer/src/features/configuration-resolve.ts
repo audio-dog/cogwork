@@ -39,10 +39,14 @@ export interface ResolvedEnablement {
   readonly dropped: readonly DroppedRow[];
 }
 
-export function resolveEnablement(contribution: Contribution, view: ViewContext): ResolvedEnablement {
-  const visible = contribution.rows.filter((row) => inView(row, view));
-
-  const dropped = visible
+/**
+ * A diagnostic is a fact about the Contribution's own settings, not about what you are looking at.
+ * A machine-level Contribution has no `definedIn`, so every view that names a workspace would drop
+ * its overlay rows — and with them the reason those rows are broken. Report diagnostics for every
+ * row, and let only the effective value depend on the view.
+ */
+export function diagnosticsOf(contribution: Contribution): readonly DroppedRow[] {
+  return contribution.rows
     .filter((row) => row.diagnostic !== undefined || !admissibleFor(contribution.kind, row))
     .map((row) => ({
       row,
@@ -52,6 +56,11 @@ export function resolveEnablement(contribution: Contribution, view: ViewContext)
         source: row.source,
       },
     }));
+}
+
+export function resolveEnablement(contribution: Contribution, view: ViewContext): ResolvedEnablement {
+  const visible = contribution.rows.filter((row) => inView(row, view));
+  const dropped = diagnosticsOf(contribution).filter((entry) => inView(entry.row, view));
 
   const droppedRows = new Set(dropped.map((entry) => entry.row));
   const candidates = visible
@@ -60,6 +69,11 @@ export function resolveEnablement(contribution: Contribution, view: ViewContext)
 
   const [winner, ...shadowed] = candidates;
   return { effective: winner?.value, winner, shadowed, dropped };
+}
+
+/** The workspace a Contribution's own settings resolve against. */
+export function viewOf(contribution: Contribution): ViewContext {
+  return { workspaceId: contribution.definedIn };
 }
 
 export function enableScopeFor(contribution: Contribution): ScopeRef | undefined {

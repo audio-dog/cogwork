@@ -1,67 +1,68 @@
-import { Badge } from "@cogwork/ui/components/badge";
-import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
-import { Switch } from "@cogwork/ui/components/switch";
-import { useState } from "react";
-import { draftCellAt, withDraft } from "../features/configuration-draft";
-import { type Contribution, scopeCopy } from "../features/configuration-model";
-import { workspaceById } from "../features/configuration-placeholder";
-import { enableScopeFor, resolveEnablement } from "../features/configuration-resolve";
-import { useConfigurationDraftStore } from "../store/configuration-draft";
-import { kindIcons } from "./configuration-atoms";
-import { ContributionBadges, contributionStatus } from "./contribution-badges";
-import { ListRowButton, ListRowMedia } from "./customize-list";
+import { Dialog, DialogTrigger } from "@cogwork/ui/components/dialog";
+import { ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
+import { kindIcons } from "../features/configuration-icons";
+import { type Contribution as ContributionRecord, scopeCopy } from "../features/configuration-model";
+import { useConfiguration } from "./configuration-provider";
+import { Contribution, useContribution } from "./contribution";
+import { ListRow, ListRowActions, ListRowMedia, ListRowOpen } from "./customize-list";
 import { McpConfigureDialog } from "./mcp-configure-dialog";
 
 const Icon = kindIcons["mcp-server"];
 
-function statusLine(contribution: Contribution) {
+function StatusLine() {
+  const {
+    state: { contribution, on },
+  } = useContribution();
+  const {
+    meta: { workspaceById },
+  } = useConfiguration();
+
   if (contribution.load._tag === "failed") return contribution.load.reason;
   if (contribution.readiness?._tag === "not-ready") return contribution.readiness.reason;
+
   const workspace = workspaceById(contribution.definedIn);
-  return `${workspace ? `${workspace.name} · ` : ""}${scopeCopy[contribution.definedAt].name}`;
+  const where = `${workspace ? `${workspace.name} · ` : ""}${scopeCopy[contribution.definedAt].name}`;
+  return `${on ? "Connected" : "Off"} · ${where}`;
 }
 
-export function McpServerRow({ contribution }: { contribution: Contribution }) {
-  const cells = useConfigurationDraftStore((state) => state.cells);
-  const setCell = useConfigurationDraftStore((state) => state.setCell);
-  const [configuring, setConfiguring] = useState(false);
-
-  const view = { workspaceId: contribution.definedIn };
-  const resolved = resolveEnablement(withDraft(contribution, cells), view);
-  const target = enableScopeFor(contribution);
-  const failed = contribution.load._tag === "failed";
-  const on = target ? draftCellAt(contribution, target, cells) === "on" : resolved.effective === true;
+function McpRowBody() {
+  const {
+    state: { contribution, on, failed, status },
+  } = useContribution();
 
   return (
-    <>
-      <ListRowButton onOpen={() => setConfiguring(true)} muted={!on && !failed}>
-        <ListRowMedia status={contributionStatus(contribution)}>
-          <Icon />
-        </ListRowMedia>
-        <ItemContent>
-          <ItemTitle className="gap-1.5">
-            {contribution.localName}
-            <ContributionBadges contribution={contribution} />
-            {on || failed ? null : <Badge variant="ghost">Disabled</Badge>}
-          </ItemTitle>
-          <ItemDescription className={failed ? "text-destructive" : undefined}>
-            {statusLine(contribution)}
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          <Switch
-            checked={on}
-            disabled={failed || target === undefined}
-            onCheckedChange={(checked) => {
-              if (target) setCell(contribution.id, target, checked ? "on" : "off");
-            }}
-          />
-        </ItemActions>
-      </ListRowButton>
-      <McpConfigureDialog contribution={contribution} open={configuring} onOpenChange={setConfiguring} />
-    </>
+    <ListRow muted={!on && !failed}>
+      <DialogTrigger render={<ListRowOpen label={`Configure ${contribution.localName}`} />} />
+      <ListRowMedia status={status}>
+        <Icon />
+      </ListRowMedia>
+      <ItemContent>
+        <ItemTitle className="gap-1.5">
+          {contribution.localName}
+          <Contribution.Badges />
+        </ItemTitle>
+        <ItemDescription className={failed ? "text-destructive" : undefined}>
+          <StatusLine />
+        </ItemDescription>
+      </ItemContent>
+      <ListRowActions>
+        <Contribution.Switch label={`Turn ${contribution.localName} on`} />
+      </ListRowActions>
+    </ListRow>
+  );
+}
+
+/**
+ * An MCP server launches a process, so it has an on / off. The row and its dialog share one
+ * provider, and the Dialog owns whether it is open — no `open` prop travels between them.
+ */
+export function McpServerRow({ contribution }: { contribution: ContributionRecord }) {
+  return (
+    <Contribution.Provider contribution={contribution}>
+      <Dialog>
+        <McpRowBody />
+        <McpConfigureDialog />
+      </Dialog>
+    </Contribution.Provider>
   );
 }

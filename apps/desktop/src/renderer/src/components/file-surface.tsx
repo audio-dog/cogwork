@@ -1,8 +1,8 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiFileTextLine } from "@remixicon/react";
 import { authorityLabel, kindLabels, scopeCopy } from "../features/configuration-model";
-import { contributionById, workspaceById } from "../features/configuration-placeholder";
 import { useRightPanelStore } from "../store/right-panel";
+import { useConfiguration } from "./configuration-provider";
 import { SurfaceTab } from "./surface-tab";
 
 const Icon = RiFileTextLine;
@@ -34,6 +34,9 @@ function Property({ label, value }: { label: string; value: string }) {
 }
 
 export function FileSurfaceBody({ contributionId, path }: { contributionId: string; path: string }) {
+  const {
+    meta: { contributionById, workspaceById },
+  } = useConfiguration();
   const contribution = contributionById(contributionId);
   const workspace = workspaceById(contribution?.definedIn);
 

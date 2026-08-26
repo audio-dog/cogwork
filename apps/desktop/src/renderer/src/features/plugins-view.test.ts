@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { placeholderConfiguration } from "./configuration-placeholder";
-import { attentionAction, attentionLine, attentionOf, contributionsOf, needsAttention } from "./plugins-view";
+import { attentionAction, attentionLine, pluginsView } from "./plugins-view";
 
 const { plugins } = placeholderConfiguration;
+const { attentionOf, contributionsOf, needsAttention } = pluginsView(placeholderConfiguration);
 
 function plugin(pluginId: string) {
   const found = plugins.find((entry) => entry.record.pluginId === pluginId);

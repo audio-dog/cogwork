@@ -14,7 +14,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@cogwork/ui/components/
 import { Separator } from "@cogwork/ui/components/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiArrowDownSLine, RiArrowRightSLine, RiCheckDoubleLine } from "@remixicon/react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
+import { scopeIcons } from "../features/configuration-icons";
 import {
   type ContributionKind,
   type ScopeRef,
@@ -22,27 +23,36 @@ import {
   scopeKey,
   type Workspace,
 } from "../features/configuration-model";
-import { placeholderConfiguration } from "../features/configuration-placeholder";
-import {
-  allPlaceKeys,
-  countAt,
-  placeCount,
-  profilePlace,
-  summarize,
-  toggle,
-  workspaceScopeKinds,
-} from "../features/customize-places";
-import { scopeIcons } from "./configuration-atoms";
+import { profilePlace, workspaceScopeKinds } from "../features/customize-places";
+import { useConfiguration } from "./configuration-provider";
+import { useCustomizeFilter } from "./customize-filter";
 
-const { workspaces } = placeholderConfiguration;
 const ProfileIcon = scopeIcons["settings-profile"];
 
 type Highlight = { readonly _tag: "user" } | { readonly _tag: "workspace"; readonly id: Workspace["id"] };
 
-function CountBadge({ count, muted }: { count: number; muted: boolean }) {
+/** How much of a place is picked. Distinct from `count`, which is how much lives there. */
+type Selection = "none" | "some" | "all";
+
+const selectionOf = (picked: number, total: number): Selection => {
+  if (picked === 0) return "none";
+  return picked === total ? "all" : "some";
+};
+
+function PlaceTrigger({ label, disabled }: { label: string; disabled?: boolean }) {
+  return (
+    <Button variant="outline" size="sm" className="rounded-full" disabled={disabled}>
+      <ProfileIcon data-icon="inline-start" />
+      <span className="w-32 truncate text-start">{label}</span>
+      <RiArrowDownSLine data-icon="inline-end" />
+    </Button>
+  );
+}
+
+function CountBadge({ count, selection }: { count: number; selection: Selection }) {
   return (
     <Badge
-      variant={muted || count === 0 ? "ghost" : "outline"}
+      variant={selection === "none" || count === 0 ? "ghost" : "outline"}
       className="w-6 justify-center px-0 tabular-nums"
     >
       {count}
@@ -54,14 +64,14 @@ function NavRow({
   icon: Icon,
   title,
   count,
-  muted,
+  selection,
   active,
   onHighlight,
 }: {
   icon?: typeof ProfileIcon;
   title: string;
   count: number;
-  muted: boolean;
+  selection: Selection;
   active: boolean;
   onHighlight: () => void;
 }) {
@@ -81,7 +91,7 @@ function NavRow({
         <ItemTitle>{title}</ItemTitle>
       </ItemContent>
       <ItemActions>
-        <CountBadge count={count} muted={muted} />
+        <CountBadge count={count} selection={selection} />
         <RiArrowRightSLine className="size-3.5 text-muted-foreground" />
       </ItemActions>
     </Item>
@@ -110,61 +120,41 @@ function PlaceRow({
         <ItemDescription>{copy.hint}</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <CountBadge count={count} muted={!checked} />
+        <CountBadge count={count} selection={checked ? "all" : "none"} />
       </ItemActions>
     </Item>
   );
 }
 
-function placesOf(highlight: Highlight, workspace?: Workspace): readonly ScopeRef[] {
-  if (highlight._tag === "user") return [profilePlace];
-  if (!workspace) return [];
-  return workspaceScopeKinds.map((kind) => ({ kind, workspaceId: workspace.id }));
-}
-
-export function CustomizePlaceMenu({
-  places,
-  kind,
-  onChange,
-  unavailable,
-}: {
-  places: readonly string[];
-  kind?: ContributionKind;
-  onChange: (next: readonly string[]) => void;
-  unavailable?: string;
-}) {
-  const countFor = (place: ScopeRef) => (kind ? countAt(place, kind) : 0);
+/**
+ * The Place filter for a Facet whose rows live somewhere. `kind` is what the counts count.
+ */
+export function CustomizePlaceMenu({ kind }: { kind: ContributionKind }) {
+  const {
+    state: { picture },
+    meta: { places: placeAxis },
+  } = useConfiguration();
+  const {
+    state: { places },
+    actions: { setPlaces, togglePlace },
+  } = useCustomizeFilter();
   const [highlight, setHighlight] = useState<Highlight>({ _tag: "user" });
 
+  const { workspaces } = picture;
   const profileKey = scopeKey(profilePlace);
-  const everything = places.length === placeCount;
+  const everything = places.length === placeAxis.placeCount;
   const workspace =
     highlight._tag === "workspace" ? workspaces.find((entry) => entry.id === highlight.id) : undefined;
-  const shown = placesOf(highlight, workspace);
   const user = highlight._tag === "user";
-
-  const trigger = (
-    <Button variant="outline" size="sm" className="rounded-full" disabled={unavailable !== undefined}>
-      <ProfileIcon data-icon="inline-start" />
-      <span className="w-32 truncate text-start">
-        {unavailable === undefined ? summarize(places) : scopeCopy["settings-profile"].name}
-      </span>
-      <RiArrowDownSLine data-icon="inline-end" />
-    </Button>
-  );
-
-  if (unavailable !== undefined) {
-    return (
-      <Tooltip>
-        <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
-        <TooltipContent className="max-w-72">{unavailable}</TooltipContent>
-      </Tooltip>
-    );
-  }
+  const shown: readonly ScopeRef[] = user
+    ? [profilePlace]
+    : workspace
+      ? workspaceScopeKinds.map((scopeKind) => ({ kind: scopeKind, workspaceId: workspace.id }))
+      : [];
 
   return (
     <Popover>
-      <PopoverTrigger render={trigger} />
+      <PopoverTrigger render={<PlaceTrigger label={placeAxis.summarize(places)} />} />
       <PopoverContent align="start" className="w-136 gap-0 p-0">
         <div className="flex h-64">
           <div className="flex w-68 shrink-0 flex-col gap-0.5 overflow-y-auto p-1.5">
@@ -172,12 +162,12 @@ export function CustomizePlaceMenu({
               variant="ghost"
               size="sm"
               className="justify-start"
-              onClick={() => onChange(everything ? [] : allPlaceKeys)}
+              onClick={() => setPlaces(everything ? [] : placeAxis.allPlaceKeys)}
             >
               <RiCheckDoubleLine data-icon="inline-start" />
               {everything ? "Clear All" : "Select All"}
               <span className="ms-auto text-xs text-muted-foreground tabular-nums">
-                {places.length}/{placeCount}
+                {places.length}/{placeAxis.placeCount}
               </span>
             </Button>
             <Separator className="my-1" />
@@ -185,22 +175,26 @@ export function CustomizePlaceMenu({
             <NavRow
               icon={ProfileIcon}
               title={scopeCopy["settings-profile"].name}
-              count={countFor(profilePlace)}
-              muted={!places.includes(profileKey)}
+              count={placeAxis.countAt(profilePlace, kind)}
+              selection={places.includes(profileKey) ? "all" : "none"}
               active={user}
               onHighlight={() => setHighlight({ _tag: "user" })}
             />
 
             <span className="px-2 pt-3 pb-1 text-xs text-muted-foreground">Workspaces</span>
             {workspaces.map((entry) => {
-              const keys = workspaceScopeKinds.map((kind) => scopeKey({ kind, workspaceId: entry.id }));
-              const checked = keys.filter((key) => places.includes(key)).length;
+              const keys = workspaceScopeKinds.map((scopeKind) =>
+                scopeKey({ kind: scopeKind, workspaceId: entry.id }),
+              );
+              const picked = keys.filter((key) => places.includes(key)).length;
               return (
                 <NavRow
                   key={entry.id}
                   title={entry.name}
-                  count={checked}
-                  muted={checked === 0}
+                  // How many contributions live here, matching the User row above. Selection is the
+                  // badge's tone, never its number.
+                  count={placeAxis.countInWorkspace(entry.id, kind)}
+                  selection={selectionOf(picked, keys.length)}
                   active={highlight._tag === "workspace" && highlight.id === entry.id}
                   onHighlight={() => setHighlight({ _tag: "workspace", id: entry.id })}
                 />
@@ -227,9 +221,9 @@ export function CustomizePlaceMenu({
                   <PlaceRow
                     key={key}
                     place={place}
-                    count={countFor(place)}
+                    count={placeAxis.countAt(place, kind)}
                     checked={places.includes(key)}
-                    onToggle={() => onChange(toggle(places, key))}
+                    onToggle={() => togglePlace(key)}
                   />
                 );
               })}
@@ -238,5 +232,20 @@ export function CustomizePlaceMenu({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * The same control, for a Facet the Place axis does not apply to. A separate component rather than
+ * a flag: it renders a tooltip over a disabled trigger, which shares nothing with the menu above.
+ */
+export function PlaceFilterNotApplicable({ children }: { children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        <PlaceTrigger label={scopeCopy["settings-profile"].name} disabled />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-72">{children}</TooltipContent>
+    </Tooltip>
   );
 }

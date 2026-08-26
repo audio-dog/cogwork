@@ -1,19 +1,26 @@
 import { RiCpuLine, RiPaletteLine, RiSettings3Line } from "@remixicon/react";
+import { linkOptions } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 
-export interface SettingsSection {
-  readonly id: string;
-  readonly label: string;
-  readonly icon: ComponentType;
-}
+/**
+ * Every section is its own route, so `linkOptions` checks each target where it is written rather
+ * than at each spread site. A typo here fails the build instead of redirecting at runtime.
+ */
+const sectionLinks = linkOptions([
+  { to: "/settings/general" },
+  { to: "/settings/appearance" },
+  { to: "/settings/engine" },
+]);
 
 export const settingsSections = [
-  { id: "general", label: "General", icon: RiSettings3Line },
-  { id: "appearance", label: "Appearance", icon: RiPaletteLine },
-  { id: "engine", label: "Engine", icon: RiCpuLine },
-] as const satisfies readonly SettingsSection[];
+  { id: "general", label: "General", icon: RiSettings3Line, link: sectionLinks[0] },
+  { id: "appearance", label: "Appearance", icon: RiPaletteLine, link: sectionLinks[1] },
+  { id: "engine", label: "Engine", icon: RiCpuLine, link: sectionLinks[2] },
+] as const;
 
-export type SettingsSectionId = (typeof settingsSections)[number]["id"];
+export type SettingsSection = (typeof settingsSections)[number];
+
+export type SettingsSectionId = SettingsSection["id"];
 
 export interface SettingEntry {
   readonly id: string;
@@ -61,11 +68,7 @@ export const settingsIndex = [
   },
 ] as const satisfies readonly SettingEntry[];
 
-export function isSettingsSectionId(value: string): value is SettingsSectionId {
-  return settingsSections.some((section) => section.id === value);
-}
-
-export function findSection(id: string) {
+export function findSection(id: SettingsSectionId) {
   return settingsSections.find((section) => section.id === id);
 }
 
@@ -80,3 +83,12 @@ export function searchSettings(query: string) {
     [entry.title, ...entry.keywords].join(" ").toLowerCase().includes(needle),
   );
 }
+
+export function settingEntry(id: string): SettingEntry {
+  const found = settingsIndex.find((entry) => entry.id === id);
+  if (!found) throw new Error(`Unknown setting: ${id}`);
+  return found;
+}
+
+/** Kept so a section's icon can be looked up by id without narrowing on the literal union. */
+export const sectionIcon = (id: SettingsSectionId): ComponentType | undefined => findSection(id)?.icon;

@@ -11,21 +11,23 @@ import {
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
-import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
+import { ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftSLine, RiBox3Line, RiCheckLine, RiDeleteBinLine, RiSubtractLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
+  type Contribution,
   contributionKinds,
   type InstalledPlugin,
   kindLabelsPlural,
   type SetupStep,
 } from "../features/configuration-model";
-import { contributionsOf } from "../features/plugins-view";
+import { useConfiguration } from "./configuration-provider";
 import { ContributionFileRow } from "./contribution-file-row";
 import {
   ListRow,
+  ListRowActions,
   ListRowMedia,
   ListSection,
   ListSectionBody,
@@ -49,7 +51,7 @@ function SetupRow({ step }: { step: SetupStep }) {
         <ItemTitle>{step.label}</ItemTitle>
         <ItemDescription>{step.detail}</ItemDescription>
       </ItemContent>
-      <ItemActions>
+      <ListRowActions>
         {step.done ? (
           <Badge variant="ghost">Done</Badge>
         ) : (
@@ -57,7 +59,7 @@ function SetupRow({ step }: { step: SetupStep }) {
             Do it
           </Button>
         )}
-      </ItemActions>
+      </ListRowActions>
     </ListRow>
   );
 }
@@ -88,8 +90,16 @@ function UninstallDialog({ plugin }: { plugin: InstalledPlugin }) {
   );
 }
 
+function ContributionRow({ contribution }: { contribution: Contribution }) {
+  if (contribution.kind === "mcp-server") return <McpServerRow contribution={contribution} />;
+  return <ContributionFileRow contribution={contribution} />;
+}
+
 export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
-  const rows = contributionsOf(plugin);
+  const {
+    meta: { plugins },
+  } = useConfiguration();
+  const rows = plugins.contributionsOf(plugin);
   const remaining = plugin.setup.filter((step) => !step.done);
 
   return (
@@ -112,15 +122,13 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
           <div className="flex min-w-0 flex-1 flex-col">
             <h1 className="font-heading text-2xl font-semibold tracking-tight">{plugin.name}</h1>
             <p className="text-sm text-muted-foreground">{plugin.summary}</p>
-            {plugin.requiredConnections.length > 0 ? (
-              <p className="mt-1 flex flex-wrap items-center gap-2">
-                {plugin.requiredConnections.map((connection) => (
-                  <Badge key={connection} variant="outline">
-                    Requires {connection}
-                  </Badge>
-                ))}
-              </p>
-            ) : null}
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              {plugin.requiredConnections.map((connection) => (
+                <Badge key={connection} variant="outline">
+                  Requires {connection}
+                </Badge>
+              ))}
+            </p>
           </div>
           <UninstallDialog plugin={plugin} />
         </div>
@@ -128,10 +136,8 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
         {remaining.length > 0 ? (
           <ListSection>
             <ListSectionHeader title="Setup" count={plugin.setup.length} />
-            <ListSectionRows>
-              {plugin.setup.map((step) => (
-                <SetupRow key={step.id} step={step} />
-              ))}
+            <ListSectionRows items={plugin.setup} keyOf={(step) => step.id}>
+              {(step) => <SetupRow step={step} />}
             </ListSectionRows>
           </ListSection>
         ) : null}
@@ -142,14 +148,8 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
           return (
             <ListSection key={kind}>
               <ListSectionHeader title={kindLabelsPlural[kind]} count={ofKind.length} />
-              <ListSectionRows>
-                {ofKind.map((contribution) =>
-                  contribution.kind === "mcp-server" ? (
-                    <McpServerRow key={contribution.id} contribution={contribution} />
-                  ) : (
-                    <ContributionFileRow key={contribution.id} contribution={contribution} />
-                  ),
-                )}
+              <ListSectionRows items={ofKind} keyOf={(contribution) => contribution.id}>
+                {(contribution) => <ContributionRow contribution={contribution} />}
               </ListSectionRows>
             </ListSection>
           );

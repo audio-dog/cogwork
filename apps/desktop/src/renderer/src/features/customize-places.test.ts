@@ -6,20 +6,21 @@ import {
   contributionById,
   placeholderConfiguration,
 } from "./configuration-placeholder";
-import {
+import { customizePlaces, placeOf, profilePlace, toggle, workspaceScopeKinds } from "./customize-places";
+
+const { workspaces } = placeholderConfiguration;
+
+// The Place axis is bound to a configuration rather than importing one, so a test binds it too.
+const {
   allPlaceKeys,
   allPlaces,
   countAt,
+  countInWorkspace,
   groupContributions,
   kindCount,
-  placeOf,
-  profilePlace,
   summarize,
-  toggle,
   visibleContributions,
-} from "./customize-places";
-
-const { workspaces } = placeholderConfiguration;
+} = customizePlaces(placeholderConfiguration);
 
 describe("the set of places", () => {
   it("is the machine plus two per workspace", () => {
@@ -210,6 +211,14 @@ describe("countAt and kindCount", () => {
     expect(countAt({ kind: "workspace-input", workspaceId: cogworkWorkspaceId }, "skill")).toBe(1);
     expect(countAt({ kind: "workspace-input", workspaceId: clankerWorkspaceId }, "skill")).toBe(0);
     expect(countAt(profilePlace, "rules")).toBe(2);
+  });
+
+  it("counts what lives in a workspace across both of its places", () => {
+    // The nav row badges contributions, not how many of its two checkboxes are ticked.
+    const repo = countAt({ kind: "workspace-input", workspaceId: cogworkWorkspaceId }, "skill");
+    const overlay = countAt({ kind: "private-overlay", workspaceId: cogworkWorkspaceId }, "skill");
+    expect(countInWorkspace(cogworkWorkspaceId, "skill")).toBe(repo + overlay);
+    expect(countInWorkspace(cogworkWorkspaceId, "skill")).toBeGreaterThan(workspaceScopeKinds.length - 1);
   });
 
   it("counts a kind across the selected places only", () => {
