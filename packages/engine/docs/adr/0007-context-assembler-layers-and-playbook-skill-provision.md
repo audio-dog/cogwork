@@ -18,7 +18,7 @@ ADR 0010 adds the Codex CLI runner and changes the provider-only boundary above.
 
 The contribution-kinds resolution adds **Rules** — advisory guidance contributed at any scope, authored as markdown with frontmatter. The ambient-instructions-are-`AGENTS.md`-only rule above is narrowed accordingly: `AGENTS.md` remains the only *ambient discovery*, and Rules are a fourth, *declared* layer.
 
-Precedence, general to specific: global Rules → repo `AGENTS.md` → repo Rules → private-overlay Rules → **Operating Instructions, last and highest**. Rules are advisory and can never satisfy a required need or weaken Operating Instructions — ADR 0010's guarantee that a mandatory AFK operation never depends on ambient installation or discovery holds unchanged.
+Precedence, general to specific: global Rules → repo `AGENTS.md` → repo Rules → private-overlay Rules → **Operating Instructions, last and highest**. Rules are advisory and can never satisfy a required need — ADR 0010's guarantee that a mandatory AFK operation never depends on ambient installation or discovery holds unchanged.
 
 ## Correction: same verb, same noun, opposite destination
 
@@ -27,6 +27,12 @@ The paragraph above says skill provision "mirrors TanStack sandbox's 'skills are
 TanStack AI's provisioning writes **into the checkout root** — `bootstrapWorkspace()` places instructions, `fileSkill` and `gitSkill` content under the same directory as the cloned source, then `projectWorkspace()` renders per harness. Every on-disk destination is inside the checkout. This ADR does the opposite on purpose, and its own rejected-options list rejects what TanStack does ("Copy skills into the worktree — rejected: dirties the driven checkout and risks landing in a PR").
 
 The inversion is right, because the two systems drive different things: TanStack's checkout is a throwaway clone inside a disposable sandbox, while Cogwork drives a real worktree whose diff becomes a pull request. The decision stands; only the justification was wrong. The accurate framing is **host-side skill provision** — same verb, same noun, opposite destination.
+
+## Correction: the Engine does not police what a Rule says
+
+The amendment above also claimed a Rule can never "weaken Operating Instructions". That half is struck by ADR [0018](../../../../docs/adr/0018-contribution-files-live-in-three-authoring-trees.md). The Engine collects Rules and does not read them: it decides on / off, whether the globs match, and where in the ladder they sit. Whether a model then follows a Rule over an Operating Instruction is the author's business, and no Engine gate can enforce otherwise. "Can never satisfy a required need" survives, because that one *is* an Engine gate.
+
+The same ADR narrows this ADR's ambient-instruction rule in the other direction. `AGENTS.md` is no longer the only thing read from a repository: `<repo>/.agents/` is the Workspace input's **Authoring tree**, scanned on registration, and `register` is the trust act that admits it.
 
 ## Considered Options
 
