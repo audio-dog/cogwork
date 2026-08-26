@@ -24,7 +24,6 @@ import { parseCount, sanitizeCountDraft } from "../features/settings-values";
 import { useBoard } from "../features/use-board";
 import { useSchedulerConfig } from "../features/use-scheduler-config";
 import { useWindowPreferences } from "../features/use-window-preferences";
-import { WorkspacesPanel } from "./configuration-workspaces-panel";
 import { type Theme, useTheme } from "./theme-provider";
 
 const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});
@@ -294,7 +293,6 @@ const sectionBodyById: Record<SettingsSectionId, () => ReactNode> = {
   general: () => <GeneralPage />,
   appearance: () => <AppearancePage />,
   engine: () => <EnginePage />,
-  workspaces: () => <WorkspacesPanel />,
 };
 
 export function SettingsSectionView({

@@ -1,4 +1,4 @@
-import { RiCpuLine, RiGitRepositoryLine, RiPaletteLine, RiSettings3Line } from "@remixicon/react";
+import { RiCpuLine, RiPaletteLine, RiSettings3Line } from "@remixicon/react";
 import type { ComponentType } from "react";
 
 export interface SettingsSection {
@@ -11,10 +11,6 @@ export const settingsSections = [
   { id: "general", label: "General", icon: RiSettings3Line },
   { id: "appearance", label: "Appearance", icon: RiPaletteLine },
   { id: "engine", label: "Engine", icon: RiCpuLine },
-  // Workspace registration, the daemon's runtime limits, and Control store restore. #133 fixed
-  // that these are neither Plugins nor Customize and refused to name the surface that owns them;
-  // Settings is where they sit until it is named.
-  { id: "workspaces", label: "Workspaces", icon: RiGitRepositoryLine },
 ] as const satisfies readonly SettingsSection[];
 
 export type SettingsSectionId = (typeof settingsSections)[number]["id"];
@@ -62,13 +58,6 @@ export const settingsIndex = [
     title: "Daily budget",
     description: "How many runs the scheduler starts per day before it pauses new work.",
     keywords: ["budget", "spend", "cost", "runs", "daily", "cap"],
-  },
-  {
-    id: "registered-workspaces",
-    sectionId: "workspaces",
-    title: "Registered workspaces",
-    description: "Register, deregister, and re-bind a workspace checkout path.",
-    keywords: ["workspace", "register", "deregister", "re-bind", "checkout", "repository", "restore"],
   },
 ] as const satisfies readonly SettingEntry[];
 

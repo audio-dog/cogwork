@@ -173,19 +173,6 @@ export interface Workspace {
   readonly name: string;
   readonly checkoutPath: string;
   readonly remote?: string;
-  readonly tracker: string;
-}
-
-export interface DaemonLimits {
-  readonly globalConcurrency: number;
-  readonly perWorkspaceConcurrency: number;
-  readonly dailyBudget: number;
-}
-
-export interface ControlStoreState {
-  readonly schemaVersion: number;
-  readonly openedAt: string;
-  readonly preMigrationCopy?: { readonly at: string; readonly fromVersion: number };
 }
 
 export interface ConfigurationPicture {
@@ -195,6 +182,4 @@ export interface ConfigurationPicture {
   readonly plugins: readonly InstalledPlugin[];
   readonly contributions: readonly Contribution[];
   readonly catalog: readonly CatalogEntry[];
-  readonly limits: DaemonLimits;
-  readonly controlStore: ControlStoreState;
 }

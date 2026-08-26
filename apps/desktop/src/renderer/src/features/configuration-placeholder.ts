@@ -19,21 +19,18 @@ const workspaces: readonly Workspace[] = [
     name: "cogwork",
     checkoutPath: "~/sites/cogwork",
     remote: "colonylabs/cogwork",
-    tracker: "GitHub Issues",
   },
   {
     id: reviewWorkspaceId,
     name: "cogwork (review)",
     checkoutPath: "~/sites/cogwork-review",
     remote: "colonylabs/cogwork",
-    tracker: "GitHub Issues",
   },
   {
     id: clankerWorkspaceId,
     name: "clanker-forge",
     checkoutPath: "~/sites/clanker-forge",
     remote: "taylorfsteele/clanker-forge",
-    tracker: "Linear",
   },
 ];
 
@@ -480,12 +477,6 @@ export const placeholderConfiguration: ConfigurationPicture = {
   plugins,
   contributions,
   catalog,
-  limits: { globalConcurrency: 4, perWorkspaceConcurrency: 2, dailyBudget: 40 },
-  controlStore: {
-    schemaVersion: 6,
-    openedAt: "2026-08-25T08:02:00Z",
-    preMigrationCopy: { at: "2026-08-19T17:44:00Z", fromVersion: 5 },
-  },
 };
 
 export function workspaceById(workspaceId?: WorkspaceId) {
