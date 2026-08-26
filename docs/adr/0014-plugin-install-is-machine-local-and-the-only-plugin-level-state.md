@@ -252,7 +252,7 @@ setting deleted, and `localName` is still a stable contract.
 
 **Plugin source** had two members: a catalog entry, or a local path. Nothing reaches the local path.
 A person's own contribution files, and a bundle they downloaded and unpacked, both land in an
-**Authoring tree** at its fixed location and are `local` Authority — not a Plugin. Cogwork does not
+**Authoring tree** at its fixed location and carry a `local:` Authority — not a Plugin. Cogwork does not
 install them, does not fetch them, and does not let a person name new tree locations; the only thing a
 person points Cogwork at is a workspace.
 
