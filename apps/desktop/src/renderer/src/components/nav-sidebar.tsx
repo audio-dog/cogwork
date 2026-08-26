@@ -21,7 +21,14 @@ import {
   SidebarMenuItem,
 } from "@cogwork/ui/components/sidebar";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
-import { RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
+import {
+  RiEqualizerLine,
+  RiNodeTree,
+  RiPlugLine,
+  RiPulseLine,
+  RiSettings3Line,
+  RiUserLine,
+} from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import { registeredWorkspaces } from "../features/feed";
@@ -35,13 +42,25 @@ interface View {
   readonly to: string;
 }
 
-const views: ReadonlyArray<View> = [{ label: "Feed", icon: RiPulseLine, to: "/" }];
+const views: ReadonlyArray<View> = [
+  { label: "Feed", icon: RiPulseLine, to: "/" },
+  { label: "Workflows", icon: RiNodeTree, to: "/workflows" },
+  { label: "Connections", icon: RiPlugLine, to: "/connections" },
+  { label: "Customize", icon: RiEqualizerLine, to: "/customize" },
+];
+
+const isViewActive = (pathname: string, to: string) =>
+  to === "/" ? pathname === "/" : pathname.startsWith(to);
 
 function ViewItem({ view }: { view: View }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton isActive={pathname === view.to} render={<Link to={view.to} />} tooltip={view.label}>
+      <SidebarMenuButton
+        isActive={isViewActive(pathname, view.to)}
+        render={<Link to={view.to} />}
+        tooltip={view.label}
+      >
         <view.icon />
         <span>{view.label}</span>
       </SidebarMenuButton>
