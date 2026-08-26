@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_05fbe5432690d4::t_92321c834688c6 25,115-123
+apps/desktop/src/renderer/src/components/mcp-server-row.tsx
+  s_05fbe5432690d4::t_92321c834688c6 1,17,21,37,45,48
+apps/desktop/src/renderer/src/components/customize-list.tsx
+  s_05fbe5432690d4::t_92321c834688c6 110-118,123-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "a57cad88c7b5c27b679118c4deb7bab08d768816",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
