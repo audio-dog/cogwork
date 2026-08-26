@@ -125,16 +125,10 @@ export type McpReadiness =
   | { readonly _tag: "ready" }
   | { readonly _tag: "not-ready"; readonly reason: string };
 
-export type PluginSource =
-  | { readonly _tag: "catalog"; readonly entryId: string }
-  | { readonly _tag: "local-path"; readonly path: string };
-
 export interface InstallRecord {
   readonly pluginId: string;
-  readonly source: PluginSource;
   readonly resolvedIdentity: string;
   readonly principal: string;
-  readonly revision: number;
   readonly installedAt: string;
 }
 

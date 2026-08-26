@@ -44,11 +44,6 @@ export function attentionAction(attention: PluginAttention): string | undefined 
   return undefined;
 }
 
-export function sourceLine(plugin: InstalledPlugin): string {
-  const { source } = plugin.record;
-  return source._tag === "catalog" ? "Ships with cogwork" : `Local path · ${source.path}`;
-}
-
 export function addedEntryIds(): readonly string[] {
   return placeholderConfiguration.plugins.map((plugin) => plugin.record.pluginId);
 }

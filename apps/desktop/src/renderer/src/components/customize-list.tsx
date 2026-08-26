@@ -107,12 +107,23 @@ export function ListRow({ children }: { children: ReactNode }) {
   );
 }
 
-export function ListRowButton({ onOpen, children }: { onOpen: () => void; children: ReactNode }) {
+export function ListRowButton({
+  onOpen,
+  muted,
+  children,
+}: {
+  onOpen: () => void;
+  muted?: boolean;
+  children: ReactNode;
+}) {
   return (
     <Item
       size="sm"
       render={<button type="button" onClick={onOpen} />}
-      className="cursor-pointer rounded-none border-transparent text-left hover:bg-muted"
+      className={cn(
+        "cursor-pointer rounded-none border-transparent text-left hover:bg-muted",
+        muted && "opacity-60",
+      )}
     >
       {children}
     </Item>

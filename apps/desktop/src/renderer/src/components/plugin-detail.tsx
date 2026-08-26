@@ -22,7 +22,7 @@ import {
   kindLabelsPlural,
   type SetupStep,
 } from "../features/configuration-model";
-import { contributionsOf, sourceLine } from "../features/plugins-view";
+import { contributionsOf } from "../features/plugins-view";
 import { ContributionFileRow } from "./contribution-file-row";
 import {
   ListRow,
@@ -112,14 +112,15 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
           <div className="flex min-w-0 flex-1 flex-col">
             <h1 className="font-heading text-2xl font-semibold tracking-tight">{plugin.name}</h1>
             <p className="text-sm text-muted-foreground">{plugin.summary}</p>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{sourceLine(plugin)}</span>
-              {plugin.requiredConnections.map((connection) => (
-                <Badge key={connection} variant="outline">
-                  Requires {connection}
-                </Badge>
-              ))}
-            </p>
+            {plugin.requiredConnections.length > 0 ? (
+              <p className="mt-1 flex flex-wrap items-center gap-2">
+                {plugin.requiredConnections.map((connection) => (
+                  <Badge key={connection} variant="outline">
+                    Requires {connection}
+                  </Badge>
+                ))}
+              </p>
+            ) : null}
           </div>
           <UninstallDialog plugin={plugin} />
         </div>

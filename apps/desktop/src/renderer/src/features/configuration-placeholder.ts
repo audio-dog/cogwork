@@ -285,10 +285,8 @@ const plugins: readonly InstalledPlugin[] = [
   {
     record: {
       pluginId: "linear",
-      source: { _tag: "catalog", entryId: "linear" },
       resolvedIdentity: "linear@1.4.0",
       principal: "taylor",
-      revision: 7,
       installedAt: "2026-06-02T09:12:00Z",
     },
     name: "Linear",
@@ -326,10 +324,8 @@ const plugins: readonly InstalledPlugin[] = [
   {
     record: {
       pluginId: "gh-review",
-      source: { _tag: "catalog", entryId: "gh-review" },
       resolvedIdentity: "gh-review@2.1.0",
       principal: "taylor",
-      revision: 3,
       installedAt: "2026-05-18T14:41:00Z",
     },
     name: "GitHub review pack",
@@ -364,10 +360,8 @@ const plugins: readonly InstalledPlugin[] = [
   {
     record: {
       pluginId: "granola",
-      source: { _tag: "local-path", path: "~/dev/granola-plugin" },
       resolvedIdentity: "granola@rev:9f21c4e",
       principal: "taylor",
-      revision: 1,
       installedAt: "2026-08-21T11:03:00Z",
     },
     name: "Granola notes",
@@ -399,10 +393,8 @@ const plugins: readonly InstalledPlugin[] = [
   {
     record: {
       pluginId: "codex-extras",
-      source: { _tag: "catalog", entryId: "codex-extras" },
       resolvedIdentity: "codex-extras@0.9.3",
       principal: "taylor",
-      revision: 2,
       installedAt: "2026-04-07T08:20:00Z",
     },
     name: "Codex harness extras",

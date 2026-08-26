@@ -1,3 +1,4 @@
+import { Badge } from "@cogwork/ui/components/badge";
 import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Switch } from "@cogwork/ui/components/switch";
 import { useState } from "react";
@@ -13,12 +14,11 @@ import { McpConfigureDialog } from "./mcp-configure-dialog";
 
 const Icon = kindIcons["mcp-server"];
 
-function statusLine(contribution: Contribution, on: boolean) {
+function statusLine(contribution: Contribution) {
   if (contribution.load._tag === "failed") return contribution.load.reason;
   if (contribution.readiness?._tag === "not-ready") return contribution.readiness.reason;
   const workspace = workspaceById(contribution.definedIn);
-  const where = `${workspace ? `${workspace.name} · ` : ""}${scopeCopy[contribution.definedAt].name}`;
-  return `${on ? "Connected" : "Off"} · ${where}`;
+  return `${workspace ? `${workspace.name} · ` : ""}${scopeCopy[contribution.definedAt].name}`;
 }
 
 export function McpServerRow({ contribution }: { contribution: Contribution }) {
@@ -34,7 +34,7 @@ export function McpServerRow({ contribution }: { contribution: Contribution }) {
 
   return (
     <>
-      <ListRowButton onOpen={() => setConfiguring(true)}>
+      <ListRowButton onOpen={() => setConfiguring(true)} muted={!on && !failed}>
         <ListRowMedia status={contributionStatus(contribution)}>
           <Icon />
         </ListRowMedia>
@@ -42,9 +42,10 @@ export function McpServerRow({ contribution }: { contribution: Contribution }) {
           <ItemTitle className="gap-1.5">
             {contribution.localName}
             <ContributionBadges contribution={contribution} />
+            {on || failed ? null : <Badge variant="ghost">Disabled</Badge>}
           </ItemTitle>
           <ItemDescription className={failed ? "text-destructive" : undefined}>
-            {statusLine(contribution, on)}
+            {statusLine(contribution)}
           </ItemDescription>
         </ItemContent>
         <ItemActions
