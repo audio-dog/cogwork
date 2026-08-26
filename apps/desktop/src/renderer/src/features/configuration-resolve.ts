@@ -66,7 +66,7 @@ export function enableScopeFor(contribution: Contribution): ScopeRef | undefined
   const permitted = enablementScopes[contribution.kind];
   const preferred = permitted.includes(contribution.definedAt) ? contribution.definedAt : permitted.at(-1);
   if (preferred === undefined) return undefined;
-  if (preferred === "runtime-host") return { kind: preferred };
+  if (preferred === "settings-profile") return { kind: preferred };
   if (contribution.definedIn === undefined) return undefined;
   return { kind: preferred, workspaceId: contribution.definedIn };
 }

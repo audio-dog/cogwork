@@ -26,8 +26,8 @@ import { placeholderConfiguration } from "../features/configuration-placeholder"
 import {
   allPlaceKeys,
   countAt,
-  machinePlace,
   placeCount,
+  profilePlace,
   summarize,
   toggle,
   workspaceScopeKinds,
@@ -35,7 +35,7 @@ import {
 import { scopeIcons } from "./configuration-atoms";
 
 const { workspaces } = placeholderConfiguration;
-const MachineIcon = scopeIcons["runtime-host"];
+const ProfileIcon = scopeIcons["settings-profile"];
 
 type Highlight = { readonly _tag: "user" } | { readonly _tag: "workspace"; readonly id: Workspace["id"] };
 
@@ -58,7 +58,7 @@ function NavRow({
   active,
   onHighlight,
 }: {
-  icon?: typeof MachineIcon;
+  icon?: typeof ProfileIcon;
   title: string;
   count: number;
   muted: boolean;
@@ -117,7 +117,7 @@ function PlaceRow({
 }
 
 function placesOf(highlight: Highlight, workspace?: Workspace): readonly ScopeRef[] {
-  if (highlight._tag === "user") return [machinePlace];
+  if (highlight._tag === "user") return [profilePlace];
   if (!workspace) return [];
   return workspaceScopeKinds.map((kind) => ({ kind, workspaceId: workspace.id }));
 }
@@ -136,7 +136,7 @@ export function CustomizePlaceMenu({
   const countFor = (place: ScopeRef) => (kind ? countAt(place, kind) : 0);
   const [highlight, setHighlight] = useState<Highlight>({ _tag: "user" });
 
-  const machineKey = scopeKey(machinePlace);
+  const profileKey = scopeKey(profilePlace);
   const everything = places.length === placeCount;
   const workspace =
     highlight._tag === "workspace" ? workspaces.find((entry) => entry.id === highlight.id) : undefined;
@@ -145,9 +145,9 @@ export function CustomizePlaceMenu({
 
   const trigger = (
     <Button variant="outline" size="sm" className="rounded-full" disabled={unavailable !== undefined}>
-      <MachineIcon data-icon="inline-start" />
+      <ProfileIcon data-icon="inline-start" />
       <span className="w-32 truncate text-start">
-        {unavailable === undefined ? summarize(places) : scopeCopy["runtime-host"].name}
+        {unavailable === undefined ? summarize(places) : scopeCopy["settings-profile"].name}
       </span>
       <RiArrowDownSLine data-icon="inline-end" />
     </Button>
@@ -183,10 +183,10 @@ export function CustomizePlaceMenu({
             <Separator className="my-1" />
 
             <NavRow
-              icon={MachineIcon}
-              title={scopeCopy["runtime-host"].name}
-              count={countFor(machinePlace)}
-              muted={!places.includes(machineKey)}
+              icon={ProfileIcon}
+              title={scopeCopy["settings-profile"].name}
+              count={countFor(profilePlace)}
+              muted={!places.includes(profileKey)}
               active={user}
               onHighlight={() => setHighlight({ _tag: "user" })}
             />
@@ -213,7 +213,7 @@ export function CustomizePlaceMenu({
           <div className="flex min-w-0 flex-1 flex-col p-1.5">
             <div className="flex flex-col px-2 pt-1.5 pb-2">
               <span className="truncate text-sm font-medium">
-                {user ? scopeCopy["runtime-host"].name : (workspace?.name ?? "")}
+                {user ? scopeCopy["settings-profile"].name : (workspace?.name ?? "")}
               </span>
               <span className="truncate font-mono text-xs text-muted-foreground">
                 {user ? "~/.cogwork" : (workspace?.checkoutPath ?? "")}

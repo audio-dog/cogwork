@@ -13,10 +13,10 @@ const { contributions, workspaces, plugins } = placeholderConfiguration;
 
 export const workspaceScopeKinds: readonly ScopeKind[] = ["workspace-input", "private-overlay"];
 
-export const machinePlace: ScopeRef = { kind: "runtime-host" };
+export const profilePlace: ScopeRef = { kind: "settings-profile" };
 
 export const allPlaces: readonly ScopeRef[] = [
-  machinePlace,
+  profilePlace,
   ...workspaces.flatMap((workspace) =>
     workspaceScopeKinds.map((kind) => ({ kind, workspaceId: workspace.id })),
   ),
@@ -65,7 +65,7 @@ export function summarize(places: readonly string[]): string {
   if (places.length === allPlaceKeys.length) return "Everywhere";
 
   const groups: string[] = [];
-  if (places.includes(scopeKey(machinePlace))) groups.push(scopeCopy["runtime-host"].name);
+  if (places.includes(scopeKey(profilePlace))) groups.push(scopeCopy["settings-profile"].name);
   for (const workspace of workspaces) {
     const keys = workspaceScopeKinds.map((kind) => scopeKey({ kind, workspaceId: workspace.id }));
     if (keys.some((key) => places.includes(key))) groups.push(workspace.name);
@@ -92,7 +92,7 @@ export function groupContributions(
   const visible = visibleContributions(kind, places, query);
 
   const mine = visible.filter(
-    (contribution) => contribution.authority._tag === "local" && contribution.definedAt === "runtime-host",
+    (contribution) => contribution.authority._tag === "local" && contribution.authority.tree === "user",
   );
   const builtIn = visible.filter((contribution) => contribution.authority._tag === "engine");
 
@@ -123,7 +123,7 @@ export function groupContributions(
     });
 
   return [
-    { key: "runtime-host", label: scopeCopy["runtime-host"].name, rows: mine },
+    { key: "settings-profile", label: scopeCopy["settings-profile"].name, rows: mine },
     { key: "engine", label: "Built in", rows: builtIn },
     ...fromPlugins,
     ...inRepos,

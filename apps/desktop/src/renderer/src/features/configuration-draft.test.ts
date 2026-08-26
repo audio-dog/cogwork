@@ -4,7 +4,7 @@ import type { Contribution, ScopeRef } from "./configuration-model";
 import { cogworkWorkspaceId, contributionById } from "./configuration-placeholder";
 import { resolveEnablement } from "./configuration-resolve";
 
-const machine: ScopeRef = { kind: "runtime-host" };
+const machine: ScopeRef = { kind: "settings-profile" };
 const overlay: ScopeRef = { kind: "private-overlay", workspaceId: cogworkWorkspaceId };
 const view = { workspaceId: cogworkWorkspaceId };
 
@@ -30,12 +30,12 @@ describe("withDraft", () => {
     expect(edited.rows.some((row) => row.scope.kind === "private-overlay")).toBe(false);
     // With the overlay's `off` cleared, the machine's `on` is what a Run gets.
     expect(resolveEnablement(edited, view).effective).toBe(true);
-    expect(resolveEnablement(edited, view).winner?.scope.kind).toBe("runtime-host");
+    expect(resolveEnablement(edited, view).winner?.scope.kind).toBe("settings-profile");
   });
 
   it("distinguishes clearing a cell from setting it off", () => {
     // Nothing admissible is written for this one, so it starts with no resolved value at all.
-    const contribution = required("local/mcp/repo-tools");
+    const contribution = required("local:repo/mcp/repo-tools");
     const cleared = withDraft(contribution, draft([contribution.id, machine, "unset"]));
     const off = withDraft(contribution, draft([contribution.id, machine, "off"]));
     expect(resolveEnablement(cleared, view).effective).toBeUndefined();
@@ -45,7 +45,7 @@ describe("withDraft", () => {
   it("replaces a written row at the same Scope instead of duplicating it", () => {
     const contribution = required("plugin:linear/mcp/linear");
     const edited = withDraft(contribution, draft([contribution.id, machine, "off"]));
-    const atProfile = edited.rows.filter((row) => row.scope.kind === "runtime-host");
+    const atProfile = edited.rows.filter((row) => row.scope.kind === "settings-profile");
     expect(atProfile).toHaveLength(1);
     expect(atProfile[0]?.value).toBe(false);
   });
@@ -59,7 +59,7 @@ describe("withDraft", () => {
 
   it("leaves other contributions alone", () => {
     const target = required("plugin:linear/mcp/linear");
-    const other = required("local/mcp/linear");
+    const other = required("local:private/mcp/linear");
     const cells = draft([target.id, machine, "off"]);
     expect(withDraft(other, cells)).toBe(other);
   });

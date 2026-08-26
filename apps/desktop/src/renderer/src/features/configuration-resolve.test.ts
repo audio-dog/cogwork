@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   type Contribution,
   enablementScopes,
-  hasToggle,
   type ScopeRef,
   scopeOrder,
   type WorkspaceId,
@@ -29,16 +28,16 @@ describe("resolveEnablement", () => {
     const resolved = resolveEnablement(required("plugin:linear/mcp/linear"), view);
     expect(resolved.effective).toBe(false);
     expect(resolved.winner?.scope.kind).toBe("private-overlay");
-    expect(resolved.shadowed.map((row) => row.scope.kind)).toEqual(["runtime-host"]);
+    expect(resolved.shadowed.map((row) => row.scope.kind)).toEqual(["settings-profile"]);
   });
 
   it("has nothing to resolve for a kind that has no on / off", () => {
     // A Skill, Rules, a Command and a Subagent are files: on the disk or not. There is no setting.
     for (const id of [
       "plugin:gh-review/subagent/reviewer",
-      "local/skill/commit-style",
+      "local:user/skill/commit-style",
       "engine/rules/house-style",
-      "local/command/scratch",
+      "local:user/command/scratch",
     ]) {
       const resolved = resolveEnablement(required(id), view);
       expect(enablementScopes[required(id).kind]).toEqual([]);
@@ -49,7 +48,7 @@ describe("resolveEnablement", () => {
 
   it("drops an MCP server enablement written at the repository", () => {
     // A cloned repository may ship the file but may never start a process on your machine.
-    const resolved = resolveEnablement(required("local/mcp/repo-tools"), view);
+    const resolved = resolveEnablement(required("local:repo/mcp/repo-tools"), view);
     expect(resolved.dropped.map((entry) => entry.diagnostic._tag)).toEqual(["inadmissible"]);
     expect(resolved.dropped[0]?.row.scope.kind).toBe("workspace-input");
     // Dropped, so nothing resolves — and that is not the same as off.
@@ -67,12 +66,12 @@ describe("resolveEnablement", () => {
     const resolved = resolveEnablement(required("plugin:linear/mcp/linear"), other);
     // The overlay row belongs to another workspace, so the profile row wins here.
     expect(resolved.effective).toBe(true);
-    expect(resolved.winner?.scope.kind).toBe("runtime-host");
+    expect(resolved.winner?.scope.kind).toBe("settings-profile");
   });
 
   it("never reconciles two contributions that share a local name", () => {
     const fromPlugin = required("plugin:linear/mcp/linear");
-    const fromLocal = required("local/mcp/linear");
+    const fromLocal = required("local:private/mcp/linear");
     expect(fromPlugin.localName).toBe(fromLocal.localName);
     expect(fromPlugin.id).not.toBe(fromLocal.id);
     // Same name, opposite answers, and cogwork keeps them apart rather than merging them.
@@ -81,27 +80,17 @@ describe("resolveEnablement", () => {
   });
 });
 
-describe("cellPermitted and hasToggle", () => {
-  it("gives an on / off only to the kinds that start something", () => {
-    // Wanting a process installed but not running is a real position; wanting a file present but
-    // ignored is not.
-    expect(hasToggle("mcp-server")).toBe(true);
-    expect(hasToggle("hook")).toBe(true);
-    for (const kind of ["skill", "rules", "command", "subagent"] as const) {
-      expect(hasToggle(kind)).toBe(false);
-    }
-  });
-
-  it("puts no Scope at all behind a kind that has no on / off", () => {
-    for (const kind of ["skill", "rules", "command", "subagent"] as const) {
+describe("which kinds have an on / off", () => {
+  it("gives an on / off only to the MCP server", () => {
+    expect(enablementScopes["mcp-server"]).toEqual(["settings-profile", "private-overlay"]);
+    for (const kind of ["skill", "rules", "command", "subagent", "hook"] as const) {
       expect(enablementScopes[kind]).toEqual([]);
     }
   });
 
-  it("keeps the repository out of the two that do", () => {
-    for (const kind of ["hook", "mcp-server"] as const) {
-      expect(enablementScopes[kind]).toEqual(["runtime-host", "private-overlay"]);
-    }
+  it("keeps the repository out of the one that does", () => {
+    expect(enablementScopes["mcp-server"]).not.toContain("workspace-input");
+    expect(enablementScopes["mcp-server"]).not.toContain("runtime-host");
   });
 });
 
@@ -129,13 +118,13 @@ describe("the fixture itself", () => {
 
 describe("where a contribution lives, and where it is turned on", () => {
   it("has nowhere to write for a kind with no on / off", () => {
-    const skill = required("local/skill/release-notes");
+    const skill = required("local:repo/skill/release-notes");
     expect(skill.definedAt).toBe("workspace-input");
     expect(enableScopeFor(skill)).toBeUndefined();
   });
 
   it("redirects a repo-shipped MCP server to a Scope that may enable it", () => {
-    const server = required("local/mcp/repo-tools");
+    const server = required("local:repo/mcp/repo-tools");
     expect(server.definedAt).toBe("workspace-input");
     // A repository may ship the file and may never start a process on your machine.
     expect(offeredElsewhere(server)).toBe(true);
@@ -147,8 +136,8 @@ describe("where a contribution lives, and where it is turned on", () => {
 
   it("keeps a machine-defined contribution on the machine", () => {
     const mcp = required("plugin:linear/mcp/linear");
-    expect(mcp.definedAt).toBe("runtime-host");
-    expect(enableScopeFor(mcp)?.kind).toBe("runtime-host");
+    expect(mcp.definedAt).toBe("settings-profile");
+    expect(enableScopeFor(mcp)?.kind).toBe("settings-profile");
   });
 
   it("puts every contribution in exactly one place", () => {
@@ -165,16 +154,16 @@ describe("where a contribution lives, and where it is turned on", () => {
 
 describe("settingsSpreadAcross", () => {
   it("stays empty for the ordinary case of one value in one place", () => {
-    expect(settingsSpreadAcross(required("local/mcp/linear"))).toEqual([]);
+    expect(settingsSpreadAcross(required("local:private/mcp/linear"))).toEqual([]);
   });
 
   it("stays empty for a kind that has no on / off to spread", () => {
-    expect(settingsSpreadAcross(required("local/skill/commit-style"))).toEqual([]);
+    expect(settingsSpreadAcross(required("local:user/skill/commit-style"))).toEqual([]);
   });
 
   it("names every Scope when one identity carries a value in more than one", () => {
     // The exception ADR 0013's direction exists for. It is a badge, not the shape of the page.
     const spread = settingsSpreadAcross(required("plugin:linear/mcp/linear"));
-    expect(spread).toEqual(["private-overlay", "runtime-host"]);
+    expect(spread).toEqual(["private-overlay", "settings-profile"]);
   });
 });

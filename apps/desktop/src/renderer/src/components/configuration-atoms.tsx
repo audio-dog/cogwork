@@ -1,5 +1,4 @@
 import {
-  RiComputerLine,
   RiFileTextLine,
   RiFolderLine,
   RiGitRepositoryLine,
@@ -8,6 +7,7 @@ import {
   RiServerLine,
   RiSparkling2Line,
   RiTerminalBoxLine,
+  RiUserLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
 import type { ContributionKind, ScopeKind } from "../features/configuration-model";
@@ -22,7 +22,7 @@ export const kindIcons: Record<ContributionKind, ComponentType> = {
 };
 
 export const scopeIcons: Record<ScopeKind, ComponentType> = {
-  "runtime-host": RiComputerLine,
+  "settings-profile": RiUserLine,
   "workspace-input": RiGitRepositoryLine,
   "private-overlay": RiFolderLine,
 };

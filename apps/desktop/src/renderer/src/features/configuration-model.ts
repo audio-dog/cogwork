@@ -1,9 +1,9 @@
-export const scopeOrder = ["runtime-host", "workspace-input", "private-overlay"] as const;
+export const scopeOrder = ["settings-profile", "workspace-input", "private-overlay"] as const;
 
 export type ScopeKind = (typeof scopeOrder)[number];
 
 export const scopeCopy: Record<ScopeKind, { readonly name: string; readonly hint: string }> = {
-  "runtime-host": { name: "User", hint: "On this machine, in every workspace." },
+  "settings-profile": { name: "User", hint: "Yours, in every workspace." },
   "workspace-input": { name: "Everyone", hint: "In the repo, for anyone who clones it." },
   "private-overlay": { name: "Just me", hint: "On your machine, never committed." },
 };
@@ -50,21 +50,39 @@ export const enablementScopes: Record<ContributionKind, readonly ScopeKind[]> = 
   rules: [],
   command: [],
   subagent: [],
-  hook: ["runtime-host", "private-overlay"],
-  "mcp-server": ["runtime-host", "private-overlay"],
+  hook: [],
+  "mcp-server": ["settings-profile", "private-overlay"],
 };
 
 export function hasToggle(kind: ContributionKind): boolean {
   return enablementScopes[kind].length > 0;
 }
 
+export const authoringTrees = ["user", "repo", "private"] as const;
+
+export type AuthoringTree = (typeof authoringTrees)[number];
+
+export const treeScope: Record<AuthoringTree, ScopeKind> = {
+  user: "settings-profile",
+  repo: "workspace-input",
+  private: "private-overlay",
+};
+
+export const treePath: Record<AuthoringTree, string> = {
+  user: "~/.agents/",
+  repo: "<repo>/.agents/",
+  private: "~/.cogwork/workspaces/<WorkspaceId>/",
+};
+
 export type Authority =
   | { readonly _tag: "plugin"; readonly pluginId: string }
   | { readonly _tag: "engine" }
-  | { readonly _tag: "local" };
+  | { readonly _tag: "local"; readonly tree: AuthoringTree };
 
-export function authorityLabel(authority: Authority): string {
-  return authority._tag === "plugin" ? `plugin:${authority.pluginId}` : authority._tag;
+export function authorityLabel(authority: Authority) {
+  if (authority._tag === "plugin") return `plugin:${authority.pluginId}`;
+  if (authority._tag === "local") return `local:${authority.tree}`;
+  return "engine";
 }
 
 export type Diagnostic =

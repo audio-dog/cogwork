@@ -12,8 +12,8 @@ import {
   countAt,
   groupContributions,
   kindCount,
-  machinePlace,
   placeOf,
+  profilePlace,
   summarize,
   toggle,
   visibleContributions,
@@ -36,7 +36,7 @@ describe("the set of places", () => {
 
 describe("placeOf", () => {
   it("names the workspace for a repository-defined contribution", () => {
-    const skill = contributionById("local/skill/release-notes");
+    const skill = contributionById("local:repo/skill/release-notes");
     if (!skill) throw new Error("fixture is missing the skill");
     expect(placeOf(skill)).toBe(scopeKey({ kind: "workspace-input", workspaceId: cogworkWorkspaceId }));
   });
@@ -44,7 +44,7 @@ describe("placeOf", () => {
   it("leaves a machine-defined contribution unqualified", () => {
     const mcp = contributionById("plugin:linear/mcp/linear");
     if (!mcp) throw new Error("fixture is missing the MCP server");
-    expect(placeOf(mcp)).toBe("runtime-host");
+    expect(placeOf(mcp)).toBe("settings-profile");
   });
 });
 
@@ -58,10 +58,10 @@ describe("visibleContributions", () => {
     const clankerRepo = scopeKey({ kind: "workspace-input", workspaceId: clankerWorkspaceId });
     const fromCogwork = visibleContributions("skill", [cogworkRepo], "").map((entry) => entry.id);
     const fromClanker = visibleContributions("rules", [clankerRepo], "").map((entry) => entry.id);
-    expect(fromCogwork).toContain("local/skill/release-notes");
-    expect(fromClanker).toContain("local/rules/forge-style");
+    expect(fromCogwork).toContain("local:repo/skill/release-notes");
+    expect(fromClanker).toContain("local:repo/rules/forge-style");
     expect(visibleContributions("rules", [cogworkRepo], "").map((e) => e.id)).not.toContain(
-      "local/rules/forge-style",
+      "local:repo/rules/forge-style",
     );
   });
 
@@ -79,7 +79,7 @@ describe("summarize — what the trigger says", () => {
   });
 
   it("names the one selected group on its own", () => {
-    expect(summarize(["runtime-host"])).toBe("User");
+    expect(summarize(["settings-profile"])).toBe("User");
     const cogworkRepo = scopeKey({ kind: "workspace-input", workspaceId: cogworkWorkspaceId });
     expect(summarize([cogworkRepo])).toBe("cogwork");
   });
@@ -94,7 +94,7 @@ describe("summarize — what the trigger says", () => {
   it("overflows to a +n once a second group is in play", () => {
     const cogworkRepo = scopeKey({ kind: "workspace-input", workspaceId: cogworkWorkspaceId });
     const clankerRepo = scopeKey({ kind: "workspace-input", workspaceId: clankerWorkspaceId });
-    expect(summarize(["runtime-host", cogworkRepo])).toBe("User +1");
+    expect(summarize(["settings-profile", cogworkRepo])).toBe("User +1");
     expect(summarize([cogworkRepo, clankerRepo])).toBe("cogwork +1");
   });
 
@@ -103,19 +103,19 @@ describe("summarize — what the trigger says", () => {
     // needed more than a workspace name plus an overflow count would defeat that.
     const longest = [...workspaces].sort((a, b) => b.name.length - a.name.length)[0];
     const key = scopeKey({ kind: "workspace-input", workspaceId: longest.id });
-    expect(summarize([key, "runtime-host"]).length).toBeLessThanOrEqual(longest.name.length + 5);
+    expect(summarize([key, "settings-profile"]).length).toBeLessThanOrEqual(longest.name.length + 5);
   });
 });
 
 describe("toggle", () => {
   it("adds a place that is not selected and removes one that is", () => {
-    expect(toggle([], "runtime-host")).toEqual(["runtime-host"]);
-    expect(toggle(["runtime-host"], "runtime-host")).toEqual([]);
+    expect(toggle([], "settings-profile")).toEqual(["settings-profile"]);
+    expect(toggle(["settings-profile"], "settings-profile")).toEqual([]);
   });
 
   it("leaves the other places alone", () => {
     const repo = scopeKey({ kind: "workspace-input", workspaceId: cogworkWorkspaceId });
-    expect(toggle(["runtime-host", repo], repo)).toEqual(["runtime-host"]);
+    expect(toggle(["settings-profile", repo], repo)).toEqual(["settings-profile"]);
   });
 });
 
@@ -141,7 +141,7 @@ describe("groupContributions", () => {
   it("keeps your own machine-level files in the User group", () => {
     const groups = groupContributions("skill", allPlaceKeys, "");
     const mine = groups.find((group) => group.label === "User");
-    expect(mine?.rows.map((row) => row.id)).toEqual(["local/skill/commit-style"]);
+    expect(mine?.rows.map((row) => row.id)).toEqual(["local:user/skill/commit-style"]);
   });
 
   it("names engine-authored contributions as built in", () => {
@@ -180,17 +180,17 @@ describe("groupContributions", () => {
 describe("search", () => {
   it("matches on the local name", () => {
     const found = visibleContributions("skill", allPlaceKeys, "commit").map((row) => row.id);
-    expect(found).toEqual(["local/skill/commit-style"]);
+    expect(found).toEqual(["local:user/skill/commit-style"]);
   });
 
   it("matches on the summary", () => {
     const found = visibleContributions("skill", allPlaceKeys, "release notes").map((row) => row.id);
-    expect(found).toEqual(["local/skill/release-notes"]);
+    expect(found).toEqual(["local:repo/skill/release-notes"]);
   });
 
   it("ignores case and surrounding whitespace", () => {
     const loose = visibleContributions("skill", allPlaceKeys, "  COMMIT  ").map((row) => row.id);
-    expect(loose).toEqual(["local/skill/commit-style"]);
+    expect(loose).toEqual(["local:user/skill/commit-style"]);
   });
 
   it("returns everything for an empty query", () => {
@@ -206,15 +206,15 @@ describe("search", () => {
 
 describe("countAt and kindCount", () => {
   it("counts only the given kind at the given place", () => {
-    expect(countAt(machinePlace, "skill")).toBe(2);
+    expect(countAt(profilePlace, "skill")).toBe(2);
     expect(countAt({ kind: "workspace-input", workspaceId: cogworkWorkspaceId }, "skill")).toBe(1);
     expect(countAt({ kind: "workspace-input", workspaceId: clankerWorkspaceId }, "skill")).toBe(0);
-    expect(countAt(machinePlace, "rules")).toBe(2);
+    expect(countAt(profilePlace, "rules")).toBe(2);
   });
 
   it("counts a kind across the selected places only", () => {
     const everywhere = kindCount("rules", allPlaceKeys);
-    const machineOnly = kindCount("rules", ["runtime-host"]);
+    const machineOnly = kindCount("rules", ["settings-profile"]);
     expect(machineOnly).toBeLessThan(everywhere);
     expect(kindCount("rules", [])).toBe(0);
   });
