@@ -27,14 +27,12 @@ export function CountBadge({ count, muted }: { count: number; muted?: boolean })
 export function MenuNavRow({
   icon: Icon,
   title,
-  subtitle,
   meta,
   active,
   onHover,
 }: {
   icon?: ComponentType;
   title: string;
-  subtitle?: string;
   meta?: ReactNode;
   active: boolean;
   onHover: () => void;
@@ -54,12 +52,8 @@ export function MenuNavRow({
           <Icon />
         </span>
       ) : null}
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm">{title}</span>
-        {subtitle ? (
-          <span className="truncate font-mono text-xs text-muted-foreground">{subtitle}</span>
-        ) : null}
-      </span>
+      {/* One line only: the checkout path belongs to the right pane, and once. */}
+      <span className="min-w-0 flex-1 truncate text-sm">{title}</span>
       {meta}
       <RiArrowRightSLine className="size-3.5 shrink-0 text-muted-foreground" />
     </button>

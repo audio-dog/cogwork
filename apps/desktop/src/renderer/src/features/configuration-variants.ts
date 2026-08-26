@@ -25,21 +25,21 @@ export interface VariantDefinition {
 export const variants: readonly VariantDefinition[] = [
   {
     key: "A",
-    name: "Footer bar",
+    name: "Cards that fill",
     claim:
-      "Two panes with a bottom edge. A footer spans both, bounding the right pane's leftover space and housing select all and select none — out of the trigger, where they were doing nothing.",
+      "The right pane answers its leftover space with geometry: each place takes an equal share of the height. Cheapest, and the only one that cannot scroll — but a bigger card tells you nothing new.",
   },
   {
     key: "B",
-    name: "Peer list",
+    name: "Preview",
     claim:
-      "User stops being a header and becomes the first row, same shape as every workspace, so the panes stop looking like two designs. Each place is a card that grows to fill the pane.",
+      "The space fills with information — under each place, what actually lives there. A count says three Skills are in the repo; this says one of them is the one you were looking for.",
   },
   {
     key: "C",
-    name: "Preview",
+    name: "Detail pane",
     claim:
-      "The empty space gets filled with information instead of layout: under each place sits what actually lives there. A count says how many; this says which.",
+      "Stops treating the space as a gap. Places sit at their natural height and a summary pins to the bottom, carrying the tracker, the shared-remote warning, and a tally across every kind rather than just the filtered one.",
   },
 ];
 
