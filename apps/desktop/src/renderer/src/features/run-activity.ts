@@ -1,7 +1,6 @@
 import {
   type AgUiEvent,
   agUiTextDelta,
-  type DaemonEvent,
   type RunActivity,
   type RunId,
   type RunSummary,
@@ -127,14 +126,6 @@ export const withoutRunPreview = (state: RunPreviewState, runId: string) => {
   const next = new Map(state);
   next.delete(runId);
   return next;
-};
-
-export const runPreviews = (events: ReadonlyArray<DaemonEvent>): ReadonlyMap<string, RunActivityPreview> => {
-  const fold = events.reduce<RunPreviewState>(
-    (state, event) => (event._tag === "RunActivity" ? applyRunPreview(state, event.activity) : state),
-    new Map<string, PreviewEntry>(),
-  );
-  return previewMap(fold);
 };
 
 const FILE_DIFF_EVENT = "sandbox.file.diff";
