@@ -76,6 +76,15 @@ will call the seam. It is not surfaced as a header control today.
 _Avoid_: A separate "enabled" preference that can drift from the supervisor's actual state;
 re-adding an always-on engine switch or status badge to the header
 
+**Activity session**:
+The renderer's one fold over the daemon event stream: the Board, run-activity previews, the
+activity log rows, and the engine/connection lifecycle, delivered through one provider
+(`ActivitySessionProvider`, mounted at the root route). `useBoard` is its narrowed read for
+components that need only the Board. There is exactly one live instance; a test supplies its own
+by rendering the same context with a literal session.
+_Avoid_: Board (the contracts view this contains), activity feed (the Activity tab renders this,
+it is not this), session (the harness's conversation — unrelated)
+
 ### Shell surfaces
 
 The renderer's UI vocabulary, settled while charting the shell-revamp map (orchestration issue #7).

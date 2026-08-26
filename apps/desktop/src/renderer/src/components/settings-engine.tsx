@@ -1,8 +1,8 @@
 import { maxSchedulerLimit } from "@cogwork/contracts";
 import { Separator } from "@cogwork/ui/components/separator";
+import { useBoard } from "../features/activity-session";
 import { settingEntry } from "../features/settings-catalog";
 import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../features/settings-defaults";
-import { useBoard } from "../features/use-board";
 import { useSchedulerConfig } from "../features/use-scheduler-config";
 import { NumberStepper, SettingRow, SettingsSection, SubSectionCard } from "./settings-parts";
 

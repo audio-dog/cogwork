@@ -8,7 +8,6 @@ let currentStatus: EngineStatusValue = "unknown";
 let restarting = false;
 let unsubscribeIpc: (() => void) | null = null;
 const listeners = new Set<() => void>();
-const statusListeners = new Set<(status: EngineStatusValue) => void>();
 
 function notifyListeners() {
   for (const listener of listeners) {
@@ -25,7 +24,6 @@ function setStatus(next: EngineStatusValue) {
   }
   currentStatus = next;
   notifyListeners();
-  for (const listener of statusListeners) listener(next);
 }
 
 function setRestarting(next: boolean) {
@@ -48,7 +46,7 @@ function startStatusSubscription() {
 }
 
 function stopStatusSubscription() {
-  if (listeners.size === 0 && statusListeners.size === 0 && unsubscribeIpc) {
+  if (listeners.size === 0 && unsubscribeIpc) {
     unsubscribeIpc();
     unsubscribeIpc = null;
   }
@@ -59,16 +57,6 @@ function subscribe(onStoreChange: () => void): () => void {
   startStatusSubscription();
   return () => {
     listeners.delete(onStoreChange);
-    stopStatusSubscription();
-  };
-}
-
-export function subscribeEngineStatus(listener: (status: EngineStatusValue) => void) {
-  statusListeners.add(listener);
-  startStatusSubscription();
-  listener(currentStatus);
-  return () => {
-    statusListeners.delete(listener);
     stopStatusSubscription();
   };
 }

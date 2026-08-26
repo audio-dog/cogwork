@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiExternalLinkLine, RiGitPullRequestLine, RiQuestionAnswerLine } from "@remixicon/react";
 import { useState } from "react";
+import { useBoard } from "../features/activity-session";
 import {
   type AttentionEntry,
   type AttentionKind,
@@ -17,7 +18,6 @@ import {
 } from "../features/attention";
 import { needsHumanReasonLabel, registeredWorkspaces } from "../features/feed";
 import { relativeTime } from "../features/format";
-import { useBoard } from "../features/use-board";
 import { useRightPanelStore } from "../store/right-panel";
 import { FunnelFilter, useFunnelSelection } from "./funnel-filter";
 

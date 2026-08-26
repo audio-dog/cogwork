@@ -1,4 +1,4 @@
-import type { BoardResult } from "./use-board";
+import type { BoardResult } from "./activity-session";
 import type { EnginePhase } from "./use-engine-status";
 
 export type Treatment = "live" | "off" | "connecting" | "broken";

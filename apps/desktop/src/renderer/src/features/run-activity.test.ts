@@ -1,7 +1,13 @@
-import { type AgUiEvent, DaemonEvent } from "@cogwork/contracts";
+import { type AgUiEvent, DaemonEvent, type RunActivity } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { foldTranscript, runPreviews, statusLine } from "./run-activity";
+import {
+  applyRunPreview,
+  foldTranscript,
+  previewMap,
+  type RunPreviewState,
+  statusLine,
+} from "./run-activity";
 
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
@@ -11,8 +17,8 @@ const activity = (
   seq: number,
   agui: AgUiEvent & { type: string },
   messageId: string | null = null,
-) =>
-  event({
+) => {
+  const decoded = event({
     _tag: "RunActivity",
     activity: {
       runId,
@@ -25,20 +31,22 @@ const activity = (
       event: agui,
     },
   });
-
-const runActivity = (seq: number, agui: AgUiEvent & { type: string }) => {
-  const decoded = activity("run-1", seq, agui);
   if (decoded._tag !== "RunActivity") throw new Error("Expected run activity");
   return decoded.activity;
 };
 
-describe("runPreviews", () => {
+const runActivity = (seq: number, agui: AgUiEvent & { type: string }) => activity("run-1", seq, agui);
+
+const previewsOf = (activities: ReadonlyArray<RunActivity>) =>
+  previewMap(activities.reduce<RunPreviewState>((state, next) => applyRunPreview(state, next), new Map()));
+
+describe("applyRunPreview", () => {
   it("has no preview when there are no events", () => {
-    expect(runPreviews([]).size).toBe(0);
+    expect(previewsOf([]).size).toBe(0);
   });
 
   it("labels a tool call by its name and shows the result", () => {
-    const previews = runPreviews([
+    const previews = previewsOf([
       activity("run-1", 0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "grep" }),
       activity("run-1", 1, { type: "TOOL_CALL_END", toolCallId: "t1", result: "12 matches" }),
     ]);
@@ -47,7 +55,7 @@ describe("runPreviews", () => {
   });
 
   it("accumulates streaming text within one message", () => {
-    const previews = runPreviews([
+    const previews = previewsOf([
       activity("run-1", 0, { type: "TEXT_MESSAGE_CONTENT", delta: "Extending " }, "m1"),
       activity("run-1", 1, { type: "TEXT_MESSAGE_CONTENT", delta: "the store." }, "m1"),
     ]);
@@ -56,7 +64,7 @@ describe("runPreviews", () => {
   });
 
   it("resets accumulated text when the message id changes", () => {
-    const previews = runPreviews([
+    const previews = previewsOf([
       activity("run-1", 0, { type: "TEXT_MESSAGE_CONTENT", delta: "first" }, "m1"),
       activity("run-1", 1, { type: "TEXT_MESSAGE_CONTENT", delta: "second" }, "m2"),
     ]);
@@ -65,7 +73,7 @@ describe("runPreviews", () => {
   });
 
   it("keeps the latest activity per run and tracks runs independently", () => {
-    const previews = runPreviews([
+    const previews = previewsOf([
       activity("run-1", 0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
       activity("run-2", 1, { type: "TEXT_MESSAGE_CONTENT", delta: "hello" }, "m1"),
       activity("run-1", 2, { type: "STEP_STARTED", stepName: "typecheck" }),
@@ -77,7 +85,7 @@ describe("runPreviews", () => {
 
   it("collapses whitespace and clips long text to a single line", () => {
     const long = "x".repeat(400);
-    const previews = runPreviews([
+    const previews = previewsOf([
       activity("run-1", 0, { type: "TEXT_MESSAGE_CONTENT", delta: `line one\n\n${long}` }, "m1"),
     ]);
 
@@ -89,7 +97,7 @@ describe("runPreviews", () => {
   });
 
   it("ignores an unknown or hostile event type without throwing", () => {
-    const previews = runPreviews([
+    const previews = previewsOf([
       activity("run-1", 0, { type: "__proto__" }),
       activity("run-1", 1, { type: "SOMETHING_NEW" }),
       activity("run-1", 2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
@@ -99,7 +107,7 @@ describe("runPreviews", () => {
   });
 
   it("ignores the session-id custom event", () => {
-    const previews = runPreviews([
+    const previews = previewsOf([
       activity("run-1", 0, { type: "CUSTOM", name: "harness.session-id", value: { sessionId: "s1" } }),
     ]);
 

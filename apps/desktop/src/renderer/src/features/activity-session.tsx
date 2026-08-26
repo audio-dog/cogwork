@@ -12,10 +12,9 @@ import {
   type WorkspaceId,
   type WorkspaceState,
 } from "@cogwork/contracts";
-import { useAtomRefresh, useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
-import type * as Cause from "effect/Cause";
+import { useAtomRefresh, useAtomSet, useAtomSubscribe } from "@effect/atom-react";
 import type * as Atom from "effect/unstable/reactivity/Atom";
-import { useCallback, useSyncExternalStore } from "react";
+import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
 import {
   applyRunPreview,
@@ -24,7 +23,7 @@ import {
   type RunPreviewState,
   withoutRunPreview,
 } from "./run-activity";
-import { type EnginePhase, enginePhase, subscribeEngineStatus } from "./use-engine-status";
+import { type EnginePhase, enginePhase, useEngineStatus } from "./use-engine-status";
 
 export type ActivityKind =
   | "item"
@@ -107,7 +106,7 @@ export const activityCategory = (kind: ActivityKind): ActivityCategory => {
 
 const pretty = (value: unknown) => JSON.stringify(value, null, 2);
 const rowId = (ordinal: number) => `activity:${ordinal}`;
-const bound = <Value>(values: readonly Value[]) =>
+const bound = <Value,>(values: readonly Value[]) =>
   values.length <= defaultActivityLimit ? values : values.slice(-defaultActivityLimit);
 const terminal = (status: RunStatus) => status !== "running";
 const settledRun = (board: Board, runId: RunId) => {
@@ -355,101 +354,122 @@ export const activityNow = (session: ActivitySession): NowState => ({
 });
 
 type EventResult = typeof daemonEventAtom extends Atom.Atom<infer Value> ? Value : never;
-const listeners = new Set<() => void>();
-const activityState: {
+
+// One live wiring per provider mount. The cell is the provider's mutable scratch state, so
+// consecutive subscription callbacks compose synchronously between renders.
+interface SessionCell {
   session: ActivitySession;
   lastResult: EventResult | null;
   lastPumpedResult: EventResult | null;
   processedDaemonEvents: readonly DaemonEvent[] | null;
-} = {
+}
+
+const makeSessionCell = (): SessionCell => ({
   session: initialActivitySession,
   lastResult: null,
   lastPumpedResult: null,
   processedDaemonEvents: null,
-};
+});
 
-const publish = (next: ActivitySession) => {
-  if (next === activityState.session) return;
-  activityState.session = next;
-  for (const listener of listeners) listener();
-};
+type Publish = (next: ActivitySession) => void;
 
-const recordDaemonResult = (result: EventResult, clock: () => number) => {
-  if (result === activityState.lastResult) return;
-  activityState.lastResult = result;
+const recordDaemonResult = (
+  cell: SessionCell,
+  publish: Publish,
+  result: EventResult,
+  clock: () => number,
+) => {
+  if (result === cell.lastResult) return;
+  cell.lastResult = result;
   if (result._tag === "Initial") {
-    activityState.processedDaemonEvents = null;
+    cell.processedDaemonEvents = null;
     return publish(
-      updateLifecycle(
-        resetActivityFolds(activityState.session),
-        activityState.session.engine,
-        "connecting",
-        clock(),
-      ),
+      updateLifecycle(resetActivityFolds(cell.session), cell.session.engine, "connecting", clock()),
     );
   }
   if (result._tag === "Failure") {
-    activityState.processedDaemonEvents = null;
-    return publish(
-      updateLifecycle(
-        resetActivityFolds(activityState.session),
-        activityState.session.engine,
-        "lost",
-        clock(),
-      ),
-    );
+    cell.processedDaemonEvents = null;
+    return publish(updateLifecycle(resetActivityFolds(cell.session), cell.session.engine, "lost", clock()));
   }
-  const events = unprocessedDaemonEvents(activityState.processedDaemonEvents, result.value.items);
+  const events = unprocessedDaemonEvents(cell.processedDaemonEvents, result.value.items);
   if (!events) return;
-  activityState.processedDaemonEvents = events;
-  const next = events.reduce(
-    (current, event) => ingestDaemonEvent(current, event, clock()),
-    activityState.session,
-  );
+  cell.processedDaemonEvents = events;
+  const next = events.reduce((current, event) => ingestDaemonEvent(current, event, clock()), cell.session);
   publish(updateLifecycle(next, next.engine, "live", clock()));
 };
 
-const recordEngineStatus = (status: Parameters<typeof enginePhase>[0], clock: () => number) =>
-  publish(
-    updateLifecycle(activityState.session, enginePhase(status), activityState.session.connection, clock()),
-  );
+const recordEngineStatus = (
+  cell: SessionCell,
+  publish: Publish,
+  status: Parameters<typeof enginePhase>[0],
+  clock: () => number,
+) => publish(updateLifecycle(cell.session, enginePhase(status), cell.session.connection, clock()));
 
-const pumpDaemonResult = (current: EventResult, pull: () => void, resubscribe: () => void) => {
+const pumpDaemonResult = (
+  cell: SessionCell,
+  current: EventResult,
+  pull: () => void,
+  resubscribe: () => void,
+) => {
   if (current.waiting) return;
-  if (current === activityState.lastPumpedResult) return;
-  activityState.lastPumpedResult = current;
+  if (current === cell.lastPumpedResult) return;
+  cell.lastPumpedResult = current;
   if (current._tag === "Failure") return resubscribe();
   if (current._tag === "Success" && !current.value.done) pull();
 };
 
-const subscribe = (listener: () => void, clock: () => number) => {
-  const unsubscribeEngine = subscribeEngineStatus((status) => recordEngineStatus(status, clock));
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-    unsubscribeEngine();
-  };
-};
+// The seam: consumers read the session value, and only the live provider knows it comes from the
+// daemon event atom. A test renders this context with a literal session instead.
+export const ActivitySessionContext = createContext<ActivitySession | null>(null);
 
-const getSession = () => activityState.session;
-
-export function useActivitySession(clock: () => number = Date.now) {
-  useAtomValue(daemonEventAtom);
+export function ActivitySessionProvider({
+  children,
+  clock = Date.now,
+}: {
+  readonly children: ReactNode;
+  readonly clock?: () => number;
+}) {
+  const cellRef = useRef<SessionCell | null>(null);
+  cellRef.current ??= makeSessionCell();
+  const cell = cellRef.current;
+  const [session, setSession] = useState(cell.session);
+  const publish = useCallback<Publish>(
+    (next) => {
+      if (next === cell.session) return;
+      cell.session = next;
+      setSession(next);
+    },
+    [cell],
+  );
+  const record = useCallback(
+    (result: EventResult) => recordDaemonResult(cell, publish, result, clock),
+    [cell, publish, clock],
+  );
   const pull = useAtomSet(daemonEventAtom);
   const resubscribe = useAtomRefresh(daemonEventAtom);
   const pump = useCallback(
-    (current: EventResult) => pumpDaemonResult(current, pull, resubscribe),
-    [pull, resubscribe],
+    (current: EventResult) => pumpDaemonResult(cell, current, pull, resubscribe),
+    [cell, pull, resubscribe],
   );
-  const sessionSubscribe = useCallback((listener: () => void) => subscribe(listener, clock), [clock]);
-  useAtomSubscribe(daemonEventAtom, (result) => recordDaemonResult(result, clock), { immediate: true });
+  useAtomSubscribe(daemonEventAtom, record, { immediate: true });
   useAtomSubscribe(daemonEventAtom, pump, { immediate: true });
-  return useSyncExternalStore(sessionSubscribe, getSession);
+  // Engine transitions fold during render: a status change re-renders via useEngineStatus's store
+  // read, updateLifecycle returns the identical session when the phase is unchanged, and publish
+  // skips identical sessions — so this cannot loop.
+  const { status } = useEngineStatus();
+  recordEngineStatus(cell, publish, status, clock);
+  return <ActivitySessionContext value={session}>{children}</ActivitySessionContext>;
+}
+
+export function useActivitySession(): ActivitySession {
+  const session = use(ActivitySessionContext);
+  if (session === null) throw new Error("useActivitySession must render inside ActivitySessionProvider.");
+  return session;
 }
 
 export type BoardResult =
   | { readonly _tag: "Initial" }
-  | { readonly _tag: "Failure"; readonly cause: Cause.Cause<unknown> }
+  | { readonly _tag: "Failure" }
   | {
       readonly _tag: "Success";
       readonly board: Board;
@@ -457,9 +477,8 @@ export type BoardResult =
     };
 
 export function useBoard(): BoardResult {
-  const current = useActivitySession();
-  const result = useAtomValue(daemonEventAtom);
-  if (result._tag === "Failure") return { _tag: "Failure", cause: result.cause };
-  if (result._tag !== "Success") return { _tag: "Initial" };
-  return { _tag: "Success", board: current.board, previews: previewMap(current.previews) };
+  const session = useActivitySession();
+  if (session.connection === "lost") return { _tag: "Failure" };
+  if (session.connection === "connecting") return { _tag: "Initial" };
+  return { _tag: "Success", board: session.board, previews: previewMap(session.previews) };
 }

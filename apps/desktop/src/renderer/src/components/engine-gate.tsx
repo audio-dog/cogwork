@@ -11,8 +11,8 @@ import {
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiErrorWarningLine, RiFlashlightLine, RiRestartLine, RiShutDownLine } from "@remixicon/react";
 import { createContext, type ReactNode, use, useState } from "react";
+import { useBoard } from "../features/activity-session";
 import { type BrokenReason, brokenReason, type Treatment, treatmentFor } from "../features/engine-gate";
-import { useBoard } from "../features/use-board";
 import { type EnginePhase, enginePhase, useEngineStatus } from "../features/use-engine-status";
 
 const OFF_TITLE = "Engine is off";
