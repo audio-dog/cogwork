@@ -1,14 +1,10 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiServerLine } from "@remixicon/react";
 import type { Contribution } from "../features/configuration-model";
-import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { resolveEnablement } from "../features/configuration-resolve";
+import { visibleContributions } from "../features/customize-places";
 import { ListSection, ListSectionBody, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { McpServerRow } from "./mcp-server-row";
-
-const servers = placeholderConfiguration.contributions.filter(
-  (contribution) => contribution.kind === "mcp-server",
-);
 
 function troubled(contribution: Contribution) {
   if (contribution.load._tag === "failed") return true;
@@ -16,7 +12,8 @@ function troubled(contribution: Contribution) {
   return resolveEnablement(contribution, { workspaceId: contribution.definedIn }).dropped.length > 0;
 }
 
-export function McpFacet() {
+export function McpFacet({ places, query }: { places: readonly string[]; query: string }) {
+  const servers = visibleContributions("mcp-server", places, query);
   const attention = servers.filter(troubled);
   const connected = servers.filter((contribution) => !troubled(contribution));
 

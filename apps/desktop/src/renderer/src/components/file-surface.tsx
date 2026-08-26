@@ -1,7 +1,7 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiFileTextLine } from "@remixicon/react";
 import { authorityLabel, kindLabels, scopeCopy } from "../features/configuration-model";
-import { placeholderConfiguration } from "../features/configuration-placeholder";
+import { contributionById, workspaceById } from "../features/configuration-placeholder";
 import { useRightPanelStore } from "../store/right-panel";
 import { SurfaceTab } from "./surface-tab";
 
@@ -33,9 +33,9 @@ function Property({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function FileSurfaceBody({ path }: { path: string }) {
-  const contribution = placeholderConfiguration.contributions.find((entry) => entry.file === path);
-  const workspace = placeholderConfiguration.workspaces.find((entry) => entry.id === contribution?.definedIn);
+export function FileSurfaceBody({ contributionId, path }: { contributionId: string; path: string }) {
+  const contribution = contributionById(contributionId);
+  const workspace = workspaceById(contribution?.definedIn);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">

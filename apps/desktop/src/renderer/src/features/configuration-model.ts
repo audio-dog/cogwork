@@ -2,12 +2,6 @@ export const scopeOrder = ["runtime-host", "workspace-input", "private-overlay"]
 
 export type ScopeKind = (typeof scopeOrder)[number];
 
-export const scopeLabels: Record<ScopeKind, string> = {
-  "runtime-host": "Runtime host",
-  "workspace-input": "Workspace input",
-  "private-overlay": "Private workspace overlay",
-};
-
 export const scopeCopy: Record<ScopeKind, { readonly name: string; readonly hint: string }> = {
   "runtime-host": { name: "User", hint: "On this machine, in every workspace." },
   "workspace-input": { name: "Everyone", hint: "In the repo, for anyone who clones it." },

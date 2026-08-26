@@ -16,14 +16,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { RiArrowDownSLine, RiArrowRightSLine, RiCheckDoubleLine } from "@remixicon/react";
 import { useState } from "react";
 import {
+  type ContributionKind,
   type ScopeRef,
   scopeCopy,
   scopeKey,
   type Workspace,
-  type WorkspaceId,
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
-import type { Facet } from "../features/customize-facets";
 import {
   allPlaceKeys,
   countAt,
@@ -38,7 +37,7 @@ import { scopeIcons } from "./configuration-atoms";
 const { workspaces } = placeholderConfiguration;
 const MachineIcon = scopeIcons["runtime-host"];
 
-type Highlight = { readonly _tag: "user" } | { readonly _tag: "workspace"; readonly id: WorkspaceId };
+type Highlight = { readonly _tag: "user" } | { readonly _tag: "workspace"; readonly id: Workspace["id"] };
 
 function CountBadge({ count, muted }: { count: number; muted: boolean }) {
   return (
@@ -70,7 +69,7 @@ function NavRow({
     <Item
       size="xs"
       variant={active ? "muted" : "default"}
-      render={<button type="button" onMouseEnter={onHighlight} onFocus={onHighlight} />}
+      render={<button type="button" onClick={onHighlight} onMouseEnter={onHighlight} onFocus={onHighlight} />}
       className="cursor-pointer text-left hover:bg-muted/50"
     >
       {Icon ? (
@@ -91,12 +90,12 @@ function NavRow({
 
 function PlaceRow({
   place,
-  facet,
+  count,
   checked,
   onToggle,
 }: {
   place: ScopeRef;
-  facet: Facet;
+  count: number;
   checked: boolean;
   onToggle: () => void;
 }) {
@@ -111,7 +110,7 @@ function PlaceRow({
         <ItemDescription>{copy.hint}</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <CountBadge count={countAt(place, facet)} muted={!checked} />
+        <CountBadge count={count} muted={!checked} />
       </ItemActions>
     </Item>
   );
@@ -125,15 +124,16 @@ function placesOf(highlight: Highlight, workspace?: Workspace): readonly ScopeRe
 
 export function CustomizePlaceMenu({
   places,
-  facet,
+  kind,
   onChange,
   unavailable,
 }: {
   places: readonly string[];
-  facet: Facet;
+  kind?: ContributionKind;
   onChange: (next: readonly string[]) => void;
   unavailable?: string;
 }) {
+  const countFor = (place: ScopeRef) => (kind ? countAt(place, kind) : 0);
   const [highlight, setHighlight] = useState<Highlight>({ _tag: "user" });
 
   const machineKey = scopeKey(machinePlace);
@@ -185,7 +185,7 @@ export function CustomizePlaceMenu({
             <NavRow
               icon={MachineIcon}
               title={scopeCopy["runtime-host"].name}
-              count={countAt(machinePlace, facet)}
+              count={countFor(machinePlace)}
               muted={!places.includes(machineKey)}
               active={user}
               onHighlight={() => setHighlight({ _tag: "user" })}
@@ -202,7 +202,7 @@ export function CustomizePlaceMenu({
                   count={checked}
                   muted={checked === 0}
                   active={highlight._tag === "workspace" && highlight.id === entry.id}
-                  onHighlight={() => setHighlight({ _tag: "workspace", id: entry.id as WorkspaceId })}
+                  onHighlight={() => setHighlight({ _tag: "workspace", id: entry.id })}
                 />
               );
             })}
@@ -227,7 +227,7 @@ export function CustomizePlaceMenu({
                   <PlaceRow
                     key={key}
                     place={place}
-                    facet={facet}
+                    count={countFor(place)}
                     checked={places.includes(key)}
                     onToggle={() => onChange(toggle(places, key))}
                   />

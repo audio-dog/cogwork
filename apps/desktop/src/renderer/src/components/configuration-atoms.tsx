@@ -1,8 +1,5 @@
-import { Badge } from "@cogwork/ui/components/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import {
   RiComputerLine,
-  RiErrorWarningLine,
   RiFileTextLine,
   RiFolderLine,
   RiGitRepositoryLine,
@@ -13,15 +10,7 @@ import {
   RiTerminalBoxLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
-import {
-  type Authority,
-  authorityLabel,
-  type ContributionKind,
-  type Diagnostic,
-  diagnosticLabels,
-  type McpReadiness,
-  type ScopeKind,
-} from "../features/configuration-model";
+import type { ContributionKind, ScopeKind } from "../features/configuration-model";
 
 export const kindIcons: Record<ContributionKind, ComponentType> = {
   "mcp-server": RiServerLine,
@@ -37,36 +26,3 @@ export const scopeIcons: Record<ScopeKind, ComponentType> = {
   "workspace-input": RiGitRepositoryLine,
   "private-overlay": RiFolderLine,
 };
-
-export function AuthorityBadge({ authority }: { authority: Authority }) {
-  const variant = authority._tag === "plugin" ? "secondary" : "outline";
-  return <Badge variant={variant}>{authorityLabel(authority)}</Badge>;
-}
-
-export function DiagnosticBadge({ diagnostic }: { diagnostic: Diagnostic }) {
-  const variant = diagnostic._tag === "ambiguous" ? "destructive" : "outline";
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<Badge variant={variant} />}>
-        <RiErrorWarningLine data-icon="inline-start" />
-        {diagnosticLabels[diagnostic._tag]}
-      </TooltipTrigger>
-      <TooltipContent className="max-w-80">{diagnostic.detail}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-export function FidelityBadge({ fidelity }: { fidelity: "exact" | "coarse" }) {
-  if (fidelity === "exact") return <Badge variant="outline">Enforced</Badge>;
-  return <Badge variant="secondary">Coarse</Badge>;
-}
-
-export function ReadinessBadge({ readiness }: { readiness: McpReadiness }) {
-  if (readiness._tag === "ready") return <Badge variant="outline">Ready</Badge>;
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<Badge variant="destructive" />}>Not ready</TooltipTrigger>
-      <TooltipContent className="max-w-80">{readiness.reason}</TooltipContent>
-    </Tooltip>
-  );
-}

@@ -14,12 +14,12 @@ import { RiLoopLeftLine, RiServerLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { draftCellAt, withDraft } from "../features/configuration-draft";
 import { authorityLabel, type Contribution, scopeCopy } from "../features/configuration-model";
-import { placeholderConfiguration } from "../features/configuration-placeholder";
+import { placeholderConfiguration, workspaceById } from "../features/configuration-placeholder";
 import { enableScopeFor, offeredElsewhere, resolveEnablement } from "../features/configuration-resolve";
 import { useConfigurationDraftStore } from "../store/configuration-draft";
 import { scopeIcons } from "./configuration-atoms";
 
-const { contributions, workspaces } = placeholderConfiguration;
+const { contributions } = placeholderConfiguration;
 
 /**
  * `DialogContent` styles its popup as a `grid`, and a grid item's default `min-width: auto` means
@@ -65,7 +65,7 @@ export function McpConfigureDialog({
   const target = enableScopeFor(contribution);
   const on = target ? draftCellAt(contribution, target, cells) === "on" : resolved.effective === true;
 
-  const workspace = workspaces.find((entry) => entry.id === contribution.definedIn);
+  const workspace = workspaceById(contribution.definedIn);
   const PlaceIcon = scopeIcons[contribution.definedAt];
 
   const namesakes = contributions.filter(

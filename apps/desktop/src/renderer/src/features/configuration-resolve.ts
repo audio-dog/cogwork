@@ -37,11 +37,9 @@ export interface ResolvedEnablement {
   readonly winner?: EnablementRow;
   readonly shadowed: readonly EnablementRow[];
   readonly dropped: readonly DroppedRow[];
-  readonly ladder: readonly ScopeKind[];
 }
 
 export function resolveEnablement(contribution: Contribution, view: ViewContext): ResolvedEnablement {
-  const ladder = enablementScopes[contribution.kind];
   const visible = contribution.rows.filter((row) => inView(row, view));
 
   const dropped = visible
@@ -61,11 +59,7 @@ export function resolveEnablement(contribution: Contribution, view: ViewContext)
     .toSorted((a, b) => scopeRank(b.scope.kind) - scopeRank(a.scope.kind));
 
   const [winner, ...shadowed] = candidates;
-  return { effective: winner?.value, winner, shadowed, dropped, ladder };
-}
-
-export function cellPermitted(kind: ContributionKind, scope: ScopeKind): boolean {
-  return enablementScopes[kind].includes(scope);
+  return { effective: winner?.value, winner, shadowed, dropped };
 }
 
 export function enableScopeFor(contribution: Contribution): ScopeRef | undefined {
@@ -87,10 +81,10 @@ export function offeredElsewhere(contribution: Contribution): boolean {
   return !enablementScopes[contribution.kind].includes(contribution.definedAt);
 }
 
-export function settingsSpreadAcross(contribution: Contribution, view: ViewContext): readonly ScopeKind[] {
-  const resolved = resolveEnablement(contribution, view);
-  if (resolved.shadowed.length === 0) return [];
-  return [resolved.winner, ...resolved.shadowed]
-    .filter((row) => row !== undefined)
+export function settingsSpreadAcross(contribution: Contribution) {
+  const admissible = contribution.rows.filter((row) => admissibleFor(contribution.kind, row));
+  if (admissible.length < 2) return [];
+  return admissible
+    .toSorted((a, b) => scopeRank(b.scope.kind) - scopeRank(a.scope.kind))
     .map((row) => row.scope.kind);
 }

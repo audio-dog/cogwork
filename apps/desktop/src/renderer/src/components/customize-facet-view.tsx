@@ -23,6 +23,7 @@ function FacetPill({ facet, active, places }: { facet: Facet; active: boolean; p
       variant={active ? "secondary" : "outline"}
       size="sm"
       className="rounded-full"
+      aria-current={active ? "page" : undefined}
       render={<Link to="/customize/$facet" params={{ facet: facetSlug(facet) }} />}
     >
       {facet === "plugins" ? <RiBox3Line data-icon="inline-start" /> : null}
@@ -98,8 +99,8 @@ function ContributionGroups({
 }
 
 function FacetBody({ facet, places, query }: { facet: Facet; places: readonly string[]; query: string }) {
-  if (facet === "plugins") return <PluginsFacet />;
-  if (facet === "mcp-server") return <McpFacet />;
+  if (facet === "plugins") return <PluginsFacet query={query} />;
+  if (facet === "mcp-server") return <McpFacet places={places} query={query} />;
   if (facet === "hook") return <HooksEmpty />;
   return <ContributionGroups kind={facet} places={places} query={query} />;
 }
@@ -130,7 +131,7 @@ export function CustomizeFacetView({ facet }: { facet: Facet }) {
         <div className="flex flex-wrap items-center gap-2">
           <CustomizePlaceMenu
             places={places}
-            facet={facet}
+            kind={facet === "plugins" ? undefined : facet}
             onChange={setPlaces}
             unavailable={
               facet === "plugins"

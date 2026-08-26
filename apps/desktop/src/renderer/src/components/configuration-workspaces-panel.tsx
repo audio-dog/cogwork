@@ -24,9 +24,62 @@ import {
   ItemTitle,
 } from "@cogwork/ui/components/item";
 import { RiAddLine, RiGitRepositoryLine, RiInformationLine } from "@remixicon/react";
+import { useState } from "react";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 
 const { workspaces, limits, controlStore } = placeholderConfiguration;
+
+function DeregisterDialog({ workspace }: { workspace: (typeof workspaces)[number] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger render={<Button size="sm" variant="ghost" />}>Deregister</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogTitle>Deregister {workspace.name}?</AlertDialogTitle>
+        <AlertDialogDescription>
+          One act, and it cascades: the registration, every contribution setting written at this workspace's
+          Workspace input Scope, and every one at its Private workspace overlay. Run history is not cascaded —
+          losing a workspace should not erase what it did.
+        </AlertDialogDescription>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep it</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={() => setOpen(false)}>
+            Deregister
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function RestoreDialog() {
+  const [open, setOpen] = useState(false);
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
+        render={
+          <Button size="sm" variant="outline" className="w-fit" disabled={!controlStore.preMigrationCopy} />
+        }
+      >
+        Restore the pre-migration copy
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogTitle>Restore the pre-migration copy?</AlertDialogTitle>
+        <AlertDialogDescription>
+          Everything written since {controlStore.preMigrationCopy?.at} is discarded — install records, every
+          contribution setting, every Operation setting, and the workspace registry. Run history is disposable
+          by policy and is not restored.
+        </AlertDialogDescription>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={() => setOpen(false)}>
+            Restore
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 function WorkspaceRow({ workspace }: { workspace: (typeof workspaces)[number] }) {
   const sharesRemote =
@@ -59,21 +112,7 @@ function WorkspaceRow({ workspace }: { workspace: (typeof workspaces)[number] })
         <Button size="sm" variant="outline">
           Re-bind path
         </Button>
-        <AlertDialog>
-          <AlertDialogTrigger render={<Button size="sm" variant="ghost" />}>Deregister</AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogTitle>Deregister {workspace.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              One act, and it cascades: the registration, every contribution setting written at this
-              workspace's Workspace input Scope, and every one at its Private workspace overlay. Run history
-              is not cascaded — losing a workspace should not erase what it did.
-            </AlertDialogDescription>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep it</AlertDialogCancel>
-              <AlertDialogAction variant="destructive">Deregister</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <DeregisterDialog workspace={workspace} />
       </ItemActions>
     </Item>
   );
@@ -167,32 +206,7 @@ export function WorkspacesPanel() {
               </AlertDescription>
             </Alert>
           ) : null}
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-fit"
-                  disabled={!controlStore.preMigrationCopy}
-                />
-              }
-            >
-              Restore the pre-migration copy
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogTitle>Restore the pre-migration copy?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Everything written since {controlStore.preMigrationCopy?.at} is discarded — install records,
-                every contribution setting, every Operation setting, and the workspace registry. Run history
-                is disposable by policy and is not restored.
-              </AlertDialogDescription>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction variant="destructive">Restore</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <RestoreDialog />
         </CardContent>
       </Card>
     </div>

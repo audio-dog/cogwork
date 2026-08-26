@@ -9,7 +9,10 @@ import {
 import {
   allPlaceKeys,
   allPlaces,
+  countAt,
   groupContributions,
+  kindCount,
+  machinePlace,
   placeOf,
   summarize,
   toggle,
@@ -171,5 +174,48 @@ describe("groupContributions", () => {
     const groups = groupContributions("skill", [repo], "");
     expect(groups).toHaveLength(1);
     expect(groups[0].label).toBe("cogwork · Everyone");
+  });
+});
+
+describe("search", () => {
+  it("matches on the local name", () => {
+    const found = visibleContributions("skill", allPlaceKeys, "commit").map((row) => row.id);
+    expect(found).toEqual(["local/skill/commit-style"]);
+  });
+
+  it("matches on the summary", () => {
+    const found = visibleContributions("skill", allPlaceKeys, "release notes").map((row) => row.id);
+    expect(found).toEqual(["local/skill/release-notes"]);
+  });
+
+  it("ignores case and surrounding whitespace", () => {
+    const loose = visibleContributions("skill", allPlaceKeys, "  COMMIT  ").map((row) => row.id);
+    expect(loose).toEqual(["local/skill/commit-style"]);
+  });
+
+  it("returns everything for an empty query", () => {
+    const all = visibleContributions("skill", allPlaceKeys, "");
+    expect(visibleContributions("skill", allPlaceKeys, "   ")).toEqual(all);
+  });
+
+  it("narrows the groups it feeds", () => {
+    const groups = groupContributions("skill", allPlaceKeys, "commit");
+    expect(groups.map((group) => group.label)).toEqual(["User"]);
+  });
+});
+
+describe("countAt and kindCount", () => {
+  it("counts only the given kind at the given place", () => {
+    expect(countAt(machinePlace, "skill")).toBe(2);
+    expect(countAt({ kind: "workspace-input", workspaceId: cogworkWorkspaceId }, "skill")).toBe(1);
+    expect(countAt({ kind: "workspace-input", workspaceId: clankerWorkspaceId }, "skill")).toBe(0);
+    expect(countAt(machinePlace, "rules")).toBe(2);
+  });
+
+  it("counts a kind across the selected places only", () => {
+    const everywhere = kindCount("rules", allPlaceKeys);
+    const machineOnly = kindCount("rules", ["runtime-host"]);
+    expect(machineOnly).toBeLessThan(everywhere);
+    expect(kindCount("rules", [])).toBe(0);
   });
 });

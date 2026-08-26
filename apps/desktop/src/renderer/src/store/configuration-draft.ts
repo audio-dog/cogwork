@@ -5,7 +5,6 @@ import type { DraftCell, ScopeRef } from "../features/configuration-model";
 interface DraftState {
   readonly cells: Readonly<Record<string, DraftEntry>>;
   readonly setCell: (contributionId: string, scope: ScopeRef, cell: DraftCell) => void;
-  readonly reset: () => void;
 }
 
 export const useConfigurationDraftStore = create<DraftState>((set) => ({
@@ -14,5 +13,4 @@ export const useConfigurationDraftStore = create<DraftState>((set) => ({
     set((state) => ({
       cells: { ...state.cells, [draftKey(contributionId, scope)]: { scope, cell } },
     })),
-  reset: () => set({ cells: {} }),
 }));

@@ -7,9 +7,16 @@ import { CatalogPluginRow, PluginAttentionRow, PluginRow } from "./plugin-list-r
 
 const { plugins, catalog } = placeholderConfiguration;
 
-export function PluginsFacet() {
-  const attention = plugins.filter(needsAttention);
-  const settled = plugins.filter((plugin) => !needsAttention(plugin));
+const matches = (query: string, ...fields: readonly string[]) => {
+  const needle = query.trim().toLowerCase();
+  return needle === "" || fields.join(" ").toLowerCase().includes(needle);
+};
+
+export function PluginsFacet({ query }: { query: string }) {
+  const found = plugins.filter((plugin) => matches(query, plugin.name, plugin.summary));
+  const attention = found.filter(needsAttention);
+  const settled = found.filter((plugin) => !needsAttention(plugin));
+  const offered = catalog.filter((entry) => matches(query, entry.name, entry.summary));
   const added = addedEntryIds();
 
   return (
@@ -49,9 +56,9 @@ export function PluginsFacet() {
       </ListSection>
 
       <ListSection>
-        <ListSectionHeader title="Catalog" count={catalog.length} />
+        <ListSectionHeader title="Catalog" count={offered.length} />
         <ListSectionRows>
-          {catalog.map((entry) => (
+          {offered.map((entry) => (
             <CatalogPluginRow key={entry.id} entry={entry} added={added.includes(entry.id)} />
           ))}
         </ListSectionRows>

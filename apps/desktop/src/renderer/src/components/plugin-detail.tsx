@@ -15,6 +15,7 @@ import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/u
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftSLine, RiBox3Line, RiCheckLine, RiDeleteBinLine, RiSubtractLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   contributionKinds,
   type InstalledPlugin,
@@ -22,7 +23,6 @@ import {
   type SetupStep,
 } from "../features/configuration-model";
 import { contributionsOf, sourceLine } from "../features/plugins-view";
-import { FidelityBadge } from "./configuration-atoms";
 import { ContributionFileRow } from "./contribution-file-row";
 import {
   ListRow,
@@ -33,6 +33,11 @@ import {
   ListSectionRows,
 } from "./customize-list";
 import { McpServerRow } from "./mcp-server-row";
+
+function FidelityBadge({ fidelity }: { fidelity: "exact" | "coarse" }) {
+  if (fidelity === "exact") return <Badge variant="outline">Enforced</Badge>;
+  return <Badge variant="secondary">Coarse</Badge>;
+}
 
 function SetupRow({ step }: { step: SetupStep }) {
   return (
@@ -58,8 +63,9 @@ function SetupRow({ step }: { step: SetupStep }) {
 }
 
 function UninstallDialog({ plugin }: { plugin: InstalledPlugin }) {
+  const [open, setOpen] = useState(false);
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger render={<Button size="sm" variant="ghost" />}>
         <RiDeleteBinLine data-icon="inline-start" />
         Uninstall
@@ -73,7 +79,9 @@ function UninstallDialog({ plugin }: { plugin: InstalledPlugin }) {
         </AlertDialogDescription>
         <AlertDialogFooter>
           <AlertDialogCancel>Keep it</AlertDialogCancel>
-          <AlertDialogAction variant="destructive">Uninstall</AlertDialogAction>
+          <AlertDialogAction variant="destructive" onClick={() => setOpen(false)}>
+            Uninstall
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -118,7 +126,7 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
 
         {remaining.length > 0 ? (
           <ListSection>
-            <ListSectionHeader title="Setup" count={remaining.length} />
+            <ListSectionHeader title="Setup" count={plugin.setup.length} />
             <ListSectionRows>
               {plugin.setup.map((step) => (
                 <SetupRow key={step.id} step={step} />

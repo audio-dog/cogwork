@@ -487,6 +487,10 @@ export const placeholderConfiguration: ConfigurationPicture = {
   },
 };
 
+export function workspaceById(workspaceId?: WorkspaceId) {
+  return placeholderConfiguration.workspaces.find((workspace) => workspace.id === workspaceId);
+}
+
 export function contributionById(id: string): Contribution | undefined {
   return placeholderConfiguration.contributions.find((contribution) => contribution.id === id);
 }

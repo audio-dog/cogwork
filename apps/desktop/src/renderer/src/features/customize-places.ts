@@ -6,9 +6,8 @@ import {
   scopeCopy,
   scopeKey,
 } from "./configuration-model";
-import { placeholderConfiguration } from "./configuration-placeholder";
+import { placeholderConfiguration, workspaceById } from "./configuration-placeholder";
 import { definedScope } from "./configuration-resolve";
-import type { Facet } from "./customize-facets";
 
 const { contributions, workspaces, plugins } = placeholderConfiguration;
 
@@ -29,11 +28,10 @@ export function placeOf(contribution: Contribution): string {
   return scopeKey(definedScope(contribution));
 }
 
-export function countAt(place: ScopeRef, facet: Facet): number {
+export function countAt(place: ScopeRef, kind: ContributionKind) {
   const key = scopeKey(place);
-  return contributions.filter(
-    (contribution) => placeOf(contribution) === key && (facet === "plugins" || contribution.kind === facet),
-  ).length;
+  return contributions.filter((contribution) => placeOf(contribution) === key && contribution.kind === kind)
+    .length;
 }
 
 export function kindCount(kind: ContributionKind, places: readonly string[]): number {
@@ -43,13 +41,13 @@ export function kindCount(kind: ContributionKind, places: readonly string[]): nu
 }
 
 export function visibleContributions(
-  facet: Facet,
+  kind: ContributionKind,
   places: readonly string[],
   query: string,
 ): readonly Contribution[] {
   const needle = query.trim().toLowerCase();
   return contributions
-    .filter((contribution) => facet !== "plugins" && contribution.kind === facet)
+    .filter((contribution) => contribution.kind === kind)
     .filter((contribution) => places.includes(placeOf(contribution)))
     .filter((contribution) =>
       needle === ""
@@ -87,11 +85,11 @@ export interface ContributionGroup {
 }
 
 export function groupContributions(
-  facet: Facet,
+  kind: ContributionKind,
   places: readonly string[],
   query: string,
 ): readonly ContributionGroup[] {
-  const visible = visibleContributions(facet, places, query);
+  const visible = visibleContributions(kind, places, query);
 
   const mine = visible.filter(
     (contribution) => contribution.authority._tag === "local" && contribution.definedAt === "runtime-host",
@@ -114,7 +112,7 @@ export function groupContributions(
     .filter((place) => place.workspaceId !== undefined)
     .map((place) => {
       const key = scopeKey(place);
-      const workspace = workspaces.find((entry) => entry.id === place.workspaceId);
+      const workspace = workspaceById(place.workspaceId);
       return {
         key,
         label: `${workspace?.name ?? "Unknown"} · ${scopeCopy[place.kind].name}`,

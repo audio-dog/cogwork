@@ -44,9 +44,7 @@ export function PluginAttentionRow({ plugin }: { plugin: InstalledPlugin }) {
       </ItemContent>
       {action ? (
         <ItemActions>
-          <Button size="sm" variant={failed ? "outline" : "default"}>
-            {action}
-          </Button>
+          <Badge variant={failed ? "destructive" : "secondary"}>{action}</Badge>
         </ItemActions>
       ) : null}
     </ListRowButton>

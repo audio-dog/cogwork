@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type Contribution,
+  enablementScopes,
   hasToggle,
   type ScopeRef,
   scopeOrder,
@@ -8,7 +9,6 @@ import {
 } from "./configuration-model";
 import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "./configuration-placeholder";
 import {
-  cellPermitted,
   enableScopeFor,
   offeredElsewhere,
   resolveEnablement,
@@ -41,7 +41,7 @@ describe("resolveEnablement", () => {
       "local/command/scratch",
     ]) {
       const resolved = resolveEnablement(required(id), view);
-      expect(resolved.ladder).toEqual([]);
+      expect(enablementScopes[required(id).kind]).toEqual([]);
       expect(resolved.effective).toBeUndefined();
       expect(resolved.winner).toBeUndefined();
     }
@@ -94,16 +94,13 @@ describe("cellPermitted and hasToggle", () => {
 
   it("puts no Scope at all behind a kind that has no on / off", () => {
     for (const kind of ["skill", "rules", "command", "subagent"] as const) {
-      for (const scope of scopeOrder) expect(cellPermitted(kind, scope)).toBe(false);
+      expect(enablementScopes[kind]).toEqual([]);
     }
   });
 
   it("keeps the repository out of the two that do", () => {
-    // A repository you cloned must not start a process on your machine.
     for (const kind of ["hook", "mcp-server"] as const) {
-      expect(cellPermitted(kind, "runtime-host")).toBe(true);
-      expect(cellPermitted(kind, "private-overlay")).toBe(true);
-      expect(cellPermitted(kind, "workspace-input")).toBe(false);
+      expect(enablementScopes[kind]).toEqual(["runtime-host", "private-overlay"]);
     }
   });
 });
@@ -168,16 +165,16 @@ describe("where a contribution lives, and where it is turned on", () => {
 
 describe("settingsSpreadAcross", () => {
   it("stays empty for the ordinary case of one value in one place", () => {
-    expect(settingsSpreadAcross(required("local/mcp/linear"), view)).toEqual([]);
+    expect(settingsSpreadAcross(required("local/mcp/linear"))).toEqual([]);
   });
 
   it("stays empty for a kind that has no on / off to spread", () => {
-    expect(settingsSpreadAcross(required("local/skill/commit-style"), view)).toEqual([]);
+    expect(settingsSpreadAcross(required("local/skill/commit-style"))).toEqual([]);
   });
 
   it("names every Scope when one identity carries a value in more than one", () => {
     // The exception ADR 0013's direction exists for. It is a badge, not the shape of the page.
-    const spread = settingsSpreadAcross(required("plugin:linear/mcp/linear"), view);
+    const spread = settingsSpreadAcross(required("plugin:linear/mcp/linear"));
     expect(spread).toEqual(["private-overlay", "runtime-host"]);
   });
 });
