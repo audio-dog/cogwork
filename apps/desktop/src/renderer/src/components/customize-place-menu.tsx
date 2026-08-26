@@ -13,8 +13,9 @@ import { Label } from "@cogwork/ui/components/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@cogwork/ui/components/popover";
 import { Separator } from "@cogwork/ui/components/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
+import { cn } from "@cogwork/ui/lib/utils";
 import { RiArrowDownSLine, RiArrowRightSLine, RiCheckDoubleLine } from "@remixicon/react";
-import { type ReactNode, useState } from "react";
+import { type ComponentProps, type ReactNode, useState } from "react";
 import { scopeIcons } from "../features/configuration-icons";
 import {
   type ContributionKind,
@@ -39,9 +40,14 @@ const selectionOf = (picked: number, total: number): Selection => {
   return picked === total ? "all" : "some";
 };
 
-function PlaceTrigger({ label, disabled }: { label: string; disabled?: boolean }) {
+/**
+ * `PopoverTrigger` hosts this through `render`, which injects the ref, the click handler and the
+ * ARIA wiring as props. They have to reach the native button or the menu never opens, so this
+ * spreads everything it is given.
+ */
+function PlaceTrigger({ label, className, ...props }: ComponentProps<typeof Button> & { label: string }) {
   return (
-    <Button variant="outline" size="sm" className="rounded-full" disabled={disabled}>
+    <Button variant="outline" size="sm" {...props} className={cn("rounded-full", className)}>
       <ProfileIcon data-icon="inline-start" />
       <span className="w-32 truncate text-start">{label}</span>
       <RiArrowDownSLine data-icon="inline-end" />

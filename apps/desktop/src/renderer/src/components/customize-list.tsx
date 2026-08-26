@@ -117,7 +117,7 @@ export function ListRow({ children, muted }: { children: ReactNode; muted?: bool
         "relative rounded-none border-transparent",
         // The overlay is transparent, so the row itself carries the hover tint. Keying it to the
         // overlay leaves a row without one — a setup step, say — unhighlighted, as before.
-        "has-[[data-slot=list-row-open]:hover]:bg-muted",
+        "has-[[data-list-row-open]:hover]:bg-muted",
         muted && "opacity-60",
       )}
     >
@@ -133,9 +133,12 @@ export function ListRow({ children, muted }: { children: ReactNode; muted?: bool
 export function ListRowOpen({ label, className, ...props }: ComponentProps<"button"> & { label: string }) {
   return (
     <button
-      data-slot="list-row-open"
       type="button"
+      data-slot="list-row-open"
       {...props}
+      // After the spread: a host such as `DialogTrigger` sets its own `data-slot`, and the row's
+      // hover tint keys off this marker.
+      data-list-row-open=""
       className={cn(
         "absolute inset-0 cursor-pointer rounded-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
         className,
