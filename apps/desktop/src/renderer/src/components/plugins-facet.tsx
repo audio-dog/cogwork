@@ -2,6 +2,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { RiBox3Line } from "@remixicon/react";
 import type { InstalledPlugin } from "../features/configuration-model";
 import { useConfiguration } from "./configuration-provider";
+import { SearchEmpty } from "./customize-empty";
 import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionBody, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { PluginAttentionRow, PluginRow } from "./plugin-list-rows";
@@ -25,6 +26,9 @@ export function PluginsFacet() {
   const found = picture.plugins.filter((plugin) => matches(query, plugin.name, plugin.summary));
   const attention = found.filter(pluginAxis.needsAttention);
   const settled = found.filter((plugin) => !pluginAxis.needsAttention(plugin));
+
+  // "Everything's in the list above" is only true when there is a list above.
+  if (found.length === 0) return <SearchEmpty icon={RiBox3Line} label="Plugins" />;
 
   return (
     <div className="flex flex-col gap-6">

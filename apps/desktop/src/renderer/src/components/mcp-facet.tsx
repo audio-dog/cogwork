@@ -3,6 +3,7 @@ import { RiServerLine } from "@remixicon/react";
 import type { Contribution } from "../features/configuration-model";
 import { diagnosticsOf } from "../features/configuration-resolve";
 import { useConfiguration } from "./configuration-provider";
+import { FilteredEmpty } from "./customize-empty";
 import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionBody, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { McpServerRow } from "./mcp-server-row";
@@ -27,6 +28,10 @@ export function McpFacet() {
   const servers = places.visibleContributions("mcp-server", selected, query);
   const attention = servers.filter(troubled);
   const connected = servers.filter((contribution) => !troubled(contribution));
+
+  // With nothing left after the filter there is no split to show, and "Nothing connected" would
+  // report a status the filter invented.
+  if (servers.length === 0) return <FilteredEmpty icon={RiServerLine} label="MCP servers" />;
 
   return (
     <div className="flex flex-col gap-6">

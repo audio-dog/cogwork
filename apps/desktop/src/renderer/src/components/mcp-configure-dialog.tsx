@@ -11,7 +11,11 @@ import {
 import { RiLoopLeftLine, RiServerLine } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { scopeIcons } from "../features/configuration-icons";
-import { authorityLabel, scopeCopy } from "../features/configuration-model";
+import {
+  authorityLabel,
+  type Contribution as ContributionRecord,
+  scopeCopy,
+} from "../features/configuration-model";
 import { offeredElsewhere } from "../features/configuration-resolve";
 import { useConfiguration } from "./configuration-provider";
 import { Contribution, useContribution } from "./contribution";
@@ -85,11 +89,36 @@ function SourceSection() {
   );
 }
 
+/**
+ * The Engine reports ready or not ready — or nothing at all, when it never got far enough to judge.
+ * A file that will not load is the third case, and calling it either of the first two is a lie.
+ */
+export function readinessCopy(contribution: ContributionRecord) {
+  if (contribution.readiness?._tag === "ready") {
+    return {
+      title: "Ready",
+      detail: "Launchable, authenticated, and speaking a protocol we understand.",
+      output: false,
+    };
+  }
+  if (contribution.readiness?._tag === "not-ready") {
+    return { title: "Not ready", detail: contribution.readiness.reason, output: true };
+  }
+  if (contribution.load._tag === "failed") {
+    return {
+      title: "Not checked",
+      detail: "This file didn't load, so the Engine never started the server to judge it.",
+      output: true,
+    };
+  }
+  return { title: "Not checked", detail: "The Engine hasn't reached a conclusion yet.", output: false };
+}
+
 function StatusSection() {
   const {
     state: { contribution },
   } = useContribution();
-  const notReady = contribution.readiness?._tag === "not-ready";
+  const { title, detail, output } = readinessCopy(contribution);
 
   return (
     <DialogSection>
@@ -98,14 +127,10 @@ function StatusSection() {
       <DialogSectionBody>
         <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-sm">{notReady ? "Not ready" : "Ready"}</span>
-            <span className="text-xs text-muted-foreground">
-              {contribution.readiness?._tag === "not-ready"
-                ? contribution.readiness.reason
-                : "Launchable, authenticated, and speaking a protocol we understand."}
-            </span>
+            <span className="text-sm">{title}</span>
+            <span className="text-xs text-muted-foreground">{detail}</span>
           </span>
-          {notReady ? (
+          {output ? (
             <Button size="sm" variant="ghost">
               Show output
             </Button>

@@ -12,6 +12,7 @@ import { type ContributionKind, kindLabelsPlural } from "../features/configurati
 import { type Facet, facetLabel, facetSlug, facets } from "../features/customize-facets";
 import { useConfiguration } from "./configuration-provider";
 import { ContributionFileRow } from "./contribution-file-row";
+import { FilteredEmpty } from "./customize-empty";
 import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { CustomizePlaceMenu, PlaceFilterNotApplicable } from "./customize-place-menu";
@@ -92,30 +93,6 @@ function CustomizeFrame({ children }: { children: ReactNode }) {
   );
 }
 
-function NothingHere({ kind }: { kind: ContributionKind }) {
-  const {
-    state: { places },
-  } = useCustomizeFilter();
-  const Icon = kindIcons[kind];
-  const anyPlace = places.length > 0;
-
-  return (
-    <Empty className="py-16">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Icon />
-        </EmptyMedia>
-        <EmptyTitle>
-          {anyPlace ? `No ${kindLabelsPlural[kind].toLowerCase()} yet` : "Nothing selected"}
-        </EmptyTitle>
-        <EmptyDescription>
-          {anyPlace ? "Nothing in the places you picked." : "Choose where to look."}
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
 function ContributionGroups({ kind }: { kind: ContributionKind }) {
   const {
     meta: { places },
@@ -125,7 +102,9 @@ function ContributionGroups({ kind }: { kind: ContributionKind }) {
   } = useCustomizeFilter();
 
   const groups = places.groupContributions(kind, selected, query);
-  if (groups.length === 0) return <NothingHere kind={kind} />;
+  if (groups.length === 0) {
+    return <FilteredEmpty icon={kindIcons[kind]} label={kindLabelsPlural[kind].toLowerCase()} />;
+  }
 
   return (
     <div className="flex flex-col gap-6">
