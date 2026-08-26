@@ -4,6 +4,7 @@
 - **Date:** 2026-08-24
 - **Amended:** 2026-08-24 — resolution narrows, see [Amendment](#amendment-2026-08-24--resolution-is-per-settings-family-and-merge-by-key-is-retired)
 - **Amended:** 2026-08-25 — the Plugin-supplied settings-blob schema governs an empty set, see [Amendment](#amendment-2026-08-25--the-plugin-supplied-settings-blob-schema-governs-an-empty-set)
+- **Amended:** 2026-08-26 — `local` splits into three, see [Amendment](#amendment-2026-08-26--local-splits-into-three-one-per-authoring-tree)
 
 ## Context
 
@@ -27,7 +28,7 @@ The lists differ, deliberately. Rules is a kind that resolves into Instructions.
 
 Supporting decisions:
 
-- **Identity** is `<authority>/<kind>/<localName>`, authority being `plugin:<pluginId>`, `engine`, or `local`. **Authority and Scope are orthogonal** — authority is who authored it and is immutable; scope is where its configuration lives and is not part of the identity.
+- **Identity** is `<authority>/<kind>/<localName>`, authority being `plugin:<pluginId>`, `engine`, or `local`. **Authority and Scope are orthogonal** — authority is who authored it and is immutable; scope is where its configuration lives and is not part of the identity. *(Amended — `local` takes a qualifier per Authoring tree: `local:user`, `local:repo`, `local:private`.)*
 - **Resolution** is declared as a triple of *(scope set, operator, direction)*. The scope set narrows for a trust reason: a cloned repository must not be able to enable executable behavior on your machine. *(Amended — the scope set is per settings family, not per kind.)*
 - **Schemas are layered.** The Engine owns a per-kind envelope and validates it always; the Plugin supplies a JSON Schema for its own settings blob.
 - **`version` is optional; a provenance stamp is mandatory** — declared version, or content revision. No contribution carries its own version.
@@ -106,3 +107,105 @@ own reasoning; the *rule* is what is decided, and it holds either way.
 The same ticket confirms that Connections are engine-owned, as this ADR's rejected-options section
 already claimed, and derives a Plugin's pairing with a Connection from this very field rather than
 adding another. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
+
+## Amendment (2026-08-26) — `local` splits into three, one per Authoring tree
+
+This ADR fixed identity as `<authority>/<kind>/<localName>`, with authority being `plugin:<pluginId>`,
+`engine`, or `local`, and declared **Authority and Scope orthogonal**.
+
+[#204](https://github.com/colonylabs/cogwork/issues/204) found that `local` cannot carry the one
+distinction the trust model turns on. ADR
+[0018](./0018-contribution-files-live-in-three-authoring-trees.md) gave a person three **Authoring
+trees** and made presence enablement for four of the six kinds. A file in any tree is `local`, so two
+files of one kind sharing a local name across two trees resolve to **one identity** — and an
+effective on / off is per identity. One switch therefore governs the MCP server you wrote and the one
+a cloned repository shipped. That is the precise act ADR
+[0013](./0013-two-settings-families-with-different-scope-sets.md)'s scope set exists to refuse.
+
+**`local` takes a qualifier, exactly as `plugin` already does.** Three values, one per Authoring tree:
+
+| Authority | Authoring tree |
+|---|---|
+| `local:user` | `~/.agents/` |
+| `local:repo` | `<repo>/.agents/` |
+| `local:private` | `~/.cogwork/workspaces/<WorkspaceId>/` |
+
+`engine` stays bare and `plugin:<pluginId>` is untouched. The id scheme grows no new shape, and
+anything asking *is this a file a person put here* stays a `local:` prefix test rather than a
+three-way match.
+
+**Orthogonality is narrowed, not dropped.** Authority names where the bytes came from; Scope names
+where the setting lives. The failure this ADR guarded against — an id changing when its configuration
+moves — does not arise: a repo-tree MCP server is `local:repo` whether its switch sits at the Settings
+profile or the Private workspace overlay, and the four kinds with no setting have nothing that could
+move. The qualifiers deliberately do **not** repeat the Scope names, which is why `local:repo` is not
+`local:workspace-input`.
+
+**Prior art, with its strength recorded.** Codex answers this same question twice, and its dividing
+line is ours.
+
+- For **Skills**, which carry no switch, the origin *is* part of the identity. Every skill holds its
+  `scope` beside its `plugin_id` (`app-server-protocol/src/protocol/v2/plugin.rs:413`, enum
+  `SkillScope { User, Repo, System, Admin }`); dedup keys on `{scope}:{path}:{name}` and never the
+  name alone (`core/src/skills.rs:104-113`); roots dedup by path only
+  (`ext/skills/src/host_roots.rs:271`). Two same-named skills at `User` and `Repo` both survive and
+  both reach the model, sorted `Repo` first (`ext/skills/src/loader/host_merge.rs:244-268`). `User`
+  is literally `~/.agents/skills` and `Repo` is `<dir>/.agents/skills`, the same two trees under the
+  same two words. This is a **convergence**, and it is where `user` and `repo` come from.
+- For **MCP servers**, which do carry a per-server `enabled` (`config/src/mcp_types.rs:193`), the
+  origin is *not* in the key: they sit in a `BTreeMap` keyed by bare name, and a project layer sits
+  above user config, filtered only by the twelve-key `PROJECT_LOCAL_CONFIG_DENYLIST`
+  (`config/src/loader/mod.rs:71-84`) that `mcp_servers` is not on — so a project's
+  `mcp_servers.github` overrides yours whole, `enabled` included.
+  What protects that is one coarse gate — project layers are "loaded but disabled when the directory
+  is untrusted" (`config/src/loader/mod.rs:114-116`). This is a **deliberate divergence**: ADR 0013
+  chose a per-contribution switch over a per-directory trust gate, so Cogwork cannot also inherit
+  Codex's bare-name key. A per-contribution switch with the origin outside the identity is the one
+  combination that is neither Codex's design nor ours, and it is the combination where the switch
+  misfires.
+
+Codex has no third qualifier because it has no third tree; its other two scopes are a system cache
+and an admin config file. `private` is named here, not borrowed.
+
+### Considered Options
+
+- **Two values — `local` and `local:repo`.** Rejected. It fixes the dangerous clash (your file versus
+  the repository's) and leaves the quiet one (your global file versus your private per-workspace
+  file), which is the same defect at lower cost. It also needs the rule *the id says whether the
+  repository put it there* — a grouping over trees somebody must keep correct — where three values
+  need only *the id names the tree*. **Name the authority; derive the rest** prefers the key derived
+  from the immutable location.
+- **Leave `local` alone and let the Authoring tree carry it outside the identity.** Rejected: the tree
+  is already a load-time observation and already rendered on the Customize row, and that is exactly
+  what makes the gap visible — the surface tells a person something the identity denies. A settings
+  key keyed on a colliding identity still misfires.
+- **Rely on `register` as Codex relies on directory trust.** Rejected: `register` admits a
+  workspace for orchestration, and ADR 0013 deliberately chose the stronger promise that a repository
+  may offer and only the principal may enable. Reaching for a coarse gate here would retract that.
+- **Naming the qualifiers after their Scopes** — `local:workspace` for the Workspace input tree.
+  Rejected: **Workspace input**'s own _Avoid_ line already guards against confusing it with the
+  Private workspace overlay, so the name would walk into a collision the glossary is policing.
+- **Renaming the `Private workspace overlay` Scope**, whose head noun describes a merge mechanism
+  rather than a place. Raised and deliberately deferred — the qualifier `private` needs no rename to
+  read correctly, and the Scope name reaches 33 places across eight documents.
+
+### Consequences
+
+- **ADR 0013's offer-versus-enable promise becomes mechanical rather than stated.** A repo-shipped
+  MCP server is `local:repo` and gets its own switch, at the Settings profile Scope. The row it owes
+  Customize — *this repository offers this. It is off. You can turn it on* — is now produced by the
+  identity and the Authoring tree together.
+- **The `ambiguous` conflict class stops fighting ADR 0018.** Two trees holding one local name were
+  both "the same `<authority>/<kind>/<localName>`" (ambiguous, a load-time diagnostic) and permitted
+  to coexist. They are now two identities, so ADR 0018 needs no amendment and its "Cogwork reconciles
+  nothing" is correct as written. `ambiguous` narrows to a genuine duplicate — two install records
+  under one `pluginId`.
+- **This ADR's own `union-values` reasoning becomes true for `local`.** "Identity carries Authority,
+  so two contributions sharing a local name are two different things" held for `plugin:` and failed
+  for `local`; it now holds everywhere.
+- The four kinds with no setting gain honest Run Plan provenance: a resolution trace can name which
+  tree produced which instruction.
+- Nothing is implemented — `authority` appears nowhere in `packages/*/src` — so this is a glossary
+  and ADR change with no migration.
+
+Full reasoning: [#204](https://github.com/colonylabs/cogwork/issues/204).

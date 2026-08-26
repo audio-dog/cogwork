@@ -41,7 +41,9 @@ A person authors contribution files in three trees, one per Scope that can hold 
 | Private workspace overlay | `~/.cogwork/workspaces/<WorkspaceId>/` |
 
 The Runtime host gets no tree; it holds machine facts, not contributions. Cogwork **scans** these
-trees, and a file it finds is a contribution with `local` Authority. `~/.agents/skills` is not an
+trees, and a file it finds is a contribution with `local` Authority — since ADR
+[0011](./0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md)'s 2026-08-26 amendment,
+qualified by the tree: `local:user`, `local:repo`, `local:private`. `~/.agents/skills` is not an
 invention: Codex reads it at its user layer, Cursor uses it as its global skill directory, and
 opencode reads the project form. The overlap with harness convention is `skills/` alone; the other
 subdirectories are Cogwork's.
@@ -82,9 +84,12 @@ to the executing kinds. Text handed to a model sits at the same trust level as t
 
 Two trees may hold the same local name. Both reach the harness. Existing harnesses permit duplicate
 skill names and leave the choice to the person, and Cogwork does the same rather than minting a
-reconciliation rule. [#204](https://github.com/colonylabs/cogwork/issues/204) still owns whether
-`local` splits the person from the repository; this decision removes the setting that used to
-distinguish two same-named files, which sharpens that ticket without answering it.
+reconciliation rule. [#204](https://github.com/colonylabs/cogwork/issues/204) owned whether `local`
+splits the person from the repository, and this decision — removing the setting that used to
+distinguish two same-named files — is what sharpened it. **It has since answered yes**: the Authority
+carries the tree, so two trees holding one local name are two identities, and this paragraph's
+"Cogwork reconciles nothing" needs no reconciliation rule because there is nothing to reconcile. See
+ADR [0011](./0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md)'s 2026-08-26 amendment.
 
 ### The Engine collects Rules and does not read them
 
@@ -120,7 +125,7 @@ Dispositions:
 | `~/.agents/skills` | **Becomes the Settings profile tree.** Referenced where it lies, never copied. |
 | Repository `.agents` inputs | **Becomes the Workspace input tree.** |
 | Cursor Plugin caches | **Dropped from Cogwork's view.** Ambient to the harness only. |
-| Hard-coded personal rules | **Retired.** The line is struck; the two files become `local` Rules in `~/.agents/rules/`. |
+| Hard-coded personal rules | **Retired.** The line is struck; the two files become `local:user` Rules in `~/.agents/rules/`. |
 | Provisioned `~/.cogwork` copies | **Kept, narrowed.** Fetched bundles only, identity-keyed per ADR 0014. |
 | External `sync` tool | **Out of scope.** It serves interactive sessions, which this map excludes. |
 
