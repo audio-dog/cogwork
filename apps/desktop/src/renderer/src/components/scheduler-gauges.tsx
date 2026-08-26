@@ -2,7 +2,7 @@ import type { SchedulerStats } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useBoard } from "../features/use-board";
+import { useBoard } from "../features/activity-session";
 import { useScheduling } from "../features/use-scheduling";
 
 function SchedulingToggle({ scheduler }: { scheduler: SchedulerStats }) {

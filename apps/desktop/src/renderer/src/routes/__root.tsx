@@ -3,6 +3,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { RightPanelWidthProvider } from "../components/right-panel-resize";
 import { useSidebarWidth } from "../components/sidebar-resize";
+import { ActivitySessionProvider } from "../features/activity-session";
 
 const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
 
@@ -19,11 +20,13 @@ function RootLayout() {
   } as CSSProperties;
 
   return (
-    <SidebarProvider style={providerStyle}>
-      <RightPanelWidthProvider sidebarWidth={width}>
-        <Outlet />
-      </RightPanelWidthProvider>
-    </SidebarProvider>
+    <ActivitySessionProvider>
+      <SidebarProvider style={providerStyle}>
+        <RightPanelWidthProvider sidebarWidth={width}>
+          <Outlet />
+        </RightPanelWidthProvider>
+      </SidebarProvider>
+    </ActivitySessionProvider>
   );
 }
 

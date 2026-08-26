@@ -13,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-grou
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiAddLine, RiComputerLine, RiMoonLine, RiSubtractLine, RiSunLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use, useRef, useState } from "react";
+import { useBoard } from "../features/activity-session";
 import {
   findSection,
   type SettingEntry,
@@ -21,7 +22,6 @@ import {
 } from "../features/settings-catalog";
 import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../features/settings-defaults";
 import { parseCount, sanitizeCountDraft } from "../features/settings-values";
-import { useBoard } from "../features/use-board";
 import { useSchedulerConfig } from "../features/use-scheduler-config";
 import { useWindowPreferences } from "../features/use-window-preferences";
 import { type Theme, useTheme } from "./theme-provider";

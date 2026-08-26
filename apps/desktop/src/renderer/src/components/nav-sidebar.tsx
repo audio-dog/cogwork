@@ -24,8 +24,8 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiPulseLine, RiSettings3Line, RiUserLine } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
+import { useBoard } from "../features/activity-session";
 import { registeredWorkspaces } from "../features/feed";
-import { useBoard } from "../features/use-board";
 import { useChromeStore } from "../store/chrome";
 import { useTheme } from "./theme-provider";
 

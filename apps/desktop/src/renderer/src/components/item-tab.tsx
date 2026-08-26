@@ -23,6 +23,7 @@ import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from
 import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useRef, useState } from "react";
 import { cancelRunAtom, reclassifyAtom } from "../daemon/atoms";
+import { useBoard } from "../features/activity-session";
 import { boardItem, needsHumanReasonLabel, runForItem, runsForItem } from "../features/feed";
 import { relativeTime } from "../features/format";
 import {
@@ -37,7 +38,6 @@ import {
   subTabs,
 } from "../features/item-tab";
 import { statusLine, useRunActivity } from "../features/run-activity";
-import { useBoard } from "../features/use-board";
 import { useNow } from "../features/use-now";
 import type { ItemSelection } from "../store/chrome";
 import { useRightPanelStore } from "../store/right-panel";

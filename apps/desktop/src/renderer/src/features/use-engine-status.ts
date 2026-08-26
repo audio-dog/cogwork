@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { EngineStatus } from "../../../shared/ipc";
 import { reportRendererError } from "./report-error";
 
@@ -71,6 +71,14 @@ export function subscribeEngineStatus(listener: (status: EngineStatusValue) => v
     statusListeners.delete(listener);
     stopStatusSubscription();
   };
+}
+
+// For consumers that fold status *transitions* as events (the activity session's lifecycle rows);
+// a render-time read of the current status cannot see them. A changed listener re-subscribes and
+// replays the current status, so pass a referentially stable one.
+export function useEngineStatusListener(listener: (status: EngineStatusValue) => void) {
+  // biome-ignore lint/plugin/no-use-effect: subscribes to the engine-status IPC store, an external system
+  useEffect(() => subscribeEngineStatus(listener), [listener]);
 }
 
 function getSnapshot(): EngineStatusValue {
