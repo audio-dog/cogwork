@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-08-24
+- **Amended:** 2026-08-25 — [a Connection has no Scope](#amendment-2026-08-25--a-connection-has-no-scope), and [the first settings row collapses](#amendment-2026-08-25--the-non-executing-kinds-lose-their-setting)
 
 ## Context
 
@@ -89,3 +90,25 @@ your machine, and it must equally not be able to authenticate as you.
 One further conflict class is confirmed rather than added: two first-party Plugins requiring one
 Connection is knowable with the manifests in hand, so it is a load-time diagnostic under this ADR's
 when-is-it-knowable rule. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
+
+## Amendment (2026-08-25) — the non-executing kinds lose their setting
+
+ADR [0018](./0018-contribution-files-live-in-three-authoring-trees.md) gives each Scope that can hold
+a contribution its own **authoring tree**, and Cogwork scans those trees. That makes the first row of
+the Decision table redundant: a file's tree already says everything its on / off could say, so
+**Skill, Rules, Command and Subagent have no setting at all**. They exist or they do not.
+
+The second row stands. **MCP server** keeps its setting and keeps this ADR's scope set — Settings
+profile and Private workspace overlay — so a repository may *ship* an MCP server file and only the
+principal may switch it on. **Hook** is deferred: it stays a named kind, and no harness projection
+for it has been designed.
+
+Two lines above are narrowed by this:
+
+- "Five of six kinds have exactly one setting" becomes *one of six*, pending Hook.
+- "A new contribution kind … must state whether a repository may enable it" applies to the executing
+  kinds only. For the rest, registering a workspace is the trust act, and every such file in its
+  repository is in play.
+
+The Operation settings family, the empty cells, and the `(scope set, operator, direction)` triple are
+unchanged, as is the Connection amendment above — a Connection has no Scope and therefore no tree.

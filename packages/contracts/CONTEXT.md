@@ -64,22 +64,27 @@ _Avoid_: Repo settings, private workspace overlay
 Principal-owned configuration scoped to one workspace but stored outside its repository, for repo-specific customization that must not be committed.
 _Avoid_: User-level repo input, workspace input, global config
 
+**Authoring tree**:
+The directory a person authors contribution files in. One per Scope that can hold contributions: `~/.agents/` for the **Settings profile**, `<repo>/.agents/` for the **Workspace input**, and `~/.cogwork/workspaces/<WorkspaceId>/` for the **Private workspace overlay**. The Runtime host has none. Cogwork **scans** these trees, and what it finds is a contribution with `local` Authority — no install, no manifest, no record. `~/.agents/skills` is shared with the harnesses on purpose: Codex reads it at its user layer and Cursor uses it as its global skill directory, so a Skill placed there serves Runs and interactive sessions alike.
+Distinct from the **provision root**, `~/.cogwork/`, which takes only fetched bundle bytes, identity-keyed, written by the Engine and authored by nobody — including the bytes of a Plugin installed by pairing with a **Connection**. That split is what keeps an update ceremony off files a person edits by hand. Two trees may hold the same local name; both reach the Harness and Cogwork reconciles nothing. See ADR 0018.
+_Avoid_: Provision root (the other one), config home, skill store, install cache, Scope (the tree belongs to a Scope; it is not one)
+
 **Authority**:
 Who authored a contribution — `plugin:<pluginId>`, `engine`, or `local`. Part of a contribution's identity and immutable, carried into the Run Plan as provenance. Every contribution is identified as `<authority>/<kind>/<localName>`.
 **Authority and Scope are orthogonal.** Authority is who wrote it; Scope is where the setting configuring it lives. Collapsing them would change a contribution's id when its configuration moves, breaking Run Plan provenance. In Customize, the kind is the view and the authority is a badge on the row.
 _Avoid_: Scope, source, owner, namespace
 
 **Scope**:
-Where a setting lives. Four of them: **Settings profile** (principal), **Runtime host** (machine), **Workspace input** (repo, committed), **Private workspace overlay** (principal-owned, per-workspace, uncommitted). Mutable, and never part of a contribution's identity.
+Where a setting lives, and — for the three that hold contributions — where the contribution files live. Four of them: **Settings profile** (principal), **Runtime host** (machine), **Workspace input** (repo, committed), **Private workspace overlay** (principal-owned, per-workspace, uncommitted). Mutable, and never part of a contribution's identity.
 **Not every Scope may hold every setting**, and the two settings families take different sets:
 
 | Setting | Scopes that may hold it |
 |---|---|
-| A **contribution**'s on / off — Skill, Rules, Command, Subagent | Settings profile · Workspace input · Private workspace overlay |
-| A **contribution**'s on / off — Hook, MCP server | Settings profile · Private workspace overlay |
+| A **contribution**'s on / off — MCP server | Settings profile · Private workspace overlay |
 | An **Operation setting** | Settings profile · Private workspace overlay — plus Runtime host for `harness` only |
 
-The Runtime host holds machine facts — checkout paths, installed harnesses, credential storage location — not contributions. The Workspace input is excluded from Operation settings because a repository you cloned must not choose the model you pay for, and from enabling a Hook or MCP server because it must not start a process on your machine — it may still *ship* the file. The excluded cells are empty by decision, not by omission.
+**Skill, Rules, Command and Subagent have no setting**: their Authoring tree is their enablement — see *Authoring tree*, and ADR 0018. Hook's row is deferred with the kind itself. A **Connection** is not on this axis at all: it has no Scope (ADR 0017).
+The Runtime host holds machine facts — checkout paths, installed harnesses, credential storage location — not contributions, so it is the one Scope with no Authoring tree. The Workspace input is excluded from Operation settings because a repository you cloned must not choose the model you pay for, and from switching an MCP server on because it must not start a process on your machine — it may still *ship* the file, and `register` is the trust act that admits it. The excluded cells are empty by decision, not by omission.
 There is **no collective noun** over either family; say `contribution` or `Operation setting`. Every candidate umbrella collided with a term already in this glossary.
 _Avoid_: Authority, level, tier, target (an invented axis name — say default / Workflow / Operation)
 
@@ -100,7 +105,7 @@ Update may rewrite the resolved identity and the revision, and **never** the `pl
 _Avoid_: Plugin (the bundle, not the record), install cache, provisioned path, Plugin state, `pinned` (retired — see **Plugins**)
 
 **Plugin source**:
-Where a Plugin's files come from. Two members: an entry in the **Plugin catalog**, or a local path. Both resolve to one identity scheme and neither is copied into the record — the manifest points at files either way, and placing those files on a host is engine-owned provision. A local path is added explicitly and never found by scanning a directory.
+Where a Plugin's files come from. Two members: an entry in the **Plugin catalog**, or a local path. Both resolve to one identity scheme and neither is copied into the record — the manifest points at files either way, and placing those files on a host is engine-owned provision. A local path is added explicitly and never found by scanning a directory — unlike an Authoring tree, which is scanned, and whose files are `local` Authority rather than a Plugin's.
 _Avoid_: Marketplace, registry, remote, catalog (unqualified)
 
 **Plugin catalog**:
@@ -115,7 +120,7 @@ The surface that owns Plugin **membership** — install, update, uninstall — a
 _Avoid_: Marketplace, Customize, Plugin store; `pin` (retired — no harness exposes version pinning to a person, and every update is already an explicit, declinable act); and the lowercase plural *plugins*, which means the bundles
 
 **Customize**:
-The surface that owns **contribution settings** — a contribution's on / off, and Operation settings. The kind is the view and the authority is a badge on the row. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
+The surface that owns **contribution settings** — an MCP server's on / off, and Operation settings — and that renders every other contribution read-only. The kind is the view and the authority is a badge on the row. Since ADR 0018 removed the setting from Skill, Rules, Command and Subagent, their rows show what exists and which Authoring tree it came from, and carry no toggle. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
 _Avoid_: Plugins, Settings, preferences
 
 **Connections**:
@@ -124,7 +129,7 @@ _Avoid_: Integration, connector, Customize, Plugins, setup wizard
 
 **Contribution kind**:
 One of the six types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Command, Hook**. The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
-A contribution has exactly **one** setting — on or off — written as a default and nowhere else. Everything else about it lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
+Only the kinds that **execute or connect** carry a setting. **MCP server** has one — on or off, written as a default and nowhere else. **Skill, Rules, Command and Subagent** have none at all: they exist or they do not, and the Authoring tree a file sits in says everything an on / off could say (ADR 0018). **Hook** is deferred — it stays a named kind with its setting question open, because no cross-harness projection has been designed. Everything else about a contribution lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
 _Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed), per-Operation enablement (say binding)
 
 **Connection**:
@@ -158,7 +163,7 @@ _Avoid_: Script (retired), Tool, Operation, shell command
 
 **Rules**:
 Reusable advisory guidance contributed at any scope, authored as markdown with frontmatter carrying glob-based path scoping and an always-apply flag. A contribution kind that is *not* a Run Plan member — Rules resolve into Instructions.
-Rules are advisory and can never satisfy a required need or weaken Operating Instructions. Instruction precedence, general to specific: global Rules → repo `AGENTS.md` → repo Rules → private-overlay Rules → Operating Instructions, last and highest.
+Rules are advisory and can never satisfy a required need. They are **not** guaranteed to leave Operating Instructions unweakened: the Engine collects Rules and does not read them — it decides on / off, whether the globs match, and where in the ladder — so what a model does with the text is the author's business, not an Engine gate (ADR 0018). Instruction precedence, general to specific: global Rules → repo `AGENTS.md` → repo Rules → private-overlay Rules → Operating Instructions, last and highest.
 The frontmatter shape is a considered borrow from Cursor and Claude Code, which arrived at it independently — not a standard. `AGENTS.md` specifies a filename and closest-wins and nothing more.
 _Avoid_: Operating Instructions (those are mandatory and engine-authored), Skill, prompt
 
