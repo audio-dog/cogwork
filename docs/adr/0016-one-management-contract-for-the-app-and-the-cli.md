@@ -94,7 +94,23 @@ and real acts on a **Connections** surface: **establish**, **re-connect**, and *
 contract owes three commands it deliberately did not specify, and the "four candidates, zero
 survivors" tally reads only against the state of the glossary at the time.
 
-Nothing else here changes. `pin` still has no semantics, minting a Scope identity is still not an act,
-and the CLI-and-app parity rule this ADR fixes applies to the three Connection commands unchanged —
+Nothing else here changes. Minting a Scope identity is still not an act, and the CLI-and-app
+parity rule this ADR fixes applies to the three Connection commands unchanged —
 including that **remove** carries the *dangling* warning naming the affected workspaces, because a
 warning a person cannot see is not parity.
+
+## Amendment (2026-08-26) — `pin`'s absence is permanent, not pending
+
+The Decision recorded `pin` as deliberately absent because it "has a verb and a field and no
+semantics" and [#203](https://github.com/colonylabs/cogwork/issues/203) owned defining it. #203 is
+closed **unresolved**: the question was ruled out of scope rather than answered, and the verb on
+**Plugins** and the `pinned` field on the **Install record** are deleted from the glossary.
+
+Two reasons, neither of which this contract could have supplied. No coding harness exposes version
+pinning to a person — Claude Code's `version` gates the author and its source `sha` is an install
+address, Cursor consumes `version` nowhere, Codex uses it as a path segment. And Plugin install sits
+outside the current requirements while every Plugin is a first-party pack that ships with Cogwork, so
+a control for declining updates to a separately-installed bundle has nothing to act on.
+
+The act list is unchanged — the absence was already correct, and it stops being provisional. The
+"four candidates, zero survivors" tally is unaffected: `pin` was never a survivor.
