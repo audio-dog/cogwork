@@ -2,7 +2,7 @@ import { Badge } from "@cogwork/ui/components/badge";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiErrorWarningLine } from "@remixicon/react";
-import { createContext, type ReactNode, use, useMemo } from "react";
+import { createContext, type ReactNode, use } from "react";
 import { draftCellAt, withDraft } from "../features/configuration-draft";
 import {
   type Authority,
@@ -72,32 +72,30 @@ function ContributionProvider({
   const cells = useConfigurationDraftStore((state) => state.cells);
   const setCell = useConfigurationDraftStore((state) => state.setCell);
 
-  const value = useMemo<ContributionContextValue>(() => {
-    const edited = withDraft(contribution, cells);
-    const target = enableScopeFor(contribution);
-    const resolved = resolveEnablement(edited, viewOf(contribution));
-    const on = target ? draftCellAt(contribution, target, cells) === "on" : resolved.effective === true;
-    const failed = contribution.load._tag === "failed";
-    const notReady = contribution.readiness?._tag === "not-ready";
+  const edited = withDraft(contribution, cells);
+  const target = enableScopeFor(contribution);
+  const resolved = resolveEnablement(edited, viewOf(contribution));
+  const on = target ? draftCellAt(contribution, target, cells) === "on" : resolved.effective === true;
+  const failed = contribution.load._tag === "failed";
+  const notReady = contribution.readiness?._tag === "not-ready";
 
-    return {
-      state: {
-        contribution,
-        on,
-        failed,
-        status: failed || notReady ? "error" : "ok",
-        // A diagnostic is a fact about this Contribution, not about the view, so it is never hidden.
-        diagnostics: diagnosticsOf(edited),
-        spread: settingsSpreadAcross(edited).map((kind) => scopeCopy[kind].name),
+  const value: ContributionContextValue = {
+    state: {
+      contribution,
+      on,
+      failed,
+      status: failed || notReady ? "error" : "ok",
+      // A diagnostic is a fact about this Contribution, not about the view, so it is never hidden.
+      diagnostics: diagnosticsOf(edited),
+      spread: settingsSpreadAcross(edited).map((kind) => scopeCopy[kind].name),
+    },
+    actions: {
+      setEnabled: (enabled) => {
+        if (target) setCell(contribution.id, target, enabled ? "on" : "off");
       },
-      actions: {
-        setEnabled: (enabled) => {
-          if (target) setCell(contribution.id, target, enabled ? "on" : "off");
-        },
-      },
-      meta: { target },
-    };
-  }, [contribution, cells, setCell]);
+    },
+    meta: { target },
+  };
 
   return <ContributionContext value={value}>{children}</ContributionContext>;
 }

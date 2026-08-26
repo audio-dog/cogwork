@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, use, useMemo, useState } from "react";
+import { createContext, type ReactNode, use, useState } from "react";
 import { toggle } from "../features/customize-places";
 import { useConfiguration } from "./configuration-provider";
 
@@ -37,17 +37,14 @@ export function CustomizeFilterProvider({ children }: { children: ReactNode }) {
   const [places, setPlaces] = useState<readonly string[]>(placeAxis.allPlaceKeys);
   const [query, setQuery] = useState("");
 
-  const value = useMemo<CustomizeFilterContextValue>(
-    () => ({
-      state: { places, query },
-      actions: {
-        setQuery,
-        setPlaces,
-        togglePlace: (key) => setPlaces((current) => toggle(current, key)),
-      },
-    }),
-    [places, query],
-  );
+  const value: CustomizeFilterContextValue = {
+    state: { places, query },
+    actions: {
+      setQuery,
+      setPlaces,
+      togglePlace: (key) => setPlaces((current) => toggle(current, key)),
+    },
+  };
 
   return <CustomizeFilterContext value={value}>{children}</CustomizeFilterContext>;
 }

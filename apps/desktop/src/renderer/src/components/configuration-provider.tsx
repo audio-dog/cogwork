@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, use, useMemo } from "react";
+import { createContext, type ReactNode, use } from "react";
 import type {
   ConfigurationPicture,
   Contribution,
@@ -44,18 +44,15 @@ function ConfigurationProvider({
   picture: ConfigurationPicture;
   children: ReactNode;
 }) {
-  const value = useMemo<ConfigurationContextValue>(
-    () => ({
-      state: { picture },
-      meta: {
-        places: customizePlaces(picture),
-        plugins: pluginsView(picture),
-        contributionById: (id) => picture.contributions.find((contribution) => contribution.id === id),
-        workspaceById: (id) => picture.workspaces.find((workspace) => workspace.id === id),
-      },
-    }),
-    [picture],
-  );
+  const value: ConfigurationContextValue = {
+    state: { picture },
+    meta: {
+      places: customizePlaces(picture),
+      plugins: pluginsView(picture),
+      contributionById: (id) => picture.contributions.find((contribution) => contribution.id === id),
+      workspaceById: (id) => picture.workspaces.find((workspace) => workspace.id === id),
+    },
+  };
 
   return <ConfigurationContext value={value}>{children}</ConfigurationContext>;
 }
