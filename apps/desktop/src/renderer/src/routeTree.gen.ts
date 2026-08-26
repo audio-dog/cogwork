@@ -13,10 +13,12 @@ import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppConnectionsRouteImport } from './routes/_app/connections'
-import { Route as AppCustomizeRouteImport } from './routes/_app/customize'
+import { Route as AppCustomizeRouteRouteImport } from './routes/_app/customize/route'
 import { Route as AppWorkflowsRouteImport } from './routes/_app/workflows'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
+import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
+import { Route as AppCustomizePluginIdRouteImport } from './routes/_app/customize/$pluginId'
 
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/_app',
@@ -37,7 +39,7 @@ const AppConnectionsRoute = AppConnectionsRouteImport.update({
   path: '/connections',
   getParentRoute: () => AppRouteRoute,
 } as any)
-const AppCustomizeRoute = AppCustomizeRouteImport.update({
+const AppCustomizeRouteRoute = AppCustomizeRouteRouteImport.update({
   id: '/customize',
   path: '/customize',
   getParentRoute: () => AppRouteRoute,
@@ -57,63 +59,83 @@ const SettingsSectionRoute = SettingsSectionRouteImport.update({
   path: '/$section',
   getParentRoute: () => SettingsRouteRoute,
 } as any)
+const AppCustomizeIndexRoute = AppCustomizeIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppCustomizeRouteRoute,
+} as any)
+const AppCustomizePluginIdRoute = AppCustomizePluginIdRouteImport.update({
+  id: '/$pluginId',
+  path: '/$pluginId',
+  getParentRoute: () => AppCustomizeRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsRouteRouteWithChildren
+  '/customize': typeof AppCustomizeRouteRouteWithChildren
   '/connections': typeof AppConnectionsRoute
-  '/customize': typeof AppCustomizeRoute
   '/workflows': typeof AppWorkflowsRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/settings/': typeof SettingsIndexRoute
+  '/customize/$pluginId': typeof AppCustomizePluginIdRoute
+  '/customize/': typeof AppCustomizeIndexRoute
 }
 export interface FileRoutesByTo {
   '/connections': typeof AppConnectionsRoute
-  '/customize': typeof AppCustomizeRoute
   '/workflows': typeof AppWorkflowsRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
+  '/customize/$pluginId': typeof AppCustomizePluginIdRoute
+  '/customize': typeof AppCustomizeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
+  '/_app/customize': typeof AppCustomizeRouteRouteWithChildren
   '/_app/connections': typeof AppConnectionsRoute
-  '/_app/customize': typeof AppCustomizeRoute
   '/_app/workflows': typeof AppWorkflowsRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
+  '/_app/customize/$pluginId': typeof AppCustomizePluginIdRoute
+  '/_app/customize/': typeof AppCustomizeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/settings'
-    | '/connections'
     | '/customize'
+    | '/connections'
     | '/workflows'
     | '/settings/$section'
     | '/settings/'
+    | '/customize/$pluginId'
+    | '/customize/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connections'
-    | '/customize'
     | '/workflows'
     | '/settings/$section'
     | '/'
     | '/settings'
+    | '/customize/$pluginId'
+    | '/customize'
   id:
     | '__root__'
     | '/_app'
     | '/settings'
-    | '/_app/connections'
     | '/_app/customize'
+    | '/_app/connections'
     | '/_app/workflows'
     | '/settings/$section'
     | '/_app/'
     | '/settings/'
+    | '/_app/customize/$pluginId'
+    | '/_app/customize/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -155,7 +177,7 @@ declare module '@tanstack/react-router' {
       id: '/_app/customize'
       path: '/customize'
       fullPath: '/customize'
-      preLoaderRoute: typeof AppCustomizeRouteImport
+      preLoaderRoute: typeof AppCustomizeRouteRouteImport
       parentRoute: typeof AppRouteRoute
     }
     '/_app/workflows': {
@@ -179,19 +201,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsSectionRouteImport
       parentRoute: typeof SettingsRouteRoute
     }
+    '/_app/customize/': {
+      id: '/_app/customize/'
+      path: '/'
+      fullPath: '/customize/'
+      preLoaderRoute: typeof AppCustomizeIndexRouteImport
+      parentRoute: typeof AppCustomizeRouteRoute
+    }
+    '/_app/customize/$pluginId': {
+      id: '/_app/customize/$pluginId'
+      path: '/$pluginId'
+      fullPath: '/customize/$pluginId'
+      preLoaderRoute: typeof AppCustomizePluginIdRouteImport
+      parentRoute: typeof AppCustomizeRouteRoute
+    }
   }
 }
 
+interface AppCustomizeRouteRouteChildren {
+  AppCustomizePluginIdRoute: typeof AppCustomizePluginIdRoute
+  AppCustomizeIndexRoute: typeof AppCustomizeIndexRoute
+}
+
+const AppCustomizeRouteRouteChildren: AppCustomizeRouteRouteChildren = {
+  AppCustomizePluginIdRoute: AppCustomizePluginIdRoute,
+  AppCustomizeIndexRoute: AppCustomizeIndexRoute,
+}
+
+const AppCustomizeRouteRouteWithChildren =
+  AppCustomizeRouteRoute._addFileChildren(AppCustomizeRouteRouteChildren)
+
 interface AppRouteRouteChildren {
+  AppCustomizeRouteRoute: typeof AppCustomizeRouteRouteWithChildren
   AppConnectionsRoute: typeof AppConnectionsRoute
-  AppCustomizeRoute: typeof AppCustomizeRoute
   AppWorkflowsRoute: typeof AppWorkflowsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppCustomizeRouteRoute: AppCustomizeRouteRouteWithChildren,
   AppConnectionsRoute: AppConnectionsRoute,
-  AppCustomizeRoute: AppCustomizeRoute,
   AppWorkflowsRoute: AppWorkflowsRoute,
   AppIndexRoute: AppIndexRoute,
 }

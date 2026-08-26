@@ -98,3 +98,34 @@ export function summarize(places: readonly string[]): string {
 
 /** How many places exist, for a menu footer that reports the selection honestly. */
 export const placeCount = allPlaceKeys.length;
+
+export interface PlaceGroup {
+  readonly key: string;
+  readonly label: string;
+  readonly rows: readonly Contribution[];
+}
+
+/**
+ * The visible contributions, grouped by the place they live in.
+ *
+ * The filter says which places are in view; the grouping says which one each row came from. Cursor
+ * does the same on its Subagents and Hooks facets, and it is what makes a union filter worth having
+ * — two places on screen at once are only useful if you can tell them apart.
+ *
+ * Empty groups are dropped. A checked place with nothing in it is not worth a heading.
+ */
+export function groupByPlace(facet: Facet, places: readonly string[], query: string): readonly PlaceGroup[] {
+  const visible = visibleContributions(facet, places, query);
+  return allPlaces
+    .map((place) => {
+      const key = scopeKey(place);
+      const workspace = workspaces.find((entry) => entry.id === place.workspaceId);
+      const name = scopeCopy[place.kind].name;
+      return {
+        key,
+        label: workspace ? `${workspace.name} · ${name}` : name,
+        rows: visible.filter((contribution) => placeOf(contribution) === key),
+      };
+    })
+    .filter((group) => group.rows.length > 0);
+}

@@ -11,23 +11,23 @@ import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
-import { ItemGroup } from "@cogwork/ui/components/item";
 import { Separator } from "@cogwork/ui/components/separator";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiBox3Line, RiSearchLine } from "@remixicon/react";
 import { useState } from "react";
 import { contributionKinds, kindLabelsPlural } from "../features/configuration-model";
-import { allPlaceKeys, type Facet, kindCount, visibleContributions } from "../features/customize-places";
-import { PluginsPanel } from "./configuration-plugins-panel";
+import { allPlaceKeys, type Facet, groupByPlace, kindCount } from "../features/customize-places";
+import { ListRows, ListSection } from "./customize-list";
 import { CustomizePlaceMenu } from "./customize-place-menu";
 import { CustomizeRow } from "./customize-row";
+import { PluginsFacet } from "./plugins-facet";
 
 export function CustomizePage() {
   const [facet, setFacet] = useState<Facet>("skill");
   const [places, setPlaces] = useState<readonly string[]>(allPlaceKeys);
   const [query, setQuery] = useState("");
 
-  const visible = visibleContributions(facet, places, query);
+  const groups = groupByPlace(facet, places, query);
   const plugins = facet === "plugins";
 
   return (
@@ -89,8 +89,8 @@ export function CustomizePage() {
         </div>
 
         {plugins ? (
-          <PluginsPanel />
-        ) : visible.length === 0 ? (
+          <PluginsFacet />
+        ) : groups.length === 0 ? (
           <Empty>
             <EmptyHeader>
               <EmptyTitle>Nothing here</EmptyTitle>
@@ -102,11 +102,19 @@ export function CustomizePage() {
             </EmptyHeader>
           </Empty>
         ) : (
-          <ItemGroup className="gap-2">
-            {visible.map((contribution) => (
-              <CustomizeRow key={contribution.id} contribution={contribution} />
+          // One section per place. The filter says which places are in view; the heading says which
+          // one a row came from, which is what makes two places on screen at once readable.
+          <div className="flex flex-col gap-6">
+            {groups.map((group) => (
+              <ListSection key={group.key} title={group.label} count={group.rows.length}>
+                <ListRows>
+                  {group.rows.map((contribution) => (
+                    <CustomizeRow key={contribution.id} contribution={contribution} />
+                  ))}
+                </ListRows>
+              </ListSection>
             ))}
-          </ItemGroup>
+          </div>
         )}
       </div>
     </TooltipProvider>

@@ -159,13 +159,16 @@ export function CustomizePlaceMenu({
   const shown = placesOf(highlight, workspace);
   const user = highlight._tag === "user";
 
-  // The same button either way, so switching facet never reflows the row it sits in. The label
-  // keeps saying what the filter holds even where it does not apply, so it does not flicker either.
+  // The same button either way, so switching facet never reflows the row it sits in. Where the
+  // filter does not apply the label states the one place that does, rather than reporting a
+  // selection that is not being honoured.
   const trigger = (
     <Button variant="outline" size="sm" className="rounded-full" disabled={unavailable !== undefined}>
       <MachineIcon data-icon="inline-start" />
       {/* Fixed width: a label that resizes shoves every kind pill after it along the row. */}
-      <span className="w-32 truncate text-start">{summarize(places)}</span>
+      <span className="w-32 truncate text-start">
+        {unavailable === undefined ? summarize(places) : scopeCopy["runtime-host"].name}
+      </span>
       <RiArrowDownSLine data-icon="inline-end" />
     </Button>
   );

@@ -9,6 +9,7 @@ import {
 import {
   allPlaceKeys,
   allPlaces,
+  groupByPlace,
   placeOf,
   summarize,
   toggle,
@@ -112,5 +113,38 @@ describe("toggle", () => {
   it("leaves the other places alone", () => {
     const repo = scopeKey({ kind: "workspace-input", workspaceId: cogworkWorkspaceId });
     expect(toggle(["runtime-host", repo], repo)).toEqual(["runtime-host"]);
+  });
+});
+
+describe("groupByPlace", () => {
+  it("drops empty groups — a checked place with nothing in it needs no heading", () => {
+    const groups = groupByPlace("hook", allPlaceKeys, "");
+    for (const group of groups) expect(group.rows.length).toBeGreaterThan(0);
+  });
+
+  it("names a workspace group by its workspace and its place", () => {
+    const groups = groupByPlace("skill", allPlaceKeys, "");
+    const labels = groups.map((group) => group.label);
+    expect(labels).toContain("cogwork · Everyone");
+    expect(labels).toContain("cogwork · Just me");
+  });
+
+  it("labels the machine group with the machine's own name", () => {
+    const groups = groupByPlace("mcp-server", allPlaceKeys, "");
+    expect(groups.map((group) => group.label)).toContain("User");
+  });
+
+  it("puts every visible contribution in exactly one group", () => {
+    const visible = visibleContributions("skill", allPlaceKeys, "");
+    const grouped = groupByPlace("skill", allPlaceKeys, "").flatMap((group) => group.rows);
+    expect(grouped).toHaveLength(visible.length);
+    expect(new Set(grouped.map((row) => row.id)).size).toBe(visible.length);
+  });
+
+  it("honours the place filter", () => {
+    const repo = scopeKey({ kind: "workspace-input", workspaceId: cogworkWorkspaceId });
+    const groups = groupByPlace("skill", [repo], "");
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe("cogwork · Everyone");
   });
 });
