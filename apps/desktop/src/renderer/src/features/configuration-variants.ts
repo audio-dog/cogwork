@@ -11,7 +11,7 @@
 //   3. Workspace — two of the three Scopes are workspace-bound, so a Scope is not fully named
 //      until a workspace is.
 
-export const variantKeys = ["A", "B", "C"] as const;
+export const variantKeys = ["A", "B", "C", "D"] as const;
 
 export type VariantKey = (typeof variantKeys)[number];
 
@@ -40,6 +40,12 @@ export const variants: readonly VariantDefinition[] = [
     name: "Detail pane",
     claim:
       "Stops treating the space as a gap. Places sit at their natural height and a summary pins to the bottom, carrying the tracker, the shared-remote warning, and a tally across every kind rather than just the filtered one.",
+  },
+  {
+    key: "D",
+    name: "Plain rows",
+    claim:
+      "The control: the header and the place rows at their natural height, and nothing else. The last round's right pane, unchanged — worth judging now that the left pane no longer unbalances it.",
   },
 ];
 
