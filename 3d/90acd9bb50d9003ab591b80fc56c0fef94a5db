@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/components/render-trigger.test.tsx
+  s_3c28083422ea19::t_13daa37f571de9 16-17,24,26-34,37,47
+  s_3c28083422ea19::t_47cde2bf9aa4cb 1-15,18-23,25,35-36,38-42,44-46,50-52
+  s_3c28083422ea19::t_b5890ec6ecdc2f 43,48-49
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_3c28083422ea19::t_fccd5ddd0b0eb2 18,43-47,50
+  s_3c28083422ea19::t_47cde2bf9aa4cb 16,48
+apps/desktop/src/renderer/src/components/customize-list.tsx
+  s_3c28083422ea19::t_b5890ec6ecdc2f 120,137,139-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "3d90acd9bb50d9003ab591b80fc56c0fef94a5db",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_3c28083422ea19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c7aa8cc5-6303-41e2-8c70-0a39343ddaf8",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
