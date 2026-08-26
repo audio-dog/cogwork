@@ -1,0 +1,19 @@
+apps/desktop/CONTEXT.md
+  s_becbf8f5d1aa26::t_06d838b71005f1 79-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "7eb56d6509682564a34112b2b9cb0dee3e72cadf",
+  "prompts": {},
+  "sessions": {
+    "s_becbf8f5d1aa26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cd22bf-31da-4539-a57f-fccc478d3daf",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
