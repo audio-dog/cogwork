@@ -25,7 +25,7 @@ describe("withDraft", () => {
   });
 
   it("clearing a cell removes the row rather than writing false", () => {
-    const contribution = required("plugin:gh-review/skill/pr-summary");
+    const contribution = required("plugin:linear/mcp/linear");
     const edited = withDraft(contribution, draft([contribution.id, overlay, "unset"]));
     expect(edited.rows.some((row) => row.scope.kind === "private-overlay")).toBe(false);
     // With the overlay's `off` cleared, the machine's `on` is what a Run gets.
@@ -34,7 +34,8 @@ describe("withDraft", () => {
   });
 
   it("distinguishes clearing a cell from setting it off", () => {
-    const contribution = required("plugin:gh-review/subagent/reviewer");
+    // Nothing admissible is written for this one, so it starts with no resolved value at all.
+    const contribution = required("local/mcp/repo-tools");
     const cleared = withDraft(contribution, draft([contribution.id, machine, "unset"]));
     const off = withDraft(contribution, draft([contribution.id, machine, "off"]));
     expect(resolveEnablement(cleared, view).effective).toBeUndefined();
@@ -50,7 +51,7 @@ describe("withDraft", () => {
   });
 
   it("keeps edits to one Scope from touching another", () => {
-    const contribution = required("plugin:gh-review/skill/pr-summary");
+    const contribution = required("plugin:linear/mcp/linear");
     const edited = withDraft(contribution, draft([contribution.id, machine, "off"]));
     const overlayRow = edited.rows.find((row) => row.scope.kind === "private-overlay");
     expect(overlayRow?.source).toBe("Control store");
@@ -66,18 +67,20 @@ describe("withDraft", () => {
 
 describe("draftCellAt", () => {
   it("reads an unedited cell from the rows the daemon sent", () => {
-    const contribution = required("plugin:gh-review/skill/pr-summary");
+    const contribution = required("plugin:linear/mcp/linear");
     expect(draftCellAt(contribution, machine, {})).toBe("on");
     expect(draftCellAt(contribution, overlay, {})).toBe("off");
   });
 
   it("reports an absent cell as unset", () => {
+    // A Subagent has no on / off anywhere, so every cell reads unset.
     const contribution = required("plugin:gh-review/subagent/reviewer");
     expect(draftCellAt(contribution, machine, {})).toBe("unset");
+    expect(draftCellAt(contribution, overlay, {})).toBe("unset");
   });
 
   it("prefers the edit over the written row", () => {
-    const contribution = required("plugin:gh-review/skill/pr-summary");
+    const contribution = required("plugin:linear/mcp/linear");
     const cells = draft([contribution.id, machine, "unset"]);
     expect(draftCellAt(contribution, machine, cells)).toBe("unset");
   });

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type Contribution, type ScopeRef, scopeOrder, type WorkspaceId } from "./configuration-model";
+import {
+  type Contribution,
+  hasToggle,
+  type ScopeRef,
+  scopeOrder,
+  type WorkspaceId,
+} from "./configuration-model";
 import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "./configuration-placeholder";
 import {
   cellPermitted,
@@ -22,17 +28,25 @@ function required(id: string): Contribution {
 describe("resolveEnablement", () => {
   it("lets the highest Scope win whole", () => {
     // On at the Runtime host, off at the Private workspace overlay.
-    const resolved = resolveEnablement(required("plugin:gh-review/skill/pr-summary"), view);
+    const resolved = resolveEnablement(required("plugin:linear/mcp/linear"), view);
     expect(resolved.effective).toBe(false);
     expect(resolved.winner?.scope.kind).toBe("private-overlay");
     expect(resolved.shadowed.map((row) => row.scope.kind)).toEqual(["runtime-host"]);
   });
 
-  it("leaves the effective value absent when nothing is written — not false", () => {
-    const resolved = resolveEnablement(required("plugin:gh-review/subagent/reviewer"), view);
-    expect(resolved.effective).toBeUndefined();
-    expect(resolved.winner).toBeUndefined();
-    expect(resolved.shadowed).toEqual([]);
+  it("has nothing to resolve for a kind that has no on / off", () => {
+    // A Skill, Rules, a Command and a Subagent are files: on the disk or not. There is no setting.
+    for (const id of [
+      "plugin:gh-review/subagent/reviewer",
+      "local/skill/commit-style",
+      "engine/rules/house-style",
+      "local/command/scratch",
+    ]) {
+      const resolved = resolveEnablement(required(id), view);
+      expect(resolved.ladder).toEqual([]);
+      expect(resolved.effective).toBeUndefined();
+      expect(resolved.winner).toBeUndefined();
+    }
   });
 
   it("drops an MCP server enablement written at the repository", () => {
@@ -52,7 +66,7 @@ describe("resolveEnablement", () => {
 
   it("ignores rows belonging to a workspace that is not in view", () => {
     const other = { workspaceId: "ws_nothing" as WorkspaceId };
-    const resolved = resolveEnablement(required("plugin:gh-review/skill/pr-summary"), other);
+    const resolved = resolveEnablement(required("plugin:linear/mcp/linear"), other);
     // The overlay row belongs to another workspace, so the profile row wins here.
     expect(resolved.effective).toBe(true);
     expect(resolved.winner?.scope.kind).toBe("runtime-host");
@@ -63,22 +77,36 @@ describe("resolveEnablement", () => {
     const fromLocal = required("local/mcp/linear");
     expect(fromPlugin.localName).toBe(fromLocal.localName);
     expect(fromPlugin.id).not.toBe(fromLocal.id);
-    expect(resolveEnablement(fromPlugin, view).winner?.scope.kind).toBe("runtime-host");
-    expect(resolveEnablement(fromLocal, view).winner?.scope.kind).toBe("private-overlay");
+    // Same name, opposite answers, and cogwork keeps them apart rather than merging them.
+    expect(resolveEnablement(fromPlugin, view).effective).toBe(false);
+    expect(resolveEnablement(fromLocal, view).effective).toBe(true);
   });
 });
 
-describe("cellPermitted", () => {
-  it("excludes the Workspace input for the executable kinds", () => {
-    expect(cellPermitted("hook", "workspace-input")).toBe(false);
-    expect(cellPermitted("mcp-server", "workspace-input")).toBe(false);
-    expect(cellPermitted("skill", "workspace-input")).toBe(true);
+describe("cellPermitted and hasToggle", () => {
+  it("gives an on / off only to the kinds that start something", () => {
+    // Wanting a process installed but not running is a real position; wanting a file present but
+    // ignored is not.
+    expect(hasToggle("mcp-server")).toBe(true);
+    expect(hasToggle("hook")).toBe(true);
+    for (const kind of ["skill", "rules", "command", "subagent"] as const) {
+      expect(hasToggle(kind)).toBe(false);
+    }
   });
 
-  it("lets the Runtime host hold every contribution kind", () => {
-    const kinds = ["hook", "mcp-server", "skill", "rules", "command", "subagent"] as const;
-    // The machine is where a contribution's file lives, so it is the bottom rung for all six.
-    for (const kind of kinds) expect(cellPermitted(kind, "runtime-host")).toBe(true);
+  it("puts no Scope at all behind a kind that has no on / off", () => {
+    for (const kind of ["skill", "rules", "command", "subagent"] as const) {
+      for (const scope of scopeOrder) expect(cellPermitted(kind, scope)).toBe(false);
+    }
+  });
+
+  it("keeps the repository out of the two that do", () => {
+    // A repository you cloned must not start a process on your machine.
+    for (const kind of ["hook", "mcp-server"] as const) {
+      expect(cellPermitted(kind, "runtime-host")).toBe(true);
+      expect(cellPermitted(kind, "private-overlay")).toBe(true);
+      expect(cellPermitted(kind, "workspace-input")).toBe(false);
+    }
   });
 });
 
@@ -125,7 +153,7 @@ describe("collectAttention", () => {
   it("surfaces every unmet need as its own item", () => {
     const needs = items.filter((item) => item.id.startsWith("need:"));
     expect(needs.map((item) => item.id).toSorted()).toEqual([
-      "need:follow-up:pr-summary",
+      "need:follow-up:notes",
       "need:verify:test-runner",
     ]);
   });
@@ -154,12 +182,10 @@ describe("the fixture itself", () => {
 });
 
 describe("where a contribution lives, and where it is turned on", () => {
-  it("turns a thing on where it lives, for the ordinary case", () => {
+  it("has nowhere to write for a kind with no on / off", () => {
     const skill = required("local/skill/release-notes");
     expect(skill.definedAt).toBe("workspace-input");
-    // A Skill may be enabled at the repo, so nothing is redirected.
-    expect(enableScopeFor(skill)?.kind).toBe("workspace-input");
-    expect(offeredElsewhere(skill)).toBe(false);
+    expect(enableScopeFor(skill)).toBeUndefined();
   });
 
   it("redirects a repo-shipped MCP server to a Scope that may enable it", () => {
@@ -193,12 +219,16 @@ describe("where a contribution lives, and where it is turned on", () => {
 
 describe("settingsSpreadAcross", () => {
   it("stays empty for the ordinary case of one value in one place", () => {
-    expect(settingsSpreadAcross(required("plugin:linear/mcp/linear"), view)).toEqual([]);
+    expect(settingsSpreadAcross(required("local/mcp/linear"), view)).toEqual([]);
+  });
+
+  it("stays empty for a kind that has no on / off to spread", () => {
+    expect(settingsSpreadAcross(required("local/skill/commit-style"), view)).toEqual([]);
   });
 
   it("names every Scope when one identity carries a value in more than one", () => {
     // The exception ADR 0013's direction exists for. It is a badge, not the shape of the page.
-    const spread = settingsSpreadAcross(required("plugin:gh-review/skill/pr-summary"), view);
+    const spread = settingsSpreadAcross(required("plugin:linear/mcp/linear"), view);
     expect(spread).toEqual(["private-overlay", "runtime-host"]);
   });
 });

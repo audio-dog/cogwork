@@ -18,9 +18,9 @@ import { useState } from "react";
 import { contributionKinds, kindLabelsPlural } from "../features/configuration-model";
 import { allPlaceKeys, type Facet, groupContributions, kindCount } from "../features/customize-places";
 import { kindIcons } from "./configuration-atoms";
+import { ContributionRow } from "./contribution-row";
 import { ListRows, ListSection } from "./customize-list";
 import { CustomizePlaceMenu } from "./customize-place-menu";
-import { CustomizeRow } from "./customize-row";
 import { McpFacet } from "./mcp-facet";
 import { PluginsFacet } from "./plugins-facet";
 
@@ -128,8 +128,9 @@ export function CustomizePage() {
             {groups.map((group) => (
               <ListSection key={group.key} title={group.label} count={group.rows.length}>
                 <ListRows>
+                  {/* No switch: these kinds are files, on the disk or not. The row opens the file. */}
                   {group.rows.map((contribution) => (
-                    <CustomizeRow key={contribution.id} contribution={contribution} />
+                    <ContributionRow key={contribution.id} contribution={contribution} />
                   ))}
                 </ListRows>
               </ListSection>

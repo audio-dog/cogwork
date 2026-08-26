@@ -13,7 +13,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { Switch } from "@cogwork/ui/components/switch";
 import { RiServerLine } from "@remixicon/react";
 import { draftCellAt, withDraft } from "../features/configuration-draft";
-import { type Contribution, scopeCopy } from "../features/configuration-model";
+import { type Contribution, hasToggle, scopeCopy } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { enableScopeFor, resolveEnablement } from "../features/configuration-resolve";
 import { useConfigurationDraftStore } from "../store/configuration-draft";
@@ -57,13 +57,16 @@ function ServerRow({ contribution }: { contribution: Contribution }) {
       contribution={contribution}
       detail={detail}
       trailing={
-        <Switch
-          checked={on}
-          disabled={failed || target === undefined}
-          onCheckedChange={(checked) => {
-            if (target) setCell(contribution.id, target, checked ? "on" : "off");
-          }}
-        />
+        // Only the kinds that start something have an on / off, and a server is one of them.
+        hasToggle(contribution.kind) ? (
+          <Switch
+            checked={on}
+            disabled={failed || target === undefined}
+            onCheckedChange={(checked) => {
+              if (target) setCell(contribution.id, target, checked ? "on" : "off");
+            }}
+          />
+        ) : undefined
       }
     />
   );

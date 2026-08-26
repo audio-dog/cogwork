@@ -51,13 +51,6 @@ export const scopeCopy: Record<ScopeKind, { readonly name: string; readonly hint
   "private-overlay": { name: "Just me", hint: "On your machine, never committed." },
 };
 
-/** Phrased as a place, for a row that says where one contribution came from. */
-export const scopeOriginLabels: Record<ScopeKind, string> = {
-  "runtime-host": "on this machine",
-  "workspace-input": "in the repository",
-  "private-overlay": "in your private overlay",
-};
-
 /**
  * A Scope instance. The two workspace Scopes name a workspace; the other two do not.
  * Folder path and git remote are hints for re-binding, never identity — so a ScopeRef
@@ -102,20 +95,34 @@ export const kindLabelsPlural: Record<ContributionKind, string> = {
 };
 
 /**
- * Which Scopes may hold a contribution's on / off, by kind (ADR 0013).
+ * Which Scopes may hold a contribution's on / off — and for four kinds, the answer is none.
  *
- * The Workspace input is excluded for Hook and MCP server because a repository you cloned
- * must not start a process on your machine. It may still *ship* the file. That cell is empty by
- * decision, so a UI that renders it as merely unset is lying.
+ * **A Skill, Rules, a Command and a Subagent have no on / off at all.** They are files: on the disk
+ * or not on the disk, and that is the whole of their state. Nothing needs a flag to say a file is
+ * there.
+ *
+ * An MCP server and a Hook do have one, and the reason is that they *start something*. Wanting a
+ * process installed but not running is a real position; wanting a file present but ignored is not.
+ * This is the same line ADR 0013 already drew when it barred the Workspace input from enabling those
+ * two — a repository you cloned must not start a process on your machine. It turns out that split
+ * was never about Scope. It was about which contributions run.
+ *
+ * #132 says a contribution has exactly one setting. That holds for the two that run, and the empty
+ * arrays below are the amendment for the four that do not.
  */
 export const enablementScopes: Record<ContributionKind, readonly ScopeKind[]> = {
-  skill: ["runtime-host", "workspace-input", "private-overlay"],
-  rules: ["runtime-host", "workspace-input", "private-overlay"],
-  command: ["runtime-host", "workspace-input", "private-overlay"],
-  subagent: ["runtime-host", "workspace-input", "private-overlay"],
+  skill: [],
+  rules: [],
+  command: [],
+  subagent: [],
   hook: ["runtime-host", "private-overlay"],
   "mcp-server": ["runtime-host", "private-overlay"],
 };
+
+/** Whether this kind has an on / off to render at all. */
+export function hasToggle(kind: ContributionKind): boolean {
+  return enablementScopes[kind].length > 0;
+}
 
 /** Which Scopes may hold an Operation setting. The Runtime host takes `harness` and nothing else. */
 /**

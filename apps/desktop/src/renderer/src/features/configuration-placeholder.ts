@@ -22,7 +22,7 @@ import type {
 const id = (value: string) => value as WorkspaceId;
 
 export const cogworkWorkspaceId = id("ws_01H8Z3");
-export const reviewWorkspaceId = id("ws_01H8Z9");
+const reviewWorkspaceId = id("ws_01H8Z9");
 export const clankerWorkspaceId = id("ws_01H9A2");
 
 /**
@@ -65,7 +65,16 @@ const contributions: readonly Contribution[] = [
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
     readiness: { _tag: "ready" },
-    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+    // On at the machine, off in this workspace's overlay. The overlay is the higher rung, so it
+    // wins whole — the one case ADR 0013's direction actually decides.
+    rows: [
+      { scope: { kind: "runtime-host" }, value: true, source: "Control store" },
+      {
+        scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
+        value: false,
+        source: "Control store",
+      },
+    ],
   },
   {
     id: "plugin:linear/command/linear-triage",
@@ -76,7 +85,8 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/linear@1.4.0/commands/linear-triage.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
 
   {
@@ -90,14 +100,8 @@ const contributions: readonly Contribution[] = [
     load: { _tag: "loaded" },
     // On at the profile, off in this workspace's overlay. The overlay is the highest Scope, so it
     // wins whole — and turning it off here is what leaves `follow-up` unable to run.
-    rows: [
-      { scope: { kind: "runtime-host" }, value: true, source: "Control store" },
-      {
-        scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
-        value: false,
-        source: "Control store",
-      },
-    ],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     id: "plugin:gh-review/rules/review-style",
@@ -108,13 +112,8 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/gh-review@2.1.0/rules/review-style.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    rows: [
-      {
-        scope: { kind: "workspace-input", workspaceId: cogworkWorkspaceId },
-        value: true,
-        source: ".cogwork/settings.json",
-      },
-    ],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     id: "plugin:gh-review/subagent/reviewer",
@@ -166,7 +165,8 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/codex-extras@0.9.3/commands/codex-login.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
 
   {
@@ -178,7 +178,8 @@ const contributions: readonly Contribution[] = [
     file: "engine://subagents/triager",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     id: "engine/rules/house-style",
@@ -189,7 +190,8 @@ const contributions: readonly Contribution[] = [
     file: "engine://rules/house-style",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
 
   {
@@ -203,7 +205,8 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/skills/commit-style/SKILL.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     id: "local/command/scratch",
@@ -214,7 +217,8 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/commands/scratch.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    rows: [{ scope: { kind: "runtime-host" }, value: true, source: "Control store" }],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     // Same local name as `plugin:linear/mcp/linear`, and a different contribution. Identity
@@ -277,13 +281,8 @@ const contributions: readonly Contribution[] = [
     definedAt: "workspace-input",
     definedIn: cogworkWorkspaceId,
     load: { _tag: "loaded" },
-    rows: [
-      {
-        scope: { kind: "workspace-input", workspaceId: cogworkWorkspaceId },
-        value: true,
-        source: ".cogwork/settings.json",
-      },
-    ],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     // Defined in the overlay: a file you keep beside the workspace and never commit.
@@ -296,13 +295,8 @@ const contributions: readonly Contribution[] = [
     definedAt: "private-overlay",
     definedIn: cogworkWorkspaceId,
     load: { _tag: "loaded" },
-    rows: [
-      {
-        scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
-        value: true,
-        source: "Control store",
-      },
-    ],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     // A second workspace with something of its own, so the menu is not one populated repo.
@@ -315,13 +309,8 @@ const contributions: readonly Contribution[] = [
     definedAt: "workspace-input",
     definedIn: clankerWorkspaceId,
     load: { _tag: "loaded" },
-    rows: [
-      {
-        scope: { kind: "workspace-input", workspaceId: clankerWorkspaceId },
-        value: true,
-        source: ".cogwork/settings.json",
-      },
-    ],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     id: "local/command/ship",
@@ -333,19 +322,8 @@ const contributions: readonly Contribution[] = [
     definedAt: "workspace-input",
     definedIn: clankerWorkspaceId,
     load: { _tag: "loaded" },
-    rows: [
-      {
-        scope: { kind: "workspace-input", workspaceId: clankerWorkspaceId },
-        value: true,
-        source: ".cogwork/settings.json",
-        diagnostic: {
-          _tag: "ambiguous",
-          detail:
-            "Two entries in this file claim `local/command/ship`. Picking a winner would be arbitrary, so the file is in error until one is removed.",
-          source: ".cogwork/settings.json",
-        },
-      },
-    ],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
 ];
 
@@ -670,41 +648,19 @@ const operations: readonly Operation[] = [
     summary: "Move a bot-authored pull request forward after failing checks or review comments.",
     needs: [
       {
-        id: "pr-summary",
-        label: "Summarize the pull request",
-        kind: "skill",
-        boundContributionId: "plugin:gh-review/skill/pr-summary",
-        // Bound, but the bound contribution resolves to off in this workspace's overlay. On / off
-        // is the entry gate, so a binding cannot reach past it.
+        id: "notes",
+        label: "Read the meeting note",
+        kind: "mcp-server",
+        boundContributionId: "plugin:granola/mcp/granola",
+        // Bound, but the file it points at will not parse, so it yields no contribution at all.
         satisfied: false,
         reason:
-          "`plugin:gh-review/skill/pr-summary` is bound to this need but is off at the Private workspace overlay. On / off is the entry gate, so the Run Plan is rejected before dispatch.",
+          "`plugin:granola/mcp/granola` is bound to this need, and the file it points at failed to load. Every declared need is required, so the Run Plan is rejected before dispatch.",
       },
     ],
     locked: [],
-    rows: [
-      {
-        key: "enabled",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "on",
-        source: "Control store",
-      },
-      {
-        key: "harness",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "claude-code",
-        source: "Control store",
-      },
-      {
-        key: "model",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "claude-sonnet-5",
-        source: "Control store",
-      },
-    ],
+    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
+    rows: [],
   },
   {
     id: "verify",

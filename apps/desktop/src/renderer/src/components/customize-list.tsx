@@ -8,7 +8,6 @@
 // Long groups collapse to five with a "Show n more", so a facet with eleven Subagents does not bury
 // the facet below it.
 
-import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import {
   Item,
@@ -91,26 +90,6 @@ export function ListRows({ children }: { children: readonly ReactNode[] }) {
 
 export type RowStatus = "ok" | "attention" | "error";
 
-/** A logo with a status dot, when there is a status worth putting on the logo. */
-export function ListRowMedia({ icon, status }: { icon: ReactNode; status?: RowStatus }) {
-  return (
-    <ItemMedia className="relative">
-      <span className="flex size-7 items-center justify-center rounded-md bg-background text-muted-foreground [&_svg]:size-4">
-        {icon}
-      </span>
-      {status === undefined || status === "ok" ? null : (
-        <span
-          className={cn(
-            "absolute -end-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-muted",
-            status === "error" ? "bg-destructive" : "bg-primary",
-          )}
-          aria-hidden
-        />
-      )}
-    </ItemMedia>
-  );
-}
-
 export function ListRow({
   icon,
   status,
@@ -135,7 +114,20 @@ export function ListRow({
       render={onOpen ? <button type="button" onClick={onOpen} /> : undefined}
       className={cn("rounded-none border-transparent text-left", onOpen && "cursor-pointer hover:bg-muted")}
     >
-      <ListRowMedia icon={icon} status={status} />
+      <ItemMedia className="relative">
+        <span className="flex size-7 items-center justify-center rounded-md bg-background text-muted-foreground [&_svg]:size-4">
+          {icon}
+        </span>
+        {status === undefined || status === "ok" ? null : (
+          <span
+            className={cn(
+              "absolute -end-0.5 -bottom-0.5 size-2.5 rounded-full ring-2 ring-muted",
+              status === "error" ? "bg-destructive" : "bg-primary",
+            )}
+            aria-hidden
+          />
+        )}
+      </ItemMedia>
       <ItemContent>
         <ItemTitle className="gap-1.5">
           {title}
@@ -146,9 +138,4 @@ export function ListRow({
       {trailing ? <ItemActions>{trailing}</ItemActions> : null}
     </Item>
   );
-}
-
-/** Where a row came from, when a section mixes sources. */
-export function SourceBadge({ label }: { label: string }) {
-  return <Badge variant="outline">{label}</Badge>;
 }

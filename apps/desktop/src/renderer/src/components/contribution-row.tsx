@@ -1,9 +1,12 @@
 // One contribution, as a row.
 //
-// Shared by the Customize list and a Plugin's own page so a row behaves the same wherever it is.
-// Clicking it opens the thing that configures it: an MCP server has a dialog, because it has status
-// a person cannot edit and a source they can. Everything else is a file, and files open in the right
-// panel — the seam the Files feature will grow into.
+// Shared by the Customize list, the MCP servers facet and a Plugin's own page, so a row behaves the
+// same wherever it is.
+//
+// Clicking it opens whatever configures it. An MCP server gets a dialog: it has a status a person
+// cannot edit and an on / off they can. Everything else is a file, and files open in the right panel
+// — the seam the Files feature will grow into. Those kinds pass no `trailing`, because they have
+// nothing to toggle: a Skill is on the disk or it is not.
 
 import { Badge } from "@cogwork/ui/components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";

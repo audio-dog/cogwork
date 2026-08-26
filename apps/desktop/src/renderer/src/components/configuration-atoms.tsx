@@ -80,12 +80,3 @@ export function ReadinessBadge({ readiness }: { readiness: McpReadiness }) {
     </Tooltip>
   );
 }
-
-/** The identity an install record resolved to — a declared version, or a content revision. */
-export function IdentityBadge({ identity }: { identity: string }) {
-  return (
-    <Badge variant="outline" className="font-mono">
-      {identity}
-    </Badge>
-  );
-}
