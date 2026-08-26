@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_becbf8f5d1aa26::t_ff4307ce36d9a5 1,20-21,38-43,45,49,58,67,76,88,100,110
+  s_becbf8f5d1aa26::t_40f564f3ac01ce 4-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "8dda344458c2d9396d398e6d9df95aa2c7f08e01",
+  "prompts": {},
+  "sessions": {
+    "s_becbf8f5d1aa26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cd22bf-31da-4539-a57f-fccc478d3daf",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
