@@ -1,20 +1,8 @@
-// PROTOTYPE FIXTURE — placeholder data for the Plugins / Customize / workspace surfaces.
-//
-// Nothing here comes from the daemon. It is a single scenario chosen to put every state the
-// surfaces must render on screen at once: all four Scopes, all six contribution kinds, the three
-// Authorities, every conflict class, a failed load, an offer that is not an enablement, a staged
-// update, a stale catalog, a deprecated entry, a withdrawn entry, an unsatisfiable need, an
-// Engine refusal, and two workspaces that share one git remote.
-//
-// Replace with the real picture when the surfaces are wired to `@cogwork/contracts`.
-
 import type {
   CatalogEntry,
   ConfigurationPicture,
   Contribution,
   InstalledPlugin,
-  Operation,
-  Workflow,
   Workspace,
   WorkspaceId,
 } from "./configuration-model";
@@ -25,11 +13,6 @@ export const cogworkWorkspaceId = id("ws_01H8Z3");
 const reviewWorkspaceId = id("ws_01H8Z9");
 export const clankerWorkspaceId = id("ws_01H9A2");
 
-/**
- * `cogwork` and `cogwork (review)` are two workspaces over one remote — the case ADR 0013's
- * hint-not-identity rule makes possible, and the case a surface that labels a workspace by its
- * remote alone cannot render.
- */
 const workspaces: readonly Workspace[] = [
   {
     id: cogworkWorkspaceId,
@@ -65,8 +48,6 @@ const contributions: readonly Contribution[] = [
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
     readiness: { _tag: "ready" },
-    // On at the machine, off in this workspace's overlay. The overlay is the higher rung, so it
-    // wins whole — the one case ADR 0013's direction actually decides.
     rows: [
       { scope: { kind: "runtime-host" }, value: true, source: "Control store" },
       {
@@ -85,7 +66,6 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/linear@1.4.0/commands/linear-triage.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
 
@@ -98,9 +78,6 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/gh-review@2.1.0/skills/pr-summary/SKILL.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // On at the profile, off in this workspace's overlay. The overlay is the highest Scope, so it
-    // wins whole — and turning it off here is what leaves `follow-up` unable to run.
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
@@ -112,7 +89,6 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/gh-review@2.1.0/rules/review-style.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
@@ -124,7 +100,6 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/gh-review@2.1.0/subagents/reviewer.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // Nothing written at any Scope. Not off — not there.
     rows: [],
   },
 
@@ -136,7 +111,6 @@ const contributions: readonly Contribution[] = [
     summary: "Reads meeting notes so a ticket can be drafted from them.",
     file: "~/dev/granola-plugin/mcp/granola.json",
     definedAt: "runtime-host",
-    // A malformed pointed-at file yields no contribution, so the setting written for it dangles.
     load: {
       _tag: "failed",
       reason: "mcp/granola.json:14 — expected a string for `command`, found an array.",
@@ -165,7 +139,6 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/plugins/codex-extras@0.9.3/commands/codex-login.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
 
@@ -178,7 +151,6 @@ const contributions: readonly Contribution[] = [
     file: "engine://subagents/triager",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
@@ -190,13 +162,10 @@ const contributions: readonly Contribution[] = [
     file: "engine://rules/house-style",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
 
   {
-    // Yours, on the machine, and nothing to do with a Plugin. Without one of these the "User"
-    // section never appears, which is the whole thing the source grouping exists to show.
     id: "local/skill/commit-style",
     kind: "skill",
     localName: "commit-style",
@@ -205,7 +174,6 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/skills/commit-style/SKILL.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
@@ -217,12 +185,9 @@ const contributions: readonly Contribution[] = [
     file: "~/.cogwork/commands/scratch.md",
     definedAt: "runtime-host",
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
-    // Same local name as `plugin:linear/mcp/linear`, and a different contribution. Identity
-    // carries Authority, so the set composes by union and cogwork never reconciles the two.
     id: "local/mcp/linear",
     kind: "mcp-server",
     localName: "linear",
@@ -244,9 +209,6 @@ const contributions: readonly Contribution[] = [
     ],
   },
   {
-    // A repository may ship an executable contribution but may never enable one, so this one's
-    // switch writes to the private overlay instead. The `enabled: true` someone committed for it is
-    // inadmissible: dropped with a diagnostic naming the file, never silently ignored.
     id: "local/mcp/repo-tools",
     kind: "mcp-server",
     localName: "repo-tools",
@@ -281,11 +243,9 @@ const contributions: readonly Contribution[] = [
     definedAt: "workspace-input",
     definedIn: cogworkWorkspaceId,
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
-    // Defined in the overlay: a file you keep beside the workspace and never commit.
     id: "local/skill/scratch-notes",
     kind: "skill",
     localName: "scratch-notes",
@@ -295,11 +255,9 @@ const contributions: readonly Contribution[] = [
     definedAt: "private-overlay",
     definedIn: cogworkWorkspaceId,
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
-    // A second workspace with something of its own, so the menu is not one populated repo.
     id: "local/rules/forge-style",
     kind: "rules",
     localName: "forge-style",
@@ -309,7 +267,6 @@ const contributions: readonly Contribution[] = [
     definedAt: "workspace-input",
     definedIn: clankerWorkspaceId,
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
   {
@@ -322,7 +279,6 @@ const contributions: readonly Contribution[] = [
     definedAt: "workspace-input",
     definedIn: clankerWorkspaceId,
     load: { _tag: "loaded" },
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
     rows: [],
   },
 ];
@@ -411,7 +367,6 @@ const plugins: readonly InstalledPlugin[] = [
     record: {
       pluginId: "granola",
       source: { _tag: "local-path", path: "~/dev/granola-plugin" },
-      // No declared version, so the bundle is identified by content revision.
       resolvedIdentity: "granola@rev:9f21c4e",
       principal: "taylor",
       revision: 1,
@@ -478,7 +433,6 @@ const plugins: readonly InstalledPlugin[] = [
   },
 ];
 
-/** The first-party Plugins cogwork ships. A document in the app, not a fetched index. */
 const catalog: readonly CatalogEntry[] = [
   {
     id: "linear",
@@ -518,191 +472,6 @@ const catalog: readonly CatalogEntry[] = [
   },
 ];
 
-const operations: readonly Operation[] = [
-  {
-    id: "triage",
-    name: "Triage",
-    summary: "Classify an observed item and propose the one correct next state.",
-    needs: [
-      {
-        id: "tracker-read",
-        label: "Read the issue tracker",
-        kind: "mcp-server",
-        boundContributionId: "plugin:linear/mcp/linear",
-        satisfied: true,
-      },
-    ],
-    locked: [],
-    rows: [
-      {
-        key: "enabled",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "on",
-        source: "Control store",
-      },
-      {
-        key: "harness",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "claude-code",
-        source: "Control store",
-      },
-      {
-        key: "model",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "claude-sonnet-5",
-        source: "Control store",
-      },
-      {
-        key: "effort",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "medium",
-        source: "Control store",
-      },
-      {
-        key: "binding",
-        level: "operation",
-        scope: { kind: "runtime-host" },
-        value: "tracker-read → plugin:linear/mcp/linear",
-        source: "Control store",
-      },
-    ],
-  },
-  {
-    id: "implement",
-    name: "Implement",
-    summary: "Take a ready ticket to a pull request.",
-    needs: [
-      {
-        id: "tracker-read",
-        label: "Read the issue tracker",
-        kind: "mcp-server",
-        boundContributionId: "plugin:linear/mcp/linear",
-        satisfied: true,
-      },
-      {
-        id: "repo-write",
-        label: "Write to the worktree",
-        kind: "subagent",
-        boundContributionId: "engine/subagent/triager",
-        satisfied: true,
-      },
-    ],
-    // The Definition's lock *is* Engine policy. It constrains and names its source; it never
-    // overwrites, because a silent override is indistinguishable from never having set the value.
-    locked: ["permission-profile"],
-    rows: [
-      {
-        key: "enabled",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "on",
-        source: "Control store",
-      },
-      {
-        key: "harness",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "claude-code",
-        source: "Control store",
-      },
-      // A default at the profile, and an Operation-level value in the overlay. The Operation level
-      // wins *before* Scope is consulted.
-      {
-        key: "model",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "claude-sonnet-5",
-        source: "Control store",
-      },
-      {
-        key: "model",
-        level: "operation",
-        scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
-        value: "claude-opus-5",
-        source: "Control store",
-      },
-      {
-        key: "effort",
-        level: "workflow",
-        scope: { kind: "runtime-host" },
-        value: "high",
-        source: "Control store",
-      },
-      {
-        key: "permission-profile",
-        level: "operation",
-        scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
-        value: "unrestricted",
-        source: "Control store",
-        refusedBy: "the Implement Operation Definition, which locks permission-profile",
-      },
-    ],
-  },
-  {
-    id: "follow-up",
-    name: "Follow up",
-    summary: "Move a bot-authored pull request forward after failing checks or review comments.",
-    needs: [
-      {
-        id: "notes",
-        label: "Read the meeting note",
-        kind: "mcp-server",
-        boundContributionId: "plugin:granola/mcp/granola",
-        // Bound, but the file it points at will not parse, so it yields no contribution at all.
-        satisfied: false,
-        reason:
-          "`plugin:granola/mcp/granola` is bound to this need, and the file it points at failed to load. Every declared need is required, so the Run Plan is rejected before dispatch.",
-      },
-    ],
-    locked: [],
-    // No on / off: a Skill, Rules, a Command and a Subagent are files, not switches.
-    rows: [],
-  },
-  {
-    id: "verify",
-    name: "Verify",
-    summary: "Check a merged change against what the ticket asked for.",
-    needs: [
-      {
-        id: "test-runner",
-        label: "Run the test suite",
-        kind: "mcp-server",
-        satisfied: false,
-        reason: "No contribution is bound to this need. Every declared need is required.",
-      },
-    ],
-    locked: [],
-    rows: [
-      {
-        key: "enabled",
-        level: "default",
-        scope: { kind: "runtime-host" },
-        value: "off",
-        source: "Control store",
-      },
-    ],
-  },
-];
-
-const workflows: readonly Workflow[] = [
-  {
-    id: "backlog",
-    name: "Backlog to merge",
-    summary: "Triage an item, implement it, then follow its pull request up.",
-    operationIds: ["triage", "implement", "follow-up"],
-  },
-  {
-    id: "verification",
-    name: "Verification",
-    summary: "Check merged work against its ticket.",
-    operationIds: ["verify"],
-  },
-];
-
 export const placeholderConfiguration: ConfigurationPicture = {
   principal: "taylor",
   hostId: "host_01H7QK",
@@ -710,8 +479,6 @@ export const placeholderConfiguration: ConfigurationPicture = {
   plugins,
   contributions,
   catalog,
-  workflows,
-  operations,
   limits: { globalConcurrency: 4, perWorkspaceConcurrency: 2, dailyBudget: 40 },
   controlStore: {
     schemaVersion: 6,

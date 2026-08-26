@@ -1,19 +1,8 @@
-import { RiEqualizerLine } from "@remixicon/react";
-import { createFileRoute } from "@tanstack/react-router";
-import { CustomizePage } from "../../../components/customize-page";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { defaultFacet, facetSlug } from "../../../features/customize-facets";
 
 export const Route = createFileRoute("/_app/customize/")({
-  component: CustomizeIndex,
+  beforeLoad: () => {
+    throw redirect({ to: "/customize/$facet", params: { facet: facetSlug(defaultFacet) } });
+  },
 });
-
-function CustomizeIndex() {
-  return (
-    <>
-      <div className="flex items-center gap-2">
-        <RiEqualizerLine />
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Customize</h1>
-      </div>
-      <CustomizePage />
-    </>
-  );
-}

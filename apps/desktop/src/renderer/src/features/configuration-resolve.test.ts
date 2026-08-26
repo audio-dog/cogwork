@@ -9,11 +9,9 @@ import {
 import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "./configuration-placeholder";
 import {
   cellPermitted,
-  collectAttention,
   enableScopeFor,
   offeredElsewhere,
   resolveEnablement,
-  resolveOperationSetting,
   settingsSpreadAcross,
 } from "./configuration-resolve";
 
@@ -107,55 +105,6 @@ describe("cellPermitted and hasToggle", () => {
       expect(cellPermitted(kind, "private-overlay")).toBe(true);
       expect(cellPermitted(kind, "workspace-input")).toBe(false);
     }
-  });
-});
-
-describe("resolveOperationSetting", () => {
-  it("consults the level before the Scope", () => {
-    const implement = placeholderConfiguration.operations.find((entry) => entry.id === "implement");
-    if (!implement) throw new Error("fixture is missing the implement Operation");
-    const resolved = resolveOperationSetting(implement, "model", view);
-    // The Operation-level value wins over the default even though both are admissible Scopes.
-    expect(resolved.value).toBe("claude-opus-5");
-    expect(resolved.winner?.level).toBe("operation");
-    expect(resolved.shadowed.map((row) => row.level)).toEqual(["default"]);
-  });
-
-  it("reports a locked setting and the source that refused the override", () => {
-    const implement = placeholderConfiguration.operations.find((entry) => entry.id === "implement");
-    if (!implement) throw new Error("fixture is missing the implement Operation");
-    const resolved = resolveOperationSetting(implement, "permission-profile", view);
-    expect(resolved.locked).toBe(true);
-    expect(resolved.refusedBy).toContain("locks permission-profile");
-  });
-
-  it("takes harness at the Runtime host", () => {
-    const triage = placeholderConfiguration.operations.find((entry) => entry.id === "triage");
-    if (!triage) throw new Error("fixture is missing the triage Operation");
-    const harness = resolveOperationSetting(triage, "harness", view);
-    expect(harness.winner?.scope.kind).toBe("runtime-host");
-  });
-});
-
-describe("collectAttention", () => {
-  const items = collectAttention(
-    placeholderConfiguration.contributions,
-    placeholderConfiguration.operations,
-    view,
-  );
-
-  it("surfaces a failed load as an error", () => {
-    expect(
-      items.some((item) => item.id === "load:plugin:granola/mcp/granola" && item.severity === "error"),
-    ).toBe(true);
-  });
-
-  it("surfaces every unmet need as its own item", () => {
-    const needs = items.filter((item) => item.id.startsWith("need:"));
-    expect(needs.map((item) => item.id).toSorted()).toEqual([
-      "need:follow-up:notes",
-      "need:verify:test-runner",
-    ]);
   });
 });
 

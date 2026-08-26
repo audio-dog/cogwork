@@ -1,12 +1,3 @@
-// Configuring one MCP server.
-//
-// A dialog rather than a page, because an MCP server has two things to say and they are both short:
-// where it is configured, and whether the Engine can reach it. Cursor calls the second half
-// "Environments"; ours is readiness, which is the Engine's own conclusion and not something a person
-// edits — so it is reported with a way to look at the output, and a way to ask again.
-//
-// The one thing a person changes here is the switch, which is the same act as the switch on the row.
-
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import {
@@ -36,14 +27,22 @@ const { contributions, workspaces } = placeholderConfiguration;
  * shrink below and it overflows the dialog. Every direct child of the popup needs `min-w-0`, and
  * `truncate` needs that chain unbroken to work at all.
  */
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+function DialogSection({ children }: { children: ReactNode }) {
+  return <div className="flex min-w-0 flex-col gap-1.5">{children}</div>;
+}
+
+function DialogSectionTitle({ children }: { children: ReactNode }) {
+  return <span className="text-sm font-medium">{children}</span>;
+}
+
+function DialogSectionHint({ children }: { children: ReactNode }) {
+  return <span className="text-xs text-muted-foreground">{children}</span>;
+}
+
+function DialogSectionBody({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-sm font-medium">{title}</span>
-      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
-      <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-lg bg-muted/40">
-        {children}
-      </div>
+    <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-lg bg-muted/40">
+      {children}
     </div>
   );
 }
@@ -69,8 +68,6 @@ export function McpConfigureDialog({
   const workspace = workspaces.find((entry) => entry.id === contribution.definedIn);
   const PlaceIcon = scopeIcons[contribution.definedAt];
 
-  // Identity carries Authority, so two servers with one local name are two different things and
-  // cogwork never reconciles them. Saying so is the only honest way to render the collision.
   const namesakes = contributions.filter(
     (entry) =>
       entry.kind === "mcp-server" &&
@@ -91,56 +88,64 @@ export function McpConfigureDialog({
           <DialogDescription>{contribution.summary}</DialogDescription>
         </DialogHeader>
 
-        <Section title="Source" hint="Where this server is configured, and whether it is on.">
-          <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground [&_svg]:size-4">
-              <PlaceIcon />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm">
-                {workspace ? `${workspace.name} · ` : ""}
-                {scopeCopy[contribution.definedAt].name}
+        <DialogSection>
+          <DialogSectionTitle>Source</DialogSectionTitle>
+          <DialogSectionHint>Where this server is configured, and whether it is on.</DialogSectionHint>
+          <DialogSectionBody>
+            <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground [&_svg]:size-4">
+                <PlaceIcon />
               </span>
-              <span className="truncate font-mono text-xs text-muted-foreground">{contribution.file}</span>
-            </span>
-            <Badge variant="outline" className="shrink-0">
-              {authorityLabel(contribution.authority)}
-            </Badge>
-            <Switch
-              checked={on}
-              disabled={target === undefined}
-              onCheckedChange={(checked) => {
-                if (target) setCell(contribution.id, target, checked ? "on" : "off");
-              }}
-            />
-          </div>
-          {offeredElsewhere(contribution) && target ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">
-              The repo ships this file but can't start a process on your machine, so the switch writes to{" "}
-              {scopeCopy[target.kind].name}.
-            </p>
-          ) : null}
-        </Section>
-
-        <Section title="Status" hint="The Engine's own conclusion. Nothing here is yours to set.">
-          <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="text-sm">
-                {contribution.readiness?._tag === "ready" ? "Ready" : "Not ready"}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm">
+                  {workspace ? `${workspace.name} · ` : ""}
+                  {scopeCopy[contribution.definedAt].name}
+                </span>
+                <span className="truncate font-mono text-xs text-muted-foreground">{contribution.file}</span>
               </span>
-              <span className="text-xs text-muted-foreground">
-                {contribution.readiness?._tag === "not-ready"
-                  ? contribution.readiness.reason
-                  : "Launchable, authenticated, and speaking a protocol we understand."}
-              </span>
-            </span>
-            {contribution.readiness?._tag === "not-ready" ? (
-              <Button size="sm" variant="ghost">
-                Show output
-              </Button>
+              <Badge variant="outline" className="shrink-0">
+                {authorityLabel(contribution.authority)}
+              </Badge>
+              <Switch
+                checked={on}
+                disabled={target === undefined}
+                onCheckedChange={(checked) => {
+                  if (target) setCell(contribution.id, target, checked ? "on" : "off");
+                }}
+              />
+            </div>
+            {offeredElsewhere(contribution) && target ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                The repo ships this file but can't start a process on your machine, so the switch writes to{" "}
+                {scopeCopy[target.kind].name}.
+              </p>
             ) : null}
-          </div>
-        </Section>
+          </DialogSectionBody>
+        </DialogSection>
+
+        <DialogSection>
+          <DialogSectionTitle>Status</DialogSectionTitle>
+          <DialogSectionHint>The Engine's own conclusion. Nothing here is yours to set.</DialogSectionHint>
+          <DialogSectionBody>
+            <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-sm">
+                  {contribution.readiness?._tag === "ready" ? "Ready" : "Not ready"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {contribution.readiness?._tag === "not-ready"
+                    ? contribution.readiness.reason
+                    : "Launchable, authenticated, and speaking a protocol we understand."}
+                </span>
+              </span>
+              {contribution.readiness?._tag === "not-ready" ? (
+                <Button size="sm" variant="ghost">
+                  Show output
+                </Button>
+              ) : null}
+            </div>
+          </DialogSectionBody>
+        </DialogSection>
 
         {namesakes.length > 0 ? (
           <p className="min-w-0 text-xs break-words text-muted-foreground">

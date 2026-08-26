@@ -1,9 +1,3 @@
-// A file, open in the right panel.
-//
-// The first surface here that is not about a Run. Deliberately thin: the Files feature will own
-// reading and editing anything on disk, and this is the seam it will grow into. For now it names the
-// file and shows what cogwork already knows about it, which is enough to answer "which one is this".
-
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiFileTextLine } from "@remixicon/react";
 import { authorityLabel, kindLabels, scopeCopy } from "../features/configuration-model";

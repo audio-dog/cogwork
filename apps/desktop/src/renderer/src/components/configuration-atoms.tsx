@@ -1,9 +1,3 @@
-// PROTOTYPE — neutral atoms the Plugins / Customize variants share.
-//
-// Deliberately thin. Badges, icons and scope labels are the same question in every variant, so
-// sharing them costs nothing; layout, navigation and the write affordance are the things the
-// variants disagree about, and none of that lives here.
-
 import { Badge } from "@cogwork/ui/components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import {
@@ -62,10 +56,6 @@ export function DiagnosticBadge({ diagnostic }: { diagnostic: Diagnostic }) {
   );
 }
 
-/**
- * Three postures are enforced exactly; anything finer is coarse. The recorded fidelity travels
- * with the row so no surface presents a coarse enforcement as exact.
- */
 export function FidelityBadge({ fidelity }: { fidelity: "exact" | "coarse" }) {
   if (fidelity === "exact") return <Badge variant="outline">Enforced</Badge>;
   return <Badge variant="secondary">Coarse</Badge>;

@@ -1,12 +1,3 @@
-// What a Plugin needs from you, if anything.
-//
-// Cursor groups its MCPs by status and its Subagents by place, picking whichever axis carries the
-// information on that facet. For a Plugin the answer is status: one that is set up and loading needs
-// nothing said about it, and one with a malformed file or an unfinished setup needs saying now.
-//
-// There is no update state. Every Plugin is first-party and ships with cogwork, so updating one is
-// updating the app — there is nothing to stage, offer, pin or decline.
-
 import type { Contribution, InstalledPlugin } from "./configuration-model";
 import { placeholderConfiguration } from "./configuration-placeholder";
 
@@ -23,7 +14,6 @@ export function contributionsOf(plugin: InstalledPlugin): readonly Contribution[
     .filter((contribution) => contribution !== undefined);
 }
 
-/** A file that will not load beats an install that never finished. */
 export function attentionOf(plugin: InstalledPlugin): PluginAttention {
   const failed = contributionsOf(plugin).filter((contribution) => contribution.load._tag === "failed");
   if (failed.length > 0) return { _tag: "load-failed", failed };
@@ -36,7 +26,6 @@ export function needsAttention(plugin: InstalledPlugin): boolean {
   return attentionOf(plugin)._tag !== "settled";
 }
 
-/** One line for the row, so the list can be triaged without opening anything. */
 export function attentionLine(attention: PluginAttention): string {
   if (attention._tag === "load-failed") {
     return attention.failed.length === 1
@@ -49,25 +38,17 @@ export function attentionLine(attention: PluginAttention): string {
   return "";
 }
 
-/** The label on the row's action, which is the act the state calls for. */
 export function attentionAction(attention: PluginAttention): string | undefined {
   if (attention._tag === "load-failed") return "Show the file";
   if (attention._tag === "setup-unfinished") return "Finish setup";
   return undefined;
 }
 
-/** Where the bundle came from. A shipped entry, or a path you pointed at while developing one. */
 export function sourceLine(plugin: InstalledPlugin): string {
   const { source } = plugin.record;
   return source._tag === "catalog" ? "Ships with cogwork" : `Local path · ${source.path}`;
 }
 
-/**
- * Which catalog entries are already added, keyed by `pluginId` rather than by source.
- *
- * A Plugin installed from a local path during development still *is* that catalog entry — matching
- * on the source would report it as missing and offer to add it twice.
- */
 export function addedEntryIds(): readonly string[] {
   return placeholderConfiguration.plugins.map((plugin) => plugin.record.pluginId);
 }

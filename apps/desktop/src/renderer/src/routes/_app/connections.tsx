@@ -1,18 +1,23 @@
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiPlugLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { PagePlaceholder } from "../../components/page-placeholder";
-
-function ConnectionsPage() {
-  return (
-    <PagePlaceholder icon={RiPlugLine} title="Connections">
-      Deliberately empty. `Connection` is marked provisional in the glossary — what one *is* depends on
-      whether a first-party integration stays an engine-owned port or becomes something a person installs and
-      authenticates, which is #172 — and its establishment, health, refresh, and revocation are still open.
-      Giving it a page fixes where it lands without designing it.
-    </PagePlaceholder>
-  );
-}
 
 export const Route = createFileRoute("/_app/connections")({
-  component: ConnectionsPage,
+  component: ConnectionsRoute,
 });
+
+function ConnectionsRoute() {
+  return (
+    <div className="mx-auto flex w-full max-w-2xl px-8 py-16">
+      <Empty className="w-full">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <RiPlugLine />
+          </EmptyMedia>
+          <EmptyTitle>Connections aren't ready yet</EmptyTitle>
+          <EmptyDescription>We're still working out what one is.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    </div>
+  );
+}

@@ -49,11 +49,18 @@ const views: ReadonlyArray<View> = [
   { label: "Customize", icon: RiEqualizerLine, to: "/customize" },
 ];
 
+const isViewActive = (pathname: string, to: string) =>
+  to === "/" ? pathname === "/" : pathname.startsWith(to);
+
 function ViewItem({ view }: { view: View }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton isActive={pathname === view.to} render={<Link to={view.to} />} tooltip={view.label}>
+      <SidebarMenuButton
+        isActive={isViewActive(pathname, view.to)}
+        render={<Link to={view.to} />}
+        tooltip={view.label}
+      >
         <view.icon />
         <span>{view.label}</span>
       </SidebarMenuButton>

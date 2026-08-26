@@ -18,7 +18,8 @@ import { Route as AppWorkflowsRouteImport } from './routes/_app/workflows'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsSectionRouteImport } from './routes/settings/$section'
 import { Route as AppCustomizeIndexRouteImport } from './routes/_app/customize/index'
-import { Route as AppCustomizePluginIdRouteImport } from './routes/_app/customize/$pluginId'
+import { Route as AppCustomizeFacetRouteImport } from './routes/_app/customize/$facet'
+import { Route as AppCustomizePluginPluginIdRouteImport } from './routes/_app/customize/plugin.$pluginId'
 
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/_app',
@@ -64,11 +65,17 @@ const AppCustomizeIndexRoute = AppCustomizeIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppCustomizeRouteRoute,
 } as any)
-const AppCustomizePluginIdRoute = AppCustomizePluginIdRouteImport.update({
-  id: '/$pluginId',
-  path: '/$pluginId',
+const AppCustomizeFacetRoute = AppCustomizeFacetRouteImport.update({
+  id: '/$facet',
+  path: '/$facet',
   getParentRoute: () => AppCustomizeRouteRoute,
 } as any)
+const AppCustomizePluginPluginIdRoute =
+  AppCustomizePluginPluginIdRouteImport.update({
+    id: '/plugin/$pluginId',
+    path: '/plugin/$pluginId',
+    getParentRoute: () => AppCustomizeRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -78,8 +85,9 @@ export interface FileRoutesByFullPath {
   '/workflows': typeof AppWorkflowsRoute
   '/settings/$section': typeof SettingsSectionRoute
   '/settings/': typeof SettingsIndexRoute
-  '/customize/$pluginId': typeof AppCustomizePluginIdRoute
+  '/customize/$facet': typeof AppCustomizeFacetRoute
   '/customize/': typeof AppCustomizeIndexRoute
+  '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRoutesByTo {
   '/connections': typeof AppConnectionsRoute
@@ -87,8 +95,9 @@ export interface FileRoutesByTo {
   '/settings/$section': typeof SettingsSectionRoute
   '/': typeof AppIndexRoute
   '/settings': typeof SettingsIndexRoute
-  '/customize/$pluginId': typeof AppCustomizePluginIdRoute
+  '/customize/$facet': typeof AppCustomizeFacetRoute
   '/customize': typeof AppCustomizeIndexRoute
+  '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -100,8 +109,9 @@ export interface FileRoutesById {
   '/settings/$section': typeof SettingsSectionRoute
   '/_app/': typeof AppIndexRoute
   '/settings/': typeof SettingsIndexRoute
-  '/_app/customize/$pluginId': typeof AppCustomizePluginIdRoute
+  '/_app/customize/$facet': typeof AppCustomizeFacetRoute
   '/_app/customize/': typeof AppCustomizeIndexRoute
+  '/_app/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -113,8 +123,9 @@ export interface FileRouteTypes {
     | '/workflows'
     | '/settings/$section'
     | '/settings/'
-    | '/customize/$pluginId'
+    | '/customize/$facet'
     | '/customize/'
+    | '/customize/plugin/$pluginId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connections'
@@ -122,8 +133,9 @@ export interface FileRouteTypes {
     | '/settings/$section'
     | '/'
     | '/settings'
-    | '/customize/$pluginId'
+    | '/customize/$facet'
     | '/customize'
+    | '/customize/plugin/$pluginId'
   id:
     | '__root__'
     | '/_app'
@@ -134,8 +146,9 @@ export interface FileRouteTypes {
     | '/settings/$section'
     | '/_app/'
     | '/settings/'
-    | '/_app/customize/$pluginId'
+    | '/_app/customize/$facet'
     | '/_app/customize/'
+    | '/_app/customize/plugin/$pluginId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -208,24 +221,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCustomizeIndexRouteImport
       parentRoute: typeof AppCustomizeRouteRoute
     }
-    '/_app/customize/$pluginId': {
-      id: '/_app/customize/$pluginId'
-      path: '/$pluginId'
-      fullPath: '/customize/$pluginId'
-      preLoaderRoute: typeof AppCustomizePluginIdRouteImport
+    '/_app/customize/$facet': {
+      id: '/_app/customize/$facet'
+      path: '/$facet'
+      fullPath: '/customize/$facet'
+      preLoaderRoute: typeof AppCustomizeFacetRouteImport
+      parentRoute: typeof AppCustomizeRouteRoute
+    }
+    '/_app/customize/plugin/$pluginId': {
+      id: '/_app/customize/plugin/$pluginId'
+      path: '/plugin/$pluginId'
+      fullPath: '/customize/plugin/$pluginId'
+      preLoaderRoute: typeof AppCustomizePluginPluginIdRouteImport
       parentRoute: typeof AppCustomizeRouteRoute
     }
   }
 }
 
 interface AppCustomizeRouteRouteChildren {
-  AppCustomizePluginIdRoute: typeof AppCustomizePluginIdRoute
+  AppCustomizeFacetRoute: typeof AppCustomizeFacetRoute
   AppCustomizeIndexRoute: typeof AppCustomizeIndexRoute
+  AppCustomizePluginPluginIdRoute: typeof AppCustomizePluginPluginIdRoute
 }
 
 const AppCustomizeRouteRouteChildren: AppCustomizeRouteRouteChildren = {
-  AppCustomizePluginIdRoute: AppCustomizePluginIdRoute,
+  AppCustomizeFacetRoute: AppCustomizeFacetRoute,
   AppCustomizeIndexRoute: AppCustomizeIndexRoute,
+  AppCustomizePluginPluginIdRoute: AppCustomizePluginPluginIdRoute,
 }
 
 const AppCustomizeRouteRouteWithChildren =

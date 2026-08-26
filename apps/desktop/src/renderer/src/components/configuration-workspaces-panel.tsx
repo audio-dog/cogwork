@@ -1,10 +1,3 @@
-// PROTOTYPE — the third settings surface, which has no name.
-//
-// #133 fixed this surface's boundary and deliberately refused to mint its name: it is neither
-// Plugins nor Customize, and `Settings` sits on Customize's *Avoid* line. It owns workspace
-// registration, the daemon's runtime limits, and Control store restore. Naming it is a
-// `/domain-modeling` act on the maintainer's say-so, so this file uses a description, not a noun.
-
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   AlertDialog,
@@ -36,7 +29,6 @@ import { placeholderConfiguration } from "../features/configuration-placeholder"
 const { workspaces, limits, controlStore } = placeholderConfiguration;
 
 function WorkspaceRow({ workspace }: { workspace: (typeof workspaces)[number] }) {
-  // Two workspaces may share one remote, so the checkout path is what tells them apart.
   const sharesRemote =
     workspace.remote !== undefined &&
     workspaces.filter((candidate) => candidate.remote === workspace.remote).length > 1;
@@ -90,10 +82,6 @@ function WorkspaceRow({ workspace }: { workspace: (typeof workspaces)[number] })
 export function WorkspacesPanel() {
   return (
     <div className="flex flex-col gap-6">
-      {/*
-        The gap is the point: this surface exists, its contents are settled, and its name is not.
-        Rendering a coined noun here would mint the term the map declined to mint.
-      */}
       <Alert>
         <RiInformationLine />
         <AlertTitle>This surface has no name yet.</AlertTitle>

@@ -1,15 +1,3 @@
-// Where Customize looks: the machine, and each workspace's two places.
-//
-// The menu is a filter, not a selection — unchecking a place hides what lives there. Three
-// decisions it rests on:
-//
-//   · A place is fully named or it is not a place. "The repository" means nothing until it says
-//     which repository, so a place is `runtime-host` or a Scope kind paired with a WorkspaceId.
-//   · The checkout path is stated once, in the right pane. The left pane identifies a workspace;
-//     the right pane describes it.
-//   · The trigger is the whole button. It used to be the caret half of a split control, and a
-//     longer label pushed the caret right and dragged the popup with it.
-
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Checkbox } from "@cogwork/ui/components/checkbox";
@@ -35,10 +23,10 @@ import {
   type WorkspaceId,
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
+import type { Facet } from "../features/customize-facets";
 import {
   allPlaceKeys,
   countAt,
-  type Facet,
   machinePlace,
   placeCount,
   summarize,
@@ -52,7 +40,6 @@ const MachineIcon = scopeIcons["runtime-host"];
 
 type Highlight = { readonly _tag: "user" } | { readonly _tag: "workspace"; readonly id: WorkspaceId };
 
-/** Counts are fixed-width and tabular so a row never resizes as the selection changes. */
 function CountBadge({ count, muted }: { count: number; muted: boolean }) {
   return (
     <Badge
@@ -64,7 +51,6 @@ function CountBadge({ count, muted }: { count: number; muted: boolean }) {
   );
 }
 
-/** A left-pane row. Pointing at it is enough to reveal its places; it selects nothing itself. */
 function NavRow({
   icon: Icon,
   title,
@@ -103,7 +89,6 @@ function NavRow({
   );
 }
 
-/** A right-pane row. Rendered as a label so the whole row toggles its checkbox. */
 function PlaceRow({
   place,
   facet,
@@ -147,7 +132,6 @@ export function CustomizePlaceMenu({
   places: readonly string[];
   facet: Facet;
   onChange: (next: readonly string[]) => void;
-  /** Why this facet cannot be filtered by place, when it cannot. */
   unavailable?: string;
 }) {
   const [highlight, setHighlight] = useState<Highlight>({ _tag: "user" });
@@ -159,13 +143,9 @@ export function CustomizePlaceMenu({
   const shown = placesOf(highlight, workspace);
   const user = highlight._tag === "user";
 
-  // The same button either way, so switching facet never reflows the row it sits in. Where the
-  // filter does not apply the label states the one place that does, rather than reporting a
-  // selection that is not being honoured.
   const trigger = (
     <Button variant="outline" size="sm" className="rounded-full" disabled={unavailable !== undefined}>
       <MachineIcon data-icon="inline-start" />
-      {/* Fixed width: a label that resizes shoves every kind pill after it along the row. */}
       <span className="w-32 truncate text-start">
         {unavailable === undefined ? summarize(places) : scopeCopy["runtime-host"].name}
       </span>
@@ -176,7 +156,6 @@ export function CustomizePlaceMenu({
   if (unavailable !== undefined) {
     return (
       <Tooltip>
-        {/* A disabled button emits no pointer events, so the span is what the tooltip listens on. */}
         <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
         <TooltipContent className="max-w-72">{unavailable}</TooltipContent>
       </Tooltip>
@@ -186,7 +165,6 @@ export function CustomizePlaceMenu({
   return (
     <Popover>
       <PopoverTrigger render={trigger} />
-      {/* `align="start"` pins the popup's leading edge to the trigger's, which does not move. */}
       <PopoverContent align="start" className="w-136 gap-0 p-0">
         <div className="flex h-64">
           <div className="flex w-68 shrink-0 flex-col gap-0.5 overflow-y-auto p-1.5">
@@ -237,7 +215,6 @@ export function CustomizePlaceMenu({
               <span className="truncate text-sm font-medium">
                 {user ? scopeCopy["runtime-host"].name : (workspace?.name ?? "")}
               </span>
-              {/* The one place the checkout path is stated. */}
               <span className="truncate font-mono text-xs text-muted-foreground">
                 {user ? "~/.cogwork" : (workspace?.checkoutPath ?? "")}
               </span>

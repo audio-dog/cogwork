@@ -15,11 +15,6 @@ type ItemSurface = {
   readonly runId?: RunId;
 };
 
-/**
- * A file open in the panel. The first surface that is not about a Run — a placeholder for the Files
- * feature, which will own reading and editing anything on disk. Keyed by path, so opening the same
- * file twice reuses its tab.
- */
 type FileSurface = {
   readonly id: `file:${string}`;
   readonly kind: "file";
