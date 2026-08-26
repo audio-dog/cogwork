@@ -1,0 +1,24 @@
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_100147228de293::t_1ed70b73363c1e 101-102,114,120-132
+  s_100147228de293::t_59e9557fa8a934 133,137,169,177-178,184-185,201,204-228
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_100147228de293::t_4adcf4da825bfc 172-173
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_100147228de293::t_fb9d03067fefc4 108-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "214bbfff49276adac28ede59865e0e8ffedd41f8",
+  "prompts": {},
+  "sessions": {
+    "s_100147228de293": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bb8da924-469c-4d15-9429-c25b17ea5330",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
