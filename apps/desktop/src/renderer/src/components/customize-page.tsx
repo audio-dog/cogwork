@@ -21,6 +21,7 @@ import { kindIcons } from "./configuration-atoms";
 import { ListRows, ListSection } from "./customize-list";
 import { CustomizePlaceMenu } from "./customize-place-menu";
 import { CustomizeRow } from "./customize-row";
+import { McpFacet } from "./mcp-facet";
 import { PluginsFacet } from "./plugins-facet";
 
 export function CustomizePage() {
@@ -37,7 +38,7 @@ export function CustomizePage() {
       <div className="flex flex-col gap-4">
         <InputGroup>
           <InputGroupInput
-            placeholder="Search contributions…"
+            placeholder="Search Plugins, Skills, MCPs..."
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -92,6 +93,8 @@ export function CustomizePage() {
 
         {plugins ? (
           <PluginsFacet />
+        ) : facet === "mcp-server" ? (
+          <McpFacet />
         ) : facet === "hook" ? (
           // Hooks are out of scope for this map. Saying so beats an empty list that looks broken.
           <Empty className="py-16">
@@ -99,10 +102,8 @@ export function CustomizePage() {
               <EmptyMedia variant="icon">
                 <RiPulseLine />
               </EmptyMedia>
-              <EmptyTitle>Hooks aren't wired up yet</EmptyTitle>
-              <EmptyDescription>
-                A Plugin can ship one, but cogwork can't run them. They'll turn up here when it can.
-              </EmptyDescription>
+              <EmptyTitle>Hooks aren't ready yet</EmptyTitle>
+              <EmptyDescription>We're still building them.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : groups.length === 0 ? (
@@ -112,12 +113,10 @@ export function CustomizePage() {
                 <FacetIcon />
               </EmptyMedia>
               <EmptyTitle>
-                {places.length === 0 ? "Nowhere to look" : `No ${kindLabelsPlural[facet].toLowerCase()} here`}
+                {places.length === 0 ? "Nothing selected" : `No ${kindLabelsPlural[facet].toLowerCase()} yet`}
               </EmptyTitle>
               <EmptyDescription>
-                {places.length === 0
-                  ? "Pick at least one place from the filter."
-                  : "Nothing of this kind lives in the places you're looking at."}
+                {places.length === 0 ? "Choose where to look." : "Nothing in the places you picked."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

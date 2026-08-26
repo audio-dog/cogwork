@@ -30,9 +30,15 @@ import { scopeIcons } from "./configuration-atoms";
 
 const { contributions, workspaces } = placeholderConfiguration;
 
+/**
+ * `DialogContent` styles its popup as a `grid`, and a grid item's default `min-width: auto` means
+ * min-content — so one unbreakable string, like a long file path, sets a floor the item cannot
+ * shrink below and it overflows the dialog. Every direct child of the popup needs `min-w-0`, and
+ * `truncate` needs that chain unbroken to work at all.
+ */
 function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <span className="text-sm font-medium">{title}</span>
       {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
       <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-lg bg-muted/40">
@@ -75,8 +81,8 @@ export function McpConfigureDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="flex min-w-0 items-center gap-2 pe-8">
             <span className="flex size-7 items-center justify-center rounded-md bg-muted [&_svg]:size-4">
               <RiServerLine />
             </span>
@@ -86,8 +92,8 @@ export function McpConfigureDialog({
         </DialogHeader>
 
         <Section title="Source" hint="Where this server is configured, and whether it is on.">
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            <span className="flex size-7 items-center justify-center rounded-md bg-background text-muted-foreground [&_svg]:size-4">
+          <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground [&_svg]:size-4">
               <PlaceIcon />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
@@ -97,7 +103,9 @@ export function McpConfigureDialog({
               </span>
               <span className="truncate font-mono text-xs text-muted-foreground">{contribution.file}</span>
             </span>
-            <Badge variant="outline">{authorityLabel(contribution.authority)}</Badge>
+            <Badge variant="outline" className="shrink-0">
+              {authorityLabel(contribution.authority)}
+            </Badge>
             <Switch
               checked={on}
               disabled={target === undefined}
@@ -115,7 +123,7 @@ export function McpConfigureDialog({
         </Section>
 
         <Section title="Status" hint="The Engine's own conclusion. Nothing here is yours to set.">
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-2.5 px-3 py-2.5">
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-sm">
                 {contribution.readiness?._tag === "ready" ? "Ready" : "Not ready"}
@@ -135,7 +143,7 @@ export function McpConfigureDialog({
         </Section>
 
         {namesakes.length > 0 ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="min-w-0 text-xs break-words text-muted-foreground">
             Another server is also called <span className="font-medium">{contribution.localName}</span> —{" "}
             <span className="font-mono">{namesakes[0].id}</span>. They are separate servers with the same
             name, and cogwork keeps them apart rather than merging them.
@@ -143,10 +151,12 @@ export function McpConfigureDialog({
         ) : null}
 
         {resolved.dropped.length > 0 ? (
-          <p className="text-xs text-destructive">{resolved.dropped[0].diagnostic.detail}</p>
+          <p className="min-w-0 text-xs break-words text-destructive">
+            {resolved.dropped[0].diagnostic.detail}
+          </p>
         ) : null}
 
-        <DialogFooter className="justify-between sm:justify-between">
+        <DialogFooter className="min-w-0 justify-between sm:justify-between">
           <Button size="sm" variant="ghost">
             <RiLoopLeftLine data-icon="inline-start" />
             Check again

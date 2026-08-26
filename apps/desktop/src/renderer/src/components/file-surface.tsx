@@ -66,10 +66,8 @@ export function FileSurfaceBody({ path }: { path: string }) {
           <EmptyMedia variant="icon">
             <Icon />
           </EmptyMedia>
-          <EmptyTitle>Nothing to read yet</EmptyTitle>
-          <EmptyDescription>
-            Opening and editing files lands with the Files panel. This tab is where it will show up.
-          </EmptyDescription>
+          <EmptyTitle>No preview yet</EmptyTitle>
+          <EmptyDescription>You'll be able to read files here soon.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     </div>

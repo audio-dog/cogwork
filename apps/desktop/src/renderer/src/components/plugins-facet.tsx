@@ -11,7 +11,13 @@ import { RiBox3Line } from "@remixicon/react";
 import { useNavigate } from "@tanstack/react-router";
 import type { CatalogEntry, InstalledPlugin } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
-import { attentionAction, attentionLine, attentionOf, needsAttention } from "../features/plugins-view";
+import {
+  addedEntryIds,
+  attentionAction,
+  attentionLine,
+  attentionOf,
+  needsAttention,
+} from "../features/plugins-view";
 import { ListRow, ListRows, ListSection } from "./customize-list";
 
 const { plugins, catalog } = placeholderConfiguration;
@@ -62,15 +68,12 @@ function CatalogRow({ entry, installed }: { entry: CatalogEntry; installed: bool
 export function PluginsFacet() {
   const attention = plugins.filter(needsAttention);
   const settled = plugins.filter((plugin) => !needsAttention(plugin));
-  const added = plugins
-    .map((plugin) => plugin.record.source)
-    .filter((source) => source._tag === "catalog")
-    .map((source) => source.entryId);
+  const added = addedEntryIds();
 
   return (
     <div className="flex flex-col gap-6">
       {attention.length > 0 ? (
-        <ListSection title="Needs you" count={attention.length}>
+        <ListSection title="Needs Attention" count={attention.length}>
           <ListRows>
             {attention.map((plugin) => (
               <PluginRow key={plugin.record.pluginId} plugin={plugin} showAttention />
@@ -79,15 +82,15 @@ export function PluginsFacet() {
         </ListSection>
       ) : null}
 
-      <ListSection title="Added" count={settled.length}>
+      <ListSection title="Installed" count={settled.length}>
         {settled.length === 0 ? (
           <Empty className="py-10">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <RiBox3Line />
               </EmptyMedia>
-              <EmptyTitle>Every Plugin needs something</EmptyTitle>
-              <EmptyDescription>They are all in the list above.</EmptyDescription>
+              <EmptyTitle>Nothing to show</EmptyTitle>
+              <EmptyDescription>Everything's in the list above.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -99,7 +102,7 @@ export function PluginsFacet() {
         )}
       </ListSection>
 
-      <ListSection title="Ships with cogwork" count={catalog.length}>
+      <ListSection title="Catalog" count={catalog.length}>
         <ListRows>
           {catalog.map((entry) => (
             <CatalogRow key={entry.id} entry={entry} installed={added.includes(entry.id)} />

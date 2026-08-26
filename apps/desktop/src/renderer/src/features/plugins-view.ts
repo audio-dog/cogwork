@@ -61,3 +61,13 @@ export function sourceLine(plugin: InstalledPlugin): string {
   const { source } = plugin.record;
   return source._tag === "catalog" ? "Ships with cogwork" : `Local path · ${source.path}`;
 }
+
+/**
+ * Which catalog entries are already added, keyed by `pluginId` rather than by source.
+ *
+ * A Plugin installed from a local path during development still *is* that catalog entry — matching
+ * on the source would report it as missing and offer to add it twice.
+ */
+export function addedEntryIds(): readonly string[] {
+  return placeholderConfiguration.plugins.map((plugin) => plugin.record.pluginId);
+}
