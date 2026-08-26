@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/components/customize-filter.tsx
+  s_3c28083422ea19::t_082a1ffbe5240e 1,40-47
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_3c28083422ea19::t_082a1ffbe5240e 1,47-55
+apps/desktop/src/renderer/src/components/contribution.tsx
+  s_3c28083422ea19::t_082a1ffbe5240e 5,75-80,82-94,96-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "ef3509b3f0b58565754f3be77fd601c4100e899f",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_3c28083422ea19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c7aa8cc5-6303-41e2-8c70-0a39343ddaf8",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
