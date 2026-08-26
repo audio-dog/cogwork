@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_becbf8f5d1aa26::t_c88379b1dc9c09 49
+  s_becbf8f5d1aa26::t_40fd2dd663c254 1
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_becbf8f5d1aa26::t_b6dd197e0aea37 26
+  s_becbf8f5d1aa26::t_97acfe5ca13259 456-460
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "929ae3b8cb756bfcd57f330dede62475d2d72fb9",
+  "prompts": {},
+  "sessions": {
+    "s_becbf8f5d1aa26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cd22bf-31da-4539-a57f-fccc478d3daf",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
