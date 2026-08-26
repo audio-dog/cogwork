@@ -1,0 +1,51 @@
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_becbf8f5d1aa26::t_3c9d24776a692e 15
+  s_becbf8f5d1aa26::t_8e84b92ef00fcc 59,68,75,86,226,276,354,357-374,382-391,394-407,415-452,458,461-484
+  s_becbf8f5d1aa26::t_40f564f3ac01ce 376-381,392,408-413
+  s_becbf8f5d1aa26::t_f02e6a0f5e2e2b 26
+  s_becbf8f5d1aa26::t_331aa93f5f7c42 109
+  s_becbf8f5d1aa26::t_3bc2d2a1e791d5 453-457,460
+  s_becbf8f5d1aa26::t_fd862ec81cc2d5 17
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_becbf8f5d1aa26::t_40f564f3ac01ce 8
+apps/desktop/src/renderer/src/components/settings-page.tsx
+  s_becbf8f5d1aa26::t_40f564f3ac01ce 16
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_becbf8f5d1aa26::t_19e706461f9ad3 5
+apps/desktop/src/renderer/src/components/scheduler-gauges.test.tsx
+  s_becbf8f5d1aa26::t_67b59c124ee7c5 1-42,53
+  s_becbf8f5d1aa26::t_456da817205797 43-52
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_becbf8f5d1aa26::t_9e9aa0e671974f 77-78,81
+  s_becbf8f5d1aa26::t_b217676e39c602 1
+  s_becbf8f5d1aa26::t_a2ea24fa87ff9f 76,79-80,82-83
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_becbf8f5d1aa26::t_f5f8bfe3bf76a3 6
+  s_becbf8f5d1aa26::t_46bb085954d2dd 23-29
+apps/desktop/src/renderer/src/components/engine-gate.tsx
+  s_becbf8f5d1aa26::t_19e706461f9ad3 14
+apps/desktop/src/renderer/src/features/engine-gate.ts
+  s_becbf8f5d1aa26::t_19e706461f9ad3 1
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_becbf8f5d1aa26::t_40f564f3ac01ce 8
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_becbf8f5d1aa26::t_40f564f3ac01ce 26
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_becbf8f5d1aa26::t_19e706461f9ad3 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "30a75b0b738694bf94a75c4ed77e049311b20807",
+  "prompts": {},
+  "sessions": {
+    "s_becbf8f5d1aa26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cd22bf-31da-4539-a57f-fccc478d3daf",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
