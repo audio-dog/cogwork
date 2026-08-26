@@ -1,0 +1,145 @@
+apps/desktop/src/renderer/src/routes/settings/general.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-6
+apps/desktop/src/renderer/src/features/customize-facets.test.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-33
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 21,26,82-88,91,103-105,112,116-117,120-124,126-129,145-147,198-199
+  s_becbf8f5d1aa26::t_ec637b85f12d7d 200
+apps/desktop/src/renderer/src/components/customize-empty.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-84
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 24-31,45-53,59-63
+apps/desktop/src/renderer/src/features/customize-facets.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-29
+apps/desktop/src/renderer/src/features/use-settings-route.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-2,4-7
+apps/desktop/src/renderer/src/routes/settings/appearance.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-6
+apps/desktop/src/renderer/src/routes/_app/customize/plugin.$pluginId.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-22
+apps/desktop/src/renderer/src/store/configuration-draft.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-16
+apps/desktop/src/renderer/src/components/contribution-file-row.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-46
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-171
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-69
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 2,5-13,16-19,21-23,71,86-94
+apps/desktop/src/renderer/src/components/mcp-server-row.test.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-52
+apps/desktop/src/renderer/src/routes/settings/route.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 4,7-11,13-18,23,32-34
+apps/desktop/src/renderer/src/features/plugins-view.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-54
+apps/desktop/src/renderer/src/components/plugin-list-rows.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-57
+packages/ui/src/components/alert-dialog.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-155
+apps/desktop/src/renderer/src/routes/settings/$.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-8
+apps/desktop/src/renderer/src/components/settings-general.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-28
+apps/desktop/src/renderer/src/routes/_app/customize/route.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-17
+apps/desktop/src/renderer/src/features/configuration-draft.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-46
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 15-17,19-25,41-55,61-73,76-96,101-107,109-111,114-119,122-124,130-136,139-141,145-158,160-171,176-182,185-187,218-238,246-271,274-294,298-312,314-316,321-323,332-335,340-343
+apps/desktop/src/renderer/src/components/settings-engine.tsx
+  s_becbf8f5d1aa26::t_24219912de6e77 3
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-2,4-56
+apps/desktop/src/renderer/src/components/customize-facet-view.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-181
+apps/desktop/src/renderer/src/features/configuration-icons.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-28
+apps/desktop/src/renderer/src/routes/_app/workflows.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-23
+apps/desktop/src/renderer/src/components/customize-list.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-154
+apps/desktop/src/renderer/src/components/plugins-facet.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-66
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-189
+apps/desktop/src/renderer/src/routes/settings/index.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 5
+apps/desktop/src/renderer/src/components/render-trigger.test.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-52
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-230
+packages/ui/src/components/dialog.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-133
+packages/ui/src/components/tabs.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-72
+apps/desktop/src/renderer/src/features/configuration-draft.test.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-87
+apps/desktop/src/renderer/src/components/customize-list.test.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-58
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-65
+apps/desktop/src/renderer/src/components/customize-empty.test.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-67
+apps/desktop/src/renderer/src/features/configuration-resolve.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-104
+apps/desktop/src/renderer/src/components/file-surface.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-72
+apps/desktop/src/renderer/src/routes/_app/customize/index.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-8
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 18-26,46-53,69-87,113,139-140,166-173
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-60
+apps/desktop/src/renderer/src/components/settings-appearance.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-84
+apps/desktop/src/renderer/src/components/mcp-server-row.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-68
+apps/desktop/src/renderer/src/features/settings-catalog.test.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 2-8,53-62
+apps/desktop/src/renderer/src/features/customize-places.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-164
+apps/desktop/src/renderer/src/routes/settings/engine.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-6
+apps/desktop/src/renderer/src/components/customize-filter.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-50
+packages/ui/src/components/select.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-183
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-196
+apps/desktop/src/renderer/src/components/contribution.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-188
+apps/desktop/src/renderer/src/components/mcp-configure-dialog.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-203
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-439
+apps/desktop/src/renderer/src/routes/_app/customize/$facet.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-30
+apps/desktop/src/renderer/src/routes/_app/connections.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-23
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 8,141-143,152
+apps/desktop/src/renderer/src/components/settings-parts.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-150
+apps/desktop/src/renderer/src/store/right-panel-restore.test.ts
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-66
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 1-257
+apps/desktop/src/renderer/src/components/settings-sidebar.tsx
+  s_becbf8f5d1aa26::t_73f3e978a7e112 20,25,29,31,37,39,88,93-94,96,136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "c59055e0381fed1a74a399e08e59b0ae347b471d",
+  "prompts": {},
+  "sessions": {
+    "s_becbf8f5d1aa26": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37cd22bf-31da-4539-a57f-fccc478d3daf",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
