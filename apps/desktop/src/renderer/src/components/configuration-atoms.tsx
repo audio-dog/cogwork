@@ -28,9 +28,6 @@ import {
   diagnosticLabels,
   type McpReadiness,
   type ScopeKind,
-  type ScopeRef,
-  scopeLabels,
-  type Workspace,
 } from "../features/configuration-model";
 
 export const kindIcons: Record<ContributionKind, ComponentType> = {
@@ -47,17 +44,6 @@ export const scopeIcons: Record<ScopeKind, ComponentType> = {
   "workspace-input": RiGitRepositoryLine,
   "private-overlay": RiFolderLine,
 };
-
-/**
- * A Scope instance in words. The workspace Scopes name the workspace *and* its checkout path,
- * because two workspaces may share one git remote and would otherwise read identically.
- */
-export function describeScope(scope: ScopeRef, workspaces: readonly Workspace[]): string {
-  if (scope.workspaceId === undefined) return scopeLabels[scope.kind];
-  const workspace = workspaces.find((candidate) => candidate.id === scope.workspaceId);
-  if (!workspace) return `${scopeLabels[scope.kind]} — unknown workspace`;
-  return `${scopeLabels[scope.kind]} · ${workspace.name}`;
-}
 
 export function AuthorityBadge({ authority }: { authority: Authority }) {
   const variant = authority._tag === "plugin" ? "secondary" : "outline";

@@ -25,13 +25,6 @@ export const scopeLabels: Record<ScopeKind, string> = {
   "private-overlay": "Private workspace overlay",
 };
 
-/** The short form, for a filter control that has no room for the full name. */
-export const scopeShortLabels: Record<ScopeKind, string> = {
-  "runtime-host": "This machine",
-  "workspace-input": "Repo",
-  "private-overlay": "Yours, here",
-};
-
 /**
  * Product copy, kept separate from the glossary names above on purpose.
  *

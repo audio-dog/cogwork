@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { scopeKey } from "../features/configuration-model";
+import { scopeKey } from "./configuration-model";
 import {
   clankerWorkspaceId,
   cogworkWorkspaceId,
   contributionById,
   placeholderConfiguration,
-} from "../features/configuration-placeholder";
+} from "./configuration-placeholder";
 import {
   allPlaceKeys,
   allPlaces,

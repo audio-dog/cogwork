@@ -44,7 +44,7 @@ import {
 } from "./configuration-atoms";
 
 /** Where a contribution's file sits. Shown on every row, because it is the axis being filtered. */
-export function DefinedAtBadge({ contribution }: { contribution: Contribution }) {
+function DefinedAtBadge({ contribution }: { contribution: Contribution }) {
   const Icon = scopeIcons[contribution.definedAt];
   // Several workspaces can be on screen at once now, so the badge names the one it belongs to.
   const workspaceName = placeholderConfiguration.workspaces.find(

@@ -820,15 +820,3 @@ export const placeholderConfiguration: ConfigurationPicture = {
 export function contributionById(id: string): Contribution | undefined {
   return placeholderConfiguration.contributions.find((contribution) => contribution.id === id);
 }
-
-export function pluginById(pluginId: string): InstalledPlugin | undefined {
-  return placeholderConfiguration.plugins.find((plugin) => plugin.record.pluginId === pluginId);
-}
-
-export function operationById(operationId: string): Operation | undefined {
-  return placeholderConfiguration.operations.find((operation) => operation.id === operationId);
-}
-
-export function workspaceById(workspaceId: WorkspaceId): Workspace | undefined {
-  return placeholderConfiguration.workspaces.find((workspace) => workspace.id === workspaceId);
-}

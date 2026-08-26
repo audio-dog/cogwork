@@ -14,9 +14,9 @@ import {
   type ScopeRef,
   scopeCopy,
   scopeKey,
-} from "../features/configuration-model";
-import { placeholderConfiguration } from "../features/configuration-placeholder";
-import { definedScope } from "../features/configuration-resolve";
+} from "./configuration-model";
+import { placeholderConfiguration } from "./configuration-placeholder";
+import { definedScope } from "./configuration-resolve";
 
 export type Facet = "plugins" | ContributionKind;
 

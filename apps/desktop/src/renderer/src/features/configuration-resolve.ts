@@ -16,7 +16,6 @@ import {
   type ScopeKind,
   type ScopeRef,
   type SettingLevel,
-  sameScope,
   scopeOrder,
   settingLevels,
   type WorkspaceId,
@@ -94,15 +93,6 @@ export function resolveEnablement(contribution: Contribution, view: ViewContext)
   return { effective: winner?.value, winner, shadowed, dropped, ladder };
 }
 
-/**
- * A repository may **offer** an executable contribution but never enable one. This is the honest
- * row #134 asked for: *this repository offers this Hook. It is off. You can turn it on.*
- */
-export function isOfferedNotEnabled(contribution: Contribution, resolved: ResolvedEnablement): boolean {
-  const executable = contribution.kind === "hook" || contribution.kind === "mcp-server";
-  return executable && contribution.authority._tag !== "engine" && resolved.effective !== true;
-}
-
 export interface ResolvedOperationSetting {
   readonly key: OperationSettingKey;
   readonly value?: string;
@@ -145,11 +135,6 @@ export function resolveOperationSetting(
     locked: operation.locked.includes(key),
     refusedBy: candidates.find((row) => row.refusedBy !== undefined)?.refusedBy,
   };
-}
-
-/** The value written at exactly one Scope, or `undefined` when that cell is unset. */
-export function rowAt(contribution: Contribution, scope: ScopeRef): EnablementRow | undefined {
-  return contribution.rows.find((row) => sameScope(row.scope, scope));
 }
 
 /** Whether a cell may legally hold a value at all. An illegal cell is not an unset cell. */
