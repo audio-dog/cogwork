@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_05fbe5432690d4::t_a902235b1979ca 27,145,150-151,162-182,185
+apps/desktop/src/renderer/src/components/customize-page.tsx
+  s_05fbe5432690d4::t_a902235b1979ca 16,34-35,49-51,110-112
+  s_05fbe5432690d4::t_646512b2285350 36-45,47-48,53-63,65,68,70-71,73-87,89-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "1e6db3bc5d21382560b8744c857cb4e2da7b428d",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
