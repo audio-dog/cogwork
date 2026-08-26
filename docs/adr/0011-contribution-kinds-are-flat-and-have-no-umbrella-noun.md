@@ -105,8 +105,8 @@ the env-var name a Plugin's MCP server uses today. The field stays present and u
 own reasoning; the *rule* is what is decided, and it holds either way.
 
 The same ticket confirms that Connections are engine-owned, as this ADR's rejected-options section
-already claimed, and derives a Plugin's pairing with a Connection from this very field rather than
-adding another. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
+already claimed, and derives which Plugin requires a given Connection from this very field rather
+than adding another. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
 
 ## Amendment (2026-08-26) — `local` splits into three, one per Authoring tree
 

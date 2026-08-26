@@ -13,18 +13,16 @@ Meanwhile the shipped surface has no contract at all. Three authorities claim th
 
 ## Decision
 
-### Thirteen acts, five subjects, and the list is closed
+### Nine acts, five subjects, and the list is closed
 
 | Subject | Acts |
 |---|---|
-| A Plugin, keyed by `pluginId` | install · stage an update · accept a staged update · decline a staged update · uninstall · refresh the Plugin catalog |
+| A Plugin, keyed by `pluginId` | install · uninstall |
 | `(contribution identity, Scope)` | set or clear a contribution's on / off |
 | `(Operation setting, level, Scope)` | set or clear an Operation setting |
 | A workspace | register · deregister · re-bind the checkout path |
 | The daemon's runtime limits | set a limit |
 | The Control store | restore the pre-migration copy |
-
-Staging and accepting are two commands rather than one flag: a resolved identity comes into existence only at staging, so an accept that names it is necessarily the second round trip. That pair is what makes an accept attributable without an interactive prompt, and one pair serves both clients.
 
 Three things are deliberately absent. **`pin`** has a verb and a field and no semantics — [#203](https://github.com/colonylabs/cogwork/issues/203) owns it, and giving it a command here would design a surface for a concept nobody has defined. **Connection** is marked provisional in the glossary with an *Avoid* line naming scoping, binding, granting and resolving; this contract specifies no Connection act. **Minting a Scope identity** is not an act: `PrincipalId` is a constant, `HostId` is minted at the store's first open, `WorkspaceId` is minted by register, and the overlay key is a pair of two identities that already exist. Four candidate commands, zero survivors.
 
@@ -114,3 +112,35 @@ a control for declining updates to a separately-installed bundle has nothing to 
 
 The act list is unchanged — the absence was already correct, and it stops being provisional. The
 "four candidates, zero survivors" tally is unaffected: `pin` was never a survivor.
+
+
+## Amendment (2026-08-26) — the four update acts are struck, leaving install and uninstall
+
+[#205](https://github.com/colonylabs/cogwork/issues/205) struck the Plugin catalog fetch and the
+staged-update ceremony. See ADR
+[0014](./0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md)'s 2026-08-26
+amendment.
+
+Every Plugin and the catalog document ship with Cogwork, so nothing is fetched and an app update is
+the only thing that changes a Plugin's files. Four of this contract's six Plugin acts had nothing to
+act on and are deleted: **stage an update**, **accept a staged update**, **decline a staged update**,
+and **refresh the Plugin catalog**. The subject keeps **install** and **uninstall**, which is ADR
+0014's own "install and uninstall are the whole of it" — a sentence this act list had contradicted
+since the day it was written.
+
+The count in the Decision heading falls from thirteen to nine, and to twelve with the three Connection
+acts the 2026-08-25 amendment above owes. The `pin` amendment is unaffected: it was never a survivor,
+and its argument — "a control for declining updates to a separately-installed bundle has nothing to
+act on" — is the argument that removes these four.
+
+This ADR's **last write wins** rule now holds without qualification. The one case that needed more —
+an accept naming the resolved identity a stage had just created — no longer exists, so the **Install
+record**'s `revision` field goes with it: it was there for stale-write detection across that two-command
+round trip, and `install` and `uninstall` are each one command.
+[#135](https://github.com/colonylabs/cogwork/issues/135)'s handoff to this ADR — "how an update path
+expresses an attributable accept" — is answered by there being no update path. An app update needs no
+attribution, because updating the app is the act.
+
+An app update lands at **load**: Cogwork re-reads disk at Run assembly, so the next Run gets what is
+there and a Run in flight keeps what it was given. That is a rule, not a command, and the act list
+stays closed.

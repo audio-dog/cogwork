@@ -169,8 +169,7 @@ than a new decision.
 - `SchedulerStats.perWorkspace` stops being dishonest the day the loader dies, which is the symptom
   ADR 0016 flagged against this ticket by name.
 - ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md) is undisturbed. The
-  paired install it describes — establishing a Connection installs the one first-party Plugin that
-  requires it — is an install of fetched bytes, so it lands in the provision root and never in an
-  Authoring tree. A Connection has no Scope and therefore no tree.
+  install it describes — establishing a Connection installs the Plugin that requires it — puts bundle
+  bytes in the provision root and never in an Authoring tree. A Connection has no Scope and therefore no tree.
 - `sync` gains a `~/.agents/rules/` target, or the two files are placed by hand. Either way `sync`
   stays the only writer to `~/.agents/`; Cogwork reads that tree and never writes it.

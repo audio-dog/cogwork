@@ -98,8 +98,8 @@ GitHub a bundle with an empty manifest whose provision path runs for zero files.
   reason **for** the surface, not against it: an Engine port's Connection has no Plugin over it, so
   Plugin setup can never be its home. ADR 0014 could not weigh this, having excluded Connection
   behaviour.
-- **No new noun.** The page lists Connections. A card is a view of one Connection with its paired
-  Plugin under it. No *Integration* container is minted — a container invites versioning, scoping, and
+- **No new noun.** The page lists Connections. A card is a view of one Connection with the Plugin
+  that requires it under it. No *Integration* container is minted — a container invites versioning, scoping, and
   uninstall questions that a view does not have.
 - **Establishing is app-level; binding stays per-workspace.** The page makes Linear available to the
   machine. A workspace still names its issue tracker and references the Connection by id, because one
@@ -111,31 +111,30 @@ GitHub a bundle with an empty manifest whose provision path runs for zero files.
 - **A removal with a live binding is allowed and leaves the binding *dangling***, with a warning
   naming the workspaces. Reconcile reports the workspace and dispatches nothing for it. This is ADR
   0014's existing shape for committed Workspace input values.
-- **Install is never blocked on a Connection.** Installing a paired Plugin from Customize proceeds and
+- **Install is never blocked on a Connection.** Installing a Plugin that requires a Connection proceeds and
   offers the login in the same flow. If the person abandons the browser, **the install stands** and
   the row reads *Connection needed*. A rollback would need a pending state and a timeout — a rule a
   person must learn and cannot see — and would delete a bundle ADR 0014 already provisioned
   atomically. Codex does exactly this: a declared-but-unestablished connector is `is_accessible:
   false` with an `install_url`, and the plugin install is not blocked.
-- **Establishing a Connection installs its paired Plugin and turns its contributions on.** This
-  *amends ADR 0014*'s "after install every contribution is off", narrowly: only a paired install
-  triggered by establishment, and then for **every** contribution, not a per-kind exception. A person
-  who connects Linear and then has to find and flip an MCP server has been handed a setup step
-  disguised as a settings screen. Both entry paths converge on the same state. A Plugin with no
-  Connection still installs with everything off.
-- The paired install is a **one-time act, not an invariant.** "Linear as the tracker, without the
-  Linear tools" stays reachable, because an MCP server that is on costs context on every Run.
-  Establishing again after a removal runs the paired install again, and needs no memory of an earlier
-  uninstall.
+- **Establishing a Connection installs the Plugin that requires it.** A person who connects Linear and
+  then has to find and flip an MCP server has been handed a setup step disguised as a settings screen.
+  Both entry paths converge on the same state. This once *amended ADR 0014*'s "after install every
+  contribution is off"; [#205](https://github.com/colonylabs/cogwork/issues/205) has since deleted that
+  sentence outright, so the two paths converge with no exception to state — see the 2026-08-26
+  amendment below.
+- Installing on establishment is a **one-time act, not an invariant.** "Linear as the tracker, without
+  the Linear tools" stays reachable, because an MCP server that is on costs context on every Run.
+  Establishing again after a removal installs again, and needs no memory of an earlier uninstall.
 
-### The pairing
+### One Connection, one Plugin
 
-**The pairing is derived from the Plugin's existing Connection-requirements field, and one Connection
-pairs with at most one first-party Plugin.** No new field, no manifest flag, no engine pairing table.
+**Which Plugin a Connection brings with it is derived from the Plugin's existing
+Connection-requirements field, and one Connection is required by at most one first-party Plugin.** No new field, no manifest flag, no engine lookup table.
 
 The one-to-one rule is what makes derivation exact. Without it, *requires* (a hard dependency) and
 *pairs with* (a recommendation) are two relations sharing one field, the auto-install set is open to
-every future Plugin naming `linear`, and three paired Plugins have no primary. With it, "the Plugin
+every future Plugin naming `linear`, and three Plugins requiring it have no primary. With it, "the Plugin
 that requires Linear" and "the Linear Plugin" are the same thing.
 
 Two first-party Plugins requiring one Connection is knowable with the manifests in hand, so it is a
@@ -167,7 +166,7 @@ installs. That is a rule change with no data migration, precisely because no fie
 - **Give a Connection a Scope ladder.** Rejected as ADR 0013 already implied, and rejected again on
   the same trust reason.
 - **A field on the Connection naming its Plugin.** Rejected: two statements of one relation can
-  disagree, the field is engine-authored so a new pairing needs a release rather than a catalog
+  disagree, the field is engine-authored so a new one needs a release rather than a catalog
   update, and it is exactly the table that rots if Plugins ever come from outside.
 - **A manifest opt-in flag separating *requires* from *pairs with*.** Rejected *for now*: under
   one-to-one the flag has one possible value and no caller, and this project refuses machinery with no
@@ -175,13 +174,15 @@ installs. That is a rule change with no data migration, precisely because no fie
   reopen trigger above is the flag's cue.
 - **Block install until the Connection exists.** Rejected: without the Connection the Plugin does
   nothing *and* the Engine does nothing, so a block repairs nothing and only moves the wall. It also
-  makes install order a rule, and stops an offline person installing anything paired.
+  makes install order a rule, and stops an offline person installing anything that requires a
+  Connection.
 
 ## Consequences
 
 - The glossary's **Connection** entry stops being provisional and loses its *Avoid* line about
   scoping. **Connection readiness** joins it as a term.
-- **Connections joins Plugins as a surface that may write membership**, through the paired install.
+- **Connections joins Plugins as a surface that may write membership**, by installing the Plugin
+  that requires the Connection.
   Customize's contribution rows still may never write membership or credential state — that rule was
   about the surface that renders authority, and it is unchanged.
 - The **Control store** gains a Connection record; ADR 0015's closed field list widens by one table.
@@ -197,6 +198,31 @@ installs. That is a rule change with no data migration, precisely because no fie
   crate, `AppDeclaration { name, connector_id, category }` declaring connectors by id, and
   `plugin_display_names_by_connector_id` carrying the many-plugins-one-connector relation we chose.
   We deviate on one point deliberately: Codex permits many plugins per connector, and we enforce
-  one-to-one so the pairing can be derived.
+  one-to-one so the Plugin can be derived.
 
 Full reasoning: [#172](https://github.com/colonylabs/cogwork/issues/172).
+
+
+## Amendment (2026-08-26) — "paired install" is struck as a term, and the arrow is confirmed
+
+[#205](https://github.com/colonylabs/cogwork/issues/205) struck **paired install**. The word "paired"
+never said what was paired with what, so it needed explaining at every use, and it named an act nobody
+refers to twice. No replacement noun is minted. The behaviour is written as the sentence it always
+was: **establishing a Connection installs the Plugin that requires it**, and at most one first-party
+Plugin requires a given Connection. This follows the same disposition that retired `capability`,
+refused a `Readiness` umbrella, and struck `pin`.
+
+Two substantive corrections come with it.
+
+**The exception this ADR amended into ADR 0014 no longer exists.** This ADR narrowed "after install
+every contribution is off" to leave establishment as the one case that turned contributions on. #205
+deleted the original sentence: after **any** install a Plugin's MCP server is on, and its Skills,
+Rules, Commands and Subagents are on disk and therefore active. Establishment and a plain install now
+reach the same state with no exception to state, which is what this ADR wanted and could not have.
+
+**Removal cascades down the arrow, never up — confirmed, and the Plugins surface says so.** #205 put
+this to the maintainer directly, because uninstall was proposed to remove the Connection too. It does
+not. A Connection may also authenticate an Engine port with no Plugin over it, so uninstalling a tools
+bundle must never stop the daemon reconciling. Uninstall shows a notice naming the Connection as still
+established, and does **not** offer to remove it: **Connections** stays the only surface that writes
+Connection state.
