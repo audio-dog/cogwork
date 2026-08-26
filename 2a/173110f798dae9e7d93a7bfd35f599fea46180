@@ -1,0 +1,43 @@
+apps/desktop/src/renderer/src/components/contribution-row.tsx
+  s_05fbe5432690d4::t_e73053ec3c35b7 3-9
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_05fbe5432690d4::t_28e55e8ab5cf69 98-102,104-111,114-117,122-125
+  s_05fbe5432690d4::t_b43d309457be35 126
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_05fbe5432690d4::t_6775e6dbfd0910 222-226
+  s_05fbe5432690d4::t_b9c3e76b76236c 2-8,31,37-49,69,80-82,86-100,103-109,156,185,188,231
+apps/desktop/src/renderer/src/components/customize-page.tsx
+  s_05fbe5432690d4::t_e73053ec3c35b7 131,133
+  s_05fbe5432690d4::t_a0279aa46cc637 21
+apps/desktop/src/renderer/src/features/configuration-draft.test.ts
+  s_05fbe5432690d4::t_b9c3e76b76236c 28,37-38,54,70,76,79,83
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_05fbe5432690d4::t_1ca410167aa8a9 16,60-69
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_05fbe5432690d4::t_56a83bccc8a784 68-77,651-655,658
+  s_05fbe5432690d4::t_848582c8172155 88-89,103-104,115-116,168-169,181-182,193-194,208-209,220-221,284-285,298-299,312-313,325-326,662-663
+  s_05fbe5432690d4::t_1ca410167aa8a9 25
+apps/desktop/src/renderer/src/components/customize-list.tsx
+  s_05fbe5432690d4::t_1ca410167aa8a9 117-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "2a173110f798dae9e7d93a7bfd35f599fea46180",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_05fbe5432690d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e339a41d-e77e-4d3e-8a0e-7a24395f1371",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
