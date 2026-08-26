@@ -23,9 +23,9 @@ import { RiErrorWarningLine } from "@remixicon/react";
 import { draftCellAt, withDraft } from "../features/configuration-draft";
 import {
   type Contribution,
+  scopeCopy,
   scopeLabels,
   scopeOriginLabels,
-  scopeShortLabels,
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 import {
@@ -55,7 +55,7 @@ export function DefinedAtBadge({ contribution }: { contribution: Contribution })
       <TooltipTrigger render={<Badge variant="outline" className="cursor-help" />}>
         <Icon />
         {workspaceName ? `${workspaceName} · ` : ""}
-        {scopeShortLabels[contribution.definedAt]}
+        {scopeCopy[contribution.definedAt].name}
       </TooltipTrigger>
       <TooltipContent className="max-w-80">
         <span className="font-medium">{scopeLabels[contribution.definedAt]}</span> — this file lives{" "}

@@ -12,6 +12,7 @@ import {
   type ContributionKind,
   type ScopeKind,
   type ScopeRef,
+  scopeCopy,
   scopeKey,
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
@@ -72,16 +73,28 @@ export function toggle(places: readonly string[], key: string): readonly string[
   return places.includes(key) ? places.filter((entry) => entry !== key) : [...places, key];
 }
 
-/** Toggling a whole column of the matrix: every workspace's Repo, or every workspace's overlay. */
-export function toggleColumn(places: readonly string[], kind: ScopeKind): readonly string[] {
-  const column = workspaces.map((workspace) => scopeKey({ kind, workspaceId: workspace.id }));
-  const allOn = column.every((key) => places.includes(key));
-  return allOn ? places.filter((key) => !column.includes(key)) : [...new Set([...places, ...column])];
+/**
+ * What the trigger says: the scope of what is on screen, named the way Cursor names it — the first
+ * selected group, then a `+n` for the rest.
+ *
+ * Groups, not places: "cogwork" covers both of that workspace's places, because a person thinks in
+ * workspaces and reads a count of them, not a count of Scopes.
+ */
+export function summarize(places: readonly string[]): string {
+  if (places.length === 0) return "Nothing selected";
+  if (places.length === allPlaceKeys.length) return "Everywhere";
+
+  const groups: string[] = [];
+  if (places.includes(scopeKey(machinePlace))) groups.push(scopeCopy["runtime-host"].name);
+  for (const workspace of workspaces) {
+    const keys = workspaceScopeKinds.map((kind) => scopeKey({ kind, workspaceId: workspace.id }));
+    if (keys.some((key) => places.includes(key))) groups.push(workspace.name);
+  }
+
+  const [first, ...rest] = groups;
+  if (first === undefined) return "Nothing selected";
+  return rest.length === 0 ? first : `${first} +${rest.length}`;
 }
 
-export function summarize(places: readonly string[], facet: Facet): string {
-  if (places.length === 0) return "Nowhere";
-  if (places.length === allPlaceKeys.length) return "Everywhere";
-  const count = visibleContributions(facet, places, "").length;
-  return `${places.length} places · ${count} shown`;
-}
+/** How many places exist, for a menu footer that reports the selection honestly. */
+export const placeCount = allPlaceKeys.length;

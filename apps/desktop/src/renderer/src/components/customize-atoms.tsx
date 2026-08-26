@@ -1,7 +1,7 @@
-// PROTOTYPE — the parts of Customize every split-dropdown variant holds constant.
+// PROTOTYPE — the parts of Customize every menu variant holds constant.
 //
-// The page shell, the kind pills and the outer split pill are identical in all three variants, so
-// the only thing that differs on screen is the menu body. That is what is being compared.
+// The page shell, the kind pills and the trigger are identical in all three variants, so the only
+// thing that differs on screen is the menu body. That is what is being compared.
 
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
@@ -15,59 +15,41 @@ import type { ReactNode } from "react";
 import { contributionKinds, kindLabelsPlural } from "../features/configuration-model";
 import { scopeIcons } from "./configuration-atoms";
 import { PluginsPanel } from "./configuration-plugins-panel";
-import { allPlaceKeys, type Facet, kindCount, summarize, visibleContributions } from "./customize-places";
+import { type Facet, kindCount, summarize, visibleContributions } from "./customize-places";
 import { CustomizeRow } from "./customize-row";
 
 const MachineIcon = scopeIcons["runtime-host"];
 
 /**
- * The split pill: a summary segment and a caret segment, divided. Clicking the summary is the
- * escape hatch back to everything, so no menu design can trap a person in an empty list.
+ * The trigger. One button, and the whole of it opens the menu.
+ *
+ * Two things keep the menu still. The button *is* `Popover.Trigger`, so the anchor's leading edge
+ * never moves — previously the trigger was only the caret half of a split button, so a longer
+ * summary pushed the caret right and dragged the popup with it. And the label has a fixed width and
+ * truncates, so a change in the selection cannot resize the button and shove the kind pills along
+ * with it.
  */
-export function SplitPlacePill({
+export function PlacePickerButton({
   places,
-  facet,
-  onSetAll,
-  menuWidth = "26rem",
+  menuWidth = "38rem",
   children,
 }: {
   places: readonly string[];
-  facet: Facet;
-  onSetAll: (next: readonly string[]) => void;
   menuWidth?: string;
   children: ReactNode;
 }) {
-  const everywhere = places.length === allPlaceKeys.length;
   return (
-    <div className="flex items-stretch rounded-full border border-input">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="rounded-s-full rounded-e-none border-0 pe-2"
-        onClick={() => onSetAll(everywhere ? [] : allPlaceKeys)}
-      >
-        <MachineIcon />
-        <span className="max-w-56 truncate">{summarize(places, facet)}</span>
-      </Button>
-      <Separator orientation="vertical" />
-      <Popover>
-        <PopoverTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="rounded-s-none rounded-e-full border-0 px-1.5"
-              aria-label="Choose where to look"
-            />
-          }
-        >
-          <RiArrowDownSLine />
-        </PopoverTrigger>
-        <PopoverContent align="start" className="p-0" style={{ width: menuWidth }}>
-          {children}
-        </PopoverContent>
-      </Popover>
-    </div>
+    <Popover>
+      <PopoverTrigger render={<Button variant="outline" size="sm" className="rounded-full" />}>
+        <MachineIcon data-icon="inline-start" />
+        <span className="w-32 truncate text-start">{summarize(places)}</span>
+        <RiArrowDownSLine data-icon="inline-end" />
+      </PopoverTrigger>
+      {/* `align="start"` pins the popup's leading edge to the button's, which does not move. */}
+      <PopoverContent align="start" className="p-0" style={{ width: menuWidth }}>
+        {children}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -123,7 +105,9 @@ export function CustomizePageShell({
             onClick={() => onFacet(kind)}
           >
             {kindLabelsPlural[kind]}
-            <Badge variant="ghost" className="ms-1 px-1">
+            {/* Fixed width: the count changes with the selection, and a resizing pill moves its
+                neighbours. */}
+            <Badge variant="ghost" className="ms-1 w-4 justify-center px-0 tabular-nums">
               {kindCount(kind, places)}
             </Badge>
           </Button>
@@ -138,8 +122,8 @@ export function CustomizePageShell({
             <EmptyTitle>Nothing here</EmptyTitle>
             <EmptyDescription>
               {places.length === 0
-                ? "No place is checked, so nothing can show."
-                : "Nothing of this kind lives in the checked places."}
+                ? "No place is selected, so nothing can show."
+                : "Nothing of this kind lives in the selected places."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

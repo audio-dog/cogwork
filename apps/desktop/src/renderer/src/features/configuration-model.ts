@@ -32,32 +32,26 @@ export const scopeShortLabels: Record<ScopeKind, string> = {
   "private-overlay": "Yours, here",
 };
 
-/** What each Scope's identity is minted from (#134). Rendered so a person can tell two clones apart. */
-export const scopeIdentity: Record<ScopeKind, string> = {
-  "runtime-host": "a HostId, minted once and kept in this machine's ~/.cogwork",
-  "workspace-input": "a WorkspaceId, minted at registration",
-  "private-overlay": "the pair (Principal, WorkspaceId)",
-};
-
 /**
- * One line on what a Scope is, shown beside its filter control.
+ * Product copy, kept separate from the glossary names above on purpose.
  *
- * These say **where a thing lives**, not which value wins. A contribution's file sits in exactly
- * one of these places; the levels are locations, not a cascade. ADR 0013's `override-scalar`
- * direction still exists, but it only ever applies to one identity carrying settings at more than
- * one Scope — an exception, and rendered as one.
+ * `scopeLabels` holds the terms the domain owns and is what a diagnostic, a provenance line or a
+ * tooltip should say, because those have to be precise. This is what a person reads in a menu.
+ *
+ * **`Runtime host` shows as "User".** That is the maintainer's call, matching Cursor. It is worth
+ * recording rather than burying: the glossary's `Settings profile` entry lists "User settings" on
+ * its *Avoid* line, and this map collapsed Settings profile into Runtime host — so the avoided word
+ * is now the chosen label for the Scope that absorbed it. A `/domain-modeling` act should settle
+ * whether the glossary follows the copy or the copy keeps its distance.
+ *
+ * "Shared" and "Private" are deliberately relative: in the menu they sit nested under a named
+ * workspace, so they need no noun of their own — and inventing "Project" would have collided with
+ * `Workspace`, which the glossary already owns.
  */
-export const scopeDescriptions: Record<ScopeKind, string> = {
-  "runtime-host": "Installed on this machine, and available in every workspace on it.",
-  "workspace-input": "Committed to the repository, so everyone who clones it gets the same files.",
-  "private-overlay": "Yours, for this workspace only, and never committed.",
-};
-
-/** The terse form, for a menu row where a full sentence would be truncated. */
-export const scopeHints: Record<ScopeKind, string> = {
-  "runtime-host": "Available in every workspace",
-  "workspace-input": "Committed, shared with everyone",
-  "private-overlay": "Not committed, only yours",
+export const scopeCopy: Record<ScopeKind, { readonly name: string; readonly hint: string }> = {
+  "runtime-host": { name: "User", hint: "Available in every workspace on this machine" },
+  "workspace-input": { name: "Shared", hint: "Committed, so everyone who clones the repo gets it" },
+  "private-overlay": { name: "Private", hint: "Only yours, and never committed" },
 };
 
 /** Phrased as a place, for a row that says where one contribution came from. */

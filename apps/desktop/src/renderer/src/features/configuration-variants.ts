@@ -25,21 +25,21 @@ export interface VariantDefinition {
 export const variants: readonly VariantDefinition[] = [
   {
     key: "A",
-    name: "Matrix",
+    name: "Footer bar",
     claim:
-      "One row per workspace and two aligned checkbox columns. Nothing is nested, so nothing needs revealing — and the column headings toggle every workspace's repo, or every private overlay, at once.",
+      "Two panes with a bottom edge. A footer spans both, bounding the right pane's leftover space and housing select all and select none — out of the trigger, where they were doing nothing.",
   },
   {
     key: "B",
-    name: "Two panes",
+    name: "Peer list",
     claim:
-      "Workspaces on the left, that workspace's places on the right. Browsing costs no clicks — the pointer alone reveals each one — and it is the only shape that still works at twenty workspaces.",
+      "User stops being a header and becomes the first row, same shape as every workspace, so the panes stop looking like two designs. Each place is a card that grows to fill the pane.",
   },
   {
     key: "C",
-    name: "Segmented rows",
+    name: "Preview",
     claim:
-      "One row per workspace, its two places as chips on the right carrying their own state and count. The most compact and the least abstract, at the cost of any whole-column action.",
+      "The empty space gets filled with information instead of layout: under each place sits what actually lives there. A count says how many; this says which.",
   },
 ];
 
