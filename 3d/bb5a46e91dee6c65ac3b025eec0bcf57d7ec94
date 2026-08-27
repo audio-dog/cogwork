@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_da1645ec2131aa::t_54cbfb40ab7e3d 23,27-33
+  s_da1645ec2131aa::t_5486ba1710313e 1-22,24-26,34-41
+apps/desktop/src/renderer/src/features/daemon-limit-state.ts
+  s_da1645ec2131aa::t_7dbb2da658bc03 11
+  s_da1645ec2131aa::t_4c470f5ad996a5 1-10,12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3dbb5a46e91dee6c65ac3b025eec0bcf57d7ec94",
+  "prompts": {},
+  "sessions": {
+    "s_da1645ec2131aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0452c-a951-72f0-b260-588d724f47c1",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
