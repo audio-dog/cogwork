@@ -245,9 +245,7 @@ export const webFetch = Effect.fn("Tools.webfetch")(function* (
   return { url: args.url, status: response.status, content };
 });
 
-export type ToolRunPromise = Effect.Success<
-  ReturnType<typeof FiberSet.makeRuntimePromise<HttpClient.HttpClient>>
->;
+type ToolRunPromise = Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<HttpClient.HttpClient>>>;
 
 const bindServer =
   <S extends Schema.Codec<unknown, unknown, never, never>>(

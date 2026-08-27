@@ -1,9 +1,11 @@
 import { RunId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Tracer from "effect/Tracer";
@@ -49,6 +51,38 @@ const makeTools = Effect.fn("owned-tools.test.makeTools")(function* (
   );
   return makeOwnedToolSet(sandbox, runPromise, profile);
 });
+
+interface SpanProbeService {
+  readonly record: (span: Tracer.NativeSpan) => void;
+  readonly find: (name: string) => Tracer.NativeSpan | undefined;
+}
+
+class SpanProbe extends Context.Service<SpanProbe, SpanProbeService>()(
+  "@cogwork/engine/tools/owned-tools.test/SpanProbe",
+) {
+  static readonly layer = Layer.sync(SpanProbe, () => {
+    const spans: Array<Tracer.NativeSpan> = [];
+    return {
+      record: (span) => {
+        spans.push(span);
+      },
+      find: (name) => spans.find((span) => span.name === name),
+    };
+  });
+
+  static readonly testLayer = Layer.effect(
+    Tracer.Tracer,
+    Effect.map(SpanProbe, (probe) =>
+      Tracer.make({
+        span: (options) => {
+          const span = new Tracer.NativeSpan(options);
+          probe.record(span);
+          return span;
+        },
+      }),
+    ),
+  ).pipe(Layer.provideMerge(SpanProbe.layer));
+}
 
 const hasAncestor = (span: Tracer.NativeSpan, ancestor: Tracer.NativeSpan): boolean =>
   Option.match(span.parent, {
@@ -177,12 +211,13 @@ describe("owned tools", () => {
       };
       const fiber = yield* Effect.forkScoped(
         Effect.scoped(
-          Effect.gen(function* () {
-            const tools = yield* makeTools(controlled);
-            const bash = tools.bash.execute;
-            if (bash === undefined) throw new Error("bash tool is missing a server executor");
-            yield* Effect.promise(() => Promise.resolve(bash({ command: "wait" })));
-          }),
+          makeTools(controlled).pipe(
+            Effect.flatMap((tools) => {
+              const bash = tools.bash.execute;
+              if (bash === undefined) return Effect.die("bash tool is missing a server executor");
+              return Effect.promise(() => Promise.resolve(bash({ command: "wait" })));
+            }),
+          ),
         ),
       );
       const control = yield* RunControl.RunControl;
@@ -197,28 +232,19 @@ describe("owned tools", () => {
 
   it.effect("tool handler spans stay under the run span", () =>
     Effect.gen(function* () {
-      const spans: Array<Tracer.NativeSpan> = [];
-      const tracer = Tracer.make({
-        span: (options) => {
-          const span = new Tracer.NativeSpan(options);
-          spans.push(span);
-          return span;
-        },
-      });
-      yield* Effect.gen(function* () {
-        const sandbox = yield* openSandbox();
-        const tools = yield* makeTools(sandbox);
-        const read = tools.read.execute;
-        if (read === undefined) throw new Error("read tool is missing a server executor");
-        yield* Effect.promise(() => Promise.resolve(read({ path: "seed.txt" })));
-      }).pipe(Effect.withSpan("run"), Effect.provideService(Tracer.Tracer, tracer), Effect.scoped);
+      const probe = yield* SpanProbe;
+      const sandbox = yield* openSandbox();
+      const tools = yield* makeTools(sandbox);
+      const read = tools.read.execute;
+      assert.isDefined(read);
+      yield* Effect.promise(() => Promise.resolve(read({ path: "seed.txt" })));
 
-      const runSpan = spans.find((span) => span.name === "run");
-      const toolSpan = spans.find((span) => span.name === "Tools.read");
+      const runSpan = probe.find("run");
+      const toolSpan = probe.find("Tools.read");
       assert.isDefined(runSpan);
       assert.isDefined(toolSpan);
       assert.isTrue(hasAncestor(toolSpan, runSpan));
-    }),
+    }).pipe(Effect.withSpan("run"), Effect.provide(SpanProbe.testLayer), Effect.scoped),
   );
 
   it.effect("globs files across the worktree", () =>
