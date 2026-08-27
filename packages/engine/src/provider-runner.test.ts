@@ -307,9 +307,7 @@ describe("defaultRunBudget", () => {
 describe("resolveContextLayers", () => {
   it.effect("returns the assembled layers on success", () =>
     Effect.gen(function* () {
-      const layers = yield* Effect.promise(() =>
-        resolveContextLayers(contextService([sampleLayer]), reqStub, []),
-      );
+      const layers = yield* resolveContextLayers(contextService([sampleLayer]), reqStub, []);
       assert.deepStrictEqual([...layers], [sampleLayer]);
     }),
   );
@@ -319,7 +317,7 @@ describe("resolveContextLayers", () => {
       const failing: ContextAssemblerService = {
         assemble: () => Effect.fail(new ContextAssemblerError({ skill: "implement-agent", message: "boom" })),
       };
-      const layers = yield* Effect.promise(() => resolveContextLayers(failing, reqStub, [sampleLayer]));
+      const layers = yield* resolveContextLayers(failing, reqStub, [sampleLayer]);
       assert.deepStrictEqual([...layers], [sampleLayer]);
     }),
   );
