@@ -2,7 +2,6 @@ import {
   IssueTrackerConfig,
   SourceControlConfig,
   WorkspaceConfig,
-  type WorkspaceFailureInfo,
   WorkspaceId,
   WorkspaceInput,
   type WorkspaceRegistration,
@@ -24,10 +23,15 @@ import {
   type ControlStoreStatus,
   controlStoreClientLayer,
 } from "./control-store";
-import { emptyRegistry, type RegisteredWorkspace, type RegistryState } from "./projector";
+import {
+  emptyRegistry,
+  type RegisteredWorkspace,
+  type RegisteredWorkspaceFailure,
+  type RegistryState,
+} from "./projector";
 
 export { emptyRegistry } from "./projector";
-export type { RegisteredWorkspace, RegistryState };
+export type { RegisteredWorkspace, RegisteredWorkspaceFailure, RegistryState };
 
 export interface WorkspaceRegistryService extends RegistryState {
   readonly refresh: Effect.Effect<RegistryState, WorkspaceRegistrationError>;
@@ -55,7 +59,7 @@ export interface WorkspaceManagementService {
 
 export type WorkspaceRegistrationChange =
   | { readonly _tag: "Registered"; readonly workspace: RegisteredWorkspace }
-  | { readonly _tag: "Failed"; readonly failure: WorkspaceFailureInfo };
+  | { readonly _tag: "Failed"; readonly failure: RegisteredWorkspaceFailure };
 
 export class WorkspaceManagement extends Context.Service<WorkspaceManagement, WorkspaceManagementService>()(
   "@cogwork/engine/registry/WorkspaceManagement",
@@ -109,7 +113,8 @@ const workspaceFailure = (row: WorkspaceRow, message: string) => {
     ...(name ? { name } : {}),
     source: row.checkoutPath,
     message,
-  } satisfies WorkspaceFailureInfo;
+    workspaceLimit: present(row.concurrency),
+  } satisfies RegisteredWorkspaceFailure;
 };
 
 export const findWorkspace = (registry: RegistryState, name: string) =>

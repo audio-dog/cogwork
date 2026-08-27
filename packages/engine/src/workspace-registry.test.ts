@@ -216,6 +216,7 @@ layer(NodeServices.layer)((it) => {
           checkoutPath: missingCheckout,
           issueTracker: { type: "github", repo: "acme/repo" },
           linearHistory: false,
+          concurrency: 3,
         }),
       );
       if (firstChange._tag === "Failed" || secondChange._tag === "Failed") {
@@ -236,6 +237,7 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(missingChange._tag, "Failed");
       if (missingChange._tag !== "Failed") return assert.fail("expected missing input diagnostic");
       assert.isDefined(missingChange.failure.name);
+      assert.strictEqual(missingChange.failure.workspaceLimit, 3);
       assert.strictEqual(liveRegistry.failures.length, 1);
 
       yield* fs.writeFileString(
@@ -252,6 +254,7 @@ layer(NodeServices.layer)((it) => {
 
       assert.strictEqual(reloaded.workspaces.length, 2);
       assert.strictEqual(reloaded.failures.length, 1);
+      assert.strictEqual(reloaded.failures[0]?.workspaceLimit, 3);
       assert.deepStrictEqual(reloaded.workspaces.map((workspace) => workspace.config.displayName).sort(), [
         "first clone",
         "second clone",

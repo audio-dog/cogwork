@@ -6,9 +6,13 @@ export interface RegisteredWorkspace {
   readonly workspaceLimit?: number;
 }
 
+export interface RegisteredWorkspaceFailure extends WorkspaceFailureInfo {
+  readonly workspaceLimit?: number;
+}
+
 export interface RegistryState {
   readonly workspaces: ReadonlyArray<RegisteredWorkspace>;
-  readonly failures: ReadonlyArray<WorkspaceFailureInfo>;
+  readonly failures: ReadonlyArray<RegisteredWorkspaceFailure>;
 }
 
 export const emptyRegistry: RegistryState = { workspaces: [], failures: [] };
