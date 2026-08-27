@@ -1,0 +1,36 @@
+packages/codex-cli/src/harness.test.ts
+  s_79dcb41c4b1d64::t_c5f82038901efb 19,68-69,158,205,252,270,313,357,378,393,408,422,471,637
+packages/cursor-acp/src/harness.test.ts
+  s_79dcb41c4b1d64::t_d9dbad1712d204 11,49,139
+packages/engine/src/provider-runner.test.ts
+  s_79dcb41c4b1d64::t_451ccba1ba4678 2,183,224-229,252-257,279
+packages/engine/src/executor.test.ts
+  s_79dcb41c4b1d64::t_ea7a8aff378769 15,544-549
+packages/engine/src/harness.test.ts
+  s_79dcb41c4b1d64::t_208882efa995fd 5,28
+packages/engine/src/harness.ts
+  s_79dcb41c4b1d64::t_18dac9434184c0 12,55-57,89,138,152
+packages/engine/src/tools/file-diff-feed.ts
+  s_79dcb41c4b1d64::t_b6438a6d4e4dab 2,4,76-99,103-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "afdd54326be234ef489de452c543eb483d7023c8",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_79dcb41c4b1d64": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d056e58d-a89b-4fc0-9a52-a3e3d494793f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
