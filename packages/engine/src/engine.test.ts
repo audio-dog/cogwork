@@ -1,10 +1,13 @@
 import { DaemonRpcs, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
@@ -68,8 +71,8 @@ const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [])
     comment: () => Effect.void,
   });
 
-const sources = (
-  issueTrackerLayer: Layer.Layer<IssueTracker.IssueTracker>,
+const sources = <R = never>(
+  issueTrackerLayer: Layer.Layer<IssueTracker.IssueTracker, never, R>,
   prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [],
 ) => Layer.mergeAll(issueTrackerLayer, providerStub(prs));
 
@@ -77,6 +80,39 @@ const observing = (
   items: ReadonlyArray<TrackerItem>,
   prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = [],
 ) => sources(Layer.succeed(IssueTracker.IssueTracker, stub({ observe: () => Effect.succeed(items) })), prs);
+
+class ReconcileObserveCount extends Context.Service<ReconcileObserveCount, Ref.Ref<number>>()(
+  "@cogwork/engine/engine.test/ReconcileObserveCount",
+) {
+  static readonly layer = Layer.effect(ReconcileObserveCount, Ref.make(0));
+}
+
+class LogMessages extends Context.Service<LogMessages, MutableRef.MutableRef<ReadonlyArray<string>>>()(
+  "@cogwork/engine/engine.test/LogMessages",
+) {
+  static readonly layer = Layer.sync(LogMessages, () => MutableRef.make<ReadonlyArray<string>>([]));
+  static readonly captureLayer = Logger.layer([
+    Effect.map(LogMessages, (messages) =>
+      Logger.make(({ message }) => MutableRef.update(messages, (current) => [...current, String(message)])),
+    ),
+  ]).pipe(Layer.provideMerge(LogMessages.layer));
+}
+
+const defectOnceThenObserve = sources(
+  Layer.effect(
+    IssueTracker.IssueTracker,
+    Effect.gen(function* () {
+      const observes = yield* ReconcileObserveCount;
+      return stub({
+        observe: Effect.fn(function* () {
+          const count = yield* Ref.getAndUpdate(observes, (current) => current + 1);
+          if (count === 0) return yield* Effect.die("reconcile defect");
+          return [];
+        }),
+      });
+    }),
+  ),
+);
 
 describe("buildRegistry", () => {
   it("registers valid configs and isolates malformed and unreadable ones", () => {
@@ -150,6 +186,20 @@ describe("reconcile worker", () => {
   const workerLayer = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, sources(IssueTracker.emptyLayer))),
   );
+  const defectiveWorkerLayer = Reconcile.layer.pipe(
+    Layer.provide(Layer.mergeAll(registryLayer, defectOnceThenObserve)),
+    Layer.provideMerge(ReconcileObserveCount.layer),
+    Layer.provideMerge(LogMessages.captureLayer),
+  );
+  const neverWorkerLayer = Reconcile.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        registryLayer,
+        sources(Layer.succeed(IssueTracker.IssueTracker, stub({ observe: () => Effect.never }))),
+      ),
+    ),
+    Layer.provideMerge(LogMessages.captureLayer),
+  );
 
   it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
     Effect.gen(function* () {
@@ -160,6 +210,40 @@ describe("reconcile worker", () => {
       assert.strictEqual(receipt.pendingWork, 0);
       assert.strictEqual(receipt.paused, 0);
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
+  );
+
+  it.effect("settles a defective reconcile and continues with the next submission", () =>
+    Effect.gen(function* () {
+      const observes = yield* ReconcileObserveCount;
+      const messages = yield* LogMessages;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const firstFiber = yield* Effect.forkChild(
+        worker.submit().pipe(Effect.timeout("1 second"), Effect.sandbox, Effect.flip),
+      );
+      yield* TestClock.adjust("1 second");
+      const first = yield* Fiber.join(firstFiber);
+      assert.include(Cause.pretty(first), "reconcile defect");
+
+      const second = yield* worker.submit();
+      assert.strictEqual(second.workspaces, 1);
+      assert.strictEqual(yield* Ref.get(observes), 2);
+      assert.isTrue(MutableRef.get(messages).some((line) => line.includes("reconcile job failed")));
+    }).pipe(Effect.provide(defectiveWorkerLayer), Effect.scoped),
+  );
+
+  it.effect("logs and fails a submission whose receipt does not settle", () =>
+    Effect.gen(function* () {
+      const messages = yield* LogMessages;
+      const fiber = yield* Effect.forkChild(
+        Effect.flatMap(Reconcile.ReconcileWorker, (worker) =>
+          worker.submit().pipe(Effect.timeout("31 seconds"), Effect.flip),
+        ),
+      );
+      yield* TestClock.adjust("31 seconds");
+      const error = yield* Fiber.join(fiber);
+      assert.isTrue(Cause.isTimeoutError(error));
+      assert.isTrue(MutableRef.get(messages).some((line) => line.includes("reconcile submission timed out")));
+    }).pipe(Effect.provide(neverWorkerLayer), Effect.scoped),
   );
 
   const eligibleItem: TrackerItem = {

@@ -6,6 +6,7 @@ import type {
   PollState,
   WorkspaceId,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -19,6 +20,8 @@ import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
+
+const submitTimeout = "30 seconds";
 
 export interface ReconcileReceipt {
   readonly workspaces: number;
@@ -213,12 +216,31 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  yield* Queue.take(queue).pipe(Effect.flatMap(reconcile), Effect.forever, Effect.forkScoped);
+  const settleJobFailure = (job: ReconcileJob, cause: Cause.Cause<never>) => {
+    const settle = Deferred.failCause(job.receipt, cause);
+    if (Cause.hasInterruptsOnly(cause)) {
+      return settle.pipe(Effect.andThen(Effect.failCause(cause)));
+    }
+    return Effect.logError("reconcile job failed", { cause }).pipe(Effect.andThen(settle));
+  };
+
+  const runJob = (job: ReconcileJob) =>
+    reconcile(job).pipe(Effect.catchCause((cause) => settleJobFailure(job, cause)));
+
+  const awaitReceipt = (receipt: Deferred.Deferred<ReconcileReceipt>) =>
+    Deferred.await(receipt).pipe(
+      Effect.timeout(submitTimeout),
+      Effect.tapErrorTag("TimeoutError", () =>
+        Effect.logError("reconcile submission timed out", { timeout: submitTimeout }),
+      ),
+    );
+
+  yield* Queue.take(queue).pipe(Effect.flatMap(runJob), Effect.forever, Effect.forkScoped);
 
   const submit = Effect.fn("ReconcileWorker.submit")(function* () {
     const receipt = yield* Deferred.make<ReconcileReceipt>();
     yield* Queue.offer(queue, { receipt });
-    return yield* Deferred.await(receipt);
+    return yield* awaitReceipt(receipt);
   });
 
   return { submit, snapshot: Ref.get(snapshotRef) } as const;
