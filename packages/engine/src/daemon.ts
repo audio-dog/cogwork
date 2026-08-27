@@ -22,7 +22,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import { cancelRun, reclassify, setSchedulerConfig, setScheduling } from "./commands";
+import { cancelRun, reclassify, registerWorkspace, setSchedulerConfig, setScheduling } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
 import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
 import type { CredentialStore } from "./credential-store";
@@ -43,7 +43,7 @@ import {
   type WorkspaceReconcileState,
 } from "./reconcile";
 import { Recovery, layer as recoveryLayer } from "./recovery";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry, layer as workspaceRegistryLayer } from "./registry";
 import { layer as runControlLayer } from "./run-control";
 import {
   type CoreRunLedger,
@@ -105,7 +105,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const runs = running.map((run) => ({ _tag: "RunChanged", run }) as const);
   const scheduling = {
     _tag: "SchedulerChanged",
-    scheduler: schedulerStatsOf(config, stats),
+    scheduler: schedulerStatsOf(config, stats, registry),
   } as const;
   return [...items, ...workspaces, ...runs, scheduling].map((event) => ({ ...event, emittedAtMillis }));
 });
@@ -141,7 +141,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       health: controlStore.health === "available" ? "running" : "store-unavailable",
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
-      scheduler: schedulerStatsOf(config, stats),
+      scheduler: schedulerStatsOf(config, stats, registry),
       workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
       failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
     };
@@ -165,6 +165,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   Reclassify: reclassify,
   SetScheduling: setScheduling,
   SetSchedulerConfig: setSchedulerConfig,
+  RegisterWorkspace: registerWorkspace,
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;
@@ -179,7 +180,6 @@ export interface HostAdapters<E = never, R = never> {
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
-  readonly registry: Layer.Layer<WorkspaceRegistry, E, R>;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
   readonly scheduler: SchedulerConfig;
@@ -197,6 +197,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
+  const registry = workspaceRegistryLayer.pipe(Layer.provideMerge(controlStore), Layer.provide(storeClient));
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
     runLedgerPublishingLayer.pipe(
       Layer.provide(
@@ -211,7 +212,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const base = Layer.mergeAll(
-    adapters.registry,
+    registry,
     controlStore,
     daemonInfoLayer,
     issueTracker,

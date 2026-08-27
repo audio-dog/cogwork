@@ -22,24 +22,8 @@ import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import { fullHarnessExecution, type HarnessRunner } from "./harness";
 import { ReconcileWorker } from "./reconcile";
-import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
-
-const workspace: Registry.LoadedWorkspace = {
-  source: "example.workspace.ts",
-  value: {
-    name: "example",
-    checkoutPath: "/repos/example",
-    issueTracker: { type: "linear" },
-    harness: { preferred: "cursor" },
-  },
-};
-
-const registryLayer = Layer.succeed(
-  Registry.WorkspaceRegistry,
-  Registry.buildRegistry({ loaded: [workspace], failures: [] }),
-);
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
@@ -96,7 +80,6 @@ describe("daemon server composition", () => {
         contextAssembler: contextAssemblerLayer,
         runLedger: RunLedger.layerMemoryCore,
         controlStorePath: controlStore.path,
-        registry: registryLayer,
         worktrees: worktreeLayer,
         harnessRunners: [stubRunner],
         scheduler: { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
@@ -133,10 +116,7 @@ describe("daemon server composition", () => {
       assert.deepStrictEqual(result.reconciled.workspaces, []);
       assert.isUndefined(result.heartbeatsExit);
       assert.strictEqual(result.status.scheduler.globalInFlight, 0);
-      assert.deepStrictEqual(
-        result.status.workspaces.map((w) => w.name),
-        ["example"],
-      );
+      assert.deepStrictEqual(result.status.workspaces, []);
     }),
   );
 });
