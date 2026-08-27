@@ -1,0 +1,49 @@
+docs/spec/settings-and-plugins.md
+  s_940e2d115ea8f3::t_6cb9236fe21ac7 1-2,6-61,63-87,89-114,122-123,126-190,196-291,299-302,311-330,333-353,359-362,374-379,382-397,401-402,407-466,473-475,479-502,510-571,574-582,585-589,593-614,617-630,634,639-647,649-663
+  s_940e2d115ea8f3::t_7f21f8df4cb725 398-400
+  s_940e2d115ea8f3::t_6848eea7f5df3c 62
+  s_940e2d115ea8f3::t_8be9a0914bd110 191-195
+  s_940e2d115ea8f3::t_5e11ffd996c4cd 372-373
+  s_940e2d115ea8f3::t_f1640527becefe 3-5
+  s_940e2d115ea8f3::t_c49dea33304b5d 583-584
+  s_940e2d115ea8f3::t_f2d31d8484d337 503-509
+  s_940e2d115ea8f3::t_078f1ab14694bb 631-633,635-638
+  s_940e2d115ea8f3::t_2a2df2ae596827 124-125
+  s_940e2d115ea8f3::t_807c68b42b9c66 648
+  s_940e2d115ea8f3::t_533010802b4eaf 293-298
+  s_940e2d115ea8f3::t_6072612872a9f5 363-371
+  s_940e2d115ea8f3::t_23e2a810d09925 615-616
+  s_940e2d115ea8f3::t_d6ab1aaa9524f4 331-332
+  s_940e2d115ea8f3::t_2193a8dfdc1ce0 590-592
+  s_940e2d115ea8f3::t_d1f55d21785c0b 476-478
+  s_940e2d115ea8f3::t_66e118dd30582c 467-472
+  s_940e2d115ea8f3::t_7b54d6089a09cc 572-573
+  s_940e2d115ea8f3::t_dd34fc2600423d 292
+  s_940e2d115ea8f3::t_b22823944f8e48 303-310
+  s_940e2d115ea8f3::t_3a2973d34d9101 88
+  s_940e2d115ea8f3::t_41e5a1baf556bb 115-121
+  s_940e2d115ea8f3::t_fbccf1512a3889 380-381
+  s_940e2d115ea8f3::t_7c5f7af700404f 354-358
+  s_940e2d115ea8f3::t_ebac3d81109c23 403-406
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "40079428bb059454c1b7d5e652ba409d713cf4fc",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_940e2d115ea8f3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9523d5-2170-42f4-a2d7-a13e970ba851",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
