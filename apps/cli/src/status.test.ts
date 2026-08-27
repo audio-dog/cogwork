@@ -158,7 +158,7 @@ describe("formatStatus", () => {
           perWorkspaceLimit: 4,
           dailyBudgetUsed: 7,
           dailyBudgetLimit: 50,
-          perWorkspace: [{ name: workspaceId("cogwork"), inFlight: 1 }],
+          perWorkspace: [{ name: workspaceId("cogwork"), inFlight: 1, limit: 4 }],
         },
         workspaces: [
           workspace({

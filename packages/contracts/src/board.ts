@@ -50,6 +50,7 @@ export const workspaceKey = (state: WorkspaceState) =>
 export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
   _tag: "Registered" as const,
   name: info.name,
+  ...(info.displayName ? { displayName: info.displayName } : {}),
   checkoutPath: info.checkoutPath,
   issueTracker: info.issueTracker,
   harness: info.harness,
