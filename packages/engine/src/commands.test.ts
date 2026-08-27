@@ -1,4 +1,7 @@
 import {
+  ControlStoreFailure,
+  type ControlStore as ControlStorePicture,
+  type DaemonLimitUpdate,
   DaemonRpcs,
   HarnessName,
   IssueTrackerError,
@@ -20,6 +23,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
@@ -68,11 +72,12 @@ const schedulerStub = () =>
         admit: () => Effect.void,
         setScheduling: (desired) =>
           Ref.updateAndGet(stateRef, (state) => ({ ...state, paused: desired === "paused" })),
-        setConfig: (update) =>
+        setLimit: (update: DaemonLimitUpdate) =>
           Ref.updateAndGet(configRef, (current) => ({
-            globalLimit: update.globalLimit ?? current.globalLimit,
-            perWorkspaceLimit: update.perWorkspaceLimit ?? current.perWorkspaceLimit,
-            dailyBudget: update.dailyBudget ?? current.dailyBudget,
+            globalLimit: update.key === "global-concurrency" ? update.value : current.globalLimit,
+            perWorkspaceLimit:
+              update.key === "per-workspace-concurrency" ? update.value : current.perWorkspaceLimit,
+            dailyBudget: update.key === "daily-budget" ? update.value : current.dailyBudget,
           })),
         config: Ref.get(configRef),
         stats: Ref.get(stateRef),
@@ -129,9 +134,42 @@ const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<Trac
 const runLedgerLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
 const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedgerLayer));
 
+const picture: ControlStorePicture = {
+  daemonLimits: {
+    globalConcurrency: 4,
+    perWorkspaceConcurrency: 4,
+    dailyBudget: 50,
+    revision: 0,
+  },
+};
+
+const controlStoreStub = (
+  setDaemonLimit: ControlStoreService["setDaemonLimit"] = (update) =>
+    Effect.succeed({
+      daemonLimits: {
+        globalConcurrency:
+          update.key === "global-concurrency" ? update.value : picture.daemonLimits.globalConcurrency,
+        perWorkspaceConcurrency:
+          update.key === "per-workspace-concurrency"
+            ? update.value
+            : picture.daemonLimits.perWorkspaceConcurrency,
+        dailyBudget: update.key === "daily-budget" ? update.value : picture.daemonLimits.dailyBudget,
+        revision: picture.daemonLimits.revision + 1,
+      },
+    }),
+) =>
+  Layer.succeed(ControlStore, {
+    health: "available",
+    seed: picture,
+    picture: Effect.succeed(picture),
+    setDaemonLimit,
+    withWrite: (effect) => effect,
+  });
+
 const daemonLayer = (
   source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>,
   scheduler = schedulerStub(),
+  controlStore = controlStoreStub(),
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -143,6 +181,7 @@ const daemonLayer = (
     Layer.provideMerge(runRecorder),
     Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(RunControl.layer),
+    Layer.provideMerge(controlStore),
     Layer.provideMerge(source),
   );
 
@@ -424,27 +463,68 @@ describe("SetScheduling", () => {
   );
 });
 
-describe("SetSchedulerConfig", () => {
-  it.effect("writes the new limits and budget and reports them back", () =>
+describe("SetDaemonLimit", () => {
+  it.effect("returns and publishes the same whole Control store picture", () =>
     Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const stats = yield* client.SetSchedulerConfig({
-        update: { globalLimit: 8, perWorkspaceLimit: 3, dailyBudget: 20 },
+      const returned = yield* client.SetDaemonLimit({
+        update: { key: "global-concurrency", value: 8, expectedRevision: 0 },
       });
-      assert.strictEqual(stats.globalLimit, 8);
-      assert.strictEqual(stats.perWorkspaceLimit, 3);
-      assert.strictEqual(stats.dailyBudgetLimit, 20);
+      const published = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
+      const [controlStoreChanged, schedulerChanged] = published;
+
+      assert.strictEqual(controlStoreChanged?._tag, "ControlStoreChanged");
+      if (controlStoreChanged?._tag !== "ControlStoreChanged")
+        return assert.fail("expected ControlStoreChanged");
+      assert.deepStrictEqual(controlStoreChanged.controlStore, returned);
+      assert.deepStrictEqual(returned.daemonLimits, {
+        globalConcurrency: 8,
+        perWorkspaceConcurrency: 4,
+        dailyBudget: 50,
+        revision: 1,
+      });
+      assert.strictEqual(schedulerChanged?._tag, "SchedulerChanged");
+      if (schedulerChanged?._tag !== "SchedulerChanged") return assert.fail("expected SchedulerChanged");
+      assert.strictEqual(schedulerChanged.scheduler.globalLimit, 8);
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
-  it.effect("leaves an unsent field untouched", () =>
+  it.effect("does not change scheduler memory when the row write fails", () =>
     Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const stats = yield* client.SetSchedulerConfig({ update: { globalLimit: 9 } });
-      assert.strictEqual(stats.globalLimit, 9);
-      // perWorkspaceLimit and dailyBudget keep the stub's seeded values.
-      assert.strictEqual(stats.perWorkspaceLimit, 4);
-      assert.strictEqual(stats.dailyBudgetLimit, 50);
-    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+      const failure = yield* Effect.flip(
+        client.SetDaemonLimit({
+          update: { key: "global-concurrency", value: 9, expectedRevision: 0 },
+        }),
+      );
+      const scheduler = yield* Scheduler.Scheduler;
+      yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("example"), id: id("AUD-1") });
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
+      );
+
+      assert.strictEqual(failure._tag, "ControlStoreFailure");
+      assert.strictEqual((yield* scheduler.config).globalLimit, 4);
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["ItemRemoved"],
+      );
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(() =>
+            Effect.fail(ControlStoreFailure.make({ operation: "set daemon limit", message: "disk full" })),
+          ),
+        ),
+      ),
+      Effect.scoped,
+    ),
   );
 });

@@ -1,5 +1,6 @@
 import {
   ClassifiedItem,
+  type ControlStore as ControlStorePicture,
   itemKey,
   SchedulerStats,
   type WorkItemId,
@@ -93,7 +94,7 @@ export const make = Effect.gen(function* () {
   });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
-    const stats = schedulerStatsOf(yield* scheduler.config, yield* scheduler.stats);
+    const stats = schedulerStatsOf(registry, yield* scheduler.config, yield* scheduler.stats);
     const signature = encodeStats(stats);
     if ((yield* Ref.get(lastScheduler)) === signature) return stats;
     yield* Ref.set(lastScheduler, signature);
@@ -101,7 +102,14 @@ export const make = Effect.gen(function* () {
     return stats;
   });
 
-  return { publishItems, publishWorkspaces, publishScheduler } as const;
+  const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
+    controlStore: ControlStorePicture,
+  ) {
+    yield* bus.publish({ _tag: "ControlStoreChanged", controlStore });
+    return controlStore;
+  });
+
+  return { publishItems, publishWorkspaces, publishScheduler, publishControlStore } as const;
 });
 
 export type DaemonEventPublisherService = Effect.Success<typeof make>;
