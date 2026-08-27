@@ -61,6 +61,7 @@ export const codexRuntimeConfig = (
 ): CodexTextConfig => ({
   approvalPolicy: "never",
   sandboxMode: sandboxMode(profile),
+  ...(profile === "full" ? { networkAccessEnabled: true } : {}),
   modelReasoningEffort: effort,
 });
 

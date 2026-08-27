@@ -209,6 +209,7 @@ describe("codexRunner", () => {
           {
             approvalPolicy: "never",
             sandboxMode: "workspace-write",
+            networkAccessEnabled: true,
             modelReasoningEffort: "high",
             env: codexChildEnvironment(),
           },
@@ -436,7 +437,7 @@ describe("codexRunner", () => {
       assert.include(capture.args, "workspace-write");
       assert.include(capture.args, 'approval_policy="never"');
       assert.notInclude(capture.args, "danger-full-access");
-      assert.notInclude(capture.args, "sandbox_workspace_write.network_access=true");
+      assert.include(capture.args, "sandbox_workspace_write.network_access=true");
       assert.notInclude(capture.args, "resume");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
@@ -676,6 +677,7 @@ describe("codexRuntimeConfig", () => {
     assert.deepStrictEqual(codexRuntimeConfig("high", "full"), {
       approvalPolicy: "never",
       sandboxMode: "workspace-write",
+      networkAccessEnabled: true,
       modelReasoningEffort: "high",
     });
     assert.deepStrictEqual(codexRuntimeConfig("high", "read-only"), {
