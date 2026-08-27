@@ -21,6 +21,46 @@ const migrationIdsAt = (path: string) =>
     (db) => Effect.sync(() => db.close()),
   );
 
+const evolvedLegacyLedgerSql = `
+CREATE TABLE runs (
+  id TEXT PRIMARY KEY,
+  workspace TEXT NOT NULL,
+  work_item TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  harness TEXT NOT NULL,
+  session TEXT,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  total_tokens INTEGER,
+  status TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER
+);
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  workspace TEXT NOT NULL,
+  harness TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  handle TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE run_events (
+  run_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  name TEXT,
+  data TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (run_id, seq)
+);
+CREATE INDEX runs_started_at ON runs (started_at DESC);
+ALTER TABLE runs ADD COLUMN branch TEXT;
+ALTER TABLE runs ADD COLUMN estimated INTEGER;
+INSERT INTO runs (
+  id, workspace, work_item, stage, harness, branch, estimated, status, started_at
+) VALUES ('legacy', 'ws', '#1', 'implement', 'codex', '218-control-store', 1, 'succeeded', 1);
+`;
+
 layer(NodeServices.layer)((it) => {
   it.effect("creates schema metadata for a fresh store", () =>
     Effect.gen(function* () {
@@ -190,15 +230,9 @@ layer(NodeServices.layer)((it) => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const legacyPath = path.join(dir, "runs.db");
       const storePath = path.join(dir, "control.db");
-      yield* storeAt(legacyPath);
       yield* Effect.acquireUseRelease(
         Effect.sync(() => new DatabaseSync(legacyPath)),
-        (db) =>
-          Effect.sync(() =>
-            db.exec(
-              "INSERT INTO runs (id, workspace, work_item, stage, harness, status, started_at) VALUES ('legacy', 'ws', '#1', 'implement', 'codex', 'succeeded', 1); DELETE FROM control_migrations",
-            ),
-          ),
+        (db) => Effect.sync(() => db.exec(evolvedLegacyLedgerSql)),
         (db) => Effect.sync(() => db.close()),
       );
 
@@ -206,10 +240,10 @@ layer(NodeServices.layer)((it) => {
       assert.isFalse(yield* fs.exists(legacyPath));
       const rows = yield* Effect.acquireUseRelease(
         Effect.sync(() => new DatabaseSync(storePath)),
-        (db) => Effect.sync(() => db.prepare("SELECT id FROM runs").all()),
+        (db) => Effect.sync(() => db.prepare("SELECT id, branch, estimated FROM runs").all()),
         (db) => Effect.sync(() => db.close()),
       );
-      assert.deepStrictEqual(rows, [{ id: "legacy" }]);
+      assert.deepStrictEqual(rows, [{ id: "legacy", branch: "218-control-store", estimated: 1 }]);
       assert.strictEqual((yield* migrationIdsAt(storePath))[0]?.id, 0);
       assert.isTrue(
         (yield* fs.readDirectory(dir)).some((entry) => entry.startsWith("control.db.before-migration-")),

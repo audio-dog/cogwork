@@ -48,13 +48,95 @@ const normalizeSql = (sql: unknown) =>
     .replace(/\bconstraint\s+\w+\s+/g, "")
     .replace(/\s+/g, "");
 
-const schemaShape = (db: DatabaseSync) =>
+const tableNames = (db: DatabaseSync) =>
+  db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all()
+    .map((table) => String(table.name));
+
+const objectShape = (db: DatabaseSync) =>
   db
     .prepare(
-      "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' OR name LIKE 'sqlite_autoindex_%' ORDER BY type, name",
+      "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' OR name LIKE 'sqlite_autoindex_%' ORDER BY type, name",
     )
     .all()
-    .map((object) => `${String(object.type)}:${String(object.name)}:${normalizeSql(object.sql)}`);
+    .map((object) => `object:${String(object.type)}:${String(object.name)}`);
+
+const tableShape = (db: DatabaseSync) =>
+  db
+    .prepare(
+      "SELECT name, ncol, wr, strict FROM pragma_table_list WHERE schema = 'main' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
+    .all()
+    .map(
+      (table) =>
+        `table:${String(table.name)}:${Number(table.ncol)}:${Number(table.wr)}:${Number(table.strict)}`,
+    );
+
+const columnShape = (db: DatabaseSync, table: string) =>
+  db
+    .prepare(
+      'SELECT name, lower(type) AS type, "notnull", dflt_value, pk, hidden FROM pragma_table_xinfo(?) ORDER BY name',
+    )
+    .all(table)
+    .map(
+      (column) =>
+        `column:${table}:${String(column.name)}:${String(column.type)}:${Number(column.notnull)}:${String(column.dflt_value ?? "")}:${Number(column.pk)}:${Number(column.hidden)}`,
+    );
+
+const indexShape = (db: DatabaseSync, table: string) =>
+  db
+    .prepare('SELECT name, "unique", origin, partial FROM pragma_index_list(?) ORDER BY name')
+    .all(table)
+    .flatMap((index) => [
+      `index:${table}:${String(index.name)}:${Number(index.unique)}:${String(index.origin)}:${Number(index.partial)}`,
+      ...db
+        .prepare('SELECT seqno, name, "desc", coll, key FROM pragma_index_xinfo(?) ORDER BY seqno')
+        .all(String(index.name))
+        .map(
+          (column) =>
+            `index-column:${String(index.name)}:${Number(column.seqno)}:${String(column.name ?? "")}:${Number(column.desc)}:${String(column.coll)}:${Number(column.key)}`,
+        ),
+    ]);
+
+const foreignKeyShape = (db: DatabaseSync, table: string) =>
+  db
+    .prepare(
+      'SELECT id, seq, "table", "from", "to", on_update, on_delete, match FROM pragma_foreign_key_list(?) ORDER BY id, seq',
+    )
+    .all(table)
+    .map(
+      (key) =>
+        `foreign-key:${table}:${Number(key.id)}:${Number(key.seq)}:${String(key.table)}:${String(key.from)}:${String(key.to)}:${String(key.on_update)}:${String(key.on_delete)}:${String(key.match)}`,
+    );
+
+const constraintShape = (db: DatabaseSync) =>
+  db
+    .prepare(
+      "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
+    .all()
+    .map((table) => {
+      const sql = normalizeSql(table.sql);
+      const features = ["check(", "collate", "generated", "references", "withoutrowid", "strict"].filter(
+        (feature) => sql.includes(feature),
+      );
+      return `constraints:${String(table.name)}:${features.join(",")}`;
+    });
+
+const schemaShape = (db: DatabaseSync) => {
+  const tables = tableNames(db);
+  return [
+    ...objectShape(db),
+    ...tableShape(db),
+    ...tables.flatMap((table) => [
+      ...columnShape(db, table),
+      ...indexShape(db, table),
+      ...foreignKeyShape(db, table),
+    ]),
+    ...constraintShape(db),
+  ];
+};
 
 const expectedSchemaShape = (() => {
   const db = new DatabaseSync(":memory:");
