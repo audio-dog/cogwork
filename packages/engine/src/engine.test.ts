@@ -515,6 +515,41 @@ const schedulerStubService = {
   }),
 } satisfies Scheduler.Scheduler["Service"];
 
+class SchedulerTickCount extends Context.Service<SchedulerTickCount, Ref.Ref<number>>()(
+  "@cogwork/engine/engine.test/SchedulerTickCount",
+) {
+  static readonly layer = Layer.effect(SchedulerTickCount, Ref.make(0));
+  static readonly schedulerLayer = Layer.effect(
+    Scheduler.Scheduler,
+    Effect.gen(function* () {
+      const ticks = yield* SchedulerTickCount;
+      return {
+        ...schedulerStubService,
+        tick: () => Ref.update(ticks, (count) => count + 1).pipe(Effect.map(() => [])),
+      };
+    }),
+  ).pipe(Layer.provideMerge(SchedulerTickCount.layer));
+}
+
+class SchedulerDrainGraces extends Context.Service<SchedulerDrainGraces, Ref.Ref<ReadonlyArray<number>>>()(
+  "@cogwork/engine/engine.test/SchedulerDrainGraces",
+) {
+  static readonly layer = Layer.effect(SchedulerDrainGraces, Ref.make<ReadonlyArray<number>>([]));
+  static readonly schedulerLayer = Layer.effect(
+    Scheduler.Scheduler,
+    Effect.gen(function* () {
+      const drained = yield* SchedulerDrainGraces;
+      return {
+        ...schedulerStubService,
+        drain: (options: Scheduler.DrainOptions) =>
+          Ref.update(drained, (graces) => [...graces, options.graceMillis]).pipe(
+            Effect.map(() => ({ inFlight: 0, interrupted: 0 })),
+          ),
+      };
+    }),
+  ).pipe(Layer.provideMerge(SchedulerDrainGraces.layer));
+}
+
 describe("daemon heartbeats", () => {
   const worktreeStub = Layer.succeed(WorktreeManager, {
     ensure: () => Effect.die("unused"),
@@ -522,51 +557,71 @@ describe("daemon heartbeats", () => {
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
   });
+  const emptyWorkerLayer = Reconcile.layer.pipe(
+    Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
+  );
+  const defectiveWorkerLayer = Reconcile.layer.pipe(
+    Layer.provide(Layer.mergeAll(registeredSample, defectOnceThenObserve)),
+    Layer.provideMerge(ReconcileObserveCount.layer),
+  );
+  const heartbeatLayer = <WorkerServices, SchedulerServices>(
+    workerLayer: Layer.Layer<Reconcile.ReconcileWorker | WorkerServices>,
+    schedulerLayer: Layer.Layer<Scheduler.Scheduler | SchedulerServices>,
+  ) =>
+    EventPublisher.layer.pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          workerLayer,
+          registeredSample,
+          schedulerLayer,
+          worktreeStub,
+          DaemonEventBus.layer,
+          Layer.succeed(Recovery.Recovery, {
+            recover: () => Effect.void,
+            recoverWhenLive: () => Effect.void,
+          }),
+        ),
+      ),
+    );
 
   it.effect("drains the scheduler when a stop signal interrupts them", () =>
     Effect.gen(function* () {
-      const drained = yield* Ref.make<ReadonlyArray<number>>([]);
-      const schedulerStub = Layer.succeed(Scheduler.Scheduler, {
-        ...schedulerStubService,
-        drain: (options) =>
-          Ref.update(drained, (graces) => [...graces, options.graceMillis]).pipe(
-            Effect.map(() => ({ inFlight: 0, interrupted: 0 })),
-          ),
-      });
-      yield* Effect.gen(function* () {
-        const beats = yield* Effect.forkChild(
-          Daemon.heartbeats({
-            pollIntervalMillis: 60_000,
-            drain: { graceMillis: 1234, abort: Latch.makeUnsafe(false).await },
-          }),
-        );
-        yield* TestClock.adjust("1 second");
-        yield* Fiber.interrupt(beats);
-
-        assert.deepStrictEqual(yield* Ref.get(drained), [1234]);
-      }).pipe(
-        Effect.provide(
-          EventPublisher.layer.pipe(
-            Layer.provideMerge(
-              Layer.mergeAll(
-                Reconcile.layer.pipe(
-                  Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
-                ),
-                registeredSample,
-                schedulerStub,
-                worktreeStub,
-                DaemonEventBus.layer,
-                Layer.succeed(Recovery.Recovery, {
-                  recover: () => Effect.void,
-                  recoverWhenLive: () => Effect.void,
-                }),
-              ),
-            ),
-          ),
-        ),
-        Effect.scoped,
+      const drained = yield* SchedulerDrainGraces;
+      const beats = yield* Effect.forkChild(
+        Daemon.heartbeats({
+          pollIntervalMillis: 60_000,
+          drain: { graceMillis: 1234, abort: Latch.makeUnsafe(false).await },
+        }),
       );
-    }),
+      yield* TestClock.adjust("1 second");
+      yield* Fiber.interrupt(beats);
+
+      assert.deepStrictEqual(yield* Ref.get(drained), [1234]);
+    }).pipe(
+      Effect.provide(heartbeatLayer(emptyWorkerLayer, SchedulerDrainGraces.schedulerLayer)),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("keeps both heartbeats running after a reconcile submission fails", () =>
+    Effect.gen(function* () {
+      const observes = yield* ReconcileObserveCount;
+      const schedulerTicks = yield* SchedulerTickCount;
+      const beats = yield* Effect.forkChild(
+        Daemon.heartbeats({
+          pollIntervalMillis: 1_000,
+          drain: { graceMillis: 1234, abort: Latch.makeUnsafe(false).await },
+        }),
+      );
+      yield* TestClock.adjust("6 seconds");
+      yield* Fiber.interrupt(beats);
+
+      assert.isAtLeast(yield* Ref.get(observes), 2);
+      assert.isAtLeast(yield* Ref.get(schedulerTicks), 2);
+    }).pipe(
+      Effect.provide(heartbeatLayer(defectiveWorkerLayer, SchedulerTickCount.schedulerLayer)),
+      Effect.scoped,
+    ),
   );
 });
 

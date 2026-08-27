@@ -7,6 +7,7 @@ import {
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -274,7 +275,13 @@ const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
 });
 
 const reconcileHeartbeat = (pollIntervalMillis: number) =>
-  reconcileTick().pipe(Effect.repeat(Schedule.spaced(pollIntervalMillis)));
+  reconcileTick().pipe(
+    Effect.catchCauseIf(
+      (cause) => !Cause.hasInterruptsOnly(cause),
+      (cause) => Effect.logError("reconcile heartbeat failed", { cause }),
+    ),
+    Effect.repeat(Schedule.spaced(pollIntervalMillis)),
+  );
 
 export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
