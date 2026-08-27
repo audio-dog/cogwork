@@ -71,6 +71,7 @@ const fakeGit = (
       options.rebaseFailure === undefined
         ? Ref.update(recorder.rebased, (log) => [...log, worktreePath])
         : Effect.fail(options.rebaseFailure),
+    remoteUrl: () => Effect.succeed("git@example.com:repo.git"),
   } satisfies GitService;
 };
 
