@@ -1,0 +1,27 @@
+apps/cli/src/watch.test.ts
+  s_07a6809442ebd2::t_1d7fecb456974a 216
+packages/contracts/src/board.test.ts
+  s_07a6809442ebd2::t_1d7fecb456974a 201
+apps/cli/src/status.test.ts
+  s_07a6809442ebd2::t_1d7fecb456974a 161
+packages/contracts/src/board.ts
+  s_07a6809442ebd2::t_4568eb9e19cb76 53
+packages/contracts/src/daemon.ts
+  s_07a6809442ebd2::t_3bdd1f7b48fa94 88,109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2a47f26124f3a7fb58fbc453c69e58929c4be41a",
+  "prompts": {},
+  "sessions": {
+    "s_07a6809442ebd2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a6-0eb5-79c0-ade3-d87ee0329bc8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
