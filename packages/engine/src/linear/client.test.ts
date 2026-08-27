@@ -407,7 +407,11 @@ describe("linear client", () => {
           ? { body: { data: { teams: { nodes: [teamBundle] } } } }
           : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
       );
-      fetchStub.mockImplementationOnce(() => Promise.withResolvers<Response>().promise);
+      const onAbort = vi.fn();
+      fetchStub.mockImplementationOnce((_input, init) => {
+        init?.signal?.addEventListener("abort", onAbort);
+        return Promise.withResolvers<Response>().promise;
+      });
       const client = yield* LinearClient;
       const request = yield* Effect.forkChild(client.observeIssues(ref, null));
       yield* TestClock.adjust("1 minute");
@@ -417,6 +421,7 @@ describe("linear client", () => {
         ["AUD-1"],
       );
       assert.strictEqual(fetchStub.mock.calls.length, 2);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
     }).pipe(withToken()),
   );
 
