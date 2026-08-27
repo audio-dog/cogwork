@@ -16,7 +16,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-// The Control store owns this schema; the ledger is one region of it.
 const { runEvents, runs, sessions } = ControlStoreSchema;
 
 const unresumableStatuses = ["interrupted", "crashed", "exhausted"];
@@ -139,18 +138,15 @@ const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows
     ),
   ).pipe(Effect.map((chunks) => chunks.flat()));
 
-// The store's client is provided by the engine, which opened the file, took its lock, and migrated
-// it before this layer is built. The ledger neither opens nor closes the database.
 const make = Effect.fn("ledger.make")(function* () {
   const db = yield* SQLiteNodeDrizzle.makeWithDefaults();
 
-  // The ledger is disposable by policy: no read and no write may stop the daemon. The query is taken
-  // as a thunk because building it runs Drizzle's compiler, which is as able to throw as the query
-  // is to fail, and recovery is from the whole cause so that a defect is swallowed too.
+  // Taken as a thunk: building the query runs Drizzle's compiler, which can throw before any
+  // Effect exists to fail.
   const swallow = <A, E>(operation: string, query: () => Effect.Effect<A, E>, fallback: () => A) =>
     Effect.suspend(query).pipe(
       Effect.catchCause((cause) => {
-        if (Cause.hasInterrupts(cause)) return Effect.interrupt;
+        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
         return Effect.andThen(
           Effect.logWarning(`run ledger ${operation} failed`, { cause: Cause.pretty(cause) }),
           Effect.sync(fallback),

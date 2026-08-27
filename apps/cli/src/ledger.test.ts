@@ -24,8 +24,6 @@ class TestStorePath extends Context.Service<TestStorePath, string>()(
   "@cogwork/cli/ledger.test/TestStorePath",
 ) {}
 
-// The ledger reads and writes through the Control store's client, so a test needs the store booted
-// around it exactly as the daemon boots it.
 const bootedLedgerLayer = (storePath: string) =>
   ledgerLayer.pipe(
     Layer.provideMerge(
@@ -470,6 +468,62 @@ describe("sqlite RunLedger", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
         assert.isNull(yield* ledger.resolveWatchTarget("#404"));
+      }),
+    );
+  });
+});
+
+// AC: a run-event write failure never stops the daemon, and a read degrades to empty. Both go
+// through `swallow`, so both are exercised against a store whose tables have been pulled away.
+describe("sqlite RunLedger against a broken store", () => {
+  const dropTables = (storePath: string) =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => new DatabaseSync(storePath)),
+      (sqlite) =>
+        Effect.sync(() =>
+          sqlite.exec(
+            "DROP TABLE IF EXISTS run_events; DROP TABLE IF EXISTS runs; DROP TABLE IF EXISTS sessions",
+          ),
+        ),
+      (sqlite) => Effect.sync(() => sqlite.close()),
+    );
+
+  layer(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-broken-" });
+      const storePath = path.join(dir, "control.db");
+      return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
+    }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
+  )((it) => {
+    it.effect("completes a write whose table is gone", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* dropTables(yield* TestStorePath);
+
+        yield* ledger.insertRun(record("broken-1", 1000));
+        yield* ledger.appendEvent(runId("broken-1"), {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 1000,
+        });
+      }),
+    );
+
+    it.effect("degrades a read whose table is gone to empty", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* dropTables(yield* TestStorePath);
+
+        assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+        assert.deepStrictEqual(yield* ledger.runningRuns, []);
+        assert.deepStrictEqual(yield* ledger.events(runId("broken-1")), []);
+        assert.isNull(yield* ledger.getRun(runId("broken-1")));
+        assert.isNull(yield* ledger.getSession(session));
+        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, workItem), 0);
       }),
     );
   });
