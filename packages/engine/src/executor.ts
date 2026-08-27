@@ -26,6 +26,7 @@ import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import { operationPolicyProfile } from "./operation-policy";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
@@ -178,6 +179,7 @@ export const make = Effect.gen(function* () {
     return {
       harness: resolved.harness,
       stage,
+      profile: operationPolicyProfile(stage),
       skill: resolved.skill,
       checkoutPath,
       session,

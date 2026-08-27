@@ -25,6 +25,7 @@ import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
   type AgUiEvent,
+  fullHarnessExecution,
   HarnessError,
   type HarnessRequest,
   type HarnessRunner,
@@ -219,6 +220,7 @@ const stuckImplementEvents: ReadonlyArray<AgUiEvent> = [
 const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () =>
     Stream.concat(
       Stream.fromArray(implementStreamEvents),
@@ -391,6 +393,7 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => (
 const runner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () => Stream.fromArray(events),
 });
 
@@ -403,6 +406,7 @@ const capturingRunner = (
 ): HarnessRunner => ({
   name,
   sessionKind,
+  execution: fullHarnessExecution,
   run: (request) =>
     Stream.unwrap(
       Ref.update(requests, (xs) => [...xs, request]).pipe(
@@ -452,12 +456,14 @@ const unreachableRemoteWorktree: WorktreeManagerService = {
 const failingRunner = (error: HarnessError): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () => Stream.fail(error),
 });
 
 const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
   sessionKind: "owned-transcript",
+  execution: fullHarnessExecution,
   run: () => Stream.fromArray(events),
 });
 
@@ -785,6 +791,7 @@ describe("Executor.execute", () => {
 
         const [request] = yield* Ref.get(requests);
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
+        assert.strictEqual(request?.profile, "full");
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
         assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
