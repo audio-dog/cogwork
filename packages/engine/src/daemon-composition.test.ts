@@ -1,3 +1,9 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+// @effect-diagnostics-next-line nodeBuiltinImport:off
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -55,8 +61,21 @@ const socketServerLayer = (socket: Socket.Socket) =>
   });
 
 describe("daemon server composition", () => {
-  it.effect("boots from memory adapters and answers a query over the transport", () =>
+  it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
     Effect.gen(function* () {
+      const controlStore = yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const dir = mkdtempSync(join(tmpdir(), "cogwork-poisoned-store-"));
+          const path = join(dir, "control.db");
+          const db = new DatabaseSync(path);
+          db.exec(
+            "CREATE TABLE control_migrations (id INTEGER PRIMARY KEY, hash TEXT NOT NULL); INSERT INTO control_migrations VALUES (99, 'poison')",
+          );
+          db.close();
+          return { dir, path };
+        }),
+        ({ dir }) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+      );
       const toServer = new TransformStream<Uint8Array, Uint8Array>();
       const toClient = new TransformStream<Uint8Array, Uint8Array>();
       const client = yield* Socket.fromTransformStream(
@@ -71,6 +90,7 @@ describe("daemon server composition", () => {
         credentials: CredentialStore.layerEnv,
         contextAssembler: contextAssemblerLayer,
         runLedger: RunLedger.layerMemoryCore,
+        controlStorePath: controlStore.path,
         registry: registryLayer,
         worktrees: worktreeLayer,
         harnessRunners: [stubRunner],
@@ -82,6 +102,7 @@ describe("daemon server composition", () => {
       );
 
       const result = yield* Effect.gen(function* () {
+        yield* Daemon.bootstrap;
         const rpc = yield* RpcClient.make(DaemonRpcs);
         const runs = yield* rpc.ListRuns();
         const status = yield* rpc.GetStatus();
@@ -89,7 +110,7 @@ describe("daemon server composition", () => {
       }).pipe(Effect.provide(Layer.mergeAll(serverLayer, clientLayer)), Effect.scoped);
 
       assert.deepStrictEqual(result.runs, []);
-      assert.strictEqual(result.status.health, "running");
+      assert.strictEqual(result.status.health, "store-unavailable");
       assert.deepStrictEqual(
         result.status.workspaces.map((w) => w.name),
         ["example"],

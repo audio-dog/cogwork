@@ -9,6 +9,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as EventPublisher from "./event-publisher";
@@ -470,6 +471,7 @@ describe("daemon heartbeats", () => {
                 ),
                 registeredSample,
                 schedulerStub,
+                Layer.succeed(ControlStore, { health: "available" }),
                 worktreeStub,
                 DaemonEventBus.layer,
                 Layer.succeed(Recovery.Recovery, {
@@ -499,6 +501,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
+      Layer.provideMerge(Layer.succeed(ControlStore, { health: "available" })),
       Layer.provideMerge(runRecorder),
       Layer.provideMerge(runLedger),
       Layer.provideMerge(RunControl.layer),
