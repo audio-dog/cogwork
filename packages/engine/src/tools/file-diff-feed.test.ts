@@ -1,10 +1,11 @@
 import { assert, describe, it } from "@effect/vitest";
-import { DEFAULT_WORKSPACE_ROOT } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as PlatformError from "effect/PlatformError";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { FILE_DIFF_EVENT, toFileDiffEvent, watchWorktreeDiffs } from "./file-diff-feed";
@@ -80,46 +81,21 @@ describe("file diff feed", () => {
   );
 
   it.live(
-    "streams a diff event when a tool writes through the sandbox",
+    "streams a diff event when a tool writes through the sandbox, skipping ignored paths",
     () =>
       Effect.gen(function* () {
-        const original = yield* openSandbox();
-        const state: {
-          onEvent: ((event: { readonly type: string; readonly path: string }) => void) | null;
-        } = { onEvent: null };
-        const ready = Deferred.makeUnsafe<void>();
-        const fs = original.handle.fs;
-        const sandbox: WorktreeSandbox = {
-          ...original,
-          handle: {
-            ...original.handle,
-            fs: {
-              ...fs,
-              write: (path, data) =>
-                fs.write(path, data).then(() => {
-                  state.onEvent?.({ type: "change", path: `${DEFAULT_WORKSPACE_ROOT}/${path}` });
-                }),
-              watch: (_path, onEvent) => {
-                state.onEvent = onEvent;
-                Deferred.doneUnsafe(ready, Effect.void);
-                return Promise.resolve({
-                  stop: () => {
-                    state.onEvent = null;
-                    return Promise.resolve();
-                  },
-                });
-              },
-            },
-          },
-        };
+        const sandbox = yield* openSandbox();
         const baseSha = yield* resolveBaseSha(sandbox);
+        const events = yield* Queue.make<FileSystem.WatchEvent>();
         const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
           Stream.take(1),
           Stream.runHead,
+          Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
           Effect.forkChild,
         );
-        yield* Deferred.await(ready);
         yield* writeFile(sandbox, { path: "watched.txt", content: "hello from a tool\n" });
+        yield* Queue.offer(events, { _tag: "Update", path: "node_modules/dep/index.js" });
+        yield* Queue.offer(events, { _tag: "Update", path: "watched.txt" });
         const head = yield* Fiber.join(fiber).pipe(Effect.timeout("15 seconds"));
         if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
         assert.strictEqual(head.value.name, FILE_DIFF_EVENT);
@@ -128,5 +104,56 @@ describe("file diff feed", () => {
         assert.include(value.diff, "+hello from a tool");
       }),
     20000,
+  );
+
+  // The watcher misreports create/remove (it stats paths relative to the
+  // process cwd), so the feed classifies through the sandbox handle instead;
+  // a tracked file gone from disk must still surface as a deletion diff.
+  it.live(
+    "diffs a tracked file the watcher reports after it was removed",
+    () =>
+      Effect.gen(function* () {
+        const sandbox = yield* openSandbox();
+        const baseSha = yield* resolveBaseSha(sandbox);
+        yield* Effect.promise(() => sandbox.handle.fs.remove("seed.txt"));
+        const events = yield* Queue.make<FileSystem.WatchEvent>();
+        const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+          Stream.take(1),
+          Stream.runHead,
+          Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+          Effect.forkChild,
+        );
+        yield* Queue.offer(events, { _tag: "Create", path: "seed.txt" });
+        const head = yield* Fiber.join(fiber).pipe(Effect.timeout("15 seconds"));
+        if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
+        const value = yield* decodeDiffValue(head.value.value);
+        assert.strictEqual(value.path, "seed.txt");
+        assert.include(value.diff, "-seed");
+      }),
+    20000,
+  );
+
+  // The crash-proof property this feed exists for: a watcher failure — e.g.
+  // FSEvents denied under a Codex seatbelt sandbox, surfaced as an async
+  // EMFILE — must arrive on the typed error channel, never as an uncaught
+  // exception.
+  it.effect("surfaces a watcher failure as a typed tool error", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* openSandbox();
+      const baseSha = yield* resolveBaseSha(sandbox);
+      const failure = PlatformError.systemError({
+        _tag: "Unknown",
+        module: "FileSystem",
+        method: "watch",
+        cause: new Error("EMFILE: too many open files, watch"),
+      });
+      const result = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+        Stream.runDrain,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fail(failure) })),
+        Effect.flip,
+      );
+      assert.strictEqual(result.reason, "exec-failed");
+      assert.include(result.message, "file watcher failed");
+    }),
   );
 });
