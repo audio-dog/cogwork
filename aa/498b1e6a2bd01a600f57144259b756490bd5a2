@@ -1,0 +1,21 @@
+packages/engine/src/tools/file-diff-feed.test.ts
+  s_79dcb41c4b1d64::t_30b58093632c34 136-164
+  s_79dcb41c4b1d64::t_69cf89cf307c94 133-135
+  s_79dcb41c4b1d64::t_e735b4f43bc220 132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "aa498b1e6a2bd01a600f57144259b756490bd5a2",
+  "prompts": {},
+  "sessions": {
+    "s_79dcb41c4b1d64": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d056e58d-a89b-4fc0-9a52-a3e3d494793f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
