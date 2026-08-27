@@ -1,0 +1,23 @@
+packages/cursor-acp/src/harness.ts
+  s_9b30292056623b::t_ab2afe5c665a93 211-215
+packages/cursor-acp/src/harness.test.ts
+  s_9b30292056623b::t_9a0e2a185755bc 50
+  s_9b30292056623b::t_775ab9c02a3396 1
+  s_9b30292056623b::t_70195a104581fd 108,120,122-124,128,142-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "3f29519f760a90e4b6c486e3c8528b9ddabcd286",
+  "prompts": {},
+  "sessions": {
+    "s_9b30292056623b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040c4-d52b-7a43-9fff-20b259315e40",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
