@@ -9,7 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { resolveTarget } from "./commands";
+import { formatDaemonLimits, limitsCommand, resolveTarget } from "./commands";
 
 const runId = Schema.decodeSync(RunIdSchema);
 const workItemId = Schema.decodeSync(WorkItemIdSchema);
@@ -51,4 +51,21 @@ describe("resolveTarget", () => {
       assert.isTrue(Option.isNone(target));
     }),
   );
+});
+
+describe("limits", () => {
+  it("formats the durable rows in their store order", () => {
+    assert.strictEqual(
+      formatDaemonLimits({
+        daemonLimits: {
+          globalConcurrency: 8,
+          perWorkspaceConcurrency: 3,
+          dailyBudget: 20,
+          revision: 2,
+        },
+      }),
+      "global-concurrency: 8\nper-workspace-concurrency: 3\ndaily-budget: 20",
+    );
+    assert.isDefined(limitsCommand);
+  });
 });
