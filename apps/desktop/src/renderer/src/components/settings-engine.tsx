@@ -1,4 +1,4 @@
-import { maxSchedulerLimit } from "@cogwork/contracts";
+import { type ControlStore, maxSchedulerLimit } from "@cogwork/contracts";
 import { Separator } from "@cogwork/ui/components/separator";
 import { useBoard } from "../features/activity-session";
 import { settingEntry } from "../features/settings-catalog";
@@ -6,11 +6,9 @@ import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../fea
 import { useDaemonLimit } from "../features/use-daemon-limit";
 import { NumberStepper, SettingRow, SettingsSection, SubSectionCard } from "./settings-parts";
 
-export function EngineSettings() {
-  const result = useBoard();
-  const controlStore = result._tag === "Success" ? result.board.controlStore : null;
+function EngineSettingsContent({ board }: { readonly board: ControlStore | null }) {
+  const { controlStore, setLimit, result: write } = useDaemonLimit(board);
   const limits = controlStore?.daemonLimits;
-  const { setLimit, result: write } = useDaemonLimit();
   const disabled = limits === undefined || write.waiting;
   const expectedRevision = limits?.revision ?? 0;
 
@@ -53,4 +51,10 @@ export function EngineSettings() {
       </SubSectionCard>
     </SettingsSection>
   );
+}
+
+export function EngineSettings() {
+  const result = useBoard();
+  const controlStore = result._tag === "Success" ? result.board.controlStore : null;
+  return <EngineSettingsContent key={result._tag} board={controlStore} />;
 }
