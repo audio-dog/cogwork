@@ -1,0 +1,28 @@
+apps/cli/src/login-commands.ts
+  s_07a6809442ebd2::t_d6ab1dce58b89f 12,22-24,36-37,39-41,66,71,89
+  s_07a6809442ebd2::t_32ec6484f2f003 78
+  s_07a6809442ebd2::t_7b780e5acdc8be 38
+  s_07a6809442ebd2::t_30d12645364ca7 77,79-82
+apps/cli/src/worktree-commands.ts
+  s_07a6809442ebd2::t_7b780e5acdc8be 32
+  s_07a6809442ebd2::t_d6ab1dce58b89f 4,8,19-21,30-31,33-35,38,45,58,64,80,89,94,101
+  s_07a6809442ebd2::t_32ec6484f2f003 49
+apps/cli/src/commands.ts
+  s_07a6809442ebd2::t_78d3d80746b8be 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "404ee755a6f4a3f2cf2912a354c49df74f5f7d0b",
+  "prompts": {},
+  "sessions": {
+    "s_07a6809442ebd2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a6-0eb5-79c0-ade3-d87ee0329bc8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
