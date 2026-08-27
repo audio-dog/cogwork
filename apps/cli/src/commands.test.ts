@@ -9,7 +9,13 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { formatDaemonLimits, limitsCommand, resolveTarget } from "./commands";
+import {
+  formatDaemonLimits,
+  limitsCommand,
+  resolveTarget,
+  schedulingActions,
+  schedulingCommand,
+} from "./commands";
 
 const runId = Schema.decodeSync(RunIdSchema);
 const workItemId = Schema.decodeSync(WorkItemIdSchema);
@@ -67,5 +73,12 @@ describe("limits", () => {
       "global-concurrency: 8\nper-workspace-concurrency: 3\ndaily-budget: 20",
     );
     assert.isDefined(limitsCommand);
+  });
+});
+
+describe("scheduling", () => {
+  it("exposes pause and resume actions for the daemon scheduler", () => {
+    assert.deepStrictEqual(schedulingActions, { pause: "paused", resume: "running" });
+    assert.isDefined(schedulingCommand);
   });
 });

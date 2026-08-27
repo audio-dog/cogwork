@@ -9,6 +9,7 @@ import {
   type RunEvent,
   RunId,
   type RunSummary,
+  type SchedulingState,
   WorkItemId,
 } from "@cogwork/contracts";
 import { Daemon, Registry } from "@cogwork/engine";
@@ -94,6 +95,11 @@ export const formatDaemonLimits = (controlStore: ControlStore) =>
     `per-workspace-concurrency: ${controlStore.daemonLimits.perWorkspaceConcurrency}`,
     `daily-budget: ${controlStore.daemonLimits.dailyBudget}`,
   ].join("\n");
+
+export const schedulingActions = {
+  pause: "paused",
+  resume: "running",
+} as const satisfies Record<"pause" | "resume", SchedulingState>;
 
 const runDaemon = Effect.fn("commands.runDaemon")(
   function* (options: DaemonOptions) {
@@ -279,6 +285,15 @@ const setLimit = Effect.fn("commands.setLimit")(
   (effect, options) => overSocket(effect, options.socketPath),
 );
 
+const setScheduling = Effect.fn("commands.setScheduling")(
+  function* (options: { readonly socketPath: string; readonly desired: SchedulingState }) {
+    const client = yield* RpcClient.make(DaemonRpcs);
+    const scheduler = yield* client.SetScheduling({ desired: options.desired });
+    yield* Console.log(`scheduling: ${scheduler.scheduling}`);
+  },
+  (effect, options) => overSocket(effect, options.socketPath),
+);
+
 export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
   configHome: configHomeFlag,
@@ -329,4 +344,23 @@ const limitsSetCommand = Command.make("set", {
 
 export const limitsCommand = Command.make("limits").pipe(
   Command.withSubcommands([limitsShowCommand, limitsSetCommand]),
+);
+
+const schedulingPauseCommand = Command.make("pause", { socket: socketFlag }).pipe(
+  Command.withDescription("Pause new runs; in-flight runs finish"),
+  Command.withHandler(({ socket }) =>
+    setScheduling({ socketPath: socket, desired: schedulingActions.pause }),
+  ),
+);
+
+const schedulingResumeCommand = Command.make("resume", { socket: socketFlag }).pipe(
+  Command.withDescription("Resume scheduling new runs"),
+  Command.withHandler(({ socket }) =>
+    setScheduling({ socketPath: socket, desired: schedulingActions.resume }),
+  ),
+);
+
+export const schedulingCommand = Command.make("scheduling").pipe(
+  Command.withDescription("Control new-run scheduling"),
+  Command.withSubcommands([schedulingPauseCommand, schedulingResumeCommand]),
 );
