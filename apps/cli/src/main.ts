@@ -8,6 +8,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { daemonCommand, runEventsCommand, runsCommand, statusCommand, watchCommand } from "./commands";
 import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
+import { workspaceCommand } from "./workspace-commands";
 import { worktreeCommand } from "./worktree-commands";
 
 const cli = Command.make("cogwork").pipe(
@@ -18,6 +19,7 @@ const cli = Command.make("cogwork").pipe(
     runEventsCommand,
     watchCommand,
     worktreeCommand,
+    workspaceCommand,
     loginCommand,
     modelsCommand,
   ]),
