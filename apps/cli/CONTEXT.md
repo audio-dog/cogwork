@@ -20,16 +20,12 @@ The process responsible for booting the server layer and keeping the daemon aliv
 _Avoid_: Treating the CLI as the product's always-on host; embedding the long-lived engine inside a UI renderer
 
 **Server layer**:
-The full composition of engine layers a daemon host boots. It now lives in the engine (`Daemon.serverLayer`), not here — the CLI is one **host adapter**: it builds the file credential store, the SQLite ledger, the disk workspace loader, the git/worktree platform, the cursor harness runner, and the socket-server transport, then hands them to the engine. The disk loader and credential file stay CLI concerns behind the registry- and credential-store parameters. The desktop app will be the second host.
+The full composition of engine layers a daemon host boots. It now lives in the engine (`Daemon.serverLayer`), not here — the CLI is one **host adapter**: it builds the file credential store, the SQLite ledger, the git/worktree platform, the cursor harness runner, and the socket-server transport, then hands them to the engine. The workspace registry is engine-owned and loaded from the Control store. The desktop app will be the second host.
 _Avoid_: Daemon (the running process is the daemon; this is how it's assembled), owning the composition here (it moved to the engine)
 
 **Stop signal**:
 A `SIGINT` or `SIGTERM` to the daemon process. The first one starts the engine's **drain** — the runtime interrupts the heartbeats and the drain runs as their shutdown finalizer, giving in-flight runs `--drain-grace` seconds to finish. A second stop signal ends that wait.
 _Avoid_: Kill, cancel
-
-**Config home**:
-The directory of `*.workspace.ts` files the daemon loads at startup to learn which workspaces to drive.
-_Avoid_: Config file, settings
 
 **Credential file**:
 Where stored OAuth credentials and AI-provider keys live on this machine — `~/.cogwork/credentials.json` by default, `--credentials` to move it. Written 0600 by renaming a fresh file over the old one, so an interrupted save can neither widen the permissions nor truncate the other organizations' grants or provider keys. A file that cannot be read is logged and treated as empty for reads, and refuses to be overwritten on save rather than discarding whatever it held. The file is `version: 2` — issue-tracker grants plus provider keys — and reads a `version: 1` file (grants only) as one with no provider keys, upgrading it on the next write. This file is the CLI's half of the engine's credential store; the CLI also hands the store Linear's client-credentials grant, so a machine with no file can still authenticate from a secret in the environment.
