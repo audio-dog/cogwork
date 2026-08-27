@@ -208,8 +208,13 @@ is exact because both sides run the same statements.
 
 This is what this ADR's previous amendment already argued, one inference short. It said `push` is
 correct against a development database and wrong "on a user's laptop… there is no CLI and no person
-there". There is a person there. `drizzle-kit push` is now a script for moving the local store
-forward without losing its rows, and `drizzle-kit export` produces the create statements that ship.
+there". There is a person there. `drizzle-kit export` produces the create statements that ship.
+
+`push` is *not* adopted, for a reason that is about this ADR's own schema check rather than about
+push: it reaches a schema by `ALTER TABLE`, so the DDL text and column order it leaves differ from
+what the create statements produce, and an exact comparison refuses the result. Keeping a local
+store across a schema change and checking the schema exactly cannot both be had; the check is worth
+more here, because the store is disposable and the wrong-schema diagnosis is not.
 
 **Withdrawn with it:** the pre-migration copy through `VACUUM INTO` — it preserved a user's data
 against a failed migration, and there are no migrations and no users, while every copy it took stayed

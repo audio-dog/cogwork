@@ -31,9 +31,13 @@ that read `.claude/skills`; those copies are ignored, not committed.
 Pre-alpha, there are no migrations: the Control store is created from the schema and replaced when
 the schema moves. After changing `control-store-schema.ts`, run
 `pnpm --filter @cogwork/engine drizzle:schema` to regenerate the shipped create statements;
-`pnpm --filter @cogwork/engine drizzle:check` reports when they have drifted. `drizzle:push` moves a local store forward without
-losing its rows; otherwise delete `~/.cogwork/control.db` and let boot recreate it. See ADR 0015 for
-when migrations come back.
+`pnpm --filter @cogwork/engine drizzle:check` reports when they have drifted. Then delete
+`~/.cogwork/control.db` and let boot recreate it.
+
+`drizzle-kit push` is deliberately not wired up. It reaches a schema by `ALTER TABLE`, so the store it
+leaves behind carries different DDL text and column order than the create statements produce, and
+boot's schema comparison — which is exact on purpose — refuses it. Deleting the store is the only
+supported way forward. See ADR 0015 for when migrations come back.
 
 ## Agent skills
 

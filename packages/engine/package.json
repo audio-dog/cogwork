@@ -9,8 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "drizzle:schema": "node scripts/generate-control-store-create.mjs",
-    "drizzle:check": "node scripts/generate-control-store-create.mjs --check",
-    "drizzle:push": "drizzle-kit push"
+    "drizzle:check": "node scripts/generate-control-store-create.mjs --check"
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
