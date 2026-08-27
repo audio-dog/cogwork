@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { DaemonRpcs, WorkItemId, WorkspaceConfig, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -29,24 +29,22 @@ import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { WorktreeManager } from "./worktree";
 
-const validModule: Registry.LoadedWorkspace = {
-  source: "example.workspace.ts",
-  value: {
+const registeredWorkspace: Registry.RegisteredWorkspace = {
+  source: "control-store:example",
+  config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
     harness: { preferred: "cursor" },
-  },
+  }),
 };
 
-const malformedModule: Registry.LoadedWorkspace = {
-  source: "broken.workspace.ts",
-  value: { name: "missing required fields" },
-};
-
-const sampleResult: Registry.LoadResult = {
-  loaded: [validModule, malformedModule],
-  failures: [{ source: "unreadable.workspace.ts", message: "boom" }],
+const sampleRegistry: Registry.RegistryState = {
+  workspaces: [registeredWorkspace],
+  failures: [
+    { source: "control-store:broken", message: "invalid Workspace input" },
+    { source: "control-store:unreadable", message: "cannot read Workspace input" },
+  ],
 };
 
 const id = Schema.decodeSync(WorkItemId);
@@ -116,74 +114,8 @@ const defectOnceThenObserve = sources(
   ),
 );
 
-describe("buildRegistry", () => {
-  it("registers valid configs and isolates malformed and unreadable ones", () => {
-    const state = Registry.buildRegistry(sampleResult);
-    assert.strictEqual(state.workspaces.length, 1);
-    assert.strictEqual(state.workspaces[0]?.config.name, "example");
-    assert.strictEqual(state.failures.length, 2);
-    assert.deepStrictEqual(state.failures.map((f) => f.source).sort(), [
-      "broken.workspace.ts",
-      "unreadable.workspace.ts",
-    ]);
-  });
-
-  it("isolates a second file that reuses a registered workspace name", () => {
-    const duplicate: Registry.LoadedWorkspace = {
-      source: "example-copy.workspace.ts",
-      value: validModule.value,
-    };
-    const state = Registry.buildRegistry({ loaded: [validModule, duplicate], failures: [] });
-    assert.strictEqual(state.workspaces.length, 1);
-    assert.strictEqual(state.failures.length, 1);
-    assert.strictEqual(state.failures[0]?.source, "example-copy.workspace.ts");
-  });
-});
-
-describe("decide", () => {
-  const registered = Registry.buildRegistry({ loaded: [validModule], failures: [] });
-
-  it("emits a registration event for a valid, unseen config", () => {
-    const events = Registry.decide(Registry.emptyRegistry, {
-      type: "register-workspace",
-      source: validModule.source,
-      module: validModule.value,
-    });
-    assert.strictEqual(events[0]?.type, "workspace.registered");
-  });
-
-  it("rejects a config whose name is already registered", () => {
-    const events = Registry.decide(registered, {
-      type: "register-workspace",
-      source: "example-dup.workspace.ts",
-      module: validModule.value,
-    });
-    assert.strictEqual(events[0]?.type, "workspace.registration-failed");
-  });
-
-  it("turns a decode failure into a registration-failed event", () => {
-    const events = Registry.decide(Registry.emptyRegistry, {
-      type: "register-workspace",
-      source: malformedModule.source,
-      module: malformedModule.value,
-    });
-    assert.strictEqual(events[0]?.type, "workspace.registration-failed");
-  });
-
-  it("passes an import failure straight through as a registration-failed event", () => {
-    const events = Registry.decide(Registry.emptyRegistry, {
-      type: "record-import-failure",
-      source: "unreadable.workspace.ts",
-      message: "boom",
-    });
-    assert.deepStrictEqual(events, [
-      { type: "workspace.registration-failed", source: "unreadable.workspace.ts", message: "boom" },
-    ]);
-  });
-});
-
 describe("reconcile worker", () => {
-  const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
+  const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.readOnlyRegistry(sampleRegistry));
 
   const workerLayer = Reconcile.layer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, sources(IssueTracker.emptyLayer))),
@@ -540,7 +472,7 @@ describe("reconcile worker", () => {
   );
 });
 
-const registeredSample = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
+const registeredSample = Layer.succeed(Registry.WorkspaceRegistry, Registry.readOnlyRegistry(sampleRegistry));
 
 const schedulerStubService = {
   tick: () => Effect.succeed(0),
@@ -761,6 +693,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(EventPublisher.layer),
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
+      Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub),
       Layer.provideMerge(Layer.succeed(ControlStore, { health: "available" })),
       Layer.provideMerge(runRecorder),
