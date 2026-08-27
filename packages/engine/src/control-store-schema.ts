@@ -1,5 +1,33 @@
-import { desc } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { maxSchedulerLimit } from "@cogwork/contracts";
+import { desc, sql } from "drizzle-orm";
+import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const daemonLimits = sqliteTable(
+  "daemon_limits",
+  {
+    id: integer("id").primaryKey(),
+    globalConcurrency: integer("global_concurrency").notNull(),
+    perWorkspaceConcurrency: integer("per_workspace_concurrency").notNull(),
+    dailyBudget: integer("daily_budget").notNull(),
+    revision: integer("revision").notNull(),
+  },
+  (table) => [
+    check("daemon_limits_single_row", sql`${table.id} = 1`),
+    check(
+      "daemon_limits_global_concurrency",
+      sql`${table.globalConcurrency} BETWEEN 1 AND ${sql.raw(String(maxSchedulerLimit))}`,
+    ),
+    check(
+      "daemon_limits_per_workspace_concurrency",
+      sql`${table.perWorkspaceConcurrency} BETWEEN 1 AND ${sql.raw(String(maxSchedulerLimit))}`,
+    ),
+    check(
+      "daemon_limits_daily_budget",
+      sql`${table.dailyBudget} BETWEEN 1 AND ${sql.raw(String(maxSchedulerLimit))}`,
+    ),
+    check("daemon_limits_revision", sql`${table.revision} >= 0`),
+  ],
+);
 
 // Effect's `Migrator` creates and owns its own bookkeeping table, so it is deliberately absent
 // here: including it would make drizzle-kit generate a rival definition of the same table.
