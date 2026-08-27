@@ -34,6 +34,7 @@ export const WorkspaceState = Schema.TaggedUnion({
     poll: PollState,
   },
   Failed: {
+    name: Schema.optional(WorkspaceId),
     source: TrimmedNonEmptyString,
     message: Schema.String,
   },

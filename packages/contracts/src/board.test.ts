@@ -293,6 +293,28 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "boom");
   });
 
+  it("replaces workspace states under their minted identity", () => {
+    const failure = workspaceState({
+      _tag: "Failed",
+      name: "acme",
+      source: "/repos/acme",
+      message: "boom",
+    });
+    const failed = fold([
+      event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
+      event({ _tag: "WorkspaceChanged", workspace: failure }),
+    ]);
+    const recovered = applyDaemonEvent(
+      failed,
+      event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
+    );
+
+    assert.strictEqual(failed.workspaces.size, 1);
+    assert.strictEqual(failed.workspaces.get("acme")?._tag, "Failed");
+    assert.strictEqual(recovered.workspaces.size, 1);
+    assert.strictEqual(recovered.workspaces.get("acme")?._tag, "Registered");
+  });
+
   it("starts empty", () => {
     assert.strictEqual(initialBoard.items.size, 0);
     assert.strictEqual(initialBoard.runs.size, 0);

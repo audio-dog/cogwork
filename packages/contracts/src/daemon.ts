@@ -98,6 +98,7 @@ export const WorkspaceInfo = Schema.Struct({
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
 export const WorkspaceFailureInfo = Schema.Struct({
+  name: Schema.optional(WorkspaceId),
   source: TrimmedNonEmptyString,
   message: Schema.String,
 });
