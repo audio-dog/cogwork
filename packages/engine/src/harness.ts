@@ -68,6 +68,10 @@ export interface HarnessRunner {
 }
 
 export interface HarnessService {
+  readonly preflight: (
+    harness: HarnessName,
+    profile: OperationPolicyProfile,
+  ) => Effect.Effect<void, HarnessError>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
   // An unregistered harness falls back to opaque-handle: its run fails at
   // dispatch anyway, and that was the one kind every session took before.
@@ -103,26 +107,32 @@ const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolic
     message: `harness runner ${runner.name} cannot enforce ${posture} for the ${profile} profile`,
   });
 
+const preflightRunner = (
+  registry: ReadonlyMap<HarnessName, HarnessRunner>,
+  harness: HarnessName,
+  profile: OperationPolicyProfile,
+) => {
+  const runner = registry.get(harness);
+  if (!runner) return Effect.fail(unknownHarness(harness));
+  const posture = unsupportedPosture(runner, profile);
+  if (posture) return Effect.fail(unsupportedRunnerPosture(runner, profile, posture));
+  return Effect.succeed(runner);
+};
+
 export const make = (
   runners: ReadonlyArray<HarnessRunner>,
   services: HarnessRunnerServices,
 ): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
   return {
-    run: (request) => {
-      const runner = registry.get(request.harness);
-      const posture = runner ? unsupportedPosture(runner, request.profile) : null;
-      const stream = runner
-        ? posture
-          ? Stream.fail(unsupportedRunnerPosture(runner, request.profile, posture))
-          : runner.run(request)
-        : Stream.fail(unknownHarness(request.harness));
-      return stream.pipe(
+    preflight: (harness, profile) => preflightRunner(registry, harness, profile).pipe(Effect.asVoid),
+    run: (request) =>
+      Stream.fromEffect(preflightRunner(registry, request.harness, request.profile)).pipe(
+        Stream.flatMap((runner) => runner.run(request)),
         Stream.provideService(SessionStore, services.sessionStore),
         Stream.provideService(ContextAssembler, services.contextAssembler),
         Stream.provideService(CredentialStore, services.credentialStore),
-      );
-    },
+      ),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
   };
 };

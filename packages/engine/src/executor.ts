@@ -865,6 +865,12 @@ export const make = Effect.gen(function* () {
     if (!resolved?.enabled) {
       return false;
     }
+    const runnable = yield* harness
+      .preflight(resolved.harness, operationPolicyProfile(item.stage))
+      .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
+    if (!runnable) {
+      return false;
+    }
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {

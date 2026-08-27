@@ -755,15 +755,38 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("treats an unregistered harness as a non-retryable, human-handoff failure", () =>
+  it.effect("declines an unregistered harness before claiming or recording a run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const layer = provide(recorder(calls), []);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        yield* executor.execute(workspace, triageItem);
-        const log = yield* Ref.get(calls);
-        assert.strictEqual(log.find((c) => c.method === "handOff")?.stage, "triage");
+        const accepted = yield* executor.execute(workspace, triageItem);
+
+        assert.isFalse(accepted);
+        assert.deepStrictEqual(yield* Ref.get(calls), []);
+        const ledger = yield* RunLedger.RunLedger;
+        assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("declines an unsupported harness posture before claiming or recording a run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const unsupported = {
+        ...runner(successEvents),
+        execution: { ...fullHarnessExecution, profiles: [] },
+      } satisfies HarnessRunner;
+      const layer = provide(recorder(calls), [unsupported]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const accepted = yield* executor.execute(workspace, triageItem);
+
+        assert.isFalse(accepted);
+        assert.deepStrictEqual(yield* Ref.get(calls), []);
+        const ledger = yield* RunLedger.RunLedger;
+        assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
       }).pipe(Effect.provide(layer));
     }),
   );
