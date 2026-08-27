@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { codexRunner } from "@cogwork/codex-cli";
 import { HarnessName } from "@cogwork/contracts";
 import { cursorRunner } from "@cogwork/cursor-acp";
-import { ContextAssembler, Daemon, Provider, Registry } from "@cogwork/engine";
+import { ContextAssembler, Daemon, Provider } from "@cogwork/engine";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Effect from "effect/Effect";
@@ -18,12 +18,10 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
 import { layer as ledgerLayer } from "./ledger";
-import { loadFromDisk } from "./loader";
 import { contextFsLayer, worktreeManagerLayer } from "./platform";
 
 export interface DaemonOptions {
   readonly socketPath: string;
-  readonly configHome: string;
   readonly controlStorePath: string;
   readonly credentialsPath: string;
   readonly maxConcurrency: number;
@@ -76,9 +74,6 @@ export const transportLayer = (socketPath: string) =>
     Layer.provide(restrictSocket(socketPath).pipe(Layer.provideMerge(boundSocketServer(socketPath)))),
   );
 
-const registryLayer = (configHome: string) =>
-  Layer.effect(Registry.WorkspaceRegistry, Effect.map(loadFromDisk(configHome), Registry.buildRegistry));
-
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
 const codexName = Schema.decodeSync(HarnessName)("codex");
 const providerName = Schema.decodeSync(HarnessName)("provider");
@@ -108,7 +103,6 @@ export const serverLayer = (options: DaemonOptions) =>
     contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
     runLedger: ledgerLayer,
     controlStorePath: options.controlStorePath,
-    registry: registryLayer(options.configHome),
     worktrees: worktreeManagerLayer,
     harnessRunners,
     scheduler: {
