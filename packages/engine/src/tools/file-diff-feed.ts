@@ -87,7 +87,7 @@ const classifyWorktreeEvent = Effect.fn("Tools.classifyWorktreeEvent")(function*
   rel: string,
 ) {
   const path = `${DEFAULT_WORKSPACE_ROOT}/${rel}`;
-  const exists = yield* Effect.promise(() => sandbox.handle.fs.exists(path)).pipe(
+  const exists = yield* Effect.tryPromise(() => sandbox.handle.fs.exists(path)).pipe(
     Effect.orElseSucceed(() => false),
   );
   return { type: exists ? "change" : "delete", path, timestamp: 0 } satisfies SandboxFileEvent;

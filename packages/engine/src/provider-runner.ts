@@ -178,10 +178,20 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             outputSchema: stageResultSchema(request.stage),
           });
 
-          const diffs = watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.catchCause(() => Stream.empty));
-          return Stream.merge(bridgeChat(chatStream), diffs, { haltStrategy: "left" }).pipe(
-            Stream.ensuring(Effect.sync(() => abortController.abort())),
-          );
+          // Live diffs are a nicety: a dead feed must not end the run, but it
+          // must leave a trace — on Linux a large ignored tree can exhaust
+          // inotify watches, and recursive watching cannot exclude subtrees.
+          return Stream.merge(
+            bridgeChat(chatStream),
+            watchWorktreeDiffs(sandbox, baseSha).pipe(
+              Stream.catchCause((cause) =>
+                Stream.fromEffect(Effect.logWarning("worktree diff feed stopped", { cause })).pipe(
+                  Stream.drain,
+                ),
+              ),
+            ),
+            { haltStrategy: "left" },
+          ).pipe(Stream.ensuring(Effect.sync(() => abortController.abort())));
         }),
       ),
   };
