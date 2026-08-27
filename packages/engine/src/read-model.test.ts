@@ -13,8 +13,9 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { RegisteredWorkspace } from "./projector";
-import { classifiedItemsOf, workspaceInfoOf } from "./read-model";
+import { classifiedItemsOf, schedulerStatsOf, workspaceInfoOf } from "./read-model";
 import type { WorkspaceReconcileState } from "./reconcile";
+import { initialState } from "./scheduler";
 
 const id = Schema.decodeSync(WorkItemId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -171,5 +172,17 @@ describe("workspaceInfoOf", () => {
 
     assert.deepStrictEqual(info.poll, { status: "pending" });
     assert.deepStrictEqual([info.eligible, info.claimed, info.blocked, info.needsHuman], [[], [], [], []]);
+  });
+});
+
+describe("schedulerStatsOf", () => {
+  it("reports the durable workspace limit even with no run in flight", () => {
+    const registered = { ...workspace, workspaceLimit: 2 };
+    const stats = schedulerStatsOf({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }, initialState, {
+      workspaces: [registered],
+      failures: [],
+    });
+
+    assert.deepStrictEqual(stats.perWorkspace, [{ name: workspace.config.name, inFlight: 0, limit: 2 }]);
   });
 });

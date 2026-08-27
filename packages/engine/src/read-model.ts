@@ -30,6 +30,7 @@ export const workspaceInfoOf = (
   state: WorkspaceReconcileState | undefined,
 ) => ({
   name: workspace.config.name,
+  ...(workspace.config.displayName ? { displayName: workspace.config.displayName } : {}),
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
   harness: workspace.config.harness.preferred,
@@ -50,12 +51,26 @@ export const workspaceStatesOf = (registry: RegistryState, snapshot: ReconcileSn
   ];
 };
 
-export const schedulerStatsOf = (config: SchedulerConfig, state: SchedulerState): SchedulerStats => ({
+export const schedulerStatsOf = (
+  config: SchedulerConfig,
+  state: SchedulerState,
+  registry?: RegistryState,
+): SchedulerStats => ({
   scheduling: state.paused ? "paused" : "running",
   globalInFlight: state.global,
   globalLimit: config.globalLimit,
   perWorkspaceLimit: config.perWorkspaceLimit,
   dailyBudgetUsed: state.budgetUsed,
   dailyBudgetLimit: config.dailyBudget,
-  perWorkspace: [...state.perWorkspace].map(([name, inFlight]) => ({ name, inFlight })),
+  perWorkspace: registry
+    ? registry.workspaces.map((workspace) => ({
+        name: workspace.config.name,
+        inFlight: state.perWorkspace.get(workspace.config.name) ?? 0,
+        limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
+      }))
+    : [...state.perWorkspace].map(([name, inFlight]) => ({
+        name,
+        inFlight,
+        limit: config.perWorkspaceLimit,
+      })),
 });
