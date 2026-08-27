@@ -25,7 +25,7 @@ const controlStoreFlag = Flag.string("control-store").pipe(
 );
 
 const workspaceFlag = Flag.string("workspace").pipe(
-  Flag.withDescription("Name of the registered workspace whose OAuth app to log in against"),
+  Flag.withDescription("WorkspaceId whose OAuth app to log in against"),
 );
 
 const credentialsFlag = Flag.string("credentials").pipe(
@@ -35,9 +35,9 @@ const credentialsFlag = Flag.string("credentials").pipe(
 
 const findIssueTracker = Effect.fn("login.findIssueTracker")(function* (name: string) {
   const registry = yield* Registry.WorkspaceRegistry;
-  const workspace = Registry.findWorkspace(registry, name);
-  if (!workspace) return yield* new LoginConfigError({ detail: `workspace "${name}" not found` });
-  return workspace.config.issueTracker;
+  const issueTracker = Registry.findWorkspaceIssueTracker(registry, name);
+  if (!issueTracker) return yield* new LoginConfigError({ detail: `workspace "${name}" not found` });
+  return issueTracker;
 });
 
 const resolveConfig = (

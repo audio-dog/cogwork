@@ -21,7 +21,9 @@ const controlStoreFlag = Flag.string("control-store").pipe(
   Flag.withDefault(defaultControlStorePath),
 );
 
-const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("Name of the registered workspace"));
+const workspaceFlag = Flag.string("workspace").pipe(
+  Flag.withDescription("WorkspaceId of the registered workspace"),
+);
 
 const itemFlag = Flag.string("item").pipe(Flag.withDescription("Work item id, e.g. #13"));
 const titleFlag = Flag.string("title").pipe(Flag.withDescription("Work item title"));
