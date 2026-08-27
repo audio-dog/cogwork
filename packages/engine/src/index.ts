@@ -1,6 +1,6 @@
 export * as ContextAssembler from "./context-assembler";
 export * as ContextFs from "./context-fs";
-export * from "./control-store";
+export { bootControlStoreLayer, controlStoreClientLayer } from "./control-store";
 export * as ControlStoreSchema from "./control-store-schema";
 export * as CredentialStore from "./credential-store";
 export * as Daemon from "./daemon";
