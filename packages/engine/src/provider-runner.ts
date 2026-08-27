@@ -83,14 +83,12 @@ const launchError = (retryable: boolean, message: string) =>
 
 // Falls back to the run-start layers when a refresh fails, so a broken read never
 // strips context mid-run.
-export const resolveContextLayers = (
-  assembler: ContextAssemblerService,
-  request: AssembleRequest,
-  fallback: ReadonlyArray<InstructionLayer>,
-) =>
-  assembler
-    .assemble(request)
-    .pipe(Effect.match({ onFailure: () => fallback, onSuccess: (value) => value.layers }));
+export const resolveContextLayers = Effect.fn("ProviderRunner.resolveContextLayers")(
+  (assembler: ContextAssemblerService, request: AssembleRequest, fallback: ReadonlyArray<InstructionLayer>) =>
+    assembler
+      .assemble(request)
+      .pipe(Effect.match({ onFailure: () => fallback, onSuccess: (value) => value.layers })),
+);
 
 // Runs on every turn so a mid-run edit to an AGENTS.md reaches the next prompt.
 const contextMiddleware = (
