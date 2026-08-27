@@ -43,3 +43,17 @@ export const runEvents = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.runId, table.seq] }), index("run_events_at").on(table.at)],
 );
+export const workspaces = sqliteTable("workspaces", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  checkoutPath: text("checkout_path").notNull(),
+  gitRemote: text("git_remote"),
+  issueTracker: text("issue_tracker").notNull(),
+  sourceControl: text("source_control"),
+  linearHistory: integer("linear_history", { mode: "boolean" }).notNull(),
+  worktreeRoot: text("worktree_root"),
+  worktreeRemote: text("worktree_remote"),
+  worktreeBaseBranch: text("worktree_base_branch"),
+  worktreeReapAfterMillis: integer("worktree_reap_after_millis"),
+  concurrency: integer("concurrency"),
+});
