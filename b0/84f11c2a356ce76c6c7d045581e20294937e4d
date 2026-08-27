@@ -1,0 +1,31 @@
+packages/engine/drizzle/20260827020927_run-event-retention/migration.sql
+  s_5336be0f0cc6b5::t_7ac3e26f90056f 1
+packages/engine/drizzle.config.ts
+  s_5336be0f0cc6b5::t_d488b3002ff9b7 1-3
+packages/engine/drizzle/20260827015812_familiar_puma/snapshot.json
+  s_5336be0f0cc6b5::t_c31ae2a41b58c5 1-374
+packages/engine/drizzle/20260827020927_run-event-retention/snapshot.json
+  s_5336be0f0cc6b5::t_141aee969096b6 1-388
+packages/engine/src/control-store-schema.ts
+  s_5336be0f0cc6b5::t_4483f493a2deba 2-45,47
+  s_5336be0f0cc6b5::t_edf0671de90e09 1,46
+packages/engine/drizzle/20260827015812_familiar_puma/migration.sql
+  s_5336be0f0cc6b5::t_be3c74819488f6 1,7,12,22,39,47-50
+  s_5336be0f0cc6b5::t_c31ae2a41b58c5 2-6,8-11,13-21,23-38,40-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b084f11c2a356ce76c6c7d045581e20294937e4d",
+  "prompts": {},
+  "sessions": {
+    "s_5336be0f0cc6b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040d1-284c-7e20-8e3d-473de6e169e3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
