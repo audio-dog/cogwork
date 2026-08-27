@@ -20,6 +20,19 @@ Before changing Effect code, read the applicable patterns in `docs/agent-pattern
 
 You must always invoke the /effect-ts skill when writing Effect code.
 
+## Drizzle
+
+The Control store's schema lives in `packages/engine/src/control-store-schema.ts`, and `drizzle-kit`
+runs from `packages/engine`. `drizzle-kit` ships its own agent skills, which
+`pnpm dlx @tanstack/intent@latest list` surfaces under `drizzle-kit` — load them before touching a
+Drizzle file. `pnpm --filter @cogwork/engine exec drizzle-kit skills` writes a local copy for editors
+that read `.claude/skills`; those copies are ignored, not committed.
+
+Never hand-edit a generated `migration.sql`. `drizzle-kit generate --custom` is where hand-written
+SQL belongs. `packages/engine/src/control-store-migrations.gen.ts` is generated from the committed
+SQL — run `pnpm --filter @cogwork/engine drizzle:generate` after any schema change, and
+`pnpm format-and-lint` fails when it drifts.
+
 ## Agent skills
 
 ### Issue tracker

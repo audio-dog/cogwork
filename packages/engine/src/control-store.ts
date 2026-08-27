@@ -1,13 +1,17 @@
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import { chmodSync, existsSync, mkdirSync, renameSync } from "node:fs";
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import { dirname, join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import * as SqliteMigrator from "@effect/sql-sqlite-node/SqliteMigrator";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { migrations } from "./control-store-migrations";
+import * as Migrator from "effect/unstable/sql/Migrator";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import type { SqlError } from "effect/unstable/sql/SqlError";
+import { migrations as shippedMigrations } from "./control-store-migrations.gen";
 
 export type ControlStoreStatus =
   | { readonly health: "available" }
@@ -29,267 +33,203 @@ export class ControlStoreWriteError extends Schema.TaggedError<ControlStoreWrite
   { message: Schema.String },
 ) {}
 
+const migrationsTable = "control_migrations";
+const legacyLedgerName = "runs.db";
 const maximumRunEventAgeMillis = 1000 * 60 * 60 * 24 * 30;
-const sqliteBusyTimeoutMillis = 30_000;
+const importedTables = ["runs", "sessions", "run_events"] as const;
+
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+// `ATTACH`, `VACUUM INTO`, and identifiers cannot carry a bound parameter.
 const quoted = (value: string) => `'${value.replaceAll("'", "''")}'`;
-const applied = (db: DatabaseSync) =>
-  db
-    .prepare("SELECT id, hash FROM control_migrations ORDER BY id")
-    .all()
-    .map((row) => ({ id: Number(row.id), hash: String(row.hash) }));
-const compatible = (rows: ReadonlyArray<{ readonly id: number; readonly hash: string }>) =>
-  rows.every((row, index) => migrations[index]?.id === row.id && migrations[index]?.hash === row.hash);
 
-const normalizeSql = (sql: unknown) =>
-  String(sql ?? "")
-    .toLowerCase()
-    .replace(/[`"]/g, "")
-    .replace(/\bconstraint\s+\w+\s+/g, "")
-    .replace(/\s+/g, "");
+const hasTable = Effect.fn("ControlStore.hasTable")(function* (table: string) {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = yield* sql<{
+    readonly name: string;
+  }>`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${table}`;
+  return rows.length > 0;
+});
 
-const tableNames = (db: DatabaseSync) =>
-  db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-    .all()
-    .map((table) => String(table.name));
+const appliedMigrationIds = Effect.fn("ControlStore.appliedMigrationIds")(function* () {
+  if (!(yield* hasTable(migrationsTable))) return [];
+  const sql = yield* SqlClient.SqlClient;
+  const rows = yield* sql<{ readonly migration_id: number }>`SELECT migration_id FROM ${sql(
+    migrationsTable,
+  )} ORDER BY migration_id`;
+  return rows.map((row) => row.migration_id);
+});
 
-const objectShape = (db: DatabaseSync) =>
-  db
-    .prepare(
-      "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' OR name LIKE 'sqlite_autoindex_%' ORDER BY type, name",
-    )
-    .all()
-    .map((object) => `object:${String(object.type)}:${String(object.name)}`);
+// Which migrations a store boots with. Production passes the shipped set; a test passes a prefix of
+// it to stand in for a store an older build left behind.
+export type ControlStoreMigrations = Record<string, Effect.Effect<void, SqlError, SqlClient.SqlClient>>;
+const migrationIds = (migrations: ControlStoreMigrations) =>
+  Effect.map(Migrator.fromRecord(migrations), (resolved) => resolved.map(([id]) => id));
+const runMigrations = (migrations: ControlStoreMigrations) =>
+  SqliteMigrator.run({ loader: Migrator.fromRecord(migrations), table: migrationsTable });
 
-const tableShape = (db: DatabaseSync) =>
-  db
-    .prepare(
-      "SELECT name, ncol, wr, strict FROM pragma_table_list WHERE schema = 'main' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-    )
-    .all()
-    .map(
-      (table) =>
-        `table:${String(table.name)}:${Number(table.ncol)}:${Number(table.wr)}:${Number(table.strict)}`,
-    );
+const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
+  if (!(yield* hasTable("run_events"))) return;
+  const sql = yield* SqlClient.SqlClient;
+  const now = yield* Clock.currentTimeMillis;
+  yield* sql`DELETE FROM run_events WHERE at < ${now - maximumRunEventAgeMillis}`;
+});
 
-const columnShape = (db: DatabaseSync, table: string) =>
-  db
-    .prepare(
-      'SELECT name, lower(type) AS type, "notnull", dflt_value, pk, hidden FROM pragma_table_xinfo(?) ORDER BY name',
-    )
-    .all(table)
-    .map(
-      (column) =>
-        `column:${table}:${String(column.name)}:${String(column.type)}:${Number(column.notnull)}:${String(column.dflt_value ?? "")}:${Number(column.pk)}:${Number(column.hidden)}`,
-    );
+// The copy is the only evidence a failed migration leaves behind, so it is taken before the
+// migrator opens its transaction and after retention has bounded what there is to copy.
+const copyBeforeMigrating = Effect.fn("ControlStore.copyBeforeMigrating")(function* (storePath: string) {
+  const sql = yield* SqlClient.SqlClient;
+  const fs = yield* FileSystem.FileSystem;
+  const now = yield* Clock.currentTimeMillis;
+  const destination = `${storePath}.before-migration-${now}.sqlite`;
+  yield* sql.unsafe(`VACUUM INTO ${quoted(destination)}`);
+  yield* fs.chmod(destination, 0o600);
+});
 
-const indexShape = (db: DatabaseSync, table: string) =>
-  db
-    .prepare('SELECT name, "unique", origin, partial FROM pragma_index_list(?) ORDER BY name')
-    .all(table)
-    .flatMap((index) => [
-      `index:${table}:${String(index.name)}:${Number(index.unique)}:${String(index.origin)}:${Number(index.partial)}`,
-      ...db
-        .prepare('SELECT seqno, name, "desc", coll, key FROM pragma_index_xinfo(?) ORDER BY seqno')
-        .all(String(index.name))
-        .map(
-          (column) =>
-            `index-column:${String(index.name)}:${Number(column.seqno)}:${String(column.name ?? "")}:${Number(column.desc)}:${String(column.coll)}:${Number(column.key)}`,
-        ),
-    ]);
+const columnsOf = Effect.fn("ControlStore.columnsOf")(function* (schema: string, table: string) {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = yield* sql<{
+    readonly name: string;
+  }>`SELECT name FROM pragma_table_info(${table}, ${schema})`;
+  return rows.map((row) => row.name);
+});
 
-const foreignKeyShape = (db: DatabaseSync, table: string) =>
-  db
-    .prepare(
-      'SELECT id, seq, "table", "from", "to", on_update, on_delete, match FROM pragma_foreign_key_list(?) ORDER BY id, seq',
-    )
-    .all(table)
-    .map(
-      (key) =>
-        `foreign-key:${table}:${Number(key.id)}:${Number(key.seq)}:${String(key.table)}:${String(key.from)}:${String(key.to)}:${String(key.on_update)}:${String(key.on_delete)}:${String(key.match)}`,
-    );
+const importTable = Effect.fn("ControlStore.importTable")(function* (table: (typeof importedTables)[number]) {
+  const legacy = yield* columnsOf("legacy", table);
+  if (legacy.length === 0) return;
+  const sql = yield* SqlClient.SqlClient;
+  const shared = (yield* columnsOf("main", table)).filter((column) => legacy.includes(column));
+  const columns = shared.map((column) => `"${column}"`).join(", ");
+  yield* sql.unsafe(`INSERT INTO main.${table} (${columns}) SELECT ${columns} FROM legacy.${table}`);
+});
 
-const constraintShape = (db: DatabaseSync) =>
-  db
-    .prepare(
-      "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-    )
-    .all()
-    .map((table) => {
-      const sql = normalizeSql(table.sql);
-      const features = ["check(", "collate", "generated", "references", "withoutrowid", "strict"].filter(
-        (feature) => sql.includes(feature),
-      );
-      return `constraints:${String(table.name)}:${features.join(",")}`;
+// A legacy `runs.db` is imported rather than renamed into place. Its tables were created by a
+// bootstrap that predates drizzle-kit, so their DDL does not match what the migrations produce, and
+// adopting the file would leave a store the schema check has to be taught to forgive. Copying the
+// rows into a freshly migrated store keeps that check exact, and keeps the old file as evidence.
+const importLegacyLedger = Effect.fn("ControlStore.importLegacyLedger")(function* (legacyPath: string) {
+  const sql = yield* SqlClient.SqlClient;
+  const fs = yield* FileSystem.FileSystem;
+  const now = yield* Clock.currentTimeMillis;
+  yield* Effect.acquireUseRelease(
+    sql.unsafe(`ATTACH DATABASE ${quoted(legacyPath)} AS legacy`),
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.forEach(importedTables, importTable, { discard: true });
+        yield* sql`UPDATE runs SET status = 'exhausted' WHERE status = 'blocked'`;
+      }),
+    () => Effect.ignore(sql.unsafe("DETACH DATABASE legacy")),
+  );
+  yield* fs.rename(legacyPath, `${legacyPath}.imported-${now}`);
+});
+
+// Every store reaches its schema by running the same statements, so the expected shape is what those
+// statements produce in an empty database and the comparison can stay textual.
+const schemaFingerprint = Effect.fn("ControlStore.schemaFingerprint")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const rows = yield* sql<{
+    readonly type: string;
+    readonly name: string;
+    readonly sql: string | null;
+  }>`SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' OR name LIKE 'sqlite_autoindex_%' ORDER BY type, name`;
+  return rows.map((row) => `${row.type}:${row.name}:${row.sql ?? ""}`).join("\n");
+});
+
+const expectedSchemaFingerprint = (migrations: ControlStoreMigrations) =>
+  Effect.gen(function* () {
+    yield* runMigrations(migrations);
+    return yield* schemaFingerprint();
+  }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" })));
+
+const validate = Effect.fn("ControlStore.validate")(function* (migrations: ControlStoreMigrations) {
+  const sql = yield* SqlClient.SqlClient;
+  const integrity = yield* sql<{ readonly integrity_check: string }>`PRAGMA integrity_check`;
+  if (integrity[0]?.integrity_check !== "ok")
+    return yield* new ControlStoreBootError({
+      message: `Control store integrity check failed: ${integrity[0]?.integrity_check ?? "no result"}`,
     });
+  if ((yield* schemaFingerprint()) !== (yield* expectedSchemaFingerprint(migrations)))
+    return yield* new ControlStoreBootError({ message: "Control store schema is incompatible" });
+});
 
-const schemaShape = (db: DatabaseSync) => {
-  const tables = tableNames(db);
-  return [
-    ...objectShape(db),
-    ...tableShape(db),
-    ...tables.flatMap((table) => [
-      ...columnShape(db, table),
-      ...indexShape(db, table),
-      ...foreignKeyShape(db, table),
-    ]),
-    ...constraintShape(db),
-  ];
-};
-
-const expectedSchemaShape = (() => {
-  const db = new DatabaseSync(":memory:");
-  try {
-    for (const migration of migrations) {
-      for (const statement of migration.statements) db.exec(statement);
-    }
-    return schemaShape(db);
-  } finally {
-    db.close();
+const boot = Effect.fn("ControlStore.boot")(function* (
+  storePath: string,
+  migrations: ControlStoreMigrations,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* fs.chmod(storePath, 0o600);
+  const applied = yield* appliedMigrationIds();
+  const shipped = yield* migrationIds(migrations);
+  const unknown = applied.filter((id) => !shipped.includes(id));
+  if (unknown.length > 0)
+    return yield* new ControlStoreBootError({
+      message: `Control store carries migrations this build does not ship: ${unknown.join(", ")}`,
+    });
+  yield* retainRunEvents();
+  // A store the client has just created holds nothing, so there is nothing to copy.
+  const occupied = (yield* schemaFingerprint()) !== "";
+  const pending = shipped.filter((id) => !applied.includes(id));
+  if (pending.length > 0 && occupied) yield* copyBeforeMigrating(storePath);
+  yield* runMigrations(migrations);
+  if (!occupied) {
+    const legacyPath = path.join(path.dirname(storePath), legacyLedgerName);
+    if (legacyPath !== storePath && (yield* fs.exists(legacyPath))) yield* importLegacyLedger(legacyPath);
   }
-})();
-
-const validateSchema = (db: DatabaseSync) => {
-  if (schemaShape(db).join("|") !== expectedSchemaShape.join("|"))
-    throw new Error("Control store schema is incompatible");
-};
-
-const validate = (db: DatabaseSync) => {
-  const integrity = db.prepare("PRAGMA integrity_check").get();
-  if (integrity?.integrity_check !== "ok")
-    throw new Error(`Control store integrity check failed: ${integrity?.integrity_check ?? "no result"}`);
-  if (!compatible(applied(db))) throw new Error("Control store migration history is incompatible");
-  validateSchema(db);
-};
-
-const backup = (dbPath: string, backupPath: string) => {
-  const reader = new DatabaseSync(dbPath, { readOnly: true });
-  try {
-    reader.exec(`VACUUM INTO ${quoted(backupPath)}`);
-    chmodSync(backupPath, 0o600);
-  } finally {
-    reader.close();
-  }
-};
-
-const pendingMigrations = (db: DatabaseSync) => {
-  const current = applied(db);
-  if (!compatible(current)) throw new Error("Control store migration history is incompatible");
-  return migrations.slice(current.length);
-};
-
-const retainRunEvents = (db: DatabaseSync) => {
-  const table = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'run_events'").get();
-  if (!table) return;
-  // @effect-diagnostics-next-line globalDate:off
-  const cutoff = Date.now() - maximumRunEventAgeMillis;
-  db.prepare("DELETE FROM run_events WHERE at < ?").run(cutoff);
-};
-
-const applyPendingMigrations = (
-  db: DatabaseSync,
-  dbPath: string,
-  existed: boolean,
-  pending: typeof migrations,
-) => {
-  if (pending.length === 0) return;
-  db.exec("COMMIT");
-  db.exec("BEGIN IMMEDIATE");
-  const lockedPending = pendingMigrations(db);
-  // @effect-diagnostics-next-line globalDate:off
-  if (lockedPending.length > 0 && existed) backup(dbPath, `${dbPath}.before-migration-${Date.now()}.sqlite`);
-  for (const migration of lockedPending) {
-    for (const statement of migration.statements) db.exec(statement);
-    db.prepare("INSERT INTO control_migrations (id, hash) VALUES (?, ?)").run(migration.id, migration.hash);
-  }
-};
-
-const migrateStore = (dbPath: string) => {
-  const existed = existsSync(dbPath);
-  mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
-  const db = new DatabaseSync(dbPath);
-  try {
-    chmodSync(dbPath, 0o600);
-    db.exec(`PRAGMA busy_timeout = ${sqliteBusyTimeoutMillis}`);
-    db.exec("CREATE TABLE IF NOT EXISTS control_migrations (id INTEGER PRIMARY KEY, hash TEXT NOT NULL)");
-    db.exec("BEGIN IMMEDIATE");
-    const pending = pendingMigrations(db);
-    retainRunEvents(db);
-    applyPendingMigrations(db, dbPath, existed, pending);
-    validate(db);
-    db.exec("COMMIT");
-  } catch (error) {
-    try {
-      db.exec("ROLLBACK");
-    } catch {}
-    throw error;
-  } finally {
-    db.close();
-  }
-};
-
-const migrateLegacyLedger = (dbPath: string) => {
-  const legacyPath = join(dirname(dbPath), "runs.db");
-  if (existsSync(dbPath) || !existsSync(legacyPath)) return;
-  renameSync(legacyPath, dbPath);
-};
-
-export const migrate = Effect.fn("ControlStore.migrate")(function* (dbPath: string) {
-  yield* Effect.try({
-    try: () => {
-      migrateLegacyLedger(dbPath);
-      migrateStore(dbPath);
-    },
-    catch: (error) => new ControlStoreBootError({ message: messageOf(error) }),
-  });
+  yield* validate(migrations);
 });
 
 export const writeAuthoritative = Effect.fn("ControlStore.writeAuthoritative")(function* (
-  dbPath: string,
   key: string,
   value: string,
   expectedRevision: number,
 ) {
-  return yield* Effect.try({
-    try: () => {
-      const db = new DatabaseSync(dbPath);
-      try {
-        db.exec("BEGIN IMMEDIATE");
-        const actualRevision = Number(
-          db.prepare("SELECT revision FROM authoritative_records WHERE key = ?").get(key)?.revision ?? 0,
-        );
+  const sql = yield* SqlClient.SqlClient;
+  return yield* sql
+    .withTransaction(
+      Effect.gen(function* () {
+        const rows = yield* sql<{
+          readonly revision: number;
+        }>`SELECT revision FROM authoritative_records WHERE key = ${key}`;
+        const actualRevision = rows[0]?.revision ?? 0;
         if (actualRevision !== expectedRevision)
-          throw new StaleControlStoreWrite({ key, expectedRevision, actualRevision });
+          return yield* new StaleControlStoreWrite({ key, expectedRevision, actualRevision });
         const revision = actualRevision + 1;
-        db.prepare(
-          "INSERT INTO authoritative_records (key, value, revision) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, revision = excluded.revision",
-        ).run(key, value, revision);
-        db.exec("COMMIT");
+        yield* sql`INSERT INTO authoritative_records (key, value, revision) VALUES (${key}, ${value}, ${revision}) ON CONFLICT(key) DO UPDATE SET value = excluded.value, revision = excluded.revision`;
         return revision;
-      } catch (error) {
-        try {
-          db.exec("ROLLBACK");
-        } catch {}
-        throw error;
-      } finally {
-        db.close();
-      }
-    },
-    catch: (error) =>
-      Schema.is(StaleControlStoreWrite)(error)
-        ? error
-        : new ControlStoreWriteError({ message: messageOf(error) }),
-  });
+      }),
+    )
+    .pipe(Effect.catchTag("SqlError", (error) => new ControlStoreWriteError({ message: messageOf(error) })));
 });
+
+// The directory has to exist, and be private, before the client opens the file inside it.
+const prepareStoreDirectory = Effect.fn("ControlStore.prepareStoreDirectory")(function* (storePath: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* fs.makeDirectory(path.dirname(storePath), { recursive: true, mode: 0o700 });
+});
+
+export const controlStoreClientLayer = (storePath: string) =>
+  Layer.unwrap(
+    Effect.map(prepareStoreDirectory(storePath), () => SqliteClient.layer({ filename: storePath })),
+  );
 
 const available: ControlStoreStatus = { health: "available" };
 const unavailable = (message: string): ControlStoreStatus => ({ health: "unavailable", message });
-export const bootControlStoreLayer = (dbPath: string) =>
+
+// Boot fails closed: any failure — and any defect — leaves the daemon serving RPC with the store
+// reported unavailable, and the store itself untouched as evidence.
+export const bootControlStoreLayer = (
+  storePath: string,
+  migrations: ControlStoreMigrations = shippedMigrations,
+) =>
   Layer.effect(
     ControlStore,
-    migrate(dbPath).pipe(
+    boot(storePath, migrations).pipe(
       Effect.map(() => available),
-      Effect.catchTag("ControlStoreBootError", (error) => Effect.succeed(unavailable(error.message))),
+      Effect.catchCause((cause) =>
+        Effect.succeed(
+          unavailable(Cause.hasFails(cause) ? messageOf(Cause.squash(cause)) : Cause.pretty(cause)),
+        ),
+      ),
     ),
   );

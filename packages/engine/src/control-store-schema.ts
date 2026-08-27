@@ -1,30 +1,34 @@
+import { desc } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const controlMigrations = sqliteTable("control_migrations", {
-  id: integer("id").primaryKey(),
-  hash: text("hash").notNull(),
-});
+// The Control store's schema, and the only source drizzle-kit diffs. The migrator's own
+// bookkeeping table is deliberately absent: Effect's `Migrator` creates and owns it, so putting it
+// here would make drizzle-kit generate a rival definition of the same table.
 export const authoritativeRecords = sqliteTable("authoritative_records", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
   revision: integer("revision").notNull(),
 });
-export const runs = sqliteTable("runs", {
-  id: text("id").primaryKey(),
-  workspace: text("workspace").notNull(),
-  workItem: text("work_item").notNull(),
-  stage: text("stage").notNull(),
-  harness: text("harness").notNull(),
-  branch: text("branch"),
-  session: text("session"),
-  inputTokens: integer("input_tokens"),
-  outputTokens: integer("output_tokens"),
-  totalTokens: integer("total_tokens"),
-  estimated: integer("estimated", { mode: "boolean" }),
-  status: text("status").notNull(),
-  startedAt: integer("started_at").notNull(),
-  endedAt: integer("ended_at"),
-});
+export const runs = sqliteTable(
+  "runs",
+  {
+    id: text("id").primaryKey(),
+    workspace: text("workspace").notNull(),
+    workItem: text("work_item").notNull(),
+    stage: text("stage").notNull(),
+    harness: text("harness").notNull(),
+    branch: text("branch"),
+    session: text("session"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    totalTokens: integer("total_tokens"),
+    estimated: integer("estimated", { mode: "boolean" }),
+    status: text("status").notNull(),
+    startedAt: integer("started_at").notNull(),
+    endedAt: integer("ended_at"),
+  },
+  (table) => [index("runs_started_at").on(desc(table.startedAt))],
+);
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
   workspace: text("workspace").notNull(),

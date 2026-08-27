@@ -110,6 +110,8 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         },
         supportsAck: true,
         supportsTransferables: false,
+        // effect 4.0.0-rc.112 asks a transport to re-pass the codec of the serialization behind it.
+        codecFor: serialization.codecFor,
       };
     }),
   );

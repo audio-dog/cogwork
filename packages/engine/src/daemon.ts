@@ -7,10 +7,14 @@ import {
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
+import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import type * as Path from "effect/Path";
+import type { PlatformError } from "effect/PlatformError";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -19,7 +23,7 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { cancelRun, reclassify, setSchedulerConfig, setScheduling } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
-import { bootControlStoreLayer, ControlStore } from "./control-store";
+import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
@@ -172,7 +176,7 @@ export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
-  readonly runLedger: Layer.Layer<CoreRunLedger, E, R>;
+  readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
   readonly registry: Layer.Layer<WorkspaceRegistry, E, R>;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
@@ -190,17 +194,23 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
-  const controlStore = bootControlStoreLayer(adapters.controlStorePath);
-  const runLedger: Layer.Layer<RunLedger, E, R> = runLedgerPublishingLayer.pipe(
-    Layer.provide(
-      Layer.unwrap(
-        Effect.map(ControlStore, (store) =>
-          store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
-        ),
-      ).pipe(Layer.provide(controlStore)),
-    ),
-    Layer.provide(daemonEventBusLayer),
-  );
+  // One store means one connection: the boot loop and the run ledger share this client, so they
+  // share its write lock rather than racing each other for the same file.
+  const storeClient = controlStoreClientLayer(adapters.controlStorePath);
+  const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
+  // Booting the store reaches the filesystem, so the ledger built on top of it carries that
+  // requirement outward to whichever host provides the platform services.
+  const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
+    runLedgerPublishingLayer.pipe(
+      Layer.provide(
+        Layer.unwrap(
+          Effect.map(ControlStore, (store) =>
+            store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
+          ),
+        ).pipe(Layer.provide(controlStore), Layer.provide(storeClient)),
+      ),
+      Layer.provide(daemonEventBusLayer),
+    );
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const base = Layer.mergeAll(

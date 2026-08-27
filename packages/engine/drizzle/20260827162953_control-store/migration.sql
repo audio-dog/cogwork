@@ -1,15 +1,10 @@
-CREATE TABLE IF NOT EXISTS `authoritative_records` (
+CREATE TABLE `authoritative_records` (
 	`key` text PRIMARY KEY,
 	`value` text NOT NULL,
 	`revision` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS `control_migrations` (
-	`id` integer PRIMARY KEY,
-	`hash` text NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS `run_events` (
+CREATE TABLE `run_events` (
 	`run_id` text NOT NULL,
 	`seq` integer NOT NULL,
 	`type` text NOT NULL,
@@ -19,7 +14,7 @@ CREATE TABLE IF NOT EXISTS `run_events` (
 	CONSTRAINT `run_events_pk` PRIMARY KEY(`run_id`, `seq`)
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS `runs` (
+CREATE TABLE `runs` (
 	`id` text PRIMARY KEY,
 	`workspace` text NOT NULL,
 	`work_item` text NOT NULL,
@@ -36,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `runs` (
 	`ended_at` integer
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS `sessions` (
+CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY,
 	`workspace` text NOT NULL,
 	`harness` text NOT NULL,
@@ -45,6 +40,5 @@ CREATE TABLE IF NOT EXISTS `sessions` (
 	`created_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS `runs_started_at` ON `runs` (`started_at` DESC);
---> statement-breakpoint
-UPDATE `runs` SET `status` = 'exhausted' WHERE `status` = 'blocked';
+CREATE INDEX `run_events_at` ON `run_events` (`at`);--> statement-breakpoint
+CREATE INDEX `runs_started_at` ON `runs` ("started_at" desc);

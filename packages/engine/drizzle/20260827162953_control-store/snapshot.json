@@ -1,15 +1,11 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "35ff667c-bf52-4c92-820c-83f33070eb91",
+  "id": "23a4930f-ba56-431e-a56c-77d1a2daf3c0",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
       "name": "authoritative_records",
-      "entityType": "tables"
-    },
-    {
-      "name": "control_migrations",
       "entityType": "tables"
     },
     {
@@ -53,26 +49,6 @@
       "name": "revision",
       "entityType": "columns",
       "table": "authoritative_records"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "control_migrations"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "hash",
-      "entityType": "columns",
-      "table": "control_migrations"
     },
     {
       "type": "text",
@@ -351,13 +327,6 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "control_migrations_pk",
-      "table": "control_migrations",
-      "entityType": "pks"
-    },
-    {
-      "columns": ["id"],
-      "nameExplicit": false,
       "name": "runs_pk",
       "table": "runs",
       "entityType": "pks"
@@ -368,6 +337,34 @@
       "name": "sessions_pk",
       "table": "sessions",
       "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "run_events_at",
+      "entityType": "indexes",
+      "table": "run_events"
+    },
+    {
+      "columns": [
+        {
+          "value": "\"started_at\" desc",
+          "isExpression": true
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "runs_started_at",
+      "entityType": "indexes",
+      "table": "runs"
     }
   ],
   "renames": []

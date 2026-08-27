@@ -1,26 +1,60 @@
 import { DatabaseSync } from "node:sqlite";
-import { migrate, writeAuthoritative } from "@cogwork/engine";
+import {
+  bootControlStoreLayer,
+  ControlStore,
+  type ControlStoreMigrations,
+  controlStoreClientLayer,
+  writeAuthoritative,
+} from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as TestClock from "effect/testing/TestClock";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
-const storeAt = (path: string) =>
-  migrate(path).pipe(
-    Effect.map(() => ({ health: "available" as const })),
-    Effect.catchTag("ControlStoreBootError", (error) =>
-      Effect.succeed({ health: "unavailable" as const, message: error.message }),
-    ),
-  );
+const storeLayer = (storePath: string, migrations?: ControlStoreMigrations) =>
+  bootControlStoreLayer(storePath, migrations).pipe(Layer.provideMerge(controlStoreClientLayer(storePath)));
 
-const migrationIdsAt = (path: string) =>
+// Boot reports its own outcome rather than failing, so a test reads the status it left behind.
+const storeAt = (storePath: string, migrations?: ControlStoreMigrations) =>
+  Effect.provide(ControlStore, storeLayer(storePath, migrations));
+
+// Only one migration ships today, so the incremental path needs a set a test controls: booting with
+// the first entry alone stands in for the store an older build left behind.
+const step = (statement: string) => Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement));
+const firstStep = {
+  "1_run-events": step(
+    "CREATE TABLE run_events (run_id text NOT NULL, seq integer NOT NULL, at integer NOT NULL)",
+  ),
+};
+const bothSteps = {
+  ...firstStep,
+  "2_retention-index": step("CREATE INDEX run_events_at ON run_events (at)"),
+};
+const retentionWindowMillis = 1000 * 60 * 60 * 24 * 30;
+
+const poke = (storePath: string, statements: string) =>
   Effect.acquireUseRelease(
-    Effect.sync(() => new DatabaseSync(path)),
-    (db) => Effect.sync(() => db.prepare("SELECT id FROM control_migrations ORDER BY id").all()),
+    Effect.sync(() => new DatabaseSync(storePath)),
+    (db) => Effect.sync(() => db.exec(statements)),
     (db) => Effect.sync(() => db.close()),
   );
 
+const query = (storePath: string, sql: string) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => new DatabaseSync(storePath)),
+    (db) => Effect.sync(() => db.prepare(sql).all()),
+    (db) => Effect.sync(() => db.close()),
+  );
+
+const appliedNamesAt = (storePath: string) =>
+  query(storePath, "SELECT name FROM control_migrations ORDER BY migration_id");
+
+// What the pre-drizzle run ledger left on disk: tables from its bootstrap SQL, columns added later by
+// `ALTER TABLE`, and a run parked at the retired `blocked` status.
 const evolvedLegacyLedgerSql = `
 CREATE TABLE runs (
   id TEXT PRIMARY KEY,
@@ -58,7 +92,7 @@ ALTER TABLE runs ADD COLUMN branch TEXT;
 ALTER TABLE runs ADD COLUMN estimated INTEGER;
 INSERT INTO runs (
   id, workspace, work_item, stage, harness, branch, estimated, status, started_at
-) VALUES ('legacy', 'ws', '#1', 'implement', 'codex', '218-control-store', 1, 'succeeded', 1);
+) VALUES ('legacy', 'ws', '#1', 'implement', 'codex', '218-control-store', 1, 'blocked', 1);
 `;
 
 layer(NodeServices.layer)((it) => {
@@ -70,71 +104,61 @@ layer(NodeServices.layer)((it) => {
       const storePath = path.join(dir, "control.db");
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      assert.strictEqual((yield* migrationIdsAt(storePath))[0]?.id, 0);
-      yield* storeAt(storePath);
+      assert.deepStrictEqual(yield* appliedNamesAt(storePath), [{ name: "control-store" }]);
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
       assert.isFalse((yield* fs.readDirectory(dir)).some((entry) => entry.includes("before-migration")));
     }),
   );
 
-  it.effect("backs up an existing store before it applies a pending migration", () =>
+  it.effect("copies an occupied store before it applies a pending migration", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
-      yield* storeAt(storePath);
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) =>
-          Effect.sync(() =>
-            db.exec(
-              "INSERT INTO run_events VALUES ('expired', 0, 'RUN_STARTED', NULL, '{}', 0); INSERT INTO run_events VALUES ('current', 0, 'RUN_STARTED', NULL, '{}', 9999999999999); DELETE FROM control_migrations",
-            ),
-          ),
-        (db) => Effect.sync(() => db.close()),
+      assert.deepStrictEqual(yield* storeAt(storePath, firstStep), { health: "available" });
+      // Retention measures age against the clock, so move it past the window under test.
+      yield* TestClock.setTime(retentionWindowMillis + 1);
+      yield* poke(
+        storePath,
+        "INSERT INTO run_events VALUES ('expired', 0, 0); INSERT INTO run_events VALUES ('current', 0, 9999999999999)",
       );
 
-      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      const entries = yield* fs.readDirectory(dir);
-      const backupName = entries.find((entry) => entry.startsWith("control.db.before-migration-"));
-      assert.isDefined(backupName);
-      const events = yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(path.join(dir, backupName ?? "missing"))),
-        (db) => Effect.sync(() => db.prepare("SELECT run_id FROM run_events ORDER BY run_id").all()),
-        (db) => Effect.sync(() => db.close()),
+      assert.deepStrictEqual(yield* storeAt(storePath, bothSteps), { health: "available" });
+      const backupName = (yield* fs.readDirectory(dir)).find((entry) =>
+        entry.startsWith("control.db.before-migration-"),
       );
-      assert.deepStrictEqual(events, [{ run_id: "current" }]);
+      assert.isDefined(backupName);
+      // Retention runs before the copy, so the copy carries the bounded history and not the rest.
+      assert.deepStrictEqual(
+        yield* query(
+          path.join(dir, backupName ?? "missing"),
+          "SELECT run_id FROM run_events ORDER BY run_id",
+        ),
+        [{ run_id: "current" }],
+      );
     }),
   );
 
-  it.effect("reports an incompatible store as unavailable without deleting it", () =>
+  it.effect("reports a store from a newer build as unavailable without deleting it", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
       yield* storeAt(storePath);
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) =>
-          Effect.sync(() =>
-            db.exec(
-              "INSERT INTO run_events VALUES ('evidence', 0, 'RUN_STARTED', NULL, '{}', 0); UPDATE control_migrations SET hash = 'poison'",
-            ),
-          ),
-        (db) => Effect.sync(() => db.close()),
+      yield* poke(
+        storePath,
+        "INSERT INTO run_events VALUES ('evidence', 0, 'RUN_STARTED', NULL, '{}', 9999999999999); INSERT INTO control_migrations (migration_id, name) VALUES (99999999999999, 'from-the-future')",
       );
 
       const store = yield* storeAt(storePath);
       assert.strictEqual(store.health, "unavailable");
       assert.isTrue(store.health === "unavailable" && store.message.length > 0);
       assert.isTrue(yield* fs.exists(storePath));
-      const evidence = yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) => Effect.sync(() => db.prepare("SELECT run_id FROM run_events").all()),
-        (db) => Effect.sync(() => db.close()),
-      );
-      assert.deepStrictEqual(evidence, [{ run_id: "evidence" }]);
+      assert.deepStrictEqual(yield* query(storePath, "SELECT run_id FROM run_events"), [
+        { run_id: "evidence" },
+      ]);
     }),
   );
 
@@ -145,14 +169,9 @@ layer(NodeServices.layer)((it) => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
       yield* storeAt(storePath);
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) => Effect.sync(() => db.exec("DROP TABLE run_events")),
-        (db) => Effect.sync(() => db.close()),
-      );
+      yield* poke(storePath, "DROP TABLE run_events");
 
-      const store = yield* storeAt(storePath);
-      assert.strictEqual(store.health, "unavailable");
+      assert.strictEqual((yield* storeAt(storePath)).health, "unavailable");
     }),
   );
 
@@ -163,17 +182,12 @@ layer(NodeServices.layer)((it) => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
       yield* storeAt(storePath);
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) =>
-          Effect.sync(() =>
-            db.exec("DROP INDEX run_events_at; CREATE UNIQUE INDEX run_events_at ON run_events (at)"),
-          ),
-        (db) => Effect.sync(() => db.close()),
+      yield* poke(
+        storePath,
+        "DROP INDEX run_events_at; CREATE UNIQUE INDEX run_events_at ON run_events (at)",
       );
 
-      const store = yield* storeAt(storePath);
-      assert.strictEqual(store.health, "unavailable");
+      assert.strictEqual((yield* storeAt(storePath)).health, "unavailable");
     }),
   );
 
@@ -184,19 +198,12 @@ layer(NodeServices.layer)((it) => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
       yield* storeAt(storePath);
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) =>
-          Effect.sync(() =>
-            db.exec(
-              "CREATE TRIGGER discard_runs AFTER INSERT ON runs BEGIN DELETE FROM runs WHERE id = NEW.id; END",
-            ),
-          ),
-        (db) => Effect.sync(() => db.close()),
+      yield* poke(
+        storePath,
+        "CREATE TRIGGER discard_runs AFTER INSERT ON runs BEGIN DELETE FROM runs WHERE id = NEW.id; END",
       );
 
-      const store = yield* storeAt(storePath);
-      assert.strictEqual(store.health, "unavailable");
+      assert.strictEqual((yield* storeAt(storePath)).health, "unavailable");
     }),
   );
 
@@ -207,47 +214,32 @@ layer(NodeServices.layer)((it) => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
       yield* storeAt(storePath);
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) =>
-          Effect.sync(() =>
-            db.exec(
-              "DROP INDEX runs_started_at; ALTER TABLE runs RENAME TO poisoned_runs; CREATE TABLE runs (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, work_item TEXT NOT NULL, stage TEXT NOT NULL, harness TEXT NOT NULL, branch TEXT, session TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, estimated INTEGER, status TEXT NOT NULL CHECK(status <> 'running'), started_at INTEGER NOT NULL, ended_at INTEGER); INSERT INTO runs SELECT * FROM poisoned_runs; DROP TABLE poisoned_runs; CREATE INDEX runs_started_at ON runs (started_at DESC)",
-            ),
-          ),
-        (db) => Effect.sync(() => db.close()),
+      yield* poke(
+        storePath,
+        "DROP INDEX runs_started_at; ALTER TABLE runs RENAME TO poisoned_runs; CREATE TABLE runs (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, work_item TEXT NOT NULL, stage TEXT NOT NULL, harness TEXT NOT NULL, branch TEXT, session TEXT, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER, estimated INTEGER, status TEXT NOT NULL CHECK(status <> 'running'), started_at INTEGER NOT NULL, ended_at INTEGER); INSERT INTO runs SELECT * FROM poisoned_runs; DROP TABLE poisoned_runs; CREATE INDEX runs_started_at ON runs (started_at DESC)",
       );
 
-      const store = yield* storeAt(storePath);
-      assert.strictEqual(store.health, "unavailable");
+      assert.strictEqual((yield* storeAt(storePath)).health, "unavailable");
     }),
   );
 
-  it.effect("renames and migrates the legacy run ledger", () =>
+  it.effect("imports the legacy run ledger and retires the file", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const legacyPath = path.join(dir, "runs.db");
       const storePath = path.join(dir, "control.db");
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(legacyPath)),
-        (db) => Effect.sync(() => db.exec(evolvedLegacyLedgerSql)),
-        (db) => Effect.sync(() => db.close()),
-      );
+      yield* poke(legacyPath, evolvedLegacyLedgerSql);
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id, branch, estimated, status FROM runs"), [
+        { id: "legacy", branch: "218-control-store", estimated: 1, status: "exhausted" },
+      ]);
       assert.isFalse(yield* fs.exists(legacyPath));
-      const rows = yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) => Effect.sync(() => db.prepare("SELECT id, branch, estimated FROM runs").all()),
-        (db) => Effect.sync(() => db.close()),
-      );
-      assert.deepStrictEqual(rows, [{ id: "legacy", branch: "218-control-store", estimated: 1 }]);
-      assert.strictEqual((yield* migrationIdsAt(storePath))[0]?.id, 0);
-      assert.isTrue(
-        (yield* fs.readDirectory(dir)).some((entry) => entry.startsWith("control.db.before-migration-")),
-      );
+      assert.isTrue((yield* fs.readDirectory(dir)).some((entry) => entry.startsWith("runs.db.imported-")));
+      // The import lands in a freshly migrated store, so no pre-migration copy is involved.
+      assert.isFalse((yield* fs.readDirectory(dir)).some((entry) => entry.includes("before-migration")));
     }),
   );
 
@@ -258,24 +250,16 @@ layer(NodeServices.layer)((it) => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
       yield* storeAt(storePath);
-      yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) =>
-          Effect.sync(() =>
-            db.exec(
-              "INSERT INTO run_events VALUES ('expired', 0, 'RUN_STARTED', NULL, '{}', 0); INSERT INTO run_events VALUES ('current', 0, 'RUN_STARTED', NULL, '{}', 9999999999999)",
-            ),
-          ),
-        (db) => Effect.sync(() => db.close()),
+      yield* poke(
+        storePath,
+        "INSERT INTO run_events VALUES ('expired', 0, 'RUN_STARTED', NULL, '{}', 0); INSERT INTO run_events VALUES ('current', 0, 'RUN_STARTED', NULL, '{}', 9999999999999)",
       );
 
+      yield* TestClock.setTime(retentionWindowMillis + 1);
       yield* storeAt(storePath);
-      const events = yield* Effect.acquireUseRelease(
-        Effect.sync(() => new DatabaseSync(storePath)),
-        (db) => Effect.sync(() => db.prepare("SELECT run_id FROM run_events ORDER BY run_id").all()),
-        (db) => Effect.sync(() => db.close()),
-      );
-      assert.deepStrictEqual(events, [{ run_id: "current" }]);
+      assert.deepStrictEqual(yield* query(storePath, "SELECT run_id FROM run_events ORDER BY run_id"), [
+        { run_id: "current" },
+      ]);
     }),
   );
 
@@ -285,12 +269,17 @@ layer(NodeServices.layer)((it) => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
       const storePath = path.join(dir, "control.db");
-      yield* storeAt(storePath);
 
-      assert.strictEqual(yield* writeAuthoritative(storePath, "limits", "first", 0), 1);
-      const stale = yield* Effect.flip(writeAuthoritative(storePath, "limits", "stale", 0));
-      assert.strictEqual(stale._tag, "StaleControlStoreWrite");
-      if (stale._tag === "StaleControlStoreWrite") assert.strictEqual(stale.actualRevision, 1);
+      const outcome = yield* Effect.gen(function* () {
+        const first = yield* writeAuthoritative("limits", "first", 0);
+        const stale = yield* Effect.flip(writeAuthoritative("limits", "stale", 0));
+        return { first, stale };
+      }).pipe(Effect.provide(storeLayer(storePath)));
+
+      assert.strictEqual(outcome.first, 1);
+      assert.strictEqual(outcome.stale._tag, "StaleControlStoreWrite");
+      if (outcome.stale._tag === "StaleControlStoreWrite")
+        assert.strictEqual(outcome.stale.actualRevision, 1);
     }),
   );
 });

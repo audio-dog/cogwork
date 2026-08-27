@@ -8,8 +8,7 @@
   "scripts": {
     "format-and-lint:fix": "biome check . --write",
     "format-and-lint:unsafe": "biome check . --write --unsafe",
-    "format-and-lint": "biome check . && pnpm check:control-store-migrations",
-    "check:control-store-migrations": "node scripts/generate-control-store-migrations.mjs --check",
+    "format-and-lint": "biome check . && pnpm --filter @cogwork/engine drizzle:check",
     "prepare": "effect-tsgo patch",
     "dev": "turbo dev",
     "build": "turbo build",

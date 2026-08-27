@@ -104,7 +104,7 @@ export const serverLayer = (options: DaemonOptions) =>
     transport: transportLayer(options.socketPath),
     credentials: credentialsLayer(options.credentialsPath),
     contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
-    runLedger: ledgerLayer(options.controlStorePath),
+    runLedger: ledgerLayer,
     controlStorePath: options.controlStorePath,
     registry: registryLayer(options.configHome),
     worktrees: worktreeManagerLayer,

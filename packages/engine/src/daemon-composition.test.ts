@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -68,8 +69,10 @@ describe("daemon server composition", () => {
           const dir = mkdtempSync(join(tmpdir(), "cogwork-poisoned-store-"));
           const path = join(dir, "control.db");
           const db = new DatabaseSync(path);
+          // A history that claims a migration this build does not ship — the store was written by
+          // a newer daemon, so booting it would apply nothing and leave the schema wrong.
           db.exec(
-            "CREATE TABLE control_migrations (id INTEGER PRIMARY KEY, hash TEXT NOT NULL); INSERT INTO control_migrations VALUES (99, 'poison')",
+            "CREATE TABLE control_migrations (migration_id INTEGER PRIMARY KEY NOT NULL, created_at datetime NOT NULL DEFAULT current_timestamp, name VARCHAR(255) NOT NULL); INSERT INTO control_migrations (migration_id, name) VALUES (99999999999999, 'from-the-future')",
           );
           db.close();
           return { dir, path };
@@ -107,7 +110,10 @@ describe("daemon server composition", () => {
         const runs = yield* rpc.ListRuns();
         const status = yield* rpc.GetStatus();
         return { runs, status };
-      }).pipe(Effect.provide(Layer.mergeAll(serverLayer, clientLayer)), Effect.scoped);
+      }).pipe(
+        Effect.provide(Layer.mergeAll(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer))),
+        Effect.scoped,
+      );
 
       assert.deepStrictEqual(result.runs, []);
       assert.strictEqual(result.status.health, "store-unavailable");

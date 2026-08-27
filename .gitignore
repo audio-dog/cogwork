@@ -15,6 +15,12 @@ skills-lock.json
 !/.claude/settings.json
 /.mcp.json
 
+# `drizzle-kit skills` writes its bundled skills into the package that owns drizzle-kit, plus a
+# Claude Code symlink mirror. They ship inside the dependency and `@tanstack/intent` already
+# discovers them from there, so the copies are local convenience, not repository content.
+packages/*/.agents/skills/drizzle*
+packages/*/.claude/
+
 .DS_Store
 *.log
 .turbo

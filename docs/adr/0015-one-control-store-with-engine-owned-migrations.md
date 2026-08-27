@@ -3,6 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-08-25
 - **Amended:** 2026-08-25 — `drizzle-kit` is adopted as a development tool, see [Amendment](#amendment-2026-08-25--drizzle-kit-is-adopted-as-a-development-tool)
+- **Amended:** 2026-08-27 — Effect's `Migrator` owns the loop, see [Amendment](#amendment-2026-08-27--effects-migrator-owns-the-loop-and-a-legacy-ledger-is-imported)
 
 ## Context
 
@@ -189,3 +190,73 @@ store whose backing layer becomes an OS keychain that can neither list records n
 this ADR makes the Control store the authority the Engine resolves a Run Plan from, while a Run Plan
 requires Connections — so their existence and readiness must be resolvable from it. The closed field
 list widens by one table. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
+
+## Amendment (2026-08-27) — Effect's `Migrator` owns the loop, and a legacy ledger is imported
+
+This ADR decided that the engine owns the migration loop and that Effect's `unstable/sql/Migrator`
+is "not adopted". The first half stands in intent — the loop is still the engine's, and Drizzle's
+runtime `migrate()` is still never called. The second half is withdrawn, and two mechanisms change.
+
+**Effect's `Migrator` is adopted.** The rejection rested on one sentence: "the `unstable/sql`
+namespace has no SQLite client, so it is not a drop-in". `@effect/sql-sqlite-node` now exists at the
+version this workspace pins, is backed by `node:sqlite`, needs no native dependency, defaults to WAL
+and a busy timeout, and issues `BEGIN IMMEDIATE` for every transaction. The sentence is no longer
+true, and with it goes the reason.
+
+What `Migrator` does correctly is what the hand-written loop had to assert for itself. It reads the
+applied history **inside** `sql.withTransaction`, so under `BEGIN IMMEDIATE`. It inserts the pending
+rows before running them and reads a unique-constraint conflict as *migrations already running*,
+which is a second guard against a concurrent daemon. And `Migrator.fromRecord` takes migrations as
+code, so there is no directory read at run time and nothing to survive packaging.
+
+**Drizzle's runtime `migrate()` stays rejected, re-verified on `1.0.0-rc.4`.** The original evidence
+was read from `rc.2`, so it was read again. All three defects are unchanged. `migrateSync` reads
+`SELECT … FROM __drizzle_migrations` outside the transaction and then opens a deferred `` sql`BEGIN` ``
+(`sqlite-core/async/session.js`), so two racing daemon starts can both migrate.
+`getMigrationsToRun` matches on **name only** while writing a `hash` column that is never compared
+(`migrator.utils.js`). `readMigrationFiles` does a runtime `readdirSync` (`migrator.js`). The
+rejection is about `drizzle-orm`'s migrator, never about `drizzle-kit`.
+
+**What the engine still owns**, because `Migrator` does not: the pre-migration copy through
+`VACUUM INTO`, taken only when a migration is pending and the store already holds something; run-event
+retention, run before the copy so the copy is bounded; the schema fingerprint; the check that no
+applied migration is one this build does not ship; and the fail-closed status. Which migrations a
+store boots with is a parameter of the boot layer, defaulting to the shipped set — the incremental
+path is otherwise untestable while only one migration exists.
+
+**The migration `hash` is gone.** `Migrator`'s table carries an id, a name, and a timestamp. Two
+checks replace the hash and are stronger than it was: any applied id this build does not ship fails
+closed, and the schema fingerprint is compared exactly. The hash was also a footgun — it covered the
+raw bytes of the `.sql` file, so reformatting a committed migration would have marked every store on
+every machine incompatible and stopped dispatch.
+
+**A legacy `runs.db` is imported, not renamed.** Its tables were created by a bootstrap that predates
+`drizzle-kit`, and two of its columns arrived by `ALTER TABLE`, so its DDL text can never match what
+a migration produces. Adopting the file forced two things this ADR did not want: `IF NOT EXISTS`
+hand-edited into generated SQL so the first migration could run over existing tables, and a schema
+check taught to forgive whatever shape an old store happened to have. Copying the rows into a freshly
+migrated store leaves the generated SQL untouched and lets the check stay an exact comparison, which
+is the right strictness for a store that fails closed. The retired value `blocked` is translated to
+`exhausted` on the way in. The old file is kept as `runs.db.imported-<millis>`; nothing is deleted.
+
+**The hand-edit hole this ADR claimed to close was open.** A check that regenerates the module and
+fails on a difference does not close it, because the module is generated *from* the SQL — an edit to
+the SQL flows through and the check passes. `drizzle-kit check` does not catch it either; it compares
+snapshots, not SQL against the schema. Both were confirmed by editing a generated migration and
+running each. What closes it now is that there is no longer a reason to edit generated SQL: the
+legacy path does not need `IF NOT EXISTS`, hand-written SQL has a sanctioned home in
+`drizzle-kit generate --custom`, and the shipped module is produced by `drizzle-orm`'s own
+`readMigrationFiles` rather than a local parser. The local parser was the concrete cost of not doing
+this: it split on `;` instead of `--> statement-breakpoint`, which would have shredded the first
+migration to contain a semicolon inside a statement — SQLite's table-rebuild recipe, the exact case
+the previous amendment adopted `drizzle-kit` to get right.
+
+**One store, one connection.** Drizzle's Effect driver runs on the same `SqlClient`, so the boot loop
+and the run ledger share one connection and therefore one write lock, rather than opening the file
+twice in one process.
+
+**Pins.** `drizzle-kit` follows the `rc` tag and supplies `generate`, `check`, and its agent skills.
+`drizzle-orm` is pinned to `1.0.0-rc.5-169397b` rather than the `rc` tag, because `rc.4` calls
+`Schema.TaggedErrorClass` from its Effect driver — a name that exists only on Effect's beta line —
+so `drizzle-orm/effect-sqlite-node` cannot be imported on the rc line at all. Move to the release
+that carries that fix. `effect` moved to `4.0.0-rc.112` with it.

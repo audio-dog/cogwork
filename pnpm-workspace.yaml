@@ -13,6 +13,11 @@ allowBuilds:
 
 catalog:
   '@effect/tsgo': '0.24.3'
+  # drizzle-orm@1.0.0-rc.4 calls the beta-only `Schema.TaggedErrorClass` from its Effect driver, so
+  # `drizzle-orm/effect-sqlite-node` cannot be imported on the rc line at all. The rc5-tag build
+  # below calls `Schema.TaggedError` and loads. Move to the release that carries that fix.
+  drizzle-orm: '1.0.0-rc.5-169397b'
+  drizzle-kit: '1.0.0-rc.4'
   '@tanstack/ai': '0.46.0'
   '@tanstack/ai-codex': '0.4.1'
   '@tanstack/ai-sandbox': '0.3.4'
@@ -29,14 +34,17 @@ catalog:
 
 catalogs:
   effect:
-    effect: '4.0.0-rc.110'
-    '@effect/atom-react': '4.0.0-rc.110'
-    '@effect/opentelemetry': '4.0.0-rc.110'
-    '@effect/platform-node': '4.0.0-rc.110'
-    '@effect/vitest': '4.0.0-rc.110'
+    effect: '4.0.0-rc.112'
+    '@effect/atom-react': '4.0.0-rc.112'
+    '@effect/opentelemetry': '4.0.0-rc.112'
+    '@effect/platform-node': '4.0.0-rc.112'
+    '@effect/sql-sqlite-node': '4.0.0-rc.112'
+    '@effect/vitest': '4.0.0-rc.112'
 
 minimumReleaseAgeExclude:
   - '@tanstack/ai-acp@0.3.1'
+  - 'drizzle-orm@1.0.0-rc.5-169397b'
+  - 'drizzle-kit@1.0.0-rc.4'
   - '@tanstack/ai-persistence@0.2.0'
   - '@tanstack/ai-sandbox@0.3.4'
   - '@tanstack/ai-anthropic@0.16.7'
