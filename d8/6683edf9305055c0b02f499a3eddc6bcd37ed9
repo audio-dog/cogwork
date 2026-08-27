@@ -1,0 +1,53 @@
+packages/engine/src/tools/index.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 33
+packages/engine/src/executor.test.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 29,225,398,411,461,468,784,790-815,846
+  s_c58fc7ff9f453f::t_5cc85a4a002f60 723
+packages/engine/src/provider-runner.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 23,37,125,162
+packages/engine/src/daemon-composition.test.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 14,44
+packages/cursor-acp/src/harness.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 236-240
+packages/engine/CONTEXT.md
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 77,113
+packages/codex-cli/src/harness.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 55-61,63-64,191,196,210-214,233
+packages/codex-cli/CONTEXT.md
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 34-37
+packages/engine/src/harness.test.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 1,3,6-27,132-181
+  s_c58fc7ff9f453f::t_f6d1e0ba9d929e 182
+packages/cursor-acp/src/harness.test.ts
+  s_c58fc7ff9f453f::t_a9b3d1a1c87a9c 3,131-137
+  s_c58fc7ff9f453f::t_209acee9aa7d27 130,138
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 2,54,150,162,164-166,170,184-185
+packages/engine/src/tools/policy.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 8,44-46,49-51
+packages/codex-cli/src/harness.test.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 78,211-212,437,439-440,642,644,676-677,679-685
+packages/engine/src/operation-policy.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 1-6
+packages/engine/src/harness.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 18,23,31,41-52,66,71-74,96-121,128-131,135
+packages/engine/src/provider-runner.test.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 140
+packages/engine/src/executor.ts
+  s_c58fc7ff9f453f::t_07bfe3f072c33e 29,183,892-895
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d86683edf9305055c0b02f499a3eddc6bcd37ed9",
+  "prompts": {},
+  "sessions": {
+    "s_c58fc7ff9f453f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a043f0-4205-7c93-a319-3234433e1aed",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
