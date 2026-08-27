@@ -743,6 +743,12 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
+  const resolveStageOps = (workspace: RegisteredWorkspace, item: EligibleWork) => {
+    const resolved = resolveStage(workspace.config, item.stage);
+    if (!resolved?.enabled) return null;
+    return opsFor(workspace, item, resolved);
+  };
+
   const freshRecoveryOps = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
     const fresh = stageOps(workspace, item, ops.resolved);
     if (!item.resume) return fresh;
@@ -846,29 +852,27 @@ export const make = Effect.gen(function* () {
   const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
+    ops: StageOps,
     startedAtMillis: number,
   ) {
     if (item.stage === "follow-up" && item.followUp?.stalled) {
       return yield* handoffStalled(workspace, item);
     }
-    yield* runClaimed(workspace, item, opsFor(workspace, item, resolved), startedAtMillis);
+    yield* runClaimed(workspace, item, ops, startedAtMillis);
   });
 
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    const resolved = resolveStage(workspace.config, item.stage);
-    if (!resolved?.enabled) {
-      return false;
-    }
+    const stageOps = resolveStageOps(workspace, item);
+    if (!stageOps) return false;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {
       return false;
     }
-    yield* runOrHandoff(workspace, item, resolved, startedAtMillis).pipe(
+    yield* runOrHandoff(workspace, item, stageOps, startedAtMillis).pipe(
       Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
     );
     return true;
