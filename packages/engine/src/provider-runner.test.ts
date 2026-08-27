@@ -21,6 +21,7 @@ import { makeInterruptStore } from "./interrupt-store";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
 import {
   defaultLoopBudget,
+  defaultRunBudget,
   providerRunner,
   type RunChat,
   type RunChatOptions,
@@ -290,6 +291,15 @@ describe("defaultLoopBudget", () => {
   it("gives read-only stages fewer turns than writing stages", () => {
     assert.isBelow(defaultLoopBudget("triage"), defaultLoopBudget("implement"));
     assert.isBelow(defaultLoopBudget("verify"), defaultLoopBudget("follow-up"));
+  });
+});
+
+describe("defaultRunBudget", () => {
+  it("gives read-only stages less wall-clock time than writing stages", () => {
+    assert.strictEqual(defaultRunBudget("triage"), "15 minutes");
+    assert.strictEqual(defaultRunBudget("verify"), "15 minutes");
+    assert.strictEqual(defaultRunBudget("implement"), "45 minutes");
+    assert.strictEqual(defaultRunBudget("follow-up"), "45 minutes");
   });
 });
 

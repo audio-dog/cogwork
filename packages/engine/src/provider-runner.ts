@@ -71,9 +71,18 @@ export interface ProviderRunnerOptions {
   readonly runChat?: RunChat;
 }
 
+const isReadOnlyStage = (stage: LifecycleStage) => stage === "triage" || stage === "verify";
+const readOnlyLoopBudget = 12;
+const writingLoopBudget = 40;
+const readOnlyRunBudget = "15 minutes";
+const writingRunBudget = "45 minutes";
+
 // Read-only stages get fewer turns than the writing stages.
 export const defaultLoopBudget = (stage: LifecycleStage) =>
-  stage === "triage" || stage === "verify" ? 12 : 40;
+  isReadOnlyStage(stage) ? readOnlyLoopBudget : writingLoopBudget;
+
+export const defaultRunBudget = (stage: LifecycleStage) =>
+  isReadOnlyStage(stage) ? readOnlyRunBudget : writingRunBudget;
 
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });
