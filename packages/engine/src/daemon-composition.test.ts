@@ -8,9 +8,11 @@ import { DaemonRpcs, HarnessName } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as Socket from "effect/unstable/socket/Socket";
@@ -19,6 +21,7 @@ import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import type { HarnessRunner } from "./harness";
+import { ReconcileWorker } from "./reconcile";
 import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
@@ -69,8 +72,6 @@ describe("daemon server composition", () => {
           const dir = mkdtempSync(join(tmpdir(), "cogwork-poisoned-store-"));
           const path = join(dir, "control.db");
           const db = new DatabaseSync(path);
-          // A history that claims a migration this build does not ship — the store was written by
-          // a newer daemon, so booting it would apply nothing and leave the schema wrong.
           db.exec(
             "CREATE TABLE control_migrations (migration_id INTEGER PRIMARY KEY NOT NULL, created_at datetime NOT NULL DEFAULT current_timestamp, name VARCHAR(255) NOT NULL); INSERT INTO control_migrations (migration_id, name) VALUES (99999999999999, 'from-the-future')",
           );
@@ -106,10 +107,20 @@ describe("daemon server composition", () => {
 
       const result = yield* Effect.gen(function* () {
         yield* Daemon.bootstrap;
+        // Dispatch is not merely idle: `bootstrap` must not submit a reconcile, and `heartbeats`
+        // must never begin polling. Both are asserted after time has had a chance to pass.
+        const heartbeats = yield* Effect.forkChild(
+          Daemon.heartbeats({ pollIntervalMillis: 1000, drain: { graceMillis: 0, abort: Effect.void } }),
+        );
+        yield* TestClock.adjust("1 minute");
+        const worker = yield* ReconcileWorker;
+        const reconciled = yield* worker.snapshot;
+        const heartbeatsExit = heartbeats.pollUnsafe();
+        yield* Fiber.interrupt(heartbeats);
         const rpc = yield* RpcClient.make(DaemonRpcs);
         const runs = yield* rpc.ListRuns();
         const status = yield* rpc.GetStatus();
-        return { runs, status };
+        return { runs, status, reconciled, heartbeatsExit };
       }).pipe(
         Effect.provide(Layer.mergeAll(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer))),
         Effect.scoped,
@@ -117,6 +128,10 @@ describe("daemon server composition", () => {
 
       assert.deepStrictEqual(result.runs, []);
       assert.strictEqual(result.status.health, "store-unavailable");
+      assert.strictEqual(result.reconciled.generation, 0);
+      assert.deepStrictEqual(result.reconciled.workspaces, []);
+      assert.isUndefined(result.heartbeatsExit);
+      assert.strictEqual(result.status.scheduler.globalInFlight, 0);
       assert.deepStrictEqual(
         result.status.workspaces.map((w) => w.name),
         ["example"],
