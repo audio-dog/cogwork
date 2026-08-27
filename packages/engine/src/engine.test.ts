@@ -568,7 +568,7 @@ class SchedulerTickCount extends Context.Service<SchedulerTickCount, Ref.Ref<num
       const ticks = yield* SchedulerTickCount;
       return {
         ...schedulerStubService,
-        tick: () => Ref.update(ticks, (count) => count + 1).pipe(Effect.map(() => [])),
+        tick: () => Ref.update(ticks, (count) => count + 1).pipe(Effect.map(() => 0)),
       };
     }),
   ).pipe(Layer.provideMerge(SchedulerTickCount.layer));
