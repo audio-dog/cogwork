@@ -1,16 +1,15 @@
 import {
   applyDaemonEvent,
   type Board,
+  type ControlStore,
   type DaemonEvent,
   DaemonRpcs,
-  defaultSchedulerDailyBudget,
-  defaultSchedulerGlobalLimit,
-  defaultSchedulerPerWorkspaceLimit,
   initialBoard,
   type RunActivity,
   type RunEvent,
   RunId,
   type RunSummary,
+  type SchedulingState,
   WorkItemId,
 } from "@cogwork/contracts";
 import { Daemon, Registry } from "@cogwork/engine";
@@ -58,21 +57,6 @@ const credentialsFlag = Flag.string("credentials").pipe(
   Flag.withDefault(defaultCredentialsPath),
 );
 
-const maxConcurrencyFlag = Flag.integer("max-concurrency").pipe(
-  Flag.withDescription("Maximum concurrent agent sessions across all workspaces"),
-  Flag.withDefault(defaultSchedulerGlobalLimit),
-);
-
-const maxPerWorkspaceFlag = Flag.integer("max-per-workspace").pipe(
-  Flag.withDescription("Maximum concurrent agent sessions inside a single workspace"),
-  Flag.withDefault(defaultSchedulerPerWorkspaceLimit),
-);
-
-const dailyBudgetFlag = Flag.integer("daily-budget").pipe(
-  Flag.withDescription("Maximum agent sessions started per UTC day across all workspaces"),
-  Flag.withDefault(defaultSchedulerDailyBudget),
-);
-
 const pollIntervalFlag = Flag.integer("poll-interval").pipe(
   Flag.withDescription("Seconds between issue-tracker polls (higher values conserve GitHub API quota)"),
   Flag.withDefault(60),
@@ -83,11 +67,6 @@ const drainGraceFlag = Flag.integer("drain-grace").pipe(
     "Seconds in-flight runs get to finish after a stop signal (a second signal ends the wait)",
   ),
   Flag.withDefault(300),
-);
-
-const startPausedFlag = Flag.boolean("start-paused").pipe(
-  Flag.withDescription("Start with scheduling paused until it is resumed (the desktop launch default)"),
-  Flag.withDefault(false),
 );
 
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
@@ -101,6 +80,26 @@ const watchWorkItemArg = Argument.string("work-item").pipe(
   Argument.withDescription("Work item to watch; resolves to its running run, else its most recent run"),
   Argument.optional,
 );
+
+const daemonLimitKeyArgument = Argument.choice("limit", [
+  "global-concurrency",
+  "per-workspace-concurrency",
+  "daily-budget",
+]);
+
+const daemonLimitValueArgument = Argument.integer("value");
+
+export const formatDaemonLimits = (controlStore: ControlStore) =>
+  [
+    `global-concurrency: ${controlStore.daemonLimits.globalConcurrency}`,
+    `per-workspace-concurrency: ${controlStore.daemonLimits.perWorkspaceConcurrency}`,
+    `daily-budget: ${controlStore.daemonLimits.dailyBudget}`,
+  ].join("\n");
+
+export const schedulingActions = {
+  pause: "paused",
+  resume: "running",
+} as const satisfies Record<"pause" | "resume", SchedulingState>;
 
 const runDaemon = Effect.fn("commands.runDaemon")(
   function* (options: DaemonOptions) {
@@ -258,43 +257,60 @@ const runStatus = Effect.fn("commands.runStatus")(
   (effect, options) => overSocket(effect, options.socketPath),
 );
 
+const showLimits = Effect.fn("commands.showLimits")(
+  function* (_options: { readonly socketPath: string }) {
+    const client = yield* RpcClient.make(DaemonRpcs);
+    yield* Console.log(formatDaemonLimits(yield* client.GetControlStore()));
+  },
+  (effect, options) => overSocket(effect, options.socketPath),
+);
+
+const setLimit = Effect.fn("commands.setLimit")(
+  function* (options: {
+    readonly socketPath: string;
+    readonly limit: "global-concurrency" | "per-workspace-concurrency" | "daily-budget";
+    readonly value: number;
+  }) {
+    const client = yield* RpcClient.make(DaemonRpcs);
+    const current = yield* client.GetControlStore();
+    const controlStore = yield* client.SetDaemonLimit({
+      update: {
+        key: options.limit,
+        value: options.value,
+        expectedRevision: current.daemonLimits.revision,
+      },
+    });
+    yield* Console.log(formatDaemonLimits(controlStore));
+  },
+  (effect, options) => overSocket(effect, options.socketPath),
+);
+
+const setScheduling = Effect.fn("commands.setScheduling")(
+  function* (options: { readonly socketPath: string; readonly desired: SchedulingState }) {
+    const client = yield* RpcClient.make(DaemonRpcs);
+    const scheduler = yield* client.SetScheduling({ desired: options.desired });
+    yield* Console.log(`scheduling: ${scheduler.scheduling}`);
+  },
+  (effect, options) => overSocket(effect, options.socketPath),
+);
+
 export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
   configHome: configHomeFlag,
   controlStore: controlStoreFlag,
   credentials: credentialsFlag,
-  maxConcurrency: maxConcurrencyFlag,
-  maxPerWorkspace: maxPerWorkspaceFlag,
-  dailyBudget: dailyBudgetFlag,
   pollInterval: pollIntervalFlag,
   drainGrace: drainGraceFlag,
-  startPaused: startPausedFlag,
 }).pipe(
-  Command.withHandler(
-    ({
-      socket,
+  Command.withHandler(({ socket, configHome, controlStore, credentials, pollInterval, drainGrace }) =>
+    runDaemon({
+      socketPath: socket,
       configHome,
-      controlStore,
-      credentials,
-      maxConcurrency,
-      maxPerWorkspace,
-      dailyBudget,
-      pollInterval,
-      drainGrace,
-      startPaused,
-    }) =>
-      runDaemon({
-        socketPath: socket,
-        configHome,
-        controlStorePath: controlStore,
-        credentialsPath: credentials,
-        maxConcurrency,
-        maxPerWorkspace,
-        dailyBudget,
-        pollIntervalMillis: pollInterval * 1000,
-        drainGraceMillis: drainGrace * 1000,
-        startPaused,
-      }),
+      controlStorePath: controlStore,
+      credentialsPath: credentials,
+      pollIntervalMillis: pollInterval * 1000,
+      drainGraceMillis: drainGrace * 1000,
+    }),
   ),
 );
 
@@ -315,3 +331,36 @@ export const watchCommand = Command.make("watch", {
   id: watchIdFlag,
   workItem: watchWorkItemArg,
 }).pipe(Command.withHandler(({ socket, id, workItem }) => runWatch({ socketPath: socket, id, workItem })));
+
+const limitsShowCommand = Command.make("show", { socket: socketFlag }).pipe(
+  Command.withHandler(({ socket }) => showLimits({ socketPath: socket })),
+);
+
+const limitsSetCommand = Command.make("set", {
+  socket: socketFlag,
+  limit: daemonLimitKeyArgument,
+  value: daemonLimitValueArgument,
+}).pipe(Command.withHandler(({ socket, limit, value }) => setLimit({ socketPath: socket, limit, value })));
+
+export const limitsCommand = Command.make("limits").pipe(
+  Command.withSubcommands([limitsShowCommand, limitsSetCommand]),
+);
+
+const schedulingPauseCommand = Command.make("pause", { socket: socketFlag }).pipe(
+  Command.withDescription("Pause new runs; in-flight runs finish"),
+  Command.withHandler(({ socket }) =>
+    setScheduling({ socketPath: socket, desired: schedulingActions.pause }),
+  ),
+);
+
+const schedulingResumeCommand = Command.make("resume", { socket: socketFlag }).pipe(
+  Command.withDescription("Resume scheduling new runs"),
+  Command.withHandler(({ socket }) =>
+    setScheduling({ socketPath: socket, desired: schedulingActions.resume }),
+  ),
+);
+
+export const schedulingCommand = Command.make("scheduling").pipe(
+  Command.withDescription("Control new-run scheduling"),
+  Command.withSubcommands([schedulingPauseCommand, schedulingResumeCommand]),
+);

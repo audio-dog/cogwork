@@ -213,7 +213,7 @@ const schedulerStats = Schema.decodeSync(SchedulerStats)({
   perWorkspaceLimit: 4,
   dailyBudgetUsed: 2,
   dailyBudgetLimit: 10,
-  perWorkspace: [{ name: "acme", inFlight: 1 }],
+  perWorkspace: [{ name: "acme", inFlight: 1, limit: 3 }],
 });
 
 describe("renderBoard", () => {
@@ -227,7 +227,7 @@ describe("renderBoard", () => {
     ]);
 
     assert.deepStrictEqual(renderBoard(board), [
-      "scheduler: 1/4 in-flight · budget 2/10 (acme=1)",
+      "scheduler: 1/4 in-flight · budget 2/10 (acme=1/3)",
       "workspaces:",
       "  acme",
       "    triage #1 First",

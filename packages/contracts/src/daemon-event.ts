@@ -10,6 +10,7 @@ import {
   ActionableItem,
   BlockedItem,
   ClaimedItem,
+  ControlStore,
   NeedsHumanItem,
   PollState,
   SchedulerStats,
@@ -46,6 +47,7 @@ export const DaemonEvent = Schema.TaggedUnion({
   ItemRemoved: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId, id: WorkItemId },
   RunChanged: { emittedAtMillis: Schema.Finite, run: RunSummary },
   WorkspaceChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceState },
+  ControlStoreChanged: { emittedAtMillis: Schema.Finite, controlStore: ControlStore },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
 });
 export type DaemonEvent = typeof DaemonEvent.Type;

@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { DaemonRpcs, defaultControlStore, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -36,6 +36,7 @@ const validModule: Registry.LoadedWorkspace = {
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
     harness: { preferred: "cursor" },
+    concurrency: 1001,
   },
 };
 
@@ -542,13 +543,21 @@ describe("reconcile worker", () => {
 
 const registeredSample = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
 
+const availableControlStore = Layer.succeed(ControlStore, {
+  health: "available",
+  seed: defaultControlStore,
+  picture: Effect.succeed(defaultControlStore),
+  setDaemonLimit: () => Effect.succeed(defaultControlStore),
+  withWrite: (effect) => effect,
+});
+
 const schedulerStubService = {
   tick: () => Effect.succeed(0),
   awaitIdle: Effect.void,
   drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
   admit: () => Effect.void,
   setScheduling: () => Effect.succeed(Scheduler.initialState),
-  setConfig: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
+  setLimit: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
   config: Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
   stats: Effect.succeed({
     ...Scheduler.initialState,
@@ -631,7 +640,7 @@ describe("daemon heartbeats", () => {
           workerLayer,
           registeredSample,
           schedulerLayer,
-          Layer.succeed(ControlStore, { health: "available" }),
+          availableControlStore,
           worktreeStub,
           DaemonEventBus.layer,
           Layer.succeed(Recovery.Recovery, {
@@ -668,11 +677,7 @@ describe("daemon heartbeats", () => {
       assert.strictEqual(yield* Ref.get(recoveryCalls), 1);
     }).pipe(
       Effect.provide(
-        Layer.mergeAll(
-          defectiveWorkerLayer,
-          BootstrapRecoveryCalls.recoveryLayer,
-          Layer.succeed(ControlStore, { health: "available" }),
-        ),
+        Layer.mergeAll(defectiveWorkerLayer, BootstrapRecoveryCalls.recoveryLayer, availableControlStore),
       ),
       Effect.scoped,
     ),
@@ -694,6 +699,7 @@ describe("daemon heartbeats", () => {
             dailyBudgetLimit: 50,
             perWorkspace: [],
           }),
+        publishControlStore: (controlStore) => Effect.succeed(controlStore),
       });
       const layer = publisherLayer.pipe(
         Layer.provideMerge(
@@ -701,7 +707,7 @@ describe("daemon heartbeats", () => {
             defectiveWorkerLayer,
             registeredSample,
             SchedulerTickCount.schedulerLayer,
-            Layer.succeed(ControlStore, { health: "available" }),
+            availableControlStore,
             worktreeStub,
             DaemonEventBus.layer,
             Layer.succeed(Recovery.Recovery, {
@@ -762,7 +768,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
-      Layer.provideMerge(Layer.succeed(ControlStore, { health: "available" })),
+      Layer.provideMerge(availableControlStore),
       Layer.provideMerge(runRecorder),
       Layer.provideMerge(runLedger),
       Layer.provideMerge(RunControl.layer),
@@ -948,6 +954,7 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.scheduler.perWorkspace.length, 1);
       assert.strictEqual(status.scheduler.perWorkspace[0]?.name, "example");
       assert.strictEqual(status.scheduler.perWorkspace[0]?.inFlight, 2);
+      assert.strictEqual(status.scheduler.perWorkspace[0]?.limit, 1001);
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 });

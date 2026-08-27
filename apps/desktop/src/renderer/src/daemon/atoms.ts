@@ -28,4 +28,4 @@ export const reclassifyAtom = DaemonAtomRpc.mutation("Reclassify");
 
 export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");
 
-export const setSchedulerConfigAtom = DaemonAtomRpc.mutation("SetSchedulerConfig");
+export const setDaemonLimitAtom = DaemonAtomRpc.mutation("SetDaemonLimit");

@@ -158,7 +158,7 @@ describe("formatStatus", () => {
           perWorkspaceLimit: 4,
           dailyBudgetUsed: 7,
           dailyBudgetLimit: 50,
-          perWorkspace: [{ name: workspaceId("cogwork"), inFlight: 1 }],
+          perWorkspace: [{ name: workspaceId("cogwork"), inFlight: 1, limit: 3 }],
         },
         workspaces: [
           workspace({
@@ -168,7 +168,7 @@ describe("formatStatus", () => {
         failures: [{ source: "broken.workspace.ts", message: "boom" }],
       }),
     );
-    assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 · paused (cogwork=1)");
+    assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 · paused (cogwork=1/3)");
     assert.include(output, "      paused: auth (needs attention) — auth failed");
     assert.include(output, "  ! broken.workspace.ts: boom");
   });
