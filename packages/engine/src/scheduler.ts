@@ -235,8 +235,13 @@ export const make = (config: SchedulerConfig) =>
           budgetUsed: planned.state.budgetUsed,
         });
       }
-      return yield* Effect.forEach(planned.picks, (candidate) => FiberSet.run(jobs, runJob(candidate)));
+      yield* Effect.forEach(planned.picks, (candidate) => FiberSet.run(jobs, runJob(candidate)), {
+        discard: true,
+      });
+      return planned.picks.length;
     });
+
+    const awaitIdle = FiberSet.awaitEmpty(jobs);
 
     const drain = Effect.fn("Scheduler.drain")(function* (options: DrainOptions) {
       yield* Ref.update(stateRef, (state) => ({ ...state, stopping: true }));
@@ -276,6 +281,7 @@ export const make = (config: SchedulerConfig) =>
 
     return {
       tick,
+      awaitIdle,
       drain,
       admit,
       setScheduling,
