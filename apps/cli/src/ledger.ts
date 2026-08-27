@@ -19,43 +19,6 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { runEvents, runs, sessions } from "./schema";
 
-const bootstrapSql = `
-CREATE TABLE IF NOT EXISTS runs (
-  id TEXT PRIMARY KEY,
-  workspace TEXT NOT NULL,
-  work_item TEXT NOT NULL,
-  stage TEXT NOT NULL,
-  harness TEXT NOT NULL,
-  branch TEXT,
-  session TEXT,
-  input_tokens INTEGER,
-  output_tokens INTEGER,
-  total_tokens INTEGER,
-  estimated INTEGER,
-  status TEXT NOT NULL,
-  started_at INTEGER NOT NULL,
-  ended_at INTEGER
-);
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  workspace TEXT NOT NULL,
-  harness TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  handle TEXT,
-  created_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS run_events (
-  run_id TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  type TEXT NOT NULL,
-  name TEXT,
-  data TEXT NOT NULL,
-  at INTEGER NOT NULL,
-  PRIMARY KEY (run_id, seq)
-);
-CREATE INDEX IF NOT EXISTS runs_started_at ON runs (started_at DESC);
-`;
-
 const unresumableStatuses = ["interrupted", "crashed", "exhausted"];
 
 const newestRunFirst = [desc(runs.startedAt), desc(sql<number>`rowid`)] as const;
@@ -176,19 +139,6 @@ const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows
     ),
   ).pipe(Effect.map((chunks) => chunks.flat()));
 
-const addColumnIfMissing = (sqlite: DatabaseSync, ddl: string) => {
-  try {
-    sqlite.exec(ddl);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes("duplicate column")) throw error;
-  }
-};
-
-const migrateBlockedToExhausted = (sqlite: DatabaseSync) => {
-  sqlite.exec("UPDATE runs SET status = 'exhausted' WHERE status = 'blocked'");
-};
-
 const open = (ledgerPath: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -197,10 +147,6 @@ const open = (ledgerPath: string) =>
     return yield* Effect.acquireRelease(
       Effect.sync(() => {
         const sqlite = new DatabaseSync(ledgerPath);
-        sqlite.exec(bootstrapSql);
-        addColumnIfMissing(sqlite, "ALTER TABLE runs ADD COLUMN branch TEXT");
-        addColumnIfMissing(sqlite, "ALTER TABLE runs ADD COLUMN estimated INTEGER");
-        migrateBlockedToExhausted(sqlite);
         return drizzle({ client: sqlite });
       }),
       (db) => Effect.sync(() => db.$client.close()),

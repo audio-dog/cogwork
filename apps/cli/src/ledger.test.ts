@@ -9,7 +9,7 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
-import { RunLedger } from "@cogwork/engine";
+import { migrate, RunLedger } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -99,22 +99,25 @@ const sessionRecord = (over: Partial<Session> = {}): Session => ({
   ...over,
 });
 
+const sqliteLedgerLayer = ledgerLayer;
+
 const insertRunAt = (ledgerPath: string, run: RunRecord) =>
-  Effect.provide(
-    Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.insertRun(run)),
-    ledgerLayer(ledgerPath),
+  migrate(ledgerPath).pipe(
+    Effect.andThen(Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.insertRun(run))),
+    Effect.provide(sqliteLedgerLayer(ledgerPath)),
   );
 
 const listRunsAt = (ledgerPath: string) =>
-  Effect.provide(
-    Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.listRuns(10)),
-    ledgerLayer(ledgerPath),
+  migrate(ledgerPath).pipe(
+    Effect.andThen(Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.listRuns(10))),
+    Effect.provide(sqliteLedgerLayer(ledgerPath)),
   );
 
 const writeRetiredStatus = (ledgerPath: string) =>
   Effect.acquireUseRelease(
     Effect.sync(() => new DatabaseSync(ledgerPath)),
-    (sqlite) => Effect.sync(() => sqlite.exec("UPDATE runs SET status = 'blocked'")),
+    (sqlite) =>
+      Effect.sync(() => sqlite.exec("UPDATE runs SET status = 'blocked'; DELETE FROM control_migrations")),
     (sqlite) => Effect.sync(() => sqlite.close()),
   );
 
@@ -125,7 +128,8 @@ describe("sqlite RunLedger", () => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-" });
       const ledgerPath = path.join(dir, "runs.db");
-      return Layer.merge(ledgerLayer(ledgerPath), Layer.succeed(TestLedgerPath, ledgerPath));
+      yield* migrate(ledgerPath);
+      return Layer.merge(sqliteLedgerLayer(ledgerPath), Layer.succeed(TestLedgerPath, ledgerPath));
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
     it.effect("persists a run, its events, and reports a summary with event count", () =>
