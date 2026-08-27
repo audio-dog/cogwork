@@ -1,0 +1,76 @@
+apps/cli/src/rpc.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 27,109-110
+packages/engine/src/control-store.test.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-146
+packages/contracts/src/daemon.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 12
+packages/engine/src/daemon.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 10,15,17-18,27,48-53,138,141,180-181,188,198-210,215,238,314-315,338,342-347
+pnpm-workspace.yaml
+  s_fc75bb68995db6::t_cd549df9f45b4a 16-20,37-42,46-47
+apps/cli/package.json
+  s_fc75bb68995db6::t_cd549df9f45b4a 21,27
+packages/engine/drizzle.config.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-3
+packages/engine/src/control-store-schema.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-2,4-25,44
+apps/cli/src/paths.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 11
+packages/engine/package.json
+  s_fc75bb68995db6::t_cd549df9f45b4a 10-12,16,25,30,32
+biome.json
+  s_fc75bb68995db6::t_cd549df9f45b4a 10
+packages/engine/src/executor.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 236,814,816,818,820-859,864-868,870-872
+packages/engine/src/executor.test.ts
+  s_fc75bb68995db6::t_6b0ba58e7a0e7f 1038-1044,1057,1063,1066
+  s_fc75bb68995db6::t_7f3c71bcc13dfc 424-437,442,487-503,707-708,710-712
+  s_fc75bb68995db6::t_cd549df9f45b4a 17,20,23,1036-1037,1045-1056,1058-1062,1064-1065
+  s_fc75bb68995db6::t_bd6511befbc9ae 1067-1068
+packages/engine/src/control-store-create.gen.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-9
+packages/engine/src/daemon-composition.test.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-6,8,11,15,24,69,71-83,98,110-120,124-128,131-135
+packages/engine/scripts/generate-control-store-create.mjs
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-36
+.gitignore
+  s_fc75bb68995db6::t_cd549df9f45b4a 18-23
+packages/engine/src/control-store.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-102
+AGENTS.md
+  s_fc75bb68995db6::t_cd549df9f45b4a 23-41
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 113
+apps/cli/src/commands.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 29-34,51-53,264,277,289
+apps/cli/src/ledger.test.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 12,14,23-24,27-33,51,53,115-116,440,450,476-491,495-529
+packages/engine/src/index.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 3-4
+.gitattributes
+  s_fc75bb68995db6::t_cd549df9f45b4a 1-6
+packages/engine/src/engine.test.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 16,634,670-676,704,765
+apps/cli/src/ledger.ts
+  s_fc75bb68995db6::t_cd549df9f45b4a 11,13-14,18-19,141-153,157-174,176-184,186-195,197-211,213,215-216,218-219,221-222,224-229,231-239,241-244,246-255,257,259-262,264-276,278,280-305,308,310-318,320-328,330-342,344-365,367-384,386-387,389-398,400-401,409,420-466,469-470,472-473,475
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_fc75bb68995db6::t_cd549df9f45b4a 6,193-256
+pnpm-lock.yaml
+  s_fc75bb68995db6::t_d2542d01a9478e 39-44,59-60,62-63,65-69,71-72,74-75,116,119-122,139-140,143,147,183,186,210,307,311,326,333,366,370,389-391,416-418,421,426-428,431-434,903-907,909-911,913-914,926,945-946,949,951-952,955,958-962,1002-1003,1005,1432-1435,2813-2818,2822-2831,2836,2842-2846,2857,2865,2873-2880,2883-2892,2919-2922,2979-2980,3309-3311,3575-3577,3932-3933,4424-4426,4772-4773,4991-5002,5520-5522,5524,5528,5531,5541,5544-5545,5550,5552-5553,5556,5561-5564,5596,5598,5922-5925,7203-7211,7213,7215-7216,7234,7237,7701-7704,7933-7934,8210,8572-8573,8988,9120-9121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "560de221b27956a3300f3f74f5bd7a3991feca2a",
+  "prompts": {},
+  "sessions": {
+    "s_fc75bb68995db6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a7-c188-7ee0-ad58-1514c10de588",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
