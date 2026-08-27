@@ -9,6 +9,7 @@ import {
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
@@ -107,6 +108,18 @@ layer(NodeServices.layer)((it) => {
       assert.deepStrictEqual(yield* appliedNamesAt(storePath), [{ name: "control-store" }]);
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
       assert.isFalse((yield* fs.readDirectory(dir)).some((entry) => entry.includes("before-migration")));
+    }),
+  );
+
+  it.effect("propagates interruption during boot", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
+      const storePath = path.join(dir, "control.db");
+      const exit = yield* Effect.exit(storeAt(storePath, { "1_interrupt": Effect.interrupt }));
+
+      assert.isTrue(Exit.hasInterrupts(exit));
     }),
   );
 

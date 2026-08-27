@@ -228,10 +228,11 @@ export const bootControlStoreLayer = (
     ControlStore,
     boot(storePath, migrations).pipe(
       Effect.map(() => available),
-      Effect.catchCause((cause) =>
-        Effect.succeed(
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterrupts(cause)) return Effect.interrupt;
+        return Effect.succeed(
           unavailable(Cause.hasFails(cause) ? messageOf(Cause.squash(cause)) : Cause.pretty(cause)),
-        ),
-      ),
+        );
+      }),
     ),
   );
