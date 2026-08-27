@@ -1,0 +1,19 @@
+packages/contracts/src/scheduler-defaults.ts
+  s_da1645ec2131aa::t_87e4060b1ff33d 1-2,6-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f503293dd9b20ad56c6100e3384e288c086754c3",
+  "prompts": {},
+  "sessions": {
+    "s_da1645ec2131aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0452c-a951-72f0-b260-588d724f47c1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
