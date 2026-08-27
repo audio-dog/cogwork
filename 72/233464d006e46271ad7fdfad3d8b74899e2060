@@ -1,0 +1,21 @@
+AGENTS.md
+  s_dd0bc069f1065b::t_eb4f6a90fb16dc 33-34
+package.json
+  s_dd0bc069f1065b::t_afb296aa05a53c 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "72233464d006e46271ad7fdfad3d8b74899e2060",
+  "prompts": {},
+  "sessions": {
+    "s_dd0bc069f1065b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52e32dbe-b113-4a99-8d36-118cacd039df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
