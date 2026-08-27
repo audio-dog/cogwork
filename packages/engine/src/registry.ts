@@ -14,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as MutableRef from "effect/MutableRef";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -79,8 +80,13 @@ interface WorkspaceRow {
   readonly concurrency: number | null;
 }
 
+interface WorkspaceBindingRow {
+  readonly id: string;
+}
+
 const workspaceInputName = "workspace.json";
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
+const decodeWorkspaceIdOption = Schema.decodeUnknownOption(WorkspaceId);
 const decodeIssueTracker = Schema.decodeUnknownEffect(Schema.fromJsonString(IssueTrackerConfig));
 const decodeSourceControl = Schema.decodeUnknownEffect(Schema.fromJsonString(SourceControlConfig));
 const decodeWorkspaceInput = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceInput));
@@ -96,6 +102,15 @@ const workspaceInputPath = (path: Path.Path, checkoutPath: string) =>
   path.join(checkoutPath, ".agents", workspaceInputName);
 
 const present = <A>(value: A | null) => (value === null ? undefined : value);
+
+const workspaceFailure = (row: WorkspaceRow, message: string) => {
+  const name = Option.getOrUndefined(decodeWorkspaceIdOption(row.id));
+  return {
+    ...(name ? { name } : {}),
+    source: row.checkoutPath,
+    message,
+  } satisfies WorkspaceFailureInfo;
+};
 
 export const findWorkspace = (registry: RegistryState, name: string) =>
   registry.workspaces.find(
@@ -187,6 +202,17 @@ const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* () {
   ORDER BY id`;
 });
 
+const selectWorkspaceBinding = Effect.fn("WorkspaceRegistry.selectWorkspaceBinding")(function* (
+  checkoutPath: string,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const [row] = yield* sql<WorkspaceBindingRow>`SELECT id
+    FROM workspaces
+    WHERE checkout_path = ${checkoutPath}
+    LIMIT 1`;
+  return row;
+});
+
 const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: ControlStoreStatus) {
   if (store.health === "unavailable") return emptyRegistry;
   const rows = yield* selectRows();
@@ -194,12 +220,9 @@ const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: Con
   const workspaces = outcomes.flatMap((outcome) => (outcome._tag === "Success" ? [outcome.success] : []));
   const failures = outcomes.flatMap((outcome, index) => {
     if (outcome._tag === "Success") return [];
-    return [
-      {
-        source: rows[index]?.checkoutPath ?? "Control store",
-        message: outcome.failure.message,
-      },
-    ];
+    const row = rows[index];
+    if (!row) return [{ source: "Control store", message: outcome.failure.message }];
+    return [workspaceFailure(row, outcome.failure.message)];
   });
   return { workspaces, failures } satisfies RegistryState;
 });
@@ -243,11 +266,21 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
   return row;
 });
 
+const withoutWorkspace = (state: RegistryState, name: WorkspaceId | undefined) => {
+  if (!name) return state;
+  return {
+    workspaces: state.workspaces.filter((workspace) => workspace.config.name !== name),
+    failures: state.failures.filter((failure) => failure.name !== name),
+  };
+};
+
 const foldRegistration = (state: RegistryState, change: WorkspaceRegistrationChange) => {
   if (change._tag === "Registered") {
-    return { ...state, workspaces: [...state.workspaces, change.workspace] };
+    const current = withoutWorkspace(state, change.workspace.config.name);
+    return { ...current, workspaces: [...current.workspaces, change.workspace] };
   }
-  return { ...state, failures: [...state.failures, change.failure] };
+  const current = withoutWorkspace(state, change.failure.name);
+  return { ...current, failures: [...current.failures, change.failure] };
 };
 
 export const layer = Layer.effectContext(
@@ -258,6 +291,13 @@ export const layer = Layer.effectContext(
     const dependencies = yield* Effect.context<FileSystem.FileSystem | Path.Path | SqlClient.SqlClient>();
     const initial = yield* loadState(store);
     const cell = MutableRef.make(initial);
+    const revision = MutableRef.make(0);
+    const commitRefresh = (startedAt: number, state: RegistryState) => {
+      if (MutableRef.get(revision) !== startedAt) return MutableRef.get(cell);
+      MutableRef.set(cell, state);
+      MutableRef.update(revision, (current) => current + 1);
+      return state;
+    };
     const registry: WorkspaceRegistryService = {
       get workspaces() {
         return MutableRef.get(cell).workspaces;
@@ -265,13 +305,14 @@ export const layer = Layer.effectContext(
       get failures() {
         return MutableRef.get(cell).failures;
       },
-      refresh: loadState(store).pipe(
-        Effect.provide(dependencies),
-        Effect.mapError((error) => registrationError(error)),
-        Effect.map((state) => {
-          MutableRef.set(cell, state);
-          return state;
-        }),
+      refresh: Effect.sync(() => MutableRef.get(revision)).pipe(
+        Effect.flatMap((startedAt) =>
+          loadState(store).pipe(
+            Effect.provide(dependencies),
+            Effect.mapError((error) => registrationError(error)),
+            Effect.map((state) => commitRefresh(startedAt, state)),
+          ),
+        ),
       ),
     };
     const register = Effect.fn("WorkspaceManagement.register")(function* (
@@ -279,6 +320,13 @@ export const layer = Layer.effectContext(
     ) {
       if (!path.isAbsolute(registration.checkoutPath)) {
         return yield* registrationError("Workspace checkout path must be absolute");
+      }
+      const existing = yield* selectWorkspaceBinding(registration.checkoutPath).pipe(
+        Effect.provide(dependencies),
+        Effect.mapError((error) => registrationError(error)),
+      );
+      if (existing) {
+        return yield* registrationError(`Workspace checkout path is already registered as ${existing.id}`);
       }
       const id = yield* crypto.randomUUIDv7.pipe(
         Effect.flatMap(decodeWorkspaceId),
@@ -294,11 +342,12 @@ export const layer = Layer.effectContext(
         Effect.catchTag("WorkspaceRegistrationError", (error) =>
           Effect.succeed({
             _tag: "Failed" as const,
-            failure: { source: row.checkoutPath, message: error.message },
+            failure: workspaceFailure(row, error.message),
           }),
         ),
       );
       MutableRef.update(cell, (state) => foldRegistration(state, change));
+      MutableRef.update(revision, (current) => current + 1);
       return change;
     });
     return Context.make(WorkspaceRegistry, registry).pipe(Context.add(WorkspaceManagement, { register }));
