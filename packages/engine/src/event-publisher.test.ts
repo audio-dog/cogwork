@@ -9,6 +9,7 @@ import {
   type RunRecord,
   SchedulerStats,
   WorkItemId,
+  WorkspaceConfig,
   WorkspaceId,
   workspaceFailureState,
   workspaceKey,
@@ -48,16 +49,16 @@ const harnessName = Schema.decodeSync(HarnessName);
 
 const registryLayer = Layer.succeed(
   Registry.WorkspaceRegistry,
-  Registry.buildRegistry({
-    loaded: [
+  Registry.readOnlyRegistry({
+    workspaces: [
       {
-        source: "example.workspace.ts",
-        value: {
+        source: "control-store:example",
+        config: Schema.decodeSync(WorkspaceConfig)({
           name: "example",
           checkoutPath: "/repos/example",
           issueTracker: { type: "linear" },
           harness: { preferred: "cursor" },
-        },
+        }),
       },
     ],
     failures: [],
@@ -282,6 +283,7 @@ describe("DaemonEventPublisher", () => {
         Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, observing(itemsRef)))),
       ),
       Layer.provideMerge(registryLayer),
+      Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
       Layer.provideMerge(runRecorderTestLayer),
       Layer.provideMerge(runLedgerTestLayer),
@@ -344,7 +346,8 @@ describe("DaemonEventPublisher", () => {
           ),
         );
         const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
-        const expectedScheduler = schedulerStatsOf(yield* scheduler.config, yield* scheduler.stats);
+        const registry = yield* Registry.WorkspaceRegistry;
+        const expectedScheduler = schedulerStatsOf(yield* scheduler.config, yield* scheduler.stats, registry);
 
         const status = yield* client.GetStatus();
         const expectedWorkspaces = new Map(
@@ -407,8 +410,8 @@ describe("DaemonEventPublisher", () => {
 
   const failingRegistryLayer = Layer.succeed(
     Registry.WorkspaceRegistry,
-    Registry.buildRegistry({
-      loaded: [],
+    Registry.readOnlyRegistry({
+      workspaces: [],
       failures: [{ source: "broken.workspace.ts", message: "config threw at import" }],
     }),
   );
@@ -425,6 +428,7 @@ describe("DaemonEventPublisher", () => {
         Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(failingRegistryLayer, observing(itemsRef)))),
       ),
       Layer.provideMerge(failingRegistryLayer),
+      Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
       Layer.provideMerge(runRecorderTestLayer),
       Layer.provideMerge(runLedgerTestLayer),
