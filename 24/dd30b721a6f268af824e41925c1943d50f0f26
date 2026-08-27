@@ -1,0 +1,50 @@
+packages/engine/src/model-catalog.ts
+  s_9b30292056623b::t_f9311f0ed8a781 80
+apps/cli/config/cogwork.workspace.ts
+  s_9b30292056623b::t_f9311f0ed8a781 4
+packages/engine/src/executor.test.ts
+  s_9b30292056623b::t_f9311f0ed8a781 800,802-804
+docs/agent-patterns/effect-time-bounds.md
+  s_9b30292056623b::t_f9311f0ed8a781 1-116
+packages/engine/skills/implement-agent/SKILL.md
+  s_9b30292056623b::t_f9311f0ed8a781 69
+apps/cli/src/platform.ts
+  s_9b30292056623b::t_f9311f0ed8a781 167-177,180
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_9b30292056623b::t_f9311f0ed8a781 1-124
+packages/engine/src/executor.ts
+  s_9b30292056623b::t_585e466a901363 873,875
+  s_9b30292056623b::t_f9311f0ed8a781 748-753,857,863,870-871,881
+packages/codex-cli/src/harness.test.ts
+  s_9b30292056623b::t_f9311f0ed8a781 38
+packages/engine/src/provider-runner.ts
+  s_9b30292056623b::t_f9311f0ed8a781 89-92
+packages/engine/src/context-assembler.ts
+  s_9b30292056623b::t_f9311f0ed8a781 7,28,69-71,97-105,132,134-135
+apps/cli/src/platform.test.ts
+  s_9b30292056623b::t_f9311f0ed8a781 116-136
+docs/agent-patterns/effect-test-layers.md
+  s_9b30292056623b::t_f9311f0ed8a781 1-125
+apps/cli/src/rpc.ts
+  s_9b30292056623b::t_f9311f0ed8a781 1,98-102
+packages/engine/src/context-fs.ts
+  s_9b30292056623b::t_f9311f0ed8a781 16-17
+packages/engine/src/context-assembler.test.ts
+  s_9b30292056623b::t_f9311f0ed8a781 12,25-31,60,67-70,84-85,98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "24dd30b721a6f268af824e41925c1943d50f0f26",
+  "prompts": {},
+  "sessions": {
+    "s_9b30292056623b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040c4-d52b-7a43-9fff-20b259315e40",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
