@@ -1,0 +1,19 @@
+packages/engine/src/control-store.test.ts
+  s_dd0bc069f1065b::t_74647dc79c9f66 10,12-16,38-46,48,50,53-59,68,80,82-83,87,91,94,102,106,110,122,136-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "87ac0b163d3d1b70924f34bdec6526bfe2c44ba2",
+  "prompts": {},
+  "sessions": {
+    "s_dd0bc069f1065b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52e32dbe-b113-4a99-8d36-118cacd039df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
