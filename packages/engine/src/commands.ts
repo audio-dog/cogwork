@@ -8,6 +8,9 @@ import {
   type WorkItemId,
   WorkItemNotFound,
   type WorkspaceId,
+  type WorkspaceRegistration,
+  workspaceFailureState,
+  workspaceStateFromInfo,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -15,9 +18,9 @@ import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegistryState } from "./projector";
-import { classifiedItemWithPr } from "./read-model";
+import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceManagement, WorkspaceRegistry } from "./registry";
 import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
@@ -146,4 +149,18 @@ export const setSchedulerConfig = Effect.fn("Daemon.SetSchedulerConfig")(functio
   const publisher = yield* DaemonEventPublisher;
   yield* scheduler.setConfig(payload.update);
   return yield* publisher.publishScheduler();
+});
+
+export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
+  readonly registration: WorkspaceRegistration;
+}) {
+  const management = yield* WorkspaceManagement;
+  const publisher = yield* DaemonEventPublisher;
+  const change = yield* management.register(payload.registration);
+  const state =
+    change._tag === "Registered"
+      ? workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined))
+      : workspaceFailureState(change.failure);
+  yield* publisher.publishWorkspaces();
+  return state;
 });
