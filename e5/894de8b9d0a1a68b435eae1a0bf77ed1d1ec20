@@ -1,0 +1,23 @@
+packages/engine/src/control-store-create.gen.ts
+  s_07a6809442ebd2::t_21fe8855978e6f 7
+packages/engine/src/control-store-schema.ts
+  s_07a6809442ebd2::t_64108fc99ba815 46-59
+packages/engine/src/control-store.test.ts
+  s_07a6809442ebd2::t_bf19e7693f29c0 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e5894de8b9d0a1a68b435eae1a0bf77ed1d1ec20",
+  "prompts": {},
+  "sessions": {
+    "s_07a6809442ebd2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a6-0eb5-79c0-ade3-d87ee0329bc8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
