@@ -29,6 +29,8 @@ import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
 import { WorktreeManager } from "./worktree";
 
+const workspaceId = Schema.decodeSync(WorkspaceId);
+
 const registeredWorkspace: Registry.RegisteredWorkspace = {
   source: "control-store:example",
   config: Schema.decodeSync(WorkspaceConfig)({
@@ -42,7 +44,11 @@ const registeredWorkspace: Registry.RegisteredWorkspace = {
 const sampleRegistry: Registry.RegistryState = {
   workspaces: [registeredWorkspace],
   failures: [
-    { source: "control-store:broken", message: "invalid Workspace input" },
+    {
+      name: workspaceId("broken"),
+      source: "control-store:broken",
+      message: "invalid Workspace input",
+    },
     { source: "control-store:unreadable", message: "cannot read Workspace input" },
   ],
 };
@@ -485,7 +491,10 @@ const schedulerStubService = {
   stats: Effect.succeed({
     ...Scheduler.initialState,
     global: 3,
-    perWorkspace: new Map([[Schema.decodeSync(WorkspaceId)("example"), 2]]),
+    perWorkspace: new Map([
+      [workspaceId("example"), 2],
+      [workspaceId("broken"), 1],
+    ]),
     budgetDay: 0,
     budgetUsed: 7,
   }),
@@ -715,6 +724,7 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.workspaces[0]?.poll.status, "pending");
       assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.strictEqual(status.failures.length, 2);
+      assert.strictEqual(status.failures[0]?.name, "broken");
       assert.isAtLeast(status.uptimeMillis, 0);
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
@@ -878,9 +888,10 @@ describe("daemon status over rpc", () => {
       assert.strictEqual(status.scheduler.globalLimit, 4);
       assert.strictEqual(status.scheduler.dailyBudgetUsed, 7);
       assert.strictEqual(status.scheduler.dailyBudgetLimit, 50);
-      assert.strictEqual(status.scheduler.perWorkspace.length, 1);
-      assert.strictEqual(status.scheduler.perWorkspace[0]?.name, "example");
-      assert.strictEqual(status.scheduler.perWorkspace[0]?.inFlight, 2);
+      assert.deepStrictEqual(status.scheduler.perWorkspace, [
+        { name: workspaceId("example"), inFlight: 2, limit: 4 },
+        { name: workspaceId("broken"), inFlight: 1, limit: 4 },
+      ]);
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 });

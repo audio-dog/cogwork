@@ -143,7 +143,11 @@ export const handlersLayer = DaemonRpcs.toLayer({
       uptimeMillis: now - info.startedAtMillis,
       scheduler: schedulerStatsOf(config, stats, registry),
       workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
-      failures: registry.failures.map((f) => ({ source: f.source, message: f.message })),
+      failures: registry.failures.map(({ name, source, message }) => ({
+        ...(name === undefined ? {} : { name }),
+        source,
+        message,
+      })),
     };
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
