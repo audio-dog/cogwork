@@ -8,6 +8,6 @@ export const defaultSocketPath = path.join(daemonHome, "cogwork.sock");
 
 export const defaultConfigHome = path.resolve(import.meta.dirname, "../config");
 
-export const defaultLedgerPath = path.join(daemonHome, "runs.db");
+export const defaultControlStorePath = path.join(daemonHome, "control.db");
 
 export const defaultCredentialsPath = path.join(daemonHome, "credentials.json");

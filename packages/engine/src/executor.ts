@@ -217,14 +217,12 @@ export const make = Effect.gen(function* () {
   };
 
   const compatibleSession = Effect.fn("Executor.compatibleSession")(function* (
-    workspace: RegisteredWorkspace,
     ops: StageOps,
     session: Session | null,
   ) {
     if (!session) return null;
     if (session.harness === ops.resolved.harness) return session.id;
     yield* Effect.logInfo("started fresh after harness switch", {
-      workspace: workspace.config.name,
       ...(ops.branch ? { branch: ops.branch } : {}),
       oldHarness: session.harness,
       newHarness: ops.resolved.harness,
@@ -235,7 +233,7 @@ export const make = Effect.gen(function* () {
   const priorSession = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) =>
     candidateSession(workspace, item, ops.branch).pipe(
       Effect.flatMap((id) => (id ? ledger.getSession(id) : Effect.succeed(null))),
-      Effect.flatMap((session) => compatibleSession(workspace, ops, session)),
+      Effect.flatMap((session) => compatibleSession(ops, session)),
     );
 
   const planSession = Effect.fn("Executor.planSession")(function* (
@@ -385,8 +383,6 @@ export const make = Effect.gen(function* () {
     const attempts = item.priorFailures + 1;
     const exhausted = !retryable || attempts >= maxAttemptsPerStage;
     yield* Effect.logWarning("stage attempt failed", {
-      stage: item.stage,
-      item: item.id,
       reason,
       retryable,
       exhausted,
@@ -587,8 +583,6 @@ export const make = Effect.gen(function* () {
       .pipe(
         Effect.catchTag("IssueTrackerError", (error) =>
           Effect.logWarning("follow-up summary comment failed", {
-            workspace: workspace.config.name,
-            item: item.id,
             message: error.message,
           }),
         ),
@@ -817,57 +811,65 @@ export const make = Effect.gen(function* () {
     startedAtMillis: number,
   ) {
     const runId = yield* nextRunId(startedAtMillis);
-    const previous = yield* priorSession(workspace, item, ops);
-    const selectedOps = previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-    const record: RunRecord = {
-      id: runId,
+    const correlation = {
       workspace: workspace.config.name,
-      workItem: item.id,
+      item: item.id,
       stage: item.stage,
-      harness: selectedOps.resolved.harness,
-      branch: selectedOps.branch,
-      session: previous,
-      usage: null,
-      status: "running",
-      startedAtMillis,
-      endedAtMillis: null,
+      runId,
     };
-    yield* ledger.insertRun(record);
-    yield* Effect.withFiber((self) => runControl.register(runId, self));
-    const persistSession = (session: SessionId) => {
-      const prepared = withSession(record, session);
-      return prepared === record
-        ? Effect.succeed(prepared)
-        : ledger.setRunSession(runId, session).pipe(Effect.map(() => prepared));
-    };
-    return yield* planSession(workspace, selectedOps, startedAtMillis, previous).pipe(
-      Effect.matchEffect({
-        onFailure: (error) =>
-          (previous ? Effect.succeed(previous) : mintSession(workspace, selectedOps, startedAtMillis)).pipe(
-            Effect.flatMap(persistSession),
-            Effect.flatMap((prepared) =>
-              handleOf(ledger, prepared.session).pipe(
-                Effect.flatMap((handle) =>
-                  applyFailure(
-                    workspace,
-                    item,
-                    runId,
-                    retryableOf(error),
-                    prepareFailureReason(error),
-                    handle,
+    return yield* Effect.gen(function* () {
+      const previous = yield* priorSession(workspace, item, ops);
+      const selectedOps = previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+      const record: RunRecord = {
+        id: runId,
+        workspace: workspace.config.name,
+        workItem: item.id,
+        stage: item.stage,
+        harness: selectedOps.resolved.harness,
+        branch: selectedOps.branch,
+        session: previous,
+        usage: null,
+        status: "running",
+        startedAtMillis,
+        endedAtMillis: null,
+      };
+      yield* ledger.insertRun(record);
+      yield* Effect.withFiber((self) => runControl.register(runId, self));
+      const persistSession = (session: SessionId) => {
+        const prepared = withSession(record, session);
+        return prepared === record
+          ? Effect.succeed(prepared)
+          : ledger.setRunSession(runId, session).pipe(Effect.map(() => prepared));
+      };
+      return yield* planSession(workspace, selectedOps, startedAtMillis, previous).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            (previous ? Effect.succeed(previous) : mintSession(workspace, selectedOps, startedAtMillis)).pipe(
+              Effect.flatMap(persistSession),
+              Effect.flatMap((prepared) =>
+                handleOf(ledger, prepared.session).pipe(
+                  Effect.flatMap((handle) =>
+                    applyFailure(
+                      workspace,
+                      item,
+                      runId,
+                      retryableOf(error),
+                      prepareFailureReason(error),
+                      handle,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        onSuccess: ({ request, session }) =>
-          persistSession(session).pipe(
-            Effect.flatMap((prepared) =>
-              settleOutcome(workspace, item, selectedOps, prepared, runId, request),
+          onSuccess: ({ request, session }) =>
+            persistSession(session).pipe(
+              Effect.flatMap((prepared) =>
+                settleOutcome(workspace, item, selectedOps, prepared, runId, request),
+              ),
             ),
-          ),
-      }),
-    );
+        }),
+      );
+    }).pipe(Effect.annotateLogs(correlation), Effect.annotateSpans(correlation));
   });
 
   const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (

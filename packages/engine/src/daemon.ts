@@ -7,11 +7,15 @@ import {
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
+import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import type * as Path from "effect/Path";
+import type { PlatformError } from "effect/PlatformError";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -20,6 +24,7 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { cancelRun, reclassify, setSchedulerConfig, setScheduling } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
+import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
@@ -40,7 +45,12 @@ import {
 import { Recovery, layer as recoveryLayer } from "./recovery";
 import { WorkspaceRegistry } from "./registry";
 import { layer as runControlLayer } from "./run-control";
-import { type CoreRunLedger, RunLedger, publishingLayer as runLedgerPublishingLayer } from "./run-ledger";
+import {
+  type CoreRunLedger,
+  layerMemoryCore as memoryRunLedgerLayer,
+  RunLedger,
+  publishingLayer as runLedgerPublishingLayer,
+} from "./run-ledger";
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
 import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
@@ -125,9 +135,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const config = yield* scheduler.config;
     const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
+    const controlStore = yield* ControlStore;
     const stateByName = statesByName(snapshot);
     return {
-      health: "running" as const,
+      health: controlStore.health === "available" ? "running" : "store-unavailable",
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
       scheduler: schedulerStatsOf(config, stats),
@@ -166,14 +177,15 @@ export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
-  readonly runLedger: Layer.Layer<CoreRunLedger, E, R>;
+  readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
+  readonly controlStorePath: string;
   readonly registry: Layer.Layer<WorkspaceRegistry, E, R>;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
   readonly scheduler: SchedulerConfig;
 }
 
-const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
+function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
   // one, or they would mint and rotate the app-actor token independently.
@@ -183,14 +195,24 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
-  const runLedger = runLedgerPublishingLayer.pipe(
-    Layer.provide(adapters.runLedger),
-    Layer.provide(daemonEventBusLayer),
-  );
+  const storeClient = controlStoreClientLayer(adapters.controlStorePath);
+  const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
+  const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
+    runLedgerPublishingLayer.pipe(
+      Layer.provide(
+        Layer.unwrap(
+          Effect.map(ControlStore, (store) =>
+            store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
+          ),
+        ).pipe(Layer.provide(controlStore), Layer.provide(storeClient)),
+      ),
+      Layer.provide(daemonEventBusLayer),
+    );
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const base = Layer.mergeAll(
     adapters.registry,
+    controlStore,
     daemonInfoLayer,
     issueTracker,
     runLedger,
@@ -213,7 +235,7 @@ const engineLayer = <E, R>(adapters: HostAdapters<E, R>) => {
   const scheduler = schedulerLayer(adapters.scheduler).pipe(Layer.provideMerge(services));
   const withRecovery = recoveryLayer.pipe(Layer.provideMerge(scheduler));
   return eventPublisherLayer.pipe(Layer.provideMerge(withRecovery));
-};
+}
 
 export const serverLayer = <E, R>(adapters: HostAdapters<E, R>) =>
   RpcServer.layer(DaemonRpcs).pipe(
@@ -289,6 +311,8 @@ const reconcileHeartbeat = (pollIntervalMillis: number) =>
   );
 
 export const bootstrap = Effect.gen(function* () {
+  const controlStore = yield* ControlStore;
+  if (controlStore.health === "unavailable") return;
   const worker = yield* ReconcileWorker;
   const recovery = yield* Recovery;
   yield* continueAfterReconcileFailure(worker.submit(), "reconcile bootstrap failed");
@@ -311,7 +335,13 @@ export interface HeartbeatOptions {
   readonly drain: DrainOptions;
 }
 
-export const heartbeats = (options: HeartbeatOptions) =>
+const activeHeartbeats = (options: HeartbeatOptions) =>
   Effect.all([reconcileHeartbeat(options.pollIntervalMillis), executeHeartbeat()], {
     concurrency: "unbounded",
   }).pipe(Effect.onInterrupt(() => Effect.flatMap(Scheduler, (scheduler) => scheduler.drain(options.drain))));
+
+export const heartbeats = (options: HeartbeatOptions) =>
+  Effect.flatMap(ControlStore, (controlStore) => {
+    if (controlStore.health === "unavailable") return Effect.never;
+    return activeHeartbeats(options);
+  });

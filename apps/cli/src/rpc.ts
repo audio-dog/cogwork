@@ -24,7 +24,7 @@ import { contextFsLayer, worktreeManagerLayer } from "./platform";
 export interface DaemonOptions {
   readonly socketPath: string;
   readonly configHome: string;
-  readonly ledgerPath: string;
+  readonly controlStorePath: string;
   readonly credentialsPath: string;
   readonly maxConcurrency: number;
   readonly maxPerWorkspace: number;
@@ -106,7 +106,8 @@ export const serverLayer = (options: DaemonOptions) =>
     transport: transportLayer(options.socketPath),
     credentials: credentialsLayer(options.credentialsPath),
     contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
-    runLedger: ledgerLayer(options.ledgerPath),
+    runLedger: ledgerLayer,
+    controlStorePath: options.controlStorePath,
     registry: registryLayer(options.configHome),
     worktrees: worktreeManagerLayer,
     harnessRunners,

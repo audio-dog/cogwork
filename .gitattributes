@@ -1,0 +1,6 @@
+# drizzle-kit rewrites the whole schema snapshot on every migration. Reviewers want the .sql, so
+# collapse the snapshot by default; GitHub still lets them expand it.
+packages/engine/drizzle/**/snapshot.json linguist-generated=true
+
+# Generated from drizzle-kit's committed SQL by packages/engine/scripts.
+packages/engine/src/control-store-migrations.gen.ts linguist-generated=true

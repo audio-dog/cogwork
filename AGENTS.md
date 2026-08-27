@@ -20,6 +20,25 @@ Before changing Effect code, read the applicable patterns in `docs/agent-pattern
 
 You must always invoke the /effect-ts skill when writing Effect code.
 
+## Drizzle
+
+The Control store's schema lives in `packages/engine/src/control-store-schema.ts`, and `drizzle-kit`
+runs from `packages/engine`. `drizzle-kit` ships its own agent skills, which
+`pnpm dlx @tanstack/intent@latest list` surfaces under `drizzle-kit` — load them before touching a
+Drizzle file. `pnpm --filter @cogwork/engine exec drizzle-kit skills` writes a local copy for editors
+that read `.claude/skills`; those copies are ignored, not committed.
+
+Pre-alpha, there are no migrations: the Control store is created from the schema and replaced when
+the schema moves. After changing `control-store-schema.ts`, run
+`pnpm --filter @cogwork/engine drizzle:schema` to regenerate the shipped create statements;
+`pnpm --filter @cogwork/engine drizzle:check` reports when they have drifted. Then delete
+`~/.cogwork/control.db` and let boot recreate it.
+
+`drizzle-kit push` is deliberately not wired up. It reaches a schema by `ALTER TABLE`, so the store it
+leaves behind carries different DDL text and column order than the create statements produce, and
+boot's schema comparison — which is exact on purpose — refuses it. Deleting the store is the only
+supported way forward. See ADR 0015 for when migrations come back.
+
 ## Agent skills
 
 ### Issue tracker

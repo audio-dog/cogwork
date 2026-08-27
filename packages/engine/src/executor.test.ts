@@ -14,10 +14,13 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
@@ -418,10 +421,25 @@ class HarnessGate extends Context.Service<HarnessGate, Deferred.Deferred<void>>(
   static readonly layer = Layer.effect(HarnessGate, Deferred.make<void>());
 }
 
+interface HarnessObservationState {
+  readonly span: Ref.Ref<Tracer.Span | null>;
+  readonly logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }>;
+}
+
+class HarnessObservation extends Context.Service<HarnessObservation, HarnessObservationState>()(
+  "@cogwork/engine/executor.test/HarnessObservation",
+) {
+  static readonly layer = Layer.effect(
+    HarnessObservation,
+    Effect.map(Ref.make<Tracer.Span | null>(null), (span) => ({ span, logs: [] })),
+  );
+}
+
 interface TestRunner {
   readonly make: (
     requests: Ref.Ref<ReadonlyArray<HarnessRequest>>,
     gate: Deferred.Deferred<void>,
+    observation: HarnessObservationState,
   ) => HarnessRunner;
 }
 
@@ -462,6 +480,23 @@ const gatedRunner: TestRunner = {
       Stream.concat(
         Stream.fromArray(implementStreamEvents),
         Stream.unwrap(Deferred.await(gate).pipe(Effect.map(() => Stream.fromArray([implementFinished])))),
+      ),
+  }),
+};
+
+const observingRunner: TestRunner = {
+  make: (_requests, _gate, observation) => ({
+    name: cursor,
+    sessionKind: "opaque-handle",
+    execution: fullHarnessExecution,
+    run: () =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const current = yield* Effect.currentSpan.pipe(Effect.orDie, Effect.withSpan("Harness.library"));
+          yield* Ref.set(observation.span, current);
+          yield* Effect.logInfo("library log", { session: "sess-42" });
+          return Stream.fromArray(implementEvents);
+        }),
       ),
   }),
 };
@@ -669,9 +704,12 @@ function testHarness(runners: ReadonlyArray<TestRunner>) {
     Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const gate = yield* HarnessGate;
-      return harnessLayer(runners.map((runner) => runner.make(requests, gate)));
+      const observation = yield* HarnessObservation;
+      return harnessLayer(runners.map((runner) => runner.make(requests, gate, observation)));
     }),
-  ).pipe(Layer.provideMerge(Layer.merge(HarnessRequests.layer, HarnessGate.layer)));
+  ).pipe(
+    Layer.provideMerge(Layer.mergeAll(HarnessRequests.layer, HarnessGate.layer, HarnessObservation.layer)),
+  );
 }
 
 function provide(
@@ -993,6 +1031,39 @@ describe("Executor.execute", () => {
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
       assert.deepStrictEqual(run?.usage, usage);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
+  });
+
+  it.effect("correlates claimed-run library logs and spans", () => {
+    return Effect.gen(function* () {
+      const observation = yield* HarnessObservation;
+      const logger = Logger.make<unknown, void>(({ fiber, message }) => {
+        observation.logs.push({
+          message,
+          annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
+        });
+      });
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem).pipe(Effect.withLogger(logger));
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(1);
+      assert.isDefined(run);
+      const correlation = {
+        workspace: "gh",
+        item: "#15",
+        stage: "implement",
+        runId: run.id,
+      };
+      const libraryLog = observation.logs.find(({ message }) =>
+        Array.isArray(message) ? message.includes("library log") : message === "library log",
+      );
+      assert.deepStrictEqual(libraryLog?.annotations, correlation);
+      assert.deepStrictEqual(libraryLog?.message, ["library log", { session: "sess-42" }]);
+
+      const librarySpan = yield* Ref.get(observation.span);
+      assert.isNotNull(librarySpan);
+      assert.deepStrictEqual(Object.fromEntries(librarySpan.attributes), correlation);
+    }).pipe(Effect.provide(provide([observingRunner])));
   });
 
   it.effect("mints an opaque-handle session for a Cursor-served run and captures its handle", () => {
