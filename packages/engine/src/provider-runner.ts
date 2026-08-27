@@ -10,6 +10,7 @@ import {
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
@@ -185,9 +186,12 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             bridgeChat(chatStream),
             watchWorktreeDiffs(sandbox, baseSha).pipe(
               Stream.catchCause((cause) =>
-                Stream.fromEffect(Effect.logWarning("worktree diff feed stopped", { cause })).pipe(
-                  Stream.drain,
-                ),
+                // Interruption is the merge tearing the feed down, not a death.
+                Cause.hasInterruptsOnly(cause)
+                  ? Stream.empty
+                  : Stream.fromEffect(Effect.logWarning("worktree diff feed stopped", { cause })).pipe(
+                      Stream.drain,
+                    ),
               ),
             ),
             { haltStrategy: "left" },
