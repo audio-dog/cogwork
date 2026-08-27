@@ -149,12 +149,13 @@ const make = Effect.fn("ledger.make")(function* () {
   // is to fail, and recovery is from the whole cause so that a defect is swallowed too.
   const swallow = <A, E>(operation: string, query: () => Effect.Effect<A, E>, fallback: () => A) =>
     Effect.suspend(query).pipe(
-      Effect.catchCause((cause) =>
-        Effect.andThen(
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterrupts(cause)) return Effect.interrupt;
+        return Effect.andThen(
           Effect.logWarning(`run ledger ${operation} failed`, { cause: Cause.pretty(cause) }),
           Effect.sync(fallback),
-        ),
-      ),
+        );
+      }),
     );
 
   const write = <E>(operation: string, query: () => Effect.Effect<unknown, E>) =>
