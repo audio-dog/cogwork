@@ -77,7 +77,7 @@ export const makeService = Effect.fn("ModelCatalog.make")(function* (
     if (cached && now - cached.at < ttlMillis) return cached.api;
     return yield* source.fetch.pipe(
       Effect.tap((api) => Ref.set(cache, { at: now, api })),
-      Effect.catch((error) =>
+      Effect.catchTag("CatalogError", (error) =>
         cached
           ? Effect.logWarning("serving a stale model catalog; refresh failed", {
               message: error.message,
