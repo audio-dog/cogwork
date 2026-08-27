@@ -845,7 +845,6 @@ export const make = Effect.gen(function* () {
             ),
           ),
       }),
-      Effect.ensuring(runControl.unregister(runId)),
     );
   });
 

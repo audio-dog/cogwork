@@ -501,7 +501,6 @@ const unavailableCommentProvider: SourceControlProviderService = {
 
 const runControlStub = Layer.succeed(RunControl.RunControl, {
   register: () => Effect.void,
-  unregister: () => Effect.void,
   cancel: () => Effect.succeed(false),
 });
 
