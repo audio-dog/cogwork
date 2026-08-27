@@ -26,7 +26,12 @@ import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import { defaultConfigHome, defaultCredentialsPath, defaultLedgerPath, defaultSocketPath } from "./paths";
+import {
+  defaultConfigHome,
+  defaultControlStorePath,
+  defaultCredentialsPath,
+  defaultSocketPath,
+} from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatStatus } from "./status";
 import { secondStopSignal } from "./stop-signal";
@@ -43,9 +48,9 @@ const configHomeFlag = Flag.string("config-home").pipe(
   Flag.withDefault(defaultConfigHome),
 );
 
-const ledgerFlag = Flag.string("ledger").pipe(
-  Flag.withDescription("Path to the run ledger (disposable SQLite cache)"),
-  Flag.withDefault(defaultLedgerPath),
+const controlStoreFlag = Flag.string("control-store").pipe(
+  Flag.withDescription("Path to the machine-local Control store"),
+  Flag.withDefault(defaultControlStorePath),
 );
 
 const credentialsFlag = Flag.string("credentials").pipe(
@@ -256,7 +261,7 @@ const runStatus = Effect.fn("commands.runStatus")(
 export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
   configHome: configHomeFlag,
-  ledger: ledgerFlag,
+  controlStore: controlStoreFlag,
   credentials: credentialsFlag,
   maxConcurrency: maxConcurrencyFlag,
   maxPerWorkspace: maxPerWorkspaceFlag,
@@ -269,7 +274,7 @@ export const daemonCommand = Command.make("daemon", {
     ({
       socket,
       configHome,
-      ledger,
+      controlStore,
       credentials,
       maxConcurrency,
       maxPerWorkspace,
@@ -281,7 +286,7 @@ export const daemonCommand = Command.make("daemon", {
       runDaemon({
         socketPath: socket,
         configHome,
-        ledgerPath: ledger,
+        controlStorePath: controlStore,
         credentialsPath: credentials,
         maxConcurrency,
         maxPerWorkspace,
