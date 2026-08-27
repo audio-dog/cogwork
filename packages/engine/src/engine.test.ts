@@ -2,6 +2,7 @@ import { DaemonRpcs, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
@@ -244,6 +245,47 @@ describe("reconcile worker", () => {
       assert.isTrue(Cause.isTimeoutError(error));
       assert.isTrue(MutableRef.get(messages).some((line) => line.includes("reconcile submission timed out")));
     }).pipe(Effect.provide(neverWorkerLayer), Effect.scoped),
+  );
+
+  it.effect("coalesces submissions while a timed-out reconcile is still running", () =>
+    Effect.gen(function* () {
+      const release = yield* Latch.make();
+      const secondStarted = yield* Deferred.make<void>();
+      const observes = yield* Ref.make(0);
+      const source = sources(
+        Layer.succeed(
+          IssueTracker.IssueTracker,
+          stub({
+            observe: Effect.fn(function* () {
+              const count = yield* Ref.getAndUpdate(observes, (current) => current + 1);
+              if (count > 0) yield* Deferred.succeed(secondStarted, undefined);
+              yield* release.await;
+              return [];
+            }),
+          }),
+        ),
+      );
+      const layer = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
+
+      yield* Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        const submissions = yield* Effect.forkChild(
+          Effect.all([worker.submit(), worker.submit()], { concurrency: "unbounded" }).pipe(Effect.exit),
+        );
+        yield* TestClock.adjust("31 seconds");
+        yield* Fiber.join(submissions);
+
+        const duplicate = yield* Effect.forkChild(
+          Deferred.await(secondStarted).pipe(Effect.timeout("1 second"), Effect.flip),
+        );
+        yield* release.open;
+        yield* TestClock.adjust("1 second");
+        const error = yield* Fiber.join(duplicate);
+
+        assert.isTrue(Cause.isTimeoutError(error));
+        assert.strictEqual(yield* Ref.get(observes), 1);
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
   );
 
   const eligibleItem: TrackerItem = {
