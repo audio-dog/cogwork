@@ -96,6 +96,9 @@ export const WorktreeConfig = Schema.Struct({
 });
 export type WorktreeConfig = typeof WorktreeConfig.Type;
 
+export const WorkspaceConcurrency = Schema.Int.check(Schema.isGreaterThan(0));
+export type WorkspaceConcurrency = typeof WorkspaceConcurrency.Type;
+
 export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,
   checkoutPath: TrimmedNonEmptyString,
@@ -105,7 +108,7 @@ export const WorkspaceConfig = Schema.Struct({
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),
-  concurrency: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+  concurrency: Schema.optional(WorkspaceConcurrency),
   linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
