@@ -130,10 +130,6 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const assembled = yield* assembler
             .assemble(assembleRequest)
             .pipe(Effect.mapError((error) => launchError(false, error.message)));
-          const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
-            Effect.provide(FetchHttpClient.layer),
-          );
-
           const store = yield* SessionStore;
           const session = request.session;
           // History comes from the ledger-backed message store; the new prompt
@@ -151,6 +147,9 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             Effect.mapError((error) => launchError(true, error.message)),
           );
           const baseSha = yield* resolveBaseSha(sandbox);
+          const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
+            Effect.provide(FetchHttpClient.layer),
+          );
           const toolSet = makeOwnedToolSet(sandbox, runPromise, profileForStage(request.stage));
 
           const abortController = new AbortController();
