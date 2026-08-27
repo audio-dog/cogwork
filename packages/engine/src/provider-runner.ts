@@ -20,6 +20,7 @@ import {
 } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
+  fullHarnessExecution,
   HarnessError,
   type HarnessRequest,
   type HarnessRunner,
@@ -33,7 +34,7 @@ import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
   openWorktreeSandbox,
-  profileForStage,
+  policyForProfile,
   resolveBaseSha,
   watchWorktreeDiffs,
 } from "./tools";
@@ -121,6 +122,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
   return {
     name: options.name,
     sessionKind: "owned-transcript",
+    execution: fullHarnessExecution,
     run: (request: HarnessRequest) =>
       Stream.unwrap(
         Effect.gen(function* () {
@@ -157,7 +159,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             Effect.mapError((error) => launchError(true, error.message)),
           );
           const baseSha = yield* resolveBaseSha(sandbox);
-          const toolSet = makeOwnedToolSet(sandbox, profileForStage(request.stage));
+          const toolSet = makeOwnedToolSet(sandbox, policyForProfile(request.profile));
 
           const abortController = new AbortController();
           const chatStream = runChat({

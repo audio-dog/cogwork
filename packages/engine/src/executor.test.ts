@@ -26,6 +26,7 @@ import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
   type AgUiEvent,
+  fullHarnessExecution,
   HarnessError,
   type HarnessRequest,
   type HarnessRunner,
@@ -221,6 +222,7 @@ const stuckImplementEvents: ReadonlyArray<AgUiEvent> = [
 const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () =>
     Stream.concat(
       Stream.fromArray(implementStreamEvents),
@@ -393,6 +395,7 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => (
 const runner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () => Stream.fromArray(events),
 });
 
@@ -405,6 +408,7 @@ const capturingRunner = (
 ): HarnessRunner => ({
   name,
   sessionKind,
+  execution: fullHarnessExecution,
   run: (request) =>
     Stream.unwrap(
       Ref.update(requests, (xs) => [...xs, request]).pipe(
@@ -454,12 +458,14 @@ const unreachableRemoteWorktree: WorktreeManagerService = {
 const failingRunner = (error: HarnessError): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () => Stream.fail(error),
 });
 
 const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
   sessionKind: "owned-transcript",
+  execution: fullHarnessExecution,
   run: () => Stream.fromArray(events),
 });
 
@@ -714,6 +720,7 @@ describe("Executor.execute", () => {
     const silentRunner: HarnessRunner = {
       name: cursor,
       sessionKind: "opaque-handle",
+      execution: fullHarnessExecution,
       run: () => Stream.never,
     };
     const layer = Layer.unwrap(
@@ -774,15 +781,38 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("treats an unregistered harness as a non-retryable, human-handoff failure", () =>
+  it.effect("declines an unregistered harness before claiming or recording a run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const layer = provide(recorder(calls), []);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        yield* executor.execute(workspace, triageItem);
-        const log = yield* Ref.get(calls);
-        assert.strictEqual(log.find((c) => c.method === "handOff")?.stage, "triage");
+        const accepted = yield* executor.execute(workspace, triageItem);
+
+        assert.isFalse(accepted);
+        assert.deepStrictEqual(yield* Ref.get(calls), []);
+        const ledger = yield* RunLedger.RunLedger;
+        assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("declines an unsupported harness posture before claiming or recording a run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const unsupported = {
+        ...runner(successEvents),
+        execution: { ...fullHarnessExecution, profiles: [] },
+      } satisfies HarnessRunner;
+      const layer = provide(recorder(calls), [unsupported]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const accepted = yield* executor.execute(workspace, triageItem);
+
+        assert.isFalse(accepted);
+        assert.deepStrictEqual(yield* Ref.get(calls), []);
+        const ledger = yield* RunLedger.RunLedger;
+        assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -813,6 +843,7 @@ describe("Executor.execute", () => {
 
         const [request] = yield* Ref.get(requests);
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
+        assert.strictEqual(request?.profile, "full");
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
         assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);

@@ -26,6 +26,7 @@ import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import { operationPolicyProfile } from "./operation-policy";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
@@ -179,6 +180,7 @@ export const make = Effect.gen(function* () {
     return {
       harness: resolved.harness,
       stage,
+      profile: operationPolicyProfile(stage),
       skill: resolved.skill,
       checkoutPath,
       session,
@@ -887,6 +889,10 @@ export const make = Effect.gen(function* () {
   ) {
     const stageOps = resolveStageOps(workspace, item);
     if (!stageOps) return false;
+    const runnable = yield* harness
+      .preflight(stageOps.resolved.harness, operationPolicyProfile(item.stage))
+      .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
+    if (!runnable) return false;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {
