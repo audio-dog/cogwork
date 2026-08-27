@@ -1,0 +1,24 @@
+packages/codex-cli/src/harness.ts
+  s_9b30292056623b::t_ab2afe5c665a93 55-61,63,190,195,209-213,232
+packages/codex-cli/CONTEXT.md
+  s_9b30292056623b::t_bfbcd0eb856a2d 34-37
+packages/codex-cli/src/harness.test.ts
+  s_9b30292056623b::t_9a0e2a185755bc 78,675-676,678-683
+  s_9b30292056623b::t_6511b37e716937 211,436,438,641,643
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "d619401252362559fdacaed6465efd80de1b2444",
+  "prompts": {},
+  "sessions": {
+    "s_9b30292056623b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040c4-d52b-7a43-9fff-20b259315e40",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
