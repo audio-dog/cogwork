@@ -264,22 +264,24 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   );
 });
 
-const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
-  const worker = yield* ReconcileWorker;
-  const publisher = yield* DaemonEventPublisher;
-  const receipt = yield* worker.submit();
-  yield* Effect.logInfo("reconcile tick", receipt);
-  yield* publisher.publishItems();
-  yield* publisher.publishWorkspaces();
-  yield* maintainWorktrees();
-});
-
 const continueAfterReconcileFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
   Effect.catchCauseIf(
     effect,
     (cause) => !Cause.hasInterruptsOnly(cause),
     (cause) => Effect.logError(message, { cause }),
   );
+
+const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
+  const worker = yield* ReconcileWorker;
+  const publisher = yield* DaemonEventPublisher;
+  yield* continueAfterReconcileFailure(
+    worker.submit().pipe(Effect.tap((receipt) => Effect.logInfo("reconcile tick", receipt))),
+    "reconcile heartbeat failed",
+  );
+  yield* publisher.publishItems();
+  yield* publisher.publishWorkspaces();
+  yield* maintainWorktrees();
+});
 
 const reconcileHeartbeat = (pollIntervalMillis: number) =>
   continueAfterReconcileFailure(reconcileTick(), "reconcile heartbeat failed").pipe(

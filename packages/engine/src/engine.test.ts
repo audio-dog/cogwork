@@ -669,6 +669,54 @@ describe("daemon heartbeats", () => {
     ),
   );
 
+  it.effect("publishes state after a reconcile submission fails", () =>
+    Effect.gen(function* () {
+      const publishes = yield* Ref.make(0);
+      const publisherLayer = Layer.succeed(EventPublisher.DaemonEventPublisher, {
+        publishItems: () => Ref.update(publishes, (count) => count + 1),
+        publishWorkspaces: () => Effect.void,
+        publishScheduler: () =>
+          Effect.succeed({
+            scheduling: "running",
+            globalInFlight: 0,
+            globalLimit: 4,
+            perWorkspaceLimit: 4,
+            dailyBudgetUsed: 0,
+            dailyBudgetLimit: 50,
+            perWorkspace: [],
+          }),
+      });
+      const layer = publisherLayer.pipe(
+        Layer.provideMerge(
+          Layer.mergeAll(
+            defectiveWorkerLayer,
+            registeredSample,
+            SchedulerTickCount.schedulerLayer,
+            worktreeStub,
+            DaemonEventBus.layer,
+            Layer.succeed(Recovery.Recovery, {
+              recover: () => Effect.void,
+              recoverWhenLive: () => Effect.void,
+            }),
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const beats = yield* Effect.forkChild(
+          Daemon.heartbeats({
+            pollIntervalMillis: 60_000,
+            drain: { graceMillis: 1234, abort: Latch.makeUnsafe(false).await },
+          }),
+        );
+        yield* TestClock.adjust("1 second");
+        yield* Fiber.interrupt(beats);
+
+        assert.strictEqual(yield* Ref.get(publishes), 1);
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
+
   it.effect("keeps both heartbeats running after a reconcile submission fails", () =>
     Effect.gen(function* () {
       const observes = yield* ReconcileObserveCount;
