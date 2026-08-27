@@ -206,5 +206,5 @@ A bot pull request's branch and its base branch (`main`) have each gained commit
 _Avoid_: Branch divergence (that's the branch versus its own remote, not the base), merge conflict (one reason integrating the base fails), stale branch (that's merely behind)
 
 **Workspace registry**:
-The loaded set of registered workspaces (and the failures from loading), built by folding workspace registration events. The engine's view of which repos it's driving.
+The Control-store-backed set of registered workspaces and Workspace-input failures, held in a cell folded from workspace registration events. Register mints each `WorkspaceId`, writes the row, then moves the cell before publishing `WorkspaceChanged`. The engine's view of which repos it is driving.
 _Avoid_: Config store. Distinct from the harness runner map, which is also a "registry" of sorts.
