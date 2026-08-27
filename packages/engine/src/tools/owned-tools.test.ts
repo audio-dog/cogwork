@@ -1,7 +1,15 @@
+import { RunId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as Tracer from "effect/Tracer";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
+import * as RunControl from "../run-control";
 import {
   editFile,
   makeOwnedToolSet,
@@ -14,6 +22,8 @@ import {
 } from "./owned-tools";
 import { fullProfile } from "./policy";
 import type { WorktreeSandbox } from "./sandbox";
+
+const runId = Schema.decodeSync(RunId)("run-tool-cancel");
 
 const openSandbox = Effect.fn("owned-tools.test.openSandbox")(function* () {
   const handle = yield* Effect.acquireRelease(
@@ -29,6 +39,24 @@ const openSandbox = Effect.fn("owned-tools.test.openSandbox")(function* () {
   assert.strictEqual(init.exitCode, 0, init.stderr);
   return sandbox;
 });
+
+const makeTools = Effect.fn("owned-tools.test.makeTools")(function* (
+  sandbox: WorktreeSandbox,
+  profile = fullProfile,
+) {
+  const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
+    Effect.provide(FetchHttpClient.layer),
+  );
+  return makeOwnedToolSet(sandbox, runPromise, profile);
+});
+
+const hasAncestor = (span: Tracer.NativeSpan, ancestor: Tracer.NativeSpan): boolean =>
+  Option.match(span.parent, {
+    onNone: () => false,
+    onSome: (parent) =>
+      parent.spanId === ancestor.spanId ||
+      (parent instanceof Tracer.NativeSpan && hasAncestor(parent, ancestor)),
+  });
 
 describe("owned tools", () => {
   it.effect("writes and reads a file back through the sandbox", () =>
@@ -120,6 +148,79 @@ describe("owned tools", () => {
     }),
   );
 
+  it.effect("RunControl.cancel interrupts in-flight tool work", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* openSandbox();
+      const started = yield* Deferred.make<void>();
+      const aborted = yield* Deferred.make<void>();
+      const controlled: WorktreeSandbox = {
+        ...sandbox,
+        handle: {
+          ...sandbox.handle,
+          process: {
+            ...sandbox.handle.process,
+            exec: (_command, options) => {
+              const pending = Promise.withResolvers<never>();
+              Deferred.doneUnsafe(started, Effect.void);
+              options?.signal?.addEventListener(
+                "abort",
+                () => {
+                  Deferred.doneUnsafe(aborted, Effect.void);
+                  pending.reject(new Error("aborted"));
+                },
+                { once: true },
+              );
+              return pending.promise;
+            },
+          },
+        },
+      };
+      const fiber = yield* Effect.forkScoped(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const tools = yield* makeTools(controlled);
+            const bash = tools.bash.execute;
+            if (bash === undefined) throw new Error("bash tool is missing a server executor");
+            yield* Effect.promise(() => Promise.resolve(bash({ command: "wait" })));
+          }),
+        ),
+      );
+      const control = yield* RunControl.RunControl;
+      yield* control.register(runId, fiber);
+      yield* Deferred.await(started);
+
+      assert.isTrue(yield* control.cancel(runId));
+      yield* Effect.yieldNow;
+      assert.isTrue(Option.isSome(yield* Deferred.poll(aborted)));
+    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
+  );
+
+  it.effect("tool handler spans stay under the run span", () =>
+    Effect.gen(function* () {
+      const spans: Array<Tracer.NativeSpan> = [];
+      const tracer = Tracer.make({
+        span: (options) => {
+          const span = new Tracer.NativeSpan(options);
+          spans.push(span);
+          return span;
+        },
+      });
+      yield* Effect.gen(function* () {
+        const sandbox = yield* openSandbox();
+        const tools = yield* makeTools(sandbox);
+        const read = tools.read.execute;
+        if (read === undefined) throw new Error("read tool is missing a server executor");
+        yield* Effect.promise(() => Promise.resolve(read({ path: "seed.txt" })));
+      }).pipe(Effect.withSpan("run"), Effect.provideService(Tracer.Tracer, tracer), Effect.scoped);
+
+      const runSpan = spans.find((span) => span.name === "run");
+      const toolSpan = spans.find((span) => span.name === "Tools.read");
+      assert.isDefined(runSpan);
+      assert.isDefined(toolSpan);
+      assert.isTrue(hasAncestor(toolSpan, runSpan));
+    }),
+  );
+
   it.effect("globs files across the worktree", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
@@ -156,7 +257,7 @@ describe("owned tools", () => {
   it.effect("exposes the seven tools as server tool definitions", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
-      const tools = makeOwnedToolSet(sandbox, fullProfile);
+      const tools = yield* makeTools(sandbox);
       assert.deepStrictEqual(Object.keys(tools).sort(), [
         "bash",
         "edit",
