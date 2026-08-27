@@ -1,0 +1,14 @@
+apps/cli/config/cogwork.workspace.ts
+  h_46518a29d4dd91 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "2ef3a68a8c2b30dba4fa6078478b0f5f5a69898f",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
