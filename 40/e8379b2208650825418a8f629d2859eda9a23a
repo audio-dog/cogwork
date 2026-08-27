@@ -1,0 +1,20 @@
+packages/engine/src/github/client.ts
+  s_e28c0a036c6c71::t_94ecdc30c38d34 456,460
+  s_e28c0a036c6c71::t_ac7e5cba6fb991 394-406,457-459,461-464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "40e8379b2208650825418a8f629d2859eda9a23a",
+  "prompts": {},
+  "sessions": {
+    "s_e28c0a036c6c71": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a043f0-42c6-7d50-a630-08a48d211f44",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
