@@ -103,7 +103,8 @@ const schedulerState = (global: number): Scheduler.SchedulerState => ({
 
 const schedulerStub = (statsRef: Ref.Ref<Scheduler.SchedulerState>) =>
   Layer.succeed(Scheduler.Scheduler, {
-    tick: () => Effect.succeed([]),
+    tick: () => Effect.succeed(0),
+    awaitIdle: Effect.void,
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: () => Effect.void,
     setScheduling: () => Ref.get(statsRef),

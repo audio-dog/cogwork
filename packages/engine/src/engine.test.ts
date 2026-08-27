@@ -416,7 +416,8 @@ describe("reconcile worker", () => {
 const registeredSample = Layer.succeed(Registry.WorkspaceRegistry, Registry.buildRegistry(sampleResult));
 
 const schedulerStubService = {
-  tick: () => Effect.succeed([]),
+  tick: () => Effect.succeed(0),
+  awaitIdle: Effect.void,
   drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
   admit: () => Effect.void,
   setScheduling: () => Effect.succeed(Scheduler.initialState),
