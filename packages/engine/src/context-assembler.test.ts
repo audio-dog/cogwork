@@ -9,7 +9,7 @@ interface CopyCall {
   readonly dest: string;
 }
 
-const config = { homeDir: "/home/.cogwork", skillsDir: "/engine/skills" };
+const config = { homeDir: "/home/.cogwork", userAgentsDir: "/home/.agents", skillsDir: "/engine/skills" };
 
 const request: AssembleRequest = {
   cwd: "/repos/app/packages/web",
@@ -22,6 +22,13 @@ const stubFs = (
   copies: Ref.Ref<ReadonlyArray<CopyCall>>,
 ): ContextFsService => ({
   readFile: (target) => Effect.succeed(files[target] ?? null),
+  readDirectory: (target) =>
+    Effect.succeed(
+      Object.keys(files)
+        .filter((file) => file.startsWith(`${target}/`))
+        .map((file) => file.slice(target.length + 1))
+        .filter((name) => !name.includes("/")),
+    ),
   copyDirectory: (source, dest) => Ref.update(copies, (xs) => [...xs, { source, dest }]),
 });
 
@@ -50,14 +57,17 @@ describe("repoDirsFrom", () => {
 });
 
 describe("ContextAssembler.assemble", () => {
-  it.effect("yields global, repo, and playbook layers in precedence order", () =>
+  it.effect("yields user Rules, repo, and playbook layers in precedence order", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const assembler = make(
         config,
         stubFs(
           {
-            "/home/.cogwork/AGENTS.md": "global rules",
+            "/home/.agents/rules/global.md": "global rules",
+            "/home/.agents/rules/react.md": "react rules",
+            "/home/.agents/rules/notes.txt": "not a Rule",
+            "/home/.agents/rules/nested/ignored.md": "nested Rule",
             "/repos/app/AGENTS.md": "repo root rules",
             "/repos/app/packages/web/AGENTS.md": "web package rules",
             "/engine/skills/implement-agent/SKILL.md": "implement skill body",
@@ -71,7 +81,8 @@ describe("ContextAssembler.assemble", () => {
       assert.deepStrictEqual(
         [...assembled.layers],
         [
-          { kind: "global", source: "/home/.cogwork/AGENTS.md", content: "global rules" },
+          { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
+          { kind: "rules", source: "/home/.agents/rules/react.md", content: "react rules" },
           { kind: "repo", source: "/repos/app/AGENTS.md", content: "repo root rules" },
           { kind: "repo", source: "/repos/app/packages/web/AGENTS.md", content: "web package rules" },
           {
@@ -84,7 +95,7 @@ describe("ContextAssembler.assemble", () => {
     }),
   );
 
-  it.effect("skips a missing global file and repo levels with no AGENTS.md", () =>
+  it.effect("skips absent user Rules and repo levels with no AGENTS.md", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const assembler = make(

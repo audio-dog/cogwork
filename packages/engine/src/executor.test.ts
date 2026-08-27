@@ -797,8 +797,11 @@ describe("Executor.execute", () => {
       const layer = provide(recorder(calls), [runner(successEvents)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        yield* executor.execute(disabledWorkspace, triageItem);
+        assert.isFalse(yield* executor.execute(disabledWorkspace, triageItem));
         assert.deepStrictEqual(yield* Ref.get(calls), []);
+
+        const ledger = yield* RunLedger.RunLedger;
+        assert.deepStrictEqual(yield* ledger.listRuns(10), []);
       }).pipe(Effect.provide(layer));
     }),
   );

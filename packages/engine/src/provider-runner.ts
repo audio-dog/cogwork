@@ -11,7 +11,6 @@ import {
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
-import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
 import {
   type AssembleRequest,
@@ -87,8 +86,10 @@ export const resolveContextLayers = (
   request: AssembleRequest,
   fallback: ReadonlyArray<InstructionLayer>,
 ) =>
-  Effect.runPromise(Effect.result(assembler.assemble(request))).then((assembled) =>
-    Result.match(assembled, { onFailure: () => fallback, onSuccess: (value) => value.layers }),
+  Effect.runPromise(
+    assembler
+      .assemble(request)
+      .pipe(Effect.match({ onFailure: () => fallback, onSuccess: (value) => value.layers })),
   );
 
 // Runs on every turn so a mid-run edit to an AGENTS.md reaches the next prompt.
