@@ -64,7 +64,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
 };
 
 export const formatScheduler = (scheduler: SchedulerStats) => {
-  const loads = scheduler.perWorkspace.map((load) => `${load.name}=${load.inFlight}`).join(" ");
+  const loads = scheduler.perWorkspace.map((load) => `${load.name}=${load.inFlight}/${load.limit}`).join(" ");
   const suffix = loads.length === 0 ? "" : ` (${loads})`;
   const paused = scheduler.scheduling === "paused" ? " · paused" : "";
   return `scheduler: ${scheduler.globalInFlight}/${scheduler.globalLimit} in-flight · budget ${scheduler.dailyBudgetUsed}/${scheduler.dailyBudgetLimit}${paused}${suffix}`;
