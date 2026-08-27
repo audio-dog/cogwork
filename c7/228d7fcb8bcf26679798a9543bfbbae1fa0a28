@@ -1,0 +1,28 @@
+packages/engine/src/tools/sandbox.test.ts
+  s_92373bacd7ee59::t_4ff3105e3ad919 51,54,56-59
+  s_92373bacd7ee59::t_f32776e84a8b0a 88
+  s_92373bacd7ee59::t_92e8dce166c89f 17,24,26
+  s_92373bacd7ee59::t_8af939b63c0b9c 3
+  s_92373bacd7ee59::t_19d1f34bc43d0e 1-2,4-16,18-23,25,27-50,52-53,55,60-87,89-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c7228d7fcb8bcf26679798a9543bfbbae1fa0a28",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_92373bacd7ee59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03c4f495-8927-4c6a-9abe-0296d39352d7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
