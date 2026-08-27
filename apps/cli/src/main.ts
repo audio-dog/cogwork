@@ -10,6 +10,7 @@ import {
   limitsCommand,
   runEventsCommand,
   runsCommand,
+  schedulingCommand,
   statusCommand,
   watchCommand,
 } from "./commands";
@@ -21,6 +22,7 @@ const cli = Command.make("cogwork").pipe(
   Command.withSubcommands([
     daemonCommand,
     limitsCommand,
+    schedulingCommand,
     statusCommand,
     runsCommand,
     runEventsCommand,
