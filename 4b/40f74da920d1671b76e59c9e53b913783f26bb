@@ -1,0 +1,38 @@
+apps/cli/src/rpc.ts
+  s_5336be0f0cc6b5::t_b768f402b34582 107
+  s_5336be0f0cc6b5::t_53c5e180d882f6 26
+  s_5336be0f0cc6b5::t_b98c846f9bc51d 108
+packages/engine/src/daemon-composition.test.ts
+  s_5336be0f0cc6b5::t_6a2cbe10fff428 93
+  s_5336be0f0cc6b5::t_9887caac57ea76 1-6
+  s_5336be0f0cc6b5::t_5eb0c7c788bfd1 105,113
+  s_5336be0f0cc6b5::t_5539ef7b01f659 66-78
+  s_5336be0f0cc6b5::t_d097a35ff1e071 64
+packages/engine/src/daemon.ts
+  s_5336be0f0cc6b5::t_0aa54ad0c5d4a6 43,46-48
+  s_5336be0f0cc6b5::t_42d4375f282337 183,231
+  s_5336be0f0cc6b5::t_b98c846f9bc51d 22,176,193
+  s_5336be0f0cc6b5::t_5539ef7b01f659 195,199-201
+  s_5336be0f0cc6b5::t_b768f402b34582 44-45,196-198
+  s_5336be0f0cc6b5::t_7d7e32c3f562b3 194
+  s_5336be0f0cc6b5::t_c9b1ada3164f77 320,324-329
+  s_5336be0f0cc6b5::t_53c5e180d882f6 133,136,208,296-297
+packages/engine/src/engine.test.ts
+  s_5336be0f0cc6b5::t_ead4e0ab6cb2f9 12,474,504
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "4b40f74da920d1671b76e59c9e53b913783f26bb",
+  "prompts": {},
+  "sessions": {
+    "s_5336be0f0cc6b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040d1-284c-7e20-8e3d-473de6e169e3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
