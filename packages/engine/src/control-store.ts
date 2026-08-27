@@ -99,7 +99,9 @@ const importTable = Effect.fn("ControlStore.importTable")(function* (table: (typ
   const sql = yield* SqlClient.SqlClient;
   const shared = (yield* columnsOf("main", table)).filter((column) => legacy.includes(column));
   const columns = shared.map((column) => `"${column}"`).join(", ");
-  yield* sql.unsafe(`INSERT INTO main.${table} (${columns}) SELECT ${columns} FROM legacy.${table}`);
+  yield* sql.unsafe(
+    `INSERT INTO main.${table} (${columns}) SELECT ${columns} FROM legacy.${table} WHERE true ON CONFLICT DO NOTHING`,
+  );
 });
 
 // A legacy `runs.db` is imported rather than renamed into place. Its tables were created by a
@@ -113,10 +115,12 @@ const importLegacyLedger = Effect.fn("ControlStore.importLegacyLedger")(function
   yield* Effect.acquireUseRelease(
     sql.unsafe(`ATTACH DATABASE ${quoted(legacyPath)} AS legacy`),
     () =>
-      Effect.gen(function* () {
-        yield* Effect.forEach(importedTables, importTable, { discard: true });
-        yield* sql`UPDATE runs SET status = 'exhausted' WHERE status = 'blocked'`;
-      }),
+      sql.withTransaction(
+        Effect.gen(function* () {
+          yield* Effect.forEach(importedTables, importTable, { discard: true });
+          yield* sql`UPDATE runs SET status = 'exhausted' WHERE status = 'blocked'`;
+        }),
+      ),
     () => Effect.ignore(sql.unsafe("DETACH DATABASE legacy")),
   );
   yield* fs.rename(legacyPath, `${legacyPath}.imported-${now}`);
@@ -171,10 +175,8 @@ const boot = Effect.fn("ControlStore.boot")(function* (
   const pending = shipped.filter((id) => !applied.includes(id));
   if (pending.length > 0 && occupied) yield* copyBeforeMigrating(storePath);
   yield* runMigrations(migrations);
-  if (!occupied) {
-    const legacyPath = path.join(path.dirname(storePath), legacyLedgerName);
-    if (legacyPath !== storePath && (yield* fs.exists(legacyPath))) yield* importLegacyLedger(legacyPath);
-  }
+  const legacyPath = path.join(path.dirname(storePath), legacyLedgerName);
+  if (legacyPath !== storePath && (yield* fs.exists(legacyPath))) yield* importLegacyLedger(legacyPath);
   yield* validate(migrations);
 });
 

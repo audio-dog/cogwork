@@ -243,6 +243,57 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("rolls back a failed legacy import and retries it at the next boot", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
+      const legacyPath = path.join(dir, "runs.db");
+      const storePath = path.join(dir, "control.db");
+      yield* poke(
+        legacyPath,
+        `${evolvedLegacyLedgerSql}
+DROP TABLE sessions;
+CREATE TABLE sessions (id TEXT PRIMARY KEY);
+INSERT INTO sessions VALUES ('broken');`,
+      );
+
+      assert.strictEqual((yield* storeAt(storePath)).health, "unavailable");
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id FROM runs"), []);
+      yield* poke(
+        legacyPath,
+        "DROP TABLE sessions; CREATE TABLE sessions (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, harness TEXT NOT NULL, kind TEXT NOT NULL, handle TEXT, created_at INTEGER NOT NULL)",
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id FROM runs"), [{ id: "legacy" }]);
+      assert.isFalse(yield* fs.exists(legacyPath));
+    }),
+  );
+
+  it.effect("retries legacy file retirement without duplicating imported rows", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-control-store-" });
+      const legacyPath = path.join(dir, "runs.db");
+      const storePath = path.join(dir, "control.db");
+      const importedPath = path.join(dir, "runs.db.imported-123");
+      yield* TestClock.setTime(123);
+      yield* poke(legacyPath, evolvedLegacyLedgerSql);
+      yield* fs.makeDirectory(importedPath);
+
+      assert.strictEqual((yield* storeAt(storePath)).health, "unavailable");
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id FROM runs"), [{ id: "legacy" }]);
+      assert.isTrue(yield* fs.exists(legacyPath));
+      yield* fs.remove(importedPath, { recursive: true });
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id FROM runs"), [{ id: "legacy" }]);
+      assert.isFalse(yield* fs.exists(legacyPath));
+    }),
+  );
+
   it.effect("removes expired run events at boot", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
