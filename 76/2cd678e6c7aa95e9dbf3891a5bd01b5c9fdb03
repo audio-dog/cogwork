@@ -1,0 +1,22 @@
+apps/cli/src/workspace-commands.test.ts
+  s_07a6809442ebd2::t_e1d89e18316e38 1-22
+apps/cli/src/workspace-commands.ts
+  s_07a6809442ebd2::t_103f2dde43e07a 38-47,55-57
+  s_07a6809442ebd2::t_368cfd29522de4 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "762cd678e6c7aa95e9dbf3891a5bd01b5c9fdb03",
+  "prompts": {},
+  "sessions": {
+    "s_07a6809442ebd2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a6-0eb5-79c0-ade3-d87ee0329bc8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
