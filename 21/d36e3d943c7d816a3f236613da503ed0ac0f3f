@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_14f4a3d3bb5de1::t_936e9ca9de7cb7 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "21d36e3d943c7d816a3f236613da503ed0ac0f3f",
+  "prompts": {},
+  "sessions": {
+    "s_14f4a3d3bb5de1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a6-0f41-7672-8217-8e3a772483e6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
