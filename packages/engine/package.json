@@ -8,8 +8,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "drizzle:generate": "drizzle-kit generate --output json && node scripts/generate-control-store-migrations.mjs",
-    "drizzle:check": "drizzle-kit check --output json && node scripts/generate-control-store-migrations.mjs --check"
+    "drizzle:schema": "node scripts/generate-control-store-create.mjs",
+    "drizzle:check": "node scripts/generate-control-store-create.mjs --check",
+    "drizzle:push": "drizzle-kit push"
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
