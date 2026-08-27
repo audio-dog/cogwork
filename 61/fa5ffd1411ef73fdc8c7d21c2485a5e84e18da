@@ -1,0 +1,21 @@
+apps/cli/src/ledger.test.ts
+  s_5336be0f0cc6b5::t_0c72881e181bbe 103,105-107,111-113,131-132
+  s_5336be0f0cc6b5::t_36d99a1315c4d5 12,102
+  s_5336be0f0cc6b5::t_52c7f6863bfd52 119-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "61fa5ffd1411ef73fdc8c7d21c2485a5e84e18da",
+  "prompts": {},
+  "sessions": {
+    "s_5336be0f0cc6b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040d1-284c-7e20-8e3d-473de6e169e3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
