@@ -1,4 +1,5 @@
 import { agUiTextDelta, HarnessName, SessionId } from "@cogwork/contracts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
@@ -179,6 +180,7 @@ describe("providerRunner", () => {
               contextLayer([sampleLayer]),
               credentialLayer(keyProvider),
               sessionLayer([{ role: "assistant", content: "earlier turn" }]),
+              NodeFileSystem.layer,
             ),
           ),
         );
@@ -219,7 +221,12 @@ describe("providerRunner", () => {
 
       const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
         Effect.provide(
-          Layer.mergeAll(contextLayer([sampleLayer]), credentialLayer(keyProvider), sessionLayer([])),
+          Layer.mergeAll(
+            contextLayer([sampleLayer]),
+            credentialLayer(keyProvider),
+            sessionLayer([]),
+            NodeFileSystem.layer,
+          ),
         ),
       );
 
@@ -242,7 +249,12 @@ describe("providerRunner", () => {
       const error = yield* Effect.flip(
         Stream.runDrain(runner.run(request({ model: "unknown-provider/whatever" }))).pipe(
           Effect.provide(
-            Layer.mergeAll(contextLayer([sampleLayer]), credentialLayer(keyProvider), sessionLayer([])),
+            Layer.mergeAll(
+              contextLayer([sampleLayer]),
+              credentialLayer(keyProvider),
+              sessionLayer([]),
+              NodeFileSystem.layer,
+            ),
           ),
         ),
       );
@@ -264,6 +276,7 @@ describe("providerRunner", () => {
               contextLayer([sampleLayer]),
               credentialLayer(missingKeyProvider),
               sessionLayer([]),
+              NodeFileSystem.layer,
             ),
           ),
         ),

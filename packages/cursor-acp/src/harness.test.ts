@@ -8,6 +8,7 @@ import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -45,6 +46,7 @@ const harnessServices: Harness.HarnessRunnerServices = {
     providerKey: unexpected,
     persistProviderKey: unexpected,
   },
+  fileSystem: FileSystem.makeNoop({}),
 };
 
 const request = (checkoutPath: string) =>
@@ -134,6 +136,7 @@ describe("cursorRunner", () => {
               Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
               Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
               Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
+              Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
             ),
         ).pipe(Effect.timeout("1 second")),
       );

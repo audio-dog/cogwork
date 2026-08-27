@@ -9,6 +9,7 @@ import {
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -51,8 +52,9 @@ export const fullHarnessExecution: HarnessExecution = {
 };
 
 // CLI harnesses only reach for SessionStore; the wider set is provided uniformly
-// so the provider runner can assemble context and resolve its provider key.
-export type HarnessRunnerEnv = SessionStore | ContextAssembler | CredentialStore;
+// so the provider runner can assemble context, resolve its provider key, and
+// watch the worktree for diff events.
+export type HarnessRunnerEnv = SessionStore | ContextAssembler | CredentialStore | FileSystem.FileSystem;
 
 export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessError", {
   reason: Schema.Literals(["unknown-harness", "launch", "turn"]),
@@ -84,6 +86,7 @@ export interface HarnessRunnerServices {
   readonly sessionStore: SessionStoreService;
   readonly contextAssembler: ContextAssemblerService;
   readonly credentialStore: CredentialStoreService;
+  readonly fileSystem: FileSystem.FileSystem;
 }
 
 const unknownHarness = (harness: HarnessName) =>
@@ -132,6 +135,7 @@ export const make = (
         Stream.provideService(SessionStore, services.sessionStore),
         Stream.provideService(ContextAssembler, services.contextAssembler),
         Stream.provideService(CredentialStore, services.credentialStore),
+        Stream.provideService(FileSystem.FileSystem, services.fileSystem),
       ),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
   };
@@ -145,6 +149,7 @@ export const layer = (runners: ReadonlyArray<HarnessRunner>) =>
         sessionStore: SessionStore,
         contextAssembler: ContextAssembler,
         credentialStore: CredentialStore,
+        fileSystem: FileSystem.FileSystem,
       }),
       (services) => make(runners, services),
     ),
