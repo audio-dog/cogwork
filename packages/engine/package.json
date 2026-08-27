@@ -19,11 +19,13 @@
     "@tanstack/ai-persistence": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
     "@tanstack/ai-sandbox-local-process": "catalog:",
+    "drizzle-orm": "1.0.0-rc.2",
     "effect": "catalog:effect"
   },
   "devDependencies": {
     "@catenarycloud/linteffect": "^0.0.7",
     "@effect/vitest": "catalog:effect",
+    "drizzle-kit": "1.0.0-rc.2-8feace6",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

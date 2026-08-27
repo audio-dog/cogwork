@@ -398,6 +398,9 @@ importers:
       '@tanstack/ai-sandbox-local-process':
         specifier: 'catalog:'
         version: 0.2.2(@tanstack/ai-sandbox@0.3.4(@tanstack/ai@0.46.0(@opentelemetry/api@1.9.1)(zod@4.4.3))(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)))(zod@4.4.3))
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(@opentelemetry/api@1.9.1)(effect@4.0.0-rc.110)(zod@4.4.3)
       effect:
         specifier: catalog:effect
         version: 4.0.0-rc.110
@@ -408,6 +411,9 @@ importers:
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)))
+      drizzle-kit:
+        specifier: 1.0.0-rc.2-8feace6
+        version: 1.0.0-rc.2-8feace6
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -875,6 +881,9 @@ packages:
 
   '@dotenvx/primitives@0.8.0':
     resolution: {integrity: sha512-VYJy0uhFm9zTJ1TxBaW/pA8bjbOM/OttaNMwZ1RHG4JKyRG7DhSdiqD1ipQoAyoD22olUtxbP78W9xY3Wd11bg==}
+
+  '@drizzle-team/brocli@0.11.0':
+    resolution: {integrity: sha512-hD3pekGiPg0WPCCGAZmusBBJsDqGUR66Y452YgQsZOnkdQ7ViEPKuyP4huUGEZQefp8g34RRodXYmJ2TbCH+tg==}
 
   '@effect/atom-react@4.0.0-rc.110':
     resolution: {integrity: sha512-dOcBaWk69nMNkE5rZ4Kz/CjMJkM+VKgAaliQNUZ6t8NE4eYj9Cj2dHubJrHv9GovVct81X0WjySszERvYXB9TQ==}
@@ -1396,6 +1405,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@js-temporal/polyfill@0.5.1':
+    resolution: {integrity: sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==}
+    engines: {node: '>=12'}
 
   '@linear/sdk@89.0.0':
     resolution: {integrity: sha512-LiV2wsIg1Wym4GgaAUMrALo953WEgIAAceyK8qL91q75Ws8+lqwAkPW252MHtwktZCR7exMBd5wCAdct3yLU7w==}
@@ -2774,6 +2787,10 @@ packages:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
+  drizzle-kit@1.0.0-rc.2-8feace6:
+    resolution: {integrity: sha512-FK53eRKCCx2HbaPChoEmY8zi6iexDgiAibiYXB1XLHpiDypvsl/mfdJC3+B5RdVKsvEoxCrwG6F/ZqUwa4hJPQ==}
+    hasBin: true
+
   drizzle-orm@1.0.0-rc.2:
     resolution: {integrity: sha512-UXYDkbplF5wX0hwxll+80QhEwUvAJLBu+tAK/d4fna18kLE6VuliAzufF/ieDEIJeSnLRYgtmsXD6x1Xuy1kIg==}
     peerDependencies:
@@ -3233,6 +3250,9 @@ packages:
     resolution: {integrity: sha512-kVCxPF3vQM/N0B1PmoqVUqgHP+EeVjmZSQn+1oCRPxd2P21P2F19lIgbR3HBosbB1PUhOAoctJnfEn2GbN2eZA==}
     engines: {node: '>=18'}
 
+  get-tsconfig@4.14.3:
+    resolution: {integrity: sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA==}
+
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
     engines: {node: '>= 6'}
@@ -3495,6 +3515,9 @@ packages:
   js-yaml@4.3.1:
     resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
     hasBin: true
+
+  jsbi@4.3.2:
+    resolution: {integrity: sha512-9fqMSQbhJykSeii05nxKl4m6Eqn2P6rOlYiS+C5Dr/HPIU/7yZxu5qzbs40tgaFORiw2Amd0mirjxatXYMkIew==}
 
   jsesc@3.1.0:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
@@ -4341,6 +4364,9 @@ packages:
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
     engines: {node: '>=4'}
+
+  resolve-pkg-maps@1.0.0:
+    resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
 
   responselike@2.0.1:
     resolution: {integrity: sha512-4gl03wn3hj1HP3yzgdI7d3lCkF95F21Pz4BPGvKHinyQzALR5CapwC8yIi0Rh58DEMQ/SguC03wFj2k0M/mHhw==}
@@ -5423,6 +5449,8 @@ snapshots:
 
   '@dotenvx/primitives@0.8.0': {}
 
+  '@drizzle-team/brocli@0.11.0': {}
+
   '@effect/atom-react@4.0.0-rc.110(effect@4.0.0-rc.110)(react@19.2.8)(scheduler@0.27.0)':
     dependencies:
       effect: 4.0.0-rc.110
@@ -5818,6 +5846,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@js-temporal/polyfill@0.5.1':
+    dependencies:
+      jsbi: 4.3.2
 
   '@linear/sdk@89.0.0(graphql@17.0.2)':
     dependencies:
@@ -7096,11 +7128,25 @@ snapshots:
 
   dotenv@17.4.2: {}
 
+  drizzle-kit@1.0.0-rc.2-8feace6:
+    dependencies:
+      '@drizzle-team/brocli': 0.11.0
+      '@js-temporal/polyfill': 0.5.1
+      esbuild: 0.25.12
+      get-tsconfig: 4.14.3
+      jiti: 2.7.0
+
   drizzle-orm@1.0.0-rc.2(@opentelemetry/api@1.9.1)(effect@4.0.0-rc.110)(zod@3.25.76):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       effect: 4.0.0-rc.110
       zod: 3.25.76
+
+  drizzle-orm@1.0.0-rc.2(@opentelemetry/api@1.9.1)(effect@4.0.0-rc.110)(zod@4.4.3):
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
+      effect: 4.0.0-rc.110
+      zod: 4.4.3
 
   dunder-proto@1.0.1:
     dependencies:
@@ -7586,6 +7632,10 @@ snapshots:
       '@sec-ant/readable-stream': 0.4.1
       is-stream: 4.0.1
 
+  get-tsconfig@4.14.3:
+    dependencies:
+      resolve-pkg-maps: 1.0.0
+
   glob-parent@5.1.2:
     dependencies:
       is-glob: 4.0.3
@@ -7813,6 +7863,8 @@ snapshots:
   js-yaml@4.3.1:
     dependencies:
       argparse: 2.0.1
+
+  jsbi@4.3.2: {}
 
   jsesc@3.1.0: {}
 
@@ -8450,6 +8502,8 @@ snapshots:
   resolve-alpn@1.2.1: {}
 
   resolve-from@4.0.0: {}
+
+  resolve-pkg-maps@1.0.0: {}
 
   responselike@2.0.1:
     dependencies:
