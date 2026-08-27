@@ -28,10 +28,12 @@ runs from `packages/engine`. `drizzle-kit` ships its own agent skills, which
 Drizzle file. `pnpm --filter @cogwork/engine exec drizzle-kit skills` writes a local copy for editors
 that read `.claude/skills`; those copies are ignored, not committed.
 
-Never hand-edit a generated `migration.sql`. `drizzle-kit generate --custom` is where hand-written
-SQL belongs. `packages/engine/src/control-store-migrations.gen.ts` is generated from the committed
-SQL — run `pnpm --filter @cogwork/engine drizzle:generate` after any schema change, and
-`pnpm format-and-lint` fails when it drifts.
+Pre-alpha, there are no migrations: the Control store is created from the schema and replaced when
+the schema moves. After changing `control-store-schema.ts`, run
+`pnpm --filter @cogwork/engine drizzle:schema` to regenerate the shipped create statements —
+`pnpm format-and-lint` fails when they drift. `drizzle:push` moves a local store forward without
+losing its rows; otherwise delete `~/.cogwork/control.db` and let boot recreate it. See ADR 0015 for
+when migrations come back.
 
 ## Agent skills
 

@@ -3,7 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-08-25
 - **Amended:** 2026-08-25 — `drizzle-kit` is adopted as a development tool, see [Amendment](#amendment-2026-08-25--drizzle-kit-is-adopted-as-a-development-tool)
-- **Amended:** 2026-08-27 — Effect's `Migrator` owns the loop, see [Amendment](#amendment-2026-08-27--effects-migrator-owns-the-loop-and-a-legacy-ledger-is-imported)
+- **Amended:** 2026-08-27 — pre-alpha: no migrations, see [Amendment](#amendment-2026-08-27--pre-alpha-no-migrations-no-cutover-no-backups)
 
 ## Context
 
@@ -191,96 +191,61 @@ this ADR makes the Control store the authority the Engine resolves a Run Plan fr
 requires Connections — so their existence and readiness must be resolvable from it. The closed field
 list widens by one table. See ADR [0017](./0017-connections-are-engine-owned-and-pair-with-one-plugin.md).
 
-## Amendment (2026-08-27) — Effect's `Migrator` owns the loop, and a legacy ledger is imported
+## Amendment (2026-08-27) — pre-alpha: no migrations, no cutover, no backups
 
-This ADR decided that the engine owns the migration loop and that Effect's `unstable/sql/Migrator`
-is "not adopted". The first half stands in intent — the loop is still the engine's, and Drizzle's
-runtime `migrate()` is still never called. The second half is withdrawn, and two mechanisms change.
+This ADR was written as though cogwork had users. It does not. There is one person on one machine,
+that machine's store holds nothing anyone would miss, and there has never been a released version to
+move anyone from. Read under that fact, most of what this ADR decided is machinery defending a
+population of zero, and the decisions below are withdrawn.
 
-**Effect's `Migrator` is adopted.** The rejection rested on one sentence: "the `unstable/sql`
-namespace has no SQLite client, so it is not a drop-in". `@effect/sql-sqlite-node` now exists at the
-version this workspace pins, is backed by `node:sqlite`, needs no native dependency, defaults to WAL
-and a busy timeout, and issues `BEGIN IMMEDIATE` for every transaction. The sentence is no longer
-true, and with it goes the reason.
+**There is no migration loop, and no migration history.** "The engine owns the migration loop" is
+withdrawn, along with the choice of what drives it — a migration is no longer a TypeScript module of
+statements, `drizzle-kit generate` no longer runs, and Effect's `Migrator` is not adopted after all.
+A store is *created* from the schema and *replaced* when the schema moves. Boot opens the store,
+creates the schema if the file is empty, and otherwise compares the schema it found against the one
+this build would create; a mismatch reports unavailable and names the file to delete. The comparison
+is exact because both sides run the same statements.
 
-What `Migrator` does correctly is what the hand-written loop had to assert for itself. It reads the
-applied history **inside** `sql.withTransaction`, so under `BEGIN IMMEDIATE`. It inserts the pending
-rows before running them and reads a unique-constraint conflict as *migrations already running*,
-which is a second guard against a concurrent daemon. And `Migrator.fromRecord` takes migrations as
-code, so there is no directory read at run time and nothing to survive packaging.
+This is what this ADR's previous amendment already argued, one inference short. It said `push` is
+correct against a development database and wrong "on a user's laptop… there is no CLI and no person
+there". There is a person there. `drizzle-kit push` is now a script for moving the local store
+forward without losing its rows, and `drizzle-kit export` produces the create statements that ship.
 
-**Drizzle's runtime `migrate()` stays rejected, re-verified on `1.0.0-rc.4`.** The original evidence
-was read from `rc.2`, so it was read again. All three defects are unchanged. `migrateSync` reads
-`SELECT … FROM __drizzle_migrations` outside the transaction and then opens a deferred `` sql`BEGIN` ``
-(`sqlite-core/async/session.js`), so two racing daemon starts can both migrate.
-`getMigrationsToRun` matches on **name only** while writing a `hash` column that is never compared
-(`migrator.utils.js`). `readMigrationFiles` does a runtime `readdirSync` (`migrator.js`). The
-rejection is about `drizzle-orm`'s migrator, never about `drizzle-kit`.
+**Withdrawn with it:** the pre-migration copy through `VACUUM INTO` — it preserved a user's data
+against a failed migration, and there are no migrations and no users, while every copy it took stayed
+on disk forever with no command to restore one. The compatibility check on applied migration ids, and
+its mirror for shipped ids a store's history would skip. The `authoritative_records` table,
+`writeAuthoritative`, and the expected-revision write: no caller, and *authoritative record* is a noun
+no `CONTEXT.md` glossary carries. The revision-and-stale-write pattern lands with
+[#219](https://github.com/colonylabs/cogwork/issues/219)'s typed table, which wants three named
+columns rather than an opaque blob.
 
-**What the engine still owns**, because `Migrator` does not: the pre-migration copy through
-`VACUUM INTO`, taken only when a migration is pending and the store already holds something; run-event
-retention, run before the copy so the copy is bounded; the schema fingerprint; the check that no
-applied migration is one this build does not ship; the mirror of that check, that no *shipped*
-migration sits below the store's highest applied id — `Migrator` compares against that mark, so such
-a migration would be skipped in silence and surface later as an unexplained schema mismatch; and the
-fail-closed status, which reports unavailable for a failure or a defect but re-raises a cause that is
-interruption alone, so a shutdown mid-boot stays a shutdown. Which migrations a
-store boots with is a parameter of the boot layer, defaulting to the shipped set — the incremental
-path is otherwise untestable while only one migration exists.
+**And no legacy cutover.** This ADR's Consequences said `~/.cogwork/runs.db` becomes the wrong
+filename and that renaming it is itself a migration step. Withdrawn: the store does not adopt,
+rename, import, or read it. Two attempts preceded this and both cost more than the history was worth.
+Renaming forced `IF NOT EXISTS` into generated SQL and a schema check taught to forgive whatever
+shape an old store had. Copying the rows instead made boot `ATTACH` a file the daemon does not own —
+a `runs.db` whose `runs` was a view over a recursive CTE passed the table check and had its rows
+inserted while boot reported healthy, which was demonstrated rather than argued.
 
-**The migration `hash` is gone.** `Migrator`'s table carries an id, a name, and a timestamp. Two
-checks replace the hash and are stronger than it was: any applied id this build does not ship fails
-closed, and the schema fingerprint is compared exactly. The hash was also a footgun — it covered the
-raw bytes of the `.sql` file, so reformatting a committed migration would have marked every store on
-every machine incompatible and stopped dispatch.
+**What stands.** One SQLite database per machine, at `~/.cogwork`, holding the durable records and the
+run history that was `runs.db` — one file, one lock, one backup story when there is one to have. The
+directory is private and so is the file. `drizzle-kit` stays adopted as a development tool that never
+runs on another machine, now for `export` and `push` rather than `generate`, and its agent skills are
+adopted through the workspace's `@tanstack/intent` protocol. Drizzle stays the query layer, over its
+Effect driver on the store's own `SqlClient`, so the boot path and the run ledger share one connection
+and one write lock. Disposability stays a policy in the adapter: run-event writes swallow and
+continue, and retention stays mandatory — not to bound a copy that no longer exists, but because an
+unattended run ledger reached 149 MB on the author's own machine. Failure stays closed: the daemon
+starts, serves RPC, reports the store unavailable, dispatches nothing, and leaves the file untouched
+as evidence.
 
-**There is no legacy cutover at all.** This ADR's Consequences said `~/.cogwork/runs.db` becomes the
-wrong filename and that renaming it is itself a migration step. That is withdrawn: the store does not
-adopt, rename, import, or read a legacy `runs.db`. A fresh `control.db` is created beside it and the
-old file is left untouched for a person to delete.
+**When this reverses.** The first time a second machine has a store worth keeping, migrations come
+back — `drizzle-kit generate` for the SQL and Effect's `Migrator` to apply it, which was verified to
+work and rejected here only for want of a reason. Wanting to keep a store across a schema change is
+the signal to revisit this amendment.
 
-Two attempts preceded this and both were worse. Renaming the file into place forced `IF NOT EXISTS`
-to be hand-edited into generated SQL, and a schema check taught to forgive whatever shape an old
-store happened to have — because a pre-`drizzle-kit` bootstrap plus two `ALTER TABLE`s can never
-produce the DDL text a migration produces. Copying the rows instead kept the generated SQL clean, but
-`ATTACH DATABASE` on a file the daemon does not own made the boot path read an untrusted schema: a
-`runs.db` whose `runs` is a *view* over a recursive CTE passed the table check, and its rows were
-inserted into the store while boot reported healthy. Demonstrated, not theoretical.
-
-Neither cost was worth paying. cogwork has one user, who is its author, and no run history worth
-migrating — so the correct move is to write the system wanted rather than carry a cutover for a
-population that does not exist. Deleting the path removed the untrusted `ATTACH`, the column
-intersection over `pragma_table_info`, and the question of whether a corrupt disposable file should
-be allowed to stop dispatch, which this ADR's own Considered Options argued it should not.
-
-**The expected-revision write is deferred, not delivered.** This ADR said every write to an
-authoritative record raises and carries an expected revision, and #218 made it an acceptance
-criterion. It shipped as a generic `authoritative_records` table of `key`/`value`/`revision` with a
-`writeAuthoritative` beside it — and no caller. That has been struck. Three reasons: *authoritative
-record* is a noun no `CONTEXT.md` glossary carries, so it failed the vocabulary rule the moment it was
-written; the one queued consumer, [#219](https://github.com/colonylabs/cogwork/issues/219), wants
-typed columns for three named limits rather than an opaque blob; and a table shipped in the first
-migration is the hardest thing on this branch to undo. The revision-and-stale-write *pattern* stands
-as this ADR decided it; it lands with #219's real table, and #218 carries a note saying so.
-
-**The hand-edit hole this ADR claimed to close was open.** A check that regenerates the module and
-fails on a difference does not close it, because the module is generated *from* the SQL — an edit to
-the SQL flows through and the check passes. `drizzle-kit check` does not catch it either; it compares
-snapshots, not SQL against the schema. Both were confirmed by editing a generated migration and
-running each. What closes it now is that there is no longer a reason to edit generated SQL: the
-legacy path does not need `IF NOT EXISTS`, hand-written SQL has a sanctioned home in
-`drizzle-kit generate --custom`, and the shipped module is produced by `drizzle-orm`'s own
-`readMigrationFiles` rather than a local parser. The local parser was the concrete cost of not doing
-this: it split on `;` instead of `--> statement-breakpoint`, which would have shredded the first
-migration to contain a semicolon inside a statement — SQLite's table-rebuild recipe, the exact case
-the previous amendment adopted `drizzle-kit` to get right.
-
-**One store, one connection.** Drizzle's Effect driver runs on the same `SqlClient`, so the boot loop
-and the run ledger share one connection and therefore one write lock, rather than opening the file
-twice in one process.
-
-**Pins.** `drizzle-kit` follows the `rc` tag and supplies `generate`, `check`, and its agent skills.
-`drizzle-orm` is pinned to `1.0.0-rc.5-169397b` rather than the `rc` tag, because `rc.4` calls
-`Schema.TaggedErrorClass` from its Effect driver — a name that exists only on Effect's beta line —
-so `drizzle-orm/effect-sqlite-node` cannot be imported on the rc line at all. Move to the release
-that carries that fix. `effect` moved to `4.0.0-rc.112` with it.
+**Pins.** `drizzle-kit` follows the `rc` tag. `drizzle-orm` is pinned to `1.0.0-rc.5-169397b` rather
+than the `rc` tag, because `rc.4` calls `Schema.TaggedErrorClass` from its Effect driver — a name that
+exists only on Effect's beta line — so `drizzle-orm/effect-sqlite-node` cannot be imported on the rc
+line at all. Move to the release carrying that fix. `effect` moved to `4.0.0-rc.112` with it.
