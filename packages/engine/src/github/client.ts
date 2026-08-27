@@ -391,16 +391,19 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     const cached = (yield* Ref.get(etags)).get(path);
     const base = HttpClientRequest.get(path);
     const request = cached ? HttpClientRequest.setHeader(base, "if-none-match", cached.etag) : base;
-    const response = yield* Effect.retry(withTransientAttemptDeadline(send(repo, request)), {
-      while: isTransient,
-      schedule: transientBackoff,
-      times: 3,
-    });
-    if (response.status === 304 && cached) {
-      return cached.body;
-    }
-    const body = yield* Effect.mapError(response.json, toUnavailable);
-    const etag = response.headers.etag;
+    const { body, etag } = yield* Effect.retry(
+      withTransientAttemptDeadline(
+        Effect.gen(function* () {
+          const response = yield* send(repo, request);
+          if (response.status === 304 && cached) return { body: cached.body, etag: undefined };
+          return {
+            body: yield* Effect.mapError(response.json, toUnavailable),
+            etag: response.headers.etag,
+          };
+        }),
+      ),
+      { while: isTransient, schedule: transientBackoff, times: 3 },
+    );
     if (etag !== undefined) {
       yield* Ref.update(etags, (entries) => new Map(entries).set(path, { etag, body }));
     }
@@ -450,12 +453,15 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       HttpClientRequest.bodyJson(request, { query, variables }),
       toUnavailable,
     );
-    const response = yield* Effect.retry(withTransientAttemptDeadline(send(repo, withBody)), {
-      while: isTransient,
-      schedule: transientBackoff,
-      times: 3,
-    });
-    const json = yield* Effect.mapError(response.json, toUnavailable);
+    const json = yield* Effect.retry(
+      withTransientAttemptDeadline(
+        Effect.gen(function* () {
+          const response = yield* send(repo, withBody);
+          return yield* Effect.mapError(response.json, toUnavailable);
+        }),
+      ),
+      { while: isTransient, schedule: transientBackoff, times: 3 },
+    );
     const decoded = yield* Effect.mapError(decodeGraphQl(json), toUnavailable);
     const result = graphQlData(decoded);
     if (!result.ok) return yield* unavailable(result.message);
