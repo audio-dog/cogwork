@@ -3,51 +3,51 @@ import { Separator } from "@cogwork/ui/components/separator";
 import { useBoard } from "../features/activity-session";
 import { settingEntry } from "../features/settings-catalog";
 import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../features/settings-defaults";
-import { useSchedulerConfig } from "../features/use-scheduler-config";
+import { useDaemonLimit } from "../features/use-daemon-limit";
 import { NumberStepper, SettingRow, SettingsSection, SubSectionCard } from "./settings-parts";
 
 export function EngineSettings() {
   const result = useBoard();
-  const scheduler = result._tag === "Success" ? result.board.scheduler : null;
-  const { setConfig, result: write } = useSchedulerConfig();
-  // Without a connected scheduler there is nothing real to seed from or write to, so the controls
-  // show the offline fallbacks read-only until the daemon is up.
-  const disabled = scheduler === null || write.waiting;
+  const controlStore = result._tag === "Success" ? result.board.controlStore : null;
+  const limits = controlStore?.daemonLimits;
+  const { setLimit, result: write } = useDaemonLimit();
+  const disabled = limits === undefined || write.waiting;
+  const expectedRevision = limits?.revision ?? 0;
 
   return (
     <SettingsSection title="Engine">
       <SubSectionCard label="Scheduler">
         <SettingRow entry={settingEntry("global-limit")}>
           <NumberStepper
-            value={scheduler?.globalLimit ?? settingsOfflineFallbacks.globalConcurrency}
+            value={limits?.globalConcurrency ?? settingsOfflineFallbacks.globalConcurrency}
             min={minConcurrency}
             max={maxSchedulerLimit}
             label="Global concurrency"
             disabled={disabled}
-            onChange={(globalLimit) => setConfig({ globalLimit })}
+            onChange={(value) => setLimit({ key: "global-concurrency", value, expectedRevision })}
           />
         </SettingRow>
         <Separator />
         <SettingRow entry={settingEntry("per-workspace-limit")}>
           <NumberStepper
-            value={scheduler?.perWorkspaceLimit ?? settingsOfflineFallbacks.perWorkspaceConcurrency}
+            value={limits?.perWorkspaceConcurrency ?? settingsOfflineFallbacks.perWorkspaceConcurrency}
             min={minConcurrency}
             max={maxSchedulerLimit}
             label="Per-workspace concurrency"
             disabled={disabled}
-            onChange={(perWorkspaceLimit) => setConfig({ perWorkspaceLimit })}
+            onChange={(value) => setLimit({ key: "per-workspace-concurrency", value, expectedRevision })}
           />
         </SettingRow>
       </SubSectionCard>
       <SubSectionCard label="Budget">
         <SettingRow entry={settingEntry("daily-budget")}>
           <NumberStepper
-            value={scheduler?.dailyBudgetLimit ?? settingsOfflineFallbacks.dailyBudgetRuns}
+            value={limits?.dailyBudget ?? settingsOfflineFallbacks.dailyBudgetRuns}
             min={minDailyBudget}
             max={maxSchedulerLimit}
             label="Daily budget"
             disabled={disabled}
-            onChange={(dailyBudget) => setConfig({ dailyBudget })}
+            onChange={(value) => setLimit({ key: "daily-budget", value, expectedRevision })}
           />
         </SettingRow>
       </SubSectionCard>
