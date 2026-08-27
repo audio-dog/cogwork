@@ -185,4 +185,25 @@ describe("schedulerStatsOf", () => {
 
     assert.deepStrictEqual(stats.perWorkspace, [{ name: workspace.config.name, inFlight: 0, limit: 2 }]);
   });
+
+  it("reports in-flight work for a registered workspace whose input failed", () => {
+    const failed = workspaceId("failed");
+    const stats = schedulerStatsOf(
+      { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
+      { ...initialState, global: 1, perWorkspace: new Map([[failed, 1]]) },
+      {
+        workspaces: [],
+        failures: [
+          {
+            name: failed,
+            source: "/repos/failed",
+            message: "invalid Workspace input",
+            workspaceLimit: 2,
+          },
+        ],
+      },
+    );
+
+    assert.deepStrictEqual(stats.perWorkspace, [{ name: failed, inFlight: 1, limit: 2 }]);
+  });
 });

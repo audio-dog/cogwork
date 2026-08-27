@@ -51,6 +51,24 @@ export const workspaceStatesOf = (registry: RegistryState, snapshot: ReconcileSn
   ];
 };
 
+const workspaceLoadsOf = (config: SchedulerConfig, state: SchedulerState, registry: RegistryState) => [
+  ...registry.workspaces.map((workspace) => ({
+    name: workspace.config.name,
+    inFlight: state.perWorkspace.get(workspace.config.name) ?? 0,
+    limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
+  })),
+  ...registry.failures.flatMap((failure) => {
+    if (failure.name === undefined) return [];
+    return [
+      {
+        name: failure.name,
+        inFlight: state.perWorkspace.get(failure.name) ?? 0,
+        limit: failure.workspaceLimit ?? config.perWorkspaceLimit,
+      },
+    ];
+  }),
+];
+
 export const schedulerStatsOf = (
   config: SchedulerConfig,
   state: SchedulerState,
@@ -63,11 +81,7 @@ export const schedulerStatsOf = (
   dailyBudgetUsed: state.budgetUsed,
   dailyBudgetLimit: config.dailyBudget,
   perWorkspace: registry
-    ? registry.workspaces.map((workspace) => ({
-        name: workspace.config.name,
-        inFlight: state.perWorkspace.get(workspace.config.name) ?? 0,
-        limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
-      }))
+    ? workspaceLoadsOf(config, state, registry)
     : [...state.perWorkspace].map(([name, inFlight]) => ({
         name,
         inFlight,
