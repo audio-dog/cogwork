@@ -1,23 +1,121 @@
-import { ContextFs, Git } from "@cogwork/engine";
+import { ContextFs, Git, WorktreeFs } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
-import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
-import { contextFsLayer, gitLayer } from "./platform";
+import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
+import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
 
 const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 const isolated = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" };
 
+const processHandle = (exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>) =>
+  ChildProcessSpawner.makeHandle({
+    pid: ChildProcessSpawner.ProcessId(1),
+    stdin: Sink.drain,
+    stdout: Stream.empty,
+    stderr: Stream.empty,
+    all: Stream.empty,
+    exitCode,
+    isRunning: Effect.succeed(true),
+    kill: () => Effect.void,
+    getInputFd: () => Sink.drain,
+    getOutputFd: () => Stream.empty,
+    unref: Effect.succeed(Effect.void),
+  });
+
+const commandText = (command: ChildProcess.Command) => {
+  if (!ChildProcess.isStandardCommand(command)) return "unsupported command";
+  return [command.command, ...command.args].join(" ");
+};
+
+const hangingSpawnerLayer = Layer.succeed(
+  ChildProcessSpawner.ChildProcessSpawner,
+  ChildProcessSpawner.make(() => Effect.succeed(processHandle(Effect.never))),
+);
+
+const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
+  Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer)),
+);
+
 const shell = Effect.fn("test.shell")(function* (cwd: string, script: string) {
-  const spawner = yield* ChildProcessSpawner;
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const exitCode = yield* spawner.exitCode(ChildProcess.make(script, { cwd, shell: true, env: isolated }));
   if (exitCode === 0) return;
   return yield* Effect.die(new Error(`fixture failed (${exitCode}) in ${cwd}: ${script}`));
+});
+
+describe("subprocess deadlines", () => {
+  layer(gitLayer.pipe(Layer.provide(hangingSpawnerLayer)))((it) => {
+    it.effect("converts a git deadline into GitError", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const fiber = yield* Effect.forkChild(Effect.flip(git.fetch("/repo", "origin")));
+
+        yield* TestClock.adjust("5 minutes");
+        const error = yield* Fiber.join(fiber);
+
+        assert.strictEqual(error._tag, "GitError");
+        assert.strictEqual(error.command, "git fetch --prune origin");
+        assert.strictEqual(error.message, "git fetch --prune origin timed out after 5 minutes");
+      }),
+    );
+  });
+
+  layer(hangingWorktreeFsLayer)((it) => {
+    it.effect("converts a setup command deadline into WorktreeFsError", () =>
+      Effect.gen(function* () {
+        const fs = yield* WorktreeFs.WorktreeFs;
+        const fiber = yield* Effect.forkChild(Effect.flip(fs.runCommand("/repo", "pnpm install")));
+
+        yield* TestClock.adjust("30 minutes");
+        const error = yield* Fiber.join(fiber);
+
+        assert.strictEqual(error._tag, "WorktreeFsError");
+        assert.strictEqual(error.operation, "pnpm install");
+        assert.strictEqual(error.message, "pnpm install timed out after 30 minutes");
+      }),
+    );
+  });
+
+  it.effect("aborts an interrupted rebase", () =>
+    Effect.gen(function* () {
+      const commands = yield* Ref.make<ReadonlyArray<string>>([]);
+      const spawner = ChildProcessSpawner.make((command) =>
+        Effect.gen(function* () {
+          const text = commandText(command);
+          yield* Ref.update(commands, (current) => [...current, text]);
+          const exitCode = yield* text.endsWith(" --abort")
+            ? Effect.succeed(ChildProcessSpawner.ExitCode(0))
+            : Effect.sleep("1 hour").pipe(Effect.map(() => ChildProcessSpawner.ExitCode(0)));
+          return processHandle(Effect.succeed(exitCode));
+        }),
+      );
+      const interruptedGitLayer = gitLayer.pipe(
+        Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
+      );
+      const fiber = yield* Effect.forkChild(
+        Effect.gen(function* () {
+          const git = yield* Git.Git;
+          yield* git.rebase("/repo", "origin", "main");
+        }).pipe(Effect.provide(interruptedGitLayer)),
+      );
+
+      yield* TestClock.adjust("1 minute");
+      yield* Fiber.interrupt(fiber);
+
+      assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
+    }),
+  );
 });
 
 const identity = "git config user.email agent@example.com && git config user.name agent";

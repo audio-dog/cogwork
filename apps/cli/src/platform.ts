@@ -1,5 +1,6 @@
 import { ContextFs, Git, Worktree, WorktreeFs } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -9,6 +10,7 @@ import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 
 const describe = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+const timeoutMessage = (command: string, deadline: string) => `${command} timed out after ${deadline}`;
 
 const captureWith = (spawner: ChildProcessSpawner["Service"]) => (command: ChildProcess.Command) =>
   Effect.scoped(
@@ -52,6 +54,8 @@ const parseDivergence = (stdout: string) => {
   return { ahead, behind } satisfies Git.BranchDivergence;
 };
 
+const gitCommandDeadline = "5 minutes";
+
 export const gitLayer = Layer.effect(
   Git.Git,
   Effect.gen(function* () {
@@ -62,6 +66,8 @@ export const gitLayer = Layer.effect(
       const fail = (message: string) => new Git.GitError({ command, message });
       return capture(ChildProcess.make("git", [...args], { cwd })).pipe(
         Effect.mapError((cause) => fail(describe(cause))),
+        Effect.timeout(gitCommandDeadline),
+        Effect.catchTag("TimeoutError", () => fail(timeoutMessage(command, gitCommandDeadline))),
         Effect.flatMap((result) =>
           result.exitCode === 0
             ? Effect.succeed(result.stdout)
@@ -103,12 +109,16 @@ export const gitLayer = Layer.effect(
       },
       rebase: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["rebase", `${remote}/${branch}`, branch]).pipe(
-          Effect.tapError(() => Effect.ignore(runGit(worktreePath, ["rebase", "--abort"]))),
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit) ? Effect.void : Effect.ignore(runGit(worktreePath, ["rebase", "--abort"])),
+          ),
           Effect.asVoid,
         ),
     } satisfies Git.GitService;
   }),
 );
+
+const setupCommandDeadline = "30 minutes";
 
 export const worktreeFsLayer = Layer.effect(
   WorktreeFs.WorktreeFs,
@@ -132,6 +142,15 @@ export const worktreeFsLayer = Layer.effect(
       runCommand: (cwd, command) =>
         capture(ChildProcess.make(command, { cwd, shell: true })).pipe(
           Effect.mapError(fail(command)),
+          Effect.timeout(setupCommandDeadline),
+          Effect.catchTag(
+            "TimeoutError",
+            () =>
+              new WorktreeFs.WorktreeFsError({
+                operation: command,
+                message: timeoutMessage(command, setupCommandDeadline),
+              }),
+          ),
           Effect.flatMap((result) =>
             result.exitCode === 0
               ? Effect.void
