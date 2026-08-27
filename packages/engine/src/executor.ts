@@ -36,6 +36,7 @@ import {
   resolveStage,
 } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
+import { defaultRunBudget } from "./provider-runner";
 import { decideResume } from "./resume-policy";
 import { RunControl } from "./run-control";
 import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
@@ -294,16 +295,35 @@ export const make = Effect.gen(function* () {
   });
 
   const foldStream = <A, E, R>(
+    record: RunRecord,
     request: HarnessRequest,
     initial: A,
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
-  ) => Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step);
+  ) => {
+    const budget = defaultRunBudget(request.stage);
+    return Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
+      Effect.timeout(budget),
+      Effect.catchTag("TimeoutError", () =>
+        recorder.record(record, failedTerminal).pipe(
+          Effect.andThen(
+            Effect.fail(
+              new HarnessError({
+                reason: "turn",
+                retryable: true,
+                message: `${request.stage} harness run timed out after ${budget}`,
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
 
   const foldRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event));
+    foldStream(record, request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event));
 
   const foldTriageRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
+    foldStream(record, request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
 
   const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
@@ -324,12 +344,12 @@ export const make = Effect.gen(function* () {
     );
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(request, emptyAccumulator, (acc, event) =>
+    foldStream(record, request, emptyAccumulator, (acc, event) =>
       foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(request, emptyTriageAccumulator, (acc, event) =>
+    foldStream(record, request, emptyTriageAccumulator, (acc, event) =>
       foldTriageEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 

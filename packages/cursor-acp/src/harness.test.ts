@@ -1,15 +1,19 @@
+import { once } from "node:events";
 import { type AgUiEvent, agUiUsage, HarnessName } from "@cogwork/contracts";
-import { Harness, type SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import {
+  type CursorRunChat,
   cursorModelOptions,
   cursorRunner,
   estimatedUsage,
@@ -59,6 +63,15 @@ const request = (checkoutPath: string) =>
 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
+const stalledChat = (signal: AbortSignal) => ({
+  [Symbol.asyncIterator]: () => {
+    const aborted = once(signal, "abort").then(() => {
+      throw new Error("aborted");
+    });
+    return { next: () => aborted, return: () => aborted };
+  },
+});
+
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
     const projection = mcpWorkspaceProjection([]);
@@ -104,6 +117,35 @@ describe("cursorRunner", () => {
     const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
   });
+
+  it.effect("aborts the underlying chat when the harness stream is interrupted", () =>
+    Effect.gen(function* () {
+      const captured = Promise.withResolvers<AbortController>();
+      const runChat: CursorRunChat = ({ abortController }) => {
+        captured.resolve(abortController);
+        return stalledChat(abortController.signal);
+      };
+      const runner = cursorRunner({ name: cursorName, runChat });
+      const execution = yield* Effect.forkChild(
+        Stream.runDrain(
+          runner
+            .run(request("/tmp"))
+            .pipe(
+              Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
+              Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
+              Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
+            ),
+        ).pipe(Effect.timeout("1 second")),
+      );
+      const abortController = yield* Effect.promise(() => captured.promise);
+
+      yield* TestClock.adjust("1 second");
+      const error = yield* Fiber.join(execution).pipe(Effect.flip);
+
+      assert.strictEqual(error._tag, "TimeoutError");
+      assert.isTrue(abortController.signal.aborted);
+    }),
+  );
 
   it.live("refuses a Cursor triage run before native launch", () =>
     Effect.gen(function* () {

@@ -17,6 +17,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
@@ -34,6 +35,7 @@ import {
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
+import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import { layer as runRecorderLayer } from "./run-recorder";
@@ -713,6 +715,30 @@ describe("Executor.execute", () => {
       }).pipe(Effect.provide(layer));
     }),
   );
+
+  it.effect("settles a silent harness run as a retryable failure after its stage budget", () => {
+    const silentRunner: HarnessRunner = {
+      name: cursor,
+      sessionKind: "opaque-handle",
+      execution: fullHarnessExecution,
+      run: () => Stream.never,
+    };
+    const layer = Layer.unwrap(
+      Ref.make<ReadonlyArray<Call>>([]).pipe(Effect.map((calls) => provide(recorder(calls), [silentRunner]))),
+    );
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      const execution = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+      yield* TestClock.adjust(defaultRunBudget("implement"));
+      assert.isTrue(yield* Fiber.join(execution));
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "failed");
+      const events = run ? yield* ledger.events(run.id) : [];
+      assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
+    }).pipe(Effect.provide(layer));
+  });
 
   it.effect("persists a terminal event on failure so watchers flush the run", () =>
     Effect.gen(function* () {
