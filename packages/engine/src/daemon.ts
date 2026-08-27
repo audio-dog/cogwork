@@ -7,6 +7,7 @@ import {
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -263,23 +264,34 @@ const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
   );
 });
 
+const continueAfterReconcileFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
+  Effect.catchCauseIf(
+    effect,
+    (cause) => !Cause.hasInterruptsOnly(cause),
+    (cause) => Effect.logError(message, { cause }),
+  );
+
 const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
   const worker = yield* ReconcileWorker;
   const publisher = yield* DaemonEventPublisher;
-  const receipt = yield* worker.submit();
-  yield* Effect.logInfo("reconcile tick", receipt);
+  yield* continueAfterReconcileFailure(
+    worker.submit().pipe(Effect.tap((receipt) => Effect.logInfo("reconcile tick", receipt))),
+    "reconcile heartbeat failed",
+  );
   yield* publisher.publishItems();
   yield* publisher.publishWorkspaces();
   yield* maintainWorktrees();
 });
 
 const reconcileHeartbeat = (pollIntervalMillis: number) =>
-  reconcileTick().pipe(Effect.repeat(Schedule.spaced(pollIntervalMillis)));
+  continueAfterReconcileFailure(reconcileTick(), "reconcile heartbeat failed").pipe(
+    Effect.repeat(Schedule.spaced(pollIntervalMillis)),
+  );
 
 export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const recovery = yield* Recovery;
-  yield* worker.submit();
+  yield* continueAfterReconcileFailure(worker.submit(), "reconcile bootstrap failed");
   yield* recovery.recoverWhenLive();
 });
 

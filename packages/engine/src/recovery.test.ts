@@ -167,6 +167,12 @@ const workerLayer = (observed: ReadonlyArray<ObservedItem>, poll: PollState = ok
     snapshot: Effect.succeed(snapshotOf(observed, poll)),
   });
 
+const workerSnapshotLayer = (snapshot: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
+  Layer.succeed(Reconcile.ReconcileWorker, {
+    submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    snapshot: Ref.get(snapshot),
+  });
+
 const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, { workspaces: [wsA], failures: [] });
 
 const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
@@ -207,6 +213,7 @@ interface RecoveryDeps {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
   readonly poll?: PollState;
   readonly paused?: Ref.Ref<boolean>;
+  readonly snapshot?: Ref.Ref<Reconcile.ReconcileSnapshot>;
 }
 
 const recoveryLayer = (deps: RecoveryDeps) => {
@@ -219,7 +226,7 @@ const recoveryLayer = (deps: RecoveryDeps) => {
     Layer.provide(
       Layer.mergeAll(
         registryLayer,
-        workerLayer(deps.observed, deps.poll ?? okPoll),
+        deps.snapshot ? workerSnapshotLayer(deps.snapshot) : workerLayer(deps.observed, deps.poll ?? okPoll),
         schedulerStub(deps.admitted, deps.paused),
         issueTrackerStub(deps.issueTracker ?? {}),
         runLedger,
@@ -616,6 +623,29 @@ describe("Recovery.recover", () => {
 });
 
 describe("Recovery.recoverWhenLive", () => {
+  it.effect("waits for a reconciled snapshot before consuming one-shot recovery", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>({ generation: 0, workspaces: [] });
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+
+        yield* recovery.recoverWhenLive();
+        assert.deepStrictEqual(yield* Ref.get(admitted), []);
+
+        yield* Ref.set(snapshot, snapshotOf([claimedByUs]));
+        yield* recovery.recoverWhenLive();
+        yield* recovery.recoverWhenLive();
+        assert.deepStrictEqual(
+          (yield* Ref.get(admitted)).map((work) => work.id),
+          [id("#1")],
+        );
+      }).pipe(Effect.provide(recoveryLayer({ observed: [], ledger, admitted, snapshot })));
+    }),
+  );
+
   it.effect("holds recovery while scheduling is paused, then resumes it once, when live", () =>
     Effect.gen(function* () {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);

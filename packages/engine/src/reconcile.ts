@@ -6,6 +6,7 @@ import type {
   PollState,
   WorkspaceId,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -19,6 +20,8 @@ import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
+
+const submitTimeout = "30 seconds";
 
 export interface ReconcileReceipt {
   readonly workspaces: number;
@@ -44,6 +47,11 @@ export interface ReconcileSnapshot {
 
 interface ReconcileJob {
   readonly receipt: Deferred.Deferred<ReconcileReceipt>;
+}
+
+interface ReceiptSelection {
+  readonly receipt: Deferred.Deferred<ReconcileReceipt>;
+  readonly enqueue: boolean;
 }
 
 const okState = (
@@ -108,6 +116,7 @@ export const make = Effect.gen(function* () {
   const provider = yield* SourceControlProvider;
   const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
+  const pendingReceipt = yield* Ref.make<Deferred.Deferred<ReconcileReceipt> | null>(null);
   const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ generation: 0, workspaces: [] });
   const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
 
@@ -197,7 +206,7 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* (job: ReconcileJob) {
+  const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* () {
     const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
       concurrency: 4,
     });
@@ -205,20 +214,59 @@ export const make = Effect.gen(function* () {
       generation: previous.generation + 1,
       workspaces: states,
     }));
-    yield* Deferred.succeed(job.receipt, {
+    return {
       workspaces: registry.workspaces.length,
       failures: registry.failures.length,
       pendingWork: states.reduce((total, state) => total + state.eligible.length, 0),
       paused: states.filter((state) => state.poll.status === "paused").length,
-    });
+    };
   });
 
-  yield* Queue.take(queue).pipe(Effect.flatMap(reconcile), Effect.forever, Effect.forkScoped);
+  const clearPendingReceipt = (receipt: Deferred.Deferred<ReconcileReceipt>) =>
+    Ref.update(pendingReceipt, (pending) => (pending === receipt ? null : pending));
+
+  const runJob = (job: ReconcileJob) =>
+    reconcile().pipe(
+      Effect.flatMap((receipt) =>
+        clearPendingReceipt(job.receipt).pipe(Effect.andThen(Deferred.succeed(job.receipt, receipt))),
+      ),
+      Effect.catchCause((cause) => {
+        const interrupted = Cause.hasInterruptsOnly(cause);
+        return Effect.logError("reconcile job failed", { cause }).pipe(
+          Effect.when(Effect.succeed(!interrupted)),
+          Effect.andThen(clearPendingReceipt(job.receipt)),
+          Effect.andThen(Deferred.failCause(job.receipt, cause)),
+          Effect.andThen(Effect.failCause(cause).pipe(Effect.when(Effect.succeed(interrupted)))),
+        );
+      }),
+    );
+
+  const awaitReceipt = (receipt: Deferred.Deferred<ReconcileReceipt>) =>
+    Deferred.await(receipt).pipe(
+      Effect.timeout(submitTimeout),
+      Effect.tapErrorTag("TimeoutError", () =>
+        Effect.logError("reconcile submission timed out", { timeout: submitTimeout }),
+      ),
+    );
+
+  yield* Queue.take(queue).pipe(Effect.flatMap(runJob), Effect.forever, Effect.forkScoped);
+
+  const receiptForSubmit = Effect.fn("ReconcileWorker.receiptForSubmit")(function* () {
+    const candidate = yield* Deferred.make<ReconcileReceipt>();
+    const selection = yield* Ref.modify(
+      pendingReceipt,
+      (pending): readonly [ReceiptSelection, Deferred.Deferred<ReconcileReceipt> | null] => {
+        if (pending) return [{ receipt: pending, enqueue: false }, pending];
+        return [{ receipt: candidate, enqueue: true }, candidate];
+      },
+    );
+    if (selection.enqueue) yield* Queue.offer(queue, { receipt: selection.receipt });
+    return selection.receipt;
+  });
 
   const submit = Effect.fn("ReconcileWorker.submit")(function* () {
-    const receipt = yield* Deferred.make<ReconcileReceipt>();
-    yield* Queue.offer(queue, { receipt });
-    return yield* Deferred.await(receipt);
+    const receipt = yield* Effect.uninterruptible(receiptForSubmit());
+    return yield* awaitReceipt(receipt);
   });
 
   return { submit, snapshot: Ref.get(snapshotRef) } as const;
