@@ -1,0 +1,121 @@
+apps/cli/config/cogwork.workspace.ts
+  s_dd0bc069f1065b::t_bd7c66779f9ad5 4
+apps/cli/src/platform.test.ts
+  s_dd0bc069f1065b::t_780752300cc8dd 1,3,5,9-12,14-15,21-49,51,57-133,227-247
+apps/cli/src/platform.ts
+  s_dd0bc069f1065b::t_2eaeac42035ac4 3,13,57-58,69-78,92-95,123-125,132-133,156-164,197-207,210
+apps/cli/src/rpc.ts
+  s_dd0bc069f1065b::t_39b11973529b21 1,98-102
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_dd0bc069f1065b::t_4a77c32f2c1dab 1-124
+docs/agent-patterns/effect-test-layers.md
+  s_dd0bc069f1065b::t_cf471a744e138c 1-125
+docs/agent-patterns/effect-time-bounds.md
+  s_dd0bc069f1065b::t_7e8974f0e9a400 1-116
+packages/codex-cli/CONTEXT.md
+  s_dd0bc069f1065b::t_553778a57767de 34-37
+packages/codex-cli/src/harness.test.ts
+  s_dd0bc069f1065b::t_f1014ec981acae 38,78,211-212,437,439-440,642,644,676-677,679-685
+packages/codex-cli/src/harness.ts
+  s_dd0bc069f1065b::t_8a459c032fb70e 55-61,63-64,191,196,210-214,233
+packages/cursor-acp/src/harness.test.ts
+  s_dd0bc069f1065b::t_1980c967a9c6ee 1-3,10,14,16,54,66-74,121-150,162,164-166,170,184-185
+packages/cursor-acp/src/harness.ts
+  s_dd0bc069f1065b::t_7c057d66e58730 4,6,36,39,44-65,232,236-240,268-269,273,277-279
+packages/engine/CONTEXT.md
+  s_dd0bc069f1065b::t_e338d090cd8807 77,113
+packages/engine/skills/implement-agent/SKILL.md
+  s_dd0bc069f1065b::t_9994d4425cb569 69
+packages/engine/src/commands.test.ts
+  s_dd0bc069f1065b::t_148deb12f3daa0 13,20,65-66,350-375
+packages/engine/src/context-assembler.test.ts
+  s_dd0bc069f1065b::t_bd942be5bfeeeb 12,25-31,60,67-70,84-85,98
+packages/engine/src/context-assembler.ts
+  s_dd0bc069f1065b::t_1483aad847b16e 7,28,69-71,97-105,132,134-135
+packages/engine/src/context-fs.ts
+  s_dd0bc069f1065b::t_ebff9a43bc7e91 16-17
+packages/engine/src/daemon-composition.test.ts
+  s_dd0bc069f1065b::t_711fc1efe2b9c2 23,54
+packages/engine/src/daemon.ts
+  s_dd0bc069f1065b::t_5f3f577ab68fc9 11,289-295,299-302,309-311,318
+packages/engine/src/engine.test.ts
+  s_a87513e3df0624::t_ea1005aca2f737 3-5,11,76-77,86-118,191-204,217-291,546-547,562-609,617-643,647-696,698-714,725-726,729-749
+packages/engine/src/event-publisher.test.ts
+  s_dd0bc069f1065b::t_8be3106b76bb4f 106-107
+packages/engine/src/executor.test.ts
+  s_dd0bc069f1065b::t_f8e1b59ece0d61 20,29,38,225,398,411,461,468,510-514,536,724-747,789,795-820,831,833-835,851
+packages/engine/src/executor.ts
+  s_dd0bc069f1065b::t_36cd0533cac550 29,39,183,298,302-320,323,326,347,352,768-773,876,882,889-894,900
+packages/engine/src/git.ts
+  s_dd0bc069f1065b::t_1d3288c16eadf4 8
+packages/engine/src/github/client.ts
+  s_dd0bc069f1065b::t_71665aa4609a11 304-312,394-406,456-464
+packages/engine/src/harness.test.ts
+  s_dd0bc069f1065b::t_79298c44f762c4 1,3,6-27,132-182
+packages/engine/src/harness.ts
+  s_dd0bc069f1065b::t_2758b9945279b6 18,23,31,41-52,66,71-74,96-121,128-131,135
+packages/engine/src/linear/client.test.ts
+  s_dd0bc069f1065b::t_f4227026d3cc62 403,405-414,416,418-424
+packages/engine/src/linear/client.ts
+  s_dd0bc069f1065b::t_d1e90336ddf12e 171,386-389,391-394,406-413
+packages/engine/src/model-catalog.ts
+  s_dd0bc069f1065b::t_c3a5c9d7242863 80
+packages/engine/src/operation-policy.ts
+  s_dd0bc069f1065b::t_f67de2f26dfcfc 1-6
+packages/engine/src/provider-runner.test.ts
+  s_dd0bc069f1065b::t_8d1c746bd49984 24,140,298-306,310,320
+packages/engine/src/provider-runner.ts
+  s_dd0bc069f1065b::t_74c7a727544aaf 14,16-17,26,40,78-83,86-89,96-101,105,112,125,161-164,173
+packages/engine/src/reconcile.ts
+  s_dd0bc069f1065b::t_49630b1bf691d3 9,24-25,52-56,119,209,217,222,225-265,268-269
+packages/engine/src/recovery.test.ts
+  s_dd0bc069f1065b::t_5c769113272d2c 170-175,197-198,216,229,626-648
+packages/engine/src/recovery.ts
+  s_dd0bc069f1065b::t_916c87d8baa82a 224-225
+packages/engine/src/run-control.ts
+  s_dd0bc069f1065b::t_60f0cc00849f48 4-5,9,11,14-16,19
+packages/engine/src/scheduler.test.ts
+  s_dd0bc069f1065b::t_672c52ee481849 9,12,287-291,293-295,297-314,316-318,323-375,380-381,385-390,395-396,400,412-435,437-438,443-466,468-469,474-491,493-494,499-517,519-520,525-539,541-542,569-586,589-590,596-611,616-630,635-646,648-661,666-667,669,671-672,674-680,685-690,695-703
+packages/engine/src/scheduler.ts
+  s_dd0bc069f1065b::t_88994c057f55f0 238-241,244-245,284
+packages/engine/src/session-store.ts
+  s_dd0bc069f1065b::t_20825e920d6a6b 24,136-139,141,154,157
+packages/engine/src/tools/index.ts
+  s_dd0bc069f1065b::t_1517ba568d580c 33
+packages/engine/src/tools/owned-tools.test.ts
+  s_dd0bc069f1065b::t_c1b1eaf0d4c169 1,4-5,7-11,13-14,28-29,45-94,185-249,286
+packages/engine/src/tools/owned-tools.ts
+  s_dd0bc069f1065b::t_e72bce43c1838a 4,157,160,248-249,253,267,280-284,289,294,300,305,310,315,320
+packages/engine/src/tools/policy.test.ts
+  s_dd0bc069f1065b::t_5c3e4e0b193bc7 4-6,30-39,126,143,154
+packages/engine/src/tools/policy.ts
+  s_dd0bc069f1065b::t_6f6bb3a6c3b0a8 8,44-46,49-51
+packages/engine/src/worktree.test.ts
+  s_dd0bc069f1065b::t_5bba4717d9296b 54,70,73,234-237,257-282
+packages/engine/src/worktree.ts
+  s_dd0bc069f1065b::t_11454fb4d04ad9 163-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "20302e65a8eb9290a37ae63fe6a800be3ae8a243",
+  "prompts": {},
+  "sessions": {
+    "s_a87513e3df0624": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0447c-f521-7862-8f20-59c6e24f69fb",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dd0bc069f1065b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52e32dbe-b113-4a99-8d36-118cacd039df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
