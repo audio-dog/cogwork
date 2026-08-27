@@ -1,11 +1,11 @@
 import { type Git, Registry, Worktree } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
-import { loadFromDisk } from "./loader";
-import { defaultConfigHome } from "./paths";
+import { defaultControlStorePath } from "./paths";
 import { worktreeManagerLayer } from "./platform";
 
 class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()("WorkspaceNotFound", {
@@ -16,9 +16,9 @@ class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()("Workspa
   }
 }
 
-const configHomeFlag = Flag.string("config-home").pipe(
-  Flag.withDescription("Directory of workspace config files"),
-  Flag.withDefault(defaultConfigHome),
+const controlStoreFlag = Flag.string("control-store").pipe(
+  Flag.withDescription("Path to the machine-local Control store"),
+  Flag.withDefault(defaultControlStorePath),
 );
 
 const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("Name of the registered workspace"));
@@ -27,29 +27,26 @@ const itemFlag = Flag.string("item").pipe(Flag.withDescription("Work item id, e.
 const titleFlag = Flag.string("title").pipe(Flag.withDescription("Work item title"));
 const branchFlag = Flag.string("branch").pipe(Flag.withDescription("Worktree branch name"));
 
-const findWorkspace = (configHome: string, name: string) =>
-  loadFromDisk(configHome).pipe(
-    Effect.map((result) => Registry.buildRegistry(result).workspaces.find((w) => w.config.name === name)),
-    Effect.flatMap((workspace) =>
-      workspace
-        ? Effect.succeed(workspace)
-        : new WorkspaceNotFound({ detail: `workspace "${name}" not found in ${configHome}` }),
-    ),
-  );
+const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (name: string) {
+  const registry = yield* Registry.WorkspaceRegistry;
+  const workspace = Registry.findWorkspace(registry, name);
+  if (!workspace) return yield* new WorkspaceNotFound({ detail: `workspace "${name}" not found` });
+  return workspace;
+});
 
 const runWorktree = <E>(
-  options: { readonly configHome: string; readonly workspace: string },
+  options: { readonly controlStore: string; readonly workspace: string },
   use: (
     workspace: Registry.RegisteredWorkspace,
     manager: Worktree.WorktreeManagerService,
   ) => Effect.Effect<unknown, E>,
 ) =>
   Effect.gen(function* () {
-    const workspace = yield* findWorkspace(options.configHome, options.workspace);
+    const workspace = yield* findWorkspace(options.workspace);
     const manager = yield* Worktree.WorktreeManager;
     yield* use(workspace, manager);
   }).pipe(
-    Effect.provide(worktreeManagerLayer),
+    Effect.provide(Layer.mergeAll(worktreeManagerLayer, Registry.layerAt(options.controlStore))),
     Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
   );
 
@@ -58,13 +55,13 @@ const formatWorktrees = (entries: ReadonlyArray<Git.WorktreeEntry>) =>
     ? "  (no worktrees)"
     : entries.map((entry) => `  ${entry.branch ?? "(detached)"}  ${entry.path}`).join("\n");
 
-const runList = (options: { readonly configHome: string; readonly workspace: string }) =>
+const runList = (options: { readonly controlStore: string; readonly workspace: string }) =>
   runWorktree(options, (workspace, manager) =>
     manager.list(workspace).pipe(Effect.flatMap((entries) => Console.log(formatWorktrees(entries)))),
   );
 
 const runEnsure = (options: {
-  readonly configHome: string;
+  readonly controlStore: string;
   readonly workspace: string;
   readonly item: string;
   readonly title: string;
@@ -80,7 +77,7 @@ const runEnsure = (options: {
   );
 
 const runRemove = (options: {
-  readonly configHome: string;
+  readonly controlStore: string;
   readonly workspace: string;
   readonly branch: string;
 }) =>
@@ -89,19 +86,19 @@ const runRemove = (options: {
   );
 
 const listCommand = Command.make("list", {
-  configHome: configHomeFlag,
+  controlStore: controlStoreFlag,
   workspace: workspaceFlag,
 }).pipe(Command.withHandler(runList));
 
 const ensureCommand = Command.make("ensure", {
-  configHome: configHomeFlag,
+  controlStore: controlStoreFlag,
   workspace: workspaceFlag,
   item: itemFlag,
   title: titleFlag,
 }).pipe(Command.withHandler(runEnsure));
 
 const removeCommand = Command.make("remove", {
-  configHome: configHomeFlag,
+  controlStore: controlStoreFlag,
   workspace: workspaceFlag,
   branch: branchFlag,
 }).pipe(Command.withHandler(runRemove));

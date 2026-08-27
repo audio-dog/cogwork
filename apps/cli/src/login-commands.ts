@@ -8,9 +8,8 @@ import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { layer as credentialsLayer } from "./credentials";
-import { loadFromDisk } from "./loader";
 import { browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear, ProviderKeyError } from "./login";
-import { defaultConfigHome, defaultCredentialsPath } from "./paths";
+import { defaultControlStorePath, defaultCredentialsPath } from "./paths";
 
 class LoginConfigError extends Schema.TaggedError<LoginConfigError>()("LoginConfigError", {
   detail: Schema.String,
@@ -20,9 +19,9 @@ class LoginConfigError extends Schema.TaggedError<LoginConfigError>()("LoginConf
   }
 }
 
-const configHomeFlag = Flag.string("config-home").pipe(
-  Flag.withDescription("Directory of workspace config files"),
-  Flag.withDefault(defaultConfigHome),
+const controlStoreFlag = Flag.string("control-store").pipe(
+  Flag.withDescription("Path to the machine-local Control store"),
+  Flag.withDefault(defaultControlStorePath),
 );
 
 const workspaceFlag = Flag.string("workspace").pipe(
@@ -34,15 +33,12 @@ const credentialsFlag = Flag.string("credentials").pipe(
   Flag.withDefault(defaultCredentialsPath),
 );
 
-const findIssueTracker = (configHome: string, name: string) =>
-  loadFromDisk(configHome).pipe(
-    Effect.map((result) => Registry.buildRegistry(result).workspaces.find((w) => w.config.name === name)),
-    Effect.flatMap((workspace) =>
-      workspace
-        ? Effect.succeed(workspace.config.issueTracker)
-        : new LoginConfigError({ detail: `workspace "${name}" not found in ${configHome}` }),
-    ),
-  );
+const findIssueTracker = Effect.fn("login.findIssueTracker")(function* (name: string) {
+  const registry = yield* Registry.WorkspaceRegistry;
+  const workspace = Registry.findWorkspace(registry, name);
+  if (!workspace) return yield* new LoginConfigError({ detail: `workspace "${name}" not found` });
+  return workspace.config.issueTracker;
+});
 
 const resolveConfig = (
   issueTracker: IssueTrackerConfig,
@@ -67,27 +63,30 @@ const resolveConfig = (
 };
 
 const runLogin = (options: {
-  readonly configHome: string;
+  readonly controlStore: string;
   readonly workspace: string;
   readonly credentials: string;
 }) =>
   Effect.gen(function* () {
-    const issueTracker = yield* findIssueTracker(options.configHome, options.workspace);
+    const issueTracker = yield* findIssueTracker(options.workspace);
     const config = yield* resolveConfig(issueTracker);
     const result = yield* loginLinear(config);
     yield* Console.log(`Logged in to Linear org "${result.organization}" as ${result.actorUserId}.`);
   }).pipe(
     Effect.provide(
-      browserOpenerLayer.pipe(
-        Layer.provideMerge(credentialsLayer(options.credentials)),
-        Layer.provide(FetchHttpClient.layer),
+      Layer.mergeAll(
+        Registry.layerAt(options.controlStore),
+        browserOpenerLayer.pipe(
+          Layer.provideMerge(credentialsLayer(options.credentials)),
+          Layer.provide(FetchHttpClient.layer),
+        ),
       ),
     ),
     Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
   );
 
 const linearCommand = Command.make("linear", {
-  configHome: configHomeFlag,
+  controlStore: controlStoreFlag,
   workspace: workspaceFlag,
   credentials: credentialsFlag,
 }).pipe(Command.withHandler(runLogin));

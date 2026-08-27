@@ -26,12 +26,7 @@ import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import {
-  defaultConfigHome,
-  defaultControlStorePath,
-  defaultCredentialsPath,
-  defaultSocketPath,
-} from "./paths";
+import { defaultControlStorePath, defaultCredentialsPath, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatStatus } from "./status";
 import { secondStopSignal } from "./stop-signal";
@@ -41,11 +36,6 @@ import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
-);
-
-const configHomeFlag = Flag.string("config-home").pipe(
-  Flag.withDescription("Directory of workspace config files the daemon imports"),
-  Flag.withDefault(defaultConfigHome),
 );
 
 const controlStoreFlag = Flag.string("control-store").pipe(
@@ -107,7 +97,6 @@ const runDaemon = Effect.fn("commands.runDaemon")(
     const registry = yield* Registry.WorkspaceRegistry;
     yield* Effect.logInfo("cogwork daemon started", {
       socket: options.socketPath,
-      configHome: options.configHome,
       workspaces: registry.workspaces.length,
       failures: registry.failures.length,
     });
@@ -260,7 +249,6 @@ const runStatus = Effect.fn("commands.runStatus")(
 
 export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
-  configHome: configHomeFlag,
   controlStore: controlStoreFlag,
   credentials: credentialsFlag,
   maxConcurrency: maxConcurrencyFlag,
@@ -273,7 +261,6 @@ export const daemonCommand = Command.make("daemon", {
   Command.withHandler(
     ({
       socket,
-      configHome,
       controlStore,
       credentials,
       maxConcurrency,
@@ -285,7 +272,6 @@ export const daemonCommand = Command.make("daemon", {
     }) =>
       runDaemon({
         socketPath: socket,
-        configHome,
         controlStorePath: controlStore,
         credentialsPath: credentials,
         maxConcurrency,
