@@ -1,0 +1,19 @@
+apps/desktop/src/main/engine-command.test.ts
+  s_14f4a3d3bb5de1::t_725a6e2f2d8c5d 47,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "65ab1759190ae9d9cea8a81d65a130d32bc2aa6e",
+  "prompts": {},
+  "sessions": {
+    "s_14f4a3d3bb5de1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a6-0f41-7672-8217-8e3a772483e6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
