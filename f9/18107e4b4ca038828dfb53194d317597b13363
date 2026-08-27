@@ -1,0 +1,22 @@
+packages/engine/src/provider-runner.ts
+  s_79dcb41c4b1d64::t_7fb58977252d4a 184-190,193-194
+  s_79dcb41c4b1d64::t_78512c51a0e33d 181-183,191-192
+packages/engine/src/tools/file-diff-feed.ts
+  s_79dcb41c4b1d64::t_0c6dd998b71154 90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f918107e4b4ca038828dfb53194d317597b13363",
+  "prompts": {},
+  "sessions": {
+    "s_79dcb41c4b1d64": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d056e58d-a89b-4fc0-9a52-a3e3d494793f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
