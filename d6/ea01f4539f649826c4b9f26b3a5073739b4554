@@ -1,0 +1,20 @@
+packages/engine/src/linear/client.test.ts
+  s_e28c0a036c6c71::t_3208bdda39f5e7 403,405-409,412,414-419
+  s_e28c0a036c6c71::t_59b910d012d56f 410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "d6ea01f4539f649826c4b9f26b3a5073739b4554",
+  "prompts": {},
+  "sessions": {
+    "s_e28c0a036c6c71": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a043f0-42c6-7d50-a630-08a48d211f44",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
