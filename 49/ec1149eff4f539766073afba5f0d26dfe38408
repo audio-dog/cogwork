@@ -1,0 +1,39 @@
+apps/cli/src/commands.test.ts
+  s_3eeb0a0a45f74b::t_13d5e1f2edfa78 12,55-71
+apps/cli/src/commands.ts
+  s_da1645ec2131aa::t_41f1eae151e953 4,83-97,254-281,290-292,294-298,319-332
+apps/cli/src/main.ts
+  s_14f4a3d3bb5de1::t_2d6b652b78fb48 8-15,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "49ec1149eff4f539766073afba5f0d26dfe38408",
+  "prompts": {},
+  "sessions": {
+    "s_14f4a3d3bb5de1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a044a6-0f41-7672-8217-8e3a772483e6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_3eeb0a0a45f74b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0452e-20fc-7e40-b711-ce4833d149f8",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_da1645ec2131aa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0452c-a951-72f0-b260-588d724f47c1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
