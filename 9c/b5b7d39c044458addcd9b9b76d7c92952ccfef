@@ -1,0 +1,19 @@
+packages/engine/src/daemon-composition.test.ts
+  s_dd0bc069f1065b::t_04826889ba4380 11,15,24,110-119,123,131-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9cb5b7d39c044458addcd9b9b76d7c92952ccfef",
+  "prompts": {},
+  "sessions": {
+    "s_dd0bc069f1065b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52e32dbe-b113-4a99-8d36-118cacd039df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
