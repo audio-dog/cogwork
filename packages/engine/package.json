@@ -7,10 +7,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "drizzle:schema": "node scripts/generate-control-store-create.mjs",
+    "drizzle:check": "node scripts/generate-control-store-create.mjs --check"
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
+    "@effect/sql-sqlite-node": "catalog:effect",
     "@linear/sdk": "^89.0.0",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-anthropic": "0.16.7",
@@ -19,11 +22,14 @@
     "@tanstack/ai-persistence": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
     "@tanstack/ai-sandbox-local-process": "catalog:",
+    "drizzle-orm": "catalog:",
     "effect": "catalog:effect"
   },
   "devDependencies": {
     "@catenarycloud/linteffect": "^0.0.7",
+    "@effect/platform-node": "catalog:effect",
     "@effect/vitest": "catalog:effect",
+    "drizzle-kit": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

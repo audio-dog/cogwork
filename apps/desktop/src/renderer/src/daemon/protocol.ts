@@ -110,6 +110,7 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         },
         supportsAck: true,
         supportsTransferables: false,
+        codecFor: serialization.codecFor,
       };
     }),
   );

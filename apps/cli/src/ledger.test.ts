@@ -9,9 +9,9 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
-import { RunLedger } from "@cogwork/engine";
+import { bootControlStoreLayer, controlStoreClientLayer, RunLedger } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, describe, it, layer } from "@effect/vitest";
+import { assert, describe, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -20,9 +20,16 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { layer as ledgerLayer } from "./ledger";
 
-class TestLedgerPath extends Context.Service<TestLedgerPath, string>()(
-  "@cogwork/cli/ledger.test/TestLedgerPath",
+class TestStorePath extends Context.Service<TestStorePath, string>()(
+  "@cogwork/cli/ledger.test/TestStorePath",
 ) {}
+
+const bootedLedgerLayer = (storePath: string) =>
+  ledgerLayer.pipe(
+    Layer.provideMerge(
+      bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath))),
+    ),
+  );
 
 const runRow = (run: RunRecord) =>
   [
@@ -41,9 +48,9 @@ const runRow = (run: RunRecord) =>
     run.endedAtMillis,
   ] as const;
 
-const insertRunsBulk = (ledgerPath: string, records: ReadonlyArray<RunRecord>) =>
+const insertRunsBulk = (storePath: string, records: ReadonlyArray<RunRecord>) =>
   Effect.acquireUseRelease(
-    Effect.sync(() => new DatabaseSync(ledgerPath)),
+    Effect.sync(() => new DatabaseSync(storePath)),
     (sqlite) =>
       Effect.sync(() => {
         sqlite.exec("BEGIN");
@@ -99,33 +106,14 @@ const sessionRecord = (over: Partial<Session> = {}): Session => ({
   ...over,
 });
 
-const insertRunAt = (ledgerPath: string, run: RunRecord) =>
-  Effect.provide(
-    Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.insertRun(run)),
-    ledgerLayer(ledgerPath),
-  );
-
-const listRunsAt = (ledgerPath: string) =>
-  Effect.provide(
-    Effect.flatMap(RunLedger.CoreRunLedger, (ledger) => ledger.listRuns(10)),
-    ledgerLayer(ledgerPath),
-  );
-
-const writeRetiredStatus = (ledgerPath: string) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => new DatabaseSync(ledgerPath)),
-    (sqlite) => Effect.sync(() => sqlite.exec("UPDATE runs SET status = 'blocked'")),
-    (sqlite) => Effect.sync(() => sqlite.close()),
-  );
-
 describe("sqlite RunLedger", () => {
   layer(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-" });
-      const ledgerPath = path.join(dir, "runs.db");
-      return Layer.merge(ledgerLayer(ledgerPath), Layer.succeed(TestLedgerPath, ledgerPath));
+      const storePath = path.join(dir, "control.db");
+      return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
     it.effect("persists a run, its events, and reports a summary with event count", () =>
@@ -449,7 +437,7 @@ describe("sqlite RunLedger", () => {
     it.effect("resolves a watch target by work item, running-first, past the recent-runs window", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
-        const ledgerPath = yield* TestLedgerPath;
+        const storePath = yield* TestStorePath;
         yield* ledger.insertRun(
           record("resolve-old-done", 1000, {
             workItem: resolveItem,
@@ -459,7 +447,7 @@ describe("sqlite RunLedger", () => {
         );
         yield* ledger.insertRun(record("resolve-running", 2000, { workItem: resolveItem }));
         yield* insertRunsBulk(
-          ledgerPath,
+          storePath,
           Array.from({ length: 60 }, (_, index) =>
             record(`resolve-other-${index}`, 3000 + index, {
               workItem: resolveOther,
@@ -485,18 +473,58 @@ describe("sqlite RunLedger", () => {
   });
 });
 
-describe("sqlite RunLedger migration", () => {
-  it.effect("reads a run left at the retired blocked status as exhausted", () =>
+// AC: a run-event write failure never stops the daemon, and a read degrades to empty. Both go
+// through `swallow`, so both are exercised against a store whose tables have been pulled away.
+describe("sqlite RunLedger against a broken store", () => {
+  const dropTables = (storePath: string) =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => new DatabaseSync(storePath)),
+      (sqlite) =>
+        Effect.sync(() =>
+          sqlite.exec(
+            "DROP TABLE IF EXISTS run_events; DROP TABLE IF EXISTS runs; DROP TABLE IF EXISTS sessions",
+          ),
+        ),
+      (sqlite) => Effect.sync(() => sqlite.close()),
+    );
+
+  layer(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-retired-" });
-      const ledgerPath = path.join(dir, "runs.db");
-      yield* insertRunAt(ledgerPath, record("retired-1", 1000));
-      yield* writeRetiredStatus(ledgerPath);
-      const [summary] = yield* listRunsAt(ledgerPath);
-      assert.isDefined(summary);
-      assert.strictEqual(summary?.status, "exhausted");
-    }).pipe(Effect.provide(NodeServices.layer)),
-  );
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-broken-" });
+      const storePath = path.join(dir, "control.db");
+      return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
+    }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
+  )((it) => {
+    it.effect("completes a write whose table is gone", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* dropTables(yield* TestStorePath);
+
+        yield* ledger.insertRun(record("broken-1", 1000));
+        yield* ledger.appendEvent(runId("broken-1"), {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 1000,
+        });
+      }),
+    );
+
+    it.effect("degrades a read whose table is gone to empty", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* dropTables(yield* TestStorePath);
+
+        assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+        assert.deepStrictEqual(yield* ledger.runningRuns, []);
+        assert.deepStrictEqual(yield* ledger.events(runId("broken-1")), []);
+        assert.isNull(yield* ledger.getRun(runId("broken-1")));
+        assert.isNull(yield* ledger.getSession(session));
+        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, workItem), 0);
+      }),
+    );
+  });
 });

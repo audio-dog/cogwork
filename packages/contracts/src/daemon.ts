@@ -9,7 +9,7 @@ import {
 import { Claim } from "./coordination";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
 
-export const DaemonHealth = Schema.Literals(["running"]);
+export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
 
 export const PrChecks = Schema.Literals(["passing", "failing", "pending"]);

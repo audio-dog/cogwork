@@ -13,6 +13,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as EventPublisher from "./event-publisher";
@@ -568,7 +569,7 @@ class SchedulerTickCount extends Context.Service<SchedulerTickCount, Ref.Ref<num
       const ticks = yield* SchedulerTickCount;
       return {
         ...schedulerStubService,
-        tick: () => Ref.update(ticks, (count) => count + 1).pipe(Effect.map(() => [])),
+        tick: () => Ref.update(ticks, (count) => count + 1).pipe(Effect.map(() => 0)),
       };
     }),
   ).pipe(Layer.provideMerge(SchedulerTickCount.layer));
@@ -630,6 +631,7 @@ describe("daemon heartbeats", () => {
           workerLayer,
           registeredSample,
           schedulerLayer,
+          Layer.succeed(ControlStore, { health: "available" }),
           worktreeStub,
           DaemonEventBus.layer,
           Layer.succeed(Recovery.Recovery, {
@@ -665,7 +667,13 @@ describe("daemon heartbeats", () => {
       yield* Daemon.bootstrap;
       assert.strictEqual(yield* Ref.get(recoveryCalls), 1);
     }).pipe(
-      Effect.provide(Layer.merge(defectiveWorkerLayer, BootstrapRecoveryCalls.recoveryLayer)),
+      Effect.provide(
+        Layer.mergeAll(
+          defectiveWorkerLayer,
+          BootstrapRecoveryCalls.recoveryLayer,
+          Layer.succeed(ControlStore, { health: "available" }),
+        ),
+      ),
       Effect.scoped,
     ),
   );
@@ -693,6 +701,7 @@ describe("daemon heartbeats", () => {
             defectiveWorkerLayer,
             registeredSample,
             SchedulerTickCount.schedulerLayer,
+            Layer.succeed(ControlStore, { health: "available" }),
             worktreeStub,
             DaemonEventBus.layer,
             Layer.succeed(Recovery.Recovery, {
@@ -753,6 +762,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(schedulerStub),
+      Layer.provideMerge(Layer.succeed(ControlStore, { health: "available" })),
       Layer.provideMerge(runRecorder),
       Layer.provideMerge(runLedger),
       Layer.provideMerge(RunControl.layer),

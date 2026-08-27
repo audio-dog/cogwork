@@ -1,4 +1,3 @@
-import { DatabaseSync } from "node:sqlite";
 import type { RunEvent, RunId, RunRecord, Session, TokenUsage } from "@cogwork/contracts";
 import {
   RunEvent as RunEventSchema,
@@ -9,52 +8,15 @@ import {
   Session as SessionSchema,
   workItemCandidates,
 } from "@cogwork/contracts";
-import { RunLedger } from "@cogwork/engine";
+import { ControlStoreSchema, RunLedger } from "@cogwork/engine";
 import { and, desc, eq, gt, gte, inArray, isNotNull, lt, notInArray, or, type SQL, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-sqlite";
+import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { runEvents, runs, sessions } from "./schema";
 
-const bootstrapSql = `
-CREATE TABLE IF NOT EXISTS runs (
-  id TEXT PRIMARY KEY,
-  workspace TEXT NOT NULL,
-  work_item TEXT NOT NULL,
-  stage TEXT NOT NULL,
-  harness TEXT NOT NULL,
-  branch TEXT,
-  session TEXT,
-  input_tokens INTEGER,
-  output_tokens INTEGER,
-  total_tokens INTEGER,
-  estimated INTEGER,
-  status TEXT NOT NULL,
-  started_at INTEGER NOT NULL,
-  ended_at INTEGER
-);
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  workspace TEXT NOT NULL,
-  harness TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  handle TEXT,
-  created_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS run_events (
-  run_id TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  type TEXT NOT NULL,
-  name TEXT,
-  data TEXT NOT NULL,
-  at INTEGER NOT NULL,
-  PRIMARY KEY (run_id, seq)
-);
-CREATE INDEX IF NOT EXISTS runs_started_at ON runs (started_at DESC);
-`;
+const { runEvents, runs, sessions } = ControlStoreSchema;
 
 const unresumableStatuses = ["interrupted", "crashed", "exhausted"];
 
@@ -176,325 +138,275 @@ const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows
     ),
   ).pipe(Effect.map((chunks) => chunks.flat()));
 
-const addColumnIfMissing = (sqlite: DatabaseSync, ddl: string) => {
-  try {
-    sqlite.exec(ddl);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes("duplicate column")) throw error;
-  }
-};
+const make = Effect.fn("ledger.make")(function* () {
+  const db = yield* SQLiteNodeDrizzle.makeWithDefaults();
 
-const migrateBlockedToExhausted = (sqlite: DatabaseSync) => {
-  sqlite.exec("UPDATE runs SET status = 'exhausted' WHERE status = 'blocked'");
-};
-
-const open = (ledgerPath: string) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    yield* fs.makeDirectory(path.dirname(ledgerPath), { recursive: true });
-    return yield* Effect.acquireRelease(
-      Effect.sync(() => {
-        const sqlite = new DatabaseSync(ledgerPath);
-        sqlite.exec(bootstrapSql);
-        addColumnIfMissing(sqlite, "ALTER TABLE runs ADD COLUMN branch TEXT");
-        addColumnIfMissing(sqlite, "ALTER TABLE runs ADD COLUMN estimated INTEGER");
-        migrateBlockedToExhausted(sqlite);
-        return drizzle({ client: sqlite });
+  // Taken as a thunk: building the query runs Drizzle's compiler, which can throw before any
+  // Effect exists to fail.
+  const swallow = <A, E>(operation: string, query: () => Effect.Effect<A, E>, fallback: () => A) =>
+    Effect.suspend(query).pipe(
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+        return Effect.andThen(
+          Effect.logWarning(`run ledger ${operation} failed`, { cause: Cause.pretty(cause) }),
+          Effect.sync(fallback),
+        );
       }),
-      (db) => Effect.sync(() => db.$client.close()),
     );
-  });
 
-const make = (ledgerPath: string) =>
-  Effect.gen(function* () {
-    const db = yield* open(ledgerPath);
+  const write = <E>(operation: string, query: () => Effect.Effect<unknown, E>) =>
+    Effect.asVoid(swallow(operation, query, () => undefined));
 
-    const warn = (operation: string, cause: unknown) =>
-      Effect.logWarning(`run ledger ${operation} failed`, {
-        cause: cause instanceof Error ? cause.message : String(cause),
-      });
+  const readRows = <A, E>(operation: string, query: () => Effect.Effect<ReadonlyArray<A>, E>) =>
+    swallow(operation, query, () => [] as ReadonlyArray<A>);
 
-    const write = (operation: string, thunk: () => void) =>
-      Effect.try(thunk).pipe(
-        Effect.tapError((cause) => warn(operation, cause)),
-        Effect.ignore,
-      );
-
-    const readRows = <A>(operation: string, thunk: () => ReadonlyArray<A>) =>
-      Effect.try(thunk).pipe(
-        Effect.tapError((cause) => warn(operation, cause)),
-        Effect.orElseSucceed(() => [] as ReadonlyArray<A>),
-      );
-
-    const writeIds = (operation: string, thunk: () => ReadonlyArray<{ readonly id: string }>) =>
-      readRows(operation, thunk).pipe(
-        Effect.flatMap((rows) =>
-          decodeAll(
-            decodeRunId,
-            rows.map((row) => row.id),
-          ),
+  const writeIds = <E>(
+    operation: string,
+    query: () => Effect.Effect<ReadonlyArray<{ readonly id: string }>, E>,
+  ) =>
+    readRows(operation, query).pipe(
+      Effect.flatMap((rows) =>
+        decodeAll(
+          decodeRunId,
+          rows.map((row) => row.id),
         ),
-      );
+      ),
+    );
 
-    const readRun = (operation: string, thunk: () => Parameters<typeof runRecordFromRow>[0] | undefined) =>
-      Effect.try(thunk).pipe(
-        Effect.tapError((cause) => warn(operation, cause)),
-        Effect.orElseSucceed(() => undefined),
+  const readRun = <E>(
+    operation: string,
+    query: () => Effect.Effect<Parameters<typeof runRecordFromRow>[0] | undefined, E>,
+  ) =>
+    swallow(operation, query, () => undefined).pipe(
+      Effect.flatMap((row) =>
+        row ? decodeRun(runRecordFromRow(row)).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null),
+      ),
+    );
+
+  const latestRunWhere = (operation: string, where: SQL | undefined) =>
+    readRun(operation, () =>
+      db
+        .select(runRecordSelection)
+        .from(runs)
+        .where(where)
+        .orderBy(...newestRunFirst)
+        .limit(1)
+        .get(),
+    );
+
+  const service: RunLedger.RunLedgerService = {
+    insertRun: (record: RunRecord) => {
+      const values = {
+        id: record.id,
+        workspace: record.workspace,
+        workItem: record.workItem,
+        stage: record.stage,
+        harness: record.harness,
+        branch: record.branch,
+        session: record.session,
+        startedAt: record.startedAtMillis,
+        ...runColumns(record),
+      };
+      return write("insertRun", () =>
+        db.insert(runs).values(values).onConflictDoUpdate({ target: runs.id, set: values }).run(),
+      );
+    },
+
+    updateRun: (runId: RunId, patch: RunLedger.RunUpdate) =>
+      write("updateRun", () => db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run()),
+
+    setRunSession: (runId: RunId, session: SessionId) =>
+      write("setRunSession", () => db.update(runs).set({ session }).where(eq(runs.id, runId)).run()),
+
+    interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
+      writeIds("interruptRunning", () =>
+        db
+          .update(runs)
+          .set({ status: "interrupted", endedAt: endedAtMillis })
+          .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
+          .returning({ id: runs.id })
+          .all(),
+      ),
+
+    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
+      writeIds("interruptRunningBefore", () =>
+        db
+          .update(runs)
+          .set({ status: "interrupted", endedAt: endedAtMillis })
+          .where(and(eq(runs.status, "running"), lt(runs.startedAt, beforeMillis)))
+          .returning({ id: runs.id })
+          .all(),
+      ),
+
+    insertSession: (session: Session) =>
+      write("insertSession", () =>
+        db.insert(sessions).values(sessionValues(session)).onConflictDoNothing().run(),
+      ),
+
+    getSession: (id) =>
+      swallow(
+        "getSession",
+        () => db.select().from(sessions).where(eq(sessions.id, id)).get(),
+        () => undefined,
+      ).pipe(
         Effect.flatMap((row) =>
           row
-            ? decodeRun(runRecordFromRow(row)).pipe(Effect.orElseSucceed(() => null))
+            ? decodeSession(sessionFromRow(row)).pipe(Effect.orElseSucceed(() => null))
             : Effect.succeed(null),
         ),
-      );
+      ),
 
-    const latestRunWhere = (operation: string, where: SQL | undefined) =>
-      readRun(operation, () =>
+    recordSessionHandle: (id, handle: string) =>
+      write("recordSessionHandle", () =>
+        db.update(sessions).set({ handle }).where(eq(sessions.id, id)).run(),
+      ),
+
+    sessionForBranch: (workspace: string, branch: string) =>
+      readRows("sessionForBranch", () =>
+        db
+          .select({ session: runs.session })
+          .from(runs)
+          .where(and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)))
+          .orderBy(desc(runs.startedAt), desc(sql<number>`"runs".rowid`))
+          .limit(1)
+          .all(),
+      ).pipe(
+        Effect.flatMap((rows) => {
+          const raw = rows[0]?.session;
+          return raw ? decodeSessionId(raw).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null);
+        }),
+      ),
+
+    sessionEvents: (session) =>
+      readRows("sessionEvents", () =>
+        db
+          .select({
+            seq: runEvents.seq,
+            type: runEvents.type,
+            name: runEvents.name,
+            data: runEvents.data,
+            at: runEvents.at,
+          })
+          .from(runEvents)
+          .innerJoin(runs, eq(runs.id, runEvents.runId))
+          .where(eq(runs.session, session))
+          .orderBy(runs.startedAt, runEvents.seq)
+          .all(),
+      ).pipe(
+        Effect.flatMap((rows) =>
+          decodeAll(
+            decodeEvent,
+            rows.map((row) => ({
+              seq: row.seq,
+              type: row.type,
+              name: row.name,
+              data: row.data,
+              atMillis: row.at,
+            })),
+          ),
+        ),
+      ),
+
+    closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+      writeIds("closeRunning", () =>
+        db
+          .update(runs)
+          .set({ status: "failed", endedAt: endedAtMillis })
+          .where(and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")))
+          .returning({ id: runs.id })
+          .all(),
+      ),
+
+    crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+      writeIds("crashRunning", () =>
+        db
+          .update(runs)
+          .set({ status: "crashed", endedAt: endedAtMillis })
+          .where(and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")))
+          .returning({ id: runs.id })
+          .all(),
+      ),
+
+    consecutiveCrashes: (workspace: string, workItem: string) =>
+      readRows("consecutiveCrashes", () =>
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(runs)
+          .where(
+            and(
+              eq(runs.workspace, workspace),
+              eq(runs.workItem, workItem),
+              eq(runs.status, "crashed"),
+              gt(
+                runs.startedAt,
+                sql<number>`coalesce((select max(${runs.startedAt}) from ${runs} where ${runs.workspace} = ${workspace} and ${runs.workItem} = ${workItem} and ${runs.status} <> 'crashed'), -1)`,
+              ),
+            ),
+          )
+          .all(),
+      ).pipe(Effect.map((rows) => Number(rows[0]?.count ?? 0))),
+
+    appendEvent: (runId: RunId, event: RunEvent) => {
+      const values = {
+        runId,
+        seq: event.seq,
+        type: event.type,
+        name: event.name,
+        data: event.data,
+        at: event.atMillis,
+      };
+      return write("appendEvent", () =>
+        db
+          .insert(runEvents)
+          .values(values)
+          .onConflictDoUpdate({ target: [runEvents.runId, runEvents.seq], set: values })
+          .run(),
+      );
+    },
+
+    latestRunByBranch: (workspace: string, branch: string) =>
+      readRun("latestRunByBranch", () =>
         db
           .select(runRecordSelection)
           .from(runs)
-          .where(where)
-          .orderBy(...newestRunFirst)
+          .innerJoin(sessions, eq(sessions.id, runs.session))
+          .where(
+            and(
+              eq(runs.workspace, workspace),
+              eq(runs.branch, branch),
+              notInArray(runs.status, unresumableStatuses),
+              or(eq(sessions.kind, "owned-transcript"), isNotNull(sessions.handle)),
+            ),
+          )
+          .orderBy(desc(runs.startedAt), desc(sql<number>`"runs".rowid`))
           .limit(1)
           .get(),
-      );
+      ),
 
-    const service: RunLedger.RunLedgerService = {
-      insertRun: (record: RunRecord) =>
-        write("insertRun", () => {
-          const values = {
-            id: record.id,
-            workspace: record.workspace,
-            workItem: record.workItem,
-            stage: record.stage,
-            harness: record.harness,
-            branch: record.branch,
-            session: record.session,
-            startedAt: record.startedAtMillis,
-            ...runColumns(record),
-          };
-          db.insert(runs).values(values).onConflictDoUpdate({ target: runs.id, set: values }).run();
-        }),
+    latestRunForItem: (workspace: string, workItem: string) =>
+      latestRunWhere("latestRunForItem", and(eq(runs.workspace, workspace), eq(runs.workItem, workItem))),
 
-      updateRun: (runId: RunId, patch: RunLedger.RunUpdate) =>
-        write("updateRun", () => {
-          db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).run();
-        }),
+    resolveWatchTarget: (workItem: string) =>
+      readRun("resolveWatchTarget", () =>
+        db
+          .select(runRecordSelection)
+          .from(runs)
+          .where(inArray(runs.workItem, [...workItemCandidates(workItem)]))
+          .orderBy(desc(sql<boolean>`${runs.status} = 'running'`), desc(runs.startedAt))
+          .limit(1)
+          .get(),
+      ),
 
-      setRunSession: (runId: RunId, session: SessionId) =>
-        write("setRunSession", () => {
-          db.update(runs).set({ session }).where(eq(runs.id, runId)).run();
-        }),
-
-      interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
-        writeIds("interruptRunning", () =>
-          db
-            .update(runs)
-            .set({ status: "interrupted", endedAt: endedAtMillis })
-            .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
-            .returning({ id: runs.id })
-            .all(),
-        ),
-
-      interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
-        writeIds("interruptRunningBefore", () =>
-          db
-            .update(runs)
-            .set({ status: "interrupted", endedAt: endedAtMillis })
-            .where(and(eq(runs.status, "running"), lt(runs.startedAt, beforeMillis)))
-            .returning({ id: runs.id })
-            .all(),
-        ),
-
-      insertSession: (session: Session) =>
-        write("insertSession", () => {
-          db.insert(sessions).values(sessionValues(session)).onConflictDoNothing().run();
-        }),
-
-      getSession: (id) =>
-        Effect.try(() => db.select().from(sessions).where(eq(sessions.id, id)).get()).pipe(
-          Effect.tapError((cause) => warn("getSession", cause)),
-          Effect.orElseSucceed(() => undefined),
-          Effect.flatMap((row) =>
-            row
-              ? decodeSession(sessionFromRow(row)).pipe(Effect.orElseSucceed(() => null))
-              : Effect.succeed(null),
-          ),
-        ),
-
-      recordSessionHandle: (id, handle: string) =>
-        write("recordSessionHandle", () => {
-          db.update(sessions).set({ handle }).where(eq(sessions.id, id)).run();
-        }),
-
-      sessionForBranch: (workspace: string, branch: string) =>
-        readRows("sessionForBranch", () =>
-          db
-            .select({ session: runs.session })
-            .from(runs)
-            .where(and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)))
-            .orderBy(desc(runs.startedAt), desc(sql<number>`"runs".rowid`))
-            .limit(1)
-            .all(),
-        ).pipe(
-          Effect.flatMap((rows) => {
-            const raw = rows[0]?.session;
-            return raw ? decodeSessionId(raw).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null);
-          }),
-        ),
-
-      sessionEvents: (session) =>
-        readRows("sessionEvents", () =>
-          db
-            .select({
-              seq: runEvents.seq,
-              type: runEvents.type,
-              name: runEvents.name,
-              data: runEvents.data,
-              at: runEvents.at,
-            })
-            .from(runEvents)
-            .innerJoin(runs, eq(runs.id, runEvents.runId))
-            .where(eq(runs.session, session))
-            .orderBy(runs.startedAt, runEvents.seq)
-            .all(),
-        ).pipe(
-          Effect.flatMap((rows) =>
-            decodeAll(
-              decodeEvent,
-              rows.map((row) => ({
-                seq: row.seq,
-                type: row.type,
-                name: row.name,
-                data: row.data,
-                atMillis: row.at,
-              })),
-            ),
-          ),
-        ),
-
-      closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
-        writeIds("closeRunning", () =>
-          db
-            .update(runs)
-            .set({ status: "failed", endedAt: endedAtMillis })
-            .where(
-              and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")),
-            )
-            .returning({ id: runs.id })
-            .all(),
-        ),
-
-      crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
-        writeIds("crashRunning", () =>
-          db
-            .update(runs)
-            .set({ status: "crashed", endedAt: endedAtMillis })
-            .where(
-              and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")),
-            )
-            .returning({ id: runs.id })
-            .all(),
-        ),
-
-      consecutiveCrashes: (workspace: string, workItem: string) =>
-        readRows("consecutiveCrashes", () =>
-          db
-            .select({ count: sql<number>`count(*)` })
-            .from(runs)
-            .where(
-              and(
-                eq(runs.workspace, workspace),
-                eq(runs.workItem, workItem),
-                eq(runs.status, "crashed"),
-                gt(
-                  runs.startedAt,
-                  sql<number>`coalesce((select max(${runs.startedAt}) from ${runs} where ${runs.workspace} = ${workspace} and ${runs.workItem} = ${workItem} and ${runs.status} <> 'crashed'), -1)`,
-                ),
-              ),
-            )
-            .all(),
-        ).pipe(Effect.map((rows) => Number(rows[0]?.count ?? 0))),
-
-      appendEvent: (runId: RunId, event: RunEvent) =>
-        write("appendEvent", () => {
-          const values = {
-            runId,
-            seq: event.seq,
-            type: event.type,
-            name: event.name,
-            data: event.data,
-            at: event.atMillis,
-          };
-          db.insert(runEvents)
-            .values(values)
-            .onConflictDoUpdate({ target: [runEvents.runId, runEvents.seq], set: values })
-            .run();
-        }),
-
-      latestRunByBranch: (workspace: string, branch: string) =>
-        readRun("latestRunByBranch", () =>
-          db
-            .select(runRecordSelection)
-            .from(runs)
-            .innerJoin(sessions, eq(sessions.id, runs.session))
-            .where(
-              and(
-                eq(runs.workspace, workspace),
-                eq(runs.branch, branch),
-                notInArray(runs.status, unresumableStatuses),
-                or(eq(sessions.kind, "owned-transcript"), isNotNull(sessions.handle)),
-              ),
-            )
-            .orderBy(desc(runs.startedAt), desc(sql<number>`"runs".rowid`))
-            .limit(1)
-            .get(),
-        ),
-
-      latestRunForItem: (workspace: string, workItem: string) =>
-        latestRunWhere("latestRunForItem", and(eq(runs.workspace, workspace), eq(runs.workItem, workItem))),
-
-      resolveWatchTarget: (workItem: string) =>
-        readRun("resolveWatchTarget", () =>
-          db
-            .select(runRecordSelection)
-            .from(runs)
-            .where(inArray(runs.workItem, [...workItemCandidates(workItem)]))
-            .orderBy(desc(sql<boolean>`${runs.status} = 'running'`), desc(runs.startedAt))
-            .limit(1)
-            .get(),
-        ),
-
-      listRuns: (limit: number) =>
-        readRows("listRuns", () =>
-          db
-            .select({
-              ...runRecordSelection,
-              eventCount: sql<number>`(select count(*) from ${runEvents} where ${runEvents.runId} = ${runs.id})`,
-            })
-            .from(runs)
-            .orderBy(desc(runs.startedAt))
-            .limit(limit)
-            .all(),
-        ).pipe(
-          Effect.flatMap((rows) =>
-            decodeAll(
-              decodeSummary,
-              rows.map((row) => ({ ...runRecordFromRow(row), eventCount: Number(row.eventCount) })),
-            ),
-          ),
-        ),
-
-      runningRuns: readRows("runningRuns", () =>
+    listRuns: (limit: number) =>
+      readRows("listRuns", () =>
         db
           .select({
             ...runRecordSelection,
             eventCount: sql<number>`(select count(*) from ${runEvents} where ${runEvents.runId} = ${runs.id})`,
           })
           .from(runs)
-          .where(eq(runs.status, "running"))
           .orderBy(desc(runs.startedAt))
+          .limit(limit)
           .all(),
       ).pipe(
         Effect.flatMap((rows) =>
@@ -505,40 +417,59 @@ const make = (ledgerPath: string) =>
         ),
       ),
 
-      getRun: (runId: RunId) =>
-        readRun("getRun", () => db.select(runRecordSelection).from(runs).where(eq(runs.id, runId)).get()),
+    runningRuns: readRows("runningRuns", () =>
+      db
+        .select({
+          ...runRecordSelection,
+          eventCount: sql<number>`(select count(*) from ${runEvents} where ${runEvents.runId} = ${runs.id})`,
+        })
+        .from(runs)
+        .where(eq(runs.status, "running"))
+        .orderBy(desc(runs.startedAt))
+        .all(),
+    ).pipe(
+      Effect.flatMap((rows) =>
+        decodeAll(
+          decodeSummary,
+          rows.map((row) => ({ ...runRecordFromRow(row), eventCount: Number(row.eventCount) })),
+        ),
+      ),
+    ),
 
-      events: (runId: RunId) =>
-        readRows("events", () =>
-          db
-            .select({
-              seq: runEvents.seq,
-              type: runEvents.type,
-              name: runEvents.name,
-              data: runEvents.data,
-              at: runEvents.at,
-            })
-            .from(runEvents)
-            .where(eq(runEvents.runId, runId))
-            .orderBy(runEvents.seq)
-            .all(),
-        ).pipe(
-          Effect.flatMap((rows) =>
-            decodeAll(
-              decodeEvent,
-              rows.map((row) => ({
-                seq: row.seq,
-                type: row.type,
-                name: row.name,
-                data: row.data,
-                atMillis: row.at,
-              })),
-            ),
+    getRun: (runId: RunId) =>
+      readRun("getRun", () => db.select(runRecordSelection).from(runs).where(eq(runs.id, runId)).get()),
+
+    events: (runId: RunId) =>
+      readRows("events", () =>
+        db
+          .select({
+            seq: runEvents.seq,
+            type: runEvents.type,
+            name: runEvents.name,
+            data: runEvents.data,
+            at: runEvents.at,
+          })
+          .from(runEvents)
+          .where(eq(runEvents.runId, runId))
+          .orderBy(runEvents.seq)
+          .all(),
+      ).pipe(
+        Effect.flatMap((rows) =>
+          decodeAll(
+            decodeEvent,
+            rows.map((row) => ({
+              seq: row.seq,
+              type: row.type,
+              name: row.name,
+              data: row.data,
+              atMillis: row.at,
+            })),
           ),
         ),
-    };
+      ),
+  };
 
-    return service;
-  });
+  return service;
+});
 
-export const layer = (ledgerPath: string) => Layer.effect(RunLedger.CoreRunLedger, make(ledgerPath));
+export const layer = Layer.effect(RunLedger.CoreRunLedger, make());
