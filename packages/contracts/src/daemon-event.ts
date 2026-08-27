@@ -27,6 +27,7 @@ export type ClassifiedItem = typeof ClassifiedItem.Type;
 export const WorkspaceState = Schema.TaggedUnion({
   Registered: {
     name: WorkspaceId,
+    displayName: Schema.optional(TrimmedNonEmptyString),
     checkoutPath: TrimmedNonEmptyString,
     issueTracker: IssueTrackerType,
     harness: HarnessName,
