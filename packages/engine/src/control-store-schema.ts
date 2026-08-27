@@ -46,7 +46,7 @@ export const runEvents = sqliteTable(
 export const workspaces = sqliteTable("workspaces", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  checkoutPath: text("checkout_path").notNull(),
+  checkoutPath: text("checkout_path").notNull().unique(),
   gitRemote: text("git_remote"),
   issueTracker: text("issue_tracker").notNull(),
   sourceControl: text("source_control"),
