@@ -301,6 +301,15 @@ const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
 
 const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
+const transientAttemptDeadline = "30 seconds";
+
+const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, IssueTrackerError, R>) =>
+  attempt.pipe(
+    Effect.timeout(transientAttemptDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(unavailable(`GitHub request timed out after ${transientAttemptDeadline}`)),
+    ),
+  );
 
 interface EtagEntry {
   readonly etag: string;
@@ -382,7 +391,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     const cached = (yield* Ref.get(etags)).get(path);
     const base = HttpClientRequest.get(path);
     const request = cached ? HttpClientRequest.setHeader(base, "if-none-match", cached.etag) : base;
-    const response = yield* Effect.retry(send(repo, request), {
+    const response = yield* Effect.retry(withTransientAttemptDeadline(send(repo, request)), {
       while: isTransient,
       schedule: transientBackoff,
       times: 3,
@@ -441,7 +450,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       HttpClientRequest.bodyJson(request, { query, variables }),
       toUnavailable,
     );
-    const response = yield* Effect.retry(send(repo, withBody), {
+    const response = yield* Effect.retry(withTransientAttemptDeadline(send(repo, withBody)), {
       while: isTransient,
       schedule: transientBackoff,
       times: 3,

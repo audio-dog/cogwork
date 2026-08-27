@@ -168,6 +168,15 @@ const defaultCooldownMillis = 60_000;
 
 const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
+const transientAttemptDeadline = "30 seconds";
+
+const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, IssueTrackerError, R>) =>
+  attempt.pipe(
+    Effect.timeout(transientAttemptDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(unavailable(`Linear request timed out after ${transientAttemptDeadline}`)),
+    ),
+  );
 
 const teamIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -405,7 +414,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     variables: Record<string, unknown>,
   ) {
     const response = yield* Effect.retry(
-      call(ref, (sdk) => sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables)),
+      withTransientAttemptDeadline(
+        call(ref, (sdk) => sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables)),
+      ),
       { while: isTransient, schedule: transientBackoff, times: 3 },
     );
     if (response.data === undefined) {
