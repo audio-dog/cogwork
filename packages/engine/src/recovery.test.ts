@@ -188,7 +188,8 @@ const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
 
 const schedulerStub = (admitted: Ref.Ref<ReadonlyArray<EligibleWork>>, paused?: Ref.Ref<boolean>) =>
   Layer.succeed(Scheduler.Scheduler, {
-    tick: () => Effect.succeed([]),
+    tick: () => Effect.succeed(0),
+    awaitIdle: Effect.void,
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: (_workspace, work) => Ref.update(admitted, (xs) => [...xs, work]),
     setScheduling: () => Effect.succeed(Scheduler.initialState),

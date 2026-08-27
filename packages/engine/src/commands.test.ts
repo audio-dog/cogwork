@@ -62,7 +62,8 @@ const schedulerStub = () =>
       const configRef = yield* Ref.make(stubConfig);
       const stateRef = yield* Ref.make(Scheduler.initialState);
       return {
-        tick: () => Effect.succeed([]),
+        tick: () => Effect.succeed(0),
+        awaitIdle: Effect.void,
         drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
         admit: () => Effect.void,
         setScheduling: (desired) =>
