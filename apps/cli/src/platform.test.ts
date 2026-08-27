@@ -67,6 +67,19 @@ describe("subprocess deadlines", () => {
         assert.strictEqual(error._tag, "GitError");
         assert.strictEqual(error.command, "git fetch --prune origin");
         assert.strictEqual(error.message, "git fetch --prune origin timed out after 5 minutes");
+        assert.strictEqual(error.reason, "timeout");
+      }),
+    );
+
+    it.effect("does not treat a remote check timeout as a missing branch", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const fiber = yield* Effect.forkChild(Effect.flip(git.remoteBranchExists("/repo", "origin", "main")));
+
+        yield* TestClock.adjust("5 minutes");
+        const error = yield* Fiber.join(fiber);
+
+        assert.strictEqual(error.reason, "timeout");
       }),
     );
   });

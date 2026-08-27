@@ -67,7 +67,15 @@ export const gitLayer = Layer.effect(
       return capture(ChildProcess.make("git", [...args], { cwd })).pipe(
         Effect.mapError((cause) => fail(describe(cause))),
         Effect.timeout(gitCommandDeadline),
-        Effect.catchTag("TimeoutError", () => fail(timeoutMessage(command, gitCommandDeadline))),
+        Effect.catchTag(
+          "TimeoutError",
+          () =>
+            new Git.GitError({
+              command,
+              message: timeoutMessage(command, gitCommandDeadline),
+              reason: "timeout",
+            }),
+        ),
         Effect.flatMap((result) =>
           result.exitCode === 0
             ? Effect.succeed(result.stdout)
@@ -81,7 +89,10 @@ export const gitLayer = Layer.effect(
       remoteBranchExists: (repoPath, remote, branch) =>
         runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
           Effect.map(() => true),
-          Effect.catchTag("GitError", () => Effect.succeed(false)),
+          Effect.catchIf(
+            (error) => error.reason !== "timeout",
+            () => Effect.succeed(false),
+          ),
         ),
       addWorktree: ({ repoPath, worktreePath, branch, startPoint }) =>
         runGit(repoPath, ["worktree", "add", "-B", branch, worktreePath, startPoint]).pipe(Effect.asVoid),
