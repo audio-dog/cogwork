@@ -26,6 +26,7 @@ import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import { operationPolicyProfile } from "./operation-policy";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
@@ -35,6 +36,7 @@ import {
   resolveStage,
 } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
+import { defaultRunBudget } from "./provider-runner";
 import { decideResume } from "./resume-policy";
 import { RunControl } from "./run-control";
 import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
@@ -178,6 +180,7 @@ export const make = Effect.gen(function* () {
     return {
       harness: resolved.harness,
       stage,
+      profile: operationPolicyProfile(stage),
       skill: resolved.skill,
       checkoutPath,
       session,
@@ -292,16 +295,35 @@ export const make = Effect.gen(function* () {
   });
 
   const foldStream = <A, E, R>(
+    record: RunRecord,
     request: HarnessRequest,
     initial: A,
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
-  ) => Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step);
+  ) => {
+    const budget = defaultRunBudget(request.stage);
+    return Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
+      Effect.timeout(budget),
+      Effect.catchTag("TimeoutError", () =>
+        recorder.record(record, failedTerminal).pipe(
+          Effect.andThen(
+            Effect.fail(
+              new HarnessError({
+                reason: "turn",
+                retryable: true,
+                message: `${request.stage} harness run timed out after ${budget}`,
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
 
   const foldRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event));
+    foldStream(record, request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event));
 
   const foldTriageRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
+    foldStream(record, request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
 
   const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
@@ -322,12 +344,12 @@ export const make = Effect.gen(function* () {
     );
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(request, emptyAccumulator, (acc, event) =>
+    foldStream(record, request, emptyAccumulator, (acc, event) =>
       foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(request, emptyTriageAccumulator, (acc, event) =>
+    foldStream(record, request, emptyTriageAccumulator, (acc, event) =>
       foldTriageEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
@@ -743,6 +765,12 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
+  const resolveStageOps = (workspace: RegisteredWorkspace, item: EligibleWork) => {
+    const resolved = resolveStage(workspace.config, item.stage);
+    if (!resolved?.enabled) return null;
+    return opsFor(workspace, item, resolved);
+  };
+
   const freshRecoveryOps = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
     const fresh = stageOps(workspace, item, ops.resolved);
     if (!item.resume) return fresh;
@@ -839,36 +867,37 @@ export const make = Effect.gen(function* () {
             ),
           ),
       }),
-      Effect.ensuring(runControl.unregister(runId)),
     );
   });
 
   const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
+    ops: StageOps,
     startedAtMillis: number,
   ) {
     if (item.stage === "follow-up" && item.followUp?.stalled) {
       return yield* handoffStalled(workspace, item);
     }
-    yield* runClaimed(workspace, item, opsFor(workspace, item, resolved), startedAtMillis);
+    yield* runClaimed(workspace, item, ops, startedAtMillis);
   });
 
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    const resolved = resolveStage(workspace.config, item.stage);
-    if (!resolved?.enabled) {
-      return false;
-    }
+    const stageOps = resolveStageOps(workspace, item);
+    if (!stageOps) return false;
+    const runnable = yield* harness
+      .preflight(stageOps.resolved.harness, operationPolicyProfile(item.stage))
+      .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
+    if (!runnable) return false;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {
       return false;
     }
-    yield* runOrHandoff(workspace, item, resolved, startedAtMillis).pipe(
+    yield* runOrHandoff(workspace, item, stageOps, startedAtMillis).pipe(
       Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
     );
     return true;

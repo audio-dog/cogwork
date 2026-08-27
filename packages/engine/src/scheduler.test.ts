@@ -6,9 +6,10 @@ import {
   type RunRecord,
   WorkItemId,
   WorkspaceConfig,
+  type WorkspaceId,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import * as Deferred from "effect/Deferred";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
@@ -29,8 +30,6 @@ import * as Scheduler from "./scheduler";
 const id = Schema.decodeSync(WorkItemId);
 
 const never = Latch.makeUnsafe(false).await;
-
-type ExecuteFn = (workspace: RegisteredWorkspace, work: EligibleWork) => Effect.Effect<boolean>;
 
 const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace => ({
   source: `${name}.workspace.ts`,
@@ -285,41 +284,120 @@ const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileS
   })),
 });
 
-const snapshotRef = (entries: ReadonlyArray<SnapshotEntry>) => Ref.make(snapshotOf(entries));
+interface SchedulerProbeState {
+  readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
+  readonly executions: Ref.Ref<ReadonlyArray<string>>;
+  readonly gate: Latch.Latch;
+}
 
-const republish = (snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
-  Ref.update(snapshots, (snapshot) => ({ ...snapshot, generation: snapshot.generation + 1 }));
+class SchedulerProbe extends Context.Service<SchedulerProbe, SchedulerProbeState>()(
+  "@cogwork/engine/scheduler.test/SchedulerProbe",
+) {}
 
-const workerLayer = (snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
-  Layer.succeed(Reconcile.ReconcileWorker, {
+const probeLayer = (entries: ReadonlyArray<SnapshotEntry>) =>
+  Layer.effect(
+    SchedulerProbe,
+    Effect.gen(function* () {
+      return {
+        snapshots: yield* Ref.make(snapshotOf(entries)),
+        executions: yield* Ref.make<ReadonlyArray<string>>([]),
+        gate: yield* Latch.make(),
+      };
+    }),
+  );
+
+const republish = (probe: SchedulerProbeState) =>
+  Ref.update(probe.snapshots, (snapshot) => ({ ...snapshot, generation: snapshot.generation + 1 }));
+
+const workerLayer = Layer.effect(
+  Reconcile.ReconcileWorker,
+  Effect.map(SchedulerProbe, (probe) => ({
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
-    snapshot: Ref.get(snapshots),
-  });
+    snapshot: Ref.get(probe.snapshots),
+  })),
+);
 
 const registryLayer = (workspaces: ReadonlyArray<RegisteredWorkspace>) =>
   Layer.succeed(Registry.WorkspaceRegistry, { workspaces, failures: [] });
+
+type ExecuteStub = (
+  probe: SchedulerProbeState,
+  ledger: RunLedger.RunLedgerService,
+  workspace: RegisteredWorkspace,
+  work: EligibleWork,
+) => Effect.Effect<boolean>;
+
+const executorStubLayer = (execute: ExecuteStub) =>
+  Layer.effect(
+    Executor.Executor,
+    Effect.gen(function* () {
+      const probe = yield* SchedulerProbe;
+      const ledger = yield* RunLedger.RunLedger;
+      return {
+        execute: (workspace, item) => execute(probe, ledger, workspace, item),
+      };
+    }),
+  );
+
+const recordExecution = (probe: SchedulerProbeState, workspace: RegisteredWorkspace, item: EligibleWork) =>
+  Ref.update(probe.executions, (executions) => [...executions, `${workspace.config.name}:${item.id}`]);
+
+const succeed = (
+  probe: SchedulerProbeState,
+  _ledger: RunLedger.RunLedgerService,
+  workspace: RegisteredWorkspace,
+  item: EligibleWork,
+) => recordExecution(probe, workspace, item).pipe(Effect.map(() => true));
+
+const waitForGate = (
+  probe: SchedulerProbeState,
+  _ledger: RunLedger.RunLedgerService,
+  workspace: RegisteredWorkspace,
+  item: EligibleWork,
+) =>
+  recordExecution(probe, workspace, item).pipe(
+    Effect.andThen(probe.gate.await),
+    Effect.map(() => true),
+  );
+
+const crashIn =
+  (workspaceName: WorkspaceId) =>
+  (
+    probe: SchedulerProbeState,
+    _ledger: RunLedger.RunLedgerService,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) =>
+    recordExecution(probe, workspace, item).pipe(
+      Effect.andThen(workspace.config.name === workspaceName ? Effect.die(new Error("boom")) : Effect.void),
+      Effect.map(() => true),
+    );
 
 const schedulerLayer = (
   config: Scheduler.SchedulerConfig,
   deps: {
     readonly registry: ReadonlyArray<RegisteredWorkspace>;
-    readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
-    readonly execute: ExecuteFn;
-    readonly ledger?: RunLedger.RunLedgerService;
+    readonly snapshots: ReadonlyArray<SnapshotEntry>;
+    readonly execute: ExecuteStub;
   },
 ) => {
   const bus = DaemonEventBus.layer;
-  const core = deps.ledger ? Layer.succeed(RunLedger.CoreRunLedger, deps.ledger) : RunLedger.layerMemoryCore;
-  const runLedger = RunLedger.publishingLayer.pipe(Layer.provide(core), Layer.provide(bus));
+  const runLedger = RunLedger.publishingLayer.pipe(
+    Layer.provide(RunLedger.layerMemoryCore),
+    Layer.provide(bus),
+  );
+  const probe = probeLayer(deps.snapshots);
+  const executor = executorStubLayer(deps.execute).pipe(Layer.provide(Layer.merge(probe, runLedger)));
   return Scheduler.layer(config).pipe(
     Layer.provide(
       Layer.mergeAll(
         registryLayer(deps.registry),
-        workerLayer(deps.snapshots),
-        Layer.succeed(Executor.Executor, { execute: deps.execute }),
+        workerLayer.pipe(Layer.provide(probe)),
+        executor,
         runLedger,
       ),
     ),
+    Layer.provideMerge(probe),
     Layer.provideMerge(runLedger),
     Layer.provideMerge(bus),
   );
@@ -331,172 +409,137 @@ describe("Scheduler.tick", () => {
 
   it.effect("enforces global and per-workspace caps across two workspaces", () =>
     Effect.gen(function* () {
-      const gate = yield* Deferred.make<void>();
-      const started = yield* Ref.make<ReadonlyArray<string>>([]);
-      const execute: ExecuteFn = (workspace, item) =>
-        Ref.update(started, (xs) => [...xs, `${workspace.config.name}:${item.id}`]).pipe(
-          Effect.andThen(Deferred.await(gate)),
-          Effect.map(() => true),
-        );
-      const snapshots = yield* snapshotRef([
-        { workspace: wsA, eligible: [work(1), work(2), work(3)] },
-        { workspace: wsB, eligible: [work(4), work(5), work(6)] },
-      ]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
 
-        const first = yield* scheduler.tick();
-        assert.strictEqual(first.length, 3);
-        const afterFirst = yield* scheduler.stats;
-        assert.strictEqual(afterFirst.global, 3);
-        assert.strictEqual(afterFirst.perWorkspace.get(wsA.config.name), 2);
+      assert.strictEqual(yield* scheduler.tick(), 3);
+      const afterFirst = yield* scheduler.stats;
+      assert.strictEqual(afterFirst.global, 3);
+      assert.strictEqual(afterFirst.perWorkspace.get(wsA.config.name), 2);
+      assert.strictEqual(yield* scheduler.tick(), 0);
 
-        const second = yield* scheduler.tick();
-        assert.strictEqual(second.length, 0);
-
-        yield* Deferred.succeed(gate, undefined);
-        yield* Fiber.awaitAll(first);
-        const drained = yield* scheduler.stats;
-        assert.strictEqual(drained.global, 0);
-      }).pipe(
-        Effect.provide(
-          schedulerLayer(
-            { globalLimit: 3, perWorkspaceLimit: 3, dailyBudget: 100 },
-            { registry: [wsA, wsB], snapshots, execute },
-          ),
+      yield* probe.gate.open;
+      yield* scheduler.awaitIdle;
+      assert.strictEqual((yield* scheduler.stats).global, 0);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 3, perWorkspaceLimit: 3, dailyBudget: 100 },
+          {
+            registry: [wsA, wsB],
+            snapshots: [
+              { workspace: wsA, eligible: [work(1), work(2), work(3)] },
+              { workspace: wsB, eligible: [work(4), work(5), work(6)] },
+            ],
+            execute: waitForGate,
+          },
         ),
-      );
-    }),
+      ),
+    ),
   );
 
   it.effect("isolates a crashing workspace from the others", () =>
     Effect.gen(function* () {
-      const started = yield* Ref.make<ReadonlyArray<string>>([]);
-      const execute: ExecuteFn = (workspace, item) =>
-        Ref.update(started, (xs) => [...xs, `${workspace.config.name}:${item.id}`]).pipe(
-          Effect.andThen(
-            workspace.config.name === wsA.config.name ? Effect.die(new Error("boom")) : Effect.succeed(true),
-          ),
-        );
-      const snapshots = yield* snapshotRef([
-        { workspace: wsA, eligible: [work(1)] },
-        { workspace: wsB, eligible: [work(2)] },
-      ]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        const dispatched = yield* scheduler.tick();
-        yield* Fiber.awaitAll(dispatched);
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+      assert.strictEqual(yield* scheduler.tick(), 2);
+      yield* scheduler.awaitIdle;
 
-        const ran = yield* Ref.get(started);
-        assert.isTrue(ran.includes(`${wsB.config.name}:${id("#2")}`));
-        const drained = yield* scheduler.stats;
-        assert.strictEqual(drained.global, 0);
+      const ran = yield* Ref.get(probe.executions);
+      assert.isTrue(ran.includes(`${wsB.config.name}:${id("#2")}`));
+      assert.strictEqual((yield* scheduler.stats).global, 0);
 
-        yield* republish(snapshots);
-        const again = yield* scheduler.tick();
-        assert.strictEqual(again.length, 2);
-      }).pipe(
-        Effect.provide(
-          schedulerLayer(
-            { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 100 },
-            { registry: [wsA, wsB], snapshots, execute },
-          ),
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 2);
+      yield* scheduler.awaitIdle;
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 100 },
+          {
+            registry: [wsA, wsB],
+            snapshots: [
+              { workspace: wsA, eligible: [work(1)] },
+              { workspace: wsB, eligible: [work(2)] },
+            ],
+            execute: crashIn(wsA.config.name),
+          },
         ),
-      );
-    }),
+      ),
+    ),
   );
 
   it.effect("stops starting sessions once the daily budget is exhausted and resets by UTC day", () =>
     Effect.gen(function* () {
-      const execute: ExecuteFn = () => Effect.succeed(true);
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
 
-        const first = yield* scheduler.tick();
-        yield* Fiber.awaitAll(first);
-        assert.strictEqual(first.length, 1);
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
 
-        yield* republish(snapshots);
-        const exhausted = yield* scheduler.tick();
-        assert.strictEqual(exhausted.length, 0);
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 0);
 
-        yield* TestClock.adjust("25 hours");
-        yield* republish(snapshots);
-        const nextDay = yield* scheduler.tick();
-        yield* Fiber.awaitAll(nextDay);
-        assert.strictEqual(nextDay.length, 1);
-      }).pipe(
-        Effect.provide(
-          schedulerLayer(
-            { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 1 },
-            { registry: [wsA], snapshots, execute },
-          ),
+      yield* TestClock.adjust("25 hours");
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 1 },
+          { registry: [wsA], snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: succeed },
         ),
-      );
-    }),
+      ),
+    ),
   );
 
   it.effect("picks an item once per generation and again once a newer snapshot lands", () =>
     Effect.gen(function* () {
-      const runs = yield* Ref.make(0);
-      const execute: ExecuteFn = () => Ref.update(runs, (n) => n + 1).pipe(Effect.map(() => true));
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
 
-        const first = yield* scheduler.tick();
-        yield* Fiber.awaitAll(first);
-        assert.strictEqual(first.length, 1);
-        assert.strictEqual((yield* scheduler.stats).global, 0);
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual((yield* scheduler.stats).global, 0);
 
-        const repeat = yield* scheduler.tick();
-        assert.strictEqual(repeat.length, 0);
-        assert.strictEqual(yield* Ref.get(runs), 1);
+      assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.strictEqual((yield* Ref.get(probe.executions)).length, 1);
 
-        yield* republish(snapshots);
-        const refreshed = yield* scheduler.tick();
-        yield* Fiber.awaitAll(refreshed);
-        assert.strictEqual(refreshed.length, 1);
-        assert.strictEqual(yield* Ref.get(runs), 2);
-      }).pipe(
-        Effect.provide(
-          schedulerLayer(
-            { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute },
-          ),
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+      assert.strictEqual((yield* Ref.get(probe.executions)).length, 2);
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
+          { registry: [wsA], snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: succeed },
         ),
-      );
-    }),
+      ),
+    ),
   );
 
   it.effect("holds a run that outlives a generation boundary behind its reservation", () =>
     Effect.gen(function* () {
-      const gate = yield* Deferred.make<void>();
-      const execute: ExecuteFn = () => Deferred.await(gate).pipe(Effect.map(() => true));
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
 
-        const first = yield* scheduler.tick();
-        assert.strictEqual(first.length, 1);
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 0);
+      assert.strictEqual((yield* scheduler.stats).global, 1);
 
-        yield* republish(snapshots);
-        const duringRun = yield* scheduler.tick();
-        assert.strictEqual(duringRun.length, 0);
-        assert.strictEqual((yield* scheduler.stats).global, 1);
-
-        yield* Deferred.succeed(gate, undefined);
-        yield* Fiber.awaitAll(first);
-      }).pipe(
-        Effect.provide(
-          schedulerLayer(
-            { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
-            { registry: [wsA], snapshots, execute },
-          ),
+      yield* probe.gate.open;
+      yield* scheduler.awaitIdle;
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
+          { registry: [wsA], snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: waitForGate },
         ),
-      );
-    }),
+      ),
+    ),
   );
 });
 
@@ -523,143 +566,140 @@ describe("Scheduler.drain", () => {
   const statusOf = (ledger: RunLedger.RunLedgerService, name: string) =>
     Effect.map(ledger.getRun(runId(name)), (run) => run?.status ?? null);
 
-  const neverEnds =
-    (ledger: RunLedger.RunLedgerService, name: string): ExecuteFn =>
-    () =>
-      ledger.insertRun(runRecord(name, 0)).pipe(
-        Effect.andThen(never),
-        Effect.map(() => true),
-      );
+  const finishInside = (name: string) => (probe: SchedulerProbeState, ledger: RunLedger.RunLedgerService) =>
+    ledger.insertRun(runRecord(name, 0)).pipe(
+      Effect.andThen(probe.gate.await),
+      Effect.andThen(
+        ledger.updateRun(runId(name), {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 10_000,
+        }),
+      ),
+      Effect.map(() => true),
+    );
+
+  const neverEnds = (name: string) => (_probe: SchedulerProbeState, ledger: RunLedger.RunLedgerService) =>
+    ledger.insertRun(runRecord(name, 0)).pipe(
+      Effect.andThen(never),
+      Effect.map(() => true),
+    );
 
   const draining = (deps: {
-    readonly snapshots: Ref.Ref<Reconcile.ReconcileSnapshot>;
-    readonly execute: ExecuteFn;
-    readonly ledger?: RunLedger.RunLedgerService;
+    readonly snapshots: ReadonlyArray<SnapshotEntry>;
+    readonly execute: ExecuteStub;
   }) =>
     schedulerLayer({ globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 }, { registry: [wsA], ...deps });
 
   it.effect("lets a run that finishes inside the grace window record its own outcome", () =>
     Effect.gen(function* () {
-      const ledger = yield* RunLedger.makeMemory;
-      const gate = yield* Latch.make();
-      const execute: ExecuteFn = () =>
-        ledger.insertRun(runRecord("inside", 0)).pipe(
-          Effect.andThen(gate.await),
-          Effect.andThen(
-            ledger.updateRun(runId("inside"), {
-              status: "succeeded",
-              usage: null,
-              endedAtMillis: 10_000,
-            }),
-          ),
-          Effect.map(() => true),
-        );
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        yield* scheduler.tick();
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+      const ledger = yield* RunLedger.RunLedger;
+      yield* scheduler.tick();
 
-        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
-        yield* TestClock.adjust("10 seconds");
-        yield* gate.open;
+      const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
+      yield* TestClock.adjust("10 seconds");
+      yield* probe.gate.open;
 
-        assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 0 });
-        assert.strictEqual(yield* statusOf(ledger, "inside"), "succeeded");
-      }).pipe(Effect.provide(draining({ snapshots, execute, ledger })));
-    }),
+      assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 0 });
+      assert.strictEqual(yield* statusOf(ledger, "inside"), "succeeded");
+    }).pipe(
+      Effect.provide(
+        draining({ snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: finishInside("inside") }),
+      ),
+    ),
   );
 
   it.effect("interrupts a run still going when the grace window closes", () =>
     Effect.gen(function* () {
-      const ledger = yield* RunLedger.makeMemory;
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        yield* scheduler.tick();
+      const scheduler = yield* Scheduler.Scheduler;
+      const ledger = yield* RunLedger.RunLedger;
+      yield* scheduler.tick();
 
-        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
-        yield* TestClock.adjust("1 hour");
+      const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
+      yield* TestClock.adjust("1 hour");
 
-        assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 1 });
-        assert.strictEqual(yield* statusOf(ledger, "outlasts"), "interrupted");
-        assert.strictEqual((yield* scheduler.stats).global, 0);
-      }).pipe(Effect.provide(draining({ snapshots, execute: neverEnds(ledger, "outlasts"), ledger })));
-    }),
+      assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 1 });
+      assert.strictEqual(yield* statusOf(ledger, "outlasts"), "interrupted");
+      assert.strictEqual((yield* scheduler.stats).global, 0);
+    }).pipe(
+      Effect.provide(
+        draining({ snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: neverEnds("outlasts") }),
+      ),
+    ),
   );
 
   it.effect("announces each interrupted run on the bus as the grace window closes", () =>
     Effect.gen(function* () {
-      const ledger = yield* RunLedger.makeMemory;
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const subscription = yield* bus.subscribe();
-        yield* scheduler.tick();
+      const scheduler = yield* Scheduler.Scheduler;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      yield* scheduler.tick();
 
-        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
-        yield* TestClock.adjust("1 hour");
-        yield* Fiber.join(drain);
+      const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: never }));
+      yield* TestClock.adjust("1 hour");
+      yield* Fiber.join(drain);
 
-        const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "interrupted"),
-          Stream.runCollect,
-        );
-        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
-        assert.deepStrictEqual(
-          changed.map((run) => run.status),
-          ["interrupted"],
-        );
-        assert.strictEqual(changed.at(0)?.id, runId("outlasts"));
-      }).pipe(
-        Effect.provide(draining({ snapshots, execute: neverEnds(ledger, "outlasts"), ledger })),
-        Effect.scoped,
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "interrupted"),
+        Stream.runCollect,
       );
-    }),
+      const changed = [...events].flatMap((event) =>
+        event._tag === "RunChanged" && event.run.status === "interrupted" ? [event.run] : [],
+      );
+      assert.deepStrictEqual(
+        changed.map((run) => run.status),
+        ["interrupted"],
+      );
+      assert.strictEqual(changed.at(0)?.id, runId("outlasts"));
+    }).pipe(
+      Effect.provide(
+        draining({ snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: neverEnds("outlasts") }),
+      ),
+      Effect.scoped,
+    ),
   );
 
   it.effect("ends the wait as soon as a second stop signal arrives", () =>
     Effect.gen(function* () {
-      const ledger = yield* RunLedger.makeMemory;
+      const scheduler = yield* Scheduler.Scheduler;
+      const ledger = yield* RunLedger.RunLedger;
       const abort = yield* Latch.make();
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        yield* scheduler.tick();
+      yield* scheduler.tick();
 
-        const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: abort.await }));
-        yield* abort.open;
+      const drain = yield* Effect.forkChild(scheduler.drain({ graceMillis: oneHour, abort: abort.await }));
+      yield* abort.open;
 
-        assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 1 });
-        assert.strictEqual(yield* statusOf(ledger, "aborted"), "interrupted");
-      }).pipe(Effect.provide(draining({ snapshots, execute: neverEnds(ledger, "aborted"), ledger })));
-    }),
+      assert.deepStrictEqual(yield* Fiber.join(drain), { inFlight: 1, interrupted: 1 });
+      assert.strictEqual(yield* statusOf(ledger, "aborted"), "interrupted");
+    }).pipe(
+      Effect.provide(
+        draining({ snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: neverEnds("aborted") }),
+      ),
+    ),
   );
 
   it.effect("leaves a run from an earlier daemon life alone", () =>
     Effect.gen(function* () {
-      const ledger = yield* RunLedger.makeMemory;
-      yield* ledger.insertRun(runRecord("earlier-life", 0));
-      yield* TestClock.adjust("1 minute");
-      const snapshots = yield* snapshotRef([]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        yield* scheduler.drain({ graceMillis: oneHour, abort: never });
-        assert.strictEqual(yield* statusOf(ledger, "earlier-life"), "running");
-      }).pipe(Effect.provide(draining({ snapshots, execute: () => Effect.succeed(true), ledger })));
-    }),
+      const scheduler = yield* Scheduler.Scheduler;
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord("earlier-life", -1));
+      yield* scheduler.drain({ graceMillis: oneHour, abort: never });
+      assert.strictEqual(yield* statusOf(ledger, "earlier-life"), "running");
+    }).pipe(Effect.provide(draining({ snapshots: [], execute: succeed }))),
   );
 
   it.effect("picks no further candidates once a drain has started", () =>
     Effect.gen(function* () {
-      const snapshots = yield* snapshotRef([{ workspace: wsA, eligible: [work(1)] }]);
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        yield* scheduler.drain({ graceMillis: oneHour, abort: never });
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+      yield* scheduler.drain({ graceMillis: oneHour, abort: never });
 
-        yield* republish(snapshots);
-        assert.strictEqual((yield* scheduler.tick()).length, 0);
-      }).pipe(Effect.provide(draining({ snapshots, execute: () => Effect.succeed(true) })));
-    }),
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 0);
+    }).pipe(
+      Effect.provide(draining({ snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: succeed })),
+    ),
   );
 });

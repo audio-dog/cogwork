@@ -221,6 +221,8 @@ export const make = Effect.gen(function* () {
   const recoverWhenLive = Effect.fn("Recovery.recoverWhenLive")(function* () {
     const { paused } = yield* scheduler.stats;
     if (paused) return;
+    const { generation } = yield* worker.snapshot;
+    if (generation === 0) return;
     if (yield* Ref.getAndSet(recovered, true)) return;
     // Captured before recover() so the runs it re-admits (started after) survive the sweep below.
     const orphanCutoffMillis = yield* Clock.currentTimeMillis;

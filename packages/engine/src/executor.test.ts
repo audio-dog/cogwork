@@ -17,6 +17,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
@@ -25,6 +26,7 @@ import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
   type AgUiEvent,
+  fullHarnessExecution,
   HarnessError,
   type HarnessRequest,
   type HarnessRunner,
@@ -33,6 +35,7 @@ import {
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
+import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import { layer as runRecorderLayer } from "./run-recorder";
@@ -219,6 +222,7 @@ const stuckImplementEvents: ReadonlyArray<AgUiEvent> = [
 const gatedRunner = (release: Deferred.Deferred<void>): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () =>
     Stream.concat(
       Stream.fromArray(implementStreamEvents),
@@ -391,6 +395,7 @@ const recorder = (calls: Ref.Ref<ReadonlyArray<Call>>): IssueTrackerService => (
 const runner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () => Stream.fromArray(events),
 });
 
@@ -403,6 +408,7 @@ const capturingRunner = (
 ): HarnessRunner => ({
   name,
   sessionKind,
+  execution: fullHarnessExecution,
   run: (request) =>
     Stream.unwrap(
       Ref.update(requests, (xs) => [...xs, request]).pipe(
@@ -452,12 +458,14 @@ const unreachableRemoteWorktree: WorktreeManagerService = {
 const failingRunner = (error: HarnessError): HarnessRunner => ({
   name: cursor,
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () => Stream.fail(error),
 });
 
 const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): HarnessRunner => ({
   name: cursor,
   sessionKind: "owned-transcript",
+  execution: fullHarnessExecution,
   run: () => Stream.fromArray(events),
 });
 
@@ -499,6 +507,11 @@ const unavailableCommentProvider: SourceControlProviderService = {
     ),
 };
 
+const runControlStub = Layer.succeed(RunControl.RunControl, {
+  register: () => Effect.void,
+  cancel: () => Effect.succeed(false),
+});
+
 const provide = (
   ws: IssueTrackerService,
   runners: ReadonlyArray<HarnessRunner>,
@@ -520,7 +533,7 @@ const provide = (
         runLedger,
         runRecorder,
         bus,
-        RunControl.layer,
+        runControlStub,
         Layer.succeed(WorktreeManager, worktree),
         assemblerStub,
       ),
@@ -708,6 +721,30 @@ describe("Executor.execute", () => {
     }),
   );
 
+  it.effect("settles a silent harness run as a retryable failure after its stage budget", () => {
+    const silentRunner: HarnessRunner = {
+      name: cursor,
+      sessionKind: "opaque-handle",
+      execution: fullHarnessExecution,
+      run: () => Stream.never,
+    };
+    const layer = Layer.unwrap(
+      Ref.make<ReadonlyArray<Call>>([]).pipe(Effect.map((calls) => provide(recorder(calls), [silentRunner]))),
+    );
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      const execution = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+      yield* TestClock.adjust(defaultRunBudget("implement"));
+      assert.isTrue(yield* Fiber.join(execution));
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "failed");
+      const events = run ? yield* ledger.events(run.id) : [];
+      assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("persists a terminal event on failure so watchers flush the run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
@@ -749,15 +786,38 @@ describe("Executor.execute", () => {
     }),
   );
 
-  it.effect("treats an unregistered harness as a non-retryable, human-handoff failure", () =>
+  it.effect("declines an unregistered harness before claiming or recording a run", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
       const layer = provide(recorder(calls), []);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        yield* executor.execute(workspace, triageItem);
-        const log = yield* Ref.get(calls);
-        assert.strictEqual(log.find((c) => c.method === "handOff")?.stage, "triage");
+        const accepted = yield* executor.execute(workspace, triageItem);
+
+        assert.isFalse(accepted);
+        assert.deepStrictEqual(yield* Ref.get(calls), []);
+        const ledger = yield* RunLedger.RunLedger;
+        assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("declines an unsupported harness posture before claiming or recording a run", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const unsupported = {
+        ...runner(successEvents),
+        execution: { ...fullHarnessExecution, profiles: [] },
+      } satisfies HarnessRunner;
+      const layer = provide(recorder(calls), [unsupported]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const accepted = yield* executor.execute(workspace, triageItem);
+
+        assert.isFalse(accepted);
+        assert.deepStrictEqual(yield* Ref.get(calls), []);
+        const ledger = yield* RunLedger.RunLedger;
+        assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -768,8 +828,11 @@ describe("Executor.execute", () => {
       const layer = provide(recorder(calls), [runner(successEvents)]);
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
-        yield* executor.execute(disabledWorkspace, triageItem);
+        assert.isFalse(yield* executor.execute(disabledWorkspace, triageItem));
         assert.deepStrictEqual(yield* Ref.get(calls), []);
+
+        const ledger = yield* RunLedger.RunLedger;
+        assert.deepStrictEqual(yield* ledger.listRuns(10), []);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -785,6 +848,7 @@ describe("Executor.execute", () => {
 
         const [request] = yield* Ref.get(requests);
         assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
+        assert.strictEqual(request?.profile, "full");
         assert.include(request?.prompt ?? "", "implement-agent");
         assert.include(request?.prompt ?? "", "#15");
         assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);

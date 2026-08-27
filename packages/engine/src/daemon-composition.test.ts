@@ -20,7 +20,7 @@ import * as SocketServer from "effect/unstable/socket/SocketServer";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
-import type { HarnessRunner } from "./harness";
+import { fullHarnessExecution, type HarnessRunner } from "./harness";
 import { ReconcileWorker } from "./reconcile";
 import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
@@ -51,6 +51,7 @@ const worktreeLayer = Layer.succeed(WorktreeManager, {
 const stubRunner: HarnessRunner = {
   name: Schema.decodeSync(HarnessName)("cursor"),
   sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
   run: () => Stream.empty,
 };
 
