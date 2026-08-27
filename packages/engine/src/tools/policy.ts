@@ -5,6 +5,7 @@ import {
   type PolicyDecision,
   type SandboxPolicy,
 } from "@tanstack/ai-sandbox";
+import { type OperationPolicyProfile, operationPolicyProfile } from "../operation-policy";
 
 export type OwnedToolName = "read" | "write" | "edit" | "bash" | "glob" | "grep" | "webfetch";
 
@@ -40,14 +41,14 @@ export const fullProfile = defineSandboxPolicy({
   default: "allow",
 });
 
-const profilesByStage: Partial<Record<LifecycleStage, SandboxPolicy>> = {
-  triage: readOnlyProfile,
-  implement: fullProfile,
-  "follow-up": fullProfile,
-  verify: readOnlyProfile,
+const profiles: Record<OperationPolicyProfile, SandboxPolicy> = {
+  "read-only": readOnlyProfile,
+  full: fullProfile,
 };
 
-export const profileForStage = (stage: LifecycleStage) => profilesByStage[stage] ?? readOnlyProfile;
+export const policyForProfile = (profile: OperationPolicyProfile) => profiles[profile];
+
+export const profileForStage = (stage: LifecycleStage) => policyForProfile(operationPolicyProfile(stage));
 
 type Capability = "read" | "fileWrite" | "network" | "command";
 
