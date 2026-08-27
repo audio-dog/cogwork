@@ -550,6 +550,19 @@ class SchedulerDrainGraces extends Context.Service<SchedulerDrainGraces, Ref.Ref
   ).pipe(Layer.provideMerge(SchedulerDrainGraces.layer));
 }
 
+class BootstrapRecoveryCalls extends Context.Service<BootstrapRecoveryCalls, Ref.Ref<number>>()(
+  "@cogwork/engine/engine.test/BootstrapRecoveryCalls",
+) {
+  static readonly layer = Layer.effect(BootstrapRecoveryCalls, Ref.make(0));
+  static readonly recoveryLayer = Layer.effect(
+    Recovery.Recovery,
+    Effect.map(BootstrapRecoveryCalls, (calls) => ({
+      recover: () => Effect.void,
+      recoverWhenLive: () => Ref.update(calls, (count) => count + 1),
+    })),
+  ).pipe(Layer.provideMerge(BootstrapRecoveryCalls.layer));
+}
+
 describe("daemon heartbeats", () => {
   const worktreeStub = Layer.succeed(WorktreeManager, {
     ensure: () => Effect.die("unused"),
@@ -599,6 +612,17 @@ describe("daemon heartbeats", () => {
       assert.deepStrictEqual(yield* Ref.get(drained), [1234]);
     }).pipe(
       Effect.provide(heartbeatLayer(emptyWorkerLayer, SchedulerDrainGraces.schedulerLayer)),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("continues bootstrap after the initial reconcile submission fails", () =>
+    Effect.gen(function* () {
+      const recoveryCalls = yield* BootstrapRecoveryCalls;
+      yield* Daemon.bootstrap;
+      assert.strictEqual(yield* Ref.get(recoveryCalls), 1);
+    }).pipe(
+      Effect.provide(Layer.merge(defectiveWorkerLayer, BootstrapRecoveryCalls.recoveryLayer)),
       Effect.scoped,
     ),
   );

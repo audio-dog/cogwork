@@ -274,19 +274,22 @@ const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
   yield* maintainWorktrees();
 });
 
+const continueAfterReconcileFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
+  Effect.catchCauseIf(
+    effect,
+    (cause) => !Cause.hasInterruptsOnly(cause),
+    (cause) => Effect.logError(message, { cause }),
+  );
+
 const reconcileHeartbeat = (pollIntervalMillis: number) =>
-  reconcileTick().pipe(
-    Effect.catchCauseIf(
-      (cause) => !Cause.hasInterruptsOnly(cause),
-      (cause) => Effect.logError("reconcile heartbeat failed", { cause }),
-    ),
+  continueAfterReconcileFailure(reconcileTick(), "reconcile heartbeat failed").pipe(
     Effect.repeat(Schedule.spaced(pollIntervalMillis)),
   );
 
 export const bootstrap = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const recovery = yield* Recovery;
-  yield* worker.submit();
+  yield* continueAfterReconcileFailure(worker.submit(), "reconcile bootstrap failed");
   yield* recovery.recoverWhenLive();
 });
 
