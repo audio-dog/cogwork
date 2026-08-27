@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkspaceRegistration } from "@cogwork/contracts";
+import { DaemonRpcs, WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
 import { Git } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -35,6 +35,16 @@ const captureRemote = Effect.fn("workspace.captureRemote")(function* (registrati
   return { ...registration, ...(gitRemote ? { gitRemote } : {}) };
 });
 
+export const formatRegistrationResult = (displayName: string, workspace: WorkspaceState) => {
+  if (workspace._tag === "Registered") {
+    return `Registered ${workspace.displayName ?? workspace.name} as ${workspace.name}.`;
+  }
+  if (workspace.name === undefined) {
+    return `Workspace input failed for ${workspace.source}: ${workspace.message}`;
+  }
+  return `Registered ${displayName} as ${workspace.name}, but Workspace input failed: ${workspace.message}`;
+};
+
 const runRegister = Effect.fn("workspace.register")(function* (options: {
   readonly socket: string;
   readonly input: string;
@@ -42,8 +52,9 @@ const runRegister = Effect.fn("workspace.register")(function* (options: {
   const registration = yield* readRegistration(options.input).pipe(Effect.flatMap(captureRemote));
   const client = yield* RpcClient.make(DaemonRpcs);
   const workspace = yield* client.RegisterWorkspace({ registration });
-  if (workspace._tag === "Failed") return yield* Console.error(workspace.message);
-  yield* Console.log(`Registered ${workspace.displayName ?? workspace.name} as ${workspace.name}.`);
+  const message = formatRegistrationResult(registration.name, workspace);
+  if (workspace._tag === "Failed") return yield* Console.error(message);
+  yield* Console.log(message);
 });
 
 export const registerWorkspace = Effect.fn("workspace.registerWithLayers")(function* (options: {
