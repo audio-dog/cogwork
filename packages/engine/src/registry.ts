@@ -92,6 +92,7 @@ const workspaceInputName = "workspace.json";
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
 const decodeWorkspaceIdOption = Schema.decodeUnknownOption(WorkspaceId);
 const decodeIssueTracker = Schema.decodeUnknownEffect(Schema.fromJsonString(IssueTrackerConfig));
+const decodeIssueTrackerOption = Schema.decodeUnknownOption(Schema.fromJsonString(IssueTrackerConfig));
 const decodeSourceControl = Schema.decodeUnknownEffect(Schema.fromJsonString(SourceControlConfig));
 const decodeWorkspaceInput = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceInput));
 const decodeWorkspaceConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
@@ -109,8 +110,10 @@ const present = <A>(value: A | null) => (value === null ? undefined : value);
 
 const workspaceFailure = (row: WorkspaceRow, message: string) => {
   const name = Option.getOrUndefined(decodeWorkspaceIdOption(row.id));
+  const issueTracker = Option.getOrUndefined(decodeIssueTrackerOption(row.issueTracker));
   return {
     ...(name ? { name } : {}),
+    ...(issueTracker ? { issueTracker } : {}),
     source: row.checkoutPath,
     message,
     workspaceLimit: present(row.concurrency),
@@ -118,9 +121,11 @@ const workspaceFailure = (row: WorkspaceRow, message: string) => {
 };
 
 export const findWorkspace = (registry: RegistryState, name: string) =>
-  registry.workspaces.find(
-    (workspace) => workspace.config.name === name || workspace.config.displayName === name,
-  );
+  registry.workspaces.find((workspace) => workspace.config.name === name);
+
+export const findWorkspaceIssueTracker = (registry: RegistryState, name: string) =>
+  findWorkspace(registry, name)?.config.issueTracker ??
+  registry.failures.find((failure) => failure.name === name)?.issueTracker;
 
 const mergedWorktrees = (row: WorkspaceRow, input: WorkspaceInput) => {
   const root = present(row.worktreeRoot);
@@ -326,7 +331,11 @@ export const layer = Layer.effectContext(
       if (!path.isAbsolute(registration.checkoutPath)) {
         return yield* registrationError("Workspace checkout path must be absolute");
       }
-      const existing = yield* selectWorkspaceBinding(registration.checkoutPath).pipe(
+      const normalizedRegistration = {
+        ...registration,
+        checkoutPath: path.resolve(registration.checkoutPath),
+      };
+      const existing = yield* selectWorkspaceBinding(normalizedRegistration.checkoutPath).pipe(
         Effect.provide(dependencies),
         Effect.mapError((error) => registrationError(error)),
       );
@@ -337,7 +346,7 @@ export const layer = Layer.effectContext(
         Effect.flatMap(decodeWorkspaceId),
         Effect.mapError((error) => registrationError(error)),
       );
-      const row = yield* insertWorkspace(id, registration).pipe(
+      const row = yield* insertWorkspace(id, normalizedRegistration).pipe(
         Effect.provide(dependencies),
         Effect.mapError((error) => registrationError(error)),
       );

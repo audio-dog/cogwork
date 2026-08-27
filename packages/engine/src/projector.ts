@@ -1,4 +1,4 @@
-import type { WorkspaceConfig, WorkspaceFailureInfo } from "@cogwork/contracts";
+import type { IssueTrackerConfig, WorkspaceConfig, WorkspaceFailureInfo } from "@cogwork/contracts";
 
 export interface RegisteredWorkspace {
   readonly source: string;
@@ -7,6 +7,7 @@ export interface RegisteredWorkspace {
 }
 
 export interface RegisteredWorkspaceFailure extends WorkspaceFailureInfo {
+  readonly issueTracker?: IssueTrackerConfig;
   readonly workspaceLimit?: number;
 }
 

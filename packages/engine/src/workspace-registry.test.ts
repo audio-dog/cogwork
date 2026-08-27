@@ -70,7 +70,7 @@ layer(NodeServices.layer)((it) => {
       const first = yield* management.register(githubRegistration("first", checkoutPath));
       if (first._tag === "Failed") return assert.fail("expected registration to succeed");
       const duplicate = yield* management
-        .register(githubRegistration("duplicate", checkoutPath))
+        .register(githubRegistration("duplicate", `${checkoutPath}/./`))
         .pipe(Effect.flip);
 
       assert.include(duplicate.message, `already registered as ${first.workspace.config.name}`);
@@ -203,7 +203,7 @@ layer(NodeServices.layer)((it) => {
       );
       const secondChange = yield* management.register(
         registration({
-          name: "second clone",
+          name: "first clone",
           checkoutPath: secondCheckout,
           gitRemote: "git@github.com:acme/repo.git",
           issueTracker: { type: "github", repo: "acme/repo" },
@@ -226,6 +226,10 @@ layer(NodeServices.layer)((it) => {
       const second = secondChange.workspace;
       assert.notStrictEqual(first.config.name, second.config.name);
       assert.strictEqual(first.config.displayName, "first clone");
+      assert.strictEqual(second.config.displayName, "first clone");
+      assert.isUndefined(Registry.findWorkspace(liveRegistry, "first clone"));
+      assert.strictEqual(Registry.findWorkspace(liveRegistry, first.config.name), first);
+      assert.strictEqual(Registry.findWorkspace(liveRegistry, second.config.name), second);
       assert.strictEqual(first.workspaceLimit, 2);
       assert.deepStrictEqual(first.config.worktrees, {
         root: path.join(root, "worktrees"),
@@ -236,8 +240,12 @@ layer(NodeServices.layer)((it) => {
       });
       assert.strictEqual(missingChange._tag, "Failed");
       if (missingChange._tag !== "Failed") return assert.fail("expected missing input diagnostic");
-      assert.isDefined(missingChange.failure.name);
+      if (missingChange.failure.name === undefined) return assert.fail("expected minted workspace identity");
+      const missingName = missingChange.failure.name;
       assert.strictEqual(missingChange.failure.workspaceLimit, 3);
+      const liveIssueTracker = Registry.findWorkspaceIssueTracker(liveRegistry, missingName);
+      assert.strictEqual(liveIssueTracker?.type, "github");
+      assert.strictEqual(liveIssueTracker?.repo, "acme/repo");
       assert.strictEqual(liveRegistry.failures.length, 1);
 
       yield* fs.writeFileString(
@@ -245,9 +253,10 @@ layer(NodeServices.layer)((it) => {
         encodeWorkspaceInput(changedWorkspaceInput),
       );
       yield* liveRegistry.refresh;
-      assert.deepStrictEqual(Registry.findWorkspace(liveRegistry, "first clone")?.config.worktrees?.setup, [
-        "pnpm test",
-      ]);
+      assert.deepStrictEqual(
+        Registry.findWorkspace(liveRegistry, first.config.name)?.config.worktrees?.setup,
+        ["pnpm test"],
+      );
 
       const reloadedContext = yield* Layer.build(Registry.layerAt(storePath));
       const reloaded = Context.get(reloadedContext, Registry.WorkspaceRegistry);
@@ -255,9 +264,12 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(reloaded.workspaces.length, 2);
       assert.strictEqual(reloaded.failures.length, 1);
       assert.strictEqual(reloaded.failures[0]?.workspaceLimit, 3);
+      const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloaded, missingName);
+      assert.strictEqual(reloadedIssueTracker?.type, "github");
+      assert.strictEqual(reloadedIssueTracker?.repo, "acme/repo");
       assert.deepStrictEqual(reloaded.workspaces.map((workspace) => workspace.config.displayName).sort(), [
         "first clone",
-        "second clone",
+        "first clone",
       ]);
 
       const relativeError = yield* management
