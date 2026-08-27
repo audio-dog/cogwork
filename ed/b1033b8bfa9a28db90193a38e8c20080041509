@@ -1,0 +1,20 @@
+packages/engine/src/provider-runner.ts
+  s_79dcb41c4b1d64::t_eefd7c20a6c85b 189-194
+  s_79dcb41c4b1d64::t_334ba7986c7ca1 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "edb1033b8bfa9a28db90193a38e8c20080041509",
+  "prompts": {},
+  "sessions": {
+    "s_79dcb41c4b1d64": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d056e58d-a89b-4fc0-9a52-a3e3d494793f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
