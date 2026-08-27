@@ -208,6 +208,11 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   return {
     name: options.name,
     sessionKind: "opaque-handle",
+    execution: {
+      nonInteractive: false,
+      worktreeConfined: false,
+      profiles: [],
+    },
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {

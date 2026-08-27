@@ -136,6 +136,7 @@ const request = (overrides: Partial<HarnessRequest>): HarnessRequest => ({
   effort: null,
   mcpSkills: [],
   ...overrides,
+  profile: overrides.profile ?? "full",
 });
 
 const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {

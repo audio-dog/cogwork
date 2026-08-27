@@ -1,4 +1,4 @@
-import { type AgUiEvent, agUiStructuredOutputComplete, agUiUsage, HarnessName } from "@cogwork/contracts";
+import { type AgUiEvent, agUiUsage, HarnessName } from "@cogwork/contracts";
 import { Harness, type SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
@@ -47,6 +47,7 @@ const request = (checkoutPath: string) =>
   ({
     harness: cursorName,
     stage: "triage",
+    profile: "read-only",
     skill: "triage-agent",
     checkoutPath,
     session: null,
@@ -104,7 +105,7 @@ describe("cursorRunner", () => {
     assert.strictEqual(runner.sessionKind, "opaque-handle");
   });
 
-  it.live("streams one structured triage result through the native Cursor ACP adapter", () =>
+  it.live("refuses a Cursor triage run before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -116,16 +117,15 @@ describe("cursorRunner", () => {
       });
       const harness = Harness.make([runner], harnessServices);
 
-      const events = yield* Stream.runCollect(harness.run(request(checkout.id)));
-      const completions = events.filter((event) => agUiStructuredOutputComplete(event) !== null);
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 
-      assert.lengthOf(completions, 1);
-      assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
-      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+      assert.match(error.message, /cursor.*non-interactive/);
     }),
   );
 
-  it.live("fails malformed Cursor structured output without coercing its prose", () =>
+  it.live("refuses malformed Cursor input before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -139,8 +139,8 @@ describe("cursorRunner", () => {
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
     }),
   );
 });
