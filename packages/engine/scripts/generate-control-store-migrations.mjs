@@ -1,10 +1,3 @@
-// Turns drizzle-kit's committed migration folder into the TypeScript module that ships.
-//
-// A user's machine has no `drizzle-kit`, no migration folder, and no `readdirSync` that survives
-// packaging, so the statements have to reach the engine as code. Parsing is delegated to
-// `readMigrationFiles`, drizzle-orm's own reader, so the shipped statements are split exactly the
-// way Drizzle splits them — on `--> statement-breakpoint`, not on `;`.
-//
 // The folder name is the migration identity: drizzle-kit names it `<utc-timestamp>_<slug>`, which is
 // the `<id>_<name>` shape Effect's `Migrator.fromRecord` parses and orders by id.
 import { writeFileSync } from "node:fs";

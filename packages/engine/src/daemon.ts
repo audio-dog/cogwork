@@ -194,12 +194,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
-  // One store means one connection: the boot loop and the run ledger share this client, so they
-  // share its write lock rather than racing each other for the same file.
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
-  // Booting the store reaches the filesystem, so the ledger built on top of it carries that
-  // requirement outward to whichever host provides the platform services.
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
     runLedgerPublishingLayer.pipe(
       Layer.provide(
