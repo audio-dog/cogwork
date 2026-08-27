@@ -42,7 +42,7 @@ function SchedulerSummary({ scheduler }: { scheduler: SchedulerStats }) {
       </span>
       {busy.map((load) => (
         <Badge key={load.name} variant="secondary">
-          {load.name} · {load.inFlight}
+          {load.name} · {load.inFlight} / {load.limit}
         </Badge>
       ))}
     </div>
