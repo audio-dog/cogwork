@@ -507,6 +507,11 @@ const unavailableCommentProvider: SourceControlProviderService = {
     ),
 };
 
+const runControlStub = Layer.succeed(RunControl.RunControl, {
+  register: () => Effect.void,
+  cancel: () => Effect.succeed(false),
+});
+
 const provide = (
   ws: IssueTrackerService,
   runners: ReadonlyArray<HarnessRunner>,
@@ -528,7 +533,7 @@ const provide = (
         runLedger,
         runRecorder,
         bus,
-        RunControl.layer,
+        runControlStub,
         Layer.succeed(WorktreeManager, worktree),
         assemblerStub,
       ),

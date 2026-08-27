@@ -10,12 +10,14 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./daemon";
@@ -344,6 +346,32 @@ describe("Reclassify", () => {
 });
 
 describe("RunControl", () => {
+  it.effect("forgets a registered fiber when it completes", () =>
+    Effect.gen(function* () {
+      const control = yield* RunControl.RunControl;
+      const fiber = yield* Effect.forkChild(Effect.void);
+      yield* control.register(rid("run-1"), fiber);
+      yield* Fiber.await(fiber);
+
+      assert.isFalse(yield* control.cancel(rid("run-1")));
+    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
+  );
+
+  it.effect("interrupts registered fibers when its layer closes", () =>
+    Effect.gen(function* () {
+      const scope = yield* Scope.make();
+      const context = yield* Layer.buildWithScope(RunControl.layer, scope);
+      const control = Context.get(context, RunControl.RunControl);
+      const fiber = yield* Effect.forkChild(Effect.never);
+      yield* control.register(rid("run-1"), fiber);
+
+      yield* Scope.close(scope, Exit.void);
+
+      const exit = yield* Fiber.await(fiber);
+      assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
+    }),
+  );
+
   it.effect("interrupts a registered fiber on cancel and reports unknown runs", () =>
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
