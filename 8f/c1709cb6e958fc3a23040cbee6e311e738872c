@@ -1,0 +1,23 @@
+packages/engine/src/control-store-schema.ts
+  s_dd0bc069f1065b::t_30e40514cb19bb 4-5
+packages/engine/drizzle/20260827182156_control-store/snapshot.json
+  s_dd0bc069f1065b::t_c5b04e4379c387 4
+packages/engine/src/control-store-migrations.gen.ts
+  s_dd0bc069f1065b::t_42da5ef7aca9f5 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8fc1709cb6e958fc3a23040cbee6e311e738872c",
+  "prompts": {},
+  "sessions": {
+    "s_dd0bc069f1065b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52e32dbe-b113-4a99-8d36-118cacd039df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
