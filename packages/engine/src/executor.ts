@@ -9,7 +9,6 @@ import {
   stageResultCompletionSchema,
   type TriageStageResult,
 } from "@cogwork/contracts";
-import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -141,15 +140,6 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
   Stream.catchCause(stream, (cause) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
-
-const timedOutHarnessRun = (request: HarnessRequest) => {
-  const budget = defaultRunBudget(request.stage);
-  return new HarnessError({
-    reason: "turn",
-    retryable: true,
-    message: `${request.stage} harness run timed out after ${budget}`,
-  });
-};
 
 // A credential error is a configuration problem (no account, missing secret env) that retrying
 // cannot fix, so it goes straight to a human like a diverged worktree does.
@@ -303,34 +293,35 @@ export const make = Effect.gen(function* () {
   });
 
   const foldStream = <A, E, R>(
+    record: RunRecord,
     request: HarnessRequest,
     initial: A,
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
-  ) =>
-    Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
-      Effect.timeout(defaultRunBudget(request.stage)),
-    );
-
-  const catchTimedOutRun =
-    <A, E, R>(record: RunRecord, request: HarnessRequest) =>
-    (effect: Effect.Effect<A, E | Cause.TimeoutError, R>) =>
-      effect.pipe(
-        Effect.catchIf(Cause.isTimeoutError, () =>
-          recorder
-            .record(record, failedTerminal)
-            .pipe(Effect.andThen(Effect.fail(timedOutHarnessRun(request)))),
+  ) => {
+    const budget = defaultRunBudget(request.stage);
+    return Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
+      Effect.timeout(budget),
+      Effect.catchTag("TimeoutError", () =>
+        recorder.record(record, failedTerminal).pipe(
+          Effect.andThen(
+            Effect.fail(
+              new HarnessError({
+                reason: "turn",
+                retryable: true,
+                message: `${request.stage} harness run timed out after ${budget}`,
+              }),
+            ),
+          ),
         ),
-      );
+      ),
+    );
+  };
 
   const foldRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event)).pipe(
-      catchTimedOutRun(record, request),
-    );
+    foldStream(record, request, emptyAccumulator, (acc, event) => foldEvent(record, acc, event));
 
   const foldTriageRun = (record: RunRecord, request: HarnessRequest) =>
-    foldStream(request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event)).pipe(
-      catchTimedOutRun(record, request),
-    );
+    foldStream(record, request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
 
   const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
     prev.handle === null && next.handle !== null && next.handle !== expected
@@ -351,20 +342,14 @@ export const make = Effect.gen(function* () {
     );
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(request, emptyAccumulator, (acc, event) =>
+    foldStream(record, request, emptyAccumulator, (acc, event) =>
       foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
-    ).pipe(
-      Effect.catchTag("SessionRestarted", () => rejectedResume(record)),
-      catchTimedOutRun(record, request),
-    );
+    ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
-    foldStream(request, emptyTriageAccumulator, (acc, event) =>
+    foldStream(record, request, emptyTriageAccumulator, (acc, event) =>
       foldTriageEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
-    ).pipe(
-      Effect.catchTag("SessionRestarted", () => rejectedResume(record)),
-      catchTimedOutRun(record, request),
-    );
+    ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
     record: RunRecord,
