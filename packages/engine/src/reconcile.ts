@@ -207,6 +207,7 @@ export const make = Effect.gen(function* () {
   });
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* () {
+    yield* registry.refresh.pipe(Effect.orDie);
     const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
       concurrency: 4,
     });

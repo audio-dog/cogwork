@@ -173,7 +173,10 @@ const workerSnapshotLayer = (snapshot: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
     snapshot: Ref.get(snapshot),
   });
 
-const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, { workspaces: [wsA], failures: [] });
+const registryLayer = Layer.succeed(
+  Registry.WorkspaceRegistry,
+  Registry.readOnlyRegistry({ workspaces: [wsA], failures: [] }),
+);
 
 const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
   Layer.succeed(IssueTracker, {
