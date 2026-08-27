@@ -1,0 +1,35 @@
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_c8e0b2fde25a56::t_b7d6f7d039530a 9
+  s_c8e0b2fde25a56::t_c1c94ce5c24820 1-8,10-44,47-107,109-117,119-124
+  s_c8e0b2fde25a56::t_c01bc4b23fabb7 118
+  s_c8e0b2fde25a56::t_bbda37e28bba42 108
+  s_c8e0b2fde25a56::t_b88aefaa5a9946 45-46
+docs/agent-patterns/effect-test-layers.md
+  s_c8e0b2fde25a56::t_8c7cfd4f19fff5 1-125
+docs/agent-patterns/effect-time-bounds.md
+  s_c8e0b2fde25a56::t_a9ade3dae8801a 86,90,95-96
+  s_c8e0b2fde25a56::t_f2fd676031bcfe 92
+  s_c8e0b2fde25a56::t_b8d9d619560461 115
+  s_c8e0b2fde25a56::t_74e259e8c60930 1-85,87-89,91,93-94,97-114,116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "39d7c233b53655e4e435ab2a47cfc5853a6e4f40",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_c8e0b2fde25a56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89a95bb1-f882-4943-a721-ba153912232d",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
