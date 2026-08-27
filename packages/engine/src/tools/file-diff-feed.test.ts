@@ -133,6 +133,39 @@ describe("file diff feed", () => {
     20000,
   );
 
+  // A rejected exists() is a transient stat failure, not the feed's end: the
+  // event classifies as a deletion and the stream keeps flowing.
+  it.live(
+    "keeps streaming when the existence check rejects",
+    () =>
+      Effect.gen(function* () {
+        const original = yield* openSandbox();
+        const sandbox: WorktreeSandbox = {
+          ...original,
+          handle: {
+            ...original.handle,
+            fs: { ...original.handle.fs, exists: () => Promise.reject(new Error("stat blew up")) },
+          },
+        };
+        const baseSha = yield* resolveBaseSha(sandbox);
+        yield* writeFile(sandbox, { path: "seed.txt", content: "seed changed\n" });
+        const events = yield* Queue.make<FileSystem.WatchEvent>();
+        const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+          Stream.take(1),
+          Stream.runHead,
+          Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+          Effect.forkChild,
+        );
+        yield* Queue.offer(events, { _tag: "Update", path: "seed.txt" });
+        const head = yield* Fiber.join(fiber).pipe(Effect.timeout("15 seconds"));
+        if (Option.isNone(head)) return assert.fail("watcher produced no diff event");
+        const value = yield* decodeDiffValue(head.value.value);
+        assert.strictEqual(value.path, "seed.txt");
+        assert.include(value.diff, "+seed changed");
+      }),
+    20000,
+  );
+
   // The crash-proof property this feed exists for: a watcher failure — e.g.
   // FSEvents denied under a Codex seatbelt sandbox, surfaced as an async
   // EMFILE — must arrive on the typed error channel, never as an uncaught
