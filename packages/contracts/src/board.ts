@@ -1,6 +1,6 @@
 import * as Stream from "effect/Stream";
 import type { WorkspaceId } from "./base-schemas";
-import type { SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
+import type { ControlStore, SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
 import { type ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import type { RunSummary } from "./run";
 
@@ -14,6 +14,7 @@ export interface Board {
   readonly runs: ReadonlyMap<string, RunSummary>;
   readonly workspaces: ReadonlyMap<string, WorkspaceState>;
   readonly scheduler: SchedulerStats | null;
+  readonly controlStore: ControlStore | null;
 }
 
 export const initialBoard: Board = {
@@ -21,6 +22,7 @@ export const initialBoard: Board = {
   runs: new Map(),
   workspaces: new Map(),
   scheduler: null,
+  controlStore: null,
 };
 
 export const settledRunLimit = 20;
@@ -85,6 +87,7 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
       ...board,
       workspaces: new Map(board.workspaces).set(workspaceKey(workspace), workspace),
     }),
+    ControlStoreChanged: ({ controlStore }) => ({ ...board, controlStore }),
     SchedulerChanged: ({ scheduler }) => ({ ...board, scheduler }),
   });
 
