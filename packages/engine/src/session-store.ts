@@ -21,6 +21,7 @@ import {
 } from "@tanstack/ai-persistence";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -132,9 +133,12 @@ const newSession = (spec: MintSpec, id: SessionId, kind: SessionKind): Session =
 // `loadThread` folds the session's decoded harness events (from the recorder) into model messages;
 // `saveThread` is a no-op because the executor already appends every event to the ledger, so writing
 // the transcript back would fork the one truth.
-const ledgerMessageStore = (recorder: RunRecorderService): MessageStore => ({
+const ledgerMessageStore = (
+  recorder: RunRecorderService,
+  runPromise: Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<never>>>,
+): MessageStore => ({
   loadThread: (threadId) =>
-    Effect.runPromise(
+    runPromise(
       Option.match(decodeSession(threadId), {
         onNone: (): Effect.Effect<ReadonlyArray<AgUiEvent>> => Effect.succeed([]),
         onSome: (session): Effect.Effect<ReadonlyArray<AgUiEvent>> => recorder.sessionEvents(session),
@@ -147,9 +151,10 @@ export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
   const counter = yield* Ref.make(0);
+  const runPromise = yield* FiberSet.makeRuntimePromise();
   const persistence: ChatWithInterruptsPersistence = defineAIPersistence({
     stores: {
-      messages: ledgerMessageStore(recorder),
+      messages: ledgerMessageStore(recorder, runPromise),
       runs: new InMemoryRunStore(),
       interrupts: makeInterruptStore(),
     },
