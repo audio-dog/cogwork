@@ -4,10 +4,8 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { ContextFs, type ContextFsError, type ContextFsService } from "./context-fs";
 
-export type InstructionLayerKind = "global" | "repo" | "playbook";
+export type InstructionLayerKind = "rules" | "repo" | "playbook";
 
-// Array order is precedence: the runner renders these in order, so a later layer refines an earlier
-// one (global → repo → playbook). Reordering silently changes which instructions win.
 export interface InstructionLayer {
   readonly kind: InstructionLayerKind;
   readonly source: string;
@@ -27,6 +25,7 @@ export interface AssembleRequest {
 
 export interface ContextAssemblerConfig {
   readonly homeDir: string;
+  readonly userAgentsDir: string;
   readonly skillsDir: string;
 }
 
@@ -67,6 +66,9 @@ const safeSkillSegment = /^[A-Za-z0-9._-]+$/;
 
 const isSafeSkill = (skill: string) => skill !== "." && skill !== ".." && safeSkillSegment.test(skill);
 
+const presentLayers = (layers: ReadonlyArray<InstructionLayer | null>) =>
+  layers.filter((layer): layer is InstructionLayer => layer !== null);
+
 export interface ContextAssemblerService {
   readonly assemble: (
     request: AssembleRequest,
@@ -92,7 +94,15 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
   const repoLayers = Effect.fn("ContextAssembler.repoLayers")(function* (request: AssembleRequest) {
     const dirs = repoDirsFrom(request.cwd, request.projectRoot);
     const layers = yield* Effect.forEach(dirs, (dir) => readLayer("repo", joinPath(dir, "AGENTS.md")));
-    return layers.filter((layer): layer is InstructionLayer => layer !== null);
+    return presentLayers(layers);
+  });
+
+  const userRules = Effect.fn("ContextAssembler.userRules")(function* () {
+    const rulesDir = joinPath(config.userAgentsDir, "rules");
+    const files = yield* fs.readDirectory(rulesDir);
+    return yield* Effect.forEach(files.filter((file) => file.endsWith(".md")).sort(), (file) =>
+      readLayer("rules", joinPath(rulesDir, file)),
+    ).pipe(Effect.map(presentLayers));
   });
 
   const playbookLayer = Effect.fn("ContextAssembler.playbookLayer")(function* (
@@ -119,9 +129,10 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       const skillPath = joinPath(joinPath(config.homeDir, "skills"), request.skill);
       const playbook = yield* playbookLayer(request.skill, skillDir);
       yield* fs.copyDirectory(skillDir, skillPath);
-      const global = yield* readLayer("global", joinPath(config.homeDir, "AGENTS.md"));
+      const rules = yield* userRules();
       const repo = yield* repoLayers(request);
-      const layers = [...(global ? [global] : []), ...repo, playbook];
+      // Later layers refine earlier ones: Rules → repo instructions → Operating Instructions.
+      const layers = [...rules, ...repo, playbook];
       return { layers, skillPath } satisfies AssembledContext;
     }),
   };

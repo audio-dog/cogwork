@@ -164,8 +164,20 @@ export const contextFsLayer = Layer.effect(
     const fail = (operation: string) => (cause: unknown) =>
       new ContextFs.ContextFsError({ operation, message: describe(cause) });
 
+    const readDirectory = (target: string) =>
+      fs
+        .readDirectory(target)
+        .pipe(
+          Effect.catch((error) =>
+            error.reason._tag === "NotFound"
+              ? Effect.succeed([])
+              : Effect.fail(fail(`read directory ${target}`)(error)),
+          ),
+        );
+
     return {
       readFile: (target) => fs.readFileString(target).pipe(Effect.orElseSucceed(() => null)),
+      readDirectory,
       copyDirectory: (source, dest) =>
         fs
           .remove(dest, { recursive: true, force: true })

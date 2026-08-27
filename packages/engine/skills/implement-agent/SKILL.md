@@ -66,7 +66,7 @@ If any fails, fix and re-run. Do not open a PR on a red gate. If it will not go 
 Once done, run the code-simplifier agent in a subagent to refine the implementation.
 
  Then, in parallel separate subagents run: 
-- rule-reviewer agent. Explicitly instruct it to load and enforce every file in my personal rules directory at the absolute path `/Users/taylorsteele/sites/sync/packages/sync/assets/rules/` (currently `global.md` and `react.md`) alongside the repo rules, so my personal rules are checked as blocking violations. When the diff touches any React component or `.tsx` / `.jsx` file, also instruct it to load `/react-composition-patterns` and report every composition violation as blocking.
+- rule-reviewer agent. Instruct it to enforce the user Authoring tree Rules and repo rules as blocking violations.
 - /adversarial-review skill
 - /review-bugbot skill
 - /code-review skill

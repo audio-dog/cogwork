@@ -35,7 +35,7 @@ const session = Schema.decodeSync(SessionId)("session-1");
 
 const assembled: ContextAssembler.AssembledContext = {
   layers: [
-    { kind: "global", source: "/home/AGENTS.md", content: "global rules" },
+    { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
     { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },
     { kind: "playbook", source: "/skills/implement/SKILL.md", content: "playbook rules" },
   ],
