@@ -1,6 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
 import { makeOwnedToolSet } from "./owned-tools";
 import {
   compileForAfk,
@@ -22,6 +25,16 @@ const openSandbox = Effect.fn("policy.test.openSandbox")(function* () {
   );
   const sandbox: WorktreeSandbox = { handle, root: handle.id };
   return sandbox;
+});
+
+const makeTools = Effect.fn("policy.test.makeTools")(function* (
+  sandbox: WorktreeSandbox,
+  profile: typeof readOnlyProfile,
+) {
+  const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
+    Effect.provide(FetchHttpClient.layer),
+  );
+  return makeOwnedToolSet(sandbox, runPromise, profile);
 });
 
 const dangerousCommands = [
@@ -110,7 +123,7 @@ describe("gated tool set", () => {
   it.effect("returns a denied result instead of writing under the read-only profile", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
-      const tools = makeOwnedToolSet(sandbox, readOnlyProfile);
+      const tools = yield* makeTools(sandbox, readOnlyProfile);
       const write = tools.write.execute;
       if (write === undefined) throw new Error("write tool is missing a server executor");
       const result = yield* Effect.promise(() =>
@@ -127,7 +140,7 @@ describe("gated tool set", () => {
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
       yield* Effect.promise(() => sandbox.handle.fs.write("seed.txt", "hi\n"));
-      const tools = makeOwnedToolSet(sandbox, readOnlyProfile);
+      const tools = yield* makeTools(sandbox, readOnlyProfile);
       const read = tools.read.execute;
       if (read === undefined) throw new Error("read tool is missing a server executor");
       const result = yield* Effect.promise(() => Promise.resolve(read({ path: "seed.txt" })));
@@ -138,7 +151,7 @@ describe("gated tool set", () => {
   it.effect("denies a hard-deny command even under the full profile", () =>
     Effect.gen(function* () {
       const sandbox = yield* openSandbox();
-      const tools = makeOwnedToolSet(sandbox, fullProfile);
+      const tools = yield* makeTools(sandbox, fullProfile);
       const bash = tools.bash.execute;
       if (bash === undefined) throw new Error("bash tool is missing a server executor");
       const result = yield* Effect.promise(() =>

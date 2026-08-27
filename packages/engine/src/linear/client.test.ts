@@ -400,15 +400,28 @@ describe("linear client", () => {
     }).pipe(withToken("app-token", "client-credentials", invalidated));
   });
 
-  it.effect("retries a transient failure with backoff before reporting it unavailable", () =>
+  it.effect("retries after a hanging attempt reaches its deadline", () =>
     Effect.gen(function* () {
-      const fetchStub = stubLinear(() => ({ status: 500, body: {} }));
+      const fetchStub = stubLinear((document) =>
+        document.includes("TeamsByKey")
+          ? { body: { data: { teams: { nodes: [teamBundle] } } } }
+          : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
+      );
+      const onAbort = vi.fn();
+      fetchStub.mockImplementationOnce((_input, init) => {
+        init?.signal?.addEventListener("abort", onAbort);
+        return Promise.withResolvers<Response>().promise;
+      });
       const client = yield* LinearClient;
-      const failure = yield* Effect.forkChild(Effect.flip(client.observeIssues(ref, null)));
+      const request = yield* Effect.forkChild(client.observeIssues(ref, null));
       yield* TestClock.adjust("1 minute");
-      const error = yield* Fiber.join(failure);
-      assert.strictEqual(error.reason, "unavailable");
-      assert.strictEqual(fetchStub.mock.calls.length, 4);
+      const issues = yield* Fiber.join(request);
+      assert.deepStrictEqual(
+        issues.map((issue) => issue.identifier),
+        ["AUD-1"],
+      );
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
     }).pipe(withToken()),
   );
 

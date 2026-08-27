@@ -21,6 +21,7 @@ import { makeInterruptStore } from "./interrupt-store";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
 import {
   defaultLoopBudget,
+  defaultRunBudget,
   providerRunner,
   type RunChat,
   type RunChatOptions,
@@ -136,6 +137,7 @@ const request = (overrides: Partial<HarnessRequest>): HarnessRequest => ({
   effort: null,
   mcpSkills: [],
   ...overrides,
+  profile: overrides.profile ?? "full",
 });
 
 const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
@@ -293,12 +295,19 @@ describe("defaultLoopBudget", () => {
   });
 });
 
+describe("defaultRunBudget", () => {
+  it("gives read-only stages less wall-clock time than writing stages", () => {
+    assert.strictEqual(defaultRunBudget("triage"), "15 minutes");
+    assert.strictEqual(defaultRunBudget("verify"), "15 minutes");
+    assert.strictEqual(defaultRunBudget("implement"), "45 minutes");
+    assert.strictEqual(defaultRunBudget("follow-up"), "45 minutes");
+  });
+});
+
 describe("resolveContextLayers", () => {
   it.effect("returns the assembled layers on success", () =>
     Effect.gen(function* () {
-      const layers = yield* Effect.promise(() =>
-        resolveContextLayers(contextService([sampleLayer]), reqStub, []),
-      );
+      const layers = yield* resolveContextLayers(contextService([sampleLayer]), reqStub, []);
       assert.deepStrictEqual([...layers], [sampleLayer]);
     }),
   );
@@ -308,7 +317,7 @@ describe("resolveContextLayers", () => {
       const failing: ContextAssemblerService = {
         assemble: () => Effect.fail(new ContextAssemblerError({ skill: "implement-agent", message: "boom" })),
       };
-      const layers = yield* Effect.promise(() => resolveContextLayers(failing, reqStub, [sampleLayer]));
+      const layers = yield* resolveContextLayers(failing, reqStub, [sampleLayer]);
       assert.deepStrictEqual([...layers], [sampleLayer]);
     }),
   );

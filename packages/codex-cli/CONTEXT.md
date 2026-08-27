@@ -31,10 +31,10 @@ available. It is the opt-in compatibility probe for the pinned adapter and the i
 _Avoid_: Daemon startup check, provider fallback
 
 **Unattended runtime policy**:
-Every playbook uses `approvalPolicy: never` and `danger-full-access`. AFK runs cannot wait for
-approvals, and their validation commands may require local sockets or recursive file watchers. The
-runner also grants linked worktrees their shared Git metadata directory with Codex `--add-dir`.
-Codex CLI owns authentication through its host login; Cogwork's credential store is not consulted.
+Every playbook uses `approvalPolicy: never`. A read-only Run uses Codex `read-only`; a full Run uses
+`workspace-write`, so native file changes stay in the prepared worktree. The runner also grants
+linked worktrees their shared Git metadata directory with Codex `--add-dir`. Codex CLI owns
+authentication through its host login; Cogwork's credential store is not consulted.
 _Avoid_: Sandbox isolation (the local-process provider scopes the worktree but is not a container)
 
 **MCP child environment**:

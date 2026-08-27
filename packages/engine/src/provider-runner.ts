@@ -11,7 +11,10 @@ import {
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
 import {
   type AssembleRequest,
   ContextAssembler,
@@ -20,6 +23,7 @@ import {
 } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
+  fullHarnessExecution,
   HarnessError,
   type HarnessRequest,
   type HarnessRunner,
@@ -33,7 +37,7 @@ import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
   openWorktreeSandbox,
-  profileForStage,
+  policyForProfile,
   resolveBaseSha,
   watchWorktreeDiffs,
 } from "./tools";
@@ -71,35 +75,41 @@ export interface ProviderRunnerOptions {
   readonly runChat?: RunChat;
 }
 
+const isReadOnlyStage = (stage: LifecycleStage) => stage === "triage" || stage === "verify";
+const readOnlyLoopBudget = 12;
+const writingLoopBudget = 40;
+const readOnlyRunBudget = "15 minutes";
+const writingRunBudget = "45 minutes";
+
 // Read-only stages get fewer turns than the writing stages.
 export const defaultLoopBudget = (stage: LifecycleStage) =>
-  stage === "triage" || stage === "verify" ? 12 : 40;
+  isReadOnlyStage(stage) ? readOnlyLoopBudget : writingLoopBudget;
+
+export const defaultRunBudget = (stage: LifecycleStage) =>
+  isReadOnlyStage(stage) ? readOnlyRunBudget : writingRunBudget;
 
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });
 
 // Falls back to the run-start layers when a refresh fails, so a broken read never
 // strips context mid-run.
-export const resolveContextLayers = (
-  assembler: ContextAssemblerService,
-  request: AssembleRequest,
-  fallback: ReadonlyArray<InstructionLayer>,
-) =>
-  Effect.runPromise(
+export const resolveContextLayers = Effect.fn("ProviderRunner.resolveContextLayers")(
+  (assembler: ContextAssemblerService, request: AssembleRequest, fallback: ReadonlyArray<InstructionLayer>) =>
     assembler
       .assemble(request)
       .pipe(Effect.match({ onFailure: () => fallback, onSuccess: (value) => value.layers })),
-  );
+);
 
 // Runs on every turn so a mid-run edit to an AGENTS.md reaches the next prompt.
 const contextMiddleware = (
+  runPromise: Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<HttpClient.HttpClient>>>,
   assembler: ContextAssemblerService,
   request: AssembleRequest,
   fallback: ReadonlyArray<InstructionLayer>,
 ): ChatMiddleware => ({
   name: "cogwork-context",
   onConfig: (_ctx, config) =>
-    resolveContextLayers(assembler, request, fallback).then((layers) => ({
+    runPromise(resolveContextLayers(assembler, request, fallback)).then((layers) => ({
       systemPrompts: [...config.systemPrompts, ...layers.map((layer) => layer.content)],
     })),
 });
@@ -112,6 +122,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
   return {
     name: options.name,
     sessionKind: "owned-transcript",
+    execution: fullHarnessExecution,
     run: (request: HarnessRequest) =>
       Stream.unwrap(
         Effect.gen(function* () {
@@ -130,7 +141,6 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const assembled = yield* assembler
             .assemble(assembleRequest)
             .pipe(Effect.mapError((error) => launchError(false, error.message)));
-
           const store = yield* SessionStore;
           const session = request.session;
           // History comes from the ledger-backed message store; the new prompt
@@ -148,7 +158,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             Effect.mapError((error) => launchError(true, error.message)),
           );
           const baseSha = yield* resolveBaseSha(sandbox);
-          const toolSet = makeOwnedToolSet(sandbox, profileForStage(request.stage));
+          const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
+            Effect.provide(FetchHttpClient.layer),
+          );
+          const toolSet = makeOwnedToolSet(sandbox, runPromise, policyForProfile(request.profile));
 
           const abortController = new AbortController();
           const chatStream = runChat({
@@ -157,7 +170,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             tools: Object.values(toolSet),
             middleware: [
               withPersistence(store.persistence),
-              contextMiddleware(assembler, assembleRequest, assembled.layers),
+              contextMiddleware(runPromise, assembler, assembleRequest, assembled.layers),
             ],
             agentLoopStrategy: maxIterations(defaultLoopBudget(request.stage)),
             abortController,

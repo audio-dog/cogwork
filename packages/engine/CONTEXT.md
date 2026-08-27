@@ -74,7 +74,7 @@ The envelope the executor hands the harness for one run: the checkout path, the 
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
-The engine's dispatcher — given a harness request, it routes to the registered harness runner by name and provides the runner services for session and context access. It also exposes `sessionKind(name)`: the declared kind for a harness, read straight off the runner registry (an unregistered name falls back to opaque-handle, since its run fails at dispatch anyway). This is the one place kind lookup lives — no separate harness-to-kind map. Knows nothing about any specific agent.
+The engine's dispatcher — given a harness request, it routes to the registered harness runner by name and provides the runner services for session and context access. Its preflight checks that the selected runner exists and can enforce the operation's hard posture before the executor claims work. It also exposes `sessionKind(name)`: the declared kind for a harness, read straight off the runner registry (an unregistered name falls back to opaque-handle, though preflight rejects it before claim). This is the one place runner lookup lives — no separate harness-to-kind map. Knows nothing about any specific agent.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
@@ -110,7 +110,7 @@ The stream of file-change events the owned tools produce for the live run view's
 _Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
 
 **Policy profile**:
-The allow/ask/deny rules a run's owned tools are gated by, chosen from the selected operation and its settings. Two engine-owned defaults over one shared tool set: **read-only** for triage and verify (read/glob/grep/webfetch; writes and shell refused), and **full** for implementation and follow-up (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. Per-workspace overrides wait for settings-as-data.
+The allow/ask/deny rules a run's owned tools are gated by, chosen from the selected operation and its settings. Two engine-owned defaults over one shared tool set: **read-only** for triage and verify (read/glob/grep/webfetch; writes and shell refused), and **full** for implementation and follow-up (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. The Harness request carries the resolved profile. A runner declares which profiles it can enforce, plus non-interactive and worktree-confined postures; the Harness service refuses a missing hard posture before the executor claims the item or records a Run. Per-workspace overrides wait for settings-as-data.
 _Avoid_: Sandbox isolation (that's the process boundary; this is the decision layer above it), per-tool allowlist (bash is command-matched, not all-or-nothing)
 
 **Ask-compiles-to-deny**:

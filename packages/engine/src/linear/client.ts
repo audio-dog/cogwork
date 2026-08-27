@@ -168,6 +168,7 @@ const defaultCooldownMillis = 60_000;
 
 const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
+const transientAttemptDeadline = "30 seconds";
 
 const teamIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -350,14 +351,6 @@ const sdkAuth = (credential: Credential) =>
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {
   const resumeAt = yield* Ref.make(new Map<string, number>());
 
-  const sdkFor = Effect.fn("linear.sdk")(function* (ref: LinearTeamRef) {
-    const credential = yield* Effect.mapError(
-      credentials.bearerToken(ref.account),
-      (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
-    );
-    return new LinearSdk(sdkAuth(credential));
-  });
-
   const holdOff = Effect.fn("linear.holdOff")(function* (ref: LinearTeamRef, nowMillis: number) {
     const until = (yield* Ref.get(resumeAt)).get(rateLimitScopeOf(ref.account.tokenEnv));
     if (until === undefined || until <= nowMillis) return;
@@ -390,9 +383,15 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   ) {
     const nowMillis = yield* Clock.currentTimeMillis;
     yield* holdOff(ref, nowMillis);
-    const sdk = yield* sdkFor(ref);
+    const credential = yield* Effect.mapError(
+      credentials.bearerToken(ref.account),
+      (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
+    );
     return yield* Effect.tapError(
-      Effect.tryPromise({ try: () => run(sdk), catch: (cause) => fromSdkError(cause, nowMillis) }),
+      Effect.tryPromise({
+        try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
+        catch: (cause) => fromSdkError(cause, nowMillis),
+      }),
       (error) => noteFailure(ref, nowMillis, error),
     );
   });
@@ -404,9 +403,14 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     document: string,
     variables: Record<string, unknown>,
   ) {
-    const response = yield* Effect.retry(
-      call(ref, (sdk) => sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables)),
-      { while: isTransient, schedule: transientBackoff, times: 3 },
+    const response = yield* call(ref, (sdk) =>
+      sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables),
+    ).pipe(
+      Effect.timeout(transientAttemptDeadline),
+      Effect.catchTag("TimeoutError", () =>
+        Effect.fail(unavailable(`Linear request timed out after ${transientAttemptDeadline}`)),
+      ),
+      Effect.retry({ while: isTransient, schedule: transientBackoff, times: 3 }),
     );
     if (response.data === undefined) {
       return yield* unavailable("Linear response missing data");

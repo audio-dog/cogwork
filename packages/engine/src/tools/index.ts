@@ -30,6 +30,7 @@ export {
   isPolicyDenied,
   type OwnedToolName,
   type PolicyDenied,
+  policyForProfile,
   profileForStage,
   readOnlyProfile,
 } from "./policy";

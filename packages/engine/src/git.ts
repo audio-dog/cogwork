@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 export class GitError extends Schema.TaggedError<GitError>()("GitError", {
   command: Schema.String,
   message: Schema.String,
+  reason: Schema.optional(Schema.Literal("timeout")),
 }) {}
 
 export interface WorktreeEntry {
