@@ -220,7 +220,11 @@ rejection is about `drizzle-orm`'s migrator, never about `drizzle-kit`.
 **What the engine still owns**, because `Migrator` does not: the pre-migration copy through
 `VACUUM INTO`, taken only when a migration is pending and the store already holds something; run-event
 retention, run before the copy so the copy is bounded; the schema fingerprint; the check that no
-applied migration is one this build does not ship; and the fail-closed status. Which migrations a
+applied migration is one this build does not ship; the mirror of that check, that no *shipped*
+migration sits below the store's highest applied id — `Migrator` compares against that mark, so such
+a migration would be skipped in silence and surface later as an unexplained schema mismatch; and the
+fail-closed status, which reports unavailable for a failure or a defect but re-raises a cause that is
+interruption alone, so a shutdown mid-boot stays a shutdown. Which migrations a
 store boots with is a parameter of the boot layer, defaulting to the shipped set — the incremental
 path is otherwise untestable while only one migration exists.
 
@@ -230,14 +234,34 @@ closed, and the schema fingerprint is compared exactly. The hash was also a foot
 raw bytes of the `.sql` file, so reformatting a committed migration would have marked every store on
 every machine incompatible and stopped dispatch.
 
-**A legacy `runs.db` is imported, not renamed.** Its tables were created by a bootstrap that predates
-`drizzle-kit`, and two of its columns arrived by `ALTER TABLE`, so its DDL text can never match what
-a migration produces. Adopting the file forced two things this ADR did not want: `IF NOT EXISTS`
-hand-edited into generated SQL so the first migration could run over existing tables, and a schema
-check taught to forgive whatever shape an old store happened to have. Copying the rows into a freshly
-migrated store leaves the generated SQL untouched and lets the check stay an exact comparison, which
-is the right strictness for a store that fails closed. The retired value `blocked` is translated to
-`exhausted` on the way in. The old file is kept as `runs.db.imported-<millis>`; nothing is deleted.
+**There is no legacy cutover at all.** This ADR's Consequences said `~/.cogwork/runs.db` becomes the
+wrong filename and that renaming it is itself a migration step. That is withdrawn: the store does not
+adopt, rename, import, or read a legacy `runs.db`. A fresh `control.db` is created beside it and the
+old file is left untouched for a person to delete.
+
+Two attempts preceded this and both were worse. Renaming the file into place forced `IF NOT EXISTS`
+to be hand-edited into generated SQL, and a schema check taught to forgive whatever shape an old
+store happened to have — because a pre-`drizzle-kit` bootstrap plus two `ALTER TABLE`s can never
+produce the DDL text a migration produces. Copying the rows instead kept the generated SQL clean, but
+`ATTACH DATABASE` on a file the daemon does not own made the boot path read an untrusted schema: a
+`runs.db` whose `runs` is a *view* over a recursive CTE passed the table check, and its rows were
+inserted into the store while boot reported healthy. Demonstrated, not theoretical.
+
+Neither cost was worth paying. cogwork has one user, who is its author, and no run history worth
+migrating — so the correct move is to write the system wanted rather than carry a cutover for a
+population that does not exist. Deleting the path removed the untrusted `ATTACH`, the column
+intersection over `pragma_table_info`, and the question of whether a corrupt disposable file should
+be allowed to stop dispatch, which this ADR's own Considered Options argued it should not.
+
+**The expected-revision write is deferred, not delivered.** This ADR said every write to an
+authoritative record raises and carries an expected revision, and #218 made it an acceptance
+criterion. It shipped as a generic `authoritative_records` table of `key`/`value`/`revision` with a
+`writeAuthoritative` beside it — and no caller. That has been struck. Three reasons: *authoritative
+record* is a noun no `CONTEXT.md` glossary carries, so it failed the vocabulary rule the moment it was
+written; the one queued consumer, [#219](https://github.com/colonylabs/cogwork/issues/219), wants
+typed columns for three named limits rather than an opaque blob; and a table shipped in the first
+migration is the hardest thing on this branch to undo. The revision-and-stale-write *pattern* stands
+as this ADR decided it; it lands with #219's real table, and #218 carries a note saying so.
 
 **The hand-edit hole this ADR claimed to close was open.** A check that regenerates the module and
 fails on a difference does not close it, because the module is generated *from* the SQL — an edit to
