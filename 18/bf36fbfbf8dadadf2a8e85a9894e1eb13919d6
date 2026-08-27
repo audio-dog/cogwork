@@ -1,0 +1,25 @@
+AGENTS.md
+  s_a87513e3df0624::t_d5ed332c3013ab 34-40
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_a87513e3df0624::t_d66090a4a994bb 211-217
+packages/engine/drizzle.config.ts
+  s_a87513e3df0624::t_9905eb0e46811f 3
+packages/engine/package.json
+  s_a87513e3df0624::t_7357a6ea42b5d6 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "18bf36fbfbf8dadadf2a8e85a9894e1eb13919d6",
+  "prompts": {},
+  "sessions": {
+    "s_a87513e3df0624": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0447c-f521-7862-8f20-59c6e24f69fb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
