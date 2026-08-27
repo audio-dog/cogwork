@@ -1,12 +1,7 @@
 import type { AgUiEvent } from "@cogwork/contracts";
-import {
-  DEFAULT_WORKSPACE_ROOT,
-  type ExecResult,
-  type SandboxFileEvent,
-  watchWorkspace,
-} from "@tanstack/ai-sandbox";
+import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
-import * as Queue from "effect/Queue";
+import * as FileSystem from "effect/FileSystem";
 import * as Stream from "effect/Stream";
 import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
@@ -78,24 +73,43 @@ export const toFileDiffEvent = Effect.fn("Tools.toFileDiffEvent")(function* (
   return diff === "" ? null : fileDiffEvent(relTo(event.path), diff);
 });
 
+const IGNORED_SEGMENTS = [".git", "node_modules", ".repos"];
+
+const ignored = (rel: string) => rel.split("/").some((segment) => IGNORED_SEGMENTS.includes(segment));
+
+// FileSystem.watch reports paths relative to the watched root, and its
+// create/remove classification stats them against the process cwd, so it
+// cannot be trusted here. The diff pipeline only distinguishes "gone" from
+// "present", which the sandbox handle answers correctly; timestamp is never
+// read downstream.
+const classifyWorktreeEvent = Effect.fn("Tools.classifyWorktreeEvent")(function* (
+  sandbox: WorktreeSandbox,
+  rel: string,
+) {
+  const path = `${DEFAULT_WORKSPACE_ROOT}/${rel}`;
+  const exists = yield* Effect.tryPromise(() => sandbox.handle.fs.exists(path)).pipe(
+    Effect.orElseSucceed(() => false),
+  );
+  return { type: exists ? "change" : "delete", path, timestamp: 0 } satisfies SandboxFileEvent;
+});
+
+// Watching rides Effect's FileSystem so a watcher failure — e.g. macOS
+// FSEvents denied under a Codex seatbelt sandbox, surfaced as an async
+// EMFILE — lands on the typed error channel instead of crashing the process.
+// The caller already degrades a failed feed to "no live diffs".
 export const watchWorktreeDiffs = (
   sandbox: WorktreeSandbox,
   baseSha: string,
-): Stream.Stream<AgUiEvent, ToolError> =>
-  Stream.callback<SandboxFileEvent, ToolError>((queue) =>
-    Effect.gen(function* () {
-      const watcher = yield* Effect.tryPromise({
-        try: () =>
-          watchWorkspace(sandbox.handle, {
-            root: DEFAULT_WORKSPACE_ROOT,
-            ignore: [".git", "node_modules", ".repos"],
-            onEvent: (event) => Queue.offerUnsafe(queue, event),
-          }),
-        catch: (cause) => toolError("exec-failed", `failed to start file watcher: ${String(cause)}`),
-      });
-      yield* Effect.addFinalizer(() => Effect.promise(() => watcher.stop()));
-    }),
-  ).pipe(
-    Stream.mapEffect((event) => toFileDiffEvent(sandbox, baseSha, event)),
-    Stream.filter((event): event is AgUiEvent => event !== null),
+): Stream.Stream<AgUiEvent, ToolError, FileSystem.FileSystem> =>
+  FileSystem.FileSystem.pipe(
+    Effect.map((fs) =>
+      fs.watch(sandbox.root, { recursive: true }).pipe(
+        Stream.mapError((error) => toolError("exec-failed", `file watcher failed: ${error.message}`)),
+        Stream.filter((event) => !ignored(event.path)),
+        Stream.mapEffect((event) => classifyWorktreeEvent(sandbox, event.path)),
+        Stream.mapEffect((event) => toFileDiffEvent(sandbox, baseSha, event)),
+        Stream.filter((event): event is AgUiEvent => event !== null),
+      ),
+    ),
+    Stream.unwrap,
   );

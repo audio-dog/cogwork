@@ -10,6 +10,7 @@ import {
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
@@ -178,10 +179,23 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             outputSchema: stageResultSchema(request.stage),
           });
 
-          const diffs = watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.catchCause(() => Stream.empty));
-          return Stream.merge(bridgeChat(chatStream), diffs, { haltStrategy: "left" }).pipe(
-            Stream.ensuring(Effect.sync(() => abortController.abort())),
-          );
+          // Live diffs are a nicety: a dead feed must not end the run, but it
+          // must leave a trace — on Linux a large ignored tree can exhaust
+          // inotify watches, and recursive watching cannot exclude subtrees.
+          return Stream.merge(
+            bridgeChat(chatStream),
+            watchWorktreeDiffs(sandbox, baseSha).pipe(
+              Stream.catchCause((cause) =>
+                // Interruption is the merge tearing the feed down, not a death.
+                Cause.hasInterruptsOnly(cause)
+                  ? Stream.empty
+                  : Stream.fromEffect(Effect.logWarning("worktree diff feed stopped", { cause })).pipe(
+                      Stream.drain,
+                    ),
+              ),
+            ),
+            { haltStrategy: "left" },
+          ).pipe(Stream.ensuring(Effect.sync(() => abortController.abort())));
         }),
       ),
   };

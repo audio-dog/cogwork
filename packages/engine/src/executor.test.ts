@@ -12,6 +12,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Redacted from "effect/Redacted";
@@ -540,7 +541,12 @@ const provide = (
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
-  const runnerServices = Layer.mergeAll(sessionStore, contextAssemblerStub, CredentialStore.layerEnv);
+  const runnerServices = Layer.mergeAll(
+    sessionStore,
+    contextAssemblerStub,
+    CredentialStore.layerEnv,
+    FileSystem.layerNoop({}),
+  );
   return Executor.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(

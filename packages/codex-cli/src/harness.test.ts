@@ -16,6 +16,7 @@ import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -63,6 +64,8 @@ const credentialStore: CredentialStore.CredentialStoreService = {
   providerKey: unexpected,
   persistProviderKey: unexpected,
 };
+
+const fileSystem = FileSystem.makeNoop({});
 
 const makeRequest = (overrides: Partial<Harness.HarnessRequest> = {}): Harness.HarnessRequest => ({
   harness: name,
@@ -152,7 +155,7 @@ const makeLiveHarness = (codexExecutable = fakeCodexExecutable()) =>
             codexExecutable,
           }),
         ],
-        { sessionStore, contextAssembler, credentialStore },
+        { sessionStore, contextAssembler, credentialStore, fileSystem },
       ),
     })),
   );
@@ -199,7 +202,7 @@ describe("codexRunner", () => {
         },
         runChat,
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       const events = yield* Stream.runCollect(harness.run(makeRequest()));
 
@@ -246,7 +249,7 @@ describe("codexRunner", () => {
           return toAsyncIterable(chunks);
         },
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       yield* harness.run(makeRequest()).pipe(Stream.take(1), Stream.runDrain);
 
@@ -264,7 +267,7 @@ describe("codexRunner", () => {
         },
         runChat: () => toAsyncIterable(chunks),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       yield* Stream.runDrain(
         harness.run(
@@ -307,7 +310,7 @@ describe("codexRunner", () => {
         },
         runChat: () => toAsyncIterable(chunks),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       yield* Stream.runDrain(
         harness.run(
@@ -351,7 +354,7 @@ describe("codexRunner", () => {
         },
         runChat: () => toAsyncIterable(chunks),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
       const mcpSkill = (bearer: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
         { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: Redacted.make(bearer) },
       ];
@@ -372,7 +375,7 @@ describe("codexRunner", () => {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("spawn codex ENOENT")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
@@ -387,7 +390,7 @@ describe("codexRunner", () => {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("You are not logged in")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
@@ -402,7 +405,7 @@ describe("codexRunner", () => {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("File not found: /repo/input.json")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
@@ -416,7 +419,7 @@ describe("codexRunner", () => {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("Provider authentication failed with status 401")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
@@ -465,6 +468,7 @@ describe("codexRunner", () => {
       const harness = Harness.make([codexRunner({ name, codexExecutable: fakeCodexExecutable() })], {
         sessionStore,
         contextAssembler,
+        fileSystem,
         credentialStore,
       });
       const events = yield* Stream.runCollect(harness.run(makeRequest({ checkoutPath, session: null })));
@@ -630,6 +634,7 @@ describe("codexRunner", () => {
           sessionStore: { ...sessionStore, resumeHandle: () => Effect.succeed(recordedHandle) },
           contextAssembler,
           credentialStore,
+          fileSystem,
         },
       );
       const resumedEvents = yield* Stream.runCollect(

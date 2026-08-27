@@ -2,6 +2,7 @@ import { HarnessName } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type HarnessExecution, make, stageResultSchema } from "./harness";
@@ -24,6 +25,7 @@ const harnessServices = {
     providerKey: () => Effect.die("unexpected provider key lookup"),
     persistProviderKey: () => Effect.die("unexpected provider key persistence"),
   },
+  fileSystem: FileSystem.makeNoop({}),
 };
 
 describe("stageResultSchema", () => {
