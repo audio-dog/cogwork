@@ -99,7 +99,6 @@ describe("daemon server composition", () => {
         registry: registryLayer,
         worktrees: worktreeLayer,
         harnessRunners: [stubRunner],
-        scheduler: { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
       });
       const clientLayer = RpcClient.layerProtocolSocket().pipe(
         Layer.provide(Layer.succeed(Socket.Socket, client)),
