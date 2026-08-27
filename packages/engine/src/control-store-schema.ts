@@ -1,14 +1,8 @@
 import { desc } from "drizzle-orm";
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-// The Control store's schema, and the only source drizzle-kit diffs. The migrator's own
-// bookkeeping table is deliberately absent: Effect's `Migrator` creates and owns it, so putting it
-// here would make drizzle-kit generate a rival definition of the same table.
-export const authoritativeRecords = sqliteTable("authoritative_records", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-  revision: integer("revision").notNull(),
-});
+// Effect's `Migrator` creates and owns its own bookkeeping table, so it is deliberately absent
+// here: including it would make drizzle-kit generate a rival definition of the same table.
 export const runs = sqliteTable(
   "runs",
   {

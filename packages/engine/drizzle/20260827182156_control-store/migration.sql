@@ -1,9 +1,3 @@
-CREATE TABLE `authoritative_records` (
-	`key` text PRIMARY KEY,
-	`value` text NOT NULL,
-	`revision` integer NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE `run_events` (
 	`run_id` text NOT NULL,
 	`seq` integer NOT NULL,

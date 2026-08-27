@@ -1,13 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "23a4930f-ba56-431e-a56c-77d1a2daf3c0",
+  "id": "b999fb18-e504-4a89-8137-e8e456abf81d",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
-    {
-      "name": "authoritative_records",
-      "entityType": "tables"
-    },
     {
       "name": "run_events",
       "entityType": "tables"
@@ -19,36 +15,6 @@
     {
       "name": "sessions",
       "entityType": "tables"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "key",
-      "entityType": "columns",
-      "table": "authoritative_records"
-    },
-    {
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "value",
-      "entityType": "columns",
-      "table": "authoritative_records"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "revision",
-      "entityType": "columns",
-      "table": "authoritative_records"
     },
     {
       "type": "text",
@@ -316,13 +282,6 @@
       "name": "run_events_pk",
       "entityType": "pks",
       "table": "run_events"
-    },
-    {
-      "columns": ["key"],
-      "nameExplicit": false,
-      "name": "authoritative_records_pk",
-      "table": "authoritative_records",
-      "entityType": "pks"
     },
     {
       "columns": ["id"],
