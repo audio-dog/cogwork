@@ -17,6 +17,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
@@ -33,6 +34,7 @@ import {
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
+import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import { layer as runRecorderLayer } from "./run-recorder";
@@ -704,6 +706,35 @@ describe("Executor.execute", () => {
         const ledger = yield* RunLedger.RunLedger;
         const runs = yield* ledger.listRuns(10);
         assert.strictEqual(runs[0]?.status, "failed");
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("settles a silent harness run as a retryable failure after its stage budget", () =>
+    Effect.gen(function* () {
+      const calls = yield* Ref.make<ReadonlyArray<Call>>([]);
+      const silentRunner: HarnessRunner = {
+        name: cursor,
+        sessionKind: "opaque-handle",
+        run: () => Stream.never,
+      };
+      const layer = provide(recorder(calls), [silentRunner]);
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        const execution = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+        yield* TestClock.adjust(defaultRunBudget("implement"));
+        assert.isTrue(yield* Fiber.join(execution));
+
+        const log = yield* Ref.get(calls);
+        assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "timed out");
+        assert.isFalse(log.some((call) => call.method === "handOff"));
+        assert.isTrue(log.some((call) => call.method === "release"));
+
+        const ledger = yield* RunLedger.RunLedger;
+        const [run] = yield* ledger.listRuns(10);
+        assert.strictEqual(run?.status, "failed");
+        const events = run ? yield* ledger.events(run.id) : [];
+        assert.isTrue(events.some((event) => event.type === "RUN_FINISHED"));
       }).pipe(Effect.provide(layer));
     }),
   );
