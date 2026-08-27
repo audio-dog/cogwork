@@ -113,6 +113,27 @@ describe("gitLayer against a real repository", () => {
 const contextTestLayer = contextFsLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 describe("contextFsLayer against a real filesystem", () => {
+  it.effect("lists an Authoring tree directory and treats a missing one as empty", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-" });
+      const rules = path.join(root, "rules");
+      yield* fs.makeDirectory(rules, { recursive: true });
+      yield* fs.writeFileString(path.join(rules, "global.md"), "global rules");
+
+      assert.deepStrictEqual(yield* context.readDirectory(rules), ["global.md"]);
+      assert.deepStrictEqual(yield* context.readDirectory(path.join(root, "missing")), []);
+
+      const file = path.join(root, "not-a-directory");
+      yield* fs.writeFileString(file, "not a directory");
+      const error = yield* Effect.flip(context.readDirectory(file));
+      assert.strictEqual(error._tag, "ContextFsError");
+      assert.include(error.operation, "read directory");
+    }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
+  );
+
   it.effect("reads a present file and returns null for an absent one", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

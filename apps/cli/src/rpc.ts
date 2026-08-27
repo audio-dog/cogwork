@@ -1,3 +1,4 @@
+import * as os from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,16 +89,17 @@ export const harnessRunners = [
   Provider.providerRunner({ name: providerName }),
 ];
 
-// The engine ships the playbook skills beside its source, and the daemon home
-// (where the global AGENTS.md and provisioned skills live) is the directory that
-// holds the credentials file.
 const engineSkillsDir = nodePath.resolve(
   nodePath.dirname(fileURLToPath(import.meta.resolve("@cogwork/engine"))),
   "../skills",
 );
 
 const contextAssemblerLayer = (homeDir: string) =>
-  ContextAssembler.layer({ homeDir, skillsDir: engineSkillsDir }).pipe(Layer.provide(contextFsLayer));
+  ContextAssembler.layer({
+    homeDir,
+    userAgentsDir: nodePath.join(os.homedir(), ".agents"),
+    skillsDir: engineSkillsDir,
+  }).pipe(Layer.provide(contextFsLayer));
 
 export const serverLayer = (options: DaemonOptions) =>
   Daemon.serverLayer({
