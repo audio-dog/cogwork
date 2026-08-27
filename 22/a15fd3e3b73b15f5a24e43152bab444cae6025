@@ -1,0 +1,28 @@
+packages/codex-cli/src/harness.test.ts
+  s_6cf3819b1bbdfc::t_6460aab46c1173 38
+packages/engine/src/context-assembler.test.ts
+  s_6cf3819b1bbdfc::t_a8742fc1532196 69-70,98
+  s_6cf3819b1bbdfc::t_ae5e967023405e 12,25-31,60,67-68,84-85
+packages/engine/src/context-fs.ts
+  s_6cf3819b1bbdfc::t_8f336e123e7052 16-17
+packages/engine/src/context-assembler.ts
+  s_6cf3819b1bbdfc::t_8f336e123e7052 7,28,100-104,132,135
+  s_6cf3819b1bbdfc::t_3183dafa4ad928 69-71,97,105,134
+  s_6cf3819b1bbdfc::t_972a7e592c5b60 98-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "22a15fd3e3b73b15f5a24e43152bab444cae6025",
+  "prompts": {},
+  "sessions": {
+    "s_6cf3819b1bbdfc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040c4-d768-76a1-bc47-0ed4ebda953e",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
