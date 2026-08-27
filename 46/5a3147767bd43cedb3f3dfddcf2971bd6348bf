@@ -1,0 +1,22 @@
+packages/engine/src/provider-runner.test.ts
+  s_9b30292056623b::t_de3671cab955da 139
+packages/engine/src/provider-runner.ts
+  s_9b30292056623b::t_ab2afe5c665a93 38,115,152
+  s_9b30292056623b::t_b64da3b6f0b7d7 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "465a3147767bd43cedb3f3dfddcf2971bd6348bf",
+  "prompts": {},
+  "sessions": {
+    "s_9b30292056623b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040c4-d52b-7a43-9fff-20b259315e40",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
