@@ -1,0 +1,24 @@
+packages/engine/src/engine.test.ts
+  s_cdcd6d602c6a4c::t_7560c3a5d2830b 595,604-607
+  s_cdcd6d602c6a4c::t_79583d1f86180f 518-551,560-565,567-585,589-594,596-597,599-603,622
+  s_cdcd6d602c6a4c::t_5fd0fd8293ad5a 621,623-624
+  s_cdcd6d602c6a4c::t_e9f42c471a29ab 552,566,608-614,616-620
+packages/engine/src/daemon.ts
+  s_cdcd6d602c6a4c::t_dadab1f7c99e86 10,278-284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2d8c79e9a33b69864daafbc4048a31b1bb6f2679",
+  "prompts": {},
+  "sessions": {
+    "s_cdcd6d602c6a4c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04422-87e7-71c1-9669-a8f28dcaee17",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
