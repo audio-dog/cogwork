@@ -1,0 +1,27 @@
+packages/contracts/CONTEXT.md
+  s_940e2d115ea8f3::t_940ae97a70e481 128-132
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_940e2d115ea8f3::t_9fbe1c6d77259a 82
+  s_940e2d115ea8f3::t_a78119c40c5fdc 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0788dd6d2cc5bef3b18534d9ac12168875e37ca7",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_940e2d115ea8f3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9523d5-2170-42f4-a2d7-a13e970ba851",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
