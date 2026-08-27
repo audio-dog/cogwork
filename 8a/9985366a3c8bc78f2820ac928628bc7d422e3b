@@ -1,0 +1,24 @@
+packages/engine/src/tools/policy.ts
+  s_9b30292056623b::t_cb7c1e1e04ed16 51
+  s_9b30292056623b::t_ab2afe5c665a93 8,44-46,49-50
+packages/engine/src/tools/index.ts
+  s_9b30292056623b::t_ab2afe5c665a93 33
+packages/engine/src/operation-policy.ts
+  s_9b30292056623b::t_ab2afe5c665a93 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "8a9985366a3c8bc78f2820ac928628bc7d422e3b",
+  "prompts": {},
+  "sessions": {
+    "s_9b30292056623b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040c4-d52b-7a43-9fff-20b259315e40",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
