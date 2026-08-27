@@ -1,0 +1,98 @@
+apps/cli/src/platform.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 3,13,57-58,69-78,92-95,123-125,132-133,156-164
+packages/engine/src/tools/owned-tools.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 4,157,160,248-249,253,267,280-284,289,294,300,305,310,315,320
+packages/codex-cli/CONTEXT.md
+  s_5f93712d7738ed::t_979b2d2d520c30 34-37
+packages/cursor-acp/src/harness.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 4,6,36,39,44-65,232,236-240,268-269,273,277-279
+packages/engine/src/executor.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 29,39,183,296,300-318,321,324,345,350,893-896
+packages/engine/src/run-control.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 4-5,9,11,14-16,19
+packages/engine/src/scheduler.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 9,12,287-291,293-295,297-314,316-318,323-375,380-381,385-390,395-396,400,412-435,437-438,443-466,468-469,474-491,493-494,499-517,519-520,525-539,541-542,569-586,589-590,596-611,616-630,635-646,648-661,666-667,669,671-672,674-680,685-690,695-703
+packages/engine/src/tools/owned-tools.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 1,4-5,7-11,13-14,28-29,45-94,185-249,286
+packages/engine/CONTEXT.md
+  s_5f93712d7738ed::t_979b2d2d520c30 77,113
+packages/engine/src/provider-runner.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 24,140,298-306,310,320
+packages/engine/src/reconcile.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 9,24-25,52-56,119,209,217,222,225-265,268-269
+packages/engine/src/scheduler.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 238-241,244-245,284
+packages/engine/src/recovery.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 170-175,197-198,216,229,626-648
+packages/engine/src/tools/index.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 33
+packages/cursor-acp/src/harness.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 1-3,10,14,16,54,66-74,121-150,162,164-166,170,184-185
+packages/engine/src/linear/client.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 403,405-414,416,418-424
+packages/engine/src/engine.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 3-5,11,75-76,85-117,190-203,216-290,545-546,561-570,572-608,616-641,645-688,690-705,716-717,720-740
+  s_5f93712d7738ed::t_7c803d08cd2f9b 571
+packages/engine/src/operation-policy.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 1-6
+packages/codex-cli/src/harness.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 55-61,63-64,191,196,210-214,233
+packages/engine/src/tools/policy.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 8,44-46,49-51
+packages/engine/src/git.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 8
+packages/engine/src/worktree.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 163-164
+packages/engine/src/daemon-composition.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 14,44
+packages/engine/src/daemon.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 10,267-273,277-280,287-289,294
+packages/engine/src/harness.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 1,3,6-27,132-181
+  s_5f93712d7738ed::t_4176f44d98797a 182
+packages/engine/src/commands.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 13,20,65-66,350-375
+packages/engine/src/github/client.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 304-312,394-406,456-464
+packages/engine/src/recovery.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 224-225
+packages/engine/src/harness.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 18,23,31,41-52,66,71-74,96-121,128-131,135
+packages/engine/src/linear/client.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 171,386-389,391-394,406-413
+packages/engine/src/worktree.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 54,70,73,234-237,257-279
+  s_5f93712d7738ed::t_89708cad35c740 280-282
+packages/engine/src/event-publisher.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 106-107
+packages/engine/src/provider-runner.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 14,16-17,26,40,78-83,86-89,96-97,101,105,112,125,161-164,173
+apps/cli/src/platform.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 1,3,5,9-12,14-15,21-49,51,57-131
+  s_5f93712d7738ed::t_54e0c3073ab206 132-133
+packages/engine/src/tools/policy.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 4-6,30-39,126,143,154
+packages/codex-cli/src/harness.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 78,211-212,437,439-440,642,644,676-677,679-685
+packages/engine/src/session-store.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 24,136-139,141,154,157
+packages/engine/src/executor.test.ts
+  s_5f93712d7738ed::t_979b2d2d520c30 23,32,41,228,401,414,479,486,528-532,554,742-765,807,813-838,869
+  s_5f93712d7738ed::t_fe5ab938a0c991 426
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0a85cc9a5031f84aa8128067ad1d2adfa9a9900c",
+  "prompts": {},
+  "sessions": {
+    "s_5f93712d7738ed": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a043fb-e465-7c02-9a2d-4b21bdd38fab",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
