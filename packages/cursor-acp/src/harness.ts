@@ -1,8 +1,9 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
 import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
 import { Harness, SessionStore } from "@cogwork/engine";
-import { chat, EventType, type StreamChunk } from "@tanstack/ai";
+import { type ChatMiddleware, chat, EventType, type ModelMessage, type StreamChunk } from "@tanstack/ai";
 import {
+  type AcpCompatibleTextAdapter,
   type AcpHarnessContext,
   type AcpJsonRpcStream,
   type AcpSessionTransport,
@@ -32,12 +33,35 @@ export interface CursorRunnerOptions {
   readonly defaultModel?: string;
   readonly scrubEnv?: ReadonlyArray<string>;
   readonly authMethodId?: string;
+  readonly runChat?: CursorRunChat;
 }
 
-type CursorModelOptions = {
+export type CursorModelOptions = {
   readonly sessionId?: string;
   readonly effort?: string;
 };
+
+export interface CursorRunChatOptions {
+  readonly adapter: AcpCompatibleTextAdapter<string, CursorModelOptions>;
+  readonly messages: ReadonlyArray<ModelMessage>;
+  readonly middleware: ReadonlyArray<ChatMiddleware>;
+  readonly abortController: AbortController;
+  readonly modelOptions?: CursorModelOptions;
+  readonly outputSchema?: Harness.StageResultSchema;
+}
+
+export type CursorRunChat = (options: CursorRunChatOptions) => AsyncIterable<StreamChunk>;
+
+const defaultRunChat: CursorRunChat = (options) =>
+  chat({
+    adapter: options.adapter,
+    messages: [...options.messages],
+    middleware: [...options.middleware],
+    abortController: options.abortController,
+    ...(options.modelOptions ? { modelOptions: options.modelOptions } : {}),
+    outputSchema: options.outputSchema,
+    stream: true,
+  });
 
 // Cursor keeps conversation history server-side; the opaque handle is how you resume it.
 export const cursorModelOptions = (handle: string | null, effort: string | null) => ({
@@ -205,6 +229,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   const defaultModel = options.defaultModel ?? "auto";
   const scrubEnv = [...(options.scrubEnv ?? ["GITHUB_TOKEN", "GH_TOKEN"])];
   const authMethodId = options.authMethodId ?? "cursor_login";
+  const runChat = options.runChat ?? defaultRunChat;
   return {
     name: options.name,
     sessionKind: "opaque-handle",
@@ -235,15 +260,18 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             }),
           });
           const modelOptions = cursorModelOptions(handle, request.effort);
-          const stream = chat({
+          const abortController = new AbortController();
+          const stream = runChat({
             adapter: adapter(model),
             messages: [{ role: "user", content: request.prompt }],
             middleware: [withSandbox(sandbox)],
+            abortController,
             ...(handle || request.effort ? { modelOptions } : {}),
             outputSchema: Harness.stageResultSchema(request.stage),
-            stream: true,
           });
-          return withEstimatedUsage(request.prompt.length, bridge(stream));
+          return withEstimatedUsage(request.prompt.length, bridge(stream)).pipe(
+            Stream.ensuring(Effect.sync(() => abortController.abort())),
+          );
         }),
       ),
   };
