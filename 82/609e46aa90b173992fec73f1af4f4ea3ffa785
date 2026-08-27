@@ -1,0 +1,32 @@
+packages/engine/src/tools/owned-tools.ts
+  s_8f8000d079e5f0::t_29c7f0429cad29 4,157,160,248-251,255,269,282-286,291,296,302,307,312,317,322
+packages/engine/src/tools/policy.test.ts
+  s_8f8000d079e5f0::t_7e0a09e0a869fd 4-6,30-39,126,143,154
+packages/engine/src/tools/owned-tools.test.ts
+  s_8f8000d079e5f0::t_2c4cf7cdeff2ac 178-180,182-183,185-187
+  s_8f8000d079e5f0::t_a0922392cc484b 9,196-209,211-212,214-219,222
+  s_8f8000d079e5f0::t_7402a9e411dd75 43-50,181,210,260
+  s_8f8000d079e5f0::t_0bb07f34cce1af 163,165-171,173
+  s_8f8000d079e5f0::t_3628b64e892352 53-60,184,213,220
+  s_8f8000d079e5f0::t_46c5f9d2cf74aa 1,4,6-8,12,26-27,151-162,164,172,174-177,188-195
+  s_8f8000d079e5f0::t_e7f603cebacd58 11
+  s_8f8000d079e5f0::t_c3ab252348bbf6 51-52
+  s_8f8000d079e5f0::t_7370649801dce0 221
+  s_8f8000d079e5f0::t_e9f538bdb5672f 223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "82609e46aa90b173992fec73f1af4f4ea3ffa785",
+  "prompts": {},
+  "sessions": {
+    "s_8f8000d079e5f0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04416-72ca-7930-ab0e-450cb42f14bc",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
