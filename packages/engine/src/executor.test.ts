@@ -13,10 +13,13 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
@@ -414,6 +417,21 @@ const capturingRunner = (
       Ref.update(requests, (xs) => [...xs, request]).pipe(
         Effect.map(() => Stream.concat(Stream.fromArray(events), tail)),
       ),
+    ),
+});
+
+const observingRunner = (span: Ref.Ref<Tracer.Span | null>): HarnessRunner => ({
+  name: cursor,
+  sessionKind: "opaque-handle",
+  execution: fullHarnessExecution,
+  run: () =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const current = yield* Effect.currentSpan.pipe(Effect.orDie, Effect.withSpan("Harness.library"));
+        yield* Ref.set(span, current);
+        yield* Effect.logInfo("library log", { session: "sess-42" });
+        return Stream.fromArray(implementEvents);
+      }),
     ),
 });
 
@@ -869,6 +887,39 @@ describe("Executor.execute", () => {
       }).pipe(Effect.provide(layer));
     }),
   );
+
+  it.effect("correlates claimed-run library logs and spans", () => {
+    const calls = Ref.makeUnsafe<ReadonlyArray<Call>>([]);
+    const span = Ref.makeUnsafe<Tracer.Span | null>(null);
+    const logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }> = [];
+    const logger = Logger.make<unknown, void>(({ fiber, message }) => {
+      logs.push({ message, annotations: { ...fiber.getRef(References.CurrentLogAnnotations) } });
+    });
+    const layer = provide(recorder(calls), [observingRunner(span)]);
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem).pipe(Effect.withLogger(logger));
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(1);
+      assert.isDefined(run);
+      const correlation = {
+        workspace: "gh",
+        item: "#15",
+        stage: "implement",
+        runId: run.id,
+      };
+      const libraryLog = logs.find(({ message }) =>
+        Array.isArray(message) ? message.includes("library log") : message === "library log",
+      );
+      assert.deepStrictEqual(libraryLog?.annotations, correlation);
+      assert.deepStrictEqual(libraryLog?.message, ["library log", { session: "sess-42" }]);
+
+      const librarySpan = yield* Ref.get(span);
+      assert.isNotNull(librarySpan);
+      assert.deepStrictEqual(Object.fromEntries(librarySpan.attributes), correlation);
+    }).pipe(Effect.provide(layer));
+  });
 
   it.effect("mints an opaque-handle session for a Cursor-served run and captures its handle", () =>
     Effect.gen(function* () {
