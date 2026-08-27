@@ -1,0 +1,19 @@
+packages/engine/src/model-catalog.ts
+  s_506ba1521ef9f8::t_f68158cefbcde7 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "ec431d0b2ac128fbbefb00561b32ffbe43452f30",
+  "prompts": {},
+  "sessions": {
+    "s_506ba1521ef9f8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a040dd-f731-77b1-a2dc-78ce64c4c2b4",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
