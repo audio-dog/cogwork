@@ -52,9 +52,15 @@ const defaultRunChat: CodexRunChat = (options) =>
     stream: true,
   });
 
-export const codexRuntimeConfig = (effort: CodexEffort): CodexTextConfig => ({
+const sandboxMode = (profile: Harness.OperationPolicyProfile) =>
+  profile === "read-only" ? "read-only" : "workspace-write";
+
+export const codexRuntimeConfig = (
+  effort: CodexEffort,
+  profile: Harness.OperationPolicyProfile,
+): CodexTextConfig => ({
   approvalPolicy: "never",
-  sandboxMode: "danger-full-access",
+  sandboxMode: sandboxMode(profile),
   modelReasoningEffort: effort,
 });
 
@@ -181,11 +187,12 @@ const mcpAdapterConfig = (mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>) =>
 
 const adapterConfig = (
   effort: CodexEffort,
+  profile: Harness.OperationPolicyProfile,
   codexExecutable: string | undefined,
   mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>,
   gitDirectory: string | null,
 ): CodexTextConfig => ({
-  ...codexRuntimeConfig(effort),
+  ...codexRuntimeConfig(effort, profile),
   ...(codexExecutable ? { codexExecutable } : {}),
   ...(gitDirectory ? { additionalDirectories: [gitDirectory] } : {}),
   ...mcpAdapterConfig(mcpSkills),
@@ -199,6 +206,11 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
   return {
     name: options.name,
     sessionKind: "opaque-handle",
+    execution: {
+      nonInteractive: true,
+      worktreeConfined: true,
+      profiles: ["read-only", "full"],
+    },
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {
@@ -217,7 +229,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
           const gitDirectory = yield* resolveGitMetadataDirectory(request.checkoutPath);
           const adapter = makeAdapter(
             model,
-            adapterConfig(effort, options.codexExecutable, request.mcpSkills, gitDirectory),
+            adapterConfig(effort, request.profile, options.codexExecutable, request.mcpSkills, gitDirectory),
           );
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,

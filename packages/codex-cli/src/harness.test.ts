@@ -75,6 +75,7 @@ const makeRequest = (overrides: Partial<Harness.HarnessRequest> = {}): Harness.H
   effort: "high",
   mcpSkills: [],
   ...overrides,
+  profile: overrides.profile ?? "full",
 });
 
 const testRunner = (options: Omit<CodexRunnerOptions, "name">) =>
@@ -207,7 +208,7 @@ describe("codexRunner", () => {
           "gpt-5.6-sol",
           {
             approvalPolicy: "never",
-            sandboxMode: "danger-full-access",
+            sandboxMode: "workspace-write",
             modelReasoningEffort: "high",
             env: codexChildEnvironment(),
           },
@@ -432,9 +433,9 @@ describe("codexRunner", () => {
       );
       const capture = yield* structuredCapture(events);
 
-      assert.include(capture.args, "danger-full-access");
+      assert.include(capture.args, "workspace-write");
       assert.include(capture.args, 'approval_policy="never"');
-      assert.notInclude(capture.args, "workspace-write");
+      assert.notInclude(capture.args, "danger-full-access");
       assert.notInclude(capture.args, "sandbox_workspace_write.network_access=true");
       assert.notInclude(capture.args, "resume");
       assert.include(capture.prompt, "global rules");
@@ -637,9 +638,9 @@ describe("codexRunner", () => {
 
       assert.include(capture.args, "resume");
       assert.include(capture.args, recordedHandle);
-      assert.include(capture.args, "danger-full-access");
+      assert.include(capture.args, "workspace-write");
       assert.include(capture.args, 'approval_policy="never"');
-      assert.notInclude(capture.args, "workspace-write");
+      assert.notInclude(capture.args, "danger-full-access");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
       assert.include(capture.prompt, "playbook rules");
@@ -671,10 +672,15 @@ describe("codexRunner", () => {
 });
 
 describe("codexRuntimeConfig", () => {
-  it("pins unattended runs to full access with no approvals", () => {
-    assert.deepStrictEqual(codexRuntimeConfig("high"), {
+  it("maps each operation posture to Codex's bounded unattended sandbox", () => {
+    assert.deepStrictEqual(codexRuntimeConfig("high", "full"), {
       approvalPolicy: "never",
-      sandboxMode: "danger-full-access",
+      sandboxMode: "workspace-write",
+      modelReasoningEffort: "high",
+    });
+    assert.deepStrictEqual(codexRuntimeConfig("high", "read-only"), {
+      approvalPolicy: "never",
+      sandboxMode: "read-only",
       modelReasoningEffort: "high",
     });
   });
