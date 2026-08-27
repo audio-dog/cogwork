@@ -1,0 +1,21 @@
+AGENTS.md
+  s_dd0bc069f1065b::t_0d1d20e7235816 31-36
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_dd0bc069f1065b::t_36c0011d25c918 6,194-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4e2b3baee6214a3ec2f4f6d6ef5c93e0d7bddffb",
+  "prompts": {},
+  "sessions": {
+    "s_dd0bc069f1065b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "52e32dbe-b113-4a99-8d36-118cacd039df",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
