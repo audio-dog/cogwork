@@ -51,7 +51,7 @@ const fakeGit = (
     readonly worktrees?: ReadonlyArray<WorktreeEntry>;
     readonly remoteBranches?: ReadonlyArray<string>;
     readonly divergence?: BranchDivergence;
-    readonly rebaseFailure?: string;
+    readonly rebaseFailure?: GitError;
   },
 ) => {
   const remotes = new Set(options.remoteBranches ?? []);
@@ -67,15 +67,10 @@ const fakeGit = (
       Ref.update(recorder.fastForwarded, (log) => [...log, worktreePath]),
     divergence: (_worktreePath: string, _remote: string, _branch: string) =>
       Effect.succeed(options.divergence ?? inSync),
-    rebase: (worktreePath: string, remote: string, branch: string) =>
+    rebase: (worktreePath: string, _remote: string, _branch: string) =>
       options.rebaseFailure === undefined
         ? Ref.update(recorder.rebased, (log) => [...log, worktreePath])
-        : Effect.fail(
-            new GitError({
-              command: `rebase ${remote}/${branch}`,
-              message: options.rebaseFailure,
-            }),
-          ),
+        : Effect.fail(options.rebaseFailure),
   } satisfies GitService;
 };
 
@@ -236,7 +231,10 @@ describe("Worktree.ensure", () => {
         worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 2, behind: 5 },
-        rebaseFailure: "CONFLICT (content): Merge conflict in src/index.ts",
+        rebaseFailure: new GitError({
+          command: "rebase origin/13-worktree-lifecycle",
+          message: "CONFLICT (content): Merge conflict in src/index.ts",
+        }),
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
       const result = yield* Effect.result(
@@ -253,6 +251,32 @@ describe("Worktree.ensure", () => {
       assert.include(failure?.message ?? "", "no local commits were discarded");
       assert.deepStrictEqual(yield* Ref.get(recorder.removed), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
+    }),
+  );
+
+  it.effect("preserves a timed-out rebase as GitError", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
+      const git = fakeGit(recorder, {
+        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        remoteBranches: ["13-worktree-lifecycle"],
+        divergence: { ahead: 2, behind: 5 },
+        rebaseFailure: new GitError({
+          command: "rebase origin/13-worktree-lifecycle",
+          message: "timed out after 5 minutes",
+          reason: "timeout",
+        }),
+      });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+
+      const failure = yield* Effect.flip(
+        manager.ensure(workspaceWith(), { id: "#13", title: "Worktree lifecycle" }),
+      );
+
+      if (failure._tag !== "GitError")
+        return yield* Effect.die(new Error(`expected GitError, got ${failure._tag}`));
+      assert.strictEqual(failure.reason, "timeout");
     }),
   );
 

@@ -160,8 +160,8 @@ export const make = Effect.gen(function* () {
       ...divergence,
     });
     return yield* git.rebase(worktreePath, remote, branch).pipe(
-      Effect.catchTag(
-        "GitError",
+      Effect.catchIf(
+        (error) => error.reason !== "timeout",
         (error) =>
           new WorktreeDivergedError({
             remote,
