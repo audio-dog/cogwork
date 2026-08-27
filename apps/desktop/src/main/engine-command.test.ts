@@ -18,7 +18,6 @@ describe("resolveEngineCommand", () => {
       socketPath,
       "--drain-grace",
       "5",
-      "--start-paused",
     ]);
     expect(command.cwd).toBe(cliDir);
   });
@@ -45,10 +44,10 @@ describe("resolveEngineCommand", () => {
     expect(command.args[0]).toBe("/opt/engine/main.js");
   });
 
-  it("spawns the packaged daemon with scheduling paused so launch never starts spending budget", () => {
+  it("does not pass the retired scheduling mode flag", () => {
     const command = resolveEngineCommand({ socketPath, packaged: true, baseDir: "/res" });
 
-    expect(command.args).toContain("--start-paused");
+    expect(command.args).not.toContain("--start-paused");
   });
 
   it("passes a custom drain grace through to the daemon", () => {
