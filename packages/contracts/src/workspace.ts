@@ -96,8 +96,49 @@ export const WorktreeConfig = Schema.Struct({
 });
 export type WorktreeConfig = typeof WorktreeConfig.Type;
 
+export const WorkspaceInputWorktreeConfig = Schema.Struct({
+  linkPaths: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  setup: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+});
+export type WorkspaceInputWorktreeConfig = typeof WorkspaceInputWorktreeConfig.Type;
+
+export const WorkspaceBindingWorktreeConfig = Schema.Struct({
+  root: Schema.optional(TrimmedNonEmptyString),
+  remote: Schema.optional(TrimmedNonEmptyString),
+  baseBranch: Schema.optional(TrimmedNonEmptyString),
+  reapAfterMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
+});
+export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConfig.Type;
+
+export const WorkspaceInput = Schema.Struct({
+  harness: HarnessPreferences,
+  mcpSkills: Schema.optional(Schema.Array(McpSkill)),
+  playbook: Schema.optional(PlaybookConfig),
+  worktrees: Schema.optional(WorkspaceInputWorktreeConfig),
+});
+export type WorkspaceInput = typeof WorkspaceInput.Type;
+
+export const WorkspaceRegistration = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  checkoutPath: TrimmedNonEmptyString,
+  gitRemote: Schema.optional(TrimmedNonEmptyString),
+  issueTracker: IssueTrackerConfig,
+  sourceControl: Schema.optional(SourceControlConfig),
+  linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
+  worktrees: Schema.optional(WorkspaceBindingWorktreeConfig),
+  concurrency: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+});
+export type WorkspaceRegistration = typeof WorkspaceRegistration.Type;
+export type WorkspaceRegistrationInput = Schema.Codec.Encoded<typeof WorkspaceRegistration>;
+
+export class WorkspaceRegistrationError extends Schema.TaggedError<WorkspaceRegistrationError>()(
+  "WorkspaceRegistrationError",
+  { message: Schema.String },
+) {}
+
 export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,
+  displayName: Schema.optional(TrimmedNonEmptyString),
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
@@ -105,7 +146,6 @@ export const WorkspaceConfig = Schema.Struct({
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),
-  concurrency: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
   linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
 });
 export type WorkspaceConfig = typeof WorkspaceConfig.Type;
