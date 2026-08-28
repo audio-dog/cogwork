@@ -373,11 +373,19 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
         "identity escapes provision root",
       );
     }
-    if (!(yield* fs.exists(installedPath))) return;
+    if (!(yield* fs.exists(installedPath))) return null;
     const reclaimer = path.join(config.provisionRoot, ".reclaim");
     yield* fs.makeDirectory(reclaimer, { recursive: true, mode: 0o700 });
     const target = path.join(reclaimer, `${record.resolvedIdentity}--${record.installedAtMillis}`);
     yield* fs.rename(installedPath, target);
+    return { installedPath, target };
+  });
+
+  const restore = Effect.fn("PluginManager.restore")(function* (
+    reclaimed: { readonly installedPath: string; readonly target: string } | null,
+  ) {
+    if (!reclaimed) return;
+    yield* fs.rename(reclaimed.target, reclaimed.installedPath);
   });
 
   const uninstall = Effect.fn("PluginManager.uninstall")(function* (pluginId: string) {
@@ -388,11 +396,19 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
         if (!item?.record) {
           return yield* failure("uninstall Plugin", pluginId, null, "Plugin is not installed");
         }
-        yield* store
-          .uninstallPlugin(pluginId)
-          .pipe(Effect.mapError((error) => failure("uninstall Plugin", pluginId, null, error)));
-        yield* reclaim(item.record).pipe(
+        const reclaimed = yield* reclaim(item.record).pipe(
           Effect.mapError((error) => failure("reclaim Plugin", pluginId, null, error)),
+        );
+        yield* store.uninstallPlugin(pluginId).pipe(
+          Effect.mapError((error) => failure("uninstall Plugin", pluginId, null, error)),
+          Effect.catch((error) =>
+            restore(reclaimed).pipe(
+              Effect.mapError((restoreError) =>
+                failure("restore Plugin", pluginId, reclaimed?.installedPath ?? null, restoreError),
+              ),
+              Effect.andThen(Effect.fail(error)),
+            ),
+          ),
         );
         return {
           overview: yield* overview(),

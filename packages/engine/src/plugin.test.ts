@@ -264,4 +264,27 @@ layer(NodeServices.layer)((it) => {
       }).pipe(Effect.provide(test.managerLayer));
     }),
   );
+
+  it.effect("keeps membership retryable when file reclamation fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const test = yield* fixture();
+      yield* Effect.gen(function* () {
+        const plugins = yield* PluginManager;
+        yield* plugins.install("linear", localOwnerId);
+        yield* fs.writeFileString(path.join(test.provisionRoot, ".reclaim"), "blocked");
+
+        yield* Effect.flip(plugins.uninstall("linear"));
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return assert.fail(store.message);
+        assert.strictEqual((yield* store.picture).pluginInstalls.length, 1);
+        assert.isTrue(yield* fs.exists(path.join(test.provisionRoot, "linear@1.0.0")));
+
+        yield* fs.remove(path.join(test.provisionRoot, ".reclaim"));
+        yield* plugins.uninstall("linear");
+        assert.deepStrictEqual((yield* store.picture).pluginInstalls, []);
+      }).pipe(Effect.provide(test.managerLayer));
+    }),
+  );
 });
