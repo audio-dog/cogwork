@@ -1,0 +1,19 @@
+apps/cli/src/login-commands.ts
+  s_4cd1ce3e964be8::t_dc61f09a027531 41-47,53-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2d33fa28d8554d69ad74e660b79dbe5bc11fb8bc",
+  "prompts": {},
+  "sessions": {
+    "s_4cd1ce3e964be8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04a2e-8ee5-7c41-85cc-5b19945bc511",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
