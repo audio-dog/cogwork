@@ -29,6 +29,23 @@ export const daemonLimits = sqliteTable(
   ],
 );
 
+export const contributionSettings = sqliteTable(
+  "contribution_settings",
+  {
+    contribution: text("contribution").notNull(),
+    scope: text("scope").notNull(),
+    workspace: text("workspace").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.contribution, table.scope, table.workspace] }),
+    check(
+      "contribution_settings_scope",
+      sql`(${table.scope} = 'settings-profile' AND ${table.workspace} = '') OR (${table.scope} = 'private-workspace-overlay' AND ${table.workspace} <> '')`,
+    ),
+  ],
+);
+
 export const operationSettings = sqliteTable(
   "operation_settings",
   {

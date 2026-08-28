@@ -1,4 +1,8 @@
 import {
+  type ContributionSettingCell,
+  ContributionSettingRow as ContributionSettingRowSchema,
+  type ContributionSettingUpdate,
+  type ContributionSettingValue,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimits,
@@ -36,6 +40,9 @@ export type ControlStoreService =
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+      readonly updateContributionSetting: (
+        update: ContributionSettingUpdate,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     }
   | {
@@ -48,6 +55,9 @@ export type ControlStoreService =
       ) => Effect.Effect<never, ControlStoreFailure | StaleControlStoreWrite>;
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
+      ) => Effect.Effect<never, ControlStoreFailure>;
+      readonly updateContributionSetting: (
+        update: ContributionSettingUpdate,
       ) => Effect.Effect<never, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     };
@@ -63,6 +73,7 @@ const storeFailure = (operation: string) => (error: unknown) =>
   ControlStoreFailure.make({ operation, message: messageOf(error) });
 
 const decodeDaemonLimits = Schema.decodeUnknownEffect(DaemonLimitsSchema);
+const decodeContributionSettingRow = Schema.decodeUnknownEffect(ContributionSettingRowSchema);
 const decodeOperationSettingRow = Schema.decodeUnknownEffect(OperationSettingRowSchema);
 const JsonValue = Schema.fromJsonString(Schema.Unknown);
 const decodeJson = Schema.decodeUnknownEffect(JsonValue);
@@ -83,7 +94,41 @@ const StoredOperationSettingRow = Schema.Struct({
 });
 type StoredOperationSettingRow = typeof StoredOperationSettingRow.Type;
 
+const StoredContributionSettingRow = Schema.Struct({
+  contribution: Schema.String,
+  scope: Schema.Literals(["settings-profile", "private-workspace-overlay"]),
+  workspace: Schema.String,
+  enabled: Schema.Literals([0, 1]),
+});
+type StoredContributionSettingRow = typeof StoredContributionSettingRow.Type;
+
+const decodeStoredContributionSettingRows = Schema.decodeUnknownEffect(
+  Schema.Array(StoredContributionSettingRow),
+);
+
 const decodeStoredOperationSettingRows = Schema.decodeUnknownEffect(Schema.Array(StoredOperationSettingRow));
+
+const contributionScopeOf = (row: StoredContributionSettingRow) =>
+  row.scope === "settings-profile"
+    ? { _tag: "SettingsProfile" as const }
+    : { _tag: "PrivateWorkspaceOverlay" as const, workspace: row.workspace };
+
+const readContributionSettings = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    const stored = yield* sql<StoredContributionSettingRow>`
+      SELECT contribution, scope, workspace, enabled
+      FROM contribution_settings
+      ORDER BY contribution, scope, workspace
+    `;
+    const rows = yield* decodeStoredContributionSettingRows(stored);
+    return yield* Effect.forEach(rows, (row) =>
+      decodeContributionSettingRow({
+        contribution: { id: row.contribution, kind: "mcp-server" },
+        scope: contributionScopeOf(row),
+        enabled: row.enabled === 1,
+      }),
+    );
+  });
 
 const levelOf = (row: StoredOperationSettingRow) => {
   if (row.level === "default") return { _tag: "Default" };
@@ -129,9 +174,48 @@ const readPicture = (sql: SqlClient.SqlClient) =>
       WHERE id = 1
     `;
     const daemonLimits = yield* decodeDaemonLimits(row);
-    const operationSettings = yield* readOperationSettings(sql);
-    return { daemonLimits, operationSettings };
+    const [contributionSettings, operationSettings] = yield* Effect.all([
+      readContributionSettings(sql),
+      readOperationSettings(sql),
+    ]);
+    return { daemonLimits, contributionSettings, operationSettings };
   });
+
+const storedContributionScope = (scope: ContributionSettingCell["scope"]) =>
+  scope._tag === "SettingsProfile"
+    ? { scope: "settings-profile", workspace: "" }
+    : { scope: "private-workspace-overlay", workspace: scope.workspace };
+
+const storedContributionCell = (cell: ContributionSettingCell) => ({
+  contribution: cell.contribution.id,
+  ...storedContributionScope(cell.scope),
+});
+
+const setContributionSetting = Effect.fn("ControlStore.setContributionSetting")(function* (
+  sql: SqlClient.SqlClient,
+  row: ContributionSettingValue,
+) {
+  const cell = storedContributionCell(row);
+  yield* sql`
+    INSERT INTO contribution_settings (contribution, scope, workspace, enabled)
+    VALUES (${cell.contribution}, ${cell.scope}, ${cell.workspace}, ${row.enabled ? 1 : 0})
+    ON CONFLICT (contribution, scope, workspace)
+    DO UPDATE SET enabled = excluded.enabled
+  `;
+});
+
+const clearContributionSetting = Effect.fn("ControlStore.clearContributionSetting")(function* (
+  sql: SqlClient.SqlClient,
+  cell: ContributionSettingCell,
+) {
+  const stored = storedContributionCell(cell);
+  yield* sql`
+    DELETE FROM contribution_settings
+    WHERE contribution = ${stored.contribution}
+      AND scope = ${stored.scope}
+      AND workspace = ${stored.workspace}
+  `;
+});
 
 const storedLevel = (level: OperationSettingCell["level"]) => {
   if (level._tag === "Default") return { level: "default", workflow: "", operation: "" };
@@ -249,6 +333,17 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
+  const updateContributionSetting = Effect.fn("ControlStore.updateContributionSetting")(function* (
+    update: ContributionSettingUpdate,
+  ) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        if (update._tag === "Set") yield* setContributionSetting(sql, update.row);
+        else yield* clearContributionSetting(sql, update.cell);
+        return yield* readPicture(sql);
+      }),
+    );
+  });
   return {
     health: "available" as const,
     seed,
@@ -257,6 +352,8 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       setDaemonLimit(update).pipe(Effect.mapError(setDaemonLimitFailure)),
     updateOperationSetting: (update: OperationSettingUpdate) =>
       updateOperationSetting(update).pipe(Effect.mapError(storeFailure("update Operation setting"))),
+    updateContributionSetting: (update: ContributionSettingUpdate) =>
+      updateContributionSetting(update).pipe(Effect.mapError(storeFailure("update contribution setting"))),
     withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => writeGate.withPermits(1)(effect),
   };
 });
@@ -346,6 +443,7 @@ const unavailable = (message: string): ControlStoreService => {
     picture: Effect.fail(failure),
     setDaemonLimit: () => Effect.fail(failure),
     updateOperationSetting: () => Effect.fail(failure),
+    updateContributionSetting: () => Effect.fail(failure),
     withWrite: (effect) => effect,
   };
 };
