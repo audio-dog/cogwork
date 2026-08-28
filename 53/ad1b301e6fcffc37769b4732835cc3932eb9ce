@@ -1,0 +1,79 @@
+packages/engine/src/commands.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 12,19,28-33,79,93-94,105,185-189,196-225
+packages/engine/src/read-model.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 28-32
+apps/cli/src/workspace-commands.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 1,4,7,24-41
+  s_3ad8c99e0b0d7f::t_84b1d0801ebbe2 42-44
+packages/engine/src/executor.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 22,745
+turbo.json
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 3
+packages/engine/src/provider-runner.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 342-343
+packages/contracts/src/board.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 70,73-75,86,96-99
+  s_3ad8c99e0b0d7f::t_cacfc8040fe356 100
+packages/contracts/src/daemon-event.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 53
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 178-189
+apps/cli/src/workspace-commands.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 1,21-22,25,73-118,123-135
+packages/engine/src/commands.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 25,180-190,204,209,212-213,268-284,287,300-301,541,544,568,570,576,673-676,798-924
+  s_3ad8c99e0b0d7f::t_0b9b895deba5db 925
+packages/engine/src/provider-runner.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 71
+packages/engine/src/event-publisher.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 23,61-71,74,77-87,193,198-199,207-236,329,336,338,428-451
+  s_3ad8c99e0b0d7f::t_a25d97f9cb2388 452
+packages/engine/src/executor.ts
+  s_3ad8c99e0b0d7f::t_f69f7d62321d6f 919
+package.json
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 18-19
+scripts/register-workspaces.mjs
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 1-75
+packages/engine/src/event-publisher.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 17-22,37-41,48,53,97-102,108-114,126-136,144-150
+packages/contracts/src/rpc.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 20-25,121-132,140-141
+packages/engine/src/daemon.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 28-29,53-59,133,217-218
+packages/engine/src/scheduler.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 17,406-418,429,580-641
+  s_3ad8c99e0b0d7f::t_9ded30174b5059 642
+packages/contracts/src/workspace.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 142-150
+packages/engine/CONTEXT.md
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 209
+packages/engine/src/run-control.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 7-13,18-29,37
+packages/engine/src/workspace-registry.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 11,338-462
+  s_3ad8c99e0b0d7f::t_ea819f79c9e3cd 463
+apps/cli/CONTEXT.md
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 46-49
+packages/contracts/src/board.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 367-382
+packages/engine/src/registry.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 7-8,63-69,82-95,132-136,276-320,405,410-419,450-475,477-486,488-513,515-542,545-547
+packages/engine/src/engine.test.ts
+  s_3ad8c99e0b0d7f::t_a02c64d6182df5 643
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "53ad1b301e6fcffc37769b4732835cc3932eb9ce",
+  "prompts": {},
+  "sessions": {
+    "s_3ad8c99e0b0d7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-4975-7cf3-8b18-af92906892ca",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
