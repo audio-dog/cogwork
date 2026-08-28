@@ -61,6 +61,7 @@ const request = (checkoutPath: string) =>
     model: "auto",
     effort: null,
     mcpSkills: [],
+    contributions: [],
   }) satisfies Harness.HarnessRequest;
 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;

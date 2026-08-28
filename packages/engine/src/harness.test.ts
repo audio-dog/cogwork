@@ -174,6 +174,7 @@ describe("Harness", () => {
             model: null,
             effort: null,
             mcpSkills: [],
+            contributions: [],
           })
           .pipe(Stream.runDrain, Effect.flip);
 

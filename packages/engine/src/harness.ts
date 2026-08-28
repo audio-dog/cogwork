@@ -2,6 +2,7 @@ import {
   type AgUiEvent,
   type HarnessName,
   type LifecycleStage,
+  type LocalContribution,
   type SessionId,
   type SessionKind,
   type StageResultJsonSchema,
@@ -37,6 +38,7 @@ export interface HarnessRequest {
   readonly model: string | null;
   readonly effort: string | null;
   readonly mcpSkills: ReadonlyArray<ResolvedMcpSkill>;
+  readonly contributions: ReadonlyArray<LocalContribution>;
 }
 
 export interface HarnessExecution {
@@ -51,9 +53,6 @@ export const fullHarnessExecution: HarnessExecution = {
   profiles: ["read-only", "full"],
 };
 
-// CLI harnesses only reach for SessionStore; the wider set is provided uniformly
-// so the provider runner can assemble context, resolve its provider key, and
-// watch the worktree for diff events.
 export type HarnessRunnerEnv = SessionStore | ContextAssembler | CredentialStore | FileSystem.FileSystem;
 
 export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessError", {
@@ -75,8 +74,6 @@ export interface HarnessService {
     profile: OperationPolicyProfile,
   ) => Effect.Effect<void, HarnessError>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
-  // An unregistered harness falls back to opaque-handle: its run fails at
-  // dispatch anyway, and that was the one kind every session took before.
   readonly sessionKind: (harness: HarnessName) => SessionKind;
 }
 
