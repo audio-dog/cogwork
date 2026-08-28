@@ -175,8 +175,17 @@ const picture: ControlStorePicture = {
   operationSettings: [],
 };
 
-const controlStoreStub = (
-  setDaemonLimit: ControlStoreService["setDaemonLimit"] = (update) =>
+interface ControlStoreStubOptions {
+  readonly seed?: ControlStorePicture;
+  readonly read?: Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+  readonly setDaemonLimit?: ControlStoreService["setDaemonLimit"];
+  readonly updateOperationSetting?: ControlStoreService["updateOperationSetting"];
+}
+
+const controlStoreStub = ({
+  seed = picture,
+  read = Effect.succeed(seed),
+  setDaemonLimit = (update) =>
     Effect.succeed({
       daemonLimits: {
         globalConcurrency:
@@ -190,16 +199,16 @@ const controlStoreStub = (
       },
       operationSettings: picture.operationSettings,
     }),
-  updateOperationSetting: ControlStoreService["updateOperationSetting"] = (update) =>
+  updateOperationSetting = (update) =>
     Effect.succeed({
       ...picture,
       operationSettings: update._tag === "Set" ? [update.row] : [],
     }),
-) =>
+}: ControlStoreStubOptions = {}) =>
   Layer.succeed(ControlStore, {
     health: "available",
-    seed: picture,
-    picture: Effect.succeed(picture),
+    seed,
+    picture: read,
     setDaemonLimit,
     updateOperationSetting,
     withWrite: (effect) => effect,
@@ -658,9 +667,10 @@ describe("SetDaemonLimit", () => {
         daemonLayer(
           trackerLayer({}),
           schedulerStub(),
-          controlStoreStub(() =>
-            Effect.fail(ControlStoreFailure.make({ operation: "set daemon limit", message: "disk full" })),
-          ),
+          controlStoreStub({
+            setDaemonLimit: () =>
+              Effect.fail(ControlStoreFailure.make({ operation: "set daemon limit", message: "disk full" })),
+          }),
         ),
       ),
       Effect.scoped,
@@ -784,8 +794,29 @@ describe("RegisterWorkspace", () => {
 });
 
 describe("workspace lifecycle commands", () => {
-  it.effect("returns and publishes a deregistered WorkspaceId", () => {
+  it.effect("returns the WorkspaceId and publishes the refreshed Control store picture", () => {
     const registries = registrationServices();
+    const workspace = wsid("0198f16a-21d7-7000-8000-000000000001");
+    const remainingSetting = {
+      setting: "model",
+      level: { _tag: "Default" },
+      scope: { _tag: "SettingsProfile" },
+      value: "openai/gpt-5",
+    } satisfies ControlStorePicture["operationSettings"][number];
+    const beforeDeregister = {
+      ...picture,
+      operationSettings: [
+        {
+          ...remainingSetting,
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+        },
+        remainingSetting,
+      ],
+    } satisfies ControlStorePicture;
+    const afterDeregister = {
+      ...picture,
+      operationSettings: [remainingSetting],
+    } satisfies ControlStorePicture;
     return Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
@@ -794,15 +825,28 @@ describe("workspace lifecycle commands", () => {
       if (registered._tag !== "Registered") return assert.fail("expected registration");
 
       const deregistered = yield* client.DeregisterWorkspace({ workspace: registered.name });
-      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
+      yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
+      );
 
       assert.strictEqual(deregistered, registered.name);
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
-        ["WorkspaceChanged", "WorkspaceRemoved"],
+        ["WorkspaceChanged", "WorkspaceRemoved", "ControlStoreChanged", "ItemRemoved"],
       );
+      const controlStoreChanged = [...events].find((event) => event._tag === "ControlStoreChanged");
+      assert.deepStrictEqual(controlStoreChanged?.controlStore, afterDeregister);
     }).pipe(
-      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub({ seed: beforeDeregister, read: Effect.succeed(afterDeregister) }),
+          registries,
+        ),
+      ),
       Effect.scoped,
     );
   });
@@ -853,13 +897,21 @@ describe("workspace lifecycle commands", () => {
       yield* control.register(rid("run-1"), fiber, registeredWorkspace);
 
       yield* client.DeregisterWorkspace({ workspace: registeredState.name });
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
       yield* client.CancelRun({ runId: rid("run-1") });
+      yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
+      );
 
       const recorded = yield* Ref.get(calls);
       assert.deepStrictEqual(recorded.handOff, [
         { workItem: id("AUD-1"), outcome: { stage: "implement", note: undefined } },
       ]);
       assert.deepStrictEqual(recorded.released, [id("AUD-1")]);
+      assert.isFalse([...events].some((event) => event._tag === "ItemChanged"));
     }).pipe(
       Effect.provide(
         daemonLayer(recordingTracker([], calls), schedulerStub(), controlStoreStub(), registries),

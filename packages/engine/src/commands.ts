@@ -9,6 +9,7 @@ import {
   type WorkItemId,
   WorkItemNotFound,
   type WorkspaceId,
+  WorkspaceManagementError,
   type WorkspaceRegistration,
   workspaceFailureState,
   workspaceStateFromInfo,
@@ -89,8 +90,8 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const registry = yield* WorkspaceRegistry;
-  const workspace =
-    Option.getOrUndefined(controlledWorkspace) ?? findWorkspaceIssueTrackerBinding(registry, run.workspace);
+  const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
+  const workspace = Option.getOrUndefined(controlledWorkspace) ?? currentWorkspace;
   if (workspace !== undefined) {
     const issueTracker = yield* IssueTracker;
     yield* issueTracker
@@ -101,6 +102,7 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   const snapshot = yield* (yield* ReconcileWorker).snapshot;
   const observed = observedFor(snapshot, run.workspace, run.workItem);
   const item = parkedItem(observed) ?? parkedNeedsHuman(run.workItem, run.workItem);
+  if (currentWorkspace === undefined) return item;
   const bus = yield* DaemonEventBus;
   yield* bus.publish({ _tag: "ItemChanged", workspace: run.workspace, item });
   return item;
@@ -201,8 +203,16 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
 }) {
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
+  const store = yield* ControlStore;
   const workspace = yield* management.deregister(payload.workspace);
-  return yield* publisher.publishWorkspaceRemoved(workspace);
+  yield* publisher.publishWorkspaceRemoved(workspace);
+  const controlStore = yield* store.picture.pipe(
+    Effect.mapError(
+      (error) => new WorkspaceManagementError({ operation: "deregister workspace", message: error.message }),
+    ),
+  );
+  yield* publisher.publishControlStore(controlStore);
+  return workspace;
 });
 
 export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {
