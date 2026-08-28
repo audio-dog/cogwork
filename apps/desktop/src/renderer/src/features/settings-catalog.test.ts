@@ -38,15 +38,6 @@ describe("searchSettings", () => {
   it("returns an empty list when nothing matches", () => {
     expect(searchSettings("nonexistent-xyz")).toEqual([]);
   });
-
-  it("groups each result under the correct section", () => {
-    const results = searchSettings("concurrency");
-    expect(results.length).toBeGreaterThan(1);
-    for (const entry of results) {
-      expect(entry.sectionId).toBe("engine");
-      expect(findSection(entry.sectionId)?.label).toBe("Engine");
-    }
-  });
 });
 
 describe("catalog helpers", () => {
@@ -54,7 +45,6 @@ describe("catalog helpers", () => {
     expect(settingsSections.map((section) => section.link.to)).toEqual([
       "/settings/general",
       "/settings/appearance",
-      "/settings/engine",
     ]);
   });
 

@@ -31,3 +31,9 @@ export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");
 export const setDaemonLimitAtom = DaemonAtomRpc.mutation("SetDaemonLimit");
 
 export const setContributionSettingAtom = DaemonAtomRpc.mutation("SetContributionSetting");
+
+export const registerWorkspaceAtom = DaemonAtomRpc.mutation("RegisterWorkspace");
+
+export const deregisterWorkspaceAtom = DaemonAtomRpc.mutation("DeregisterWorkspace");
+
+export const rebindWorkspaceAtom = DaemonAtomRpc.mutation("RebindWorkspace");
