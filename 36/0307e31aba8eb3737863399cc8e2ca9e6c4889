@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/components/customize-facet-view.tsx
+  s_a2b222660f8a89::t_c49c7d3ae5b14a 66,80
+biome.json
+  s_a2b222660f8a89::t_a01e61f7ea2184 58-59
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_a2b222660f8a89::t_c49c7d3ae5b14a 123
+configs/lint/no-native-button-mismatch.grit
+  s_a2b222660f8a89::t_0c220fe716c5c8 3-7,9-10,12-13,15-20,23,33,35-39,42,51
+  s_a2b222660f8a89::t_5b5f9b8bcf35d0 40,52-53
+  s_a2b222660f8a89::t_46806e337b8823 1-2,8,11,14,21-22,24-32,34,41,43-50,54-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "360307e31aba8eb3737863399cc8e2ca9e6c4889",
+  "prompts": {},
+  "sessions": {
+    "s_a2b222660f8a89": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5069e21b-bd48-4747-8dac-709c8d198d11",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
