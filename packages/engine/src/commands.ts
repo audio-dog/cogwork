@@ -2,7 +2,10 @@ import {
   type ClassifiedItem,
   type DaemonLimitUpdate,
   type OperationSettingUpdate,
+  type PluginFailure,
   type PluginId,
+  type PluginMutationResult,
+  type PluginOverview,
   Principal,
   RunAlreadyFinished,
   type RunId,
@@ -40,6 +43,18 @@ import { Scheduler } from "./scheduler";
 
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
+
+const pluginMembership = (overview: PluginOverview) =>
+  overview.plugins.map((plugin) => `${plugin.pluginId}:${plugin.record?.resolvedIdentity ?? ""}`);
+
+const samePluginMembership = (left: PluginOverview, right: PluginOverview) => {
+  const leftMembership = pluginMembership(left);
+  const rightMembership = pluginMembership(right);
+  return (
+    leftMembership.length === rightMembership.length &&
+    leftMembership.every((membership, index) => membership === rightMembership[index])
+  );
+};
 
 const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workItem: WorkItemId) =>
   snapshot.workspaces
@@ -231,10 +246,7 @@ export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (pa
 });
 
 const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function* (
-  mutation: Effect.Effect<
-    import("@cogwork/contracts").PluginMutationResult,
-    import("@cogwork/contracts").PluginFailure
-  >,
+  mutation: Effect.Effect<PluginMutationResult, PluginFailure>,
 ) {
   const publisher = yield* DaemonEventPublisher;
   const plugins = yield* PluginManager;
@@ -243,9 +255,10 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
   return yield* store.withWrite(
     Effect.gen(function* () {
       const overview = yield* plugins.overview;
-      yield* publisher.publishPlugins(overview, completed.notices);
+      const notices = samePluginMembership(completed.overview, overview) ? completed.notices : [];
+      yield* publisher.publishPlugins(overview, notices);
       yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
-      return { overview, notices: completed.notices };
+      return { overview, notices };
     }),
   );
 });

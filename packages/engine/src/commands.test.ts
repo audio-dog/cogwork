@@ -216,10 +216,10 @@ const concurrentPluginManagerLayer = (
                   : [installedPlugin("github"), installedPlugin(pluginId)],
             } satisfies PluginOverview;
             yield* Ref.set(current, overview);
-            if (call > 0) return { overview, notices: [] };
+            if (call > 0) return { overview, notices: [`${pluginId} notice`] };
             yield* Deferred.succeed(firstReady, undefined);
             yield* Deferred.await(releaseFirst);
-            return { overview, notices: [] };
+            return { overview, notices: [`${pluginId} notice`] };
           }),
         uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
         contributions: () => Effect.succeed([]),
@@ -1018,10 +1018,13 @@ describe("Plugin lifecycle commands", () => {
         );
         const snapshots = [...events]
           .filter((event) => event._tag === "PluginsChanged")
-          .map((event) => event.plugins.plugins.map((plugin) => plugin.pluginId));
+          .map((event) => ({
+            plugins: event.plugins.plugins.map((plugin) => plugin.pluginId),
+            notices: event.notices,
+          }));
         assert.deepStrictEqual(snapshots, [
-          ["github", "linear"],
-          ["github", "linear"],
+          { plugins: ["github", "linear"], notices: ["linear notice"] },
+          { plugins: ["github", "linear"], notices: [] },
         ]);
       }).pipe(
         Effect.provide(
