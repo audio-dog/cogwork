@@ -1,0 +1,80 @@
+packages/engine/src/commands.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 14,21,31-36,82,96-97,108,188-192,199-228
+packages/contracts/src/rpc.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 21-26,140-151,161-162
+packages/engine/src/event-publisher.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 23,71-81,84,87-97,203,208-209,217-246,339,346,348,439-462
+  s_49dab12e61e1a0::t_109ed6c0f0dcbf 463
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 183-194
+apps/cli/src/workspace-commands.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 1,21-22,25,73-118,123-135
+apps/cli/src/workspace-commands.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 1,4,7,24-41
+  s_49dab12e61e1a0::t_94d676ee43c534 42-44
+packages/engine/src/executor.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 20,715
+packages/engine/src/workspace-registry.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 11,338-462
+  s_49dab12e61e1a0::t_bcc166ae2713bb 463
+packages/engine/src/scheduler.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 17,402-414,425,576-637
+  s_49dab12e61e1a0::t_98ad178f0a41a2 638
+packages/engine/src/read-model.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 28-32
+packages/engine/src/commands.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 25,189-199,215,220,223-224,283-299,302,315-316,556,559,583,585,591,688-691,813-939
+  s_49dab12e61e1a0::t_ed36ca96f1b5f3 940
+apps/cli/CONTEXT.md
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 46-49
+turbo.json
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 3
+packages/engine/src/run-control.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 7-13,18-29,37
+packages/contracts/src/workspace.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 142-150
+packages/contracts/src/board.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 73,76-78,89,99-102
+  s_49dab12e61e1a0::t_088ed495e63875 103
+package.json
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 18-19
+packages/engine/src/registry.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 7-8,63-69,82-95,132-136,276-320,405,410-419,450-475,477-486,488-513,515-542,545-547
+packages/engine/src/daemon.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 28,30,56-62,137,234-235
+packages/engine/CONTEXT.md
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 209
+scripts/register-workspaces.mjs
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 1-75
+packages/engine/src/event-publisher.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 18-23,38-42,49,54,98-103,109-115,127-137,152-157,159
+  s_49dab12e61e1a0::t_0997b063112f05 158
+packages/engine/src/executor.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 879
+packages/contracts/src/board.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 371-386
+packages/contracts/src/daemon-event.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 54
+packages/engine/src/provider-runner.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 316-317
+packages/engine/src/provider-runner.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 83
+packages/engine/src/engine.test.ts
+  s_49dab12e61e1a0::t_a0b22e15f0fd2d 653
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "aee523e3d5b2320ee0890cab04fafa1df5800ff8",
+  "prompts": {},
+  "sessions": {
+    "s_49dab12e61e1a0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-48c8-7272-a200-7f3fee38255b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
