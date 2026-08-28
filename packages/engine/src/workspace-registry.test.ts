@@ -10,6 +10,8 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { controlStoreClientLayer } from "./control-store";
 import * as Registry from "./registry";
 
 const workspaceInput = Schema.decodeSync(WorkspaceInput)({
@@ -57,6 +59,27 @@ const makeCheckout = Effect.fn("test.makeCheckout")(function* (root: string, nam
 });
 
 layer(NodeServices.layer)((it) => {
+  it.effect("refuses registration when the Control store is unavailable", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-health-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "unavailable");
+      yield* Layer.build(Registry.layerAt(storePath));
+      const registryContext = yield* Layer.build(
+        Registry.layer.pipe(Layer.provide(controlStoreClientLayer(storePath))),
+      );
+      const management = Context.get(registryContext, Registry.WorkspaceManagement);
+
+      const failure = yield* management
+        .register(githubRegistration("unavailable", checkoutPath))
+        .pipe(Effect.flip);
+
+      assert.include(failure.message, "did not boot");
+    }),
+  );
+
   it.effect("refuses a checkout already bound to a workspace", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -75,6 +98,29 @@ layer(NodeServices.layer)((it) => {
 
       assert.include(duplicate.message, `already registered as ${first.workspace.config.name}`);
       assert.strictEqual(liveRegistry.workspaces.length, 1);
+    }),
+  );
+
+  it.effect("loads registered workspaces without booting the Control store", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-read-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "read-only");
+      const writableContext = yield* Layer.build(Registry.layerAt(storePath));
+      const management = Context.get(writableContext, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration("read-only", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`CREATE TABLE read_only_probe (id INTEGER PRIMARY KEY)`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+
+      const readOnlyContext = yield* Layer.build(Registry.readOnlyLayerAt(storePath));
+      const reloaded = Context.get(readOnlyContext, Registry.WorkspaceRegistry);
+
+      assert.isDefined(Registry.findWorkspace(reloaded, change.workspace.config.name));
     }),
   );
 

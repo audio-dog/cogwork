@@ -22,6 +22,7 @@ import {
   ControlStore,
   type ControlStoreService,
   controlStoreClientLayer,
+  readOnlyControlStoreClientLayer,
 } from "./control-store";
 import {
   emptyRegistry,
@@ -223,8 +224,7 @@ const selectWorkspaceBinding = Effect.fn("WorkspaceRegistry.selectWorkspaceBindi
   return row;
 });
 
-const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: ControlStoreService) {
-  if (store.health === "unavailable") return emptyRegistry;
+const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(function* () {
   const rows = yield* selectRows();
   const outcomes = yield* Effect.forEach(rows, (row) => Effect.result(loadWorkspace(row)));
   const workspaces = outcomes.flatMap((outcome) => (outcome._tag === "Success" ? [outcome.success] : []));
@@ -235,6 +235,11 @@ const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: Con
     return [workspaceFailure(row, outcome.failure.message)];
   });
   return { workspaces, failures } satisfies RegistryState;
+});
+
+const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: ControlStoreService) {
+  if (store.health === "unavailable") return emptyRegistry;
+  return yield* loadAvailableState();
 });
 
 const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function* (
@@ -328,6 +333,7 @@ export const layer = Layer.effectContext(
     const register = Effect.fn("WorkspaceManagement.register")(function* (
       registration: WorkspaceRegistration,
     ) {
+      if (store.health === "unavailable") return yield* registrationError(store.message);
       if (!path.isAbsolute(registration.checkoutPath)) {
         return yield* registrationError("Workspace checkout path must be absolute");
       }
@@ -373,3 +379,9 @@ export const layerAt = (storePath: string) => {
   const store = bootControlStoreLayer(storePath).pipe(Layer.provide(client));
   return layer.pipe(Layer.provideMerge(store), Layer.provide(client));
 };
+
+export const readOnlyLayerAt = (storePath: string) =>
+  Layer.effect(
+    WorkspaceRegistry,
+    loadAvailableState().pipe(Effect.map(readOnlyRegistry), Effect.mapError(registrationError)),
+  ).pipe(Layer.provide(readOnlyControlStoreClientLayer(storePath)));
