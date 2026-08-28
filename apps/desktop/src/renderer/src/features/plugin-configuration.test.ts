@@ -3,6 +3,7 @@ import * as Cause from "effect/Cause";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
 import { placeholderConfiguration } from "./configuration-placeholder";
+import { resolveEnablement, viewOf } from "./configuration-resolve";
 import {
   configurationWithPlugins,
   pluginDetailOf,
@@ -75,6 +76,42 @@ describe("configurationWithPlugins", () => {
     expect(picture.catalogPlugins.map((plugin) => plugin.pluginId)).toEqual(["github"]);
     expect(picture.contributions.at(-1)?.rows[0]?.value).toBe(true);
     expect(picture.contributions.at(-1)?.readiness?._tag).toBe("not-ready");
+  });
+
+  it("projects Plugin MCP enablement for each workspace overlay", () => {
+    const firstWorkspace = placeholderConfiguration.workspaces.at(0);
+    if (!firstWorkspace) throw new Error("fixture needs a workspace");
+    const picture = configurationWithPlugins(placeholderConfiguration, overview, {
+      ...defaultControlStore,
+      contributionSettings: [
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: true,
+        },
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: firstWorkspace.id },
+          enabled: false,
+        },
+      ],
+    });
+
+    const instances = picture.contributions.filter(
+      (contribution) => contribution.id === "plugin:linear/mcp/linear",
+    );
+
+    expect(
+      instances.map((contribution) => ({
+        workspace: contribution.definedIn,
+        enabled: resolveEnablement(contribution, viewOf(contribution)).effective,
+      })),
+    ).toEqual(
+      picture.workspaces.map((workspace) => ({
+        workspace: workspace.id,
+        enabled: workspace.id !== firstWorkspace.id,
+      })),
+    );
   });
 
   it("keeps a catalog query failure visible", () => {
