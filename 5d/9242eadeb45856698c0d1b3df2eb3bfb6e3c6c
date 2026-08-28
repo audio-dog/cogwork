@@ -1,0 +1,27 @@
+scripts/register-workspaces.mjs
+  s_c9346782afcc5c::t_260559af610295 40-44,46,56-73,75
+  s_c9346782afcc5c::t_17fa7abc0af2a9 1-39,45,74
+  s_c9346782afcc5c::t_5ffd862876ec61 47-55
+.agents/workspace.json
+  s_c9346782afcc5c::t_798c584a2ef345 1-13
+package.json
+  s_c9346782afcc5c::t_81d4e4ae48e336 18-19
+turbo.json
+  s_c9346782afcc5c::t_96692e19b39255 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5d9242eadeb45856698c0d1b3df2eb3bfb6e3c6c",
+  "prompts": {},
+  "sessions": {
+    "s_c9346782afcc5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ecd53b-6ab9-4977-9d1e-dd24f161841f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
