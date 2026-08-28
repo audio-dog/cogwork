@@ -1,5 +1,7 @@
 import {
   type ClassifiedItem,
+  ContributionSettingRefused,
+  type ContributionSettingUpdate,
   type DaemonLimitUpdate,
   type OperationSettingUpdate,
   RunAlreadyFinished,
@@ -186,6 +188,34 @@ const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
   if (change._tag === "Failed") return workspaceFailureState(change.failure);
   return workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined));
 };
+
+const contributionSettingRefusal = (update: ContributionSettingUpdate, registry: RegistryState) => {
+  const cell = update._tag === "Set" ? update.row : update.cell;
+  const overlayWorkspace = cell.scope._tag === "PrivateWorkspaceOverlay" ? cell.scope.workspace : null;
+  if (overlayWorkspace && workspaceById(registry, overlayWorkspace) === null) {
+    return ContributionSettingRefused.make({
+      contribution: cell.contribution.id,
+      source: "Workspace registry",
+      reason: `Workspace ${overlayWorkspace} is not registered`,
+    });
+  }
+  return null;
+};
+
+export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")(function* (payload: {
+  readonly update: ContributionSettingUpdate;
+}) {
+  const registry = yield* WorkspaceRegistry;
+  const refusal = contributionSettingRefusal(payload.update, registry);
+  if (refusal) return yield* refusal;
+  const store = yield* ControlStore;
+  const publisher = yield* DaemonEventPublisher;
+  return yield* store.withWrite(
+    Effect.flatMap(store.updateContributionSetting(payload.update), (controlStore) =>
+      publisher.publishControlStore(controlStore),
+    ),
+  );
+});
 
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
   readonly registration: WorkspaceRegistration;

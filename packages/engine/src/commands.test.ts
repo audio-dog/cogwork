@@ -1,4 +1,5 @@
 import {
+  type ContributionSettingUpdate,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimitUpdate,
@@ -174,6 +175,7 @@ const picture: ControlStorePicture = {
     dailyBudget: 50,
     revision: 0,
   },
+  contributionSettings: [],
   operationSettings: [],
 };
 
@@ -181,6 +183,7 @@ interface ControlStoreStubOptions {
   readonly seed?: ControlStorePicture;
   readonly read?: Effect.Effect<ControlStorePicture, ControlStoreFailure>;
   readonly setDaemonLimit?: ControlStoreService["setDaemonLimit"];
+  readonly updateContributionSetting?: ControlStoreService["updateContributionSetting"];
   readonly updateOperationSetting?: ControlStoreService["updateOperationSetting"];
 }
 
@@ -199,6 +202,7 @@ const controlStoreStub = ({
         dailyBudget: update.key === "daily-budget" ? update.value : picture.daemonLimits.dailyBudget,
         revision: picture.daemonLimits.revision + 1,
       },
+      contributionSettings: picture.contributionSettings,
       operationSettings: picture.operationSettings,
     }),
   updateOperationSetting = (update) =>
@@ -206,12 +210,18 @@ const controlStoreStub = ({
       ...picture,
       operationSettings: update._tag === "Set" ? [update.row] : [],
     }),
+  updateContributionSetting = (update) =>
+    Effect.succeed({
+      ...picture,
+      contributionSettings: update._tag === "Set" ? [update.row] : [],
+    }),
 }: ControlStoreStubOptions = {}) =>
   Layer.succeed(ControlStore, {
     health: "available",
     seed,
     picture: read,
     setDaemonLimit,
+    updateContributionSetting,
     updateOperationSetting,
     withWrite: (effect) => effect,
   });
@@ -732,6 +742,54 @@ describe("SetOperationSetting", () => {
       if (failure._tag !== "OperationSettingRefused")
         return assert.fail("expected Operation setting refusal");
       assert.strictEqual(failure.source, "triage Operation Definition");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+});
+
+describe("SetContributionSetting", () => {
+  const update: ContributionSettingUpdate = {
+    _tag: "Set",
+    row: {
+      contribution: { id: "local:repo/mcp/tools", kind: "mcp-server" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace: wsid("example") },
+      enabled: true,
+    },
+  };
+
+  it.effect("accepts a disk-dependent dangling row and publishes the returned picture", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetContributionSetting({ update });
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.take(1),
+        Stream.runCollect,
+      );
+
+      assert.strictEqual(published?._tag, "ControlStoreChanged");
+      if (published?._tag !== "ControlStoreChanged") return assert.fail("expected ControlStoreChanged");
+      assert.deepStrictEqual(published.controlStore, returned);
+      assert.strictEqual(returned.contributionSettings[0]?.diagnostic?._tag, "Dangling");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("refuses a Private workspace overlay the engine does not own", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const failure = yield* Effect.flip(
+        client.SetContributionSetting({
+          update: {
+            ...update,
+            row: {
+              ...update.row,
+              scope: { _tag: "PrivateWorkspaceOverlay", workspace: wsid("unknown") },
+            },
+          },
+        }),
+      );
+
+      assert.strictEqual(failure._tag, "ContributionSettingRefused");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 });
