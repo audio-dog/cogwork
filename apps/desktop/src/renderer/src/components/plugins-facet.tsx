@@ -2,7 +2,7 @@ import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/aler
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiBox3Line } from "@remixicon/react";
 import type { InstalledPlugin } from "../features/configuration-model";
-import { useConfiguration } from "./configuration-provider";
+import { pluginFailureTitle, useConfiguration } from "./configuration-provider";
 import { SearchEmpty } from "./customize-empty";
 import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionBody, ListSectionHeader, ListSectionRows } from "./customize-list";
@@ -86,8 +86,8 @@ export function PluginsFacet() {
       ) : null}
       {pluginFailure ? (
         <Alert variant="destructive">
-          <AlertTitle>Plugin change failed</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{pluginFailure}</AlertDescription>
+          <AlertTitle>{pluginFailureTitle(pluginFailure)}</AlertTitle>
+          <AlertDescription className="whitespace-pre-wrap">{pluginFailure.message}</AlertDescription>
         </Alert>
       ) : null}
 

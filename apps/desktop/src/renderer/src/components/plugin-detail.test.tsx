@@ -44,7 +44,10 @@ describe("PluginDetail", () => {
     });
     const markup = renderToStaticMarkup(
       <RouterContextProvider router={router}>
-        <Configuration.Provider picture={picture} pluginFailure="could not reclaim Plugin files">
+        <Configuration.Provider
+          picture={picture}
+          pluginFailure={{ _tag: "Mutation", message: "could not reclaim Plugin files" }}
+        >
           <PluginDetail plugin={plugin} />
         </Configuration.Provider>
       </RouterContextProvider>,

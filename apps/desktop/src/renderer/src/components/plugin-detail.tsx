@@ -25,7 +25,7 @@ import {
   kindLabelsPlural,
   type SetupStep,
 } from "../features/configuration-model";
-import { useConfiguration } from "./configuration-provider";
+import { pluginFailureTitle, useConfiguration } from "./configuration-provider";
 import { ContributionFileRow } from "./contribution-file-row";
 import {
   ListRow,
@@ -128,8 +128,8 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
 
         {pluginFailure ? (
           <Alert variant="destructive">
-            <AlertTitle>Plugin change failed</AlertTitle>
-            <AlertDescription className="whitespace-pre-wrap">{pluginFailure}</AlertDescription>
+            <AlertTitle>{pluginFailureTitle(pluginFailure)}</AlertTitle>
+            <AlertDescription className="whitespace-pre-wrap">{pluginFailure.message}</AlertDescription>
           </Alert>
         ) : null}
 

@@ -23,13 +23,31 @@ interface ConfigurationState {
   readonly picture: ConfigurationPicture;
 }
 
+export type PluginFailurePresentation =
+  | { readonly _tag: "Load"; readonly message: string }
+  | { readonly _tag: "Mutation"; readonly message: string };
+
+export const pluginFailureTitle = (failure: PluginFailurePresentation) =>
+  failure._tag === "Load" ? "Plugins failed to load" : "Plugin change failed";
+
+const pluginFailureOf = (
+  mutationFailure: Cause.Cause<unknown> | null,
+  queryFailure: Cause.Cause<unknown> | null,
+) => {
+  if (mutationFailure)
+    return { _tag: "Mutation", message: Cause.pretty(mutationFailure) } satisfies PluginFailurePresentation;
+  if (queryFailure)
+    return { _tag: "Load", message: Cause.pretty(queryFailure) } satisfies PluginFailurePresentation;
+  return null;
+};
+
 interface ConfigurationMeta {
   readonly places: CustomizePlaces;
   readonly plugins: PluginsView;
   readonly contributionById: (id?: string) => Contribution | undefined;
   readonly workspaceById: (id?: WorkspaceId) => Workspace | undefined;
   readonly notices: readonly string[];
-  readonly pluginFailure: string | null;
+  readonly pluginFailure: PluginFailurePresentation | null;
   readonly pluginLoadState: PluginLoadState;
 }
 
@@ -63,7 +81,7 @@ function ConfigurationProvider({
   picture: ConfigurationPicture;
   actions?: ConfigurationActions;
   notices?: readonly string[];
-  pluginFailure?: string | null;
+  pluginFailure?: PluginFailurePresentation | null;
   pluginLoadState?: PluginLoadState;
   children: ReactNode;
 }) {
@@ -102,8 +120,8 @@ export function DaemonConfigurationProvider({ children }: { children: ReactNode 
   const activeResult = operation === "install" ? installResult : uninstallResult;
   const { loadState, notices, overview } = pluginSurfaceOf(board, pluginQuery);
   const queryFailure = pluginQueryFailure(pluginQuery);
-  const pluginFailureCause = activeResult._tag === "Failure" ? activeResult.cause : queryFailure;
-  const pluginFailure = pluginFailureCause ? Cause.pretty(pluginFailureCause) : null;
+  const mutationFailure = activeResult._tag === "Failure" ? activeResult.cause : null;
+  const pluginFailure = pluginFailureOf(mutationFailure, queryFailure);
   const picture = configurationWithPlugins(placeholderConfiguration, overview, board?.controlStore ?? null);
   const actions: ConfigurationActions = {
     installPlugin: (pluginId) => {

@@ -83,7 +83,7 @@ describe("PluginsFacet", () => {
     const markup = renderToStaticMarkup(
       <Configuration.Provider
         picture={emptyPicture}
-        pluginFailure="catalog unreadable"
+        pluginFailure={{ _tag: "Load", message: "catalog unreadable" }}
         pluginLoadState="failed"
       >
         <CustomizeFilterProvider>
@@ -92,7 +92,9 @@ describe("PluginsFacet", () => {
       </Configuration.Provider>,
     );
 
+    expect(markup).toContain("Plugins failed to load");
     expect(markup).toContain("catalog unreadable");
+    expect(markup).not.toContain("Plugin change failed");
     expect(markup).not.toContain("No Plugins yet");
   });
 
