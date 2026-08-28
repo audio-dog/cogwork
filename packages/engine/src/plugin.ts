@@ -470,25 +470,11 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     overview: overview(),
     install,
     uninstall,
-    contributions: (workspace) =>
-      Effect.all([overview(), store.picture]).pipe(
-        Effect.map(([overview, controlStore]) => {
-          const contributions = overview.plugins.flatMap((plugin) =>
-            plugin.record ? plugin.contributions : [],
-          );
-          return contributions.filter((contribution) => {
-            if (contribution.kind !== "mcp-server") return true;
-            const rows = controlStore.contributionSettings.filter(
-              (setting) => setting.contribution === contribution.id,
-            );
-            const overlay = rows.find(
-              (setting) =>
-                setting.scope._tag === "PrivateWorkspaceOverlay" && setting.scope.workspace === workspace,
-            );
-            const profile = rows.find((setting) => setting.scope._tag === "SettingsProfile");
-            return (overlay ?? profile)?.enabled === true;
-          });
-        }),
+    contributions: () =>
+      overview().pipe(
+        Effect.map((overview) =>
+          overview.plugins.flatMap((plugin) => (plugin.record ? plugin.contributions : [])),
+        ),
         Effect.mapError((error) => failure("read Plugin contributions", null, null, error)),
       ),
   } satisfies PluginManagerService;

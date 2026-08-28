@@ -251,7 +251,7 @@ layer(NodeServices.layer)((it) => {
 
         assert.deepStrictEqual(
           contributions.map((contribution) => contribution.kind),
-          ["rules"],
+          ["mcp-server", "rules"],
         );
         assert.deepStrictEqual(picture.pluginInstalls, []);
         assert.deepStrictEqual(picture.contributionSettings, []);
