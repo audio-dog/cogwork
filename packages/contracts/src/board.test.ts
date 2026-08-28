@@ -233,6 +233,8 @@ describe("applyDaemonEvent", () => {
         revision: 0,
       },
       operationSettings: [],
+      pluginInstalls: [],
+      contributionSettings: [],
     });
     const next = controlStore({
       daemonLimits: {
@@ -249,6 +251,8 @@ describe("applyDaemonEvent", () => {
           value: "anthropic/claude-sonnet-4-5",
         },
       ],
+      pluginInstalls: [],
+      contributionSettings: [],
     });
 
     const board = fold([
