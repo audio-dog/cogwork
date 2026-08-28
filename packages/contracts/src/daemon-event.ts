@@ -36,6 +36,7 @@ export const WorkspaceState = Schema.TaggedUnion({
   },
   Failed: {
     name: Schema.optional(WorkspaceId),
+    displayName: Schema.optional(TrimmedNonEmptyString),
     source: TrimmedNonEmptyString,
     message: Schema.String,
   },

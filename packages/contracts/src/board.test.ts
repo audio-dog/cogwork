@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { WorkspaceId } from "./base-schemas";
-import { applyDaemonEvent, initialBoard, liveOnly } from "./board";
+import { applyDaemonEvent, initialBoard, liveOnly, workspaceFailureState } from "./board";
 import { ControlStore, SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
@@ -49,6 +49,19 @@ const urlOf = (item: ClassifiedItem | undefined) => (item?._tag === "NeedsHuman"
 const fold = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
 describe("applyDaemonEvent", () => {
+  it("keeps a failed workspace registration name in live state", () => {
+    const state = workspaceState(
+      workspaceFailureState({
+        name: workspace("0198f16a-21d7-7000-8000-000000000001"),
+        displayName: "Cogwork",
+        source: "/repos/cogwork",
+        message: "Workspace input is missing",
+      }),
+    );
+
+    assert.strictEqual(state._tag === "Failed" ? state.displayName : undefined, "Cogwork");
+  });
+
   it("requires emittedAtMillis on daemon events", () => {
     assert.throws(() => decodeEvent({ _tag: "SeedEnd" }));
   });

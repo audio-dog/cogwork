@@ -62,6 +62,7 @@ export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
 export const workspaceFailureState = (failure: WorkspaceFailureInfo) => ({
   _tag: "Failed" as const,
   ...(failure.name ? { name: failure.name } : {}),
+  ...(failure.displayName ? { displayName: failure.displayName } : {}),
   source: failure.source,
   message: failure.message,
 });
