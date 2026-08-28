@@ -1,0 +1,97 @@
+packages/engine/src/engine.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 42,506
+packages/engine/src/github/github.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 190,202,213,230
+packages/engine/src/executor.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 191
+packages/engine/src/coordination-tracker.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 12,24,154,180-240
+  s_27758a1b49de33::t_3e7c2cb44e12da 241
+packages/engine/src/commands.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 60,105,253
+packages/cursor-acp/src/harness.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 64
+packages/codex-cli/src/harness.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 225
+packages/engine/src/provider-runner.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 140
+packages/engine/src/recovery.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 33,195-220,227,241,245,248-249,256,265,268-269,271-275
+packages/engine/src/authoring-tree.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 1-147
+packages/contracts/src/contribution.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 1-16
+packages/contracts/src/contribution.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 1-25
+packages/engine/src/comments.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 22
+packages/engine/CONTEXT.md
+  s_27758a1b49de33::t_6bbd3bee86c453 45,49
+packages/engine/src/harness.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 5,41
+packages/engine/src/executor.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 3,57-63,85,131,151,164,255,355,385,393-397,735,750,1016-1037,1063
+packages/engine/src/linear/linear.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 239,265
+packages/engine/src/projector.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 1-6,15
+packages/engine/src/recovery.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 9,13,38,201-205,211-212,228,243,252-278,738-807
+packages/engine/src/scheduler.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 1,167-169,173,280-286,301
+packages/engine/src/scheduler.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 37,637-658
+  s_27758a1b49de33::t_614ca60dd51b43 636
+packages/engine/src/coordination-tracker.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 131
+packages/engine/src/issue-tracker-router.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 16
+packages/engine/src/harness.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 177
+packages/engine/src/worktree.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 23
+packages/engine/src/context-assembler.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 18,99-141
+  s_27758a1b49de33::t_f4b6fdcecb20b7 142-144
+packages/engine/src/context-assembler.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 1,25,110-121,148-150
+packages/engine/src/provider-runner.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 43,140
+packages/engine/src/workspace-registry.test.ts
+  s_27758a1b49de33::t_614ca60dd51b43 463
+  s_27758a1b49de33::t_6bbd3bee86c453 464-511
+  s_27758a1b49de33::t_241465e6eb9534 512-513
+packages/codex-cli/src/harness.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 80
+packages/engine/src/event-publisher.test.ts
+  s_27758a1b49de33::t_614ca60dd51b43 63
+  s_27758a1b49de33::t_6bbd3bee86c453 131
+packages/engine/src/registry.ts
+  s_27758a1b49de33::t_614ca60dd51b43 311,313,404-405,407,508-511
+  s_27758a1b49de33::t_6bbd3bee86c453 22,198-201,233-237,241,321,323,334-337,339,398,435,560-563
+  s_27758a1b49de33::t_be0ad2913b957a 473
+packages/engine/src/issue-tracker.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 13
+packages/engine/src/read-model.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 109
+packages/engine/src/authoring-tree.test.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 1-93
+packages/contracts/src/index.ts
+  s_27758a1b49de33::t_6bbd3bee86c453 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ba3f38f3cd3eddc0232b93f0c392c870dfc83d22",
+  "prompts": {},
+  "sessions": {
+    "s_27758a1b49de33": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-25c9-7f51-a29b-bac3eb395b54",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
