@@ -219,6 +219,7 @@ describe("applyDaemonEvent", () => {
         dailyBudget: 50,
         revision: 0,
       },
+      operationSettings: [],
     });
     const next = controlStore({
       daemonLimits: {
@@ -227,6 +228,14 @@ describe("applyDaemonEvent", () => {
         dailyBudget: 20,
         revision: 1,
       },
+      operationSettings: [
+        {
+          setting: "model",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "anthropic/claude-sonnet-4-5",
+        },
+      ],
     });
 
     const board = fold([
