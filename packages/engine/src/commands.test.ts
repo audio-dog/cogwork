@@ -2,6 +2,7 @@ import {
   Connection,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
+  connectionIdOf,
   type DaemonLimitUpdate,
   DaemonRpcs,
   HarnessName,
@@ -188,7 +189,10 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
   contributions: () => Effect.succeed([]),
 });
-const connectionStoreLayerWithStatus = (status: "established" | "revoked") =>
+const connectionStoreLayerWithStatus = (
+  status: "established" | "revoked",
+  existing: Connection | null = null,
+) =>
   Layer.succeed(ConnectionStore, {
     overview: () => Effect.succeed({ connections: [] }),
     find: (connectionId) =>
@@ -200,7 +204,7 @@ const connectionStoreLayerWithStatus = (status: "established" | "revoked") =>
           status,
         }),
       ),
-    findSystem: () => Effect.succeed(null),
+    findSystem: () => Effect.succeed(existing),
     bearer: () => Effect.die("unexpected Connection bearer"),
     readiness: () => Effect.succeed({ _tag: "Ready" }),
     requireReady: () => Effect.void,
@@ -933,6 +937,45 @@ describe("RegisterWorkspace", () => {
       Effect.scoped,
     );
   });
+});
+
+describe("Connection mutations", () => {
+  const existing = Connection.make({
+    id: connectionIdOf("linear", "acme"),
+    system: "linear",
+    account: "acme",
+    status: "established",
+  });
+  const layer = daemonLayer(
+    trackerLayer({}),
+    schedulerStub(),
+    controlStoreStub(),
+    registryServices,
+    pluginManagerLayer,
+    connectionStoreLayerWithStatus("established", existing),
+  );
+  const establishment = {
+    system: "linear",
+    account: "other",
+    source: { _tag: "Stored" },
+  } as const;
+
+  it.effect("directs account switches through removal", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const establishError = yield* Effect.flip(client.EstablishConnection({ establishment }));
+      const reconnectError = yield* Effect.flip(client.ReconnectConnection({ establishment }));
+
+      assert.strictEqual(
+        establishError.message,
+        "Connection already exists. Use re-connect for the same account, or remove it before connecting to a different account.",
+      );
+      assert.strictEqual(
+        reconnectError.message,
+        'Connection is established for "acme". Remove it before connecting to "other".',
+      );
+    }).pipe(Effect.provide(layer), Effect.scoped),
+  );
 });
 
 describe("workspace lifecycle commands", () => {

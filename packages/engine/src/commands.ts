@@ -380,7 +380,7 @@ export const establishConnection = Effect.fn("Daemon.EstablishConnection")(funct
     return yield* connectionFailure(
       "establish Connection",
       existing.id,
-      "Connection already exists; use re-connect",
+      "Connection already exists. Use re-connect for the same account, or remove it before connecting to a different account.",
     );
   }
   const connection = yield* connections
@@ -405,11 +405,18 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
 }) {
   const connections = yield* ConnectionStore;
   const existing = yield* connections.findSystem(payload.establishment.system);
-  if (existing?.account !== payload.establishment.account) {
+  if (!existing) {
     return yield* connectionFailure(
       "re-connect Connection",
-      existing?.id ?? null,
+      null,
       "Connection does not exist; establish it first",
+    );
+  }
+  if (existing.account !== payload.establishment.account) {
+    return yield* connectionFailure(
+      "re-connect Connection",
+      existing.id,
+      `Connection is established for "${existing.account}". Remove it before connecting to "${payload.establishment.account}".`,
     );
   }
   const connection = yield* connections
