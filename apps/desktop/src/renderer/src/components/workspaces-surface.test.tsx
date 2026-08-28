@@ -1,12 +1,13 @@
-import { defaultControlStore, WorkspaceState } from "@cogwork/contracts";
+import { defaultControlStore, WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { Workspaces, type WorkspacesValue } from "./workspaces-surface";
 
+const workspaceName = Schema.decodeSync(WorkspaceId)("01991b94-d181-72f9-aae4-6aa1df396e10");
 const workspace = Schema.decodeSync(WorkspaceState)({
   _tag: "Registered",
-  name: "01991b94-d181-72f9-aae4-6aa1df396e10",
+  name: workspaceName,
   displayName: "Cogwork",
   checkoutPath: "/Users/taylor/sites/cogwork",
   issueTracker: "github",
@@ -38,9 +39,9 @@ const value: WorkspacesValue = {
   },
 };
 
-const render = () =>
+const render = (nextValue = value) =>
   renderToStaticMarkup(
-    <Workspaces.Provider value={value}>
+    <Workspaces.Provider value={nextValue}>
       <Workspaces.Root>
         <Workspaces.Header />
         <Workspaces.Registry />
@@ -62,5 +63,21 @@ describe("Workspaces surface", () => {
     expect(render()).toContain(
       "Deregistering removes the registration, its private settings, and private authoring tree. Run history stays.",
     );
+  });
+
+  it("locks every workspace action while its command is in flight", () => {
+    const markup = render({
+      ...value,
+      meta: {
+        ...value.meta,
+        rebindPending: true,
+        rebindTarget: workspaceName,
+        deregisterPending: true,
+        deregisterTarget: workspaceName,
+      },
+    });
+
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Re-bind path<\/button>/);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Deregister<\/button>/);
   });
 });

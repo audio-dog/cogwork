@@ -71,6 +71,7 @@ import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../fea
 import { parseCount, sanitizeCountDraft } from "../features/settings-values";
 import {
   absoluteCheckoutPathFrom,
+  registrationSubmissionStatus,
   type WorkspaceTracker,
   workspaceRegistrationFrom,
 } from "../features/workspace-registration";
@@ -180,8 +181,16 @@ function RegisterWorkspaceDialog() {
   } = useWorkspaces();
   const [tracker, setTracker] = useState<WorkspaceTracker>("github");
   const [invalid, setInvalid] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const status = registrationSubmissionStatus({
+    submitted,
+    pending: registerPending,
+    error: registerError,
+    outcome: registerOutcome,
+  });
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (status === "submitting" || status === "complete") return;
     const registration = workspaceRegistrationFrom(registrationDraftFrom(event.currentTarget, tracker));
     if (!registration) {
       setInvalid(true);
@@ -189,6 +198,7 @@ function RegisterWorkspaceDialog() {
     }
 
     setInvalid(false);
+    setSubmitted(true);
     register(registration);
   };
   const setTrackerValue = (value: string | null) => {
@@ -196,10 +206,17 @@ function RegisterWorkspaceDialog() {
     if (!nextTracker) return;
     setTracker(nextTracker);
   };
-  const showOutcome = registerOutcome && !registerPending;
+  const changeOpen = (open: boolean) => {
+    if (!open) return;
+    setSubmitted(false);
+    setInvalid(false);
+  };
+  const activeError = status === "failed" ? registerError : null;
+  const activeOutcome = status === "complete" ? registerOutcome : null;
+  const disabled = status === "submitting" || status === "complete";
 
   return (
-    <Dialog>
+    <Dialog onOpenChange={changeOpen}>
       <DialogTrigger render={<Button size="sm" />}>
         <RiAddLine data-icon="inline-start" />
         Register workspace
@@ -249,13 +266,13 @@ function RegisterWorkspaceDialog() {
             </Field>
             {tracker === "github" ? <GitHubRegistrationFields /> : <LinearRegistrationFields />}
             {invalid ? <FieldError>Complete the required fields and use an absolute path.</FieldError> : null}
-            {registerError ? <FieldError>{registerError}</FieldError> : null}
-            {showOutcome ? <RegistrationOutcome outcome={registerOutcome} /> : null}
+            {activeError ? <FieldError>{activeError}</FieldError> : null}
+            {activeOutcome ? <RegistrationOutcome outcome={activeOutcome} /> : null}
           </FieldGroup>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-            <Button type="submit" disabled={registerPending}>
-              {registerPending ? (
+            <Button type="submit" disabled={disabled}>
+              {status === "submitting" ? (
                 <Spinner data-icon="inline-start" />
               ) : (
                 <RiAddLine data-icon="inline-start" />
@@ -330,7 +347,9 @@ function RebindWorkspaceDialog({
 
   return (
     <Dialog>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>Re-bind path</DialogTrigger>
+      <DialogTrigger render={<Button size="sm" variant="outline" disabled={rebindPending} />}>
+        Re-bind path
+      </DialogTrigger>
       <DialogContent>
         <form className="contents" onSubmit={submit}>
           <DialogHeader>
@@ -363,7 +382,7 @@ function RebindWorkspaceDialog({
           </FieldGroup>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-            <Button type="submit" disabled={targeted && rebindPending}>
+            <Button type="submit" disabled={rebindPending}>
               {targeted && rebindPending ? (
                 <Spinner data-icon="inline-start" />
               ) : (
@@ -392,7 +411,9 @@ function DeregisterWorkspaceDialog({
   const targeted = deregisterTarget === workspace;
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button size="sm" variant="ghost" />}>Deregister</AlertDialogTrigger>
+      <AlertDialogTrigger render={<Button size="sm" variant="ghost" disabled={deregisterPending} />}>
+        Deregister
+      </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Deregister {label}?</AlertDialogTitle>
@@ -411,7 +432,7 @@ function DeregisterWorkspaceDialog({
           <AlertDialogCancel>Keep it</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            disabled={targeted && deregisterPending}
+            disabled={deregisterPending}
             onClick={() => deregister(workspace)}
           >
             {targeted && deregisterPending ? <Spinner data-icon="inline-start" /> : null}

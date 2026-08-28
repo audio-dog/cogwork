@@ -7,7 +7,7 @@ import type {
 } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
-import { createContext, type ReactNode, use, useRef } from "react";
+import { createContext, type ReactNode, use, useState } from "react";
 import { deregisterWorkspaceAtom, rebindWorkspaceAtom, registerWorkspaceAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
 import { useDaemonLimit } from "../features/use-daemon-limit";
@@ -77,8 +77,8 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const [registerResult, runRegister] = useAtom(registerWorkspaceAtom);
   const [rebindResult, runRebind] = useAtom(rebindWorkspaceAtom);
   const [deregisterResult, runDeregister] = useAtom(deregisterWorkspaceAtom);
-  const rebindTarget = useRef<WorkspaceId | null>(null);
-  const deregisterTarget = useRef<WorkspaceId | null>(null);
+  const [rebindTarget, setRebindTarget] = useState<WorkspaceId | null>(null);
+  const [deregisterTarget, setDeregisterTarget] = useState<WorkspaceId | null>(null);
   const picture = board._tag === "Success" ? board.board : null;
   const limits = useDaemonLimit(picture?.controlStore ?? null);
   const workspaces = picture ? [...picture.workspaces.values()] : [];
@@ -86,11 +86,11 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const actions: WorkspacesActions = {
     register: (registration) => runRegister({ payload: { registration } }),
     rebind: (workspace, checkoutPath) => {
-      rebindTarget.current = workspace;
+      setRebindTarget(workspace);
       runRebind({ payload: { workspace, checkoutPath } });
     },
     deregister: (workspace) => {
-      deregisterTarget.current = workspace;
+      setDeregisterTarget(workspace);
       runDeregister({ payload: { workspace } });
     },
     setLimit: limits.setLimit,
@@ -112,10 +112,10 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
           rebindPending: rebindResult.waiting,
           rebindError: resultError(rebindResult),
           rebindOutcome: resultValue(rebindResult),
-          rebindTarget: rebindTarget.current,
+          rebindTarget,
           deregisterPending: deregisterResult.waiting,
           deregisterError: resultError(deregisterResult),
-          deregisterTarget: deregisterTarget.current,
+          deregisterTarget,
           limitPending: limits.result.waiting,
           limitError: resultError(limits.result),
         },
