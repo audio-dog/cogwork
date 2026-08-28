@@ -1,5 +1,20 @@
 import type { ControlStore, PluginItem, PluginOverview } from "@cogwork/contracts";
+import type * as Cause from "effect/Cause";
+import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type { ConfigurationPicture, Contribution, InstalledPlugin, ScopeRef } from "./configuration-model";
+
+export const pluginOverviewOf = <E>(
+  board: PluginOverview | null,
+  queried: AsyncResult.AsyncResult<PluginOverview, E>,
+) => {
+  if (board) return board;
+  if (queried._tag === "Success") return queried.value;
+  return { plugins: [] };
+};
+
+export const pluginQueryFailure = <E>(
+  queried: AsyncResult.AsyncResult<PluginOverview, E>,
+): Cause.Cause<E> | null => (queried._tag === "Failure" ? queried.cause : null);
 
 const scopeOf = (setting: ControlStore["contributionSettings"][number]): ScopeRef =>
   setting.scope._tag === "SettingsProfile"

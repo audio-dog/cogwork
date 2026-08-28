@@ -1,7 +1,9 @@
 import { defaultControlStore, localOwnerId, type PluginOverview } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
 import { placeholderConfiguration } from "./configuration-placeholder";
-import { configurationWithPlugins } from "./plugin-configuration";
+import { configurationWithPlugins, pluginOverviewOf, pluginQueryFailure } from "./plugin-configuration";
 
 const overview: PluginOverview = {
   plugins: [
@@ -67,5 +69,13 @@ describe("configurationWithPlugins", () => {
     expect(picture.catalogPlugins.map((plugin) => plugin.pluginId)).toEqual(["github"]);
     expect(picture.contributions.at(-1)?.rows[0]?.value).toBe(true);
     expect(picture.contributions.at(-1)?.readiness?._tag).toBe("not-ready");
+  });
+
+  it("keeps a catalog query failure visible", () => {
+    const cause = Cause.fail(new Error("catalog unreadable"));
+    const failed = AsyncResult.failure<PluginOverview, Error>(cause);
+
+    expect(pluginOverviewOf(null, failed)).toEqual({ plugins: [] });
+    expect(pluginQueryFailure(failed)).toBe(cause);
   });
 });

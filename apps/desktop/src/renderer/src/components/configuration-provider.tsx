@@ -1,7 +1,7 @@
-import { useAtom } from "@effect/atom-react";
+import { useAtom, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useState } from "react";
-import { installPluginAtom, uninstallPluginAtom } from "../daemon/atoms";
+import { installPluginAtom, pluginsAtom, uninstallPluginAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
 import type {
   ConfigurationPicture,
@@ -11,7 +11,11 @@ import type {
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { type CustomizePlaces, customizePlaces } from "../features/customize-places";
-import { configurationWithPlugins } from "../features/plugin-configuration";
+import {
+  configurationWithPlugins,
+  pluginOverviewOf,
+  pluginQueryFailure,
+} from "../features/plugin-configuration";
 import { type PluginsView, pluginsView } from "../features/plugins-view";
 
 interface ConfigurationState {
@@ -85,16 +89,19 @@ export function PlaceholderConfigurationProvider({ children }: { children: React
 
 export function DaemonConfigurationProvider({ children }: { children: ReactNode }) {
   const boardResult = useBoard();
+  const pluginQuery = useAtomValue(pluginsAtom);
   const [installResult, install] = useAtom(installPluginAtom);
   const [uninstallResult, uninstall] = useAtom(uninstallPluginAtom);
   const [operation, setOperation] = useState<"install" | "uninstall" | null>(null);
   const board = boardResult._tag === "Success" ? boardResult.board : null;
   const activeResult = operation === "install" ? installResult : uninstallResult;
   const mutationOverview = operation && activeResult._tag === "Success" ? activeResult.value.overview : null;
-  const overview = mutationOverview ?? board?.plugins ?? { plugins: [] };
+  const overview = mutationOverview ?? pluginOverviewOf(board?.plugins ?? null, pluginQuery);
   const notices =
     operation === "uninstall" && activeResult._tag === "Success" ? activeResult.value.notices : [];
-  const pluginFailure = activeResult._tag === "Failure" ? Cause.pretty(activeResult.cause) : null;
+  const queryFailure = pluginQueryFailure(pluginQuery);
+  const pluginFailureCause = activeResult._tag === "Failure" ? activeResult.cause : queryFailure;
+  const pluginFailure = pluginFailureCause ? Cause.pretty(pluginFailureCause) : null;
   const picture = configurationWithPlugins(placeholderConfiguration, overview, board?.controlStore ?? null);
   const actions: ConfigurationActions = {
     installPlugin: (pluginId) => {

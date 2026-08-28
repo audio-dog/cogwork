@@ -30,6 +30,8 @@ export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");
 
 export const setDaemonLimitAtom = DaemonAtomRpc.mutation("SetDaemonLimit");
 
+export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
+
 export const installPluginAtom = DaemonAtomRpc.mutation("InstallPlugin");
 
 export const uninstallPluginAtom = DaemonAtomRpc.mutation("UninstallPlugin");
