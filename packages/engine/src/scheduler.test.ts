@@ -39,8 +39,8 @@ const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace =>
     issueTracker: { type: "github", repo: `owner/${name}`, actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { triage: { enabled: true } },
-    ...(concurrency === undefined ? {} : { concurrency }),
   }),
+  ...(concurrency === undefined ? {} : { workspaceLimit: concurrency }),
 });
 
 const work = (
@@ -340,7 +340,7 @@ const workerLayer = Layer.effect(
 );
 
 const registryLayer = (workspaces: ReadonlyArray<RegisteredWorkspace>) =>
-  Layer.succeed(Registry.WorkspaceRegistry, { workspaces, failures: [] });
+  Layer.succeed(Registry.WorkspaceRegistry, Registry.readOnlyRegistry({ workspaces, failures: [] }));
 
 type ExecuteStub = (
   probe: SchedulerProbeState,

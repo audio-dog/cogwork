@@ -73,6 +73,7 @@ layer(NodeServices.layer)((it) => {
           { name: "run_events" },
           { name: "runs" },
           { name: "sessions" },
+          { name: "workspaces" },
         ],
       );
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });

@@ -17,6 +17,7 @@ import {
 } from "./commands";
 import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
+import { workspaceCommand } from "./workspace-commands";
 import { worktreeCommand } from "./worktree-commands";
 
 const cli = Command.make("cogwork").pipe(
@@ -30,6 +31,7 @@ const cli = Command.make("cogwork").pipe(
     runEventsCommand,
     watchCommand,
     worktreeCommand,
+    workspaceCommand,
     loginCommand,
     modelsCommand,
   ]),

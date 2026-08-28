@@ -35,12 +35,7 @@ import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { SocketOpenError } from "effect/unstable/socket/Socket";
-import {
-  defaultConfigHome,
-  defaultControlStorePath,
-  defaultCredentialsPath,
-  defaultSocketPath,
-} from "./paths";
+import { defaultControlStorePath, defaultCredentialsPath, defaultSocketPath } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
 import { formatDaemonLimits, formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 import { secondStopSignal } from "./stop-signal";
@@ -50,11 +45,6 @@ import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
-);
-
-const configHomeFlag = Flag.string("config-home").pipe(
-  Flag.withDescription("Directory of workspace config files the daemon imports"),
-  Flag.withDefault(defaultConfigHome),
 );
 
 const controlStoreFlag = Flag.string("control-store").pipe(
@@ -234,7 +224,6 @@ const runDaemon = Effect.fn("commands.runDaemon")(
     const registry = yield* Registry.WorkspaceRegistry;
     yield* Effect.logInfo("cogwork daemon started", {
       socket: options.socketPath,
-      configHome: options.configHome,
       workspaces: registry.workspaces.length,
       failures: registry.failures.length,
     });
@@ -242,6 +231,8 @@ const runDaemon = Effect.fn("commands.runDaemon")(
       registry.failures,
       (failure) =>
         Effect.logWarning("workspace registration failed", {
+          workspace: failure.name,
+          displayName: failure.displayName,
           source: failure.source,
           message: failure.message,
         }),
@@ -477,16 +468,14 @@ const setScheduling = Effect.fn("commands.setScheduling")(
 
 export const daemonCommand = Command.make("daemon", {
   socket: socketFlag,
-  configHome: configHomeFlag,
   controlStore: controlStoreFlag,
   credentials: credentialsFlag,
   pollInterval: pollIntervalFlag,
   drainGrace: drainGraceFlag,
 }).pipe(
-  Command.withHandler(({ socket, configHome, controlStore, credentials, pollInterval, drainGrace }) =>
+  Command.withHandler(({ socket, controlStore, credentials, pollInterval, drainGrace }) =>
     runDaemon({
       socketPath: socket,
-      configHome,
       controlStorePath: controlStore,
       credentialsPath: credentials,
       pollIntervalMillis: pollInterval * 1000,

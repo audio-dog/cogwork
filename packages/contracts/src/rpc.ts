@@ -11,12 +11,13 @@ import {
   SchedulingState,
   StaleControlStoreWrite,
 } from "./daemon";
-import { ClassifiedItem, DaemonEvent } from "./daemon-event";
+import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { IssueTrackerError } from "./issue-tracker";
 import { PrincipalMiddleware } from "./principal";
 import { RunActivity, RunEvent, RunId, RunStatus, RunSummary } from "./run";
 import { OperationSettingRefused, OperationSettingUpdate } from "./settings";
 import { TriageRole } from "./triage";
+import { WorkspaceRegistration, WorkspaceRegistrationError } from "./workspace";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
 
@@ -106,12 +107,19 @@ export const SetOperationSetting = Rpc.make("SetOperationSetting", {
   error: Schema.Union([ControlStoreFailure, OperationSettingRefused]),
 });
 
+export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
+  payload: { registration: WorkspaceRegistration },
+  success: WorkspaceState,
+  error: WorkspaceRegistrationError,
+});
+
 export const DaemonCommands = RpcGroup.make(
   CancelRun,
   Reclassify,
   SetScheduling,
   SetDaemonLimit,
   SetOperationSetting,
+  RegisterWorkspace,
 ).middleware(PrincipalMiddleware);
 
 export const DaemonRpcs = DaemonQueries.merge(DaemonCommands);

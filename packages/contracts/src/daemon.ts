@@ -87,6 +87,7 @@ export type PollState = typeof PollState.Type;
 
 export const WorkspaceInfo = Schema.Struct({
   name: WorkspaceId,
+  displayName: Schema.optional(TrimmedNonEmptyString),
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerType,
   harness: HarnessName,
@@ -99,6 +100,8 @@ export const WorkspaceInfo = Schema.Struct({
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
 export const WorkspaceFailureInfo = Schema.Struct({
+  name: Schema.optional(WorkspaceId),
+  displayName: Schema.optional(TrimmedNonEmptyString),
   source: TrimmedNonEmptyString,
   message: Schema.String,
 });

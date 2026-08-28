@@ -10,7 +10,9 @@ import {
   type RunRecord,
   type TriageRole,
   WorkItemId,
+  WorkspaceConfig,
   WorkspaceId,
+  WorkspaceRegistration,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
@@ -19,6 +21,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -42,20 +45,46 @@ const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const wsid = Schema.decodeSync(WorkspaceId);
 const harness = Schema.decodeSync(HarnessName);
+const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
+  name: "acme",
+  checkoutPath: "/repos/acme",
+  gitRemote: "git@github.com:acme/repo.git",
+  issueTracker: { type: "github", repo: "acme/repo" },
+  linearHistory: false,
+  concurrency: 2,
+});
 
-const registered: Registry.LoadedWorkspace = {
-  source: "example.workspace.ts",
-  value: {
+const registered: Registry.RegisteredWorkspace = {
+  source: "control-store:example",
+  config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
     harness: { preferred: "cursor" },
-  },
+  }),
 };
 
 const registryLayer = Layer.succeed(
   Registry.WorkspaceRegistry,
-  Registry.buildRegistry({ loaded: [registered], failures: [] }),
+  Registry.readOnlyRegistry({ workspaces: [registered], failures: [] }),
+);
+const registryServices = Layer.mergeAll(registryLayer, Registry.managementReadOnlyLayer);
+const failedWorkspaceRegistryServices = Layer.mergeAll(
+  Layer.succeed(
+    Registry.WorkspaceRegistry,
+    Registry.readOnlyRegistry({
+      workspaces: [],
+      failures: [
+        {
+          name: wsid("example"),
+          source: "/repos/example",
+          message: "invalid Workspace input",
+          issueTracker: registered.config.issueTracker,
+        },
+      ],
+    }),
+  ),
+  Registry.managementReadOnlyLayer,
 );
 
 const stubConfig: Scheduler.SchedulerConfig = { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 };
@@ -179,13 +208,14 @@ const daemonLayer = (
   source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>,
   scheduler = schedulerStub(),
   controlStore = controlStoreStub(),
+  registries = registryServices,
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
     Layer.provideMerge(Daemon.daemonInfoLayer),
     Layer.provideMerge(eventPublisherLayer),
-    Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)))),
-    Layer.provideMerge(registryLayer),
+    Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source)))),
+    Layer.provideMerge(registries),
     Layer.provideMerge(scheduler),
     Layer.provideMerge(runRecorder),
     Layer.provideMerge(runLedgerLayer),
@@ -193,6 +223,53 @@ const daemonLayer = (
     Layer.provideMerge(controlStore),
     Layer.provideMerge(source),
   );
+
+const registrationServices = () => {
+  const cell = MutableRef.make<Registry.RegistryState>(Registry.emptyRegistry);
+  const registry: Registry.WorkspaceRegistryService = {
+    get workspaces() {
+      return MutableRef.get(cell).workspaces;
+    },
+    get failures() {
+      return MutableRef.get(cell).failures;
+    },
+    refresh: Effect.sync(() => MutableRef.get(cell)),
+  };
+  const register: Registry.WorkspaceManagementService["register"] = (registration) => {
+    const workspace: Registry.RegisteredWorkspace = {
+      source: "control-store:minted",
+      config: {
+        name: wsid("0198f16a-21d7-7000-8000-000000000001"),
+        displayName: registration.name,
+        checkoutPath: registration.checkoutPath,
+        issueTracker: registration.issueTracker,
+        sourceControl: registration.sourceControl,
+        harness: { preferred: harness("codex") },
+        linearHistory: registration.linearHistory,
+      },
+      workspaceLimit: registration.concurrency,
+    };
+    MutableRef.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
+    return Effect.succeed({ _tag: "Registered" as const, workspace });
+  };
+  return Layer.mergeAll(
+    Layer.succeed(Registry.WorkspaceRegistry, registry),
+    Layer.succeed(Registry.WorkspaceManagement, { register }),
+  );
+};
+
+const failedRegistrationServices = () => {
+  const failure = { source: "/repos/missing", message: "Workspace input is missing" };
+  return Layer.mergeAll(
+    Layer.succeed(
+      Registry.WorkspaceRegistry,
+      Registry.readOnlyRegistry({ workspaces: [], failures: [failure] }),
+    ),
+    Layer.succeed(Registry.WorkspaceManagement, {
+      register: () => Effect.succeed({ _tag: "Failed" as const, failure }),
+    }),
+  );
+};
 
 const runRecord = (over: Partial<RunRecord> = {}): RunRecord => ({
   id: rid("run-1"),
@@ -284,6 +361,36 @@ describe("CancelRun", () => {
       if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
+
+  it.effect("hands off and releases a run whose workspace input has failed", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+      const item = yield* client.CancelRun({ runId: rid("run-1") });
+      const run = (yield* client.ListRuns()).find(({ id }) => id === rid("run-1"));
+      const recorded = yield* Ref.get(calls);
+
+      assert.strictEqual(item._tag, "NeedsHuman");
+      assert.strictEqual(run?.status, "interrupted");
+      assert.deepStrictEqual(recorded.handOff, [
+        { workItem: id("AUD-1"), outcome: { stage: "implement", note: undefined } },
+      ]);
+      assert.deepStrictEqual(recorded.released, [id("AUD-1")]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          recordingTracker([], calls),
+          schedulerStub(),
+          controlStoreStub(),
+          failedWorkspaceRegistryServices,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
 });
 
 describe("Reclassify", () => {
@@ -591,4 +698,64 @@ describe("SetOperationSetting", () => {
       assert.strictEqual(failure.source, "triage Operation Definition");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
+});
+
+describe("RegisterWorkspace", () => {
+  it.effect("returns the minted workspace and publishes it once", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const workspace = yield* client.RegisterWorkspace({
+        registration: acmeRegistration,
+      });
+      yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
+
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
+      );
+      assert.strictEqual(workspace._tag, "Registered");
+      if (workspace._tag === "Registered") {
+        assert.strictEqual(workspace.name, "0198f16a-21d7-7000-8000-000000000001");
+        assert.strictEqual(workspace.displayName, "acme");
+      }
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["WorkspaceChanged", "ItemRemoved"],
+      );
+    }).pipe(
+      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("accepts a disk-dependent failure and publishes its diagnostic once", () => {
+    const registries = failedRegistrationServices();
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const workspace = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
+
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
+      );
+      assert.deepStrictEqual(workspace, {
+        _tag: "Failed",
+        source: "/repos/missing",
+        message: "Workspace input is missing",
+      });
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["WorkspaceChanged", "ItemRemoved"],
+      );
+    }).pipe(
+      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
 });

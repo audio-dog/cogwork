@@ -12,7 +12,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type { FollowUpMarker, ObservedPr } from "./follow-up";
-import type { RegisteredWorkspace } from "./projector";
+import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
 export { IssueTrackerError };
@@ -89,25 +89,25 @@ export interface ReclassifyOutcome {
   readonly note?: string;
 }
 
-const noAdapter = (workspace: RegisteredWorkspace) =>
+const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
     message: `no work source adapter configured for ${workspace.config.name}`,
   });
 
-const hasRemoteSource = (workspace: RegisteredWorkspace) => {
+const hasRemoteSource = (workspace: WorkspaceIssueTrackerBinding) => {
   const source = workspace.config.issueTracker;
   return source.type === "linear" ? linearTeams(source).length > 0 : Boolean(source.repo);
 };
 
-const failWhenRemote = Effect.fn("IssueTracker.guard")(function* (workspace: RegisteredWorkspace) {
+const failWhenRemote = Effect.fn("IssueTracker.guard")(function* (workspace: WorkspaceIssueTrackerBinding) {
   if (hasRemoteSource(workspace)) {
     return yield* noAdapter(workspace);
   }
   return yield* Effect.void;
 });
 
-const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: RegisteredWorkspace) {
+const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
   if (hasRemoteSource(workspace)) {
     return yield* noAdapter(workspace);
   }
@@ -115,25 +115,29 @@ const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: Reg
 });
 
 export const makeEmpty = Effect.succeed({
-  rateLimitScope: (_workspace: RegisteredWorkspace): string | null => null,
+  rateLimitScope: (_workspace: WorkspaceIssueTrackerBinding): string | null => null,
   observe: observeEmpty,
-  claim: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _claim: ClaimRequest) =>
+  claim: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _claim: ClaimRequest) =>
     failWhenRemote(workspace),
-  release: (workspace: RegisteredWorkspace, _itemId: WorkItemId) => failWhenRemote(workspace),
-  note: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _detail: string) => failWhenRemote(workspace),
-  triaged: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: TriagedOutcome) =>
+  release: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) => failWhenRemote(workspace),
+  note: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _detail: string) =>
     failWhenRemote(workspace),
-  implemented: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: ImplementedOutcome) =>
+  triaged: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: TriagedOutcome) =>
     failWhenRemote(workspace),
-  followedUp: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: FollowedUpOutcome) =>
+  implemented: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: ImplementedOutcome) =>
     failWhenRemote(workspace),
-  attemptFailed: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: AttemptFailedOutcome) =>
+  followedUp: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: FollowedUpOutcome) =>
     failWhenRemote(workspace),
-  handOff: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: HandOffOutcome) =>
+  attemptFailed: (
+    workspace: WorkspaceIssueTrackerBinding,
+    _itemId: WorkItemId,
+    _outcome: AttemptFailedOutcome,
+  ) => failWhenRemote(workspace),
+  handOff: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: HandOffOutcome) =>
     failWhenRemote(workspace),
-  stalled: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: StalledOutcome) =>
+  stalled: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: StalledOutcome) =>
     failWhenRemote(workspace),
-  reclassify: (workspace: RegisteredWorkspace, _itemId: WorkItemId, _outcome: ReclassifyOutcome) =>
+  reclassify: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: ReclassifyOutcome) =>
     failWhenRemote(workspace),
 } as const);
 
@@ -146,7 +150,10 @@ export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerServ
 export const emptyLayer = Layer.effect(IssueTracker, makeEmpty);
 
 export const releaseClaim = (tracker: IssueTrackerService) =>
-  Effect.fn("IssueTracker.releaseClaim")(function* (workspace: RegisteredWorkspace, itemId: WorkItemId) {
+  Effect.fn("IssueTracker.releaseClaim")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+  ) {
     yield* tracker.release(workspace, itemId).pipe(
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("claim release failed", {
