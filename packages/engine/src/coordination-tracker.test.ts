@@ -9,6 +9,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import { classify } from "./classify";
 import { triageProposalBody } from "./comments";
 import type { CommentHost, CoordinationComment } from "./coordination";
 import * as Coordination from "./coordination";
@@ -20,7 +21,7 @@ import {
 } from "./coordination-tracker";
 import type { FollowUpMarker } from "./follow-up";
 import { wireCodec } from "./github/markers";
-import type { RoleChanges } from "./issue-tracker";
+import { IssueTrackerError, type RoleChanges } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 
 const codec = wireCodec;
@@ -172,6 +173,68 @@ describe("coordination tracker", () => {
       assert.deepStrictEqual(item?.claim, { by: claimant, ...request });
       assert.isTrue(item?.claimedByUs);
       assert.isTrue(item?.owned);
+    }),
+  );
+
+  it.effect("leaves no claim label when the coordination marker write fails", () =>
+    Effect.gen(function* () {
+      const { host } = yield* makeFakeHost([{ number: 7, labels: ["ready-for-agent"] }]);
+      const comments = host.comments;
+      const tracker = makeCoordinationTracker({
+        ...host,
+        comments: (ref) => ({
+          ...comments(ref),
+          create: () =>
+            Effect.fail(
+              new IssueTrackerError({ reason: "unavailable", message: "coordination marker write failed" }),
+            ),
+        }),
+      });
+
+      const error = yield* tracker
+        .claim(workspace, decodeId("#7"), { claimedAtMillis: 1_722_000_000_000, stage: "implement" })
+        .pipe(Effect.flip);
+      assert.strictEqual(error.message, "coordination marker write failed");
+
+      const [item] = yield* tracker.observe(workspace);
+      assert.isFalse(item?.claimLabeled ?? true);
+      const nextPoll = classify(item ? [{ ...item, pr: null }] : []);
+      assert.deepStrictEqual(
+        nextPoll.eligible.map((work) => work.id),
+        [decodeId("#7")],
+      );
+    }),
+  );
+
+  it.effect("keeps an existing claim when its coordination marker refresh fails", () =>
+    Effect.gen(function* () {
+      const { host } = yield* makeFakeHost([{ number: 7, labels: ["ready-for-agent"] }]);
+      const tracker = makeCoordinationTracker(host);
+      yield* tracker.claim(workspace, decodeId("#7"), {
+        claimedAtMillis: 1_722_000_000_000,
+        stage: "implement",
+      });
+
+      const comments = host.comments;
+      const failingTracker = makeCoordinationTracker({
+        ...host,
+        comments: (ref) => ({
+          ...comments(ref),
+          edit: () =>
+            Effect.fail(
+              new IssueTrackerError({ reason: "unavailable", message: "coordination marker write failed" }),
+            ),
+        }),
+      });
+
+      yield* failingTracker
+        .claim(workspace, decodeId("#7"), { claimedAtMillis: 1_722_000_000_001, stage: "implement" })
+        .pipe(Effect.flip);
+
+      const [item] = yield* failingTracker.observe(workspace);
+      assert.isTrue(item?.claimLabeled ?? false);
+      assert.isTrue(item?.claimedByUs ?? false);
+      assert.strictEqual(item?.claim?.claimedAtMillis, 1_722_000_000_000);
     }),
   );
 
