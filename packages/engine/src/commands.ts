@@ -9,12 +9,14 @@ import {
   type WorkItemId,
   WorkItemNotFound,
   type WorkspaceId,
+  WorkspaceManagementError,
   type WorkspaceRegistration,
   workspaceFailureState,
   workspaceStateFromInfo,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
@@ -23,7 +25,12 @@ import { operationSettingRefusal } from "./operation-policy";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
-import { findWorkspaceIssueTrackerBinding, WorkspaceManagement, WorkspaceRegistry } from "./registry";
+import {
+  findWorkspaceIssueTrackerBinding,
+  WorkspaceManagement,
+  type WorkspaceRegistrationChange,
+  WorkspaceRegistry,
+} from "./registry";
 import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
@@ -69,6 +76,7 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const runControl = yield* RunControl;
+  const controlledWorkspace = yield* runControl.workspaceFor(payload.runId);
   yield* runControl.cancel(payload.runId);
 
   const endedAtMillis = yield* Clock.currentTimeMillis;
@@ -82,7 +90,8 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const registry = yield* WorkspaceRegistry;
-  const workspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
+  const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
+  const workspace = Option.getOrUndefined(controlledWorkspace) ?? currentWorkspace;
   if (workspace !== undefined) {
     const issueTracker = yield* IssueTracker;
     yield* issueTracker
@@ -93,6 +102,7 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   const snapshot = yield* (yield* ReconcileWorker).snapshot;
   const observed = observedFor(snapshot, run.workspace, run.workItem);
   const item = parkedItem(observed) ?? parkedNeedsHuman(run.workItem, run.workItem);
+  if (currentWorkspace === undefined) return item;
   const bus = yield* DaemonEventBus;
   yield* bus.publish({ _tag: "ItemChanged", workspace: run.workspace, item });
   return item;
@@ -172,16 +182,47 @@ export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(funct
   );
 });
 
+const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
+  if (change._tag === "Failed") return workspaceFailureState(change.failure);
+  return workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined));
+};
+
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
   readonly registration: WorkspaceRegistration;
 }) {
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const change = yield* management.register(payload.registration);
-  const state =
-    change._tag === "Registered"
-      ? workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined))
-      : workspaceFailureState(change.failure);
+  const state = workspaceStateFromChange(change);
+  yield* publisher.publishWorkspaces();
+  return state;
+});
+
+export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(function* (payload: {
+  readonly workspace: WorkspaceId;
+}) {
+  const management = yield* WorkspaceManagement;
+  const publisher = yield* DaemonEventPublisher;
+  const store = yield* ControlStore;
+  const workspace = yield* management.deregister(payload.workspace);
+  yield* publisher.publishWorkspaceRemoved(workspace);
+  const controlStore = yield* store.picture.pipe(
+    Effect.mapError(
+      (error) => new WorkspaceManagementError({ operation: "deregister workspace", message: error.message }),
+    ),
+  );
+  yield* publisher.publishControlStore(controlStore);
+  return workspace;
+});
+
+export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {
+  readonly workspace: WorkspaceId;
+  readonly checkoutPath: string;
+}) {
+  const management = yield* WorkspaceManagement;
+  const publisher = yield* DaemonEventPublisher;
+  const change = yield* management.rebind(payload.workspace, payload.checkoutPath);
+  const state = workspaceStateFromChange(change);
   yield* publisher.publishWorkspaces();
   return state;
 });

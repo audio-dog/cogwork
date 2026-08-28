@@ -14,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
+import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -402,14 +403,19 @@ const crashIn =
       Effect.map(() => true),
     );
 
-const schedulerLayer = (
-  config: Scheduler.SchedulerConfig,
-  deps: {
-    readonly registry: ReadonlyArray<RegisteredWorkspace>;
-    readonly snapshots: ReadonlyArray<SnapshotEntry>;
-    readonly execute: ExecuteStub;
-  },
-) => {
+interface SchedulerLayerDependencies {
+  readonly registry: ReadonlyArray<RegisteredWorkspace>;
+  readonly registryService?: Registry.WorkspaceRegistryService;
+  readonly snapshots: ReadonlyArray<SnapshotEntry>;
+  readonly execute: ExecuteStub;
+}
+
+const providedRegistryLayer = (deps: SchedulerLayerDependencies) => {
+  if (deps.registryService) return Layer.succeed(Registry.WorkspaceRegistry, deps.registryService);
+  return registryLayer(deps.registry);
+};
+
+const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerDependencies) => {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.publishingLayer.pipe(
     Layer.provide(RunLedger.layerMemoryCore),
@@ -420,7 +426,7 @@ const schedulerLayer = (
   return Scheduler.layer(config).pipe(
     Layer.provide(
       Layer.mergeAll(
-        registryLayer(deps.registry),
+        providedRegistryLayer(deps),
         workerLayer.pipe(Layer.provide(probe)),
         executor,
         runLedger,
@@ -570,6 +576,69 @@ describe("Scheduler.tick", () => {
       ),
     ),
   );
+
+  it.effect("lets an in-flight Run settle after its workspace leaves the registry", () => {
+    const state = MutableRef.make<Registry.RegistryState>({ workspaces: [wsA], failures: [] });
+    const registry: Registry.WorkspaceRegistryService = {
+      get workspaces() {
+        return MutableRef.get(state).workspaces;
+      },
+      get failures() {
+        return MutableRef.get(state).failures;
+      },
+      refresh: Effect.sync(() => MutableRef.get(state)),
+    };
+    const runId = Schema.decodeSync(RunId)("deregistered-workspace");
+    const harness = Schema.decodeSync(HarnessName)("cursor");
+    const finishAfterGate: ExecuteStub = (probe, ledger, workspace, item) =>
+      recordExecution(probe, workspace, item).pipe(
+        Effect.andThen(
+          ledger.insertRun({
+            id: runId,
+            workspace: workspace.config.name,
+            workItem: item.id,
+            stage: item.stage,
+            harness,
+            branch: null,
+            session: null,
+            usage: null,
+            status: "running",
+            startedAtMillis: 0,
+            endedAtMillis: null,
+          }),
+        ),
+        Effect.andThen(probe.gate.await),
+        Effect.andThen(ledger.updateRun(runId, { status: "succeeded", usage: null, endedAtMillis: 1 })),
+        Effect.map(() => true),
+      );
+    return Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+      const ledger = yield* RunLedger.RunLedger;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* Effect.yieldNow;
+
+      MutableRef.set(state, Registry.emptyRegistry);
+      yield* republish(probe);
+      assert.strictEqual(yield* scheduler.tick(), 0);
+
+      yield* probe.gate.open;
+      yield* scheduler.awaitIdle;
+      assert.strictEqual((yield* ledger.getRun(runId))?.status, "succeeded");
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
+          {
+            registry: [],
+            registryService: registry,
+            snapshots: [{ workspace: wsA, eligible: [work(1)] }],
+            execute: finishAfterGate,
+          },
+        ),
+      ),
+    );
+  });
 
   it.effect("reports an item in flight from reservation through executor completion", () =>
     Effect.gen(function* () {

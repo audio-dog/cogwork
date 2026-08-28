@@ -20,6 +20,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
@@ -57,24 +58,32 @@ const classifiedItem = Schema.decodeSync(ClassifiedItem);
 const runId = Schema.decodeSync(RunId);
 const harnessName = Schema.decodeSync(HarnessName);
 
+const registeredWorkspace: Registry.RegisteredWorkspace = {
+  source: "control-store:example",
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "example",
+    checkoutPath: "/repos/example",
+    issueTracker: { type: "linear" },
+    harness: { preferred: "cursor" },
+  }),
+};
+
 const registryLayer = Layer.succeed(
   Registry.WorkspaceRegistry,
-  Registry.readOnlyRegistry({
-    workspaces: [
-      {
-        source: "control-store:example",
-        contributions: [],
-        config: Schema.decodeSync(WorkspaceConfig)({
-          name: "example",
-          checkoutPath: "/repos/example",
-          issueTracker: { type: "linear" },
-          harness: { preferred: "cursor" },
-        }),
-      },
-    ],
-    failures: [],
-  }),
+  Registry.readOnlyRegistry({ workspaces: [registeredWorkspace], failures: [] }),
 );
+
+const mutableRegistryLayer = (state: MutableRef.MutableRef<Registry.RegistryState>) =>
+  Layer.succeed(Registry.WorkspaceRegistry, {
+    get workspaces() {
+      return MutableRef.get(state).workspaces;
+    },
+    get failures() {
+      return MutableRef.get(state).failures;
+    },
+    refresh: Effect.sync(() => MutableRef.get(state)),
+  });
 
 const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerService => ({
   rateLimitScope: () => null,
@@ -181,12 +190,13 @@ const itemSentinelEvent = {
 const publisherLayer = (
   itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
   statsRef: Ref.Ref<Scheduler.SchedulerState>,
+  workspaces = registryLayer,
 ) =>
   eventPublisherLayer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, observing(itemsRef)))),
-        registryLayer,
+        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
+        workspaces,
         schedulerStub(statsRef),
         DaemonEventBus.layer,
       ),
@@ -194,6 +204,36 @@ const publisherLayer = (
   );
 
 describe("DaemonEventPublisher", () => {
+  it.effect("does not publish stale items after their workspace leaves the registry", () =>
+    Effect.gen(function* () {
+      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("stale")]);
+      const statsRef = yield* Ref.make(schedulerState(0));
+      const registryState = MutableRef.make<Registry.RegistryState>({
+        workspaces: [registeredWorkspace],
+        failures: [],
+      });
+      const workspaces = mutableRegistryLayer(registryState);
+      yield* Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const worker = yield* Reconcile.ReconcileWorker;
+        const publisher = yield* DaemonEventPublisher;
+        const subscription = yield* bus.subscribe();
+
+        yield* worker.submit();
+        MutableRef.set(registryState, Registry.emptyRegistry);
+        yield* publisher.publishWorkspaceRemoved(registeredWorkspace.config.name);
+        yield* publisher.publishItems();
+        yield* bus.publish(schedulerSentinel);
+
+        const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
+        assert.deepStrictEqual(
+          [...events].map((event) => event._tag),
+          ["WorkspaceRemoved", "SchedulerChanged"],
+        );
+      }).pipe(Effect.provide(publisherLayer(itemsRef, statsRef, workspaces)), Effect.scoped);
+    }),
+  );
+
   it.effect("emits ItemChanged only for items whose classified read model changed", () =>
     Effect.gen(function* () {
       const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
@@ -286,15 +326,16 @@ describe("DaemonEventPublisher", () => {
   const daemonLayer = (
     itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
     statsRef: Ref.Ref<Scheduler.SchedulerState>,
+    workspaces = registryLayer,
   ) =>
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(eventPublisherLayer),
       Layer.provideMerge(
-        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, observing(itemsRef)))),
+        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
       ),
-      Layer.provideMerge(registryLayer),
+      Layer.provideMerge(workspaces),
       Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
       Layer.provideMerge(runRecorderTestLayer),
@@ -381,6 +422,31 @@ describe("DaemonEventPublisher", () => {
         assert.deepStrictEqual(board.scheduler, expectedScheduler);
         assert.deepStrictEqual(board.controlStore, defaultControlStore);
       }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
+    }),
+  );
+
+  it.effect("does not seed stale items after their workspace leaves the registry", () =>
+    Effect.gen(function* () {
+      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("stale")]);
+      const statsRef = yield* Ref.make(schedulerState(0));
+      const registryState = MutableRef.make<Registry.RegistryState>({
+        workspaces: [registeredWorkspace],
+        failures: [],
+      });
+      const workspaces = mutableRegistryLayer(registryState);
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const worker = yield* Reconcile.ReconcileWorker;
+
+        yield* worker.submit();
+        MutableRef.set(registryState, Registry.emptyRegistry);
+        const seed = yield* client.WatchEvents().pipe(
+          Stream.takeUntil((event) => event._tag === "SeedEnd"),
+          Stream.runCollect,
+        );
+
+        assert.isFalse([...seed].some((event) => event._tag === "ItemChanged"));
+      }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef, workspaces)), Effect.scoped);
     }),
   );
 

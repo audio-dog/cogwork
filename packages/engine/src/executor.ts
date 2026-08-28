@@ -916,7 +916,7 @@ export const make = Effect.gen(function* () {
               endedAtMillis: null,
             };
             return ledger.acceptRun(record, plan).pipe(
-              Effect.tap(() => Effect.withFiber((self) => runControl.register(runId, self))),
+              Effect.tap(() => Effect.withFiber((self) => runControl.register(runId, self, workspace))),
               Effect.flatMap(() => settleOutcome(workspace, item, selectedOps, record, runId, request)),
               Effect.catchTag("RunLedgerError", (error) =>
                 reportFailure(workspace, item, false, error.message, null),

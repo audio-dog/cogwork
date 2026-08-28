@@ -8,6 +8,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -331,6 +332,132 @@ layer(NodeServices.layer)((it) => {
         )
         .pipe(Effect.flip);
       assert.include(relativeError.message, "absolute");
+    }),
+  );
+
+  it.effect("re-binds identity and deregisters without deleting Run history", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-lifecycle-" });
+      const storePath = path.join(root, "control.db");
+      const firstCheckout = yield* makeCheckout(root, "first");
+      const secondCheckout = yield* makeCheckout(root, "second");
+      const registryContext = yield* Layer.build(Registry.layerAt(storePath));
+      const management = Context.get(registryContext, Registry.WorkspaceManagement);
+      const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
+      const registered = yield* management.register(
+        registration({
+          name: "moving workspace",
+          checkoutPath: firstCheckout,
+          gitRemote: "git@github.com:acme/repo.git",
+          issueTracker: { type: "github", repo: "acme/repo" },
+          sourceControl: { type: "github", repo: "acme/repo" },
+          linearHistory: true,
+          concurrency: 2,
+        }),
+      );
+      if (registered._tag === "Failed") return assert.fail("expected registration to succeed");
+      const workspace = registered.workspace.config.name;
+      const privateTree = path.join(root, "workspaces", workspace);
+      yield* fs.makeDirectory(privateTree, { recursive: true });
+      yield* fs.writeFileString(path.join(privateTree, "private.md"), "private");
+      yield* Effect.flatMap(SqlClient.SqlClient, (sql) =>
+        Effect.all([
+          sql`INSERT INTO runs (
+              id, workspace, work_item, stage, harness, status, started_at
+            ) VALUES (
+              'run-before-deregister', ${workspace}, '#222', 'implement', 'codex', 'succeeded', 1
+            )`,
+          sql`INSERT INTO operation_settings (
+              setting, level, workflow, operation, scope, workspace, value
+            ) VALUES
+              ('model', 'default', '', '', 'private-workspace-overlay', ${workspace}, '"overlay-model"'),
+              ('model', 'default', '', '', 'private-workspace-overlay', 'other-workspace', '"other-model"')`,
+        ]),
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+
+      const rebound = yield* management.rebind(workspace, secondCheckout);
+      if (rebound._tag === "Failed") return assert.fail("expected re-bind to succeed");
+      assert.strictEqual(rebound.workspace.config.name, workspace);
+      assert.strictEqual(rebound.workspace.config.checkoutPath, secondCheckout);
+      assert.strictEqual(rebound.workspace.config.sourceControl?.repo, "acme/repo");
+      assert.strictEqual(rebound.workspace.workspaceLimit, 2);
+      assert.isTrue(yield* fs.exists(privateTree));
+      const overlaysAfterRebind = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly workspace: string }>`SELECT workspace FROM operation_settings ORDER BY workspace`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(overlaysAfterRebind, [{ workspace }, { workspace: "other-workspace" }]);
+
+      assert.strictEqual(yield* management.deregister(workspace), workspace);
+      assert.isUndefined(Registry.findWorkspace(liveRegistry, workspace));
+      assert.isFalse(yield* fs.exists(privateTree));
+      const runs = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly id: string; readonly workspace: string }>`
+          SELECT id, workspace FROM runs WHERE id = 'run-before-deregister'
+        `,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(runs, [{ id: "run-before-deregister", workspace }]);
+      const overlaysAfterDeregister = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly workspace: string }>`SELECT workspace FROM operation_settings ORDER BY workspace`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(overlaysAfterDeregister, [{ workspace: "other-workspace" }]);
+
+      const registeredAgain = yield* management.register(
+        githubRegistration("moving workspace", secondCheckout),
+      );
+      if (registeredAgain._tag === "Failed") return assert.fail("expected re-registration to succeed");
+      assert.notStrictEqual(registeredAgain.workspace.config.name, workspace);
+    }),
+  );
+
+  it.effect("rolls back deregistration when the private tree cannot be removed", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-rollback-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "rollback");
+      const privateRoot = path.join(root, "workspaces");
+      const failure = PlatformError.systemError({
+        _tag: "PermissionDenied",
+        module: "FileSystem",
+        method: "remove",
+      });
+      const failingFileSystem = FileSystem.FileSystem.of({
+        ...fs,
+        remove: (file, options) =>
+          file.startsWith(privateRoot) ? Effect.fail(failure) : fs.remove(file, options),
+      });
+      const registryContext = yield* Layer.build(
+        Registry.layerAt(storePath).pipe(
+          Layer.provide(Layer.succeed(FileSystem.FileSystem, failingFileSystem)),
+        ),
+      );
+      const management = Context.get(registryContext, Registry.WorkspaceManagement);
+      const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
+      const registered = yield* management.register(githubRegistration("rollback", checkoutPath));
+      if (registered._tag === "Failed") return assert.fail("expected registration to succeed");
+      const workspace = registered.workspace.config.name;
+      const privateTree = path.join(privateRoot, workspace);
+      yield* fs.makeDirectory(privateTree, { recursive: true });
+
+      const deregistration = yield* management.deregister(workspace).pipe(Effect.flip);
+
+      assert.strictEqual(deregistration._tag, "WorkspaceManagementError");
+      assert.isDefined(Registry.findWorkspace(liveRegistry, workspace));
+      assert.isTrue(yield* fs.exists(privateTree));
+      const rows = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql<{ readonly id: string }>`SELECT id FROM workspaces WHERE id = ${workspace}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(rows, [{ id: workspace }]);
     }),
   );
 

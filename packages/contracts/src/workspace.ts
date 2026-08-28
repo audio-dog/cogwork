@@ -139,6 +139,15 @@ export class WorkspaceRegistrationError extends Schema.TaggedError<WorkspaceRegi
   { message: Schema.String },
 ) {}
 
+export class WorkspaceManagementError extends Schema.TaggedError<WorkspaceManagementError>()(
+  "WorkspaceManagementError",
+  { operation: Schema.String, message: Schema.String },
+) {}
+
+export class WorkspaceNotFound extends Schema.TaggedError<WorkspaceNotFound>()("WorkspaceNotFound", {
+  workspace: WorkspaceId,
+}) {}
+
 export const WorkspaceConfig = Schema.Struct({
   name: WorkspaceId,
   displayName: Schema.optional(TrimmedNonEmptyString),
