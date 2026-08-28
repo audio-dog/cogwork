@@ -1,0 +1,115 @@
+apps/cli/src/commands.ts
+  s_131eaddb8a39f4::t_f89145913a3093 4,12,74-93,249-284,294-300,321-353
+  s_131eaddb8a39f4::t_3b2e3b04c21364 293
+  s_131eaddb8a39f4::t_da085ec02e4b25 285
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_131eaddb8a39f4::t_f89145913a3093 31
+packages/engine/src/read-model.ts
+  s_131eaddb8a39f4::t_f89145913a3093 73
+  s_131eaddb8a39f4::t_3b2e3b04c21364 54,83
+packages/contracts/src/board.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 7,15,202,214-237
+  s_131eaddb8a39f4::t_cb53f5383f4f8f 238-239
+packages/engine/src/engine.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 490-497,504,590,627,649,657,719
+  s_131eaddb8a39f4::t_3b2e3b04c21364 1-7,48,904
+packages/engine/src/executor.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 12,366-371,375-445,447-453,461-470,472,475-503,515-545,547,553,555,565,567,571,573-626,629-635,658-663,669-683,693-697,703-720,734-735,737,742,747,750-754,756-762,764-783,785-794,796-807,809-817,819-848,851-853,855-861,863-868,870-871,873-876,878-885,887-891,893-911,914-920,933,936-937,939-941,943-949,951-953,955-958,960-964,966-970,972-976,978-983,985-986,988-991,993-998,1000-1005,1007-1010,1012-1040,1044-1050,1063,1069,1072,1075-1078,1080-1085,1087-1090,1092-1097,1099-1103,1105-1111,1113-1117,1119-1123,1125-1130,1132-1139,1141-1144,1146-1149,1151-1152,1154-1158,1160-1166,1168-1172,1174-1178,1180-1187,1189,1191-1194,1196-1199,1201-1206,1208-1210,1212-1216,1218-1223,1225-1233,1235-1243,1245,1247-1251,1253-1278,1280-1305,1307-1311,1313-1336,1338-1342,1344-1350,1352-1357,1359-1360,1362-1376,1378-1382,1384-1389,1391-1392,1394-1396,1398-1400,1402-1408,1410-1414,1416-1421,1423-1424,1426-1428,1430-1432,1434-1439,1441-1442,1444-1447,1449-1452,1454-1459,1461-1462,1464-1467,1469-1473,1475-1480,1482-1497,1499-1503,1505-1509,1511-1616,1618-1622,1624-1630,1632-1634,1636-1649,1651-1655,1657-1662,1664-1668,1670-1671,1673-1679,1681-1685,1687-1695,1702,1710-1711,1714-1718,1720-1726,1728-1732,1734-1738,1740-1743,1745-1747,1749-1753,1755-1758,1760-1762,1764-1769,1771-1778,1780-1786,1788-1793,1795-1800,1802-1830,1832-1836,1838-1842,1844-1852,1854-1859,1861-1874,1876-1881,1883-1889,1891-1895,1897-1901,1903-1909,1911-1914,1916-1921,1923,1926-1928,1932-1934,1936-1941,1944-1949,1951-1965
+packages/contracts/src/daemon.ts
+  s_131eaddb8a39f4::t_f89145913a3093 11,108-114,118,136-156,158-159,161-174
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_131eaddb8a39f4::t_f89145913a3093 45
+packages/contracts/src/scheduler-defaults.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1-2,6-14
+packages/engine/src/event-publisher.ts
+  s_131eaddb8a39f4::t_f89145913a3093 3,97,105-112
+apps/desktop/CONTEXT.md
+  s_131eaddb8a39f4::t_f89145913a3093 25-26
+packages/engine/src/control-store-schema.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1-30
+packages/engine/src/control-store-create.gen.ts
+  s_131eaddb8a39f4::t_f89145913a3093 4
+packages/engine/src/control-store.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1-9,19-20,24-43,52-128,157-175,187,205-220,225
+packages/contracts/src/workspace.ts
+  s_131eaddb8a39f4::t_3b2e3b04c21364 99-101,132
+apps/desktop/src/main/engine-command.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 47,50
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1-41
+apps/desktop/src/renderer/src/features/daemon-limit-state.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1-14
+packages/engine/src/scheduler.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1,26-30,33-38,282-283,292
+apps/cli/src/commands.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 12-18,61-84
+packages/engine/src/registry.ts
+  s_131eaddb8a39f4::t_1db28f7d3b59ba 23,226
+packages/engine/src/control-store.test.ts
+  s_131eaddb8a39f4::t_3b2e3b04c21364 62-68
+  s_131eaddb8a39f4::t_f89145913a3093 12-14,16-20,74-123
+  s_131eaddb8a39f4::t_dabc60d5639f61 124
+apps/cli/src/watch.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 216,230
+packages/engine/CONTEXT.md
+  s_131eaddb8a39f4::t_f89145913a3093 37
+packages/engine/src/commands.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 2-4,29,87,89-92,149-180,184,197,526-527,529-530,532-533,535-550,554,556-557,559-588
+  s_131eaddb8a39f4::t_3b2e3b04c21364 617-620,645-648
+apps/desktop/src/renderer/src/features/use-daemon-limit.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1-17
+packages/engine/src/recovery.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 205
+packages/engine/src/scheduler.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 75,79,84-101
+  s_131eaddb8a39f4::t_63b894362404ea 102-104
+packages/contracts/src/daemon-event.ts
+  s_131eaddb8a39f4::t_f89145913a3093 13,52
+apps/cli/src/main.ts
+  s_131eaddb8a39f4::t_f89145913a3093 8-16,25-26
+apps/cli/src/status.ts
+  s_131eaddb8a39f4::t_f89145913a3093 67
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_131eaddb8a39f4::t_f89145913a3093 137-138
+packages/contracts/CONTEXT.md
+  s_131eaddb8a39f4::t_f89145913a3093 46,297,379,387
+packages/contracts/src/board.ts
+  s_131eaddb8a39f4::t_f89145913a3093 3,17,25,92
+packages/contracts/src/rpc.ts
+  s_131eaddb8a39f4::t_3b2e3b04c21364 113
+  s_131eaddb8a39f4::t_f89145913a3093 5-13,23-27,53,97-100
+apps/cli/src/status.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 161,171
+packages/contracts/src/daemon-limit.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 1-61
+packages/engine/src/daemon.ts
+  s_131eaddb8a39f4::t_f89145913a3093 4,28-33,61,76-87,111,127,129-133,167,176-179,198,266-280
+  s_131eaddb8a39f4::t_3b2e3b04c21364 26
+packages/engine/src/commands.ts
+  s_131eaddb8a39f4::t_f89145913a3093 3,17,146-147,149,152-160
+packages/engine/src/event-publisher.test.ts
+  s_131eaddb8a39f4::t_f89145913a3093 5,28,44-50,121,300,344,349-354,365,379,399,401-405,420,425
+apps/cli/CONTEXT.md
+  s_131eaddb8a39f4::t_f89145913a3093 9-11,16
+apps/desktop/src/renderer/src/components/settings-engine.tsx
+  s_131eaddb8a39f4::t_f89145913a3093 1,6,9-13,20,25,31,36,43,48,55-59
+  s_131eaddb8a39f4::t_7f48c3b4e6f7c7 60
+packages/engine/src/read-model.test.ts
+  s_131eaddb8a39f4::t_1db28f7d3b59ba 181-185,204-205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "75648e68dcdedfdd86955df0a21ecfcfff45b834",
+  "prompts": {},
+  "sessions": {
+    "s_131eaddb8a39f4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a045d8-5cd6-78c0-a7a5-8d19080cbcbd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
