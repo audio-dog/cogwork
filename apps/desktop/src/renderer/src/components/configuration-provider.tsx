@@ -1,7 +1,7 @@
 import type { ContributionSettingCell, ContributionSettingUpdate, ControlStore } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
-import { createContext, type ReactNode, use, useRef } from "react";
+import { createContext, type ReactNode, use, useState } from "react";
 import { setContributionSettingAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
 import type {
@@ -133,10 +133,10 @@ export function StaticConfigurationProvider({
 export function LiveConfigurationProvider({ children }: { children: ReactNode }) {
   const result = useBoard();
   const [write, run] = useAtom(setContributionSettingAtom);
-  const submission = useRef<ContributionSettingSubmission | null>(null);
+  const [submission, setSubmission] = useState<ContributionSettingSubmission | null>(null);
   const board = result._tag === "Success" ? result.board : null;
-  const settingState = contributionSettingState(board?.controlStore ?? null, write, submission.current);
-  if (settingState.settled) submission.current = null;
+  const settingState = contributionSettingState(board?.controlStore ?? null, write, submission);
+  if (settingState.settled) setSubmission(null);
   const picture = board
     ? configurationPicture({ ...board, controlStore: settingState.controlStore })
     : emptyConfigurationPicture;
@@ -144,7 +144,7 @@ export function LiveConfigurationProvider({ children }: { children: ReactNode })
     picture,
     {
       setContributionSetting: (update) => {
-        submission.current = { baseline: board?.controlStore ?? null, update, previousResult: write };
+        setSubmission({ baseline: board?.controlStore ?? null, update, previousResult: write });
         run({ payload: { update } });
       },
     },
