@@ -1,4 +1,5 @@
 import {
+  type DaemonStatus,
   type RunId,
   RunId as RunIdSchema,
   type WorkItemId,
@@ -10,7 +11,11 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import { RpcClientDefect, RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import { SocketOpenError } from "effect/unstable/socket/Socket";
 import {
+  daemonOrStore,
+  daemonStatusPicture,
   formatDaemonLimits,
   formatOperationSettings,
   limitsCommand,
@@ -26,6 +31,28 @@ const workItemId = Schema.decodeSync(WorkItemIdSchema);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 
 const constResolver = (result: RunId | null) => () => Effect.succeed(result);
+const unavailableSocket = new SocketOpenError({
+  kind: "Unknown",
+  cause: new Error("socket unavailable"),
+});
+const unavailableDaemon = new RpcClientError({ reason: unavailableSocket });
+
+const unavailableStoreStatus: DaemonStatus = {
+  health: "store-unavailable",
+  startedAtMillis: 0,
+  uptimeMillis: 1000,
+  scheduler: {
+    scheduling: "paused",
+    globalInFlight: 0,
+    globalLimit: 4,
+    perWorkspaceLimit: 4,
+    dailyBudgetUsed: 0,
+    dailyBudgetLimit: 50,
+    perWorkspace: [],
+  },
+  workspaces: [],
+  failures: [],
+};
 
 describe("resolveTarget", () => {
   it.effect("uses an explicit run id and never resolves a work item", () =>
@@ -163,6 +190,74 @@ describe("operation settings", () => {
           level: { _tag: "Default" },
         },
       });
+    }),
+  );
+});
+
+describe("daemon fallback", () => {
+  it.effect("shows daemon health without reading an unavailable store", () =>
+    Effect.gen(function* () {
+      const storeReads = yield* Ref.make(0);
+      const output = yield* daemonStatusPicture(
+        unavailableStoreStatus,
+        Ref.update(storeReads, (count) => count + 1).pipe(Effect.andThen(Effect.fail("store unavailable"))),
+      );
+
+      assert.include(output, "daemon: store-unavailable");
+      assert.strictEqual(yield* Ref.get(storeReads), 0);
+    }),
+  );
+
+  it.effect("uses the daemon picture without opening the store", () =>
+    Effect.gen(function* () {
+      const storeReads = yield* Ref.make(0);
+
+      assert.strictEqual(
+        yield* daemonOrStore(
+          Effect.succeed("daemon"),
+          Ref.update(storeReads, (count) => count + 1).pipe(Effect.map(() => "stored")),
+        ),
+        "daemon",
+      );
+      assert.strictEqual(yield* Ref.get(storeReads), 0);
+    }),
+  );
+
+  it.effect("reads the store when the daemon transport is unavailable", () =>
+    Effect.gen(function* () {
+      assert.strictEqual(
+        yield* daemonOrStore(Effect.fail(unavailableDaemon), Effect.succeed("stored")),
+        "stored",
+      );
+    }),
+  );
+
+  it.effect("reads the store when the socket layer cannot open", () =>
+    Effect.gen(function* () {
+      assert.strictEqual(
+        yield* daemonOrStore(Effect.fail(unavailableSocket), Effect.succeed("stored")),
+        "stored",
+      );
+    }),
+  );
+
+  it.effect("does not hide a non-transport daemon failure", () =>
+    Effect.gen(function* () {
+      const storeReads = yield* Ref.make(0);
+      const failure = new RpcClientError({
+        reason: new RpcClientDefect({ message: "broken", cause: new Error("broken") }),
+      });
+
+      assert.strictEqual(
+        yield* Effect.flip(
+          daemonOrStore(
+            Effect.fail(failure),
+            Ref.update(storeReads, (count) => count + 1).pipe(Effect.map(() => "stored")),
+          ),
+        ),
+        failure,
+      );
+      assert.strictEqual(yield* Ref.get(storeReads), 0);
     }),
   );
 });
