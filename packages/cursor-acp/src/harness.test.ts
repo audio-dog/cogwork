@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { type AgUiEvent, agUiUsage, HarnessName } from "@cogwork/contracts";
+import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
@@ -51,17 +51,42 @@ const harnessServices: Harness.HarnessRunnerServices = {
 
 const request = (checkoutPath: string) =>
   ({
-    harness: cursorName,
-    stage: "triage",
-    profile: "read-only",
-    skill: "triage-agent",
-    checkoutPath,
+    plan: Schema.decodeSync(RunPlan)({
+      id: "run-cursor-test",
+      operation: "triage",
+      harness: { name: cursorName, model: "auto", effort: null, profile: "read-only" },
+      instructions: [],
+      operatingInstructions: { name: "triage-agent", path: "/skills/triage-agent" },
+      tools: [],
+      skills: [],
+      mcp: [],
+      subagents: [],
+      commands: [],
+      hooks: [],
+      middleware: ["sandbox"],
+      structuredOutput:
+        stageResultJsonSchema("triage")?.["~standard"].jsonSchema.input({
+          target: "draft-2020-12",
+        }) ?? null,
+      connections: [],
+      messages: [{ role: "user", content: "triage the issue" }],
+      workContext: {
+        reference: { workItem: "#1", url: null },
+        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+      sandbox: { workspace: checkoutPath, policy: "read-only" },
+      persistence: { sessionKind: "opaque-handle" },
+      provenance: {
+        resolution: [],
+        stamps: [],
+        projectedNames: [],
+        projection: [],
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+    }),
     session: null,
-    prompt: "triage the issue",
-    model: "auto",
-    effort: null,
-    mcpSkills: [],
-    contributions: [],
+    mcpCredentials: new Map(),
   }) satisfies Harness.HarnessRequest;
 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
