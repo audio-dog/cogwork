@@ -182,6 +182,7 @@ export const loginLinear = Effect.fn("cli.login.linear")(function* (config: Line
     issueTracker: "linear",
     organization: identity.organization,
     actorUserId: identity.actorUserId,
+    oauthClientId: config.clientId,
     token,
   });
   yield* Effect.logInfo("stored Linear credential", {

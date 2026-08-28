@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { resolveOperationSetting, WorkspaceId } from "@cogwork/contracts";
+import { ConnectionId, resolveOperationSetting, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -53,6 +53,41 @@ const temporaryStore = Effect.fn("test.temporaryStore")(function* (name = "contr
   return { dir, storePath: path.join(dir, name) };
 });
 
+const connectionId = Schema.decodeSync(ConnectionId);
+
+const persistConnectionState = Effect.fn("test.persistConnectionState")((storePath: string) =>
+  Effect.gen(function* () {
+    const store = yield* ControlStore;
+    if (store.health === "unavailable") return assert.fail(store.message);
+    yield* store.establishConnection({
+      id: connectionId("linear/acme"),
+      system: "linear",
+      account: "acme",
+      status: "established",
+    });
+    yield* store.revokeConnection(connectionId("linear/acme"));
+  }).pipe(Effect.provide(storeLayerAt(storePath))),
+);
+
+const establishDuplicateSystem = Effect.fn("test.establishDuplicateSystem")((storePath: string) =>
+  Effect.gen(function* () {
+    const store = yield* ControlStore;
+    if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
+    yield* store.establishConnection({
+      id: connectionId("linear/acme"),
+      system: "linear",
+      account: "acme",
+      status: "established",
+    });
+    yield* store.establishConnection({
+      id: connectionId("linear/other"),
+      system: "linear",
+      account: "other",
+      status: "established",
+    });
+  }).pipe(Effect.provide(storeLayerAt(storePath))),
+);
+
 const retentionWindowMillis = 1000 * 60 * 60 * 24 * 30;
 const workspace = Schema.decodeSync(WorkspaceId)("example");
 
@@ -68,6 +103,7 @@ layer(NodeServices.layer)((it) => {
           "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
         ),
         [
+          { name: "connections" },
           { name: "contribution_settings" },
           { name: "daemon_limits" },
           { name: "operation_settings" },
@@ -79,6 +115,30 @@ layer(NodeServices.layer)((it) => {
         ],
       );
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+    }),
+  );
+
+  it.effect("persists Connection lifecycle state", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* persistConnectionState(storePath);
+
+      const reloaded = yield* readControlStore(storePath);
+      assert.strictEqual(reloaded.connections.length, 1);
+      assert.strictEqual(reloaded.connections[0]?.id, "linear/acme");
+      assert.strictEqual(reloaded.connections[0]?.status, "revoked");
+    }),
+  );
+
+  it.effect("permits only one Connection for each system", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const error = yield* Effect.flip(establishDuplicateSystem(storePath));
+
+      assert.strictEqual(error._tag, "ControlStoreFailure");
+      if (error._tag === "ControlStoreFailure") {
+        assert.strictEqual(error.operation, "establish Connection");
+      }
     }),
   );
 

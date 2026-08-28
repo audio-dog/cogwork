@@ -1,4 +1,4 @@
-import { linearTeams, type WorkspaceConfig } from "@cogwork/contracts";
+import { connectionAccountOf, linearTeams, type WorkspaceConfig } from "@cogwork/contracts";
 import type { CredentialAccount } from "../credential-store";
 
 type LinearWorkspaceConfig = Pick<WorkspaceConfig, "name" | "issueTracker">;
@@ -15,14 +15,14 @@ export const credentialAccountFor = (config: LinearWorkspaceConfig): CredentialA
   const key = linearAccountKey(config);
   if (key === null) return null;
   const source = config.issueTracker;
-  const oauth = source.oauth;
+  const account = connectionAccountOf(source.connectionId);
   return {
+    connectionId: source.connectionId,
     key,
     issueTracker: "linear",
-    organization: source.organization ?? null,
-    tokenEnv: source.tokenEnv ?? "LINEAR_API_KEY",
-    clientCredentials:
-      oauth?.clientSecretEnv != null ? { clientId: oauth.clientId, secretEnv: oauth.clientSecretEnv } : null,
-    oauthClientId: oauth?.clientId ?? null,
+    organization: account === "default" || source.connectionId === "unbound" ? null : account,
+    tokenEnv: "LINEAR_API_KEY",
+    clientCredentials: null,
+    oauthClientId: null,
   };
 };

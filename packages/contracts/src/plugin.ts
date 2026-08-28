@@ -1,5 +1,6 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
+import { ConnectionId } from "./connection";
 import { FileContributionKind, PluginContributionAuthority } from "./contribution";
 import { PrincipalId } from "./principal";
 
@@ -18,6 +19,7 @@ export const PluginMcpServer = Schema.Struct({
   endpoint: TrimmedNonEmptyString,
   secretEnv: Schema.NullOr(TrimmedNonEmptyString),
   credentialAvailable: Schema.Boolean,
+  connectionId: Schema.optionalKey(ConnectionId),
 });
 export type PluginMcpServer = typeof PluginMcpServer.Type;
 

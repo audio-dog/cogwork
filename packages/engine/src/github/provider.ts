@@ -1,4 +1,4 @@
-import type { WorkItemId } from "@cogwork/contracts";
+import type { ConnectionId, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { checkState } from "../ci";
@@ -30,7 +30,7 @@ interface GitHubTarget extends GitHubRepoRef {
 
 const targetFromRepo = (
   repo: string,
-  tokenEnv: string | undefined,
+  connectionId: ConnectionId,
   actorLogin: string | undefined,
   botAllowlist: ReadonlyArray<string> | undefined,
 ): GitHubTarget | null => {
@@ -39,7 +39,8 @@ const targetFromRepo = (
   return {
     owner,
     name,
-    tokenEnv: tokenEnv ?? "GITHUB_TOKEN",
+    tokenEnv: "GITHUB_TOKEN",
+    connectionId,
     actorLogin: actorLogin ?? null,
     botAllowlist: new Set(botAllowlist ?? []),
   };
@@ -51,11 +52,11 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
   const explicit = workspace.config.sourceControl;
   if (explicit) {
     if (explicit.type !== "github" || !explicit.repo) return null;
-    return targetFromRepo(explicit.repo, explicit.tokenEnv, explicit.actorLogin, explicit.botAllowlist);
+    return targetFromRepo(explicit.repo, explicit.connectionId, explicit.actorLogin, explicit.botAllowlist);
   }
   const source = workspace.config.issueTracker;
   if (source.type !== "github" || !source.repo) return null;
-  return targetFromRepo(source.repo, source.tokenEnv, source.actorLogin, source.botAllowlist);
+  return targetFromRepo(source.repo, source.connectionId, source.actorLogin, source.botAllowlist);
 };
 
 // The engine cuts an item's branch as `branchName(item)`, whose stable prefix is `ticketSlug(item.id)`.

@@ -1,31 +1,27 @@
-import type { IssueTrackerConfig } from "@cogwork/contracts";
-import { Linear, Registry } from "@cogwork/engine";
+import { type ConnectionEstablishment, DaemonRpcs } from "@cogwork/contracts";
+import { Linear } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { layer as credentialsLayer } from "./credentials";
-import { browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear, ProviderKeyError } from "./login";
-import { defaultControlStorePath, defaultCredentialsPath } from "./paths";
+import { browserOpenerLayer, loginKey, loginLinear, ProviderKeyError } from "./login";
+import { defaultCredentialsPath, defaultSocketPath } from "./paths";
+import { clientLayer } from "./rpc";
 
-class LoginConfigError extends Schema.TaggedError<LoginConfigError>()("LoginConfigError", {
-  detail: Schema.String,
-}) {
-  override get message() {
-    return this.detail;
-  }
-}
+const clientIdFlag = Flag.string("client-id").pipe(Flag.withDescription("Linear OAuth client id"));
 
-const controlStoreFlag = Flag.string("control-store").pipe(
-  Flag.withDescription("Path to the machine-local Control store"),
-  Flag.withDefault(defaultControlStorePath),
+const redirectPortFlag = Flag.integer("redirect-port").pipe(
+  Flag.withDescription("Loopback OAuth callback port"),
+  Flag.withDefault(Linear.OAuth.defaultRedirectPort),
 );
 
-const workspaceFlag = Flag.string("workspace").pipe(
-  Flag.withDescription("WorkspaceId whose OAuth app to log in against"),
+const socketFlag = Flag.string("socket").pipe(
+  Flag.withDescription("Path to the daemon control socket"),
+  Flag.withDefault(defaultSocketPath),
 );
 
 const credentialsFlag = Flag.string("credentials").pipe(
@@ -33,61 +29,50 @@ const credentialsFlag = Flag.string("credentials").pipe(
   Flag.withDefault(defaultCredentialsPath),
 );
 
-const findIssueTracker = Effect.fn("login.findIssueTracker")(function* (name: string) {
-  const registry = yield* Registry.WorkspaceRegistry;
-  const issueTracker = Registry.findWorkspaceIssueTracker(registry, name);
-  if (!issueTracker) return yield* new LoginConfigError({ detail: `workspace "${name}" not found` });
-  return issueTracker;
-});
-
-const resolveConfig = (
-  issueTracker: IssueTrackerConfig,
-): Effect.Effect<LinearLoginConfig, LoginConfigError> => {
-  if (issueTracker.type !== "linear") {
-    return Effect.fail(
-      new LoginConfigError({ detail: `login linear needs a linear work source, not "${issueTracker.type}"` }),
-    );
-  }
-  const clientId = issueTracker.oauth?.clientId;
-  if (!clientId) {
-    return Effect.fail(
-      new LoginConfigError({
-        detail: "missing OAuth client_id; set issueTracker.oauth.clientId in the workspace config",
-      }),
-    );
-  }
-  return Effect.succeed({
-    clientId,
-    redirectPort: issueTracker.oauth?.redirectPort ?? Linear.OAuth.defaultRedirectPort,
-  });
-};
-
-const runLogin = (options: {
-  readonly controlStore: string;
-  readonly workspace: string;
-  readonly credentials: string;
-}) =>
-  Effect.gen(function* () {
-    const issueTracker = yield* findIssueTracker(options.workspace);
-    const config = yield* resolveConfig(issueTracker);
-    const result = yield* loginLinear(config);
-    yield* Console.log(`Logged in to Linear org "${result.organization}" as ${result.actorUserId}.`);
-  }).pipe(
-    Effect.provide(
-      Layer.mergeAll(
-        Registry.readOnlyLayerAt(options.controlStore),
-        browserOpenerLayer.pipe(
-          Layer.provideMerge(credentialsLayer(options.credentials)),
-          Layer.provide(FetchHttpClient.layer),
+const runLogin = Effect.fn("login.linear")(
+  (options: {
+    readonly clientId: string;
+    readonly redirectPort: number;
+    readonly socket: string;
+    readonly credentials: string;
+  }) =>
+    Effect.gen(function* () {
+      const result = yield* loginLinear({ clientId: options.clientId, redirectPort: options.redirectPort });
+      const client = yield* RpcClient.make(DaemonRpcs);
+      const establishment = {
+        system: "linear",
+        account: result.organization,
+        source: { _tag: "Stored" },
+      } satisfies ConnectionEstablishment;
+      const connections = yield* client.GetConnections();
+      const existing = connections.connections.find((item) => item.system === "linear")?.connection;
+      if (existing?.account === result.organization) {
+        yield* client.ReconnectConnection({ establishment });
+      } else {
+        yield* client.EstablishConnection({ establishment });
+      }
+      yield* Console.log(
+        `Logged in to Linear org "${result.organization}" as ${result.actorUserId}; Connection established.`,
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          clientLayer(options.socket),
+          browserOpenerLayer.pipe(
+            Layer.provideMerge(credentialsLayer(options.credentials)),
+            Layer.provide(FetchHttpClient.layer),
+          ),
         ),
       ),
+      Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
     ),
-    Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
-  );
+);
 
 const linearCommand = Command.make("linear", {
-  controlStore: controlStoreFlag,
-  workspace: workspaceFlag,
+  clientId: clientIdFlag,
+  redirectPort: redirectPortFlag,
+  socket: socketFlag,
   credentials: credentialsFlag,
 }).pipe(Command.withHandler(runLogin));
 

@@ -1,4 +1,10 @@
-import { TrimmedNonEmptyString } from "@cogwork/contracts";
+import {
+  type ConnectionId,
+  type ConnectionSource,
+  connectionAccountOf,
+  connectionSystemOf,
+  TrimmedNonEmptyString,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -16,6 +22,7 @@ export interface ClientCredentialsRef {
 }
 
 export interface CredentialAccount {
+  readonly connectionId?: ConnectionId;
   readonly key: string;
   readonly issueTracker: string;
   readonly organization: string | null;
@@ -41,6 +48,7 @@ export const StoredCredential = Schema.Struct({
   issueTracker: TrimmedNonEmptyString,
   organization: TrimmedNonEmptyString,
   actorUserId: TrimmedNonEmptyString,
+  oauthClientId: Schema.optional(TrimmedNonEmptyString),
   token: StoredToken,
 });
 export type StoredCredential = typeof StoredCredential.Type;
@@ -51,29 +59,53 @@ export const StoredProviderKey = Schema.Struct({
 });
 export type StoredProviderKey = typeof StoredProviderKey.Type;
 
+export const StoredConnectionCredential = Schema.TaggedUnion({
+  Stored: {
+    connectionId: TrimmedNonEmptyString,
+  },
+  Env: {
+    connectionId: TrimmedNonEmptyString,
+    name: TrimmedNonEmptyString,
+  },
+  ApiKey: {
+    connectionId: TrimmedNonEmptyString,
+    key: Schema.RedactedFromValue(TrimmedNonEmptyString),
+  },
+});
+export type StoredConnectionCredential = typeof StoredConnectionCredential.Type;
+
 const CredentialFileV1 = Schema.Struct({
   version: Schema.Literal(1),
   credentials: Schema.Array(StoredCredential),
 });
 
-export const CredentialFile = Schema.Struct({
+const CredentialFileV2 = Schema.Struct({
   version: Schema.Literal(2),
   credentials: Schema.Array(StoredCredential),
   providerKeys: Schema.Array(StoredProviderKey),
 });
+
+export const CredentialFile = Schema.Struct({
+  version: Schema.Literal(3),
+  credentials: Schema.Array(StoredCredential),
+  providerKeys: Schema.Array(StoredProviderKey),
+  connectionCredentials: Schema.Array(StoredConnectionCredential),
+});
 export type CredentialFile = typeof CredentialFile.Type;
 
-export const CredentialFileWire = Schema.Union([CredentialFile, CredentialFileV1]);
+export const CredentialFileWire = Schema.Union([CredentialFile, CredentialFileV2, CredentialFileV1]);
 export type CredentialFileWire = typeof CredentialFileWire.Type;
 
 export interface CredentialFileContents {
   readonly credentials: ReadonlyArray<StoredCredential>;
   readonly providerKeys: ReadonlyArray<StoredProviderKey>;
+  readonly connectionCredentials: ReadonlyArray<StoredConnectionCredential>;
 }
 
 export const contentsOf = (file: CredentialFileWire): CredentialFileContents => ({
   credentials: file.credentials,
-  providerKeys: file.version === 2 ? file.providerKeys : [],
+  providerKeys: file.version === 1 ? [] : file.providerKeys,
+  connectionCredentials: file.version === 3 ? file.connectionCredentials : [],
 });
 
 export interface CredentialIdentity {
@@ -81,7 +113,7 @@ export interface CredentialIdentity {
   readonly actorUserId: string;
 }
 
-export type CredentialSource = "env" | "stored-oauth" | "client-credentials";
+export type CredentialSource = "env" | "stored-key" | "stored-oauth" | "client-credentials";
 
 export interface Credential {
   readonly source: CredentialSource;
@@ -94,6 +126,15 @@ export interface StoredCredentials {
   readonly save: (credential: StoredCredential) => Effect.Effect<void, CredentialError>;
   readonly loadProviderKeys?: Effect.Effect<ReadonlyArray<StoredProviderKey>>;
   readonly saveProviderKey?: (key: StoredProviderKey) => Effect.Effect<void, CredentialError>;
+  readonly loadConnectionCredentials?: Effect.Effect<ReadonlyArray<StoredConnectionCredential>>;
+  readonly saveConnectionCredential?: (
+    credential: StoredConnectionCredential,
+  ) => Effect.Effect<void, CredentialError>;
+  readonly removeConnectionCredential?: (connectionId: ConnectionId) => Effect.Effect<void, CredentialError>;
+  readonly removeCredential?: (
+    issueTracker: string,
+    organization: string,
+  ) => Effect.Effect<void, CredentialError>;
 }
 
 export interface ProviderAccount {
@@ -144,6 +185,11 @@ export interface CredentialStoreService {
   readonly invalidate: (account: CredentialAccount) => Effect.Effect<void>;
   readonly providerKey: (account: ProviderAccount) => Effect.Effect<ProviderCredential, CredentialError>;
   readonly persistProviderKey: (key: StoredProviderKey) => Effect.Effect<void, CredentialError>;
+  readonly configureConnection: (
+    connectionId: ConnectionId,
+    source: ConnectionSource,
+  ) => Effect.Effect<void, CredentialError>;
+  readonly removeConnection: (connectionId: ConnectionId) => Effect.Effect<void, CredentialError>;
 }
 
 export class CredentialStore extends Context.Service<CredentialStore, CredentialStoreService>()(
@@ -252,7 +298,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     const match = yield* matchStored(sources.stored, account);
     if (!match) return null;
     if (match.live) return match.credential;
-    const clientId = account.oauthClientId;
+    const clientId = account.oauthClientId ?? match.credential.oauthClientId;
     const refreshToken = match.credential.token.refreshToken;
     if (!clientId || !refreshToken) {
       yield* Effect.logInfo("stored credential expired and cannot be refreshed; falling through", {
@@ -276,6 +322,22 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
   });
 
   const resolve = Effect.fn("CredentialStore.resolve")(function* (account: CredentialAccount) {
+    const connectionCredentials = yield* sources.stored.loadConnectionCredentials ?? Effect.succeed([]);
+    const configured = connectionCredentials.find((entry) => entry.connectionId === account.connectionId);
+    if (configured?._tag === "ApiKey") {
+      return { source: "stored-key", token: configured.key, identity: null } satisfies Credential;
+    }
+    if (configured?._tag === "Env") {
+      return yield* envCredential({ ...account, tokenEnv: configured.name });
+    }
+    if (configured?._tag === "Stored") {
+      const candidate = yield* resolveStored(account);
+      if (candidate) return storedCredential(candidate);
+      return yield* new CredentialError({
+        account: account.key,
+        message: `no saved browser login for ${account.key}`,
+      });
+    }
     const candidate = yield* resolveStored(account);
     if (candidate) return storedCredential(candidate);
     const granted = yield* grantedCredential(sources.clientCredentials, account);
@@ -283,6 +345,29 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
   });
 
   const loadProviderKeys = sources.stored.loadProviderKeys ?? Effect.succeed([]);
+
+  const configureConnection = Effect.fn("CredentialStore.configureConnection")(function* (
+    connectionId: ConnectionId,
+    source: ConnectionSource,
+  ) {
+    if (source._tag === "Env") {
+      const configured = yield* redactedEnv(source.name);
+      if (Redacted.value(configured).trim() === "") {
+        return yield* new CredentialError({
+          account: connectionId,
+          message: `${source.name} is unset or empty`,
+        });
+      }
+    }
+    const save = sources.stored.saveConnectionCredential;
+    if (!save) {
+      return yield* new CredentialError({
+        account: connectionId,
+        message: "this credential store cannot persist Connection credentials",
+      });
+    }
+    yield* save({ ...source, connectionId });
+  });
 
   const firstEnvKey = (envVars: ReadonlyArray<string>) =>
     Effect.reduce(
@@ -331,6 +416,16 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
           message: "this credential store cannot persist provider keys",
         }),
       ),
+    configureConnection,
+    removeConnection: (connectionId) => {
+      const system = connectionSystemOf(connectionId);
+      const account = connectionAccountOf(connectionId);
+      const removeConnectionCredential =
+        sources.stored.removeConnectionCredential?.(connectionId) ?? Effect.void;
+      const removeCredential =
+        system === null ? Effect.void : (sources.stored.removeCredential?.(system, account) ?? Effect.void);
+      return Effect.all([removeConnectionCredential, removeCredential], { discard: true });
+    },
   };
 };
 

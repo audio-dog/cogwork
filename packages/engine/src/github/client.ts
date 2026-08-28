@@ -1,4 +1,4 @@
-import type { GitHubPrioritySource, Priority } from "@cogwork/contracts";
+import type { ConnectionId, GitHubPrioritySource, Priority } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -14,6 +14,7 @@ import type * as Headers from "effect/unstable/http/Headers";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { CheckRun } from "../ci";
+import { CredentialStore } from "../credential-store";
 import { IssueTrackerError } from "../issue-tracker";
 import {
   boardMissing,
@@ -27,6 +28,7 @@ export interface GitHubRepoRef {
   readonly owner: string;
   readonly name: string;
   readonly tokenEnv: string;
+  readonly connectionId?: ConnectionId;
 }
 
 export type ReviewDecision = "changes-requested" | "approved" | "none";
@@ -335,6 +337,7 @@ export const reviewDecisionOf = (
 };
 
 const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpClient) {
+  const credentialStore = Option.getOrNull(yield* Effect.serviceOption(CredentialStore));
   const etags = yield* Ref.make(new Map<string, EtagEntry>());
   const resumeAtRef = yield* Ref.make<number | null>(null);
 
@@ -380,6 +383,21 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     repo: GitHubRepoRef,
     request: HttpClientRequest.HttpClientRequest,
   ) {
+    if (repo.connectionId && credentialStore) {
+      const account = repo.connectionId.slice(repo.connectionId.indexOf("/") + 1);
+      const credential = yield* credentialStore
+        .bearerToken({
+          connectionId: repo.connectionId,
+          key: repo.connectionId,
+          issueTracker: "github",
+          organization: account === "default" ? null : account,
+          tokenEnv: repo.tokenEnv,
+          clientCredentials: null,
+          oauthClientId: null,
+        })
+        .pipe(Effect.mapError((error) => new IssueTrackerError({ reason: "auth", message: error.message })));
+      return yield* execute(request, credential.token);
+    }
     const token = yield* Effect.mapError(
       Config.redacted(repo.tokenEnv),
       () => new IssueTrackerError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
@@ -468,31 +486,37 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return result.data;
   });
 
+  const collectPriorityPages: (
+    repo: GitHubRepoRef,
+    source: GitHubPrioritySource,
+    field: string,
+    cursor?: string | null,
+  ) => Effect.Effect<ReadonlyMap<number, Priority>, IssueTrackerError> = Effect.fn(
+    "github.projectPriorityPage",
+  )(function* (repo, source, field, cursor = null) {
+    const data = yield* graphql(repo, priorityQuery, {
+      owner: repo.owner,
+      number: source.project,
+      field,
+      cursor,
+    });
+    const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
+    if (cursor === null && boardMissing(payload)) {
+      return yield* unavailable(`GitHub project ${source.project} not found for ${repo.owner}`);
+    }
+    const page = pageOf(payload, repo);
+    const current = new Map(page.entries);
+    if (page.nextCursor === null) return current;
+    const remaining = yield* collectPriorityPages(repo, source, field, page.nextCursor);
+    return new Map([...current, ...remaining]);
+  });
+
   // One paged query so cost tracks board size, not backlog size.
   const collectPriorities = Effect.fn("github.projectPriorities")(function* (
     repo: GitHubRepoRef,
     source: GitHubPrioritySource,
   ) {
-    const field = source.field ?? defaultPriorityField;
-    const byNumber = new Map<number, Priority>();
-    let cursor: string | null = null;
-    do {
-      const data = yield* graphql(repo, priorityQuery, {
-        owner: repo.owner,
-        number: source.project,
-        field,
-        cursor,
-      });
-      const payload = yield* Effect.mapError(decodeProjectPriorities(data), toUnavailable);
-      if (cursor === null && boardMissing(payload)) {
-        return yield* unavailable(`GitHub project ${source.project} not found for ${repo.owner}`);
-      }
-      const page = pageOf(payload, repo);
-      for (const [number, priority] of page.entries) byNumber.set(number, priority);
-      cursor = page.nextCursor;
-    } while (cursor !== null);
-    const result: ReadonlyMap<number, Priority> = byNumber;
-    return result;
+    return yield* collectPriorityPages(repo, source, source.field ?? defaultPriorityField);
   });
 
   const pullClosingReferences: (

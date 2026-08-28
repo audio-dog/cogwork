@@ -1215,17 +1215,18 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
-  it.effect("keeps running when an installed Plugin needs an MCP credential", () => {
+  it.effect("rejects a Run Plan when an installed Plugin needs an MCP credential", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
+      const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      const executed = yield* executor.execute(implementWorkspace, implementItem);
+      const ledger = yield* RunLedger.RunLedger;
 
-      const [request] = yield* Ref.get(requests);
-      assert.deepStrictEqual(request?.mcpSkills, []);
-      assert.isTrue(
-        request?.contributions.some((contribution) => contribution.id === "plugin:linear/rules/linear"),
-      );
+      assert.isFalse(executed);
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(
       Effect.provide(
         provide(
@@ -1239,17 +1240,15 @@ describe("Executor.execute", () => {
     );
   });
 
-  it.effect("keeps running when Plugin contributions cannot load", () => {
+  it.effect("rejects a Run Plan when Plugin contributions cannot load", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
       yield* executor.execute(implementWorkspace, implementItem);
 
-      const [request] = yield* Ref.get(requests);
-      assert.deepStrictEqual(request?.mcpSkills, []);
-      assert.deepStrictEqual(request?.contributions, [repoSkill]);
-      assert.isFalse((yield* Ref.get(calls)).some((call) => call.method === "handOff"));
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
     }).pipe(
       Effect.provide(
         provide(
@@ -2075,7 +2074,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], worktreeStubLayer)));
   });
 
-  it.effect("hands a stalled follow-up to a human with no harness run", () => {
+  it.effect("hands a stalled follow-up to a human without resolving the Run Plan", () => {
     const stalledItem = {
       ...followUpItem,
       followUp: { ...followUpItem.followUp, noProgress: 3, stalled: true },
@@ -2100,7 +2099,17 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
-    }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)])));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(followUpEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          missingPluginCredentialLayer,
+        ),
+      ),
+    );
   });
 
   it.effect(

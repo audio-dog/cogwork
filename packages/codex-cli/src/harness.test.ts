@@ -63,6 +63,8 @@ const credentialStore: CredentialStore.CredentialStoreService = {
   invalidate: unexpected,
   providerKey: unexpected,
   persistProviderKey: unexpected,
+  configureConnection: unexpected,
+  removeConnection: unexpected,
 };
 
 const fileSystem = FileSystem.makeNoop({});

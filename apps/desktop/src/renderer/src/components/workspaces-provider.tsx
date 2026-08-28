@@ -1,4 +1,5 @@
 import type {
+  Connection,
   ControlStore,
   DaemonLimitUpdate,
   WorkspaceId,
@@ -18,6 +19,7 @@ interface WorkspacesStateValue {
   readonly status: WorkspacesStatus;
   readonly workspaces: readonly WorkspaceState[];
   readonly controlStore: ControlStore | null;
+  readonly connections: readonly Connection[];
 }
 
 interface WorkspacesActions {
@@ -103,6 +105,7 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
           status: boardStatus(board._tag),
           workspaces,
           controlStore: limits.controlStore,
+          connections: picture?.controlStore?.connections ?? [],
         },
         actions,
         meta: {

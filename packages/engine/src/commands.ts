@@ -1,5 +1,10 @@
 import {
   type ClassifiedItem,
+  type ConnectionEstablishment,
+  ConnectionFailure,
+  type ConnectionId,
+  type ConnectionMutationResult,
+  type ConnectionSystem,
   type DaemonLimitUpdate,
   type OperationSettingUpdate,
   type PluginFailure,
@@ -7,6 +12,7 @@ import {
   type PluginMutationResult,
   type PluginOverview,
   Principal,
+  type PrincipalId,
   RunAlreadyFinished,
   type RunId,
   RunNotFound,
@@ -16,12 +22,15 @@ import {
   type WorkspaceId,
   WorkspaceManagementError,
   type WorkspaceRegistration,
+  WorkspaceRegistrationError,
   workspaceFailureState,
   workspaceStateFromInfo,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import { ConnectionStore, requiringPluginId } from "./connection";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
@@ -205,9 +214,32 @@ const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
   return workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined));
 };
 
+const requireBinding = Effect.fn("Daemon.requireConnectionBinding")(function* (
+  connectionId: ConnectionId,
+  system: ConnectionSystem,
+) {
+  const connections = yield* ConnectionStore;
+  const connection = yield* connections
+    .find(connectionId)
+    .pipe(Effect.mapError((error) => new WorkspaceRegistrationError({ message: error.message })));
+  if (connection?.system === system) return;
+  const message = connection
+    ? `${connectionId} is a ${connection.system} Connection, not ${system}`
+    : `${connectionId} is not an established Connection`;
+  return yield* new WorkspaceRegistrationError({ message });
+});
+
+const connectionSystemFor = Effect.fn("Daemon.connectionSystemFor")(function* (type: string) {
+  if (type === "github" || type === "linear") return type;
+  return yield* new WorkspaceRegistrationError({ message: `${type} has no Connection system` });
+});
+
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
   readonly registration: WorkspaceRegistration;
 }) {
+  const { issueTracker, sourceControl } = payload.registration;
+  yield* requireBinding(issueTracker.connectionId, yield* connectionSystemFor(issueTracker.type));
+  if (sourceControl) yield* requireBinding(sourceControl.connectionId, "github");
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const change = yield* management.register(payload.registration);
@@ -276,4 +308,156 @@ export const uninstallPlugin = Effect.fn("Daemon.UninstallPlugin")(function* (pa
 }) {
   const plugins = yield* PluginManager;
   return yield* publishPluginMutation(plugins.uninstall(payload.pluginId));
+});
+
+const connectionFailure = (operation: string, connectionId: ConnectionId | null, error: unknown) =>
+  new ConnectionFailure({
+    operation,
+    connectionId,
+    message: error instanceof Error ? error.message : String(error),
+  });
+
+const isConnectionFailure = Schema.is(ConnectionFailure);
+
+const mapConnectionFailure = (operation: string, connectionId: ConnectionId | null) =>
+  Effect.mapError(
+    (error): ConnectionFailure =>
+      isConnectionFailure(error) ? error : connectionFailure(operation, connectionId, error),
+  );
+
+const publishConnections = Effect.fn("Daemon.publishConnections")(function* (
+  danglingWorkspaces: readonly WorkspaceId[],
+) {
+  const connections = yield* ConnectionStore;
+  const plugins = yield* PluginManager;
+  const publisher = yield* DaemonEventPublisher;
+  const pluginOverview = yield* plugins.overview;
+  const overview = yield* connections.overview(pluginOverview);
+  yield* publisher.publishConnections(overview, danglingWorkspaces);
+  return { overview, danglingWorkspaces } satisfies ConnectionMutationResult;
+});
+
+const publishControlStore = Effect.fn("Daemon.publishControlStore")(function* () {
+  const publisher = yield* DaemonEventPublisher;
+  const store = yield* ControlStore;
+  yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+});
+
+const ensureRequiredPlugin = Effect.fn("Daemon.ensureRequiredPlugin")(function* (
+  system: ConnectionEstablishment["system"],
+  principalId: PrincipalId,
+  rollback: Effect.Effect<void, never>,
+) {
+  const plugins = yield* PluginManager;
+  const overview = yield* plugins.overview;
+  const pluginId = requiringPluginId(overview, system);
+  if (!pluginId) return;
+  const plugin = overview.plugins.find((item) => item.pluginId === pluginId);
+  if (plugin?.record) return;
+  yield* publishPluginMutation(plugins.install(pluginId, principalId)).pipe(Effect.tapError(() => rollback));
+});
+
+export const establishConnection = Effect.fn("Daemon.EstablishConnection")(function* (payload: {
+  readonly establishment: ConnectionEstablishment;
+}) {
+  const { establishment } = payload;
+  const connections = yield* ConnectionStore;
+  const principal = yield* Principal;
+  const existing = yield* connections.findSystem(establishment.system);
+  if (existing) {
+    return yield* connectionFailure(
+      "establish Connection",
+      existing.id,
+      "Connection already exists; use re-connect",
+    );
+  }
+  const connection = yield* connections
+    .establish(establishment)
+    .pipe(mapConnectionFailure("establish Connection", null));
+  yield* ensureRequiredPlugin(
+    establishment.system,
+    principal.id,
+    connections.remove(connection.id).pipe(Effect.ignore),
+  );
+  yield* publishControlStore();
+  yield* Effect.logInfo("Connection established", {
+    connectionId: connection.id,
+    system: connection.system,
+    account: connection.account,
+  });
+  return yield* publishConnections([]);
+});
+
+export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(function* (payload: {
+  readonly establishment: ConnectionEstablishment;
+}) {
+  const connections = yield* ConnectionStore;
+  const existing = yield* connections.findSystem(payload.establishment.system);
+  if (existing?.account !== payload.establishment.account) {
+    return yield* connectionFailure(
+      "re-connect Connection",
+      existing?.id ?? null,
+      "Connection does not exist; establish it first",
+    );
+  }
+  const connection = yield* connections
+    .establish(payload.establishment)
+    .pipe(mapConnectionFailure("re-connect Connection", existing.id));
+  yield* publishControlStore();
+  yield* Effect.logInfo("Connection re-connected", {
+    connectionId: connection.id,
+    system: connection.system,
+    account: connection.account,
+  });
+  return yield* publishConnections([]);
+});
+
+const boundWorkspaceName = (workspace: RegistryState["workspaces"][number], connectionId: ConnectionId) => {
+  if (workspace.config.issueTracker.connectionId === connectionId) return workspace.config.name;
+  if (workspace.config.sourceControl?.connectionId === connectionId) return workspace.config.name;
+  return null;
+};
+
+const boundFailureName = (failure: RegistryState["failures"][number], connectionId: ConnectionId) => {
+  if (failure.name === undefined) return null;
+  if (failure.issueTracker?.connectionId !== connectionId) return null;
+  return failure.name;
+};
+
+const boundWorkspaceIds = (registry: RegistryState, connectionId: ConnectionId) => [
+  ...new Set([
+    ...registry.workspaces.flatMap((workspace) => {
+      const name = boundWorkspaceName(workspace, connectionId);
+      return name ? [name] : [];
+    }),
+    ...registry.failures.flatMap((failure) => {
+      const name = boundFailureName(failure, connectionId);
+      return name ? [name] : [];
+    }),
+  ]),
+];
+
+export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (payload: {
+  readonly connectionId: ConnectionId;
+}) {
+  const connections = yield* ConnectionStore;
+  const plugins = yield* PluginManager;
+  const registry = yield* WorkspaceRegistry;
+  const connection = yield* connections.find(payload.connectionId);
+  if (!connection) {
+    return yield* connectionFailure("remove Connection", payload.connectionId, "Connection not found");
+  }
+  const before = yield* plugins.overview;
+  const requiring = before.plugins.filter(
+    (plugin) => plugin.record && plugin.requiredConnections.includes(connection.system),
+  );
+  yield* Effect.forEach(requiring, (plugin) => publishPluginMutation(plugins.uninstall(plugin.pluginId)), {
+    discard: true,
+  });
+  const danglingWorkspaces = boundWorkspaceIds(registry, payload.connectionId);
+  yield* connections
+    .remove(payload.connectionId)
+    .pipe(mapConnectionFailure("remove Connection", payload.connectionId));
+  yield* publishControlStore();
+  return yield* publishConnections(danglingWorkspaces);
 });

@@ -1,4 +1,5 @@
 import {
+  Connection,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimitUpdate,
@@ -32,6 +33,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ConnectionStore } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -58,6 +60,15 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   issueTracker: { type: "github", repo: "acme/repo" },
   linearHistory: false,
   concurrency: 2,
+});
+const mismatchedRegistration = Schema.decodeSync(WorkspaceRegistration)({
+  name: "mismatch",
+  checkoutPath: "/repos/mismatch",
+  issueTracker: {
+    type: "linear",
+    connectionId: "github/acme",
+    teams: ["ENG"],
+  },
 });
 
 const registered: Registry.RegisteredWorkspace = {
@@ -177,6 +188,26 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
   contributions: () => Effect.succeed([]),
 });
+const connectionStoreLayer = Layer.succeed(ConnectionStore, {
+  overview: () => Effect.succeed({ connections: [] }),
+  find: (connectionId) =>
+    Effect.succeed(
+      Connection.make({
+        id: connectionId,
+        system: connectionId.startsWith("linear/") ? "linear" : "github",
+        account: "test",
+        status: "established",
+      }),
+    ),
+  findSystem: () => Effect.succeed(null),
+  bearer: () => Effect.die("unexpected Connection bearer"),
+  readiness: () => Effect.succeed({ _tag: "Ready" }),
+  requireReady: () => Effect.void,
+  requireSystemReady: () => Effect.void,
+  establish: () => Effect.die("unexpected Connection establish"),
+  revoke: () => Effect.die("unexpected Connection revoke"),
+  remove: () => Effect.die("unexpected Connection remove"),
+});
 
 const installedPlugin = (pluginId: string) =>
   ({
@@ -235,6 +266,7 @@ const picture: ControlStorePicture = {
     revision: 0,
   },
   operationSettings: [],
+  connections: [],
   pluginInstalls: [],
   contributionSettings: [],
 };
@@ -262,6 +294,7 @@ const controlStoreStub = ({
         revision: picture.daemonLimits.revision + 1,
       },
       operationSettings: picture.operationSettings,
+      connections: picture.connections,
       pluginInstalls: picture.pluginInstalls,
       contributionSettings: picture.contributionSettings,
     }),
@@ -276,6 +309,9 @@ const controlStoreStub = ({
     seed,
     picture: read,
     setDaemonLimit,
+    establishConnection: () => Effect.succeed(picture),
+    revokeConnection: () => Effect.succeed(picture),
+    removeConnection: () => Effect.succeed(picture),
     updateOperationSetting,
     installPlugin: () => Effect.succeed(picture),
     uninstallPlugin: () => Effect.succeed(picture),
@@ -301,6 +337,7 @@ const daemonLayer = (
     Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(RunControl.layer),
     Layer.provideMerge(controlStore),
+    Layer.provideMerge(connectionStoreLayer),
     Layer.provideMerge(plugins),
     Layer.provideMerge(source),
   );
@@ -806,6 +843,15 @@ describe("SetOperationSetting", () => {
 });
 
 describe("RegisterWorkspace", () => {
+  it.effect("rejects a tracker bound to the wrong Connection system", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const error = yield* Effect.flip(client.RegisterWorkspace({ registration: mismatchedRegistration }));
+
+      assert.include(error.message, "not linear");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
   it.effect("returns the minted workspace and publishes it once", () => {
     const registries = registrationServices();
     return Effect.gen(function* () {

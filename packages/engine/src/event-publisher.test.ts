@@ -48,6 +48,9 @@ const controlStoreLayer = Layer.succeed(ControlStore, {
   seed: defaultControlStore,
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
+  establishConnection: () => Effect.succeed(defaultControlStore),
+  revokeConnection: () => Effect.succeed(defaultControlStore),
+  removeConnection: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
@@ -60,6 +63,10 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
   contributions: () => Effect.succeed([]),
 });
+const reconcileLayer = Reconcile.layer.pipe(
+  Layer.provide(DaemonEventBus.layer),
+  Layer.provide(pluginManagerLayer),
+);
 
 const id = Schema.decodeSync(WorkItemId);
 const stats = Schema.decodeSync(SchedulerStats);
@@ -205,7 +212,7 @@ const publisherLayer = (
   eventPublisherLayer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
+        reconcileLayer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
         workspaces,
         schedulerStub(statsRef),
         DaemonEventBus.layer,

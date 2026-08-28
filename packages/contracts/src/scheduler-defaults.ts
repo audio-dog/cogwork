@@ -13,6 +13,7 @@ export const defaultDaemonLimits: DaemonLimits = {
 
 export const defaultControlStore = {
   daemonLimits: defaultDaemonLimits,
+  connections: [],
   operationSettings: [],
   pluginInstalls: [],
   contributionSettings: [],

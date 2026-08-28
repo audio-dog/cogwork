@@ -45,6 +45,8 @@ const harnessServices: Harness.HarnessRunnerServices = {
     invalidate: unexpected,
     providerKey: unexpected,
     persistProviderKey: unexpected,
+    configureConnection: unexpected,
+    removeConnection: unexpected,
   },
   fileSystem: FileSystem.makeNoop({}),
 };

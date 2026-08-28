@@ -1,3 +1,4 @@
+import { ConnectionId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -7,6 +8,7 @@ import * as Logger from "effect/Logger";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
+import * as Schema from "effect/Schema";
 import {
   accountOf,
   type ClientCredentialsGrant,
@@ -30,6 +32,7 @@ const account = {
   clientCredentials: null,
   oauthClientId: null,
 } as const;
+const connectionId = Schema.decodeSync(ConnectionId);
 
 const withEnv = (env: Record<string, string>) =>
   Effect.provide(Layer.mergeAll(layerEnv, ConfigProvider.layer(ConfigProvider.fromEnv({ env }))));
@@ -87,6 +90,149 @@ describe("CredentialStore (env)", () => {
       const lines = yield* capturingLogs(store.bearerToken(account));
       assert.isTrue(lines.some((line) => line.includes("env") && line.includes("AUD")));
     }).pipe(withEnv({ LINEAR_API_KEY: "test-key" })),
+  );
+});
+
+describe("CredentialStore (Connections)", () => {
+  it.effect("stores and resolves a Connection API key", () =>
+    Effect.gen(function* () {
+      const entries = yield* Ref.make<ReadonlyArray<import("./credential-store").StoredConnectionCredential>>(
+        [],
+      );
+      const store = make({
+        stored: {
+          load: Effect.succeed([]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Ref.get(entries),
+          saveConnectionCredential: (entry) =>
+            Ref.update(entries, (current) => [
+              ...current.filter((candidate) => candidate.connectionId !== entry.connectionId),
+              entry,
+            ]),
+        },
+      });
+      yield* store.configureConnection(connectionId("linear/acme"), {
+        _tag: "ApiKey",
+        key: Redacted.make("stored-key"),
+      });
+      const credential = yield* store.bearerToken({
+        ...account,
+        connectionId: connectionId("linear/acme"),
+      });
+
+      assert.strictEqual(credential.source, "stored-key");
+      assert.strictEqual(Redacted.value(credential.token), "stored-key");
+    }),
+  );
+
+  it.effect("resolves the env var selected for a Connection", () =>
+    Effect.gen(function* () {
+      const store = make({
+        stored: {
+          load: Effect.succeed([]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Effect.succeed([
+            { _tag: "Env", connectionId: connectionId("github/default"), name: "GH_WORK_TOKEN" },
+          ]),
+        },
+      });
+      const credential = yield* store.bearerToken({
+        ...account,
+        key: "github/default",
+        issueTracker: "github",
+        connectionId: connectionId("github/default"),
+      });
+
+      assert.strictEqual(credential.source, "env");
+      assert.strictEqual(Redacted.value(credential.token), "env-token");
+    }).pipe(
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: { GH_WORK_TOKEN: "env-token" } }))),
+    ),
+  );
+
+  it.effect("uses only the saved browser grant selected for a Connection", () =>
+    Effect.gen(function* () {
+      const entries = yield* Ref.make<ReadonlyArray<import("./credential-store").StoredConnectionCredential>>(
+        [{ _tag: "ApiKey", connectionId: connectionId("linear/acme"), key: Redacted.make("old-key") }],
+      );
+      const store = make({
+        stored: {
+          load: Effect.succeed([stored("acme", storedToken(far))]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Ref.get(entries),
+          saveConnectionCredential: (entry) =>
+            Ref.update(entries, (current) => [
+              ...current.filter((candidate) => candidate.connectionId !== entry.connectionId),
+              entry,
+            ]),
+        },
+      });
+      yield* store.configureConnection(connectionId("linear/acme"), { _tag: "Stored" });
+      const credential = yield* store.bearerToken({
+        ...account,
+        key: "linear/acme",
+        organization: "acme",
+        connectionId: connectionId("linear/acme"),
+      });
+
+      assert.strictEqual(credential.source, "stored-oauth");
+      assert.strictEqual(Redacted.value(credential.token), "oauth-token");
+      assert.strictEqual((yield* Ref.get(entries))[0]?._tag, "Stored");
+    }),
+  );
+
+  it.effect("does not fall through to the default environment for a missing saved grant", () =>
+    Effect.gen(function* () {
+      const store = make({
+        stored: {
+          load: Effect.succeed([]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Effect.succeed([
+            { _tag: "Stored", connectionId: connectionId("linear/acme") },
+          ]),
+        },
+      });
+      const error = yield* Effect.flip(
+        store.bearerToken({
+          ...account,
+          key: "linear/acme",
+          organization: "acme",
+          connectionId: connectionId("linear/acme"),
+        }),
+      );
+
+      assert.include(error.message, "no saved browser login");
+    }).pipe(
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: { LINEAR_API_KEY: "env-key" } }))),
+    ),
+  );
+
+  it.effect("removes both the Connection source and its saved browser grant", () =>
+    Effect.gen(function* () {
+      const entries = yield* Ref.make<ReadonlyArray<import("./credential-store").StoredConnectionCredential>>(
+        [{ _tag: "Stored", connectionId: connectionId("linear/acme") }],
+      );
+      const grants = yield* Ref.make<ReadonlyArray<StoredCredential>>([stored("acme", storedToken(far))]);
+      const store = make({
+        stored: {
+          load: Ref.get(grants),
+          save: () => Effect.void,
+          loadConnectionCredentials: Ref.get(entries),
+          removeConnectionCredential: (id) =>
+            Ref.update(entries, (current) => current.filter((entry) => entry.connectionId !== id)),
+          removeCredential: (issueTracker, organization) =>
+            Ref.update(grants, (current) =>
+              current.filter(
+                (entry) => entry.issueTracker !== issueTracker || entry.organization !== organization,
+              ),
+            ),
+        },
+      });
+      yield* store.removeConnection(connectionId("linear/acme"));
+
+      assert.deepStrictEqual(yield* Ref.get(entries), []);
+      assert.deepStrictEqual(yield* Ref.get(grants), []);
+    }),
   );
 });
 

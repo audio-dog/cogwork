@@ -6,6 +6,7 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
+import { Connection } from "./connection";
 import { Claim } from "./coordination";
 import { ContributionSetting, PluginInstall } from "./plugin";
 import { OperationSettingRow } from "./settings";
@@ -160,6 +161,7 @@ export type DaemonLimits = typeof DaemonLimits.Type;
 
 export const ControlStore = Schema.Struct({
   daemonLimits: DaemonLimits,
+  connections: Schema.Array(Connection),
   operationSettings: Schema.Array(OperationSettingRow),
   pluginInstalls: Schema.Array(PluginInstall),
   contributionSettings: Schema.Array(ContributionSetting),

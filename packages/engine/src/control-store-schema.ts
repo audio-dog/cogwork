@@ -1,6 +1,6 @@
 import { maxSchedulerLimit } from "@cogwork/contracts";
 import { desc, sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const daemonLimits = sqliteTable(
   "daemon_limits",
@@ -26,6 +26,21 @@ export const daemonLimits = sqliteTable(
       sql`${table.dailyBudget} BETWEEN 1 AND ${sql.raw(String(maxSchedulerLimit))}`,
     ),
     check("daemon_limits_revision", sql`${table.revision} >= 0`),
+  ],
+);
+
+export const connections = sqliteTable(
+  "connections",
+  {
+    id: text("id").primaryKey(),
+    system: text("system").notNull(),
+    account: text("account").notNull(),
+    status: text("status").notNull(),
+  },
+  (table) => [
+    check("connections_system", sql`${table.system} IN ('github', 'linear')`),
+    check("connections_status", sql`${table.status} IN ('established', 'revoked')`),
+    uniqueIndex("connections_system").on(table.system),
   ],
 );
 

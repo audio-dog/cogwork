@@ -6,6 +6,17 @@ const tracker = (over: Partial<typeof IssueTrackerConfig.Encoded>) =>
   Schema.decodeSync(IssueTrackerConfig)({ type: "linear", ...over });
 
 describe("linearTeams", () => {
+  it("carries a Connection id instead of credential configuration", () => {
+    const configured = Schema.decodeSync(IssueTrackerConfig)({
+      type: "linear",
+      connectionId: "linear/acme",
+    });
+
+    assert.strictEqual(configured.connectionId, "linear/acme");
+    assert.isFalse("tokenEnv" in configured);
+    assert.isFalse("oauth" in configured);
+  });
+
   it("reads a single configured team", () => {
     assert.deepStrictEqual([...linearTeams(tracker({ teams: ["GRO"] }))], ["GRO"]);
   });

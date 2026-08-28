@@ -1,5 +1,6 @@
 import {
   ClassifiedItem,
+  type ConnectionOverview,
   type ControlStore as ControlStorePicture,
   itemKey,
   type PluginOverview,
@@ -150,6 +151,14 @@ export const make = Effect.gen(function* () {
     return plugins;
   });
 
+  const publishConnections = Effect.fn("DaemonEventPublisher.publishConnections")(function* (
+    connections: ConnectionOverview,
+    danglingWorkspaces: readonly WorkspaceId[],
+  ) {
+    yield* bus.publish({ _tag: "ConnectionsChanged", connections, danglingWorkspaces });
+    return connections;
+  });
+
   return {
     publishItems,
     publishWorkspaces,
@@ -157,6 +166,7 @@ export const make = Effect.gen(function* () {
     publishScheduler,
     publishControlStore,
     publishPlugins,
+    publishConnections,
   } as const;
 });
 

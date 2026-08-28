@@ -25,6 +25,7 @@ import * as DaemonEventBus from "./daemon-event-bus";
 import * as EventPublisher from "./event-publisher";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
+import { observeWorkspace } from "./observe";
 import { PluginManager } from "./plugin";
 import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
@@ -37,6 +38,16 @@ import { type PrSignals, SourceControlProvider } from "./source-control";
 import { WorktreeManager } from "./worktree";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
+const pluginManagerLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
+});
+const reconcileLayer = Reconcile.layer.pipe(
+  Layer.provide(DaemonEventBus.layer),
+  Layer.provide(pluginManagerLayer),
+);
 
 const registeredWorkspace: Registry.RegisteredWorkspace = {
   source: "control-store:example",
@@ -114,6 +125,77 @@ class LogMessages extends Context.Service<LogMessages, MutableRef.MutableRef<Rea
   ]).pipe(Layer.provideMerge(LogMessages.layer));
 }
 
+describe("workspace observation", () => {
+  const workspace: Registry.RegisteredWorkspace = {
+    ...registeredWorkspace,
+    config: Schema.decodeSync(WorkspaceConfig)({
+      name: "example",
+      checkoutPath: "/repos/example",
+      issueTracker: {
+        type: "linear",
+        connectionId: "linear/acme",
+        teams: ["ENG"],
+      },
+      sourceControl: {
+        type: "github",
+        connectionId: "github/acme",
+        repo: "acme/example",
+      },
+      harness: { preferred: "cursor" },
+    }),
+  };
+  const githubWorkspace: Registry.RegisteredWorkspace = {
+    ...workspace,
+    config: Schema.decodeSync(WorkspaceConfig)({
+      name: "github-example",
+      checkoutPath: "/repos/github-example",
+      issueTracker: {
+        type: "github",
+        connectionId: "github/acme",
+        repo: "acme/example",
+      },
+      harness: { preferred: "cursor" },
+    }),
+  };
+  const auth = new IssueTracker.IssueTrackerError({ reason: "auth", message: "unauthorized" });
+
+  it.effect("identifies the tracker Connection when tracker observation fails", () =>
+    Effect.gen(function* () {
+      const observe = observeWorkspace(stub({ observe: () => Effect.fail(auth) }), {
+        observe: () => Effect.succeed(new Map()),
+        comment: () => Effect.void,
+      });
+      const error = yield* Effect.flip(observe(workspace));
+
+      assert.strictEqual(error.connectionId, workspace.config.issueTracker.connectionId);
+    }),
+  );
+
+  it.effect("identifies the source-control Connection when provider observation fails", () =>
+    Effect.gen(function* () {
+      const observe = observeWorkspace(stub({}), {
+        observe: () => Effect.fail(auth),
+        comment: () => Effect.void,
+      });
+      const error = yield* Effect.flip(observe(workspace));
+
+      assert.strictEqual(error.connectionId, workspace.config.sourceControl?.connectionId);
+    }),
+  );
+
+  it.effect("uses the GitHub tracker Connection for fallback source-control failures", () =>
+    Effect.gen(function* () {
+      const observe = observeWorkspace(stub({}), {
+        observe: () => Effect.fail(auth),
+        comment: () => Effect.void,
+      });
+      const error = yield* Effect.flip(observe(githubWorkspace));
+
+      assert.strictEqual(error.connectionId, githubWorkspace.config.issueTracker.connectionId);
+    }),
+  );
+});
+
 const defectOnceThenObserve = sources(
   Layer.effect(
     IssueTracker.IssueTracker,
@@ -133,15 +215,15 @@ const defectOnceThenObserve = sources(
 describe("reconcile worker", () => {
   const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.readOnlyRegistry(sampleRegistry));
 
-  const workerLayer = Reconcile.layer.pipe(
+  const workerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, sources(IssueTracker.emptyLayer))),
   );
-  const defectiveWorkerLayer = Reconcile.layer.pipe(
+  const defectiveWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, defectOnceThenObserve)),
     Layer.provideMerge(ReconcileObserveCount.layer),
     Layer.provideMerge(LogMessages.captureLayer),
   );
-  const neverWorkerLayer = Reconcile.layer.pipe(
+  const neverWorkerLayer = reconcileLayer.pipe(
     Layer.provide(
       Layer.mergeAll(
         registryLayer,
@@ -214,7 +296,7 @@ describe("reconcile worker", () => {
           }),
         ),
       );
-      const layer = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
+      const layer = reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
 
       yield* Effect.gen(function* () {
         const worker = yield* Reconcile.ReconcileWorker;
@@ -253,7 +335,7 @@ describe("reconcile worker", () => {
     openBlockers: 0,
     proposal: null,
   };
-  const workerWithWork = Reconcile.layer.pipe(
+  const workerWithWork = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
   );
 
@@ -308,7 +390,7 @@ describe("reconcile worker", () => {
     headRef: "aud-2-in-review",
     followable: true,
   };
-  const workerWithInReview = Reconcile.layer.pipe(
+  const workerWithInReview = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem], [[id("AUD-2"), inReviewPr]]))),
   );
 
@@ -341,7 +423,7 @@ describe("reconcile worker", () => {
       }),
     ),
   );
-  const workerWithAuthFailure = Reconcile.layer.pipe(
+  const workerWithAuthFailure = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, authFailingSource)),
   );
 
@@ -385,7 +467,7 @@ describe("reconcile worker", () => {
     );
 
   const rateLimitedWorker = (observes: Ref.Ref<number>, retryAfterMillis?: number) =>
-    Reconcile.layer.pipe(
+    reconcileLayer.pipe(
       Layer.provide(Layer.mergeAll(registryLayer, rateLimitedSource(observes, retryAfterMillis))),
     );
 
@@ -480,7 +562,7 @@ describe("reconcile worker", () => {
         );
       }).pipe(
         Effect.provide(
-          Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, scopelessSource(observes)))),
+          reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, scopelessSource(observes)))),
         ),
         Effect.scoped,
       );
@@ -495,19 +577,15 @@ const availableControlStore = Layer.succeed(ControlStore, {
   seed: defaultControlStore,
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
+  establishConnection: () => Effect.succeed(defaultControlStore),
+  revokeConnection: () => Effect.succeed(defaultControlStore),
+  removeConnection: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
 });
-const pluginManagerLayer = Layer.succeed(PluginManager, {
-  overview: Effect.succeed({ plugins: [] }),
-  install: () => Effect.die(new Error("unexpected Plugin install")),
-  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
-  contributions: () => Effect.succeed([]),
-});
-
 const schedulerStubService = {
   tick: () => Effect.succeed(0),
   awaitIdle: Effect.void,
@@ -584,10 +662,10 @@ describe("daemon heartbeats", () => {
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
   });
-  const emptyWorkerLayer = Reconcile.layer.pipe(
+  const emptyWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
   );
-  const defectiveWorkerLayer = Reconcile.layer.pipe(
+  const defectiveWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registeredSample, defectOnceThenObserve)),
     Layer.provideMerge(ReconcileObserveCount.layer),
   );
@@ -663,6 +741,7 @@ describe("daemon heartbeats", () => {
           }),
         publishControlStore: (controlStore) => Effect.succeed(controlStore),
         publishPlugins: (plugins) => Effect.succeed(plugins),
+        publishConnections: (connections) => Effect.succeed(connections),
       });
       const layer = publisherLayer.pipe(
         Layer.provideMerge(
@@ -728,7 +807,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(EventPublisher.layer),
-      Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
+      Layer.provideMerge(reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub),

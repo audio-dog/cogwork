@@ -16,7 +16,12 @@ const workspace = Schema.decodeSync(WorkspaceState)({
 });
 
 const value: WorkspacesValue = {
-  state: { status: "ready", workspaces: [workspace], controlStore: defaultControlStore },
+  state: {
+    status: "ready",
+    workspaces: [workspace],
+    controlStore: defaultControlStore,
+    connections: [],
+  },
   actions: {
     register: vi.fn(),
     rebind: vi.fn(),

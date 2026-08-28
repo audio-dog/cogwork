@@ -112,6 +112,8 @@ const stubCredentials = (token: string | null, source: CredentialSource, invalid
       Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
     persistProviderKey: (key) =>
       Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
+    configureConnection: () => Effect.void,
+    removeConnection: () => Effect.void,
   });
 
 const withToken = (

@@ -44,7 +44,8 @@ const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
   return {
     owner,
     name,
-    tokenEnv: source.tokenEnv ?? "GITHUB_TOKEN",
+    tokenEnv: "GITHUB_TOKEN",
+    connectionId: source.connectionId,
     actorLogin: source.actorLogin ?? null,
     priority: source.priority ?? null,
   } satisfies GitHubTarget;
