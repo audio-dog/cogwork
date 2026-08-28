@@ -1,6 +1,7 @@
 import {
   type ClassifiedItem,
   type DaemonLimitUpdate,
+  type OperationSettingUpdate,
   RunAlreadyFinished,
   type RunId,
   RunNotFound,
@@ -15,6 +16,7 @@ import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
+import { operationSettingRefusal } from "./operation-policy";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
@@ -154,5 +156,19 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
       yield* publisher.publishScheduler();
       return published;
     }),
+  );
+});
+
+export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
+  readonly update: OperationSettingUpdate;
+}) {
+  const refusal = operationSettingRefusal(payload.update);
+  if (refusal !== null) return yield* refusal;
+  const store = yield* ControlStore;
+  const publisher = yield* DaemonEventPublisher;
+  return yield* store.withWrite(
+    Effect.flatMap(store.updateOperationSetting(payload.update), (controlStore) =>
+      publisher.publishControlStore(controlStore),
+    ),
   );
 });

@@ -5,6 +5,7 @@ import {
   DaemonRpcs,
   HarnessName,
   IssueTrackerError,
+  type OperationSettingUpdate,
   RunId,
   type RunRecord,
   type TriageRole,
@@ -141,6 +142,7 @@ const picture: ControlStorePicture = {
     dailyBudget: 50,
     revision: 0,
   },
+  operationSettings: [],
 };
 
 const controlStoreStub = (
@@ -156,6 +158,12 @@ const controlStoreStub = (
         dailyBudget: update.key === "daily-budget" ? update.value : picture.daemonLimits.dailyBudget,
         revision: picture.daemonLimits.revision + 1,
       },
+      operationSettings: picture.operationSettings,
+    }),
+  updateOperationSetting: ControlStoreService["updateOperationSetting"] = (update) =>
+    Effect.succeed({
+      ...picture,
+      operationSettings: update._tag === "Set" ? [update.row] : [],
     }),
 ) =>
   Layer.succeed(ControlStore, {
@@ -163,6 +171,7 @@ const controlStoreStub = (
     seed: picture,
     picture: Effect.succeed(picture),
     setDaemonLimit,
+    updateOperationSetting,
     withWrite: (effect) => effect,
   });
 
@@ -526,5 +535,60 @@ describe("SetDaemonLimit", () => {
       ),
       Effect.scoped,
     ),
+  );
+});
+
+describe("SetOperationSetting", () => {
+  const modelUpdate: OperationSettingUpdate = {
+    _tag: "Set",
+    row: {
+      setting: "model",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "SettingsProfile" },
+      value: "anthropic/claude-sonnet-4-5",
+    },
+  };
+
+  it.effect("returns and publishes the same raw Operation setting rows", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetOperationSetting({ update: modelUpdate });
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.take(1),
+        Stream.runCollect,
+      );
+
+      assert.strictEqual(published?._tag, "ControlStoreChanged");
+      if (published?._tag !== "ControlStoreChanged") return assert.fail("expected ControlStoreChanged");
+      assert.deepStrictEqual(published.controlStore, returned);
+      if (modelUpdate._tag !== "Set") return assert.fail("expected set update");
+      assert.deepStrictEqual(returned.operationSettings, [modelUpdate.row]);
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("refuses a locked setting with its Operation Definition named", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const failure = yield* Effect.flip(
+        client.SetOperationSetting({
+          update: {
+            _tag: "Set",
+            row: {
+              setting: "permission-profile",
+              level: { _tag: "Operation", workflow: "coding", operation: "triage" },
+              scope: { _tag: "SettingsProfile" },
+              value: "full",
+            },
+          },
+        }),
+      );
+
+      assert.strictEqual(failure._tag, "OperationSettingRefused");
+      if (failure._tag !== "OperationSettingRefused")
+        return assert.fail("expected Operation setting refusal");
+      assert.strictEqual(failure.source, "triage Operation Definition");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 });
