@@ -1,6 +1,7 @@
 import {
   HarnessName,
   LocalContribution,
+  PluginFailure,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -756,6 +757,21 @@ const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
     ]),
 });
 
+const unavailablePluginLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.fail(
+      new PluginFailure({
+        operation: "read Plugin contributions",
+        pluginId: null,
+        file: null,
+        message: "catalog unavailable",
+      }),
+    ),
+});
+
 function testHarness(runners: ReadonlyArray<TestRunner>) {
   return Layer.unwrap(
     Effect.gen(function* () {
@@ -1211,6 +1227,30 @@ describe("Executor.execute", () => {
           noopProviderLayer,
           trackerRecorder(),
           missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("keeps running when Plugin contributions cannot load", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.mcpSkills, []);
+      assert.deepStrictEqual(request?.contributions, [repoSkill]);
+      assert.isFalse((yield* Ref.get(calls)).some((call) => call.method === "handOff"));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          unavailablePluginLayer,
         ),
       ),
     );

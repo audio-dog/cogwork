@@ -2,7 +2,6 @@ import type {
   FileContribution,
   LifecycleStage,
   PluginContribution,
-  PluginFailure,
   PluginMcpServer,
   RunRecord,
   Session,
@@ -58,7 +57,7 @@ import { SourceControlProvider } from "./source-control";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
-type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError | PluginFailure;
+type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError;
 
 interface RunAccumulator {
   readonly handle: string | null;
@@ -156,7 +155,7 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
 
 // A credential error is a configuration problem (no account, missing secret env) that retrying
 // cannot fix, so it goes straight to a human like a diverged worktree does.
-const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError", "PluginFailure"]);
+const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError"]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
   if (error._tag === "HarnessError") return error.retryable;
@@ -167,6 +166,7 @@ const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
+const noPluginContributions: ReadonlyArray<PluginContribution> = [];
 
 interface PluginMcpContribution {
   readonly id: string;
@@ -202,7 +202,15 @@ export const make = Effect.gen(function* () {
     session: SessionId | null,
     stage: LifecycleStage,
   ) {
-    const pluginContributions = yield* plugins.contributions(workspace.config.name);
+    const pluginContributions = yield* plugins
+      .contributions(workspace.config.name)
+      .pipe(
+        Effect.catchTag("PluginFailure", (error) =>
+          Effect.logWarning("Plugin contributions unavailable", { message: error.message }).pipe(
+            Effect.map(() => noPluginContributions),
+          ),
+        ),
+      );
     const loaded = pluginContributions.filter((contribution) => contribution.load._tag === "Loaded");
     const fileContributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
       id: contribution.id,
