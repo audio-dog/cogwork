@@ -1,3 +1,5 @@
+import type { WorkspaceId } from "@cogwork/contracts";
+
 export const scopeOrder = ["settings-profile", "workspace-input", "private-overlay"] as const;
 
 export type ScopeKind = (typeof scopeOrder)[number];
@@ -13,7 +15,7 @@ export interface ScopeRef {
   readonly workspaceId?: WorkspaceId;
 }
 
-export type WorkspaceId = string & { readonly __brand: "WorkspaceId" };
+export type { WorkspaceId };
 
 export function scopeKey(scope: ScopeRef): string {
   return scope.workspaceId ? `${scope.kind}:${scope.workspaceId}` : scope.kind;
@@ -148,6 +150,14 @@ export interface InstalledPlugin {
   readonly setup: readonly SetupStep[];
 }
 
+export interface CatalogPlugin {
+  readonly pluginId: string;
+  readonly name: string;
+  readonly summary: string;
+  readonly resolvedIdentity: string | null;
+  readonly manifestFailure: string | null;
+}
+
 export interface SetupStep {
   readonly id: string;
   readonly label: string;
@@ -167,5 +177,6 @@ export interface ConfigurationPicture {
   readonly hostId: string;
   readonly workspaces: readonly Workspace[];
   readonly plugins: readonly InstalledPlugin[];
+  readonly catalogPlugins: readonly CatalogPlugin[];
   readonly contributions: readonly Contribution[];
 }

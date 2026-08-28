@@ -427,6 +427,7 @@ export const placeholderConfiguration: ConfigurationPicture = {
   hostId: "host_01H7QK",
   workspaces,
   plugins,
+  catalogPlugins: [],
   contributions,
 };
 
