@@ -362,14 +362,19 @@ layer(NodeServices.layer)((it) => {
       const privateTree = path.join(root, "workspaces", workspace);
       yield* fs.makeDirectory(privateTree, { recursive: true });
       yield* fs.writeFileString(path.join(privateTree, "private.md"), "private");
-      yield* Effect.flatMap(
-        SqlClient.SqlClient,
-        (sql) =>
+      yield* Effect.flatMap(SqlClient.SqlClient, (sql) =>
+        Effect.all([
           sql`INSERT INTO runs (
-          id, workspace, work_item, stage, harness, status, started_at
-        ) VALUES (
-          'run-before-deregister', ${workspace}, '#222', 'implement', 'codex', 'succeeded', 1
-        )`,
+              id, workspace, work_item, stage, harness, status, started_at
+            ) VALUES (
+              'run-before-deregister', ${workspace}, '#222', 'implement', 'codex', 'succeeded', 1
+            )`,
+          sql`INSERT INTO operation_settings (
+              setting, level, workflow, operation, scope, workspace, value
+            ) VALUES
+              ('model', 'default', '', '', 'private-workspace-overlay', ${workspace}, '"overlay-model"'),
+              ('model', 'default', '', '', 'private-workspace-overlay', 'other-workspace', '"other-model"')`,
+        ]),
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
 
       const rebound = yield* management.rebind(workspace, secondCheckout);
@@ -379,6 +384,12 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(rebound.workspace.config.sourceControl?.repo, "acme/repo");
       assert.strictEqual(rebound.workspace.workspaceLimit, 2);
       assert.isTrue(yield* fs.exists(privateTree));
+      const overlaysAfterRebind = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly workspace: string }>`SELECT workspace FROM operation_settings ORDER BY workspace`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(overlaysAfterRebind, [{ workspace }, { workspace: "other-workspace" }]);
 
       assert.strictEqual(yield* management.deregister(workspace), workspace);
       assert.isUndefined(Registry.findWorkspace(liveRegistry, workspace));
@@ -391,6 +402,12 @@ layer(NodeServices.layer)((it) => {
         `,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
       assert.deepStrictEqual(runs, [{ id: "run-before-deregister", workspace }]);
+      const overlaysAfterDeregister = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly workspace: string }>`SELECT workspace FROM operation_settings ORDER BY workspace`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(overlaysAfterDeregister, [{ workspace: "other-workspace" }]);
 
       const registeredAgain = yield* management.register(
         githubRegistration("moving workspace", secondCheckout),
