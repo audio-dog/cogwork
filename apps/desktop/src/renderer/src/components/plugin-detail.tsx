@@ -120,6 +120,7 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
           variant="ghost"
           size="sm"
           className="w-fit"
+          nativeButton={false}
           render={<Link to="/customize/$facet" params={{ facet: "plugins" }} />}
         >
           <RiArrowLeftSLine data-icon="inline-start" />

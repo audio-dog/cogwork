@@ -63,6 +63,7 @@ function ActiveFacetPill({ facet }: { facet: Facet }) {
       size="sm"
       className="rounded-full"
       aria-current="page"
+      nativeButton={false}
       render={<Link to="/customize/$facet" params={{ facet: facetSlug(facet) }} />}
     >
       <FacetPillContent facet={facet} />
@@ -76,6 +77,7 @@ function InactiveFacetPill({ facet }: { facet: Facet }) {
       variant="outline"
       size="sm"
       className="rounded-full"
+      nativeButton={false}
       render={<Link to="/customize/$facet" params={{ facet: facetSlug(facet) }} />}
     >
       <FacetPillContent facet={facet} />

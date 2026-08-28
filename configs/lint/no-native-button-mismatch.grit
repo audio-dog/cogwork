@@ -1,0 +1,55 @@
+language js(typescript, jsx)
+
+// Base UI components built on `useButton` compare the tag they render against
+// the `nativeButton` prop, and log a console error when the two disagree. The
+// trap is the default: `nativeButton` is true on most of them, so
+// `render={<Link />}` or `render={<a />}` quietly drops native button semantics
+// (form submission, Enter and Space activation).
+//
+// The two name tables mirror the per-component defaults in `@base-ui/react`.
+// Re-derive them after a Base UI upgrade with:
+//   grep -rn "nativeButton = " packages/ui/node_modules/@base-ui/react --include="*.mjs"
+// Each table holds the local `@cogwork/ui` wrapper names and the `*Primitive.*`
+// aliases that `packages/ui/src/components` uses.
+//
+// The rule fires only when the rendered tag is certain: an intrinsic HTML tag,
+// or the router `Link`. A capitalized component can render anything, so
+// `render={<Button />}` and `render={<SidebarTrigger />}` stay quiet.
+//
+// State the intent with `nativeButton={...}` to silence the rule. Do not
+// suppress it with a comment.
+
+or {
+  // `nativeButton` defaults to true: the render prop must be a real <button>.
+  or {
+    `<$tag $props />`,
+    `<$tag $props>$_</$tag>`
+  } as $el where {
+    $tag <: r"^(?:Button|AlertDialogAction|AlertDialogCancel|AlertDialogTrigger|DialogClose|DialogTrigger|SheetClose|SheetTrigger|PopoverTrigger|DropdownMenuTrigger|MenubarTrigger|CollapsibleTrigger|SelectTrigger|TabsTrigger|Toggle|ToggleGroupItem|AlertDialogPrimitive\.Close|AlertDialogPrimitive\.Trigger|DialogPrimitive\.Close|DialogPrimitive\.Trigger|SheetPrimitive\.Close|SheetPrimitive\.Trigger|PopoverPrimitive\.Trigger|MenuPrimitive\.Trigger|CollapsiblePrimitive\.Trigger|SelectPrimitive\.Trigger|TabsPrimitive\.Tab|TogglePrimitive)$",
+    $props <: contains or {
+      `render={<$inner $_ />}`,
+      `render={<$inner $_>$_</$inner>}`
+    },
+    $inner <: r"^(?:[a-z][a-z0-9]*|Link)$",
+    ! $inner <: r"^button$",
+    or {
+      // Absent, or the bare shorthand. Both mean true.
+      ! $props <: contains `nativeButton={$_}`,
+      $props <: contains `nativeButton={true}`
+    },
+    register_diagnostic(span=$el, message=`Rule: the render prop of a Base UI button must agree with nativeButton. Why: <$tag> has nativeButton true, so a <$inner> removes native button semantics (form submission, Enter and Space activation) and Base UI logs a console error. Fix: render a real <button>, or keep <$inner> and add nativeButton={false}.`, severity="error")
+  },
+  // `nativeButton` defaults to false: the render prop must not be a <button>.
+  or {
+    `<$tag $props />`,
+    `<$tag $props>$_</$tag>`
+  } as $el where {
+    $tag <: r"^(?:Checkbox|Switch|SelectItem|DropdownMenuItem|DropdownMenuCheckboxItem|DropdownMenuRadioItem|DropdownMenuSubTrigger|ContextMenuItem|ContextMenuCheckboxItem|ContextMenuRadioItem|ContextMenuSubTrigger|MenubarItem|MenubarCheckboxItem|MenubarRadioItem|MenubarSubTrigger|CheckboxPrimitive\.Root|SwitchPrimitive\.Root|SelectPrimitive\.Item|MenuPrimitive\.Item|MenuPrimitive\.CheckboxItem|MenuPrimitive\.RadioItem|MenuPrimitive\.SubmenuTrigger|ContextMenuPrimitive\.Item|ContextMenuPrimitive\.CheckboxItem|ContextMenuPrimitive\.RadioItem|ContextMenuPrimitive\.SubmenuTrigger)$",
+    $props <: contains or {
+      `render={<button $_ />}`,
+      `render={<button $_>$_</button>}`
+    },
+    or { ! $props <: contains `nativeButton`, $props <: contains `nativeButton={false}` },
+    register_diagnostic(span=$el, message=`Rule: the render prop of a Base UI button must agree with nativeButton. Why: <$tag> has nativeButton false, so a <button> keeps native behavior while Base UI also applies its own role and aria-disabled attributes, and Base UI logs a console error. Fix: render a non-button element (div, span, a, label), or add nativeButton if the <button> is deliberate.`, severity="error")
+  }
+}

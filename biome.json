@@ -55,7 +55,8 @@
     "./configs/lint/no-runtime-runfork.grit",
     "./configs/lint/no-effect-never.grit",
     "./configs/lint/no-side-effect-in-state-updater.grit",
-    "./configs/lint/no-switch.grit"
+    "./configs/lint/no-switch.grit",
+    "./configs/lint/no-native-button-mismatch.grit"
   ],
   "javascript": {
     "formatter": {
