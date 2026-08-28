@@ -1,0 +1,24 @@
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_c1c3ea685594ee::t_981cb074e39053 32-37
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_c1c3ea685594ee::t_a05a5530caef34 53-58,84,104,110-111,113-114,117,120
+  s_c1c3ea685594ee::t_bf0826137d41fa 69
+  s_c1c3ea685594ee::t_d99613b875f0bb 36
+  s_c1c3ea685594ee::t_604100e29827f4 1-35,37-52,59-68,70-83,85-103,105-109,112,115-116,118-119,121-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "003f9c86789dbd4ff1562effc8dfbb3567693726",
+  "prompts": {},
+  "sessions": {
+    "s_c1c3ea685594ee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0490e-c32b-7f52-bed2-b8c81206469a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
