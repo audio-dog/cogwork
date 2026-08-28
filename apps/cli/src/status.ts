@@ -1,4 +1,10 @@
-import type { DaemonStatus, PollState, SchedulerStats, WorkspaceInfo } from "@cogwork/contracts";
+import type {
+  ControlStore,
+  DaemonStatus,
+  PollState,
+  SchedulerStats,
+  WorkspaceInfo,
+} from "@cogwork/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
@@ -12,8 +18,8 @@ const proposalPreviewMax = 100;
 const proposalPreview = (proposal: string | null) => {
   if (proposal === null) return "";
   const oneLine = proposal.replace(/\s+/g, " ").trim();
-  const preview =
-    oneLine.length <= proposalPreviewMax ? oneLine : `${oneLine.slice(0, proposalPreviewMax - 1).trimEnd()}…`;
+  if (oneLine.length <= proposalPreviewMax) return ` — ${oneLine}`;
+  const preview = `${oneLine.slice(0, proposalPreviewMax - 1).trimEnd()}…`;
   return ` — ${preview}`;
 };
 
@@ -22,9 +28,8 @@ const isoOrMillis = (millis: number) =>
 
 const pauseQualifier = (poll: Extract<PollState, { readonly status: "paused" }>) => {
   if (poll.reason !== "rate-limited") return " (needs attention)";
-  return poll.retryAtMillis === null
-    ? " (self-healing)"
-    : ` (self-healing, retrying after ${isoOrMillis(poll.retryAtMillis)})`;
+  if (poll.retryAtMillis === null) return " (self-healing)";
+  return ` (self-healing, retrying after ${isoOrMillis(poll.retryAtMillis)})`;
 };
 
 const formatPoll = (poll: PollState) => {
@@ -70,6 +75,19 @@ export const formatScheduler = (scheduler: SchedulerStats) => {
   return `scheduler: ${scheduler.globalInFlight}/${scheduler.globalLimit} in-flight · budget ${scheduler.dailyBudgetUsed}/${scheduler.dailyBudgetLimit}${paused}${suffix}`;
 };
 
+const daemonLimitLines = (controlStore: ControlStore) => [
+  `global-concurrency: ${controlStore.daemonLimits.globalConcurrency}`,
+  `per-workspace-concurrency: ${controlStore.daemonLimits.perWorkspaceConcurrency}`,
+  `daily-budget: ${controlStore.daemonLimits.dailyBudget}`,
+];
+
+export const formatDaemonLimits = (controlStore: ControlStore) => daemonLimitLines(controlStore).join("\n");
+
+const formatControlStore = (controlStore: ControlStore) =>
+  ["control store:", "  daemon limits:", ...daemonLimitLines(controlStore).map((line) => `    ${line}`)].join(
+    "\n",
+  );
+
 export const formatStatus = (status: DaemonStatus) => {
   const header = `daemon: ${status.health} (uptime ${Math.round(status.uptimeMillis / 1000)}s)`;
   const workspaces =
@@ -85,3 +103,17 @@ export const formatStatus = (status: DaemonStatus) => {
     ...(status.failures.length > 0 ? ["failures:", failures] : []),
   ].join("\n");
 };
+
+export const formatStatusWithStore = (status: DaemonStatus, controlStore: ControlStore) =>
+  [formatStatus(status), formatControlStore(controlStore)].join("\n");
+
+export const formatOfflineStatus = (controlStore: ControlStore) =>
+  [
+    "daemon: needs a daemon",
+    formatControlStore(controlStore),
+    "scheduler: needs a daemon",
+    "workspace state: needs a daemon",
+    "availability: needs a daemon",
+    "readiness: needs a daemon",
+    "effective settings: needs a daemon",
+  ].join("\n");
