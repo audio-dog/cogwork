@@ -115,13 +115,20 @@ const workspaceOf = (state: ReturnType<typeof registeredWorkspaces>[number]) =>
     checkoutPath: state.checkoutPath,
   }) satisfies Workspace;
 
-const uniqueContributions = (contributions: readonly Contribution[]) =>
-  [
-    ...contributions.reduce(
+const uniqueContributions = (contributions: readonly Contribution[]) => {
+  const scoped = new Set(
+    contributions.flatMap((contribution) => (contribution.definedIn === undefined ? [] : [contribution.id])),
+  );
+  const instances = contributions.filter(
+    (contribution) => contribution.definedIn !== undefined || !scoped.has(contribution.id),
+  );
+  return [
+    ...instances.reduce(
       (unique, contribution) => new Map(unique).set(contributionInstanceKey(contribution), contribution),
       new Map<string, Contribution>(),
     ),
   ].map(([, contribution]) => contribution);
+};
 
 export const configurationPicture = (board: Board) => {
   const registered = registeredWorkspaces(board);

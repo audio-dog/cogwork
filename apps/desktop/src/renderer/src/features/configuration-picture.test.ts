@@ -175,4 +175,47 @@ describe("configurationPicture", () => {
         .map((contribution) => contribution.definedIn),
     ).toEqual([workspace, other]);
   });
+
+  it("does not add a profile copy beside a user MCP workspace overlay", () => {
+    const other = Schema.decodeSync(WorkspaceId)("other");
+    const userServer = Schema.decodeSync(LocalContribution)({
+      id: "local:user/mcp/review",
+      authority: "local:user",
+      kind: "mcp-server",
+      localName: "review",
+      file: "/home/.agents/mcp/review.json",
+    });
+    const projectedWorkspace = (name: WorkspaceId) =>
+      Schema.decodeSync(WorkspaceState)({
+        _tag: "Registered",
+        name,
+        displayName: name,
+        checkoutPath: `/repos/${name}`,
+        issueTracker: "github",
+        harness: "codex",
+        poll: { status: "ok" },
+        contributions: [userServer],
+      });
+    const picture = configurationPicture({
+      ...board,
+      controlStore: {
+        ...controlStore,
+        contributionSettings: [
+          {
+            contribution: { id: userServer.id, kind: "mcp-server" },
+            scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+            enabled: false,
+          },
+        ],
+      },
+      workspaces: new Map([
+        [workspace, projectedWorkspace(workspace)],
+        [other, projectedWorkspace(other)],
+      ]),
+    });
+
+    expect(picture.contributions.filter((contribution) => contribution.id === userServer.id)).toEqual([
+      expect.objectContaining({ definedIn: workspace }),
+    ]);
+  });
 });
