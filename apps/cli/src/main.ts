@@ -18,6 +18,7 @@ import {
 } from "./commands";
 import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
+import { pluginCommand } from "./plugin-commands";
 import { workspaceCommand } from "./workspace-commands";
 import { worktreeCommand } from "./worktree-commands";
 
@@ -36,6 +37,7 @@ const cli = Command.make("cogwork").pipe(
     workspaceCommand,
     loginCommand,
     modelsCommand,
+    pluginCommand,
   ]),
 );
 

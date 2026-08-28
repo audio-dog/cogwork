@@ -2,6 +2,7 @@ import {
   ClassifiedItem,
   type ControlStore as ControlStorePicture,
   itemKey,
+  type PluginOverview,
   SchedulerStats,
   type WorkItemId,
   type WorkspaceId,
@@ -52,9 +53,11 @@ const contributionSettingAppliesToWorkspace = (
 ) => scope._tag === "SettingsProfile" || workspace.config.name === scope.workspace;
 
 const contributionSettingExists = (
+  controlStore: ControlStorePicture,
   registry: RegistryState,
   row: ControlStorePicture["contributionSettings"][number],
 ) =>
+  controlStore.pluginInstalls.some(({ pluginId }) => row.contribution.id.startsWith(`plugin:${pluginId}/`)) ||
   registry.workspaces.some(
     (workspace) =>
       contributionSettingAppliesToWorkspace(row.scope, workspace) &&
@@ -65,7 +68,7 @@ export const controlStoreWithDiagnostics = (controlStore: ControlStorePicture, r
   const contributionSettings: ControlStorePicture["contributionSettings"] =
     controlStore.contributionSettings.map((stored) => {
       const row = withoutContributionDiagnostic(stored);
-      if (contributionSettingExists(registry, row)) return row;
+      if (contributionSettingExists(controlStore, registry, row)) return row;
       return {
         ...row,
         diagnostic: {
@@ -198,12 +201,20 @@ export const make = Effect.gen(function* () {
     return workspace;
   });
 
+  const publishPlugins = Effect.fn("DaemonEventPublisher.publishPlugins")(function* (
+    plugins: PluginOverview,
+    notices: readonly string[],
+  ) {
+    yield* bus.publish({ _tag: "PluginsChanged", plugins, notices });
+    return plugins;
+  });
   return {
     publishItems,
     publishWorkspaces,
     publishWorkspaceRemoved,
     publishScheduler,
     publishControlStore,
+    publishPlugins,
   } as const;
 });
 

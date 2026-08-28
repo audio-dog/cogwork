@@ -45,6 +45,7 @@ const controlStore = {
     },
   ],
   operationSettings: [],
+  pluginInstalls: [],
 } satisfies NonNullable<Board["controlStore"]>;
 
 const board: Board = {
@@ -53,6 +54,8 @@ const board: Board = {
   scheduler: null,
   workspaces: new Map([[workspace, registeredWorkspace]]),
   controlStore,
+  plugins: null,
+  pluginNotices: [],
 };
 
 describe("configurationPicture", () => {

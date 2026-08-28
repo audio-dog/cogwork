@@ -1,0 +1,16 @@
+{
+  "plugins": [
+    {
+      "pluginId": "github",
+      "name": "GitHub",
+      "summary": "GitHub tools and review guidance.",
+      "bundle": "bundles/github"
+    },
+    {
+      "pluginId": "linear",
+      "name": "Linear",
+      "summary": "Linear tools and issue-writing guidance.",
+      "bundle": "bundles/linear"
+    }
+  ]
+}

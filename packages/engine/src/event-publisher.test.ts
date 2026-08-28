@@ -7,6 +7,7 @@ import {
   HarnessName,
   initialBoard,
   itemKey,
+  localOwnerId,
   RunId,
   type RunRecord,
   SchedulerStats,
@@ -33,8 +34,13 @@ import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
-import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
+import {
+  controlStoreWithDiagnostics,
+  DaemonEventPublisher,
+  layer as eventPublisherLayer,
+} from "./event-publisher";
 import { IssueTracker, type IssueTrackerService, type TrackerItem } from "./issue-tracker";
+import { PluginManager } from "./plugin";
 import { classifiedItemsOf, schedulerStatsOf } from "./read-model";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
@@ -52,8 +58,16 @@ const controlStoreLayer = Layer.succeed(ControlStore, {
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
+  installPlugin: () => Effect.succeed(defaultControlStore),
+  uninstallPlugin: () => Effect.succeed(defaultControlStore),
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
+});
+const pluginManagerLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
 });
 
 interface ControlStoreProbeService {
@@ -99,6 +113,33 @@ const registryLayer = Layer.succeed(
   Registry.WorkspaceRegistry,
   Registry.readOnlyRegistry({ workspaces: [registeredWorkspace], failures: [] }),
 );
+
+describe("controlStoreWithDiagnostics", () => {
+  it("keeps installed Plugin contribution settings valid", () => {
+    const controlStore: ControlStorePicture = {
+      ...defaultControlStore,
+      pluginInstalls: [
+        {
+          pluginId: "linear",
+          resolvedIdentity: "linear@1.0.0",
+          principal: localOwnerId,
+          installedAtMillis: 1,
+        },
+      ],
+      contributionSettings: [
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: true,
+        },
+      ],
+    };
+
+    const picture = controlStoreWithDiagnostics(controlStore, { workspaces: [], failures: [] });
+
+    assert.isUndefined(picture.contributionSettings[0]?.diagnostic);
+  });
+});
 
 const mutableRegistryLayer = (state: MutableRef.MutableRef<Registry.RegistryState>) =>
   Layer.succeed(Registry.WorkspaceRegistry, {
@@ -255,6 +296,8 @@ describe("DaemonEventPublisher", () => {
                 ),
                 setDaemonLimit: () => Ref.get(probe.current),
                 updateOperationSetting: () => Ref.get(probe.current),
+                installPlugin: () => Ref.get(probe.current),
+                uninstallPlugin: () => Ref.get(probe.current),
                 updateContributionSetting: () => Ref.get(probe.current),
                 withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
               } satisfies ControlStoreService;
@@ -442,6 +485,7 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(controlStoreLayer),
+      Layer.provideMerge(pluginManagerLayer),
       Layer.provideMerge(observing(itemsRef)),
     );
 
@@ -622,6 +666,8 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(runRecorderTestLayer),
       Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
+      Layer.provideMerge(controlStoreLayer),
+      Layer.provideMerge(pluginManagerLayer),
       Layer.provideMerge(observing(itemsRef)),
     );
 

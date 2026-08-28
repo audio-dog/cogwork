@@ -25,6 +25,7 @@ import * as DaemonEventBus from "./daemon-event-bus";
 import * as EventPublisher from "./event-publisher";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
+import { PluginManager } from "./plugin";
 import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
 import * as Registry from "./registry";
@@ -495,8 +496,16 @@ const availableControlStore = Layer.succeed(ControlStore, {
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
+  installPlugin: () => Effect.succeed(defaultControlStore),
+  uninstallPlugin: () => Effect.succeed(defaultControlStore),
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
+});
+const pluginManagerLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
 });
 
 const schedulerStubService = {
@@ -653,6 +662,7 @@ describe("daemon heartbeats", () => {
             perWorkspace: [],
           }),
         publishControlStore: (controlStore) => Effect.succeed(controlStore),
+        publishPlugins: (plugins) => Effect.succeed(plugins),
       });
       const layer = publisherLayer.pipe(
         Layer.provideMerge(
@@ -723,6 +733,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub),
       Layer.provideMerge(availableControlStore),
+      Layer.provideMerge(pluginManagerLayer),
       Layer.provideMerge(runRecorder),
       Layer.provideMerge(runLedger),
       Layer.provideMerge(RunControl.layer),

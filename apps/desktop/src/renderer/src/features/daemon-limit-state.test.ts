@@ -9,8 +9,9 @@ const picture = (revision: number, globalConcurrency: number): ControlStore => (
     dailyBudget: 50,
     revision,
   },
-  contributionSettings: [],
   operationSettings: [],
+  pluginInstalls: [],
+  contributionSettings: [],
 });
 
 describe("currentControlStore", () => {

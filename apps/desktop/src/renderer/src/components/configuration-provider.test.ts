@@ -28,6 +28,7 @@ const picture = (enabled: boolean): ControlStore => ({
     },
   ],
   operationSettings: [],
+  pluginInstalls: [],
 });
 
 describe("contributionSettingState", () => {

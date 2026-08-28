@@ -290,6 +290,7 @@ const plugins: readonly InstalledPlugin[] = [
     },
     name: "Linear",
     summary: "Track work in Linear and let cogwork read and write its issues.",
+    manifestFailure: null,
     contributionIds: ["plugin:linear/mcp/linear", "plugin:linear/command/linear-triage"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
@@ -329,6 +330,7 @@ const plugins: readonly InstalledPlugin[] = [
     },
     name: "GitHub review pack",
     summary: "Review conventions, a pull-request summary Skill, and a pre-push Hook.",
+    manifestFailure: null,
     contributionIds: [
       "plugin:gh-review/skill/pr-summary",
       "plugin:gh-review/rules/review-style",
@@ -365,6 +367,7 @@ const plugins: readonly InstalledPlugin[] = [
     },
     name: "Granola notes",
     summary: "Draft a ticket from a meeting note.",
+    manifestFailure: null,
     contributionIds: ["plugin:granola/mcp/granola"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
@@ -398,6 +401,7 @@ const plugins: readonly InstalledPlugin[] = [
     },
     name: "Codex harness extras",
     summary: "Notifications and a login walk-through for the host-owned Codex CLI.",
+    manifestFailure: null,
     contributionIds: ["plugin:codex-extras/command/codex-login"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
@@ -425,6 +429,7 @@ const plugins: readonly InstalledPlugin[] = [
 export const placeholderConfiguration: ConfigurationPicture = {
   workspaces,
   plugins,
+  catalogPlugins: [],
   contributions,
 };
 

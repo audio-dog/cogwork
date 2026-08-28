@@ -10,6 +10,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import {
   type Credential,
   type CredentialAccount,
@@ -112,8 +113,16 @@ const LabelNode = Schema.Struct({
   name: Schema.String,
 });
 
+const PageInfoNode = Schema.Struct({
+  hasNextPage: Schema.Boolean,
+  endCursor: Schema.NullOr(Schema.String),
+});
+
 const IssuesTeamNode = Schema.Struct({
-  issues: Schema.Struct({ nodes: Schema.Array(IssueNode) }),
+  issues: Schema.Struct({
+    nodes: Schema.Array(IssueNode),
+    pageInfo: PageInfoNode,
+  }),
 });
 
 const MetaTeamNode = Schema.Struct({
@@ -216,10 +225,20 @@ const coordinationFields = `
       }`;
 
 const issuesSelection = (coordination: string) => `
-  issues(filter: { state: { type: { nin: ["completed"] } } }, first: ${issuePageSize}) {
+  issues(filter: $filter, first: ${issuePageSize}, after: $after) {
     nodes {${issueFields}${coordination}
     }
+    pageInfo { hasNextPage endCursor }
   }`;
+
+const issuesArgs = ", $filter: IssueFilter, $after: String";
+
+// Mirrors the classify-side assignee ownership gate: when the workspace names an allowlist, an
+// issue owned by anyone else can never classify, so fetching it only costs pages.
+const issuesFilter = (assigneeIds: ReadonlyArray<string> | null) => ({
+  state: { type: { nin: ["completed"] } },
+  ...(assigneeIds !== null && assigneeIds.length > 0 ? { assignee: { id: { in: assigneeIds } } } : {}),
+});
 
 const metaSelection = `
   id
@@ -280,11 +299,11 @@ const teamShape = <S extends Schema.Top & { readonly DecodingServices: never }>(
 };
 
 const metaShape = teamShape(MetaTeamNode, metaSelection);
-const issuesShape = teamShape(IssuesTeamNode, issuesSelection(""));
+const issuesShape = teamShape(IssuesTeamNode, issuesSelection(""), issuesArgs);
 const coordinatedIssuesShape = teamShape(
   IssuesTeamNode,
   issuesSelection(coordinationFields),
-  ", $bot: ID!, $ledger: String!, $proposal: String!",
+  `${issuesArgs}, $bot: ID!, $ledger: String!, $proposal: String!`,
 );
 
 const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
@@ -439,15 +458,26 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   const observeIssues = Effect.fn("linear.observeIssues")(function* (
     ref: LinearTeamRef,
     coordination: CoordinationScope | null,
+    assigneeIds: ReadonlyArray<string> | null = null,
   ) {
-    const team = coordination
-      ? yield* loadTeam(ref, coordinatedIssuesShape, {
+    const shape = coordination ? coordinatedIssuesShape : issuesShape;
+    const scopeVariables = coordination
+      ? {
           bot: coordination.actorUserId,
           ledger: coordination.ledgerMarker,
           proposal: coordination.proposalMarker,
-        })
-      : yield* loadTeam(ref, issuesShape);
-    return team.issues.nodes.map(toObservedIssue);
+        }
+      : {};
+    const filter = issuesFilter(assigneeIds);
+    const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
+    const issues = yield* Stream.paginate(null as string | null, (after) =>
+      Effect.map(loadPage(after), (team: typeof IssuesTeamNode.Type) => {
+        const page = team.issues.pageInfo;
+        const next = page.hasNextPage ? Option.fromNullOr(page.endCursor) : Option.none<string>();
+        return [team.issues.nodes, next] as const;
+      }),
+    ).pipe(Stream.runCollect);
+    return issues.map(toObservedIssue);
   });
 
   const mutate = Effect.fn("linear.mutate")(function* (

@@ -8,6 +8,7 @@ import {
 } from "./base-schemas";
 import { LocalContribution } from "./contribution";
 import { Claim } from "./coordination";
+import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
 import { WorkspaceConcurrency } from "./workspace";
@@ -161,8 +162,9 @@ export type DaemonLimits = typeof DaemonLimits.Type;
 
 export const ControlStore = Schema.Struct({
   daemonLimits: DaemonLimits,
-  contributionSettings: Schema.Array(ContributionSettingRow),
   operationSettings: Schema.Array(OperationSettingRow),
+  pluginInstalls: Schema.Array(PluginInstall),
+  contributionSettings: Schema.Array(ContributionSettingRow),
 });
 export type ControlStore = typeof ControlStore.Type;
 

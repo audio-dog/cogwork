@@ -16,6 +16,7 @@ export * as Linear from "./linear";
 export * as McpSkill from "./mcp-skill";
 export * as ModelCatalog from "./model-catalog";
 export * as Playbook from "./playbook";
+export * as Plugin from "./plugin";
 export * as HarnessBridge from "./provider-bridge";
 export * as Provider from "./provider-runner";
 export * as Providers from "./providers";

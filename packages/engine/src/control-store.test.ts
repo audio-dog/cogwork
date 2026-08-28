@@ -81,6 +81,7 @@ layer(NodeServices.layer)((it) => {
           { name: "contribution_settings" },
           { name: "daemon_limits" },
           { name: "operation_settings" },
+          { name: "plugin_installs" },
           { name: "run_events" },
           { name: "runs" },
           { name: "sessions" },

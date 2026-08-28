@@ -1,0 +1,6 @@
+{
+  "endpoint": "https://mcp.linear.app/mcp",
+  "secret": {
+    "env": "LINEAR_API_KEY"
+  }
+}

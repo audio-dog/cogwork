@@ -145,6 +145,7 @@ export const configurationPicture = (board: Board) => {
   return {
     workspaces: registered.map(workspaceOf),
     plugins: [],
+    catalogPlugins: [],
     contributions: withDanglingSettings(contributions, settings),
   } satisfies ConfigurationPicture;
 };

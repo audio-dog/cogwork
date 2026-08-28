@@ -14,7 +14,6 @@ const controlStore: ControlStore = {
     dailyBudget: 50,
     revision: 0,
   },
-  contributionSettings: [],
   operationSettings: [
     {
       setting: "model",
@@ -47,6 +46,8 @@ const controlStore: ControlStore = {
       value: "workspace-triage-model",
     },
   ],
+  pluginInstalls: [],
+  contributionSettings: [],
 };
 
 describe("Operation settings view", () => {

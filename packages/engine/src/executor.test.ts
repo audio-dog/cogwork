@@ -3,6 +3,7 @@ import {
   defaultControlStore,
   HarnessName,
   LocalContribution,
+  PluginFailure,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -44,6 +45,7 @@ import {
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
@@ -209,6 +211,8 @@ const controlStoreStub = (
     picture: read,
     setDaemonLimit: () => Effect.succeed(picture),
     updateOperationSetting: () => Effect.succeed(picture),
+    installPlugin: () => Effect.succeed(picture),
+    uninstallPlugin: () => Effect.succeed(picture),
     updateContributionSetting: () => Effect.succeed(picture),
     withWrite: (effect) => effect,
   } satisfies ControlStoreService);
@@ -395,6 +399,7 @@ interface Call {
   readonly note?: string;
   readonly checks?: string;
   readonly detail?: string;
+  readonly noProgress?: number;
 }
 
 class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<Call>>>()(
@@ -425,7 +430,12 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
           record(calls, { method: "triaged", item: itemId, role: outcome.role, proposal: outcome.proposal }),
         implemented: (_workspace, itemId) => record(calls, { method: "implemented", item: itemId }),
         followedUp: (_workspace, itemId, outcome) =>
-          record(calls, { method: "followedUp", item: itemId, checks: outcome.marker.checks }),
+          record(calls, {
+            method: "followedUp",
+            item: itemId,
+            checks: outcome.marker.checks,
+            noProgress: outcome.marker.noProgress,
+          }),
         attemptFailed: (_workspace, itemId, outcome) =>
           record(calls, {
             method: "attemptFailed",
@@ -441,6 +451,7 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
             item: itemId,
             checks: outcome.marker.checks,
             detail: outcome.detail,
+            noProgress: outcome.marker.noProgress,
           }),
         reclassify: () => Effect.void,
       }),
@@ -738,6 +749,61 @@ const runControlStub = Layer.succeed(RunControl.RunControl, {
   workspaceFor: () => Effect.succeed(Option.none()),
   cancel: () => Effect.succeed(false),
 });
+const pluginManagerStub = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
+});
+
+const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.succeed([
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server" as const,
+        localName: "linear",
+        summary: "Linear MCP server",
+        file: "/plugins/linear/mcp/linear.json",
+        load: {
+          _tag: "Loaded" as const,
+          mcpServer: {
+            endpoint: "https://mcp.linear.app/mcp",
+            secretEnv: "MISSING_LINEAR_API_KEY",
+            credentialAvailable: false,
+          },
+        },
+      },
+      {
+        id: "plugin:linear/rules/linear",
+        authority: "plugin:linear",
+        kind: "rules" as const,
+        localName: "linear",
+        summary: "Linear rules",
+        file: "/plugins/linear/rules/linear.md",
+        load: { _tag: "Loaded" as const },
+      },
+    ]),
+});
+
+const unavailablePluginLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.fail(
+      new PluginFailure({
+        operation: "read Plugin contributions",
+        pluginId: null,
+        file: null,
+        message: "catalog unavailable",
+      }),
+    ),
+});
 
 function testHarness(runners: ReadonlyArray<TestRunner>) {
   return Layer.unwrap(
@@ -758,6 +824,7 @@ function provide(
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
   controlStore = controlStoreStub(),
+  plugins: Layer.Layer<PluginManager> = pluginManagerStub,
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -783,6 +850,7 @@ function provide(
         worktree,
         assemblerStub,
         controlStore,
+        plugins,
       ),
     ),
   );
@@ -1234,6 +1302,56 @@ describe("Executor.execute", () => {
         [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: null }],
       );
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
+  });
+
+  it.effect("keeps running when an installed Plugin needs an MCP credential", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.mcpSkills, []);
+      assert.isTrue(
+        request?.contributions.some((contribution) => contribution.id === "plugin:linear/rules/linear"),
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(),
+          missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("keeps running when Plugin contributions cannot load", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.mcpSkills, []);
+      assert.deepStrictEqual(request?.contributions, [repoSkill]);
+      assert.isFalse((yield* Ref.get(calls)).some((call) => call.method === "handOff"));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(),
+          unavailablePluginLayer,
+        ),
+      ),
+    );
   });
 
   it.effect("resolves a credential-store bearer for an authed skill without leaking it to the ledger", () => {
@@ -1837,6 +1955,40 @@ describe("Executor.execute", () => {
     },
   );
 
+  it.effect("starts the no-progress count over when the round pushed", () => {
+    const carriedItem = {
+      ...followUpItem,
+      followUp: { ...followUpItem.followUp, noProgress: 2 },
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(followUpWorkspace, carriedItem);
+
+      const log = yield* Ref.get(calls);
+      const followedUp = log.find((c) => c.method === "followedUp");
+      assert.strictEqual(followedUp?.noProgress, 0);
+    }).pipe(Effect.provide(provide([runner(followUpEvents)], existingWorktree)));
+  });
+
+  it.effect("carries the no-progress count forward when the round pushed nothing", () => {
+    const carriedItem = {
+      ...followUpItem,
+      followUp: { ...followUpItem.followUp, noProgress: 2 },
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(followUpWorkspace, carriedItem);
+
+      const log = yield* Ref.get(calls);
+      const followedUp = log.find((c) => c.method === "followedUp");
+      assert.strictEqual(followedUp?.noProgress, 2);
+    }).pipe(Effect.provide(provide([runner(noopFollowUpEvents)], existingWorktree)));
+  });
+
   it.effect("hands a self-reported stuck follow-up to a human without retrying", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -2033,6 +2185,9 @@ describe("Executor.execute", () => {
       assert.include(stalled?.detail ?? "", "no progress");
       assert.strictEqual(stalled?.checks, "failing");
       assert.isFalse(log.some((c) => c.method === "handOff"));
+      // The hand-off parks the count so whoever hands the item back gets a fresh three rounds
+      // instead of an item that claims and abandons in the same breath.
+      assert.strictEqual(stalled?.noProgress, 0);
 
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);

@@ -4,10 +4,13 @@ import {
   type ContributionSettingRow,
   type ControlStoreFailure,
   defaultContributionEnabled,
+  type FileContribution,
   type FollowUpStageResult,
   type ImplementStageResult,
   type LifecycleStage,
   type LocalContribution,
+  type PluginContribution,
+  type PluginMcpServer,
   RunId,
   type RunRecord,
   resolveContributionEnabled,
@@ -19,6 +22,7 @@ import {
   type TriageStageResult,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -30,12 +34,12 @@ import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
 import { ControlStore } from "./control-store";
-import type { CredentialError } from "./credential-store";
-import type { FollowUpContext } from "./follow-up";
+import { CredentialError } from "./credential-store";
+import { type FollowUpContext, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
-import { McpSkillAssembler } from "./mcp-skill";
+import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
 import { operationPolicyProfile } from "./operation-policy";
 import {
   buildContinuationNudge,
@@ -45,6 +49,7 @@ import {
   type ResolvedStage,
   resolveStage,
 } from "./playbook";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { decideResume } from "./resume-policy";
@@ -170,6 +175,19 @@ const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
+const noPluginContributions: ReadonlyArray<PluginContribution> = [];
+
+interface PluginMcpContribution {
+  readonly id: string;
+  readonly server: PluginMcpServer;
+}
+
+const availablePluginMcp = (contribution: PluginContribution) => {
+  if (contribution.load._tag !== "Loaded") return [];
+  const server = contribution.load.mcpServer;
+  if (!server?.credentialAvailable) return [];
+  return [{ id: contribution.id, server }] satisfies ReadonlyArray<PluginMcpContribution>;
+};
 
 const contributionSettingApplies = (
   contribution: LocalContribution,
@@ -198,6 +216,7 @@ export const make = Effect.gen(function* () {
   const recorder = yield* RunRecorder;
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
+  const plugins = yield* PluginManager;
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
@@ -214,6 +233,41 @@ export const make = Effect.gen(function* () {
     stage: LifecycleStage,
   ) {
     const picture = yield* controlStore.picture;
+    const pluginContributions = yield* plugins
+      .contributions(workspace.config.name)
+      .pipe(
+        Effect.catchTag("PluginFailure", (error) =>
+          Effect.logWarning("Plugin contributions unavailable", { message: error.message }).pipe(
+            Effect.map(() => noPluginContributions),
+          ),
+        ),
+      );
+    const loaded = pluginContributions.filter((contribution) => contribution.load._tag === "Loaded");
+    const fileContributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
+      id: contribution.id,
+      authority: contribution.authority,
+      kind: contribution.kind,
+      localName: contribution.localName,
+      file: contribution.file,
+    }));
+    const pluginMcpSkills: ReadonlyArray<ResolvedMcpSkill> = yield* Effect.forEach(
+      loaded.flatMap(availablePluginMcp),
+      ({ id, server }) =>
+        Effect.gen(function* () {
+          const { endpoint, secretEnv } = server;
+          if (!secretEnv) return { name: id, endpoint, bearer: null };
+          const bearer = yield* Config.redacted(secretEnv).pipe(
+            Effect.mapError(
+              (error) =>
+                new CredentialError({
+                  account: id,
+                  message: `MCP server needs environment key ${secretEnv}: ${error.message}`,
+                }),
+            ),
+          );
+          return { name: id, endpoint, bearer };
+        }),
+    );
     return {
       harness: resolved.harness,
       stage,
@@ -224,10 +278,13 @@ export const make = Effect.gen(function* () {
       prompt,
       model: resolved.model,
       effort: resolved.effort,
-      mcpSkills: yield* assembler.assemble(workspace.config),
-      contributions: workspace.contributions.filter((contribution) =>
-        contributionEnabled(contribution, workspace, picture.contributionSettings),
-      ),
+      mcpSkills: [...(yield* assembler.assemble(workspace.config)), ...pluginMcpSkills],
+      contributions: [
+        ...workspace.contributions.filter((contribution) =>
+          contributionEnabled(contribution, workspace, picture.contributionSettings),
+        ),
+        ...fileContributions,
+      ],
     } satisfies HarnessRequest;
   });
 
@@ -605,11 +662,11 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
-  const followUpMarker = (context: FollowUpContext) => ({
+  const followUpMarker = (context: FollowUpContext, noProgress: number) => ({
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
     botTriggerAtMillis: context.botTriggerAtMillis,
-    noProgress: context.noProgress,
+    noProgress,
     baseDivergence: context.baseDivergence,
   });
 
@@ -640,7 +697,7 @@ export const make = Effect.gen(function* () {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* postFollowUpSummary(workspace, item, result.summary);
     yield* issueTracker.followedUp(workspace, item.id, {
-      marker: followUpMarker(context),
+      marker: followUpMarker(context, noProgressAfterRound(context, result.outcome)),
       atMillis: endedAtMillis,
     });
     yield* settleRun(runId, {
@@ -727,8 +784,13 @@ export const make = Effect.gen(function* () {
   ) {
     const atMillis = yield* Clock.currentTimeMillis;
     const context = item.followUp ?? defaultFollowUp;
+    // The count is spent the moment the hand-off lands: a human owns the PR now, and while it wears
+    // `ready-for-human` no poll can reach a follow-up round to move the count again. Parking it at 0
+    // makes the hand-off a door that opens both ways — whoever hands it back, by any route, gets a
+    // fresh three rounds instead of an item that claims and abandons in the same breath. The detail
+    // still reports the count that parked it.
     yield* issueTracker.stalled(workspace, item.id, {
-      marker: followUpMarker(context),
+      marker: followUpMarker(context, 0),
       atMillis,
       detail: `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.`,
     });

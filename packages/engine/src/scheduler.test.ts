@@ -92,8 +92,9 @@ describe("Scheduler.configFromControlStore", () => {
         dailyBudget: 20,
         revision: 2,
       },
-      contributionSettings: [],
       operationSettings: [],
+      pluginInstalls: [],
+      contributionSettings: [],
     });
 
     assert.deepStrictEqual(config, {
