@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { WorkspaceId } from "./base-schemas";
 import { applyDaemonEvent, initialBoard, liveOnly, workspaceFailureState } from "./board";
+import { LocalContribution } from "./contribution";
 import { ControlStore, SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
@@ -14,6 +15,7 @@ const runSummary = Schema.decodeSync(RunSummary);
 const schedulerStats = Schema.decodeSync(SchedulerStats);
 const controlStore = Schema.decodeSync(ControlStore);
 const workspaceState = Schema.decodeSync(WorkspaceState);
+const localContribution = Schema.decodeSync(LocalContribution);
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
 
@@ -25,6 +27,7 @@ const registered = (name: string) =>
     issueTracker: "github",
     harness: "cursor",
     poll: { status: "ok" },
+    contributions: [],
   });
 
 type Stage = "triage" | "implement" | "follow-up" | "verify";
@@ -232,6 +235,7 @@ describe("applyDaemonEvent", () => {
         dailyBudget: 50,
         revision: 0,
       },
+      contributionSettings: [],
       operationSettings: [],
     });
     const next = controlStore({
@@ -241,6 +245,7 @@ describe("applyDaemonEvent", () => {
         dailyBudget: 20,
         revision: 1,
       },
+      contributionSettings: [],
       operationSettings: [
         {
           setting: "model",
@@ -317,6 +322,7 @@ describe("applyDaemonEvent", () => {
           issueTracker: "linear",
           harness: "cursor",
           poll: { status: "ok" },
+          contributions: [],
         }),
       }),
     ]);
@@ -325,6 +331,28 @@ describe("applyDaemonEvent", () => {
     const acme = board.workspaces.get("acme");
     assert.strictEqual(acme?._tag, "Registered");
     assert.strictEqual(acme?._tag === "Registered" ? acme.issueTracker : null, "linear");
+  });
+
+  it("folds Workspace input contribution offers into the registered workspace", () => {
+    const contribution = localContribution({
+      id: "local:repo/mcp/tools",
+      authority: "local:repo",
+      kind: "mcp-server",
+      localName: "tools",
+      file: "/repos/acme/.agents/mcp/tools.json",
+    });
+    const board = fold([
+      event({
+        _tag: "WorkspaceChanged",
+        workspace: {
+          ...registered("acme"),
+          contributions: [contribution],
+        },
+      }),
+    ]);
+
+    const acme = board.workspaces.get("acme");
+    assert.deepStrictEqual(acme?._tag === "Registered" ? acme.contributions : [], [contribution]);
   });
 
   it("folds a failed workspace onto the board keyed by its source", () => {
