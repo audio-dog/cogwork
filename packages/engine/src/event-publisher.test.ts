@@ -63,6 +63,7 @@ const registryLayer = Layer.succeed(
     workspaces: [
       {
         source: "control-store:example",
+        contributions: [],
         config: Schema.decodeSync(WorkspaceConfig)({
           name: "example",
           checkoutPath: "/repos/example",

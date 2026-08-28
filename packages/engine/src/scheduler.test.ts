@@ -33,6 +33,7 @@ const never = Latch.makeUnsafe(false).await;
 
 const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace => ({
   source: `${name}.workspace.ts`,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,

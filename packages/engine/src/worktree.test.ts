@@ -20,6 +20,7 @@ const decodeConfig = Schema.decodeSync(WorkspaceConfig);
 
 const workspaceWith = (worktrees?: Worktree.WorktreeSettings) => ({
   source: "test.workspace.ts",
+  contributions: [],
   config: decodeConfig({
     name: "demo",
     checkoutPath: "/repo",

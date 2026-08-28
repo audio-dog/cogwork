@@ -77,6 +77,7 @@ const makeRequest = (overrides: Partial<Harness.HarnessRequest> = {}): Harness.H
   model: "gpt-5.6-sol",
   effort: "high",
   mcpSkills: [],
+  contributions: [],
   ...overrides,
   profile: overrides.profile ?? "full",
 });

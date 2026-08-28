@@ -106,6 +106,7 @@ const state: WorkspaceReconcileState = {
 
 const workspace: RegisteredWorkspace = {
   source: "example.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",

@@ -15,6 +15,7 @@ const request: AssembleRequest = {
   cwd: "/repos/app/packages/web",
   projectRoot: "/repos/app",
   skill: "implement-agent",
+  contributions: [],
 };
 
 const stubFs = (
@@ -91,6 +92,52 @@ describe("ContextAssembler.assemble", () => {
             content: "implement skill body",
           },
         ],
+      );
+    }),
+  );
+
+  it.effect("places repository and private Rules between repo instructions and the playbook", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const repoRule = "/repos/app/.agents/rules/style.md";
+      const privateRule = "/home/.cogwork/workspaces/ws/rules/private.md";
+      const assembler = make(
+        config,
+        stubFs(
+          {
+            "/home/.agents/rules/global.md": "global rules",
+            "/repos/app/AGENTS.md": "repo instructions",
+            [repoRule]: "repo rules",
+            [privateRule]: "private rules",
+            "/engine/skills/implement-agent/SKILL.md": "implement skill body",
+          },
+          copies,
+        ),
+      );
+
+      const assembled = yield* assembler.assemble({
+        ...request,
+        contributions: [
+          {
+            id: "local:private/rules/private",
+            authority: "local:private",
+            kind: "rules",
+            localName: "private",
+            file: privateRule,
+          },
+          {
+            id: "local:repo/rules/style",
+            authority: "local:repo",
+            kind: "rules",
+            localName: "style",
+            file: repoRule,
+          },
+        ],
+      });
+
+      assert.deepStrictEqual(
+        assembled.layers.map((layer) => layer.content),
+        ["global rules", "repo instructions", "repo rules", "private rules", "implement skill body"],
       );
     }),
   );

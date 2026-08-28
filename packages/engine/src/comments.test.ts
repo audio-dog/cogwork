@@ -19,6 +19,7 @@ import type { RegisteredWorkspace } from "./projector";
 
 const workspace: RegisteredWorkspace = {
   source: "a.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",

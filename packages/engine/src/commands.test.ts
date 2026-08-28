@@ -56,6 +56,7 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
 
 const registered: Registry.RegisteredWorkspace = {
   source: "control-store:example",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",
@@ -239,6 +240,7 @@ const registrationServices = () => {
   const register: Registry.WorkspaceManagementService["register"] = (registration) => {
     const workspace: Registry.RegisteredWorkspace = {
       source: "control-store:minted",
+      contributions: [],
       config: {
         name: wsid("0198f16a-21d7-7000-8000-000000000001"),
         displayName: registration.name,

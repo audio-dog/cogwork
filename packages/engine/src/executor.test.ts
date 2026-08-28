@@ -1,5 +1,6 @@
 import {
   HarnessName,
+  LocalContribution,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -52,6 +53,13 @@ const cursor = Schema.decodeSync(HarnessName)("cursor");
 const codex = Schema.decodeSync(HarnessName)("codex");
 const id = Schema.decodeSync(WorkItemId);
 const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
+const repoSkill = Schema.decodeSync(LocalContribution)({
+  id: "local:repo/skill/release",
+  authority: "local:repo",
+  kind: "skill",
+  localName: "release",
+  file: "/repos/gh/.agents/skills/release/SKILL.md",
+});
 
 const handleOf = (ledger: RunLedger.RunLedgerService, session: SessionId | null | undefined) =>
   session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
@@ -73,6 +81,7 @@ const seedResumeSession = (handle: string | null = "sess-prev") =>
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -118,6 +127,7 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [repoSkill],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -137,6 +147,7 @@ const codexImplementWorkspace: RegisteredWorkspace = {
 
 const mcpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -149,6 +160,7 @@ const mcpWorkspace: RegisteredWorkspace = {
 
 const mcpAuthWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -161,9 +173,6 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   }),
 };
 
-// A stand-in for the real credential-store-backed assembler: it hands back a redacted bearer for any
-// skill that declares auth, so the executor tests can prove the token reaches the request without
-// wiring a live credential store.
 const contextAssemblerStub = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () => Effect.succeed({ layers: [], skillPath: "/" }),
 });
@@ -242,6 +251,7 @@ const malformedImplementResultEvents: ReadonlyArray<AgUiEvent> = [
 
 const followUpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -329,8 +339,6 @@ const malformedFollowUpResultEvents: ReadonlyArray<AgUiEvent> = [
   finished,
 ];
 
-// An owned-transcript run never hands back a session handle — its conversation
-// lives in the run ledger — so these events carry no session id.
 const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   text("Fixed the failing check and pushed."),
@@ -343,6 +351,7 @@ const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
 
 const disabledWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -1049,6 +1058,7 @@ describe("Executor.execute", () => {
       assert.include(request?.prompt ?? "", "implement-agent");
       assert.include(request?.prompt ?? "", "#15");
       assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
+      assert.deepStrictEqual(request?.contributions, [repoSkill]);
 
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((c) => c.method === "implemented"));

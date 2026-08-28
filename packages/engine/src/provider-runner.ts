@@ -82,7 +82,6 @@ const writingLoopBudget = 40;
 const readOnlyRunBudget = "15 minutes";
 const writingRunBudget = "45 minutes";
 
-// Read-only stages get fewer turns than the writing stages.
 export const defaultLoopBudget = (stage: LifecycleStage) =>
   isReadOnlyStage(stage) ? readOnlyLoopBudget : writingLoopBudget;
 
@@ -138,6 +137,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             cwd: request.checkoutPath,
             projectRoot: request.checkoutPath,
             skill: request.skill,
+            contributions: request.contributions,
           };
           const assembled = yield* assembler
             .assemble(assembleRequest)

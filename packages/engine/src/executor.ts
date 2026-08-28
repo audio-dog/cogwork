@@ -188,6 +188,7 @@ export const make = Effect.gen(function* () {
       model: resolved.model,
       effort: resolved.effort,
       mcpSkills: yield* assembler.assemble(workspace.config),
+      contributions: workspace.contributions,
     } satisfies HarnessRequest;
   });
 

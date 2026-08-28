@@ -222,6 +222,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
               cwd: request.checkoutPath,
               projectRoot: request.checkoutPath,
               skill: request.skill,
+              contributions: request.contributions,
             })
             .pipe(Effect.mapError((error) => launchError(error.message)));
           const store = yield* SessionStore.SessionStore;

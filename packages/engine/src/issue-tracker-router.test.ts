@@ -13,6 +13,7 @@ const workspaceOf = (
   issueTracker: { readonly type: string; readonly repo?: string; readonly teams?: ReadonlyArray<string> },
 ): RegisteredWorkspace => ({
   source: `${name}.workspace.ts`,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name,
     checkoutPath: `/repos/${name}`,
