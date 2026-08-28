@@ -218,4 +218,62 @@ describe("configurationPicture", () => {
       expect.objectContaining({ definedIn: workspace }),
     ]);
   });
+
+  it("projects a dangling workspace overlay on the matching profile contribution", () => {
+    const missing = Schema.decodeSync(WorkspaceId)("missing");
+    const userServer = Schema.decodeSync(LocalContribution)({
+      id: "local:user/mcp/review",
+      authority: "local:user",
+      kind: "mcp-server",
+      localName: "review",
+      file: "/home/.agents/mcp/review.json",
+    });
+    const state = Schema.decodeSync(WorkspaceState)({
+      _tag: "Registered",
+      name: workspace,
+      displayName: "Example",
+      checkoutPath: "/repos/example",
+      issueTracker: "github",
+      harness: "codex",
+      poll: { status: "ok" },
+      contributions: [userServer],
+    });
+    const picture = configurationPicture({
+      ...board,
+      controlStore: {
+        ...controlStore,
+        contributionSettings: [
+          {
+            contribution: { id: userServer.id, kind: "mcp-server" },
+            scope: { _tag: "PrivateWorkspaceOverlay", workspace: missing },
+            enabled: false,
+            diagnostic: {
+              _tag: "Dangling",
+              source: "Control store",
+              detail: "No loaded MCP server has this identity.",
+            },
+          },
+        ],
+      },
+      workspaces: new Map([[workspace, state]]),
+    });
+
+    expect(picture.contributions).toEqual([
+      expect.objectContaining({
+        id: userServer.id,
+        rows: [
+          {
+            scope: { kind: "private-overlay", workspaceId: missing },
+            value: false,
+            source: "Control store",
+            diagnostic: {
+              _tag: "dangling",
+              source: "Control store",
+              detail: "No loaded MCP server has this identity.",
+            },
+          },
+        ],
+      }),
+    ]);
+  });
 });

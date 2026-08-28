@@ -41,6 +41,14 @@ const diagnosticOf = (diagnostic: ContributionSettingDiagnostic) =>
     detail: diagnostic.detail,
   }) satisfies Diagnostic;
 
+const enablementRowOf = (row: ContributionSettingRow) =>
+  ({
+    scope: settingScope(row),
+    value: row.enabled,
+    source: "Control store",
+    ...(row.diagnostic ? { diagnostic: diagnosticOf(row.diagnostic) } : {}),
+  }) satisfies EnablementRow;
+
 const settingApplies = (
   row: ContributionSettingRow,
   contribution: LocalContribution,
@@ -72,18 +80,7 @@ const enablementRows = (
   contribution: LocalContribution,
   workspace: WorkspaceId | undefined,
   rows: readonly ContributionSettingRow[],
-) =>
-  rows
-    .filter((row) => settingApplies(row, contribution, workspace))
-    .map(
-      (row) =>
-        ({
-          scope: settingScope(row),
-          value: row.enabled,
-          source: "Control store",
-          ...(row.diagnostic ? { diagnostic: diagnosticOf(row.diagnostic) } : {}),
-        }) satisfies EnablementRow,
-    );
+) => rows.filter((row) => settingApplies(row, contribution, workspace)).map(enablementRowOf);
 
 const contributionOf = (
   contribution: LocalContribution,
@@ -130,16 +127,42 @@ const uniqueContributions = (contributions: readonly Contribution[]) => {
   ].map(([, contribution]) => contribution);
 };
 
+const sameSettingScope = (enablement: EnablementRow, setting: ContributionSettingRow) => {
+  const scope = settingScope(setting);
+  return enablement.scope.kind === scope.kind && enablement.scope.workspaceId === scope.workspaceId;
+};
+
+const withDanglingSettings = (
+  contributions: readonly Contribution[],
+  settings: readonly ContributionSettingRow[],
+) =>
+  settings
+    .filter((setting) => setting.diagnostic !== undefined)
+    .reduce<readonly Contribution[]>((projected, setting) => {
+      const matches = projected.filter((contribution) => contribution.id === setting.contribution.id);
+      if (matches.some((contribution) => contribution.rows.some((row) => sameSettingScope(row, setting)))) {
+        return projected;
+      }
+      const target = matches.find((contribution) => contribution.definedIn === undefined) ?? matches.at(0);
+      if (target === undefined) return projected;
+      return projected.map((contribution) =>
+        contribution === target
+          ? { ...contribution, rows: [...contribution.rows, enablementRowOf(setting)] }
+          : contribution,
+      );
+    }, contributions);
+
 export const configurationPicture = (board: Board) => {
   const registered = registeredWorkspaces(board);
   const settings = board.controlStore?.contributionSettings ?? [];
+  const contributions = uniqueContributions(
+    registered.flatMap((state) =>
+      state.contributions.map((contribution) => contributionOf(contribution, state.name, settings)),
+    ),
+  );
   return {
     workspaces: registered.map(workspaceOf),
     plugins: [],
-    contributions: uniqueContributions(
-      registered.flatMap((state) =>
-        state.contributions.map((contribution) => contributionOf(contribution, state.name, settings)),
-      ),
-    ),
+    contributions: withDanglingSettings(contributions, settings),
   } satisfies ConfigurationPicture;
 };
