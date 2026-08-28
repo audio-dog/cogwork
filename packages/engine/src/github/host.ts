@@ -11,7 +11,7 @@ import type { CommentHost, CoordinationComment } from "../coordination";
 import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
 import { IssueTrackerError } from "../issue-tracker";
-import type { RegisteredWorkspace } from "../projector";
+import type { WorkspaceIssueTrackerBinding } from "../projector";
 import type { GitHubClientService, GitHubRepoRef, RawComment, RawIssue } from "./client";
 import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from "./markers";
 
@@ -36,7 +36,7 @@ const toCoordinationComment =
     createdAtMillis: comment.createdAtMillis,
   });
 
-const targetFor = (workspace: RegisteredWorkspace) => {
+const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
   const source = workspace.config.issueTracker;
   if (source.type !== "github" || !source.repo) return null;
   const [owner, name] = source.repo.split("/");
@@ -64,7 +64,7 @@ const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
   return parsed;
 });
 
-const notGitHub = (workspace: RegisteredWorkspace) =>
+const notGitHub = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
     message: `workspace ${workspace.config.name} is not a github work source`,
@@ -119,7 +119,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
   return {
     codec: wireCodec,
     rateLimitScope: () => null,
-    list: Effect.fn("github.list")(function* (workspace: RegisteredWorkspace) {
+    list: Effect.fn("github.list")(function* (workspace: WorkspaceIssueTrackerBinding) {
       const target = targetFor(workspace);
       if (!target) {
         return [];
@@ -131,7 +131,7 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
         { concurrency: 10 },
       );
     }),
-    resolve: Effect.fn("github.resolve")(function* (workspace: RegisteredWorkspace, id: WorkItemId) {
+    resolve: Effect.fn("github.resolve")(function* (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) {
       const target = targetFor(workspace);
       if (!target) {
         return yield* notGitHub(workspace);

@@ -180,7 +180,7 @@ const candidateOf = (
 ): Candidate => ({
   workspace,
   work,
-  workspaceLimit: workspace.config.concurrency ?? config.perWorkspaceLimit,
+  workspaceLimit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
   keys: keysFor(workspace, work),
 });
 

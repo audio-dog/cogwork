@@ -25,7 +25,7 @@ import type {
   TrackerItem,
   TriagedOutcome,
 } from "./issue-tracker";
-import type { RegisteredWorkspace } from "./projector";
+import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 export const handoffRoleFor = (stage: LifecycleStage): TriageRole | null => {
   if (stage === "implement") return "ready-for-agent";
@@ -48,11 +48,14 @@ export interface ListedItem<CommentId> {
 
 export interface CoordinationHost<Ref, CommentId> {
   readonly codec: WireCodec;
-  readonly rateLimitScope: (workspace: RegisteredWorkspace) => string | null;
+  readonly rateLimitScope: (workspace: WorkspaceIssueTrackerBinding) => string | null;
   readonly list: (
-    workspace: RegisteredWorkspace,
+    workspace: WorkspaceIssueTrackerBinding,
   ) => Effect.Effect<ReadonlyArray<ListedItem<CommentId>>, IssueTrackerError>;
-  readonly resolve: (workspace: RegisteredWorkspace, id: WorkItemId) => Effect.Effect<Ref, IssueTrackerError>;
+  readonly resolve: (
+    workspace: WorkspaceIssueTrackerBinding,
+    id: WorkItemId,
+  ) => Effect.Effect<Ref, IssueTrackerError>;
   readonly comments: (ref: Ref) => CommentHost<CommentId>;
   readonly claimIdentity: (ref: Ref) => string;
   readonly addClaim: (ref: Ref) => Effect.Effect<void, IssueTrackerError>;
@@ -111,12 +114,12 @@ export const makeCoordinationTracker = <Ref, CommentId>(
 
   return {
     rateLimitScope: host.rateLimitScope,
-    observe: Effect.fn("coordinationTracker.observe")(function* (workspace: RegisteredWorkspace) {
+    observe: Effect.fn("coordinationTracker.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
       const listed = yield* host.list(workspace);
       return listed.map((item) => buildItem(codec, item));
     }),
     claim: Effect.fn("coordinationTracker.claim")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       request: ClaimRequest,
     ) {
@@ -129,14 +132,14 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       }).pipe(Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : host.removeClaim(ref))));
     }),
     release: Effect.fn("coordinationTracker.release")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
     ) {
       const ref = yield* host.resolve(workspace, id);
       yield* host.removeClaim(ref);
     }),
     note: Effect.fn("coordinationTracker.note")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       detail: string,
     ) {
@@ -144,7 +147,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       yield* writeNote(ref, detail);
     }),
     triaged: Effect.fn("coordinationTracker.triaged")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       outcome: TriagedOutcome,
     ) {
@@ -154,7 +157,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       yield* writeAttempt(ref, { stage: "triage", outcome: "succeeded", atMillis: outcome.atMillis });
     }),
     implemented: Effect.fn("coordinationTracker.implemented")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       outcome: ImplementedOutcome,
     ) {
@@ -163,7 +166,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       yield* writeAttempt(ref, { stage: "implement", outcome: "succeeded", atMillis: outcome.atMillis });
     }),
     followedUp: Effect.fn("coordinationTracker.followedUp")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       outcome: FollowedUpOutcome,
     ) {
@@ -172,7 +175,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       yield* writeAttempt(ref, { stage: "follow-up", outcome: "succeeded", atMillis: outcome.atMillis });
     }),
     attemptFailed: Effect.fn("coordinationTracker.attemptFailed")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       outcome: AttemptFailedOutcome,
     ) {
@@ -184,7 +187,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       );
     }),
     handOff: Effect.fn("coordinationTracker.handOff")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       outcome: HandOffOutcome,
     ) {
@@ -194,7 +197,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       if (outcome.note !== undefined) yield* writeNote(ref, outcome.note);
     }),
     stalled: Effect.fn("coordinationTracker.stalled")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       outcome: StalledOutcome,
     ) {
@@ -204,7 +207,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       yield* writeAttempt(ref, { stage: "follow-up", outcome: "abandoned", atMillis: outcome.atMillis });
     }),
     reclassify: Effect.fn("coordinationTracker.reclassify")(function* (
-      workspace: RegisteredWorkspace,
+      workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       outcome: ReclassifyOutcome,
     ) {

@@ -6,7 +6,7 @@ import type { CommentHost, CoordinationComment } from "../coordination";
 import * as Coordination from "../coordination";
 import type { CoordinationHost, ListedItem } from "../coordination-tracker";
 import { IssueTrackerError } from "../issue-tracker";
-import type { RegisteredWorkspace } from "../projector";
+import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
 import {
   type LinearClientService,
@@ -52,7 +52,7 @@ const coordinationScope = ({ actorUserId }: LinearTarget) =>
 
 // One target per configured team, all sharing one credential account so a single token covers the
 // whole workspace; only the team key differs, which is what routes a write to its owning team.
-const targetsFor = (workspace: RegisteredWorkspace): ReadonlyArray<LinearTarget> => {
+const targetsFor = (workspace: WorkspaceIssueTrackerBinding): ReadonlyArray<LinearTarget> => {
   const source = workspace.config.issueTracker;
   const account = credentialAccountFor(workspace.config);
   if (account === null) return [];
@@ -74,7 +74,7 @@ const teamKeyOf = (identifier: string) => {
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
 const itemId = (identifier: string) => decodeItemId(identifier).pipe(Effect.orDie);
 
-const notLinear = (workspace: RegisteredWorkspace) =>
+const notLinear = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
     message: `workspace ${workspace.config.name} is not a linear work source`,
@@ -122,12 +122,12 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
 
   return {
     codec: wireCodec,
-    rateLimitScope: (workspace: RegisteredWorkspace) => {
+    rateLimitScope: (workspace: WorkspaceIssueTrackerBinding) => {
       // Every team shares one token, so the whole workspace backs off on one scope.
       const [target] = targetsFor(workspace);
       return target === undefined ? null : rateLimitScopeOf(target.account.tokenEnv);
     },
-    list: Effect.fn("linear.list")(function* (workspace: RegisteredWorkspace) {
+    list: Effect.fn("linear.list")(function* (workspace: WorkspaceIssueTrackerBinding) {
       const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
         Effect.flatMap(client.observeIssues(target, coordinationScope(target)), (issues) =>
           Effect.forEach(issues, listItem(target)),
@@ -135,7 +135,7 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
       );
       return perTeam.flat();
     }),
-    resolve: Effect.fn("linear.resolve")(function* (workspace: RegisteredWorkspace, id: WorkItemId) {
+    resolve: Effect.fn("linear.resolve")(function* (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) {
       const targets = targetsFor(workspace);
       const [first, ...rest] = targets;
       if (first === undefined) {

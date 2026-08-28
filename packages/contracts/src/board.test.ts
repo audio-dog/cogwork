@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { WorkspaceId } from "./base-schemas";
-import { applyDaemonEvent, initialBoard, liveOnly } from "./board";
+import { applyDaemonEvent, initialBoard, liveOnly, workspaceFailureState } from "./board";
 import { ControlStore, SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
@@ -49,6 +49,19 @@ const urlOf = (item: ClassifiedItem | undefined) => (item?._tag === "NeedsHuman"
 const fold = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
 describe("applyDaemonEvent", () => {
+  it("keeps a failed workspace registration name in live state", () => {
+    const state = workspaceState(
+      workspaceFailureState({
+        name: workspace("0198f16a-21d7-7000-8000-000000000001"),
+        displayName: "Cogwork",
+        source: "/repos/cogwork",
+        message: "Workspace input is missing",
+      }),
+    );
+
+    assert.strictEqual(state._tag === "Failed" ? state.displayName : undefined, "Cogwork");
+  });
+
   it("requires emittedAtMillis on daemon events", () => {
     assert.throws(() => decodeEvent({ _tag: "SeedEnd" }));
   });
@@ -318,6 +331,28 @@ describe("applyDaemonEvent", () => {
     const failed = board.workspaces.get("broken.workspace.ts");
     assert.strictEqual(failed?._tag, "Failed");
     assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "boom");
+  });
+
+  it("replaces workspace states under their minted identity", () => {
+    const failure = workspaceState({
+      _tag: "Failed",
+      name: "acme",
+      source: "/repos/acme",
+      message: "boom",
+    });
+    const failed = fold([
+      event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
+      event({ _tag: "WorkspaceChanged", workspace: failure }),
+    ]);
+    const recovered = applyDaemonEvent(
+      failed,
+      event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
+    );
+
+    assert.strictEqual(failed.workspaces.size, 1);
+    assert.strictEqual(failed.workspaces.get("acme")?._tag, "Failed");
+    assert.strictEqual(recovered.workspaces.size, 1);
+    assert.strictEqual(recovered.workspaces.get("acme")?._tag, "Registered");
   });
 
   it("starts empty", () => {
