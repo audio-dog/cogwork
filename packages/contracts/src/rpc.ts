@@ -15,7 +15,12 @@ import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { IssueTrackerError } from "./issue-tracker";
 import { PrincipalMiddleware } from "./principal";
 import { RunActivity, RunEvent, RunId, RunStatus, RunSummary } from "./run";
-import { OperationSettingRefused, OperationSettingUpdate } from "./settings";
+import {
+  ContributionSettingRefused,
+  ContributionSettingUpdate,
+  OperationSettingRefused,
+  OperationSettingUpdate,
+} from "./settings";
 import { TriageRole } from "./triage";
 import {
   WorkspaceManagementError,
@@ -112,6 +117,12 @@ export const SetOperationSetting = Rpc.make("SetOperationSetting", {
   error: Schema.Union([ControlStoreFailure, OperationSettingRefused]),
 });
 
+export const SetContributionSetting = Rpc.make("SetContributionSetting", {
+  payload: { update: ContributionSettingUpdate },
+  success: ControlStore,
+  error: Schema.Union([ControlStoreFailure, ContributionSettingRefused]),
+});
+
 export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
   payload: { registration: WorkspaceRegistration },
   success: WorkspaceState,
@@ -135,6 +146,7 @@ export const DaemonCommands = RpcGroup.make(
   Reclassify,
   SetScheduling,
   SetDaemonLimit,
+  SetContributionSetting,
   SetOperationSetting,
   RegisterWorkspace,
   DeregisterWorkspace,

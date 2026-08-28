@@ -1,4 +1,4 @@
-import type { DaemonLimits } from "./daemon";
+import type { ControlStore, DaemonLimits } from "./daemon";
 
 export const defaultSchedulerGlobalLimit = 4;
 export const defaultSchedulerPerWorkspaceLimit = 4;
@@ -11,4 +11,8 @@ export const defaultDaemonLimits: DaemonLimits = {
   revision: 0,
 };
 
-export const defaultControlStore = { daemonLimits: defaultDaemonLimits, operationSettings: [] };
+export const defaultControlStore: ControlStore = {
+  daemonLimits: defaultDaemonLimits,
+  contributionSettings: [],
+  operationSettings: [],
+};
