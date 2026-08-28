@@ -626,6 +626,28 @@ describe("Recovery.recover", () => {
 });
 
 describe("Recovery.recoverWhenLive", () => {
+  it.effect("recovers a workspace that becomes live after bootstrap", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>({ generation: 1, workspaces: [] });
+      const ledger = yield* RunLedger.makeMemory;
+      yield* ledger.insertRun(interrupted);
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+
+        yield* recovery.recoverWhenLive();
+        assert.deepStrictEqual(yield* Ref.get(admitted), []);
+
+        yield* Ref.set(snapshot, snapshotOf([claimedByUs]));
+        yield* recovery.recoverWhenLive();
+        assert.deepStrictEqual(
+          (yield* Ref.get(admitted)).map((work) => work.id),
+          [id("#1")],
+        );
+      }).pipe(Effect.provide(recoveryLayer({ observed: [], ledger, admitted, snapshot })));
+    }),
+  );
+
   it.effect("waits for a reconciled snapshot before consuming one-shot recovery", () =>
     Effect.gen(function* () {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);

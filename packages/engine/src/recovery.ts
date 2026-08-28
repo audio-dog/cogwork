@@ -1,9 +1,10 @@
-import type { LifecycleStage, PollState, SessionId } from "@cogwork/contracts";
+import type { LifecycleStage, PollState, SessionId, WorkspaceId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Semaphore from "effect/Semaphore";
 import {
   consecutiveFailures,
   type EligibleWork,
@@ -14,7 +15,7 @@ import {
 import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
+import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { handleOf, RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
@@ -28,7 +29,9 @@ export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
   const scheduler = yield* Scheduler;
   const releaseClaim = makeReleaseClaim(issueTracker);
-  const recovered = yield* Ref.make(false);
+  const recoveredWorkspaces = yield* Ref.make<ReadonlySet<WorkspaceId>>(new Set());
+  const orphanSweepComplete = yield* Ref.make(false);
+  const recoveryGate = Semaphore.makeUnsafe(1);
 
   const handOffExhausted = Effect.fn("Recovery.handOffExhausted")(function* (
     workspace: RegisteredWorkspace,
@@ -193,42 +196,55 @@ export const make = Effect.gen(function* () {
       return Effect.logWarning("claim recovery deferred; workspace poll is not ok", {
         workspace: workspace.config.name,
         ...pollDetail(state.poll),
-      });
+      }).pipe(Effect.map(() => null));
     }
     return recoverWorkspace(workspace, state.observed).pipe(
+      Effect.map(() => workspace.config.name),
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("claim recovery skipped", {
           workspace: workspace.config.name,
           message: error.message,
-        }),
+        }).pipe(Effect.map(() => null)),
       ),
     );
   };
 
-  const recover = Effect.fn("Recovery.recover")(function* () {
-    const snapshot = yield* worker.snapshot;
+  const recoverSnapshot = Effect.fn("Recovery.recoverSnapshot")(function* (
+    snapshot: ReconcileSnapshot,
+    completed: ReadonlySet<WorkspaceId>,
+  ) {
     const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
-    yield* Effect.forEach(
-      snapshot.workspaces,
-      (state) => {
-        const workspace = byName.get(state.name);
-        return workspace ? recoverState(workspace, state) : Effect.void;
-      },
-      { discard: true },
-    );
+    const results = yield* Effect.forEach(snapshot.workspaces, (state) => {
+      if (completed.has(state.name)) return Effect.succeed(null);
+      const workspace = byName.get(state.name);
+      if (!workspace) return Effect.succeed(null);
+      return recoverState(workspace, state);
+    });
+    return results.filter((workspace): workspace is WorkspaceId => workspace !== null);
   });
 
-  const recoverWhenLive = Effect.fn("Recovery.recoverWhenLive")(function* () {
+  const recover = Effect.fn("Recovery.recover")(function* () {
+    const snapshot = yield* worker.snapshot;
+    yield* recoverSnapshot(snapshot, new Set<WorkspaceId>());
+  });
+
+  const recoverWhenLiveUnlocked = Effect.fn("Recovery.recoverWhenLive")(function* () {
     const { paused } = yield* scheduler.stats;
     if (paused) return;
-    const { generation } = yield* worker.snapshot;
-    if (generation === 0) return;
-    if (yield* Ref.getAndSet(recovered, true)) return;
-    // Captured before recover() so the runs it re-admits (started after) survive the sweep below.
-    const orphanCutoffMillis = yield* Clock.currentTimeMillis;
-    yield* recover();
+    const snapshot = yield* worker.snapshot;
+    if (snapshot.generation === 0) return;
+    const sweepComplete = yield* Ref.get(orphanSweepComplete);
+    // Recovery admits new runs; take the cutoff first so the orphan sweep cannot interrupt them.
+    const orphanCutoffMillis = sweepComplete ? null : yield* Clock.currentTimeMillis;
+    const completed = yield* Ref.get(recoveredWorkspaces);
+    const recovered = yield* recoverSnapshot(snapshot, completed);
+    yield* Ref.update(recoveredWorkspaces, (current) => new Set([...current, ...recovered]));
+    if (orphanCutoffMillis === null) return;
     yield* ledger.interruptRunningBefore(orphanCutoffMillis, yield* Clock.currentTimeMillis);
+    yield* Ref.set(orphanSweepComplete, true);
   });
+
+  const recoverWhenLive = () => recoveryGate.withPermit(recoverWhenLiveUnlocked());
 
   return { recover, recoverWhenLive };
 });
