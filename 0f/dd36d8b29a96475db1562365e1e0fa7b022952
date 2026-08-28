@@ -1,0 +1,156 @@
+packages/contracts/src/scheduler-defaults.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 14-19
+apps/cli/src/plugin-commands.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-14
+packages/engine/src/index.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 19
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-2,18,147,154-161,181
+packages/contracts/src/plugin.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-38
+packages/contracts/src/index.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 10
+packages/engine/plugins/bundles/linear/rules/linear-issues.md
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 27-38
+apps/cli/src/status.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 51-52
+packages/engine/plugins/bundles/github/skills/github-review/SKILL.md
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-8
+packages/engine/plugins/bundles/linear/plugin.json
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-21
+packages/engine/src/context-assembler.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 113,118,127,151-157,163-170
+apps/desktop/src/renderer/src/routes/_app/customize/plugin.$pluginId.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-4,6,13-51
+packages/contracts/src/daemon-event.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 18,56-60
+packages/engine/src/daemon.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1,30,37,55,131,150-161,209-211,233-234,251-252,269-273,294
+packages/engine/plugins/bundles/github/mcp/github.json
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-6
+packages/engine/src/executor.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 6,15,51,250,809-849,875-888,925,953,1438-1441,1443-1444,1449-1455,1458,1492-1501,1503-1504,1510-1517,1520-1524
+  s_3ad8c99e0b0d7f::t_eeb5fdb09c83e6 898-900
+  s_3ad8c99e0b0d7f::t_2831f870f1df36 236-249,1442,1445-1446,1448,1456-1457,1502,1505-1507,1509,1518-1519
+  s_3ad8c99e0b0d7f::t_725e768ca66ebd 850-874,1459-1491
+  s_d7297afc1c993a::t_daf3ff23c8c73a 251,1447,1508,1525
+packages/engine/src/event-publisher.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 5,145-152,159
+packages/contracts/src/contribution.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 19-30
+apps/desktop/src/renderer/src/components/plugin-detail.test.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-59
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 293,333,370,404,434
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 33-38
+apps/desktop/src/renderer/src/features/plugin-configuration.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-155
+packages/engine/src/executor.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 2,5-6,24,38,43,51,197-209,218,243-259,261-264,266-274,276-277,289
+  s_3ad8c99e0b0d7f::t_8a2ff46edb2080 41
+  s_3ad8c99e0b0d7f::t_467f81223ad54f 89-94,260,265,275,278-281,288,371-377
+packages/contracts/src/board.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 5,19-20,29-30,107
+packages/contracts/src/plugin.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-91
+apps/desktop/src/renderer/src/features/plugins-view.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 5,10,44
+packages/engine/src/event-publisher.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 34,52-54,57-62,355,536-537
+apps/desktop/src/renderer/src/components/plugin-list-rows.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 2,6,39,59-82
+  s_3ad8c99e0b0d7f::t_56d28fdd881c75 83-85
+packages/engine/src/control-store.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 2-3,14-15,43-51,65-73,89-90,112-129,162-198,211-216,267-319,388-431,440-451,541-543
+packages/engine/src/control-store-schema.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 62-85
+apps/desktop/src/renderer/src/components/plugins-facet.test.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-119
+packages/engine/src/run-plan.ts
+  s_3ad8c99e0b0d7f::t_143eb74565692a 5,332-333,343,350,410-411,422-424,430,434-440,453-454,460-468,495,497-498,525,538
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 8,141,150
+packages/engine/src/context-assembler.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 27,119-120,173-183
+  s_3ad8c99e0b0d7f::t_2bdc78c369a29c 1,131
+packages/engine/src/control-store.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 71,74
+apps/cli/src/commands.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 105-106,139-140
+packages/contracts/src/board.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 236-237,254-255,266-277
+  s_3ad8c99e0b0d7f::t_11170c39f6230b 278-279
+apps/cli/src/main.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 20,38
+packages/contracts/src/rpc.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 16,35-39,66,128-139,159-160
+packages/contracts/src/daemon.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 10,164-165
+apps/cli/src/plugin-commands.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-51
+packages/engine/src/commands.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 5-9,30,47-58,247-279
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1,9,28,71-77,85-92,95,111,129-134
+  s_3ad8c99e0b0d7f::t_de4908a7b5ca2d 135
+packages/engine/src/plugin.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-497
+apps/desktop/src/renderer/src/features/plugin-configuration.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-111
+apps/desktop/src/renderer/src/features/operation-settings-view.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 49-50
+apps/desktop/src/renderer/src/components/plugins-facet.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1,5,9,18-59,63,72-73,75-77,81-91,95-100,102,104,108-114,121-137
+packages/engine/plugins/bundles/linear/mcp/linear.json
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-6
+packages/engine/plugins/catalog.json
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-16
+packages/engine/src/control-store-create.gen.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 4,7
+packages/engine/plugins/bundles/github/plugin.json
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-21
+packages/engine/src/engine.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 28,499-501,504-509,665,736
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 137-142
+packages/engine/src/plugin.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-338
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 13-14
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 1-5,14-19,26-43,49-56,61,75-78,82-85,88-91,94,100-102,113-147
+  s_3ad8c99e0b0d7f::t_d0ad9d4c8c4045 148
+packages/engine/src/run-plan.test.ts
+  s_3ad8c99e0b0d7f::t_ea2ad07a476738 193-194
+packages/engine/src/commands.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 8,10-11,23,41,174-228,238-239,265-266,280-282,291,304,995-1037
+packages/engine/src/scheduler.test.ts
+  s_3ad8c99e0b0d7f::t_84b0d5887a36a7 101-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0fdd36d8b29a96475db1562365e1e0fa7b022952",
+  "prompts": {},
+  "sessions": {
+    "s_3ad8c99e0b0d7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-4975-7cf3-8b18-af92906892ca",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d7297afc1c993a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04a04-73ca-7c53-ad84-12ad05cca7ee",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
