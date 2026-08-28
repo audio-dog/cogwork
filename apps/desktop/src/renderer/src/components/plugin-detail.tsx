@@ -1,3 +1,4 @@
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,7 +108,7 @@ function ContributionRow({ contribution }: { contribution: Contribution }) {
 
 export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
   const {
-    meta: { plugins },
+    meta: { plugins, pluginFailure },
   } = useConfiguration();
   const rows = plugins.contributionsOf(plugin);
   const remaining = plugin.setup.filter((step) => !step.done);
@@ -124,6 +125,13 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
           <RiArrowLeftSLine data-icon="inline-start" />
           Customize
         </Button>
+
+        {pluginFailure ? (
+          <Alert variant="destructive">
+            <AlertTitle>Plugin change failed</AlertTitle>
+            <AlertDescription className="whitespace-pre-wrap">{pluginFailure}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="flex items-start gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-5">
