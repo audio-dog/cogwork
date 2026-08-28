@@ -1,10 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { absoluteCheckoutPathFrom, workspaceRegistrationFrom } from "./workspace-registration";
+import {
+  absoluteCheckoutPathFrom,
+  registrationSubmissionStatus,
+  workspaceRegistrationFrom,
+} from "./workspace-registration";
 
 describe("absoluteCheckoutPathFrom", () => {
   it("trims absolute paths and refuses relative paths", () => {
     expect(absoluteCheckoutPathFrom("  /Users/taylor/sites/cogwork  ")).toBe("/Users/taylor/sites/cogwork");
     expect(absoluteCheckoutPathFrom("relative/path")).toBeNull();
+  });
+});
+
+describe("registrationSubmissionStatus", () => {
+  it("ignores an atom result until this dialog submits", () => {
+    expect(registrationSubmissionStatus({ submitted: false, pending: false, error: null, outcome: {} })).toBe(
+      "idle",
+    );
+  });
+
+  it("blocks repeat submission until a failure permits retry", () => {
+    expect(
+      registrationSubmissionStatus({ submitted: true, pending: false, error: null, outcome: null }),
+    ).toBe("submitting");
+    expect(
+      registrationSubmissionStatus({ submitted: true, pending: false, error: "failed", outcome: null }),
+    ).toBe("failed");
+    expect(registrationSubmissionStatus({ submitted: true, pending: false, error: null, outcome: {} })).toBe(
+      "complete",
+    );
   });
 });
 

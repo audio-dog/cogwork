@@ -15,6 +15,13 @@ export interface WorkspaceRegistrationDraft {
   readonly sourceControlRepository: string;
 }
 
+interface RegistrationSubmission {
+  readonly submitted: boolean;
+  readonly pending: boolean;
+  readonly error: string | null;
+  readonly outcome: unknown | null;
+}
+
 const trimmed = (value: string) => value.trim();
 const optional = (value: string) => trimmed(value) || undefined;
 const teamsFrom = (value: string) => [...new Set(value.split(",").map(trimmed).filter(Boolean))];
@@ -22,6 +29,19 @@ const teamsFrom = (value: string) => [...new Set(value.split(",").map(trimmed).f
 export const absoluteCheckoutPathFrom = (value: string) => {
   const path = trimmed(value);
   return /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path) ? path : null;
+};
+
+export const registrationSubmissionStatus = ({
+  submitted,
+  pending,
+  error,
+  outcome,
+}: RegistrationSubmission) => {
+  if (!submitted) return "idle";
+  if (pending) return "submitting";
+  if (error) return "failed";
+  if (outcome !== null) return "complete";
+  return "submitting";
 };
 
 const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
