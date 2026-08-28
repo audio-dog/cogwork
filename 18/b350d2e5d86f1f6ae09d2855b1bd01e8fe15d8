@@ -1,0 +1,46 @@
+packages/engine/src/executor.ts
+  s_fadf779d32b538::t_589d99d6c9f9ec 569,573
+  s_fadf779d32b538::t_8c1266f5c9d854 691-695
+  s_fadf779d32b538::t_1319bef776290d 604,697
+  s_fadf779d32b538::t_e229072b245a61 24
+packages/engine/src/follow-up.ts
+  s_fadf779d32b538::t_c539735f32b070 1
+  s_fadf779d32b538::t_fce8ff12b9159f 54-56
+  s_fadf779d32b538::t_378d8d9d163792 78-84
+packages/engine/src/follow-up.test.ts
+  s_fadf779d32b538::t_7b9e8596afc3fb 3,6
+  s_fadf779d32b538::t_0e7dc2f0915360 222-260
+  s_fadf779d32b538::t_8d21cf62d3a3cb 307
+  s_fadf779d32b538::t_12d4dc838742d3 201-219
+  s_1b921de9110ef8::t_be338421b4f0ea 220-221
+packages/engine/src/executor.test.ts
+  s_fadf779d32b538::t_263c7b99ef0a9b 374
+  s_fadf779d32b538::t_c4552f64fecf57 1760-1793
+  s_fadf779d32b538::t_ab40f870aabfe0 1990-1992
+  s_fadf779d32b538::t_fca7bced175df9 426
+  s_fadf779d32b538::t_61e9288ffc75a5 405-410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "18b350d2e5d86f1f6ae09d2855b1bd01e8fe15d8",
+  "prompts": {},
+  "sessions": {
+    "s_1b921de9110ef8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04a00-5228-7910-aadd-ec906ef3ecac",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_fadf779d32b538": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "509ca7dd-c527-4069-b5ad-aa66b4fc7c1b",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
