@@ -1,12 +1,21 @@
-import type { LifecycleStage, RunRecord, Session, SessionId, TokenUsage } from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
+  type ContributionSettingRow,
+  type ControlStoreFailure,
+  defaultContributionEnabled,
   type FollowUpStageResult,
   type ImplementStageResult,
+  type LifecycleStage,
+  type LocalContribution,
   RunId,
+  type RunRecord,
+  resolveContributionEnabled,
+  type Session,
+  type SessionId,
   sessionHandle,
   stageResultCompletionSchema,
+  type TokenUsage,
   type TriageStageResult,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
@@ -20,6 +29,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
+import { ControlStore } from "./control-store";
 import type { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
@@ -46,7 +56,12 @@ import { SourceControlProvider } from "./source-control";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
-type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError;
+type PrepareError =
+  | GitError
+  | WorktreeFsError
+  | WorktreeDivergedError
+  | CredentialError
+  | ControlStoreFailure;
 
 interface RunAccumulator {
   readonly handle: string | null;
@@ -156,6 +171,26 @@ const handoffCause = (retryable: boolean, attempts: number) =>
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
 
+const contributionSettingApplies = (
+  contribution: LocalContribution,
+  workspace: RegisteredWorkspace,
+  row: ContributionSettingRow,
+) => {
+  if (row.contribution.id !== contribution.id) return false;
+  if (row.scope._tag === "SettingsProfile") return true;
+  return row.scope.workspace === workspace.config.name;
+};
+
+const contributionEnabled = (
+  contribution: LocalContribution,
+  workspace: RegisteredWorkspace,
+  rows: readonly ContributionSettingRow[],
+) => {
+  if (contribution.kind !== "mcp-server") return true;
+  const applicable = rows.filter((row) => contributionSettingApplies(contribution, workspace, row));
+  return resolveContributionEnabled(applicable) ?? defaultContributionEnabled(contribution.authority);
+};
+
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const harness = yield* Harness;
@@ -166,6 +201,7 @@ export const make = Effect.gen(function* () {
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
+  const controlStore = yield* ControlStore;
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
@@ -177,6 +213,7 @@ export const make = Effect.gen(function* () {
     session: SessionId | null,
     stage: LifecycleStage,
   ) {
+    const picture = yield* controlStore.picture;
     return {
       harness: resolved.harness,
       stage,
@@ -188,7 +225,9 @@ export const make = Effect.gen(function* () {
       model: resolved.model,
       effort: resolved.effort,
       mcpSkills: yield* assembler.assemble(workspace.config),
-      contributions: workspace.contributions,
+      contributions: workspace.contributions.filter((contribution) =>
+        contributionEnabled(contribution, workspace, picture.contributionSettings),
+      ),
     } satisfies HarnessRequest;
   });
 

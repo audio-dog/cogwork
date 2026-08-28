@@ -1,4 +1,5 @@
 import {
+  defaultControlStore,
   HarnessName,
   LocalContribution,
   type SessionId,
@@ -27,6 +28,7 @@ import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
+import { ControlStore } from "./control-store";
 import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
@@ -60,6 +62,13 @@ const repoSkill = Schema.decodeSync(LocalContribution)({
   kind: "skill",
   localName: "release",
   file: "/repos/gh/.agents/skills/release/SKILL.md",
+});
+const repoMcp = Schema.decodeSync(LocalContribution)({
+  id: "local:repo/mcp/tools",
+  authority: "local:repo",
+  kind: "mcp-server",
+  localName: "tools",
+  file: "/repos/gh/.agents/mcp/tools.json",
 });
 
 const handleOf = (ledger: RunLedger.RunLedgerService, session: SessionId | null | undefined) =>
@@ -128,7 +137,7 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
-  contributions: [repoSkill],
+  contributions: [repoSkill, repoMcp],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -188,6 +197,17 @@ const assemblerStub = Layer.succeed(McpSkillAssembler, {
       })),
     ),
 });
+
+const controlStoreStub = (picture = defaultControlStore) =>
+  Layer.succeed(ControlStore, {
+    health: "available" as const,
+    seed: picture,
+    picture: Effect.succeed(picture),
+    setDaemonLimit: () => Effect.succeed(picture),
+    updateOperationSetting: () => Effect.succeed(picture),
+    updateContributionSetting: () => Effect.succeed(picture),
+    withWrite: (effect) => effect,
+  });
 
 const implementItem = {
   id: id("#15"),
@@ -733,6 +753,7 @@ function provide(
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
+  controlStore = controlStoreStub(),
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -757,6 +778,7 @@ function provide(
         runControlStub,
         worktree,
         assemblerStub,
+        controlStore,
       ),
     ),
   );
@@ -1076,6 +1098,38 @@ describe("Executor.execute", () => {
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
       assert.deepStrictEqual(run?.usage, usage);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
+  });
+
+  it.effect("includes a repository MCP offer after the principal enables it", () => {
+    const enabled = {
+      ...defaultControlStore,
+      contributionSettings: [
+        {
+          contribution: { id: repoMcp.id, kind: "mcp-server" as const },
+          scope: { _tag: "PrivateWorkspaceOverlay" as const, workspace: implementWorkspace.config.name },
+          enabled: true,
+        },
+      ],
+    };
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.contributions, [repoSkill, repoMcp]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(enabled),
+        ),
+      ),
+    );
   });
 
   it.effect("correlates claimed-run library logs and spans", () => {
