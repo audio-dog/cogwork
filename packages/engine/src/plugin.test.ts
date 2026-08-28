@@ -2,7 +2,9 @@ import { localOwnerId, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
@@ -77,7 +79,7 @@ function fixture() {
       pluginManagerLayer({ catalogPath, provisionRoot }).pipe(Layer.provideMerge(storeLayer)),
       configLayer,
     );
-    return { root, catalogPath, bundlePath, storePath, provisionRoot, managerLayer };
+    return { root, catalogPath, bundlePath, storePath, provisionRoot, storeLayer, managerLayer };
   });
 }
 
@@ -285,6 +287,52 @@ layer(NodeServices.layer)((it) => {
         yield* plugins.uninstall("linear");
         assert.deepStrictEqual((yield* store.picture).pluginInstalls, []);
       }).pipe(Effect.provide(test.managerLayer));
+    }),
+  );
+
+  it.effect("restores provisioned files when uninstall is interrupted before membership removal", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const test = yield* fixture();
+      const removalStarted = yield* Deferred.make<void>();
+      const managerLayer = Layer.merge(
+        pluginManagerLayer({
+          catalogPath: test.catalogPath,
+          provisionRoot: test.provisionRoot,
+        }).pipe(
+          Layer.provideMerge(
+            Layer.effect(
+              ControlStore,
+              Effect.gen(function* () {
+                const store = yield* ControlStore;
+                if (store.health === "unavailable") return store;
+                return {
+                  ...store,
+                  uninstallPlugin: () =>
+                    Deferred.succeed(removalStarted, undefined).pipe(Effect.andThen(Effect.never)),
+                };
+              }),
+            ).pipe(Layer.provide(test.storeLayer)),
+          ),
+        ),
+        configLayer,
+      );
+
+      yield* Effect.gen(function* () {
+        const plugins = yield* PluginManager;
+        yield* plugins.install("linear", localOwnerId);
+        const uninstalling = yield* plugins
+          .uninstall("linear")
+          .pipe(Effect.forkChild({ startImmediately: true }));
+        yield* Deferred.await(removalStarted);
+        yield* Fiber.interrupt(uninstalling);
+
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return assert.fail(store.message);
+        assert.strictEqual((yield* store.picture).pluginInstalls.length, 1);
+        assert.isTrue(yield* fs.exists(path.join(test.provisionRoot, "linear@1.0.0")));
+      }).pipe(Effect.provide(managerLayer));
     }),
   );
 });

@@ -15,6 +15,7 @@ import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -401,14 +402,14 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
         );
         yield* store.uninstallPlugin(pluginId).pipe(
           Effect.mapError((error) => failure("uninstall Plugin", pluginId, null, error)),
-          Effect.catch((error) =>
-            restore(reclaimed).pipe(
+          Effect.onExit((exit) => {
+            if (Exit.isSuccess(exit)) return Effect.void;
+            return restore(reclaimed).pipe(
               Effect.mapError((restoreError) =>
                 failure("restore Plugin", pluginId, reclaimed?.installedPath ?? null, restoreError),
               ),
-              Effect.andThen(Effect.fail(error)),
-            ),
-          ),
+            );
+          }),
         );
         return {
           overview: yield* overview(),
