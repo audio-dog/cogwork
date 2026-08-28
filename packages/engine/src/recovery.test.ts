@@ -151,6 +151,7 @@ const snapshotOf = (
   poll: PollState = okPoll,
 ): Reconcile.ReconcileSnapshot => ({
   generation: 1,
+  observedAtMillis: 1,
   workspaces: [
     {
       name: wsA.config.name,
@@ -666,7 +667,11 @@ describe("Recovery.recoverWhenLive", () => {
   it.effect("recovers a workspace that becomes live after bootstrap", () =>
     Effect.gen(function* () {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
-      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>({ generation: 1, workspaces: [] });
+      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>({
+        generation: 1,
+        observedAtMillis: 1,
+        workspaces: [],
+      });
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
       yield* Effect.gen(function* () {
@@ -688,7 +693,11 @@ describe("Recovery.recoverWhenLive", () => {
   it.effect("waits for a reconciled snapshot before consuming one-shot recovery", () =>
     Effect.gen(function* () {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
-      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>({ generation: 0, workspaces: [] });
+      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>({
+        generation: 0,
+        observedAtMillis: 0,
+        workspaces: [],
+      });
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
       yield* Effect.gen(function* () {
