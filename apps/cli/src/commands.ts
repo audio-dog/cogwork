@@ -112,6 +112,7 @@ const runDaemon = Effect.fn("commands.runDaemon")(
       (failure) =>
         Effect.logWarning("workspace registration failed", {
           workspace: failure.name,
+          displayName: failure.displayName,
           source: failure.source,
           message: failure.message,
         }),

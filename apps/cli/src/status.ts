@@ -38,6 +38,12 @@ const formatPoll = (poll: PollState) => {
   return [`      paused: ${poll.reason}${pauseQualifier(poll)} — ${poll.message}`];
 };
 
+const workspaceLabel = (workspace: { readonly name?: string; readonly displayName?: string }) => {
+  if (workspace.name === undefined) return workspace.displayName ?? "";
+  if (workspace.displayName === undefined) return workspace.name;
+  return `${workspace.displayName} (${workspace.name})`;
+};
+
 const formatWorkspace = (workspace: WorkspaceInfo) => {
   const poll = formatPoll(workspace.poll);
   const eligible = section(
@@ -59,7 +65,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     ),
   );
   return [
-    `  - ${workspace.name} [${workspace.issueTracker}/${workspace.harness}] ${workspace.checkoutPath}`,
+    `  - ${workspaceLabel(workspace)} [${workspace.issueTracker}/${workspace.harness}] ${workspace.checkoutPath}`,
     ...poll,
     ...eligible,
     ...claimed,
@@ -69,7 +75,8 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
 };
 
 const formatFailure = (failure: DaemonStatus["failures"][number]) => {
-  const workspace = failure.name === undefined ? "" : `${failure.name} · `;
+  const label = workspaceLabel(failure);
+  const workspace = label.length === 0 ? "" : `${label} · `;
   return `  ! ${workspace}${failure.source}: ${failure.message}`;
 };
 

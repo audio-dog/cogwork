@@ -156,6 +156,13 @@ describe("formatStatus", () => {
     assert.notInclude(output, "needs-human");
   });
 
+  it("shows the registration name beside the minted workspace id", () => {
+    const name = workspaceId("0198f16a-21d7-7000-8000-000000000001");
+    const output = formatStatus(status({ workspaces: [workspace({ name, displayName: "Cogwork" })] }));
+
+    assert.include(output, `  - Cogwork (${name}) [github/cursor] /tmp/cogwork`);
+  });
+
   it("renders eligible and claimed sections alongside the workspace header", () => {
     const output = formatStatus(
       status({
@@ -194,12 +201,19 @@ describe("formatStatus", () => {
             poll: { status: "paused", reason: "auth", message: "auth failed", retryAtMillis: null },
           }),
         ],
-        failures: [{ name: workspaceId("failed-workspace"), source: "broken.workspace.ts", message: "boom" }],
+        failures: [
+          {
+            name: workspaceId("failed-workspace"),
+            displayName: "Broken workspace",
+            source: "broken.workspace.ts",
+            message: "boom",
+          },
+        ],
       }),
     );
     assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 · paused (cogwork=1/3)");
     assert.include(output, "      paused: auth (needs attention) — auth failed");
-    assert.include(output, "  ! failed-workspace · broken.workspace.ts: boom");
+    assert.include(output, "  ! Broken workspace (failed-workspace) · broken.workspace.ts: boom");
   });
 
   it("renders a rate-limited pause as self-healing with the retry-at instant", () => {
