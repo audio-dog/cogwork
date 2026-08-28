@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import type { RegistryState } from "./projector";
 import {
@@ -84,10 +85,29 @@ export const make = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const registry = yield* WorkspaceRegistry;
+  const controlStore = yield* ControlStore;
   const bus = yield* DaemonEventBus;
   const lastItems = yield* Ref.make<ReadonlyMap<string, PublishedItem>>(new Map());
   const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, PublishedWorkspace>>(new Map());
   const lastScheduler = yield* Ref.make<string | null>(null);
+
+  const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
+    picture: ControlStorePicture,
+  ) {
+    const published = controlStoreWithDiagnostics(picture, registry);
+    yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: published });
+    return published;
+  });
+
+  const refreshControlStore = Effect.fn("DaemonEventPublisher.refreshControlStore")(function* () {
+    if (controlStore.health === "unavailable") return;
+    yield* controlStore.picture.pipe(
+      Effect.flatMap(publishControlStore),
+      Effect.catchTag("ControlStoreFailure", (error) =>
+        Effect.logWarning("Control store diagnostic refresh failed", { message: error.message }),
+      ),
+    );
+  });
 
   const publishItems = Effect.fn("DaemonEventPublisher.publishItems")(function* () {
     const snapshot = yield* worker.snapshot;
@@ -153,6 +173,7 @@ export const make = Effect.gen(function* () {
       lastWorkspaces,
       new Map(signed.map(({ key, signature, state }) => [key, { signature, state }] as const)),
     );
+    if (changed.length > 0 || removed.length > 0) yield* refreshControlStore();
   });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
@@ -173,14 +194,6 @@ export const make = Effect.gen(function* () {
     );
     yield* bus.publish({ _tag: "WorkspaceRemoved", workspace });
     return workspace;
-  });
-
-  const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
-    controlStore: ControlStorePicture,
-  ) {
-    const published = controlStoreWithDiagnostics(controlStore, registry);
-    yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: published });
-    return published;
   });
 
   return {

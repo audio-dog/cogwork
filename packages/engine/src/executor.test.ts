@@ -1,4 +1,5 @@
 import {
+  ControlStoreFailure,
   defaultControlStore,
   HarnessName,
   LocalContribution,
@@ -28,7 +29,7 @@ import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
-import { ControlStore } from "./control-store";
+import { ControlStore, type ControlStoreService } from "./control-store";
 import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
@@ -198,16 +199,19 @@ const assemblerStub = Layer.succeed(McpSkillAssembler, {
     ),
 });
 
-const controlStoreStub = (picture = defaultControlStore) =>
+const controlStoreStub = (
+  picture = defaultControlStore,
+  read: ControlStoreService["picture"] = Effect.succeed(picture),
+) =>
   Layer.succeed(ControlStore, {
-    health: "available" as const,
+    health: "available",
     seed: picture,
-    picture: Effect.succeed(picture),
+    picture: read,
     setDaemonLimit: () => Effect.succeed(picture),
     updateOperationSetting: () => Effect.succeed(picture),
     updateContributionSetting: () => Effect.succeed(picture),
     withWrite: (effect) => effect,
-  });
+  } satisfies ControlStoreService);
 
 const implementItem = {
   id: id("#15"),
@@ -1105,12 +1109,12 @@ describe("Executor.execute", () => {
       ...defaultControlStore,
       contributionSettings: [
         {
-          contribution: { id: repoMcp.id, kind: "mcp-server" as const },
-          scope: { _tag: "PrivateWorkspaceOverlay" as const, workspace: implementWorkspace.config.name },
+          contribution: { id: repoMcp.id, kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
           enabled: true,
         },
       ],
-    };
+    } satisfies ControlStoreService["seed"];
 
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
@@ -1131,6 +1135,35 @@ describe("Executor.execute", () => {
       ),
     );
   });
+
+  it.effect("does not dispatch when contribution settings cannot be read", () =>
+    Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(
+            defaultControlStore,
+            Effect.fail(
+              ControlStoreFailure.make({ operation: "read Control store", message: "database unavailable" }),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 
   it.effect("correlates claimed-run library logs and spans", () => {
     return Effect.gen(function* () {

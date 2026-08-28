@@ -199,6 +199,7 @@ const publisherLayer = (
         Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
         workspaces,
         schedulerStub(statsRef),
+        controlStoreLayer,
         DaemonEventBus.layer,
       ),
     ),

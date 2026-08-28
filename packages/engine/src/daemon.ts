@@ -1,5 +1,6 @@
 import {
   agUiIsTerminal,
+  type DaemonEvent,
   DaemonRpcs,
   defaultControlStore,
   localOwner,
@@ -93,6 +94,11 @@ export const daemonInfoLayer = Layer.effect(
 
 const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
 
+type ControlStoreSeedEvent = Omit<
+  Extract<DaemonEvent, { readonly _tag: "ControlStoreChanged" }>,
+  "emittedAtMillis"
+>;
+
 const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(function* (
   store: ControlStoreService,
   registry: RegistryState,
@@ -103,9 +109,9 @@ const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(functi
       onFailure: () => [],
       onSuccess: (controlStore) => [
         {
-          _tag: "ControlStoreChanged" as const,
+          _tag: "ControlStoreChanged",
           controlStore: controlStoreWithDiagnostics(controlStore, registry),
-        },
+        } satisfies ControlStoreSeedEvent,
       ],
     }),
   );

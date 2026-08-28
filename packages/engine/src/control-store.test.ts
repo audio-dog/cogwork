@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { resolveOperationSetting, WorkspaceId } from "@cogwork/contracts";
+import { type ContributionSettingCell, resolveOperationSetting, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -184,8 +184,14 @@ layer(NodeServices.layer)((it) => {
   it.effect("sets, clears, and reloads raw contribution setting rows", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      const contribution = { id: "local:repo/mcp/tools", kind: "mcp-server" as const };
-      const scope = { _tag: "PrivateWorkspaceOverlay" as const, workspace };
+      const contribution = {
+        id: "local:repo/mcp/tools",
+        kind: "mcp-server",
+      } satisfies ContributionSettingCell["contribution"];
+      const scope = {
+        _tag: "PrivateWorkspaceOverlay",
+        workspace,
+      } satisfies ContributionSettingCell["scope"];
 
       yield* useStoreAt(storePath, (store) =>
         store.updateContributionSetting({

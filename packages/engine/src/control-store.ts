@@ -110,8 +110,14 @@ const decodeStoredOperationSettingRows = Schema.decodeUnknownEffect(Schema.Array
 
 const contributionScopeOf = (row: StoredContributionSettingRow) =>
   row.scope === "settings-profile"
-    ? { _tag: "SettingsProfile" as const }
-    : { _tag: "PrivateWorkspaceOverlay" as const, workspace: row.workspace };
+    ? ({ _tag: "SettingsProfile" } satisfies { readonly _tag: "SettingsProfile" })
+    : ({
+        _tag: "PrivateWorkspaceOverlay",
+        workspace: row.workspace,
+      } satisfies {
+        readonly _tag: "PrivateWorkspaceOverlay";
+        readonly workspace: string | null;
+      });
 
 const readContributionSettings = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
