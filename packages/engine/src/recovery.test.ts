@@ -192,12 +192,18 @@ const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
     ...service,
   });
 
-const schedulerStub = (admitted: Ref.Ref<ReadonlyArray<EligibleWork>>, paused?: Ref.Ref<boolean>) =>
+const schedulerStub = (
+  admitted: Ref.Ref<ReadonlyArray<EligibleWork>>,
+  paused?: Ref.Ref<boolean>,
+  inFlight?: Ref.Ref<ReadonlySet<string>>,
+) =>
   Layer.succeed(Scheduler.Scheduler, {
     tick: () => Effect.succeed(0),
     awaitIdle: Effect.void,
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: (_workspace, work) => Ref.update(admitted, (xs) => [...xs, work]),
+    isInFlight: (_workspace, itemId) =>
+      inFlight ? Effect.map(Ref.get(inFlight), (items) => items.has(itemId)) : Effect.succeed(false),
     setScheduling: () => Effect.succeed(Scheduler.initialState),
     setLimit: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 100 }),
     stats: paused
@@ -213,6 +219,7 @@ interface RecoveryDeps {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
   readonly poll?: PollState;
   readonly paused?: Ref.Ref<boolean>;
+  readonly inFlight?: Ref.Ref<ReadonlySet<string>>;
   readonly snapshot?: Ref.Ref<Reconcile.ReconcileSnapshot>;
 }
 
@@ -227,7 +234,7 @@ const recoveryLayer = (deps: RecoveryDeps) => {
       Layer.mergeAll(
         registryLayer,
         deps.snapshot ? workerSnapshotLayer(deps.snapshot) : workerLayer(deps.observed, deps.poll ?? okPoll),
-        schedulerStub(deps.admitted, deps.paused),
+        schedulerStub(deps.admitted, deps.paused, deps.inFlight),
         issueTrackerStub(deps.issueTracker ?? {}),
         runLedger,
       ),
@@ -671,6 +678,59 @@ describe("Recovery.recoverWhenLive", () => {
           [id("#1")],
         );
       }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted, paused })));
+    }),
+  );
+
+  it.effect("releases a newly observed orphan claim without recording an attempt", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const attempts = yield* Ref.make<ReadonlyArray<string>>([]);
+      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>(snapshotOf([]));
+      const ledger = yield* RunLedger.makeMemory;
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (items) => [...items, itemId]),
+        attemptFailed: (_workspace, itemId) => Ref.update(attempts, (items) => [...items, itemId]),
+      };
+
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recoverWhenLive();
+        yield* Ref.set(snapshot, { ...snapshotOf([withAttempts(claimedByUs, 2)]), generation: 2 });
+        yield* recovery.recoverWhenLive();
+        yield* recovery.recoverWhenLive();
+
+        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+        assert.deepStrictEqual(yield* Ref.get(attempts), []);
+      }).pipe(Effect.provide(recoveryLayer({ observed: [], issueTracker, ledger, admitted, snapshot })));
+    }),
+  );
+
+  it.effect("holds an orphan claim while its work item is in flight", () =>
+    Effect.gen(function* () {
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const released = yield* Ref.make<ReadonlyArray<string>>([]);
+      const snapshot = yield* Ref.make<Reconcile.ReconcileSnapshot>(snapshotOf([]));
+      const inFlight = yield* Ref.make<ReadonlySet<string>>(new Set([id("#1")]));
+      const ledger = yield* RunLedger.makeMemory;
+      const issueTracker: Partial<IssueTrackerService> = {
+        release: (_workspace, itemId) => Ref.update(released, (items) => [...items, itemId]),
+      };
+
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recoverWhenLive();
+        yield* Ref.set(snapshot, { ...snapshotOf([claimedByUs]), generation: 2 });
+        yield* recovery.recoverWhenLive();
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+
+        yield* Ref.set(inFlight, new Set());
+        yield* Ref.set(snapshot, { ...snapshotOf([claimedByUs]), generation: 3 });
+        yield* recovery.recoverWhenLive();
+        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+      }).pipe(
+        Effect.provide(recoveryLayer({ observed: [], issueTracker, ledger, admitted, snapshot, inFlight })),
+      );
     }),
   );
 });

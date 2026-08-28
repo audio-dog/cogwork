@@ -14,7 +14,7 @@ import {
 import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
+import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { handleOf, RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
@@ -28,7 +28,7 @@ export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
   const scheduler = yield* Scheduler;
   const releaseClaim = makeReleaseClaim(issueTracker);
-  const recovered = yield* Ref.make(false);
+  const recoveredGeneration = yield* Ref.make(0);
 
   const handOffExhausted = Effect.fn("Recovery.handOffExhausted")(function* (
     workspace: RegisteredWorkspace,
@@ -188,14 +188,18 @@ export const make = Effect.gen(function* () {
   const pollDetail = (poll: PollState) =>
     poll.status === "paused" ? { poll: poll.status, reason: poll.reason } : { poll: poll.status };
 
-  const recoverState = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState) => {
+  const recoverStateWith = (
+    workspace: RegisteredWorkspace,
+    state: WorkspaceReconcileState,
+    recoverObserved: typeof recoverWorkspace,
+  ) => {
     if (state.poll.status !== "ok") {
       return Effect.logWarning("claim recovery deferred; workspace poll is not ok", {
         workspace: workspace.config.name,
         ...pollDetail(state.poll),
       });
     }
-    return recoverWorkspace(workspace, state.observed).pipe(
+    return recoverObserved(workspace, state.observed).pipe(
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("claim recovery skipped", {
           workspace: workspace.config.name,
@@ -205,28 +209,62 @@ export const make = Effect.gen(function* () {
     );
   };
 
-  const recover = Effect.fn("Recovery.recover")(function* () {
-    const snapshot = yield* worker.snapshot;
-    const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
+  const recoverState = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState) =>
+    recoverStateWith(workspace, state, recoverWorkspace);
+
+  const recoverOrphan = Effect.fn("Recovery.recoverOrphan")(function* (
+    workspace: RegisteredWorkspace,
+    item: ObservedItem,
+  ) {
+    if (yield* ledger.latestRunForItem(workspace.config.name, item.id)) return;
+    if (yield* scheduler.isInFlight(workspace, item.id)) return;
+    yield* releaseClaim(workspace, item.id);
+  });
+
+  const recoverOrphans = Effect.fn("Recovery.recoverOrphans")(function* (
+    workspace: RegisteredWorkspace,
+    observed: ReadonlyArray<ObservedItem>,
+  ) {
     yield* Effect.forEach(
+      observed.filter((item) => item.claimedByUs),
+      (item) => recoverOrphan(workspace, item),
+      { discard: true },
+    );
+  });
+
+  const recoverOrphanState = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState) =>
+    recoverStateWith(workspace, state, recoverOrphans);
+
+  const recoverSnapshot = (snapshot: ReconcileSnapshot, recoverWorkspaceState: typeof recoverState) => {
+    const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
+    return Effect.forEach(
       snapshot.workspaces,
       (state) => {
         const workspace = byName.get(state.name);
-        return workspace ? recoverState(workspace, state) : Effect.void;
+        return workspace ? recoverWorkspaceState(workspace, state) : Effect.void;
       },
       { discard: true },
     );
+  };
+
+  const recover = Effect.fn("Recovery.recover")(function* () {
+    yield* recoverSnapshot(yield* worker.snapshot, recoverState);
   });
 
   const recoverWhenLive = Effect.fn("Recovery.recoverWhenLive")(function* () {
     const { paused } = yield* scheduler.stats;
     if (paused) return;
-    const { generation } = yield* worker.snapshot;
+    const snapshot = yield* worker.snapshot;
+    const { generation } = snapshot;
     if (generation === 0) return;
-    if (yield* Ref.getAndSet(recovered, true)) return;
-    // Captured before recover() so the runs it re-admits (started after) survive the sweep below.
+    const previousGeneration = yield* Ref.getAndSet(recoveredGeneration, generation);
+    if (previousGeneration === generation) return;
+    if (previousGeneration > 0) {
+      return yield* recoverSnapshot(snapshot, recoverOrphanState);
+    }
+    // Captured before recovery so runs it re-admits are not interrupted by the startup sweep.
     const orphanCutoffMillis = yield* Clock.currentTimeMillis;
-    yield* recover();
+    yield* recoverSnapshot(snapshot, recoverState);
     yield* ledger.interruptRunningBefore(orphanCutoffMillis, yield* Clock.currentTimeMillis);
   });
 
