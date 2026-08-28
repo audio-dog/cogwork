@@ -53,7 +53,11 @@ export const DaemonEvent = Schema.TaggedUnion({
   WorkspaceChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceState },
   WorkspaceRemoved: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId },
   ControlStoreChanged: { emittedAtMillis: Schema.Finite, controlStore: ControlStore },
-  PluginsChanged: { emittedAtMillis: Schema.Finite, plugins: PluginOverview },
+  PluginsChanged: {
+    emittedAtMillis: Schema.Finite,
+    plugins: PluginOverview,
+    notices: Schema.Array(TrimmedNonEmptyString),
+  },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
 });
 export type DaemonEvent = typeof DaemonEvent.Type;

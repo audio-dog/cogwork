@@ -263,6 +263,20 @@ describe("applyDaemonEvent", () => {
     assert.deepStrictEqual(board.controlStore, next);
   });
 
+  it("replaces Plugin notices with the latest Plugin event", () => {
+    const board = fold([
+      event({
+        _tag: "PluginsChanged",
+        plugins: { plugins: [] },
+        notices: ["GitHub remains connected."],
+      }),
+      event({ _tag: "PluginsChanged", plugins: { plugins: [] }, notices: [] }),
+    ]);
+
+    assert.deepStrictEqual(board.plugins, { plugins: [] });
+    assert.deepStrictEqual(board.pluginNotices, []);
+  });
+
   it("keeps running runs and only the recent settled run window", () => {
     const runs = Array.from({ length: 25 }, (_, index) =>
       event({
