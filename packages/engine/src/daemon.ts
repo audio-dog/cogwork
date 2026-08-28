@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import {
   agUiIsTerminal,
   DaemonRpcs,
@@ -266,7 +267,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
   const plugins = pluginManagerLayer({
-    catalogPath: adapters.pluginCatalogPath ?? new URL("../plugins/catalog.json", import.meta.url).pathname,
+    catalogPath:
+      adapters.pluginCatalogPath ?? fileURLToPath(new URL("../plugins/catalog.json", import.meta.url)),
     provisionRoot: adapters.pluginProvisionRoot ?? `${adapters.controlStorePath}.plugins`,
   }).pipe(Layer.provide(controlStore));
   const registry = workspaceRegistryLayer(adapters.controlStorePath).pipe(
