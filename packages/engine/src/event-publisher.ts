@@ -14,7 +14,12 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { DaemonEventBus } from "./daemon-event-bus";
-import { classifiedItemsOf, schedulerStatsOf, workspaceStatesOf } from "./read-model";
+import {
+  classifiedItemsOf,
+  currentReconcileStatesOf,
+  schedulerStatsOf,
+  workspaceStatesOf,
+} from "./read-model";
 import { ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { Scheduler } from "./scheduler";
@@ -45,7 +50,7 @@ export const make = Effect.gen(function* () {
 
   const publishItems = Effect.fn("DaemonEventPublisher.publishItems")(function* () {
     const snapshot = yield* worker.snapshot;
-    const signed = snapshot.workspaces.flatMap((state) =>
+    const signed = currentReconcileStatesOf(registry, snapshot).flatMap((state) =>
       classifiedItemsOf(state).map(
         (item) =>
           ({
