@@ -10,8 +10,9 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
-import { bootControlStoreLayer, controlStoreClientLayer, RunLedger } from "@cogwork/engine";
+import { bootControlStoreLayer, RunLedger } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { assert, describe, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -28,7 +29,9 @@ class TestStorePath extends Context.Service<TestStorePath, string>()(
 const bootedLedgerLayer = (storePath: string) =>
   ledgerLayer.pipe(
     Layer.provideMerge(
-      bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath))),
+      bootControlStoreLayer(storePath).pipe(
+        Layer.provideMerge(SqliteClient.layer({ filename: storePath, busyTimeout: "25 millis" })),
+      ),
     ),
   );
 
@@ -168,7 +171,25 @@ describe("sqlite RunLedger", () => {
           ledger.acceptRun(record("accepted", 2000), runPlan("accepted", "Changed")),
         );
         assert.strictEqual(error._tag, "RunLedgerError");
+        assert.isFalse(error.retryable);
         assert.deepStrictEqual(yield* ledger.getRunPlan(accepted.id), accepted);
+      }),
+    );
+
+    it.effect("marks store write failures retryable", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const storePath = yield* TestStorePath;
+        const sqlite = yield* Effect.acquireRelease(
+          Effect.sync(() => new DatabaseSync(storePath)),
+          (database) => Effect.sync(() => database.close()),
+        );
+        yield* Effect.sync(() => sqlite.exec("BEGIN EXCLUSIVE"));
+
+        const error = yield* Effect.flip(ledger.acceptRun(record("locked", 1000), runPlan("locked")));
+
+        assert.strictEqual(error._tag, "RunLedgerError");
+        assert.isTrue(error.retryable);
       }),
     );
 

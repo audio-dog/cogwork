@@ -17,6 +17,7 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as SqlError from "effect/unstable/sql/SqlError";
 
 const { runEvents, runPlans, runs, sessions } = ControlStoreSchema;
 
@@ -146,7 +147,7 @@ const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
 const decodeRunPlan = Schema.decodeUnknownEffect(Schema.fromJsonString(RunPlanSchema));
 const encodeRunPlan = Schema.encodeSync(Schema.fromJsonString(RunPlanSchema));
 const runPlanError = (operation: string, message: string) =>
-  Effect.fail(RunLedger.RunLedgerError.make({ operation, message }));
+  Effect.fail(RunLedger.RunLedgerError.make({ operation, message, retryable: false }));
 
 const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows: ReadonlyArray<unknown>) =>
   Effect.forEach(rows, (row) =>
@@ -183,7 +184,13 @@ const make = Effect.fn("ledger.make")(function* () {
     Effect.suspend(query).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
-        return Effect.fail(RunLedger.RunLedgerError.make({ operation, message: Cause.pretty(cause) }));
+        const retryable = cause.reasons.some(
+          (reason) =>
+            Cause.isFailReason(reason) && SqlError.isSqlError(reason.error) && reason.error.isRetryable,
+        );
+        return Effect.fail(
+          RunLedger.RunLedgerError.make({ operation, message: Cause.pretty(cause), retryable }),
+        );
       }),
     );
 

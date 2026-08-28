@@ -30,10 +30,11 @@ export interface RunUpdate {
 export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLedgerError", {
   operation: Schema.String,
   message: Schema.String,
+  retryable: Schema.Boolean,
 }) {}
 
 const runLedgerError = (operation: string, message: string) =>
-  Effect.fail(RunLedgerError.make({ operation, message }));
+  Effect.fail(RunLedgerError.make({ operation, message, retryable: false }));
 
 const deepFreeze = <A>(value: A): A => {
   if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
@@ -46,7 +47,11 @@ const snapshotRunPlan = (plan: RunPlan) =>
     Effect.flatMap(Schema.decodeEffect(RunPlanSchema)),
     Effect.map(deepFreeze),
     Effect.mapError((error) =>
-      RunLedgerError.make({ operation: "accept Run", message: `Run Plan snapshot failed: ${error}` }),
+      RunLedgerError.make({
+        operation: "accept Run",
+        message: `Run Plan snapshot failed: ${error}`,
+        retryable: false,
+      }),
     ),
   );
 

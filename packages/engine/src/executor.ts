@@ -927,7 +927,7 @@ export const make = Effect.gen(function* () {
               Effect.tap(() => Effect.withFiber((self) => runControl.register(runId, self, workspace))),
               Effect.flatMap(() => settleOutcome(workspace, item, selectedOps, record, runId, request)),
               Effect.catchTag("RunLedgerError", (error) =>
-                reportFailure(workspace, item, false, error.message, null),
+                reportFailure(workspace, item, error.retryable, error.message, null),
               ),
             );
           },

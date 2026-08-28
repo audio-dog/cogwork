@@ -107,6 +107,7 @@ describe("accepted Run Plan", () => {
         assert.isTrue(Object.isFrozen(stored?.messages));
         const error = yield* Effect.flip(ledger.acceptRun(record("accepted", 2000), runPlan("accepted")));
         assert.strictEqual(error._tag, "RunLedgerError");
+        assert.isFalse(error.retryable);
       }),
     );
   });
