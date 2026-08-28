@@ -1,5 +1,6 @@
 import {
   type ClassifiedItem,
+  type Connection,
   type ConnectionEstablishment,
   ConnectionFailure,
   type ConnectionId,
@@ -214,6 +215,18 @@ const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
   return workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined));
 };
 
+const connectionBindingFailure = (
+  connection: Connection | null,
+  connectionId: ConnectionId,
+  system: ConnectionSystem,
+) => {
+  if (!connection) return `${connectionId} is not an established Connection`;
+  if (connection.system !== system) {
+    return `${connectionId} is a ${connection.system} Connection, not ${system}`;
+  }
+  return `${connectionId} is not an established Connection`;
+};
+
 const requireBinding = Effect.fn("Daemon.requireConnectionBinding")(function* (
   connectionId: ConnectionId,
   system: ConnectionSystem,
@@ -222,11 +235,10 @@ const requireBinding = Effect.fn("Daemon.requireConnectionBinding")(function* (
   const connection = yield* connections
     .find(connectionId)
     .pipe(Effect.mapError((error) => new WorkspaceRegistrationError({ message: error.message })));
-  if (connection?.system === system) return;
-  const message = connection
-    ? `${connectionId} is a ${connection.system} Connection, not ${system}`
-    : `${connectionId} is not an established Connection`;
-  return yield* new WorkspaceRegistrationError({ message });
+  if (connection?.system === system && connection.status === "established") return;
+  return yield* new WorkspaceRegistrationError({
+    message: connectionBindingFailure(connection, connectionId, system),
+  });
 });
 
 const connectionSystemFor = Effect.fn("Daemon.connectionSystemFor")(function* (type: string) {

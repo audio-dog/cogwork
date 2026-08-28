@@ -188,26 +188,28 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
   contributions: () => Effect.succeed([]),
 });
-const connectionStoreLayer = Layer.succeed(ConnectionStore, {
-  overview: () => Effect.succeed({ connections: [] }),
-  find: (connectionId) =>
-    Effect.succeed(
-      Connection.make({
-        id: connectionId,
-        system: connectionId.startsWith("linear/") ? "linear" : "github",
-        account: "test",
-        status: "established",
-      }),
-    ),
-  findSystem: () => Effect.succeed(null),
-  bearer: () => Effect.die("unexpected Connection bearer"),
-  readiness: () => Effect.succeed({ _tag: "Ready" }),
-  requireReady: () => Effect.void,
-  requireSystemReady: () => Effect.void,
-  establish: () => Effect.die("unexpected Connection establish"),
-  revoke: () => Effect.die("unexpected Connection revoke"),
-  remove: () => Effect.die("unexpected Connection remove"),
-});
+const connectionStoreLayerWithStatus = (status: "established" | "revoked") =>
+  Layer.succeed(ConnectionStore, {
+    overview: () => Effect.succeed({ connections: [] }),
+    find: (connectionId) =>
+      Effect.succeed(
+        Connection.make({
+          id: connectionId,
+          system: connectionId.startsWith("linear/") ? "linear" : "github",
+          account: "test",
+          status,
+        }),
+      ),
+    findSystem: () => Effect.succeed(null),
+    bearer: () => Effect.die("unexpected Connection bearer"),
+    readiness: () => Effect.succeed({ _tag: "Ready" }),
+    requireReady: () => Effect.void,
+    requireSystemReady: () => Effect.void,
+    establish: () => Effect.die("unexpected Connection establish"),
+    revoke: () => Effect.die("unexpected Connection revoke"),
+    remove: () => Effect.die("unexpected Connection remove"),
+  });
+const connectionStoreLayer = connectionStoreLayerWithStatus("established");
 
 const installedPlugin = (pluginId: string) =>
   ({
@@ -325,6 +327,7 @@ const daemonLayer = (
   controlStore = controlStoreStub(),
   registries = registryServices,
   plugins: Layer.Layer<PluginManager> = pluginManagerLayer,
+  connections = connectionStoreLayer,
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -337,7 +340,7 @@ const daemonLayer = (
     Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(RunControl.layer),
     Layer.provideMerge(controlStore),
-    Layer.provideMerge(connectionStoreLayer),
+    Layer.provideMerge(connections),
     Layer.provideMerge(plugins),
     Layer.provideMerge(source),
   );
@@ -850,6 +853,27 @@ describe("RegisterWorkspace", () => {
 
       assert.include(error.message, "not linear");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("rejects a tracker bound to a revoked Connection", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const error = yield* Effect.flip(client.RegisterWorkspace({ registration: acmeRegistration }));
+
+      assert.include(error.message, "not an established Connection");
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          pluginManagerLayer,
+          connectionStoreLayerWithStatus("revoked"),
+        ),
+      ),
+      Effect.scoped,
+    ),
   );
 
   it.effect("returns the minted workspace and publishes it once", () => {
