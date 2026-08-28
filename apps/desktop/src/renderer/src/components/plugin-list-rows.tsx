@@ -36,7 +36,7 @@ export function PluginAttentionRow({ plugin }: { plugin: InstalledPlugin }) {
   } = useConfiguration();
   const attention = plugins.attentionOf(plugin);
   const action = attentionAction(attention);
-  const failed = attention._tag === "load-failed";
+  const failed = attention._tag === "load-failed" || attention._tag === "manifest-failed";
 
   return (
     <ListRow>

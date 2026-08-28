@@ -144,6 +144,7 @@ export interface InstalledPlugin {
   readonly record: InstallRecord;
   readonly name: string;
   readonly summary: string;
+  readonly manifestFailure: string | null;
   readonly contributionIds: readonly string[];
   readonly permissions: readonly PermissionRow[];
   readonly requiredConnections: readonly string[];

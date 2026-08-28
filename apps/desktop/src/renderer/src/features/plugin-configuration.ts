@@ -52,6 +52,7 @@ const installedPluginOf = (plugin: PluginItem): InstalledPlugin | null => {
     },
     name: plugin.name,
     summary: plugin.summary,
+    manifestFailure: plugin.manifestFailure,
     contributionIds: plugin.contributions.map((contribution) => contribution.id),
     permissions: [
       { label: "Plugin files", detail: "Machine-local provisioned bundle", fidelity: "exact" },

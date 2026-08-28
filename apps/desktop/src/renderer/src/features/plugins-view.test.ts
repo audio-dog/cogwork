@@ -24,6 +24,18 @@ describe("attentionOf", () => {
     expect(attention._tag).toBe("load-failed");
   });
 
+  it("puts an installed Plugin with a broken manifest in Needs Attention", () => {
+    const attention = attentionOf({
+      ...plugin("gh-review"),
+      manifestFailure: "plugin.json is invalid",
+    });
+    expect(attention).toEqual({
+      _tag: "manifest-failed",
+      reason: "plugin.json is invalid",
+    });
+    expect(attentionLine(attention)).toBe("plugin.json is invalid");
+  });
+
   it("reports an unfinished setup", () => {
     const attention = attentionOf(plugin("linear"));
     expect(attention).toEqual({ _tag: "setup-unfinished", remaining: 1 });
