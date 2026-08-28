@@ -1,8 +1,10 @@
 import {
   applyDaemonEvent,
   type Board,
+  type ControlStore,
   type DaemonEvent,
   DaemonRpcs,
+  type DaemonStatus,
   initialBoard,
   type RunActivity,
   type RunEvent,
@@ -32,7 +34,7 @@ import {
   defaultSocketPath,
 } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
-import { formatDaemonLimits, formatOfflineStatus, formatStatusWithStore } from "./status";
+import { formatDaemonLimits, formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 import { secondStopSignal } from "./stop-signal";
 import { telemetryLayer } from "./telemetry";
 import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
@@ -210,6 +212,14 @@ const watchOverview = <E>(source: Stream.Stream<DaemonEvent, E>) =>
     Stream.runForEach((board) => Console.log(overviewScreen(board))),
   );
 
+export const daemonStatusPicture = Effect.fn("commands.daemonStatusPicture")(function* <E, R>(
+  status: DaemonStatus,
+  controlStore: Effect.Effect<ControlStore, E, R>,
+) {
+  if (status.health === "store-unavailable") return formatStatus(status);
+  return formatStatusWithStore(status, yield* controlStore);
+});
+
 export const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R>(
   resolve: (workItem: WorkItemId) => Effect.Effect<RunId | null, E, R>,
   id: Option.Option<string>,
@@ -260,7 +270,7 @@ const runStatus = Effect.fn("commands.runStatus")(function* (options: {
     Effect.gen(function* () {
       const client = yield* RpcClient.make(DaemonRpcs);
       const status = yield* client.GetStatus();
-      return formatStatusWithStore(status, yield* client.GetControlStore());
+      return yield* daemonStatusPicture(status, client.GetControlStore());
     }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
     readControlStore(options.controlStorePath).pipe(Effect.map(formatOfflineStatus)),
   ).pipe(Effect.flatMap(Console.log));
