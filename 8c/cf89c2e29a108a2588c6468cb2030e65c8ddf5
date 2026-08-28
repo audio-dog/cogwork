@@ -1,0 +1,28 @@
+packages/engine/src/operation-policy.ts
+  s_70f3b7a624b3fe::t_22500208a63694 2,9,23
+  s_cfdbc418f7e51a::t_849122062ac1d5 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8ccf89c2e29a108a2588c6468cb2030e65c8ddf5",
+  "prompts": {},
+  "sessions": {
+    "s_70f3b7a624b3fe": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a045d0-62bd-72b1-b33b-ffba030f920c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_cfdbc418f7e51a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04611-4dd2-7a90-9cb9-42e8ca8d801f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
