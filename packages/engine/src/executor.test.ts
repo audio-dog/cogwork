@@ -207,6 +207,17 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
   ).pipe(Layer.provideMerge(ContextCleanupCalls.layer));
 }
 
+const missingPlaybookContext = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: (request) =>
+    Effect.fail(
+      new ContextAssembler.ContextAssemblerError({
+        skill: request.skill,
+        message: `playbook skill "${request.skill}" has no readable SKILL.md`,
+      }),
+    ),
+  cleanup: () => Effect.void,
+});
+
 const assemblerStub = Layer.succeed(McpSkillAssembler, {
   assemble: (config) =>
     Effect.succeed(
@@ -789,6 +800,7 @@ function provide(
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
   operationSettings: ReadonlyArray<OperationSettingRow> = [],
+  contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -796,7 +808,7 @@ function provide(
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerServices = Layer.mergeAll(
     sessionStore,
-    ContextCleanupCalls.contextAssemblerLayer,
+    contextAssembler,
     CredentialStore.layerEnv,
     FileSystem.layerNoop({}),
   );
@@ -810,10 +822,11 @@ function provide(
         runLedger,
         runRecorder,
         bus,
+        ContextCleanupCalls.layer,
         runControlStub,
         worktree,
         assemblerStub,
-        ContextCleanupCalls.contextAssemblerLayer,
+        contextAssembler,
         controlStoreLayer(operationSettings),
       ),
     ),
@@ -1654,6 +1667,36 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], divergedWorktree)));
+  });
+
+  it.effect("hands a missing playbook to a human on the first attempt without retrying", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const log = yield* Ref.get(calls);
+      const attempt = log.find((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempt?.stage, "implement");
+      assert.include(attempt?.reason ?? "", "no readable SKILL.md");
+      const handOff = log.find((call) => call.method === "handOff");
+      assert.strictEqual(handOff?.stage, "implement");
+      assert.include(handOff?.note ?? "", "non-retryable failure");
+
+      const ledger = yield* RunLedger.RunLedger;
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          missingPlaybookContext,
+        ),
+      ),
+    );
   });
 
   it.effect("keeps retrying a prepare failure that is not a divergence", () => {

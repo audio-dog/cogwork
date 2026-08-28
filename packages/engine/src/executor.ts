@@ -175,9 +175,7 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
 
-// A credential error is a configuration problem (no account, missing secret env) that retrying
-// cannot fix, so it goes straight to a human like a diverged worktree does.
-const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError"]);
+const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError", "ContextAssemblerError"]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
   if (error._tag === "HarnessError") return error.retryable;
