@@ -6,9 +6,10 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
+import { LocalContribution } from "./contribution";
 import { Claim } from "./coordination";
-import { ContributionSetting, PluginInstall } from "./plugin";
-import { OperationSettingRow } from "./settings";
+import { PluginInstall } from "./plugin";
+import { ContributionSettingRow, OperationSettingRow } from "./settings";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
 import { WorkspaceConcurrency } from "./workspace";
 
@@ -93,6 +94,7 @@ export const WorkspaceInfo = Schema.Struct({
   issueTracker: IssueTrackerType,
   harness: HarnessName,
   poll: PollState,
+  contributions: Schema.Array(LocalContribution),
   eligible: Schema.Array(ActionableItem),
   claimed: Schema.Array(ClaimedItem),
   blocked: Schema.Array(BlockedItem),
@@ -162,7 +164,7 @@ export const ControlStore = Schema.Struct({
   daemonLimits: DaemonLimits,
   operationSettings: Schema.Array(OperationSettingRow),
   pluginInstalls: Schema.Array(PluginInstall),
-  contributionSettings: Schema.Array(ContributionSetting),
+  contributionSettings: Schema.Array(ContributionSettingRow),
 });
 export type ControlStore = typeof ControlStore.Type;
 

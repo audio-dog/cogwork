@@ -8,7 +8,9 @@ import {
 } from "./configuration-model";
 import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "./configuration-placeholder";
 import {
+  definedScope,
   diagnosticsOf,
+  displayedEnablement,
   enableScopeFor,
   offeredElsewhere,
   resolveEnablement,
@@ -69,6 +71,42 @@ describe("resolveEnablement", () => {
     // The overlay row belongs to another workspace, so the profile row wins here.
     expect(resolved.effective).toBe(true);
     expect(resolved.winner?.scope.kind).toBe("settings-profile");
+  });
+
+  it("shows and edits a dangling overlay at its stored scope", () => {
+    const contribution = {
+      id: "plugin:linear/mcp/linear",
+      authority: { _tag: "plugin", pluginId: "linear" },
+      kind: "mcp-server",
+      localName: "linear",
+      summary: "Linear MCP",
+      file: "/plugins/linear/mcp/linear.json",
+      definedAt: "settings-profile",
+      definedIn: cogworkWorkspaceId,
+      load: { _tag: "loaded" },
+      rows: [
+        { scope: { kind: "settings-profile" }, value: true, source: "Control store" },
+        {
+          scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
+          value: false,
+          source: "Control store",
+          diagnostic: {
+            _tag: "dangling",
+            source: "Control store",
+            detail: "The workspace was removed.",
+          },
+        },
+      ],
+    } satisfies Contribution;
+
+    const resolved = resolveEnablement(contribution, viewOf(contribution));
+
+    expect(resolved.effective).toBe(true);
+    expect(displayedEnablement(resolved)).toBe(false);
+    expect(enableScopeFor(contribution)).toEqual({
+      kind: "private-overlay",
+      workspaceId: cogworkWorkspaceId,
+    });
   });
 
   it("never reconciles two contributions that share a local name", () => {
@@ -140,6 +178,35 @@ describe("where a contribution lives, and where it is turned on", () => {
     const mcp = required("plugin:linear/mcp/linear");
     expect(mcp.definedAt).toBe("settings-profile");
     expect(enableScopeFor(mcp)?.kind).toBe("settings-profile");
+  });
+
+  it("edits a user MCP server at its effective workspace overlay", () => {
+    const mcp = {
+      id: "local:user/mcp/review",
+      authority: { _tag: "local", tree: "user" },
+      kind: "mcp-server",
+      localName: "review",
+      summary: "/home/.agents/mcp/review.json",
+      file: "/home/.agents/mcp/review.json",
+      definedAt: "settings-profile",
+      definedIn: cogworkWorkspaceId,
+      load: { _tag: "loaded" },
+      rows: [
+        { scope: { kind: "settings-profile" }, value: true, source: "Control store" },
+        {
+          scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
+          value: false,
+          source: "Control store",
+        },
+      ],
+    } satisfies Contribution;
+
+    expect(resolveEnablement(mcp, viewOf(mcp)).effective).toBe(false);
+    expect(enableScopeFor(mcp)).toEqual({
+      kind: "private-overlay",
+      workspaceId: cogworkWorkspaceId,
+    });
+    expect(definedScope(mcp)).toEqual({ kind: "settings-profile" });
   });
 
   it("puts every contribution in exactly one place", () => {

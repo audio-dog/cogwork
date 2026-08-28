@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { resolveOperationSetting, WorkspaceId } from "@cogwork/contracts";
+import { type ContributionSettingCell, resolveOperationSetting, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -12,6 +12,7 @@ import * as TestClock from "effect/testing/TestClock";
 import {
   bootControlStoreLayer,
   ControlStore,
+  type ControlStoreService,
   controlStoreClientLayer,
   readControlStore,
 } from "./control-store";
@@ -25,6 +26,15 @@ const storeAt = (storePath: string) =>
       ? { health: store.health }
       : { health: store.health, message: store.message },
   ).pipe(Effect.provide(storeLayerAt(storePath)));
+
+const useStoreAt = <A, E, R>(
+  storePath: string,
+  use: (store: Extract<ControlStoreService, { readonly health: "available" }>) => Effect.Effect<A, E, R>,
+) =>
+  Effect.flatMap(ControlStore, (store) => {
+    if (store.health === "unavailable") return Effect.die(new Error(store.message));
+    return use(store);
+  }).pipe(Effect.provide(storeLayerAt(storePath)));
 
 const poke = (storePath: string, statements: string) =>
   Effect.acquireUseRelease(
@@ -170,6 +180,40 @@ layer(NodeServices.layer)((it) => {
         }),
         "overlay-default",
       );
+    }),
+  );
+
+  it.effect("sets, clears, and reloads raw contribution setting rows", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const contribution = {
+        id: "local:repo/mcp/tools",
+        kind: "mcp-server",
+      } satisfies ContributionSettingCell["contribution"];
+      const scope = {
+        _tag: "PrivateWorkspaceOverlay",
+        workspace,
+      } satisfies ContributionSettingCell["scope"];
+
+      yield* useStoreAt(storePath, (store) =>
+        store.updateContributionSetting({
+          _tag: "Set",
+          row: { contribution, scope, enabled: true },
+        }),
+      );
+
+      const reloaded = yield* useStoreAt(storePath, (store) => Effect.succeed(store.seed));
+
+      assert.deepStrictEqual(reloaded.contributionSettings, [{ contribution, scope, enabled: true }]);
+
+      const cleared = yield* useStoreAt(storePath, (store) =>
+        store.updateContributionSetting({
+          _tag: "Clear",
+          cell: { contribution, scope },
+        }),
+      );
+
+      assert.deepStrictEqual(cleared.contributionSettings, []);
     }),
   );
 

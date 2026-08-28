@@ -18,11 +18,11 @@ function StatusLine() {
   } = useConfiguration();
 
   if (contribution.load._tag === "failed") return contribution.load.reason;
-  if (contribution.readiness?._tag === "not-ready") return contribution.readiness.reason;
-
   const workspace = workspaceById(contribution.definedIn);
   const where = `${workspace ? `${workspace.name} · ` : ""}${scopeCopy[contribution.definedAt].name}`;
-  return `${on ? "Connected" : "Off"} · ${where}`;
+  if (!on) return `Off · ${where}`;
+  if (contribution.readiness?._tag === "not-ready") return contribution.readiness.reason;
+  return `Connected · ${where}`;
 }
 
 function McpRowBody() {

@@ -24,6 +24,9 @@ layer(NodeServices.layer)((it) => {
       const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-authoring-tree-" });
       const repoRoot = path.join(root, "repo");
       const cogworkHome = path.join(root, ".cogwork");
+      const userAgentsDir = path.join(root, ".agents");
+      yield* writeFile(path.join(userAgentsDir, "skills", "commit", "SKILL.md"));
+      yield* writeFile(path.join(userAgentsDir, "mcp", "review.json"));
       yield* writeFile(path.join(repoRoot, ".agents", "skills", "release", "SKILL.md"));
       yield* writeFile(path.join(repoRoot, ".agents", "rules", "style.md"));
       yield* writeFile(path.join(repoRoot, ".agents", "commands", "ship.md"));
@@ -31,7 +34,12 @@ layer(NodeServices.layer)((it) => {
       yield* writeFile(path.join(repoRoot, ".agents", "mcp", "tools.json"));
       yield* writeFile(path.join(cogworkHome, "workspaces", workspace, "skills", "release", "SKILL.md"));
 
-      const contributions = yield* scanAuthoringTrees({ workspace, repoRoot, cogworkHome });
+      const contributions = yield* scanAuthoringTrees({
+        workspace,
+        repoRoot,
+        cogworkHome,
+        userAgentsDir,
+      });
 
       assert.deepStrictEqual(
         contributions.map(({ id }) => id),
@@ -42,6 +50,8 @@ layer(NodeServices.layer)((it) => {
           "local:repo/rules/style",
           "local:repo/skill/release",
           "local:repo/subagent/reviewer",
+          "local:user/mcp/review",
+          "local:user/skill/commit",
         ],
       );
     }),
@@ -63,7 +73,12 @@ layer(NodeServices.layer)((it) => {
       yield* writeFile(path.join(repoRoot, ".agents", "skills", " release ", "SKILL.md"));
       yield* writeFile(path.join(repoRoot, ".agents", "skills", "missing", "README.md"));
 
-      const contributions = yield* scanAuthoringTrees({ workspace, repoRoot, cogworkHome });
+      const contributions = yield* scanAuthoringTrees({
+        workspace,
+        repoRoot,
+        cogworkHome,
+        userAgentsDir: path.join(root, ".agents"),
+      });
 
       assert.deepStrictEqual(contributions, []);
     }),
@@ -85,6 +100,7 @@ layer(NodeServices.layer)((it) => {
         workspace,
         repoRoot,
         cogworkHome: path.join(root, ".cogwork"),
+        userAgentsDir: path.join(root, ".agents"),
       });
 
       assert.deepStrictEqual(contributions, []);

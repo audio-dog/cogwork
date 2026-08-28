@@ -1,5 +1,5 @@
 import {
-  type ContributionSetting,
+  type ContributionSettingRow,
   defaultControlStore,
   HarnessName,
   LocalContribution,
@@ -890,7 +890,7 @@ const unavailablePluginLayer = Layer.succeed(PluginManager, {
 
 const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
-  contributionSettings: ReadonlyArray<ContributionSetting> = [],
+  contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
 ) => {
   const picture = { ...defaultControlStore, operationSettings, contributionSettings };
   return Layer.succeed(ControlStore, {
@@ -927,7 +927,7 @@ function provide(
   operationSettings: ReadonlyArray<OperationSettingRow> = [],
   contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
   plugins: Layer.Layer<PluginManager> = pluginManagerStub,
-  contributionSettings: ReadonlyArray<ContributionSetting> = [],
+  contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -1524,7 +1524,7 @@ describe("Executor.execute", () => {
           availablePluginMcpLayer,
           [
             {
-              contribution: "plugin:linear/mcp/linear",
+              contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
               scope: { _tag: "PrivateWorkspaceOverlay", workspace: implementWorkspace.config.name },
               enabled: false,
             },

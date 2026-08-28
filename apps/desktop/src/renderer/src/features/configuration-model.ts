@@ -16,7 +16,6 @@ export interface ScopeRef {
 }
 
 export type { WorkspaceId };
-
 export function scopeKey(scope: ScopeRef): string {
   return scope.workspaceId ? `${scope.kind}:${scope.workspaceId}` : scope.kind;
 }
@@ -123,6 +122,9 @@ export interface Contribution {
   readonly readiness?: McpReadiness;
 }
 
+export const contributionInstanceKey = (contribution: Contribution) =>
+  contribution.definedIn ? `${contribution.id}:${contribution.definedIn}` : contribution.id;
+
 export type McpReadiness =
   | { readonly _tag: "ready" }
   | { readonly _tag: "not-ready"; readonly reason: string };
@@ -174,8 +176,6 @@ export interface Workspace {
 }
 
 export interface ConfigurationPicture {
-  readonly principal: string;
-  readonly hostId: string;
   readonly workspaces: readonly Workspace[];
   readonly plugins: readonly InstalledPlugin[];
   readonly catalogPlugins: readonly CatalogPlugin[];

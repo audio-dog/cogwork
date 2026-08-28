@@ -10,6 +10,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import {
   type Credential,
   type CredentialAccount,
@@ -454,8 +455,6 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return team;
     });
 
-  // A team's backlog can exceed one page, and Linear's default ordering is newest-created first, so
-  // stopping at one page would silently hide every older work item; every page is fetched instead.
   const observeIssues = Effect.fn("linear.observeIssues")(function* (
     ref: LinearTeamRef,
     coordination: CoordinationScope | null,
@@ -471,14 +470,13 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       : {};
     const filter = issuesFilter(assigneeIds);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
-    const issues: Array<typeof IssueNode.Type> = [];
-    let after: string | null = null;
-    do {
-      const team: typeof IssuesTeamNode.Type = yield* loadPage(after);
-      issues.push(...team.issues.nodes);
-      const page = team.issues.pageInfo;
-      after = page.hasNextPage ? page.endCursor : null;
-    } while (after !== null);
+    const issues = yield* Stream.paginate(null as string | null, (after) =>
+      Effect.map(loadPage(after), (team: typeof IssuesTeamNode.Type) => {
+        const page = team.issues.pageInfo;
+        const next = page.hasNextPage ? Option.fromNullOr(page.endCursor) : Option.none<string>();
+        return [team.issues.nodes, next] as const;
+      }),
+    ).pipe(Stream.runCollect);
     return issues.map(toObservedIssue);
   });
 

@@ -8,7 +8,11 @@ import { RiBox3Line, RiEqualizerLine, RiPulseLine, RiSearchLine, RiSettings3Line
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { kindIcons } from "../features/configuration-icons";
-import { type ContributionKind, kindLabelsPlural } from "../features/configuration-model";
+import {
+  type ContributionKind,
+  contributionInstanceKey,
+  kindLabelsPlural,
+} from "../features/configuration-model";
 import { type Facet, facetLabel, facetSlug, facets } from "../features/customize-facets";
 import { useConfiguration } from "./configuration-provider";
 import { ContributionFileRow } from "./contribution-file-row";
@@ -147,7 +151,7 @@ function ContributionGroups({ kind }: { kind: ContributionKind }) {
       {groups.map((group) => (
         <ListSection key={group.key}>
           <ListSectionHeader title={group.label} count={group.rows.length} />
-          <ListSectionRows items={group.rows} keyOf={(contribution) => contribution.id}>
+          <ListSectionRows items={group.rows} keyOf={contributionInstanceKey}>
             {(contribution) => <ContributionFileRow contribution={contribution} />}
           </ListSectionRows>
         </ListSection>

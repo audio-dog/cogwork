@@ -1,5 +1,5 @@
 import {
-  type ContributionSetting,
+  type ContributionSettingRow,
   operationSettingNames,
   RunId,
   type SettingResolutionCase,
@@ -279,14 +279,14 @@ describe("Run Plan assembly", () => {
       localName: "linear",
       file: "/plugins/linear/mcp/linear.json",
     };
-    const contributionSettings: ReadonlyArray<ContributionSetting> = [
+    const contributionSettings: ReadonlyArray<ContributionSettingRow> = [
       {
-        contribution: contribution.id,
+        contribution: { id: contribution.id, kind: "mcp-server" },
         scope: { _tag: "SettingsProfile" },
         enabled: true,
       },
       {
-        contribution: contribution.id,
+        contribution: { id: contribution.id, kind: "mcp-server" },
         scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
         enabled: false,
       },

@@ -33,11 +33,11 @@ function Property({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function FileSurfaceBody({ contributionId, path }: { contributionId: string; path: string }) {
+export function FileSurfaceBody({ path }: { path: string }) {
   const {
-    meta: { contributionById, workspaceById },
+    meta: { contributionByFile, workspaceById },
   } = useConfiguration();
-  const contribution = contributionById(contributionId);
+  const contribution = contributionByFile(path);
   const workspace = workspaceById(contribution?.definedIn);
 
   return (

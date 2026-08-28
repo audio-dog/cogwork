@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   ContributionEnabledRow,
-  ContributionSetting,
+  ContributionSettingRow,
   ContributionUnionRow,
   FileContribution,
   OperationBinding,
@@ -221,14 +221,14 @@ export interface ResolvedRunPlanStage {
   readonly stage: ResolvedStage;
   readonly profile: RunPlanPolicyProfile;
   readonly settings: ReadonlyMap<OperationSettingName, ReturnType<typeof resolveEngineOperationSetting>>;
-  readonly contributionSettings: ReadonlyArray<ContributionSetting>;
+  readonly contributionSettings: ReadonlyArray<ContributionSettingRow>;
 }
 
 export const resolveRunPlanStage = (
   config: WorkspaceConfig,
   operation: LifecycleStage,
   rows: readonly OperationSettingRow[],
-  contributionSettings: ReadonlyArray<ContributionSetting> = [],
+  contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
 ) => {
   const base = resolveStage(config, operation);
   if (!base) return null;
@@ -345,19 +345,19 @@ const contributionMembers = (contributions: ReadonlyArray<FileContribution>, kin
     );
 
 const contributionRows = (
-  settings: ReadonlyArray<ContributionSetting>,
+  settings: ReadonlyArray<ContributionSettingRow>,
   contribution: FileContribution,
   workspace: WorkspaceConfig["name"] | null,
 ) =>
   settings.filter(
     (setting) =>
-      setting.contribution === contribution.id &&
+      setting.contribution.id === contribution.id &&
       (setting.scope._tag === "SettingsProfile" || setting.scope.workspace === workspace),
   );
 
 const contributionGate = (
   contribution: FileContribution,
-  settings: ReadonlyArray<ContributionSetting>,
+  settings: ReadonlyArray<ContributionSettingRow>,
   workspace: WorkspaceConfig["name"] | null,
 ) =>
   resolveEngineContributionEnabled(
@@ -367,7 +367,7 @@ const contributionGate = (
 
 export const admittedContributions = (
   contributions: ReadonlyArray<FileContribution>,
-  settings: ReadonlyArray<ContributionSetting> = [],
+  settings: ReadonlyArray<ContributionSettingRow> = [],
   workspace: WorkspaceConfig["name"] | null = null,
 ) =>
   contributions.filter(
@@ -375,7 +375,7 @@ export const admittedContributions = (
       contribution.kind !== "mcp-server" || contributionGate(contribution, settings, workspace).value,
   );
 
-const contributionSettingCandidate = (setting: ContributionSetting) =>
+const contributionSettingCandidate = (setting: ContributionSettingRow) =>
   RunPlanResolutionCandidate.make({
     scope: scopeName(setting.scope),
     level: "Contribution entry gate",
@@ -406,7 +406,7 @@ const droppedContribution = (
 
 const contributionGateTrace = (
   contribution: FileContribution,
-  settings: ReadonlyArray<ContributionSetting>,
+  settings: ReadonlyArray<ContributionSettingRow>,
   workspace: WorkspaceConfig["name"],
 ) => {
   const resolution = contributionGate(contribution, settings, workspace);
