@@ -1,0 +1,24 @@
+packages/engine/src/control-store.test.ts
+  s_4512567ffa37bf::t_66e567394b37d3 65-71
+  s_4512567ffa37bf::t_ed77606d1b05a6 2,10,52,102-161
+  s_4512567ffa37bf::t_caaa4cad4f0896 162-164
+packages/engine/src/control-store.ts
+  s_4512567ffa37bf::t_3f2f6035744a46 67-69
+  s_4512567ffa37bf::t_90f6615ed26b6a 8-11,36-38,49-51,66,75-119,132-133,136-183,227-237,244-245,334
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "53dc28cf07e1f4d1bdfb047706ad59cabcd55124",
+  "prompts": {},
+  "sessions": {
+    "s_4512567ffa37bf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a045ab-5c66-7060-8313-1a3fcd529d76",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
