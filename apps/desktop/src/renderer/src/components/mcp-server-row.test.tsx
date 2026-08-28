@@ -13,29 +13,26 @@ function required(id: string) {
 
 function render(id: string) {
   return renderToStaticMarkup(
-    <Configuration.Provider picture={placeholderConfiguration}>
+    <Configuration.StaticProvider picture={placeholderConfiguration}>
       <TooltipProvider>
         <McpServerRow contribution={required(id)} />
       </TooltipProvider>
-    </Configuration.Provider>,
+    </Configuration.StaticProvider>,
   );
 }
 
-/** Greatest depth of nested `<button>` elements in the markup. */
 function buttonDepth(markup: string) {
-  let depth = 0;
-  let deepest = 0;
-  for (const token of markup.matchAll(/<button\b|<\/button>/g)) {
-    depth += token[0] === "</button>" ? -1 : 1;
-    deepest = Math.max(deepest, depth);
-  }
-  return deepest;
+  return [...markup.matchAll(/<button\b|<\/button>/g)].reduce(
+    (state, token) => {
+      const depth = state.depth + (token[0] === "</button>" ? -1 : 1);
+      return { depth, deepest: Math.max(state.deepest, depth) };
+    },
+    { depth: 0, deepest: 0 },
+  ).deepest;
 }
 
 describe("McpServerRow", () => {
   it("never nests the switch inside the row's own button", () => {
-    // HTML forbids a button inside a button, and a screen reader flattens the switch when it
-    // happens. The row opens from an overlay button that sits beside the controls, not around them.
     const markup = render("plugin:linear/mcp/linear");
     expect(buttonDepth(markup)).toBe(1);
   });
@@ -45,8 +42,12 @@ describe("McpServerRow", () => {
   });
 
   it("shows an overlay diagnostic on a machine-level server", () => {
-    // Granola sits at the Settings profile and its only setting is a dangling one scoped to a
-    // workspace. Resolving against its own view drops that row, so the badge must not depend on it.
     expect(render("plugin:granola/mcp/granola")).toContain("Dangling");
+  });
+
+  it("renders a repository offer as a muted Disabled row", () => {
+    const markup = render("local:repo/mcp/repo-tools");
+    expect(markup).toContain("Disabled");
+    expect(markup).toContain("opacity-60");
   });
 });
