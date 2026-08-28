@@ -73,6 +73,17 @@ const readPicture = (sql: SqlClient.SqlClient) =>
     return { daemonLimits };
   });
 
+export const readControlStore = Effect.fn("ControlStore.read")((storePath: string) =>
+  Effect.flatMap(SqlClient.SqlClient, readPicture).pipe(
+    Effect.provide(SqliteClient.layer({ filename: storePath, readonly: true, disableWAL: true })),
+    Effect.scoped,
+    Effect.catchCause((cause) => {
+      if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+      return Effect.fail(storeFailure("read Control store")(Cause.squash(cause)));
+    }),
+  ),
+);
+
 const updateLimitRevision = (sql: SqlClient.SqlClient, update: DaemonLimitUpdate) => {
   if (update.key === "global-concurrency") {
     return sql<{ readonly revision: number }>`
