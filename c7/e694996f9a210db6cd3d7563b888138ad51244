@@ -1,0 +1,42 @@
+packages/cursor-acp/src/harness.test.ts
+  s_3ad8c99e0b0d7f::t_69e2b379219088 41
+packages/engine/src/context-assembler.test.ts
+  s_3ad8c99e0b0d7f::t_c07b05bf6dc76b 263-273
+  s_9cd3b681ba111c::t_08cdab240d5d82 274-276
+packages/codex-cli/src/harness.test.ts
+  s_3ad8c99e0b0d7f::t_69e2b379219088 60
+packages/engine/src/harness.test.ts
+  s_3ad8c99e0b0d7f::t_c07b05bf6dc76b 20
+packages/engine/src/context-assembler.ts
+  s_3ad8c99e0b0d7f::t_732c64a36e634e 83,91-92,164,175
+packages/engine/src/provider-runner.test.ts
+  s_3ad8c99e0b0d7f::t_c07b05bf6dc76b 117
+packages/engine/src/daemon-composition.test.ts
+  s_3ad8c99e0b0d7f::t_c07b05bf6dc76b 46
+packages/engine/src/executor.test.ts
+  s_9cd3b681ba111c::t_de304fa6b75740 196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c7e694996f9a210db6cd3d7563b888138ad51244",
+  "prompts": {},
+  "sessions": {
+    "s_3ad8c99e0b0d7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-4975-7cf3-8b18-af92906892ca",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9cd3b681ba111c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e782321b-796a-4c23-b1b2-8ec31ca1954f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
