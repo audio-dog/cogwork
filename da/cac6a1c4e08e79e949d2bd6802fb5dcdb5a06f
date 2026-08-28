@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/operation-settings-view.test.ts
+  s_d6f8a470e8319b::t_5c5a85be0ec1aa 17
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_d6f8a470e8319b::t_5c5a85be0ec1aa 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dacac6a1c4e08e79e949d2bd6802fb5dcdb5a06f",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

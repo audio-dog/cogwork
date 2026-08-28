@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_d6f8a470e8319b::t_bdcaaca7224088 8,143,152
+apps/desktop/src/renderer/src/components/render-trigger.test.tsx
+  s_d6f8a470e8319b::t_bdcaaca7224088 18,22
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_d6f8a470e8319b::t_bdcaaca7224088 32-33
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_d6f8a470e8319b::t_b627e99bb688f8 84
+  s_d6f8a470e8319b::t_bdcaaca7224088 1-2,4-5,12,20-23,29,34,54-60,64,75-77,83,87
+  s_d6f8a470e8319b::t_5c5a85be0ec1aa 48-52,62,79-82
+  s_d6f8a470e8319b::t_ca9135de21b06e 39-40,71,78
+  s_d6f8a470e8319b::t_c1b87af35bac48 53
+  s_d6f8a470e8319b::t_12b280a0766ed3 61
+  s_d6f8a470e8319b::t_3264c373d86a6b 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f7a4fd2b02f7e360b217f56770b7b2c8b643ad7c",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
