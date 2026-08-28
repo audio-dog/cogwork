@@ -13,8 +13,9 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { RegisteredWorkspace } from "./projector";
-import { classifiedItemsOf, workspaceInfoOf } from "./read-model";
+import { classifiedItemsOf, schedulerStatsOf, workspaceInfoOf } from "./read-model";
 import type { WorkspaceReconcileState } from "./reconcile";
+import { initialState } from "./scheduler";
 
 const id = Schema.decodeSync(WorkItemId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -171,5 +172,39 @@ describe("workspaceInfoOf", () => {
 
     assert.deepStrictEqual(info.poll, { status: "pending" });
     assert.deepStrictEqual([info.eligible, info.claimed, info.blocked, info.needsHuman], [[], [], [], []]);
+  });
+});
+
+describe("schedulerStatsOf", () => {
+  it("reports the durable workspace limit even with no run in flight", () => {
+    const registered = { ...workspace, workspaceLimit: 2 };
+    const stats = schedulerStatsOf(
+      { workspaces: [registered], failures: [] },
+      { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
+      initialState,
+    );
+
+    assert.deepStrictEqual(stats.perWorkspace, [{ name: workspace.config.name, inFlight: 0, limit: 2 }]);
+  });
+
+  it("reports in-flight work for a registered workspace whose input failed", () => {
+    const failed = workspaceId("failed");
+    const stats = schedulerStatsOf(
+      {
+        workspaces: [],
+        failures: [
+          {
+            name: failed,
+            source: "/repos/failed",
+            message: "invalid Workspace input",
+            workspaceLimit: 2,
+          },
+        ],
+      },
+      { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
+      { ...initialState, global: 1, perWorkspace: new Map([[failed, 1]]) },
+    );
+
+    assert.deepStrictEqual(stats.perWorkspace, [{ name: failed, inFlight: 1, limit: 2 }]);
   });
 });

@@ -5,7 +5,6 @@ export * as ControlStoreSchema from "./control-store-schema";
 export * as CredentialStore from "./credential-store";
 export * as Daemon from "./daemon";
 export * as DaemonEventBus from "./daemon-event-bus";
-export { defineWorkspace } from "./define-workspace";
 export * as EventPublisher from "./event-publisher";
 export * as Executor from "./executor";
 export * as Git from "./git";

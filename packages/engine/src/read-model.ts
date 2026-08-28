@@ -30,6 +30,7 @@ export const workspaceInfoOf = (
   state: WorkspaceReconcileState | undefined,
 ) => ({
   name: workspace.config.name,
+  ...(workspace.config.displayName ? { displayName: workspace.config.displayName } : {}),
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
   harness: workspace.config.harness.preferred,
@@ -50,6 +51,24 @@ export const workspaceStatesOf = (registry: RegistryState, snapshot: ReconcileSn
   ];
 };
 
+const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, state: SchedulerState) => [
+  ...registry.workspaces.map((workspace) => ({
+    name: workspace.config.name,
+    inFlight: state.perWorkspace.get(workspace.config.name) ?? 0,
+    limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
+  })),
+  ...registry.failures.flatMap((failure) => {
+    if (failure.name === undefined) return [];
+    return [
+      {
+        name: failure.name,
+        inFlight: state.perWorkspace.get(failure.name) ?? 0,
+        limit: failure.workspaceLimit ?? config.perWorkspaceLimit,
+      },
+    ];
+  }),
+];
+
 export const schedulerStatsOf = (
   registry: RegistryState,
   config: SchedulerConfig,
@@ -61,9 +80,5 @@ export const schedulerStatsOf = (
   perWorkspaceLimit: config.perWorkspaceLimit,
   dailyBudgetUsed: state.budgetUsed,
   dailyBudgetLimit: config.dailyBudget,
-  perWorkspace: registry.workspaces.map((workspace) => ({
-    name: workspace.config.name,
-    inFlight: state.perWorkspace.get(workspace.config.name) ?? 0,
-    limit: workspace.config.concurrency ?? config.perWorkspaceLimit,
-  })),
+  perWorkspace: workspaceLoadsOf(registry, config, state),
 });

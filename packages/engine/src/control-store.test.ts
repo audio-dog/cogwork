@@ -64,7 +64,13 @@ layer(NodeServices.layer)((it) => {
           storePath,
           "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
         ),
-        [{ name: "daemon_limits" }, { name: "run_events" }, { name: "runs" }, { name: "sessions" }],
+        [
+          { name: "daemon_limits" },
+          { name: "run_events" },
+          { name: "runs" },
+          { name: "sessions" },
+          { name: "workspaces" },
+        ],
       );
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
     }),

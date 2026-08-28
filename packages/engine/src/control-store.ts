@@ -73,9 +73,12 @@ const readPicture = (sql: SqlClient.SqlClient) =>
     return { daemonLimits };
   });
 
+export const readOnlyControlStoreClientLayer = (storePath: string) =>
+  SqliteClient.layer({ filename: storePath, readonly: true, disableWAL: true });
+
 export const readControlStore = Effect.fn("ControlStore.read")((storePath: string) =>
   Effect.flatMap(SqlClient.SqlClient, readPicture).pipe(
-    Effect.provide(SqliteClient.layer({ filename: storePath, readonly: true, disableWAL: true })),
+    Effect.provide(readOnlyControlStoreClientLayer(storePath)),
     Effect.scoped,
     Effect.catchCause((cause) => {
       if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;

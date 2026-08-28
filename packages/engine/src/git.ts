@@ -47,6 +47,8 @@ const makeUnavailable = () => ({
     Effect.map(unavailable(`rev-list ${remote}/${branch}...HEAD`), () => noDivergence),
   rebase: (_worktreePath: string, remote: string, branch: string) =>
     Effect.asVoid(unavailable(`rebase ${remote}/${branch}`)),
+  remoteUrl: (_repoPath: string, remote: string) =>
+    Effect.map(unavailable(`remote get-url ${remote}`), () => ""),
 });
 
 export type GitService = ReturnType<typeof makeUnavailable>;

@@ -5,10 +5,10 @@ import { GitHubClient } from "./github/client";
 import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
-import type { RegisteredWorkspace } from "./projector";
+import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 export const route = (github: IssueTrackerService, linear: IssueTrackerService): IssueTrackerService => {
-  const forWorkspace = (workspace: RegisteredWorkspace) =>
+  const forWorkspace = (workspace: WorkspaceIssueTrackerBinding) =>
     workspace.config.issueTracker.type === "linear" ? linear : github;
 
   return {

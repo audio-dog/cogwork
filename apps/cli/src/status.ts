@@ -38,6 +38,12 @@ const formatPoll = (poll: PollState) => {
   return [`      paused: ${poll.reason}${pauseQualifier(poll)} — ${poll.message}`];
 };
 
+const workspaceLabel = (workspace: { readonly name?: string; readonly displayName?: string }) => {
+  if (workspace.name === undefined) return workspace.displayName ?? "";
+  if (workspace.displayName === undefined) return workspace.name;
+  return `${workspace.displayName} (${workspace.name})`;
+};
+
 const formatWorkspace = (workspace: WorkspaceInfo) => {
   const poll = formatPoll(workspace.poll);
   const eligible = section(
@@ -59,13 +65,19 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     ),
   );
   return [
-    `  - ${workspace.name} [${workspace.issueTracker}/${workspace.harness}] ${workspace.checkoutPath}`,
+    `  - ${workspaceLabel(workspace)} [${workspace.issueTracker}/${workspace.harness}] ${workspace.checkoutPath}`,
     ...poll,
     ...eligible,
     ...claimed,
     ...blocked,
     ...needsHuman,
   ].join("\n");
+};
+
+const formatFailure = (failure: DaemonStatus["failures"][number]) => {
+  const label = workspaceLabel(failure);
+  const workspace = label.length === 0 ? "" : `${label} · `;
+  return `  ! ${workspace}${failure.source}: ${failure.message}`;
 };
 
 export const formatScheduler = (scheduler: SchedulerStats) => {
@@ -94,7 +106,7 @@ export const formatStatus = (status: DaemonStatus) => {
     status.workspaces.length === 0
       ? "  (no workspaces registered)"
       : status.workspaces.map(formatWorkspace).join("\n");
-  const failures = status.failures.map((failure) => `  ! ${failure.source}: ${failure.message}`).join("\n");
+  const failures = status.failures.map(formatFailure).join("\n");
   return [
     header,
     formatScheduler(status.scheduler),
