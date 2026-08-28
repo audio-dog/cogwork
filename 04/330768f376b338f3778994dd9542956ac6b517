@@ -1,0 +1,116 @@
+packages/engine/src/linear/host.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 9,55,77,125,130,138
+packages/contracts/src/board.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 6,52-64,336-356
+  s_9f37a82c7fcd5b::t_fbc9bdd9fd8a31 357
+packages/contracts/src/workspace.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 102-141,144
+packages/engine/src/scheduler.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 43,342
+apps/cli/CONTEXT.md
+  s_9f37a82c7fcd5b::t_37bc15926383d4 27
+apps/cli/src/login-commands.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 12,22-24,28,36-41,66,71,77-82,89
+apps/cli/src/commands.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 31,114-115,321
+packages/contracts/CONTEXT.md
+  s_9f37a82c7fcd5b::t_37bc15926383d4 28,60
+packages/engine/src/read-model.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 33,54-71,83
+packages/engine/src/commands.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 12,14,23,47-54,56-58,63,68-86,203,209-210,219-265,356-385,639-698
+packages/engine/src/control-store.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 67-73
+packages/engine/src/reconcile.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 210
+packages/engine/src/recovery.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 178-181,665-686
+packages/contracts/src/daemon.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 89,102-103
+packages/engine/src/control-store.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 76-78,81
+packages/engine/src/recovery.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 1,7,18,32,34-35,221-226,228-234,238-240,242-244,246-247,250-253,255,259,263-264,266-267,270,276,278,281
+  s_9f37a82c7fcd5b::t_c15fa57d61787b 33,216-220,227,241,245,248-249,256,265,268-269,271-275
+  s_9f37a82c7fcd5b::t_21f923ec1630d7 282
+packages/engine/src/registry.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 1-9,11-33,35-36,38-39,42-59,62-67,70-398
+apps/cli/src/platform.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 128-129
+packages/engine/src/worktree.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 74
+apps/cli/src/main.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 19,32
+packages/contracts/src/board.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 49,55,64-65
+packages/engine/src/projector.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 1,3-7,10-15,20
+packages/engine/src/linear/account.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 4-5,8,14
+packages/engine/src/git.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 50-51
+apps/cli/src/status.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 41-46,68,77-82,109
+packages/engine/src/commands.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 11-13,22,24,82-89,158-170
+  s_9f37a82c7fcd5b::t_cb5e3f0d4add3c 171
+packages/engine/src/issue-tracker-router.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 8,11
+apps/cli/src/rpc.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 8
+packages/engine/src/read-model.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 16,18,177-209
+  s_9f37a82c7fcd5b::t_e4a39b8eb13dcd 210
+packages/engine/src/workspace-registry.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 1-336
+packages/engine/src/github/host.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 14,39,67,122,134
+packages/engine/src/scheduler.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 183
+packages/engine/src/daemon.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 26,52,169-174,200,231,246
+packages/engine/src/control-store-create.gen.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 8
+apps/cli/src/status.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 159-165,204-211,216
+packages/contracts/src/rpc.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 14,19,103-115
+packages/engine/src/daemon-composition.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 118
+packages/engine/src/control-store-schema.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 74-87
+packages/contracts/src/daemon-event.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 31,38-39
+packages/engine/src/engine.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 1-7,38-42,47-48,51-61,132,489,511-514,719,741-742,906-909
+packages/engine/src/event-publisher.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 13,61-62,64-65,70,296,434-435,452
+packages/engine/src/issue-tracker.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 15,92,98,103,110,118,120,122-123,125,127,129,131-136,138,140,153-156
+packages/engine/CONTEXT.md
+  s_9f37a82c7fcd5b::t_37bc15926383d4 209
+apps/cli/src/workspace-commands.test.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 1-22
+apps/cli/src/workspace-commands.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 1-74
+apps/cli/src/worktree-commands.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 4,8,19-21,24-26,32-37,40,47,51,60,66,82,91,96,103
+packages/engine/src/coordination-tracker.ts
+  s_9f37a82c7fcd5b::t_37bc15926383d4 28,51,53,55-58,117,122,135,142,150,160,169,178,190,200,210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "04330768f376b338f3778994dd9542956ac6b517",
+  "prompts": {},
+  "sessions": {
+    "s_9f37a82c7fcd5b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04667-409a-75f2-a5ec-f7ab06be56c5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
