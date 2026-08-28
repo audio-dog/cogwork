@@ -1,8 +1,8 @@
-import type { DaemonStatus, WorkspaceInfo } from "@cogwork/contracts";
+import type { ControlStore, DaemonStatus, WorkspaceInfo } from "@cogwork/contracts";
 import { HarnessName, IssueTrackerType, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { formatStatus } from "./status";
+import { formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 
 const workItemId = Schema.decodeSync(WorkItemId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -40,7 +40,36 @@ const status = (over: Partial<DaemonStatus> = {}): DaemonStatus => ({
   ...over,
 });
 
+const controlStore: ControlStore = {
+  daemonLimits: {
+    globalConcurrency: 8,
+    perWorkspaceConcurrency: 3,
+    dailyBudget: 20,
+    revision: 2,
+  },
+};
+
 describe("formatStatus", () => {
+  it("shows stored rows and labels every daemon-derived section offline", () => {
+    const output = formatOfflineStatus(controlStore);
+
+    assert.include(output, "daemon: needs a daemon");
+    assert.include(output, "global-concurrency: 8");
+    assert.include(output, "scheduler: needs a daemon");
+    assert.include(output, "workspace state: needs a daemon");
+    assert.include(output, "availability: needs a daemon");
+    assert.notInclude(output, "readiness:");
+    assert.notInclude(output, "effective settings:");
+  });
+
+  it("shows the stored rows and full daemon picture online", () => {
+    const output = formatStatusWithStore(status(), controlStore);
+
+    assert.include(output, "daemon: running");
+    assert.include(output, "global-concurrency: 8");
+    assert.notInclude(output, "needs a daemon");
+  });
+
   it("renders a needs-human section with each item's reason and inline triage proposal", () => {
     const output = formatStatus(
       status({

@@ -4,6 +4,7 @@ import {
   type ControlStore,
   type DaemonEvent,
   DaemonRpcs,
+  type DaemonStatus,
   initialBoard,
   type RunActivity,
   type RunEvent,
@@ -12,7 +13,7 @@ import {
   type SchedulingState,
   WorkItemId,
 } from "@cogwork/contracts";
-import { Daemon, Registry } from "@cogwork/engine";
+import { Daemon, Registry, readControlStore } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,6 +26,8 @@ import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
+import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import { SocketOpenError } from "effect/unstable/socket/Socket";
 import {
   defaultConfigHome,
   defaultControlStorePath,
@@ -32,7 +35,7 @@ import {
   defaultSocketPath,
 } from "./paths";
 import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
-import { formatStatus } from "./status";
+import { formatDaemonLimits, formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 import { secondStopSignal } from "./stop-signal";
 import { telemetryLayer } from "./telemetry";
 import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
@@ -89,12 +92,17 @@ const daemonLimitKeyArgument = Argument.choice("limit", [
 
 const daemonLimitValueArgument = Argument.integer("value");
 
-export const formatDaemonLimits = (controlStore: ControlStore) =>
-  [
-    `global-concurrency: ${controlStore.daemonLimits.globalConcurrency}`,
-    `per-workspace-concurrency: ${controlStore.daemonLimits.perWorkspaceConcurrency}`,
-    `daily-budget: ${controlStore.daemonLimits.dailyBudget}`,
-  ].join("\n");
+export { formatDaemonLimits } from "./status";
+
+const isUnavailableDaemonError = (error: unknown) =>
+  Schema.is(SocketOpenError)(error) ||
+  (Schema.is(RpcClientError)(error) && Schema.is(SocketOpenError)(error.reason));
+
+export const daemonOrStore = <A, E, R, E2, R2>(
+  daemon: Effect.Effect<A, E | RpcClientError, R>,
+  store: Effect.Effect<A, E2, R2>,
+): Effect.Effect<A, E | E2 | RpcClientError, R | R2> =>
+  Effect.catchIf(daemon, isUnavailableDaemonError, () => store);
 
 export const schedulingActions = {
   pause: "paused",
@@ -206,6 +214,14 @@ const watchOverview = <E>(source: Stream.Stream<DaemonEvent, E>) =>
     Stream.runForEach((board) => Console.log(overviewScreen(board))),
   );
 
+export const daemonStatusPicture = Effect.fn("commands.daemonStatusPicture")(function* <E, R>(
+  status: DaemonStatus,
+  controlStore: Effect.Effect<ControlStore, E, R>,
+) {
+  if (status.health === "store-unavailable") return formatStatus(status);
+  return formatStatusWithStore(status, yield* controlStore);
+});
+
 export const resolveTarget = Effect.fn("commands.resolveTarget")(function* <E, R>(
   resolve: (workItem: WorkItemId) => Effect.Effect<RunId | null, E, R>,
   id: Option.Option<string>,
@@ -248,22 +264,32 @@ const runWatch = Effect.fn("commands.runWatch")(
   (effect, options) => overSocket(effect, options.socketPath),
 );
 
-const runStatus = Effect.fn("commands.runStatus")(
-  function* (_options: { readonly socketPath: string }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
-    const status = yield* client.GetStatus();
-    yield* Console.log(formatStatus(status));
-  },
-  (effect, options) => overSocket(effect, options.socketPath),
-);
+const runStatus = Effect.fn("commands.runStatus")(function* (options: {
+  readonly socketPath: string;
+  readonly controlStorePath: string;
+}) {
+  yield* daemonOrStore(
+    Effect.gen(function* () {
+      const client = yield* RpcClient.make(DaemonRpcs);
+      const status = yield* client.GetStatus();
+      return yield* daemonStatusPicture(status, client.GetControlStore());
+    }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
+    readControlStore(options.controlStorePath).pipe(Effect.map(formatOfflineStatus)),
+  ).pipe(Effect.flatMap(Console.log));
+});
 
-const showLimits = Effect.fn("commands.showLimits")(
-  function* (_options: { readonly socketPath: string }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
-    yield* Console.log(formatDaemonLimits(yield* client.GetControlStore()));
-  },
-  (effect, options) => overSocket(effect, options.socketPath),
-);
+const showLimits = Effect.fn("commands.showLimits")(function* (options: {
+  readonly socketPath: string;
+  readonly controlStorePath: string;
+}) {
+  yield* daemonOrStore(
+    Effect.gen(function* () {
+      const client = yield* RpcClient.make(DaemonRpcs);
+      return yield* client.GetControlStore();
+    }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
+    readControlStore(options.controlStorePath),
+  ).pipe(Effect.map(formatDaemonLimits), Effect.flatMap(Console.log));
+});
 
 const setLimit = Effect.fn("commands.setLimit")(
   function* (options: {
@@ -314,8 +340,13 @@ export const daemonCommand = Command.make("daemon", {
   ),
 );
 
-export const statusCommand = Command.make("status", { socket: socketFlag }).pipe(
-  Command.withHandler(({ socket }) => runStatus({ socketPath: socket })),
+export const statusCommand = Command.make("status", {
+  socket: socketFlag,
+  controlStore: controlStoreFlag,
+}).pipe(
+  Command.withHandler(({ socket, controlStore }) =>
+    runStatus({ socketPath: socket, controlStorePath: controlStore }),
+  ),
 );
 
 export const runsCommand = Command.make("runs", { socket: socketFlag }).pipe(
@@ -332,8 +363,13 @@ export const watchCommand = Command.make("watch", {
   workItem: watchWorkItemArg,
 }).pipe(Command.withHandler(({ socket, id, workItem }) => runWatch({ socketPath: socket, id, workItem })));
 
-const limitsShowCommand = Command.make("show", { socket: socketFlag }).pipe(
-  Command.withHandler(({ socket }) => showLimits({ socketPath: socket })),
+const limitsShowCommand = Command.make("show", {
+  socket: socketFlag,
+  controlStore: controlStoreFlag,
+}).pipe(
+  Command.withHandler(({ socket, controlStore }) =>
+    showLimits({ socketPath: socket, controlStorePath: controlStore }),
+  ),
 );
 
 const limitsSetCommand = Command.make("set", {

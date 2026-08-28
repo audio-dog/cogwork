@@ -7,7 +7,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as TestClock from "effect/testing/TestClock";
-import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
+import {
+  bootControlStoreLayer,
+  ControlStore,
+  controlStoreClientLayer,
+  readControlStore,
+} from "./control-store";
 
 const storeLayerAt = (storePath: string) =>
   bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath)));
@@ -87,6 +92,36 @@ layer(NodeServices.layer)((it) => {
         dailyBudget: 20,
         revision: 3,
       });
+    }),
+  );
+
+  it.effect("reads the whole picture without booting or writing the store", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* Effect.gen(function* () {
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return assert.fail(store.message);
+        yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
+      }).pipe(Effect.provide(storeLayerAt(storePath)));
+
+      assert.deepStrictEqual((yield* readControlStore(storePath)).daemonLimits, {
+        globalConcurrency: 8,
+        perWorkspaceConcurrency: 4,
+        dailyBudget: 50,
+        revision: 1,
+      });
+    }),
+  );
+
+  it.effect("does not create a missing store during a read", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { storePath } = yield* temporaryStore();
+
+      const failure = yield* Effect.flip(readControlStore(storePath));
+
+      assert.strictEqual(failure._tag, "ControlStoreFailure");
+      assert.isFalse(yield* fs.exists(storePath));
     }),
   );
 
