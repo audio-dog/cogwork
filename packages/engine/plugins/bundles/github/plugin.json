@@ -1,0 +1,21 @@
+{
+  "pluginId": "github",
+  "version": "1.0.0",
+  "provenance": "cogwork-0.0.1",
+  "authRecipe": null,
+  "requiredConnections": ["github"],
+  "contributions": [
+    {
+      "kind": "mcp-server",
+      "localName": "github",
+      "summary": "GitHub's hosted MCP server.",
+      "file": "mcp/github.json"
+    },
+    {
+      "kind": "skill",
+      "localName": "github-review",
+      "summary": "Review a GitHub pull request.",
+      "file": "skills/github-review/SKILL.md"
+    }
+  ]
+}

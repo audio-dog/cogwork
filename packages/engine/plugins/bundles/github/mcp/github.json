@@ -1,0 +1,6 @@
+{
+  "endpoint": "https://api.githubcopilot.com/mcp/",
+  "secret": {
+    "env": "GITHUB_TOKEN"
+  }
+}
