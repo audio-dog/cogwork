@@ -78,6 +78,8 @@ export function viewOf(contribution: Contribution): ViewContext {
 
 export function enableScopeFor(contribution: Contribution): ScopeRef | undefined {
   const permitted = enablementScopes[contribution.kind];
+  const current = resolveEnablement(contribution, viewOf(contribution)).winner?.scope;
+  if (current && permitted.includes(current.kind)) return current;
   const preferred = permitted.includes(contribution.definedAt) ? contribution.definedAt : permitted.at(-1);
   if (preferred === undefined) return undefined;
   if (preferred === "settings-profile") return { kind: preferred };
@@ -86,9 +88,9 @@ export function enableScopeFor(contribution: Contribution): ScopeRef | undefined
 }
 
 export function definedScope(contribution: Contribution): ScopeRef {
-  return contribution.definedIn === undefined
-    ? { kind: contribution.definedAt }
-    : { kind: contribution.definedAt, workspaceId: contribution.definedIn };
+  if (contribution.definedAt === "settings-profile") return { kind: contribution.definedAt };
+  if (contribution.definedIn === undefined) return { kind: contribution.definedAt };
+  return { kind: contribution.definedAt, workspaceId: contribution.definedIn };
 }
 
 export function offeredElsewhere(contribution: Contribution): boolean {
