@@ -71,6 +71,7 @@ layer(NodeServices.layer)((it) => {
           { name: "daemon_limits" },
           { name: "operation_settings" },
           { name: "run_events" },
+          { name: "run_plans" },
           { name: "runs" },
           { name: "sessions" },
           { name: "workspaces" },
