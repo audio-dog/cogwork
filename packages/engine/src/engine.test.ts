@@ -39,6 +39,7 @@ const workspaceId = Schema.decodeSync(WorkspaceId);
 
 const registeredWorkspace: Registry.RegisteredWorkspace = {
   source: "control-store:example",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",

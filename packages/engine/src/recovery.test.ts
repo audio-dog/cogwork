@@ -33,6 +33,7 @@ const session = Schema.decodeSync(SessionId)("sess-abc");
 
 const wsA: RegisteredWorkspace = {
   source: "a.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",

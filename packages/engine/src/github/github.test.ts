@@ -187,6 +187,7 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -198,6 +199,7 @@ const workspace: RegisteredWorkspace = {
 // A workspace that never names a bot login, so the adapter falls back to "cogwork" on write.
 const noBotWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-nobot",
     checkoutPath: "/repos/gh",
@@ -208,6 +210,7 @@ const noBotWorkspace: RegisteredWorkspace = {
 
 const trustsCursorBot: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-bots",
     checkoutPath: "/repos/gh",
@@ -224,6 +227,7 @@ const trustsCursorBot: RegisteredWorkspace = {
 
 const prioritizedWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh-priority",
     checkoutPath: "/repos/gh",

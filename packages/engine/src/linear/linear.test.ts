@@ -236,6 +236,7 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
 
 const workspace: RegisteredWorkspace = {
   source: "linear.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "lin",
     checkoutPath: "/repos/lin",
@@ -261,6 +262,7 @@ const customRolesWorkspace: RegisteredWorkspace = {
 
 const multiTeamWorkspace: RegisteredWorkspace = {
   source: "linear.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "multi",
     checkoutPath: "/repos/multi",

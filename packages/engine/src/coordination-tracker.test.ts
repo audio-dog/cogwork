@@ -150,6 +150,7 @@ const makeFakeHost = Effect.fn("fakeHost")(function* (seed: ReadonlyArray<SeedIt
 
 const workspace: RegisteredWorkspace = {
   source: "fake.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "fake",
     checkoutPath: "/repos/fake",
