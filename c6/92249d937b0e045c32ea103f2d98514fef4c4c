@@ -1,0 +1,52 @@
+packages/engine/src/workspace-registry.test.ts
+  s_c3d7df8e0cdfb9::t_0faff557bb7593 11,400-445
+  s_c3d7df8e0cdfb9::t_36ab710199f603 72
+  s_c3d7df8e0cdfb9::t_87d633f6451097 337-399
+packages/engine/src/registry.ts
+  s_c3d7df8e0cdfb9::t_e4fecc15da8bcf 513
+  s_c3d7df8e0cdfb9::t_98d6fdad7b5bcb 7-8,62-68,81-94,131-135,266-293,295,384-389,430-434,466,472,478,504,533
+  s_c3d7df8e0cdfb9::t_2cd98831e23ba6 421-422,435-457,479-482,491,505-506,519
+  s_c3d7df8e0cdfb9::t_fa7fb5c5163b29 294,296-308,395-404,408,410,459,492-494,520,528
+  s_c3d7df8e0cdfb9::t_2c06cc9d5bf6f4 309
+  s_c3d7df8e0cdfb9::t_62064d3b98d6ad 390-394
+  s_c3d7df8e0cdfb9::t_6700b37bc48059 405-407
+  s_c3d7df8e0cdfb9::t_0166f65a2a4933 409
+  s_c3d7df8e0cdfb9::t_4a333eeb7602ad 411-413,418-420
+  s_c3d7df8e0cdfb9::t_3dfda3e1177f37 423-424
+  s_c3d7df8e0cdfb9::t_2bc6421fad8d37 428-429
+  s_c3d7df8e0cdfb9::t_7e84d684dce922 458
+  s_c3d7df8e0cdfb9::t_5364f4ee4dc3ae 463-465
+  s_c3d7df8e0cdfb9::t_889ca6bc6967ec 467-471
+  s_c3d7df8e0cdfb9::t_0475d825fb63d6 473-477
+  s_c3d7df8e0cdfb9::t_ea37e25a5e3add 483-485,488-490
+  s_c3d7df8e0cdfb9::t_24faaf3e2fa091 495-497,501-503
+  s_c3d7df8e0cdfb9::t_b8696fb2d3c417 507-512
+  s_c3d7df8e0cdfb9::t_881f318779a98d 514-518
+  s_c3d7df8e0cdfb9::t_a1f2fd68e84443 521-523
+  s_c3d7df8e0cdfb9::t_b0461d26b63b52 527
+  s_b50500494b130e::t_4bc933e4575fad 414-417,461-462,486-487,498-500,524-525
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c692249d937b0e045c32ea103f2d98514fef4c4c",
+  "prompts": {},
+  "sessions": {
+    "s_b50500494b130e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a046a5-88cd-7a21-a23c-70c879895f34",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c3d7df8e0cdfb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a046a9-a397-73a0-9211-7a4be9957533",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
