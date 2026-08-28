@@ -239,7 +239,7 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
   const publisher = yield* DaemonEventPublisher;
   const store = yield* ControlStore;
   const result = yield* mutation;
-  yield* publisher.publishPlugins(result.overview);
+  yield* publisher.publishPlugins(result.overview, result.notices);
   yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
   return result;
 });

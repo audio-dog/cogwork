@@ -150,7 +150,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const pluginEvents = yield* plugins.overview.pipe(
     Effect.match({
       onFailure: () => [],
-      onSuccess: (overview) => [{ _tag: "PluginsChanged" as const, plugins: overview }],
+      onSuccess: (overview) => [{ _tag: "PluginsChanged" as const, plugins: overview, notices: [] }],
     }),
   );
   return [...items, ...workspaces, ...runs, ...controlStoreEvents, ...pluginEvents, scheduling].map(

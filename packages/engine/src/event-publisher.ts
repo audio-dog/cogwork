@@ -144,8 +144,9 @@ export const make = Effect.gen(function* () {
 
   const publishPlugins = Effect.fn("DaemonEventPublisher.publishPlugins")(function* (
     plugins: PluginOverview,
+    notices: readonly string[],
   ) {
-    yield* bus.publish({ _tag: "PluginsChanged", plugins });
+    yield* bus.publish({ _tag: "PluginsChanged", plugins, notices });
     return plugins;
   });
 
