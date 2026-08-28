@@ -10,6 +10,7 @@ import { cogworkWorkspaceId, contributionById, placeholderConfiguration } from "
 import {
   definedScope,
   diagnosticsOf,
+  displayedEnablement,
   enableScopeFor,
   offeredElsewhere,
   resolveEnablement,
@@ -70,6 +71,42 @@ describe("resolveEnablement", () => {
     // The overlay row belongs to another workspace, so the profile row wins here.
     expect(resolved.effective).toBe(true);
     expect(resolved.winner?.scope.kind).toBe("settings-profile");
+  });
+
+  it("shows and edits a dangling overlay at its stored scope", () => {
+    const contribution = {
+      id: "plugin:linear/mcp/linear",
+      authority: { _tag: "plugin", pluginId: "linear" },
+      kind: "mcp-server",
+      localName: "linear",
+      summary: "Linear MCP",
+      file: "/plugins/linear/mcp/linear.json",
+      definedAt: "settings-profile",
+      definedIn: cogworkWorkspaceId,
+      load: { _tag: "loaded" },
+      rows: [
+        { scope: { kind: "settings-profile" }, value: true, source: "Control store" },
+        {
+          scope: { kind: "private-overlay", workspaceId: cogworkWorkspaceId },
+          value: false,
+          source: "Control store",
+          diagnostic: {
+            _tag: "dangling",
+            source: "Control store",
+            detail: "The workspace was removed.",
+          },
+        },
+      ],
+    } satisfies Contribution;
+
+    const resolved = resolveEnablement(contribution, viewOf(contribution));
+
+    expect(resolved.effective).toBe(true);
+    expect(displayedEnablement(resolved)).toBe(false);
+    expect(enableScopeFor(contribution)).toEqual({
+      kind: "private-overlay",
+      workspaceId: cogworkWorkspaceId,
+    });
   });
 
   it("never reconciles two contributions that share a local name", () => {
