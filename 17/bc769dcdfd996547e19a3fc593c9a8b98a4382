@@ -1,0 +1,198 @@
+packages/contracts/src/scheduler-defaults.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 17-18
+apps/cli/src/commands.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 107-108,141-142
+apps/cli/src/plugin-commands.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-51
+packages/engine/plugins/bundles/github/plugin.json
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-21
+apps/desktop/src/renderer/src/features/plugin-configuration.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-66,68-111
+  s_d6f8a470e8319b::t_71855db3678898 67
+packages/engine/src/linear/client.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 75,77-78,123-124,129,188-243,289-291,311-312,357-361,386-390
+apps/desktop/src/renderer/src/features/operation-settings-view.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 49-50
+apps/desktop/src/renderer/src/components/plugins-facet.test.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-119
+packages/engine/src/linear/host.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 32,64,134-136
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_d6f8a470e8319b::t_71855db3678898 48
+  s_d6f8a470e8319b::t_8c3947d36250fb 57-58
+packages/engine/src/context-assembler.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1,25,111-112,150-160
+apps/desktop/src/renderer/src/components/plugin-detail.test.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-59
+apps/cli/src/status.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 52-53
+packages/engine/src/context-assembler.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 99,104,113,137-143,149-156
+packages/contracts/src/board.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 5,19-20,29-30,108
+apps/desktop/src/renderer/src/routes/_app/customize/plugin.$pluginId.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-3,6,15,17-51
+apps/cli/src/plugin-commands.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-14
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1,9,28,71-77,85-92,95,111,129-134
+  s_d6f8a470e8319b::t_22d2c7412b72d9 135
+apps/desktop/src/renderer/src/features/plugin-configuration.ts
+  s_d6f8a470e8319b::t_d0d335c55374e2 79
+  s_d6f8a470e8319b::t_c1675854054d85 84-92
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-78,80-83,93-164
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 8,141,150
+packages/contracts/src/daemon-event.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 19,58-62
+packages/engine/src/event-publisher.test.ts
+  s_d6f8a470e8319b::t_474acc61829a52 10,125
+  s_d6f8a470e8319b::t_c1675854054d85 37-41,117-124,126-142
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 43,61-62,66-71,488,669-670
+  s_d6f8a470e8319b::t_431a6b410222d1 299-300
+  s_d6f8a470e8319b::t_ca7ec9773841d3 143
+apps/desktop/src/renderer/src/features/configuration-picture.ts
+  s_d6f8a470e8319b::t_71855db3678898 148
+apps/desktop/src/renderer/src/components/plugins-facet.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1,5,9,18-59,63,72-73,75-77,81-91,95-100,102,104,108-114,121-137
+packages/engine/src/control-store-schema.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 79-85
+apps/desktop/src/renderer/src/components/plugin-list-rows.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 2,6,39,59-82
+  s_d6f8a470e8319b::t_63f2f7dc3e4dac 83-85
+packages/engine/src/harness.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 3,41
+apps/desktop/src/renderer/src/components/configuration-provider.test.ts
+  s_d6f8a470e8319b::t_71855db3678898 31
+packages/contracts/src/rpc.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 16,40-44,71,139-150,171-172
+packages/engine/src/control-store.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 17-18,21,47-52,69-74,94,197-211,224,226-227,229,317,320-349,418-451,471-480,572-573
+  s_d6f8a470e8319b::t_2af7c82d1cee73 3,128-135,316,318-319
+  s_d7297afc1c993a::t_ad7fc973b59e07 136
+packages/contracts/src/plugin.ts
+  s_d6f8a470e8319b::t_ce61b6add24b58 2
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1,3-76
+packages/engine/src/executor.ts
+  s_d6f8a470e8319b::t_1e96de4fda5116 7,12-13,281
+  s_d6f8a470e8319b::t_74cc00e2afae78 282-287
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 25,37-38,42,52,178-190,219,236-270,665,669,700,787-791,793
+packages/engine/plugins/catalog.json
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-16
+packages/engine/plugins/bundles/linear/plugin.json
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-21
+packages/engine/plugins/bundles/github/skills/github-review/SKILL.md
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-8
+apps/cli/src/main.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 21,40
+packages/engine/plugins/bundles/github/mcp/github.json
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-6
+packages/engine/src/daemon.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1,31,39,61,148,167-178,227-229,252-253,271-272,289-293,314
+packages/engine/src/engine.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 28,499-500,504-509,665,736
+packages/contracts/src/board.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 239-240,257-258,269-280
+  s_d6f8a470e8319b::t_9478dc1a8334d6 281-282
+packages/engine/src/commands.test.ts
+  s_d6f8a470e8319b::t_fbf6da54e16e73 291
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 10,12-13,22,26,44,177-231,241-242,269-270,289-290,300,313,1129-1171
+packages/engine/src/executor.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 6,48,402,433-438,454,752-806,827,853,1307-1324,1326-1349,1351-1356,1958-1991,2188-2190
+  s_d6f8a470e8319b::t_a6f0023857f377 1325,1350
+  s_d6f8a470e8319b::t_1e96de4fda5116 214-215
+apps/desktop/src/renderer/src/features/plugins-view.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 5,10,44
+packages/engine/src/follow-up.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1,54-56,78-83
+  s_d6f8a470e8319b::t_dca7f8b5ffdf58 84
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 35-39
+  s_d7297afc1c993a::t_3b4c18c76848d3 40
+packages/engine/src/linear/client.ts
+  s_d6f8a470e8319b::t_d8ddd084ed21a8 476
+  s_d6f8a470e8319b::t_5b7d1f9b4be922 13,473-475,477-479
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 116-120,122-125,228,231,234-242,302,306,461,463-465,469-472,480
+packages/engine/src/plugin.test.ts
+  s_d6f8a470e8319b::t_74cc00e2afae78 105,163,240-247
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-104,106-162,164-239,248-341
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 27-38
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 13-14
+packages/contracts/src/contribution.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 19-30
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_d6f8a470e8319b::t_9b675691df293a 7-8,11-16,26-31,38-55,58-59,69-71,81-91,159-192,201,204,206-209,211,217,219-224,227-239,241-252,256-259
+packages/engine/plugins/bundles/linear/mcp/linear.json
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-6
+packages/engine/src/index.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 19
+packages/engine/plugins/bundles/linear/rules/linear-issues.md
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1
+packages/contracts/src/plugin.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-38
+packages/engine/src/scheduler.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 96-97
+packages/engine/src/control-store.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 84
+packages/engine/src/event-publisher.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 5,204-210,217
+  s_d6f8a470e8319b::t_c1675854054d85 56,71
+  s_4cd1ce3e964be8::t_0535cf647692c4 60
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-2,18,149,156-163,181
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 137-142
+packages/engine/src/follow-up.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 3,6,201-260,307
+packages/engine/src/linear/linear.test.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 61,148,152,405-418
+  s_d6f8a470e8319b::t_d9caf357165611 419
+packages/engine/src/commands.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 7-11,32,52-63,280-312
+packages/engine/src/plugin.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 1-481,483-497
+  s_d6f8a470e8319b::t_d0d335c55374e2 482
+packages/contracts/src/index.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 10
+packages/contracts/src/daemon.ts
+  s_d6f8a470e8319b::t_ce61b6add24b58 11,167
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 166
+packages/engine/src/control-store-create.gen.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 7
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_d6f8a470e8319b::t_cd32f1c2ce803c 293,333,370,404,432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "17bc769dcdfd996547e19a3fc593c9a8b98a4382",
+  "prompts": {},
+  "sessions": {
+    "s_4cd1ce3e964be8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04a2e-8ee5-7c41-85cc-5b19945bc511",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d7297afc1c993a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04a04-73ca-7c53-ad84-12ad05cca7ee",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
