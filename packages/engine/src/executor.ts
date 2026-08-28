@@ -894,6 +894,7 @@ export const make = Effect.gen(function* () {
         previous,
         observation,
       ).pipe(
+        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
         Effect.matchEffect({
           onFailure: (error) =>
             handleOf(ledger, previous).pipe(

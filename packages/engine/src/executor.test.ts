@@ -1313,7 +1313,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
   });
 
-  it.effect("does not ledger a Run before interrupted preparation assembles its Plan", () => {
+  it.effect("releases the claim without ledgering a Run when preparation is interrupted", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const { entered } = yield* WorktreeProbe;
@@ -1329,7 +1329,7 @@ describe("Executor.execute", () => {
       assert.strictEqual(runs[0]?.status, "succeeded");
 
       yield* Fiber.interrupt(running);
-      assert.strictEqual((yield* Ref.get(calls)).filter((call) => call.method === "release").length, 1);
+      assert.strictEqual((yield* Ref.get(calls)).filter((call) => call.method === "release").length, 2);
     }).pipe(Effect.provide(provide([runner(implementEvents)], interruptiblePrepareWorktree)), Effect.scoped);
   });
 
