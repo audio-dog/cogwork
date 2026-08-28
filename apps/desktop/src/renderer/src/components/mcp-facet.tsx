@@ -1,7 +1,8 @@
+import { defaultContributionEnabled } from "@cogwork/contracts";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiServerLine } from "@remixicon/react";
-import { type Contribution, contributionInstanceKey } from "../features/configuration-model";
-import { diagnosticsOf } from "../features/configuration-resolve";
+import { authorityLabel, type Contribution, contributionInstanceKey } from "../features/configuration-model";
+import { diagnosticsOf, resolveEnablement, viewOf } from "../features/configuration-resolve";
 import { useConfiguration } from "./configuration-provider";
 import { FilteredEmpty } from "./customize-empty";
 import { useCustomizeFilter } from "./customize-filter";
@@ -10,8 +11,11 @@ import { McpServerRow } from "./mcp-server-row";
 
 function troubled(contribution: Contribution) {
   if (contribution.load._tag === "failed") return true;
-  if (contribution.readiness?._tag === "not-ready") return true;
-  return diagnosticsOf(contribution).length > 0;
+  if (diagnosticsOf(contribution).length > 0) return true;
+  const on =
+    resolveEnablement(contribution, viewOf(contribution)).effective ??
+    defaultContributionEnabled(authorityLabel(contribution.authority));
+  return on && contribution.readiness?._tag === "not-ready";
 }
 
 export function McpFacet() {
