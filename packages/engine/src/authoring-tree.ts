@@ -14,6 +14,7 @@ export interface ScanAuthoringTreesRequest {
   readonly workspace: WorkspaceId;
   readonly repoRoot: string;
   readonly cogworkHome: string;
+  readonly userAgentsDir?: string;
 }
 
 interface TreeSpec {
@@ -130,7 +131,11 @@ export const scanAuthoringTrees = Effect.fn("AuthoringTree.scan")(function* (
     return [...skills, ...flat.flat()];
   });
 
+  const userTree: ReadonlyArray<TreeSpec> = request.userAgentsDir
+    ? [{ authority: "local:user", boundary: request.userAgentsDir, root: request.userAgentsDir }]
+    : [];
   const trees: ReadonlyArray<TreeSpec> = [
+    ...userTree,
     {
       authority: "local:repo",
       boundary: request.repoRoot,
