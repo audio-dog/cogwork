@@ -68,7 +68,7 @@ layer(NodeServices.layer)((it) => {
       const checkoutPath = yield* makeCheckout(root, "unavailable");
       yield* Layer.build(Registry.layerAt(storePath));
       const registryContext = yield* Layer.build(
-        Registry.layer.pipe(Layer.provide(controlStoreClientLayer(storePath))),
+        Registry.layer(storePath).pipe(Layer.provide(controlStoreClientLayer(storePath))),
       );
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
 
@@ -331,6 +331,57 @@ layer(NodeServices.layer)((it) => {
         )
         .pipe(Effect.flip);
       assert.include(relativeError.message, "absolute");
+    }),
+  );
+
+  it.effect("admits only registered repository and WorkspaceId-private Authoring trees", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-authoring-" });
+      const storePath = path.join(root, "control.db");
+      const firstCheckout = yield* makeCheckout(root, "first");
+      const secondCheckout = yield* makeCheckout(root, "second");
+      const unregisteredCheckout = yield* makeCheckout(root, "unregistered");
+      const repoSkill = path.join(firstCheckout, ".agents", "skills", "shared", "SKILL.md");
+      yield* fs.makeDirectory(path.dirname(repoSkill), { recursive: true });
+      yield* fs.writeFileString(repoSkill, "repo Skill");
+      const ignoredSkill = path.join(unregisteredCheckout, ".agents", "skills", "ignored", "SKILL.md");
+      yield* fs.makeDirectory(path.dirname(ignoredSkill), { recursive: true });
+      yield* fs.writeFileString(ignoredSkill, "unregistered Skill");
+
+      const registryContext = yield* Layer.build(Registry.layerAt(storePath));
+      const management = Context.get(registryContext, Registry.WorkspaceManagement);
+      const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
+      const firstChange = yield* management.register(githubRegistration("first", firstCheckout));
+      const secondChange = yield* management.register(githubRegistration("second", secondCheckout));
+      if (firstChange._tag === "Failed" || secondChange._tag === "Failed") {
+        return assert.fail("expected valid Workspace inputs to register");
+      }
+      const privateSkill = path.join(
+        root,
+        "workspaces",
+        firstChange.workspace.config.name,
+        "skills",
+        "shared",
+        "SKILL.md",
+      );
+      yield* fs.makeDirectory(path.dirname(privateSkill), { recursive: true });
+      yield* fs.writeFileString(privateSkill, "private Skill");
+      yield* liveRegistry.refresh;
+
+      const first = Registry.findWorkspace(liveRegistry, firstChange.workspace.config.name);
+      const second = Registry.findWorkspace(liveRegistry, secondChange.workspace.config.name);
+      assert.deepStrictEqual(
+        first?.contributions?.map((entry) => entry.id),
+        ["local:private/skill/shared", "local:repo/skill/shared"],
+      );
+      assert.deepStrictEqual(second?.contributions, []);
+      assert.isFalse(
+        liveRegistry.workspaces.some(
+          (workspace) => workspace.contributions?.some((entry) => entry.localName === "ignored") ?? false,
+        ),
+      );
     }),
   );
 });
