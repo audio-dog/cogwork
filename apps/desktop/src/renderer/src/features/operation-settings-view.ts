@@ -38,6 +38,14 @@ const codingImplementContext = (workspace: OperationSettingContext["workspace"])
   workspace,
 });
 
+const hasCodingImplementOverlay = (
+  controlStore: ControlStore,
+  workspace: OperationSettingContext["workspace"],
+) =>
+  operationSettingRowsForContext(controlStore.operationSettings, codingImplementContext(workspace)).some(
+    (row) => row.scope._tag === "PrivateWorkspaceOverlay",
+  );
+
 export const operationSettingDisplaySections = (controlStore: ControlStore) => {
   const workspaces = [
     ...new Set(
@@ -45,7 +53,7 @@ export const operationSettingDisplaySections = (controlStore: ControlStore) => {
         row.scope._tag === "PrivateWorkspaceOverlay" ? [row.scope.workspace] : [],
       ),
     ),
-  ];
+  ].filter((workspace) => hasCodingImplementOverlay(controlStore, workspace));
   return [
     { key: "global", label: "Coding · Implement", context: codingImplementContext(null) },
     ...workspaces.map((workspace) => ({

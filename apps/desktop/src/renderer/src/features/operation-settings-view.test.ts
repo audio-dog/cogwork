@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { operationSettingDisplayRows, operationSettingDisplaySections } from "./operation-settings-view";
 
 const workspace = Schema.decodeSync(WorkspaceId)("example");
+const unrelatedWorkspace = Schema.decodeSync(WorkspaceId)("unrelated");
 
 const controlStore: ControlStore = {
   daemonLimits: {
@@ -31,11 +32,23 @@ const controlStore: ControlStore = {
       scope: { _tag: "PrivateWorkspaceOverlay", workspace },
       value: "workspace-model",
     },
+    {
+      setting: "model",
+      level: { _tag: "Operation", workflow: "coding", operation: "triage" },
+      scope: { _tag: "SettingsProfile" },
+      value: "triage-model",
+    },
+    {
+      setting: "model",
+      level: { _tag: "Operation", workflow: "coding", operation: "triage" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace: unrelatedWorkspace },
+      value: "workspace-triage-model",
+    },
   ],
 };
 
 describe("Operation settings view", () => {
-  it("renders effective values from the Control store's raw rows", () => {
+  it("counts only raw rows applicable to the work context", () => {
     const rows = operationSettingDisplayRows(controlStore, {
       workflow: "coding",
       operation: "implement",
@@ -51,7 +64,7 @@ describe("Operation settings view", () => {
     expect(rows.find((row) => row.setting === "harness")?.value).toBe("Not set");
   });
 
-  it("renders each Private workspace overlay in its own ladder", () => {
+  it("renders each applicable Private workspace overlay in its own ladder", () => {
     const sections = operationSettingDisplaySections(controlStore);
 
     expect(sections.map((section) => section.label)).toEqual([
