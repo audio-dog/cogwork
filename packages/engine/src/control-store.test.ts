@@ -140,6 +140,7 @@ layer(NodeServices.layer)((it) => {
         resolveOperationSetting(reloaded.operationSettings, "model", {
           workflow: "coding",
           operation: "implement",
+          workspace,
         }),
         "profile-operation",
       );
@@ -161,6 +162,7 @@ layer(NodeServices.layer)((it) => {
         resolveOperationSetting(cleared.operationSettings, "model", {
           workflow: "coding",
           operation: "implement",
+          workspace,
         }),
         "overlay-default",
       );

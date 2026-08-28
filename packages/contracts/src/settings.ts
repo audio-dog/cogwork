@@ -51,6 +51,7 @@ export const OperationSettingName = Schema.Literals([
   "bindings",
 ]);
 export type OperationSettingName = typeof OperationSettingName.Type;
+export const operationSettingNames = OperationSettingName.literals;
 
 export const OperationBinding = Schema.Struct({
   need: TrimmedNonEmptyString,
@@ -133,6 +134,7 @@ export type ResolutionOperator = typeof ResolutionOperator.Type;
 export interface OperationSettingContext {
   readonly workflow: string;
   readonly operation: string;
+  readonly workspace: WorkspaceId | null;
 }
 
 export interface ContributionEnabledRow {
@@ -166,8 +168,20 @@ const levelRank = (level: SettingLevel, context: OperationSettingContext) => {
   return level.operation === context.operation ? 2 : -1;
 };
 
+const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSettingContext) => {
+  if (scope._tag !== "PrivateWorkspaceOverlay") return true;
+  return context.workspace !== null && scope.workspace === context.workspace;
+};
+
+export const operationSettingRowsForContext = (
+  rows: readonly OperationSettingRow[],
+  context: OperationSettingContext,
+) => rows.filter((row) => scopeApplies(row.scope, context));
+
 const selectedLevelRows = (rows: readonly OperationSettingRow[], context: OperationSettingContext) => {
-  const matching = rows.filter((row) => levelRank(row.level, context) >= 0);
+  const matching = operationSettingRowsForContext(rows, context).filter(
+    (row) => levelRank(row.level, context) >= 0,
+  );
   const selectedRank = Math.max(-1, ...matching.map((row) => levelRank(row.level, context)));
   return matching.filter((row) => levelRank(row.level, context) === selectedRank);
 };
@@ -266,12 +280,13 @@ export type SettingResolutionCase =
 const profile: SettingsProfileScope = { _tag: "SettingsProfile" };
 const host: RuntimeHostScope = { _tag: "RuntimeHost" };
 const workspace = Schema.decodeSync(WorkspaceId)("workspace");
+const foreignWorkspace = Schema.decodeSync(WorkspaceId)("foreign-workspace");
 const workspaceInput: WorkspaceInputScope = { _tag: "WorkspaceInput", workspace };
 const overlay: PrivateWorkspaceOverlayScope = {
   _tag: "PrivateWorkspaceOverlay",
   workspace,
 };
-const codingImplement = { workflow: "coding", operation: "implement" };
+const codingImplement = { workflow: "coding", operation: "implement", workspace };
 
 export const settingResolutionCases: readonly SettingResolutionCase[] = [
   {
@@ -410,6 +425,12 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
         scope: profile,
         value: "profile-operation",
       },
+      {
+        setting: "model",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace: foreignWorkspace },
+        value: "foreign-operation",
+      },
     ],
     expected: "profile-operation",
   },
@@ -488,6 +509,12 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
           { need: "tracker", contribution: "plugin:linear/mcp/linear" },
           { need: "review", contribution: "local:private/skill/review" },
         ],
+      },
+      {
+        setting: "bindings",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace: foreignWorkspace },
+        value: [{ need: "deploy", contribution: "local:private/skill/deploy" }],
       },
     ],
     expected: [
