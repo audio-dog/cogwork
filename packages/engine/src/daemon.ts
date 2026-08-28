@@ -30,6 +30,7 @@ import {
   reclassify,
   registerWorkspace,
   setDaemonLimit,
+  setOperationSetting,
   setScheduling,
 } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
@@ -205,6 +206,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   Reclassify: reclassify,
   SetScheduling: setScheduling,
   SetDaemonLimit: setDaemonLimit,
+  SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
   DeregisterWorkspace: deregisterWorkspace,
   RebindWorkspace: rebindWorkspace,

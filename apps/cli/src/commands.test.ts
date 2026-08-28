@@ -4,6 +4,7 @@ import {
   RunId as RunIdSchema,
   type WorkItemId,
   WorkItemId as WorkItemIdSchema,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -16,7 +17,10 @@ import {
   daemonOrStore,
   daemonStatusPicture,
   formatDaemonLimits,
+  formatOperationSettings,
   limitsCommand,
+  makeOperationSettingUpdate,
+  operationSettingsCommand,
   resolveTarget,
   schedulingActions,
   schedulingCommand,
@@ -24,6 +28,7 @@ import {
 
 const runId = Schema.decodeSync(RunIdSchema);
 const workItemId = Schema.decodeSync(WorkItemIdSchema);
+const workspaceId = Schema.decodeSync(WorkspaceId);
 
 const constResolver = (result: RunId | null) => () => Effect.succeed(result);
 const unavailableSocket = new SocketOpenError({
@@ -96,11 +101,97 @@ describe("limits", () => {
           dailyBudget: 20,
           revision: 2,
         },
+        operationSettings: [],
       }),
       "global-concurrency: 8\nper-workspace-concurrency: 3\ndaily-budget: 20",
     );
     assert.isDefined(limitsCommand);
   });
+});
+
+describe("operation settings", () => {
+  it("renders effective values from raw rows with level before Scope", () => {
+    assert.strictEqual(
+      formatOperationSettings(
+        {
+          daemonLimits: {
+            globalConcurrency: 4,
+            perWorkspaceConcurrency: 4,
+            dailyBudget: 50,
+            revision: 0,
+          },
+          operationSettings: [
+            {
+              setting: "model",
+              level: { _tag: "Default" },
+              scope: { _tag: "SettingsProfile" },
+              value: "profile-default",
+            },
+            {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: "operation-model",
+            },
+          ],
+        },
+        { workflow: "coding", operation: "implement", workspace: null },
+      ),
+      "enabled: unset\nharness: unset\nmodel: operation-model\neffort: unset\npermission-profile: unset\nbindings: unset",
+    );
+    assert.isDefined(operationSettingsCommand);
+  });
+
+  it.effect("maps the set form to a typed Operation setting row", () =>
+    Effect.gen(function* () {
+      const update = yield* makeOperationSettingUpdate(
+        {
+          setting: "enabled",
+          scope: "overlay",
+          level: "workflow",
+          workflow: "coding",
+          operation: "implement",
+          workspace: Option.some("example"),
+        },
+        Option.some("off"),
+      );
+
+      assert.deepStrictEqual(update, {
+        _tag: "Set",
+        row: {
+          setting: "enabled",
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId("example") },
+          level: { _tag: "Workflow", workflow: "coding" },
+          value: false,
+        },
+      });
+    }),
+  );
+
+  it.effect("maps the clear form to an Operation setting cell", () =>
+    Effect.gen(function* () {
+      const update = yield* makeOperationSettingUpdate(
+        {
+          setting: "harness",
+          scope: "host",
+          level: "default",
+          workflow: "coding",
+          operation: "implement",
+          workspace: Option.none(),
+        },
+        Option.none(),
+      );
+
+      assert.deepStrictEqual(update, {
+        _tag: "Clear",
+        cell: {
+          setting: "harness",
+          scope: { _tag: "RuntimeHost" },
+          level: { _tag: "Default" },
+        },
+      });
+    }),
+  );
 });
 
 describe("daemon fallback", () => {

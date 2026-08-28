@@ -1,9 +1,10 @@
 import { type ContributionKind, contributionKinds, kindLabelsPlural } from "./configuration-model";
 
-export type Facet = "plugins" | ContributionKind;
+export type Facet = "plugins" | "operations" | ContributionKind;
 
 const slugs: Record<Facet, string> = {
   plugins: "plugins",
+  operations: "operations",
   "mcp-server": "mcp-servers",
   skill: "skills",
   subagent: "subagents",
@@ -12,7 +13,7 @@ const slugs: Record<Facet, string> = {
   hook: "hooks",
 };
 
-export const facets: readonly Facet[] = ["plugins", ...contributionKinds];
+export const facets: readonly Facet[] = ["plugins", "operations", ...contributionKinds];
 
 export const defaultFacet: Facet = "plugins";
 
@@ -25,5 +26,7 @@ export function facetFromSlug(slug: string) {
 }
 
 export function facetLabel(facet: Facet) {
-  return facet === "plugins" ? "Plugins" : kindLabelsPlural[facet];
+  if (facet === "plugins") return "Plugins";
+  if (facet === "operations") return "Operations";
+  return kindLabelsPlural[facet];
 }
