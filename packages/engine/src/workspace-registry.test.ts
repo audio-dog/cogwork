@@ -69,7 +69,9 @@ layer(NodeServices.layer)((it) => {
       const checkoutPath = yield* makeCheckout(root, "unavailable");
       yield* Layer.build(Registry.layerAt(storePath));
       const registryContext = yield* Layer.build(
-        Registry.layer(storePath).pipe(Layer.provide(controlStoreClientLayer(storePath))),
+        Registry.layer(storePath, `${storePath}.agents`).pipe(
+          Layer.provide(controlStoreClientLayer(storePath)),
+        ),
       );
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
 
@@ -519,6 +521,30 @@ layer(NodeServices.layer)((it) => {
         liveRegistry.workspaces.some(
           (workspace) => workspace.contributions?.some((entry) => entry.localName === "ignored") ?? false,
         ),
+      );
+    }),
+  );
+
+  it.effect("publishes user Authoring tree contributions with each registered workspace", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-user-authoring-" });
+      const storePath = path.join(root, "control.db");
+      const userAgentsDir = path.join(root, ".agents");
+      const checkoutPath = yield* makeCheckout(root, "user-tree");
+      const userSkill = path.join(userAgentsDir, "skills", "commit", "SKILL.md");
+      yield* fs.makeDirectory(path.dirname(userSkill), { recursive: true });
+      yield* fs.writeFileString(userSkill, "user Skill");
+
+      const registryContext = yield* Layer.build(Registry.layerAt(storePath, userAgentsDir));
+      const management = Context.get(registryContext, Registry.WorkspaceManagement);
+      const change = yield* management.register(githubRegistration("user-tree", checkoutPath));
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+
+      assert.deepStrictEqual(
+        change.workspace.contributions.map((entry) => entry.id),
+        ["local:user/skill/commit"],
       );
     }),
   );

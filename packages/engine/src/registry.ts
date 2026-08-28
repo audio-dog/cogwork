@@ -38,6 +38,11 @@ import {
 export { emptyRegistry } from "./projector";
 export type { RegisteredWorkspace, RegisteredWorkspaceFailure, RegistryState, WorkspaceIssueTrackerBinding };
 
+interface AuthoringRoots {
+  readonly cogworkHome: string;
+  readonly userAgentsDir?: string;
+}
+
 export interface WorkspaceRegistryService extends RegistryState {
   readonly refresh: Effect.Effect<RegistryState, WorkspaceRegistrationError>;
 }
@@ -197,7 +202,7 @@ const mergedWorktrees = (row: WorkspaceRow, input: WorkspaceInput) => {
 
 const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   row: WorkspaceRow,
-  cogworkHome: string,
+  authoringRoots: AuthoringRoots,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -233,7 +238,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   const contributions = yield* scanAuthoringTrees({
     workspace: name,
     repoRoot: row.checkoutPath,
-    cogworkHome,
+    ...authoringRoots,
   }).pipe(Effect.mapError(registrationError));
   return {
     source: `control-store:${row.id}`,
@@ -308,9 +313,9 @@ const updateCheckoutPath = Effect.fn("WorkspaceRegistry.updateCheckoutPath")(fun
 
 const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChange")(function* (
   row: WorkspaceRow,
-  cogworkHome: string,
+  authoringRoots: AuthoringRoots,
 ) {
-  return yield* loadWorkspace(row, cogworkHome).pipe(
+  return yield* loadWorkspace(row, authoringRoots).pipe(
     Effect.map((workspace) => ({ _tag: "Registered" as const, workspace })),
     Effect.catchTag("WorkspaceRegistrationError", (error) =>
       Effect.succeed({ _tag: "Failed" as const, failure: workspaceFailure(row, error.message) }),
@@ -318,9 +323,11 @@ const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChan
   );
 });
 
-const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(function* (cogworkHome: string) {
+const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(function* (
+  authoringRoots: AuthoringRoots,
+) {
   const rows = yield* selectRows();
-  const outcomes = yield* Effect.forEach(rows, (row) => Effect.result(loadWorkspace(row, cogworkHome)));
+  const outcomes = yield* Effect.forEach(rows, (row) => Effect.result(loadWorkspace(row, authoringRoots)));
   const workspaces = outcomes.flatMap((outcome) => (outcome._tag === "Success" ? [outcome.success] : []));
   const failures = outcomes.flatMap((outcome, index) => {
     if (outcome._tag === "Success") return [];
@@ -333,10 +340,10 @@ const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(fun
 
 const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (
   store: ControlStoreService,
-  cogworkHome: string,
+  authoringRoots: AuthoringRoots,
 ) {
   if (store.health === "unavailable") return emptyRegistry;
-  return yield* loadAvailableState(cogworkHome);
+  return yield* loadAvailableState(authoringRoots);
 });
 
 const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function* (
@@ -395,16 +402,17 @@ const foldRegistration = (state: RegistryState, change: WorkspaceRegistrationCha
   return { ...current, failures: [...current.failures, change.failure] };
 };
 
-export const layer = (controlStorePath: string) =>
+export const layer = (controlStorePath: string, userAgentsDir: string) =>
   Layer.effectContext(
     Effect.gen(function* () {
       const crypto = yield* Crypto.Crypto;
       const path = yield* Path.Path;
       const store = yield* ControlStore;
       const cogworkHome = path.dirname(controlStorePath);
+      const authoringRoots = { cogworkHome, userAgentsDir };
       const privateWorkspaceRoot = path.join(cogworkHome, "workspaces");
       const dependencies = yield* Effect.context<FileSystem.FileSystem | Path.Path | SqlClient.SqlClient>();
-      const initial = yield* loadState(store, cogworkHome);
+      const initial = yield* loadState(store, authoringRoots);
       const cell = MutableRef.make(initial);
       const revision = MutableRef.make(0);
       const commitChange = (change: WorkspaceRegistrationChange) => {
@@ -432,7 +440,7 @@ export const layer = (controlStorePath: string) =>
         },
         refresh: Effect.sync(() => MutableRef.get(revision)).pipe(
           Effect.flatMap((startedAt) =>
-            loadState(store, cogworkHome).pipe(
+            loadState(store, authoringRoots).pipe(
               Effect.provide(dependencies),
               Effect.mapError((error) => registrationError(error)),
               Effect.map((state) => commitRefresh(startedAt, state)),
@@ -470,7 +478,9 @@ export const layer = (controlStorePath: string) =>
               Effect.provide(dependencies),
               Effect.mapError((error) => registrationError(error)),
             );
-            const change = yield* loadRegistrationChange(row, cogworkHome).pipe(Effect.provide(dependencies));
+            const change = yield* loadRegistrationChange(row, authoringRoots).pipe(
+              Effect.provide(dependencies),
+            );
             return commitChange(change);
           }),
         );
@@ -507,7 +517,7 @@ export const layer = (controlStorePath: string) =>
             yield* sql.withTransaction(updateCheckoutPath(workspace, normalizedPath));
             const change = yield* loadRegistrationChange(
               { ...current, checkoutPath: normalizedPath },
-              cogworkHome,
+              authoringRoots,
             );
             return commitChange(change);
           }).pipe(Effect.provide(dependencies), Effect.mapError(managementError("re-bind workspace"))),
@@ -551,10 +561,10 @@ export const layer = (controlStorePath: string) =>
     }),
   );
 
-export const layerAt = (storePath: string) => {
+export const layerAt = (storePath: string, userAgentsDir = `${storePath}.agents`) => {
   const client = controlStoreClientLayer(storePath);
   const store = bootControlStoreLayer(storePath).pipe(Layer.provide(client));
-  return layer(storePath).pipe(Layer.provideMerge(store), Layer.provide(client));
+  return layer(storePath, userAgentsDir).pipe(Layer.provideMerge(store), Layer.provide(client));
 };
 
 export const readOnlyLayerAt = (storePath: string) =>
@@ -562,6 +572,6 @@ export const readOnlyLayerAt = (storePath: string) =>
     WorkspaceRegistry,
     Effect.gen(function* () {
       const path = yield* Path.Path;
-      return readOnlyRegistry(yield* loadAvailableState(path.dirname(storePath)));
+      return readOnlyRegistry(yield* loadAvailableState({ cogworkHome: path.dirname(storePath) }));
     }).pipe(Effect.mapError(registrationError)),
   ).pipe(Layer.provide(readOnlyControlStoreClientLayer(storePath)));
