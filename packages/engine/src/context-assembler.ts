@@ -162,6 +162,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       }
       const skillDir = joinPath(config.skillsDir, request.skill);
       const skillPath = joinPath(runPath(request.runId), `skills/${request.skill}`);
+      yield* playbookLayer(request.skill, skillDir);
       yield* fs.copyDirectory(skillDir, skillPath);
       const playbook = yield* playbookLayer(request.skill, skillPath);
       const rules = yield* userRules();

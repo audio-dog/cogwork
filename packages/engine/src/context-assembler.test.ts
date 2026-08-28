@@ -283,16 +283,23 @@ describe("ContextAssembler.assemble", () => {
 
       assert.strictEqual(error._tag, "ContextAssemblerError");
       assert.include(error.message, "implement-agent");
+      assert.deepStrictEqual(yield* Ref.get(copies), []);
     }),
   );
 
   it.effect("fails when the isolated playbook copy has no SKILL.md", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
-      const assembler = make(config, stubFs({}, copies));
+      const base = stubFs({ "/engine/skills/implement-agent/SKILL.md": "playbook" }, copies);
+      const assembler = make(config, {
+        ...base,
+        readFile: (target) =>
+          target.startsWith(`${config.homeDir}/run-plans/`) ? Effect.succeed(null) : base.readFile(target),
+      });
 
-      yield* Effect.flip(assembler.assemble(request));
+      const error = yield* Effect.flip(assembler.assemble(request));
 
+      assert.strictEqual(error._tag, "ContextAssemblerError");
       assert.lengthOf(yield* Ref.get(copies), 1);
     }),
   );
