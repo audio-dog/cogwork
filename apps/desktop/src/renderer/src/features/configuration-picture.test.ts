@@ -176,7 +176,7 @@ describe("configurationPicture", () => {
     ).toEqual([workspace, other]);
   });
 
-  it("does not add a profile copy beside a user MCP workspace overlay", () => {
+  it("keeps user MCP instances for workspaces without an overlay", () => {
     const other = Schema.decodeSync(WorkspaceId)("other");
     const userServer = Schema.decodeSync(LocalContribution)({
       id: "local:user/mcp/review",
@@ -214,12 +214,26 @@ describe("configurationPicture", () => {
       ]),
     });
 
-    expect(picture.contributions.filter((contribution) => contribution.id === userServer.id)).toEqual([
-      expect.objectContaining({ definedIn: workspace }),
+    expect(
+      picture.contributions
+        .filter((contribution) => contribution.id === userServer.id)
+        .map((contribution) => ({ definedIn: contribution.definedIn, rows: contribution.rows })),
+    ).toEqual([
+      {
+        definedIn: workspace,
+        rows: [
+          {
+            scope: { kind: "private-overlay", workspaceId: workspace },
+            value: false,
+            source: "Control store",
+          },
+        ],
+      },
+      { definedIn: other, rows: [] },
     ]);
   });
 
-  it("projects a dangling workspace overlay on the matching profile contribution", () => {
+  it("projects a dangling workspace overlay on the matching user contribution", () => {
     const missing = Schema.decodeSync(WorkspaceId)("missing");
     const userServer = Schema.decodeSync(LocalContribution)({
       id: "local:user/mcp/review",

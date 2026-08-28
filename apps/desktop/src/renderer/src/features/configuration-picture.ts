@@ -60,20 +60,9 @@ const settingApplies = (
   return row.scope.workspace === workspace;
 };
 
-const definedInWorkspace = (
-  contribution: LocalContribution,
-  workspace: WorkspaceId,
-  rows: readonly ContributionSettingRow[],
-) => {
-  if (contribution.authority !== "local:user") return workspace;
-  if (contribution.kind !== "mcp-server") return undefined;
-  const hasOverlay = rows.some(
-    (row) =>
-      row.contribution.id === contribution.id &&
-      row.scope._tag === "PrivateWorkspaceOverlay" &&
-      row.scope.workspace === workspace,
-  );
-  return hasOverlay ? workspace : undefined;
+const definedInWorkspace = (contribution: LocalContribution, workspace: WorkspaceId) => {
+  if (contribution.authority === "local:user" && contribution.kind !== "mcp-server") return undefined;
+  return workspace;
 };
 
 const enablementRows = (
@@ -87,7 +76,7 @@ const contributionOf = (
   workspace: WorkspaceId,
   settings: readonly ContributionSettingRow[],
 ) => {
-  const definedIn = definedInWorkspace(contribution, workspace, settings);
+  const definedIn = definedInWorkspace(contribution, workspace);
   return {
     id: contribution.id,
     kind: contribution.kind,
@@ -112,20 +101,13 @@ const workspaceOf = (state: ReturnType<typeof registeredWorkspaces>[number]) =>
     checkoutPath: state.checkoutPath,
   }) satisfies Workspace;
 
-const uniqueContributions = (contributions: readonly Contribution[]) => {
-  const scoped = new Set(
-    contributions.flatMap((contribution) => (contribution.definedIn === undefined ? [] : [contribution.id])),
-  );
-  const instances = contributions.filter(
-    (contribution) => contribution.definedIn !== undefined || !scoped.has(contribution.id),
-  );
-  return [
-    ...instances.reduce(
+const uniqueContributions = (contributions: readonly Contribution[]) =>
+  [
+    ...contributions.reduce(
       (unique, contribution) => new Map(unique).set(contributionInstanceKey(contribution), contribution),
       new Map<string, Contribution>(),
     ),
   ].map(([, contribution]) => contribution);
-};
 
 const sameSettingScope = (enablement: EnablementRow, setting: ContributionSettingRow) => {
   const scope = settingScope(setting);
