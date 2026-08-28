@@ -1,8 +1,11 @@
+import { WorkspaceState } from "@cogwork/contracts";
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import {
   absoluteCheckoutPathFrom,
-  registrationSubmissionStatus,
+  workspaceOutcomeError,
   workspaceRegistrationFrom,
+  workspaceSubmissionStatus,
 } from "./workspace-registration";
 
 describe("absoluteCheckoutPathFrom", () => {
@@ -12,23 +15,71 @@ describe("absoluteCheckoutPathFrom", () => {
   });
 });
 
-describe("registrationSubmissionStatus", () => {
+describe("workspaceSubmissionStatus", () => {
   it("ignores an atom result until this dialog submits", () => {
-    expect(registrationSubmissionStatus({ submitted: false, pending: false, error: null, outcome: {} })).toBe(
-      "idle",
-    );
+    expect(
+      workspaceSubmissionStatus({
+        submitted: false,
+        pending: false,
+        error: null,
+        outcomeError: null,
+        outcome: {},
+      }),
+    ).toBe("idle");
   });
 
   it("blocks repeat submission until a failure permits retry", () => {
     expect(
-      registrationSubmissionStatus({ submitted: true, pending: false, error: null, outcome: null }),
+      workspaceSubmissionStatus({
+        submitted: true,
+        pending: false,
+        error: null,
+        outcomeError: null,
+        outcome: null,
+      }),
     ).toBe("submitting");
     expect(
-      registrationSubmissionStatus({ submitted: true, pending: false, error: "failed", outcome: null }),
+      workspaceSubmissionStatus({
+        submitted: true,
+        pending: false,
+        error: "failed",
+        outcomeError: null,
+        outcome: null,
+      }),
     ).toBe("failed");
-    expect(registrationSubmissionStatus({ submitted: true, pending: false, error: null, outcome: {} })).toBe(
-      "complete",
-    );
+    expect(
+      workspaceSubmissionStatus({
+        submitted: true,
+        pending: false,
+        error: null,
+        outcomeError: null,
+        outcome: {},
+      }),
+    ).toBe("complete");
+  });
+
+  it("treats a failed command outcome as retryable", () => {
+    expect(
+      workspaceSubmissionStatus({
+        submitted: true,
+        pending: false,
+        error: null,
+        outcomeError: "Workspace input failed",
+        outcome: {},
+      }),
+    ).toBe("failed");
+  });
+});
+
+describe("workspaceOutcomeError", () => {
+  it("returns the input failure from a failed workspace outcome", () => {
+    const outcome = Schema.decodeSync(WorkspaceState)({
+      _tag: "Failed",
+      source: "/Users/taylor/sites/cogwork/CONTEXT.md",
+      message: "Workspace input failed",
+    });
+
+    expect(workspaceOutcomeError(outcome)).toBe("Workspace input failed");
   });
 });
 

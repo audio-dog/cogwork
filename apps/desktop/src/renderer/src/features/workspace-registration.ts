@@ -1,4 +1,4 @@
-import { WorkspaceRegistration } from "@cogwork/contracts";
+import { WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -15,10 +15,11 @@ export interface WorkspaceRegistrationDraft {
   readonly sourceControlRepository: string;
 }
 
-interface RegistrationSubmission {
+interface WorkspaceSubmission {
   readonly submitted: boolean;
   readonly pending: boolean;
   readonly error: string | null;
+  readonly outcomeError: string | null;
   readonly outcome: unknown | null;
 }
 
@@ -31,17 +32,26 @@ export const absoluteCheckoutPathFrom = (value: string) => {
   return /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path) ? path : null;
 };
 
-export const registrationSubmissionStatus = ({
+export const workspaceSubmissionStatus = ({
   submitted,
   pending,
   error,
+  outcomeError,
   outcome,
-}: RegistrationSubmission) => {
+}: WorkspaceSubmission) => {
   if (!submitted) return "idle";
   if (pending) return "submitting";
-  if (error) return "failed";
+  if (error || outcomeError) return "failed";
   if (outcome !== null) return "complete";
   return "submitting";
+};
+
+export const workspaceSubmissionIsLocked = (status: ReturnType<typeof workspaceSubmissionStatus>) =>
+  status === "submitting" || status === "complete";
+
+export const workspaceOutcomeError = (outcome: WorkspaceState | null) => {
+  if (outcome?._tag !== "Failed") return null;
+  return outcome.message;
 };
 
 const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
