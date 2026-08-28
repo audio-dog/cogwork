@@ -21,7 +21,7 @@ import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
-import { WorkspaceManagement, WorkspaceRegistry } from "./registry";
+import { findWorkspaceIssueTrackerBinding, WorkspaceManagement, WorkspaceRegistry } from "./registry";
 import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
@@ -80,8 +80,8 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const registry = yield* WorkspaceRegistry;
-  const workspace = workspaceById(registry, run.workspace);
-  if (workspace !== null) {
+  const workspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
+  if (workspace !== undefined) {
     const issueTracker = yield* IssueTracker;
     yield* issueTracker
       .handOff(workspace, run.workItem, { stage: run.stage, note: payload.note })

@@ -353,24 +353,35 @@ describe("CancelRun", () => {
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
-  it.effect("interrupts a run whose workspace input has failed", () =>
-    Effect.gen(function* () {
+  it.effect("hands off and releases a run whose workspace input has failed", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    return Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
       yield* ledger.insertRun(runRecord());
       const client = yield* RpcTest.makeClient(DaemonRpcs);
 
       const item = yield* client.CancelRun({ runId: rid("run-1") });
       const run = (yield* client.ListRuns()).find(({ id }) => id === rid("run-1"));
+      const recorded = yield* Ref.get(calls);
 
       assert.strictEqual(item._tag, "NeedsHuman");
       assert.strictEqual(run?.status, "interrupted");
+      assert.deepStrictEqual(recorded.handOff, [
+        { workItem: id("AUD-1"), outcome: { stage: "implement", note: undefined } },
+      ]);
+      assert.deepStrictEqual(recorded.released, [id("AUD-1")]);
     }).pipe(
       Effect.provide(
-        daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), failedWorkspaceRegistryServices),
+        daemonLayer(
+          recordingTracker([], calls),
+          schedulerStub(),
+          controlStoreStub(),
+          failedWorkspaceRegistryServices,
+        ),
       ),
       Effect.scoped,
-    ),
-  );
+    );
+  });
 });
 
 describe("Reclassify", () => {

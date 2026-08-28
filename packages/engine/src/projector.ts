@@ -1,6 +1,10 @@
 import type { IssueTrackerConfig, WorkspaceConfig, WorkspaceFailureInfo } from "@cogwork/contracts";
 
-export interface RegisteredWorkspace {
+export interface WorkspaceIssueTrackerBinding {
+  readonly config: Pick<WorkspaceConfig, "name" | "issueTracker">;
+}
+
+export interface RegisteredWorkspace extends WorkspaceIssueTrackerBinding {
   readonly source: string;
   readonly config: WorkspaceConfig;
   readonly workspaceLimit?: number;

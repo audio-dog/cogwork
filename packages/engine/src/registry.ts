@@ -29,10 +29,11 @@ import {
   type RegisteredWorkspace,
   type RegisteredWorkspaceFailure,
   type RegistryState,
+  type WorkspaceIssueTrackerBinding,
 } from "./projector";
 
 export { emptyRegistry } from "./projector";
-export type { RegisteredWorkspace, RegisteredWorkspaceFailure, RegistryState };
+export type { RegisteredWorkspace, RegisteredWorkspaceFailure, RegistryState, WorkspaceIssueTrackerBinding };
 
 export interface WorkspaceRegistryService extends RegistryState {
   readonly refresh: Effect.Effect<RegistryState, WorkspaceRegistrationError>;
@@ -124,9 +125,18 @@ const workspaceFailure = (row: WorkspaceRow, message: string) => {
 export const findWorkspace = (registry: RegistryState, name: string) =>
   registry.workspaces.find((workspace) => workspace.config.name === name);
 
+export const findWorkspaceIssueTrackerBinding = (registry: RegistryState, name: string) => {
+  const workspace = findWorkspace(registry, name);
+  if (workspace !== undefined) return workspace;
+  const failure = registry.failures.find((candidate) => candidate.name === name);
+  if (failure?.name === undefined || failure.issueTracker === undefined) return undefined;
+  return {
+    config: { name: failure.name, issueTracker: failure.issueTracker },
+  } satisfies WorkspaceIssueTrackerBinding;
+};
+
 export const findWorkspaceIssueTracker = (registry: RegistryState, name: string) =>
-  findWorkspace(registry, name)?.config.issueTracker ??
-  registry.failures.find((failure) => failure.name === name)?.issueTracker;
+  findWorkspaceIssueTrackerBinding(registry, name)?.config.issueTracker;
 
 const mergedWorktrees = (row: WorkspaceRow, input: WorkspaceInput) => {
   const root = present(row.worktreeRoot);
