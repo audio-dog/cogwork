@@ -40,6 +40,9 @@ import { Scheduler } from "./scheduler";
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
 
+const workspaceIsRegistered = (registry: RegistryState, name: WorkspaceId) =>
+  workspaceById(registry, name) !== null || registry.failures.some((failure) => failure.name === name);
+
 const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workItem: WorkItemId) =>
   snapshot.workspaces
     .find((state) => state.name === workspace)
@@ -192,7 +195,7 @@ const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
 const contributionSettingRefusal = (update: ContributionSettingUpdate, registry: RegistryState) => {
   const cell = update._tag === "Set" ? update.row : update.cell;
   const overlayWorkspace = cell.scope._tag === "PrivateWorkspaceOverlay" ? cell.scope.workspace : null;
-  if (overlayWorkspace && workspaceById(registry, overlayWorkspace) === null) {
+  if (overlayWorkspace && !workspaceIsRegistered(registry, overlayWorkspace)) {
     return ContributionSettingRefused.make({
       contribution: cell.contribution.id,
       source: "Workspace registry",

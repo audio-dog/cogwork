@@ -793,6 +793,38 @@ describe("SetContributionSetting", () => {
       assert.strictEqual(failure._tag, "ContributionSettingRefused");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
+
+  it.effect("clears an overlay for a failed registered workspace", () => {
+    const stored = { ...picture, contributionSettings: [update.row] } satisfies ControlStorePicture;
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetContributionSetting({
+        update: {
+          _tag: "Clear",
+          cell: {
+            contribution: update.row.contribution,
+            scope: update.row.scope,
+          },
+        },
+      });
+
+      assert.deepStrictEqual(returned.contributionSettings, []);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub({
+            seed: stored,
+            read: Effect.succeed(stored),
+            updateContributionSetting: () => Effect.succeed(picture),
+          }),
+          failedWorkspaceRegistryServices,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
 });
 
 describe("RegisterWorkspace", () => {
