@@ -72,8 +72,8 @@ export function PluginsFacet() {
                 <EmptyMedia variant="icon">
                   <RiBox3Line />
                 </EmptyMedia>
-                <EmptyTitle>Nothing to show</EmptyTitle>
-                <EmptyDescription>Everything's in the list above.</EmptyDescription>
+                <EmptyTitle>No Plugins installed</EmptyTitle>
+                <EmptyDescription>Install one from the Catalog below.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           </ListSectionBody>
