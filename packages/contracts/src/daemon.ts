@@ -7,6 +7,7 @@ import {
   WorkspaceId,
 } from "./base-schemas";
 import { Claim } from "./coordination";
+import { ContributionSetting, PluginInstall } from "./plugin";
 import { OperationSettingRow } from "./settings";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
 import { WorkspaceConcurrency } from "./workspace";
@@ -160,6 +161,8 @@ export type DaemonLimits = typeof DaemonLimits.Type;
 export const ControlStore = Schema.Struct({
   daemonLimits: DaemonLimits,
   operationSettings: Schema.Array(OperationSettingRow),
+  pluginInstalls: Schema.Array(PluginInstall),
+  contributionSettings: Schema.Array(ContributionSetting),
 });
 export type ControlStore = typeof ControlStore.Type;
 

@@ -15,6 +15,7 @@ import {
   PollState,
   SchedulerStats,
 } from "./daemon";
+import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
 
 export const ClassifiedItem = Schema.TaggedUnion({
@@ -51,6 +52,7 @@ export const DaemonEvent = Schema.TaggedUnion({
   RunChanged: { emittedAtMillis: Schema.Finite, run: RunSummary },
   WorkspaceChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceState },
   ControlStoreChanged: { emittedAtMillis: Schema.Finite, controlStore: ControlStore },
+  PluginsChanged: { emittedAtMillis: Schema.Finite, plugins: PluginOverview },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
 });
 export type DaemonEvent = typeof DaemonEvent.Type;

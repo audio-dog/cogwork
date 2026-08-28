@@ -13,6 +13,7 @@ import {
 } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { IssueTrackerError } from "./issue-tracker";
+import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
 import { PrincipalMiddleware } from "./principal";
 import { RunActivity, RunEvent, RunId, RunStatus, RunSummary } from "./run";
 import { OperationSettingRefused, OperationSettingUpdate } from "./settings";
@@ -24,6 +25,11 @@ export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
 export const GetControlStore = Rpc.make("GetControlStore", {
   success: ControlStore,
   error: ControlStoreFailure,
+});
+
+export const GetPlugins = Rpc.make("GetPlugins", {
+  success: PluginOverview,
+  error: PluginFailure,
 });
 
 export const ListRuns = Rpc.make("ListRuns", { success: Schema.Array(RunSummary) });
@@ -52,6 +58,7 @@ export const WatchEvents = Rpc.make("WatchEvents", {
 export const DaemonQueries = RpcGroup.make(
   GetStatus,
   GetControlStore,
+  GetPlugins,
   ListRuns,
   GetRunEvents,
   ResolveWatchTarget,
@@ -113,6 +120,18 @@ export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
   error: WorkspaceRegistrationError,
 });
 
+export const InstallPlugin = Rpc.make("InstallPlugin", {
+  payload: { pluginId: PluginId },
+  success: PluginMutationResult,
+  error: PluginFailure,
+});
+
+export const UninstallPlugin = Rpc.make("UninstallPlugin", {
+  payload: { pluginId: PluginId },
+  success: PluginMutationResult,
+  error: PluginFailure,
+});
+
 export const DaemonCommands = RpcGroup.make(
   CancelRun,
   Reclassify,
@@ -120,6 +139,8 @@ export const DaemonCommands = RpcGroup.make(
   SetDaemonLimit,
   SetOperationSetting,
   RegisterWorkspace,
+  InstallPlugin,
+  UninstallPlugin,
 ).middleware(PrincipalMiddleware);
 
 export const DaemonRpcs = DaemonQueries.merge(DaemonCommands);
