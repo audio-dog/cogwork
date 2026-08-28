@@ -75,7 +75,7 @@ const runLogin = (options: {
   }).pipe(
     Effect.provide(
       Layer.mergeAll(
-        Registry.layerAt(options.controlStore),
+        Registry.readOnlyLayerAt(options.controlStore),
         browserOpenerLayer.pipe(
           Layer.provideMerge(credentialsLayer(options.credentials)),
           Layer.provide(FetchHttpClient.layer),

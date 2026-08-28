@@ -48,7 +48,7 @@ const runWorktree = <E>(
     const manager = yield* Worktree.WorktreeManager;
     yield* use(workspace, manager);
   }).pipe(
-    Effect.provide(Layer.mergeAll(worktreeManagerLayer, Registry.layerAt(options.controlStore))),
+    Effect.provide(Layer.mergeAll(worktreeManagerLayer, Registry.readOnlyLayerAt(options.controlStore))),
     Effect.tapError((error) => Console.error(error instanceof Error ? error.message : String(error))),
   );
 
