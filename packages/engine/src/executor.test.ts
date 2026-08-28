@@ -29,6 +29,7 @@ import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
+import { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
 import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -216,6 +217,17 @@ const missingPlaybookContext = Layer.succeed(ContextAssembler.ContextAssembler, 
       }),
     ),
   cleanup: () => Effect.void,
+});
+
+const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: () => Effect.succeed({ layers: [], skillPath: "/", sources: [] }),
+  cleanup: () =>
+    Effect.fail(
+      new ContextFsError({
+        operation: "remove run context",
+        message: "cleanup failed",
+      }),
+    ),
 });
 
 const assemblerStub = Layer.succeed(McpSkillAssembler, {
@@ -1235,6 +1247,47 @@ describe("Executor.execute", () => {
       assert.isNotNull(librarySpan);
       assert.deepStrictEqual(Object.fromEntries(librarySpan.attributes), correlation);
     }).pipe(Effect.provide(provide([observingRunner])));
+  });
+
+  it.effect("logs cleanup failures without repeating claimed-run annotations", () => {
+    return Effect.gen(function* () {
+      const observation = yield* HarnessObservation;
+      const logger = Logger.make<unknown, void>(({ fiber, message }) => {
+        observation.logs.push({
+          message,
+          annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
+        });
+      });
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem).pipe(Effect.withLogger(logger));
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(1);
+      const cleanupLog = observation.logs.find(({ message }) =>
+        Array.isArray(message) ? message.includes("run context cleanup failed") : false,
+      );
+      assert.deepStrictEqual(cleanupLog?.annotations, {
+        workspace: "gh",
+        item: "#15",
+        stage: "implement",
+        runId: run?.id,
+      });
+      assert.deepStrictEqual(cleanupLog?.message, [
+        "run context cleanup failed",
+        { message: "cleanup failed" },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          failingCleanupContext,
+        ),
+      ),
+    );
   });
 
   it.effect("mints an opaque-handle session for a Cursor-served run and captures its handle", () => {

@@ -207,7 +207,7 @@ export const make = Effect.gen(function* () {
       .cleanup(runId)
       .pipe(
         Effect.catchTag("ContextFsError", (error) =>
-          Effect.logWarning("run context cleanup failed", { runId, message: error.message }),
+          Effect.logWarning("run context cleanup failed", { message: error.message }),
         ),
       );
 
@@ -939,9 +939,9 @@ export const make = Effect.gen(function* () {
         }),
       );
     }).pipe(
+      Effect.ensuring(cleanupRunContext(runId)),
       Effect.annotateLogs(correlation),
       Effect.annotateSpans(correlation),
-      Effect.ensuring(cleanupRunContext(runId)),
     );
   });
 
