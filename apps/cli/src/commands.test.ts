@@ -26,9 +26,11 @@ const runId = Schema.decodeSync(RunIdSchema);
 const workItemId = Schema.decodeSync(WorkItemIdSchema);
 
 const constResolver = (result: RunId | null) => () => Effect.succeed(result);
-const unavailableDaemon = new RpcClientError({
-  reason: new SocketOpenError({ kind: "Unknown", cause: new Error("socket unavailable") }),
+const unavailableSocket = new SocketOpenError({
+  kind: "Unknown",
+  cause: new Error("socket unavailable"),
 });
+const unavailableDaemon = new RpcClientError({ reason: unavailableSocket });
 
 const unavailableStoreStatus: DaemonStatus = {
   health: "store-unavailable",
@@ -134,6 +136,15 @@ describe("daemon fallback", () => {
     Effect.gen(function* () {
       assert.strictEqual(
         yield* daemonOrStore(Effect.fail(unavailableDaemon), Effect.succeed("stored")),
+        "stored",
+      );
+    }),
+  );
+
+  it.effect("reads the store when the socket layer cannot open", () =>
+    Effect.gen(function* () {
+      assert.strictEqual(
+        yield* daemonOrStore(Effect.fail(unavailableSocket), Effect.succeed("stored")),
         "stored",
       );
     }),

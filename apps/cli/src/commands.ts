@@ -27,6 +27,7 @@ import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import { SocketOpenError } from "effect/unstable/socket/Socket";
 import {
   defaultConfigHome,
   defaultControlStorePath,
@@ -93,8 +94,9 @@ const daemonLimitValueArgument = Argument.integer("value");
 
 export { formatDaemonLimits } from "./status";
 
-const isUnavailableDaemonError = <E>(error: E): error is Extract<E, RpcClientError> =>
-  Schema.is(RpcClientError)(error) && error.reason._tag === "SocketOpenError";
+const isUnavailableDaemonError = (error: unknown) =>
+  Schema.is(SocketOpenError)(error) ||
+  (Schema.is(RpcClientError)(error) && Schema.is(SocketOpenError)(error.reason));
 
 export const daemonOrStore = <A, E, R, E2, R2>(
   daemon: Effect.Effect<A, E | RpcClientError, R>,
