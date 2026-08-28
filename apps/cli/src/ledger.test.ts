@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   HarnessName,
   RunId,
+  RunPlan,
   type RunRecord,
   type Session,
   SessionId,
@@ -81,6 +82,46 @@ const foldSession = Schema.decodeSync(SessionId)("sess-fold");
 const ownedSession = Schema.decodeSync(SessionId)("sess-owned");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
+const runPlan = (id: string, message = "Triage #7") =>
+  Schema.decodeSync(RunPlan)({
+    id: runId(id),
+    operation: "triage",
+    harness: { name: harness, model: null, effort: null, profile: "read-only" },
+    instructions: [],
+    operatingInstructions: { name: "triage-agent", path: "/skills/triage-agent" },
+    tools: [],
+    skills: [],
+    mcp: [],
+    subagents: [],
+    commands: [],
+    hooks: [],
+    middleware: [],
+    structuredOutput: null,
+    connections: [],
+    messages: [{ role: "user", content: message }],
+    workContext: {
+      reference: { workItem, url: "https://example.test/issues/7" },
+      facts: {
+        roles: ["needs-triage"],
+        assignees: [],
+        openBlockers: 0,
+        claim: null,
+        priority: "medium",
+        pr: null,
+      },
+      observation: { generation: 3, observedAtMillis: 1000 },
+    },
+    sandbox: { workspace: "/repo", policy: "read-only" },
+    persistence: { sessionKind: "opaque-handle" },
+    provenance: {
+      resolution: [],
+      stamps: [],
+      projectedNames: [],
+      projection: [],
+      observation: { generation: 3, observedAtMillis: 1000 },
+    },
+  });
+
 const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecord> = {}): RunRecord => ({
   id: runId(id),
   workspace,
@@ -116,6 +157,21 @@ describe("sqlite RunLedger", () => {
       return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
+    it.effect("persists one immutable Plan when accepting a Run", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const accepted = runPlan("accepted");
+        yield* ledger.acceptRun(record("accepted", 1000), accepted);
+
+        assert.deepStrictEqual(yield* ledger.getRunPlan(accepted.id), accepted);
+        const error = yield* Effect.flip(
+          ledger.acceptRun(record("accepted", 2000), runPlan("accepted", "Changed")),
+        );
+        assert.strictEqual(error._tag, "RunLedgerError");
+        assert.deepStrictEqual(yield* ledger.getRunPlan(accepted.id), accepted);
+      }),
+    );
+
     it.effect("persists a run, its events, and reports a summary with event count", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
