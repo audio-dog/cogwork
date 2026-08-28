@@ -1,4 +1,5 @@
 import {
+  type ConnectionId,
   DaemonRpcs,
   defaultControlStore,
   WorkItemId,
@@ -19,6 +20,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -426,6 +428,19 @@ describe("reconcile worker", () => {
   const workerWithAuthFailure = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, authFailingSource)),
   );
+  const connectedGithubWorkspace: Registry.RegisteredWorkspace = {
+    ...registeredWorkspace,
+    config: Schema.decodeSync(WorkspaceConfig)({
+      name: "example",
+      checkoutPath: "/repos/example",
+      issueTracker: {
+        type: "github",
+        connectionId: "github/acme",
+        repo: "acme/example",
+      },
+      harness: { preferred: "cursor" },
+    }),
+  };
 
   it.effect("pauses a workspace on auth failure instead of failing the tick", () =>
     Effect.gen(function* () {
@@ -442,6 +457,40 @@ describe("reconcile worker", () => {
         { reason: "auth", retryAtMillis: null },
       );
     }).pipe(Effect.provide(workerWithAuthFailure), Effect.scoped),
+  );
+
+  it.effect("revokes the configured Connection when an auth failure omits its identity", () =>
+    Effect.gen(function* () {
+      const revoked = yield* Ref.make<ReadonlyArray<ConnectionId>>([]);
+      const registry = Layer.succeed(
+        Registry.WorkspaceRegistry,
+        Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
+      );
+      const connectionStore = Layer.succeed(ConnectionStore, {
+        overview: () => Effect.succeed({ connections: [] }),
+        find: () => Effect.succeed(null),
+        findSystem: () => Effect.succeed(null),
+        bearer: () => Effect.die("unexpected Connection bearer"),
+        readiness: () => Effect.succeed({ _tag: "Ready" as const }),
+        requireReady: () => Effect.void,
+        requireSystemReady: () => Effect.void,
+        establish: () => Effect.die("unexpected Connection establish"),
+        revoke: (connectionId) => Ref.update(revoked, (connections) => [...connections, connectionId]),
+        remove: () => Effect.die("unexpected Connection remove"),
+      });
+      const layer = reconcileLayer.pipe(
+        Layer.provide(Layer.mergeAll(registry, authFailingSource, connectionStore)),
+      );
+
+      yield* Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        yield* worker.submit();
+      }).pipe(Effect.provide(layer), Effect.scoped);
+
+      assert.deepStrictEqual(yield* Ref.get(revoked), [
+        connectedGithubWorkspace.config.issueTracker.connectionId,
+      ]);
+    }),
   );
 
   const rateLimitedSource = (observes: Ref.Ref<number>, retryAfterMillis: number | undefined) =>
