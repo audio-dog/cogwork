@@ -1,0 +1,270 @@
+import {
+  operationSettingNames,
+  RunId,
+  type SettingResolutionCase,
+  settingResolutionCases,
+  WorkItemId,
+  WorkspaceConfig,
+} from "@cogwork/contracts";
+import { assert, describe, it } from "@effect/vitest";
+import * as Schema from "effect/Schema";
+import type { EligibleWork } from "./classify";
+import type { AssembledContext } from "./context-assembler";
+import type { RegisteredWorkspace } from "./projector";
+import {
+  assembleRunPlan,
+  engineAdmissibleSettingScope,
+  engineSettingScopeDirection,
+  resolveEngineContributionEnabled,
+  resolveEngineContributionUnion,
+  resolveEngineOperationSetting,
+  resolveRunPlanStage,
+} from "./run-plan";
+
+const resolvedValue = (testCase: SettingResolutionCase) => {
+  if (testCase._tag === "Direction") return engineSettingScopeDirection;
+  if (testCase._tag === "Admissible") {
+    return engineAdmissibleSettingScope(testCase.family, testCase.setting, testCase.scope);
+  }
+  if (testCase._tag === "ContributionDefault") {
+    return resolveEngineContributionEnabled([], testCase.authority).value;
+  }
+  if (testCase._tag === "ContributionEnabled") {
+    return resolveEngineContributionEnabled(testCase.rows, "local:user").value;
+  }
+  if (testCase._tag === "ContributionUnion") {
+    return resolveEngineContributionUnion(testCase.rows).value;
+  }
+  return resolveEngineOperationSetting(testCase.rows, testCase.setting, testCase.context).value;
+};
+
+describe("engine setting resolution", () => {
+  for (const testCase of settingResolutionCases) {
+    it(testCase.name, () => {
+      assert.deepStrictEqual(resolvedValue(testCase), testCase.expected);
+    });
+  }
+});
+
+const workspace: RegisteredWorkspace = {
+  source: "control-store:workspace",
+  contributions: [
+    {
+      id: "local:private/skill/review",
+      authority: "local:private",
+      kind: "skill",
+      localName: "review",
+      file: "/repo/.agents.local/skills/review/SKILL.md",
+    },
+    {
+      id: "local:private/mcp/tools",
+      authority: "local:private",
+      kind: "mcp-server",
+      localName: "tools",
+      file: "/repo/.agents/mcp/tools.json",
+    },
+    {
+      id: "local:repo/command/release",
+      authority: "local:repo",
+      kind: "command",
+      localName: "release",
+      file: "/repo/.agents/commands/release.md",
+    },
+    {
+      id: "local:repo/mcp/disabled",
+      authority: "local:repo",
+      kind: "mcp-server",
+      localName: "disabled",
+      file: "/repo/.agents/mcp/disabled.json",
+    },
+  ],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "workspace",
+    checkoutPath: "/repo",
+    issueTracker: { type: "github", repo: "owner/repo" },
+    harness: { preferred: "codex" },
+    playbook: { implement: { enabled: true, model: "definition-model" } },
+  }),
+};
+
+const otherWorkspace = Schema.decodeSync(WorkspaceConfig)({
+  name: "other-workspace",
+  checkoutPath: "/other",
+  issueTracker: { type: "github", repo: "owner/other" },
+  harness: { preferred: "codex" },
+}).name;
+
+const item: EligibleWork = {
+  id: Schema.decodeSync(WorkItemId)("#228"),
+  title: "Assemble Run Plan",
+  url: "https://github.com/owner/repo/issues/228",
+  stage: "implement",
+  priority: "high",
+  priorFailures: 0,
+  workContext: {
+    reference: {
+      workItem: Schema.decodeSync(WorkItemId)("#228"),
+      url: "https://github.com/owner/repo/issues/228",
+    },
+    facts: {
+      roles: ["ready-for-agent"],
+      assignees: ["maintainer"],
+      openBlockers: 0,
+      claim: null,
+      priority: "high",
+      pr: null,
+    },
+  },
+};
+
+const context: AssembledContext = {
+  layers: [
+    { kind: "repo", source: "/repo/AGENTS.md", content: "repository rules" },
+    { kind: "playbook", source: "/engine/skills/implement-agent/SKILL.md", content: "playbook" },
+  ],
+  skillPath: "/home/.cogwork/skills/implement-agent",
+  sources: [
+    {
+      source: "/repo/.agents.local/skills/review/SKILL.md",
+      content: "review instructions",
+    },
+    {
+      source: "/repo/.agents/mcp/tools.json",
+      content: '{"endpoint":"https://mcp.example.test"}',
+    },
+  ],
+};
+
+describe("Run Plan assembly", () => {
+  it("freezes Messages, admitting Work Context facts, and provenance", () => {
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [
+      {
+        setting: "model",
+        level: { _tag: "Default" },
+        scope: { _tag: "SettingsProfile" },
+        value: "default-model",
+      },
+      {
+        setting: "model",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        value: "profile-model",
+      },
+      {
+        setting: "model",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+        value: "private-model",
+      },
+      {
+        setting: "model",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
+        value: "other-workspace-model",
+      },
+      {
+        setting: "permission-profile",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+        value: "read-only",
+      },
+      {
+        setting: "bindings",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        value: [{ need: "review", contribution: "local:private/skill/review" }],
+      },
+    ]);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-228"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["Instructions", "Messages", "MCP", "Sandbox", "Persistence"],
+      middleware: ["sandbox"],
+      context,
+    });
+
+    assert.deepStrictEqual(
+      plan.messages.map(({ role, content }) => ({ role, content })),
+      [{ role: "user", content: "Implement #228" }],
+    );
+    assert.deepStrictEqual({ ...plan.workContext.facts }, item.workContext?.facts);
+    assert.deepStrictEqual(
+      { ...plan.workContext.observation },
+      {
+        generation: 12,
+        observedAtMillis: 1000,
+      },
+    );
+    assert.strictEqual(plan.harness.model, "private-model");
+    assert.strictEqual(plan.harness.profile, "read-only");
+    assert.deepStrictEqual(
+      plan.provenance.resolution.slice(0, operationSettingNames.length).map((entry) => entry.key),
+      [...operationSettingNames],
+    );
+    const modelTrace = plan.provenance.resolution.find((entry) => entry.key === "model");
+    assert.strictEqual(modelTrace?.winner?.source, "Private workspace overlay workspace");
+    assert.deepStrictEqual(
+      modelTrace?.shadowed.map((candidate) => candidate.value),
+      ["profile-model", "default-model"],
+    );
+    assert.deepStrictEqual(
+      modelTrace?.dropped.map(({ candidate, reason }) => ({ value: candidate.value, reason })),
+      [
+        {
+          value: "other-workspace-model",
+          reason: "scope does not apply to this workspace",
+        },
+      ],
+    );
+    assert.deepStrictEqual(
+      plan.provenance.resolution
+        .find((entry) => entry.key === "bindings")
+        ?.contributors.map((candidate) => candidate.value),
+      [[{ need: "review", contribution: "local:private/skill/review" }]],
+    );
+    assert.deepStrictEqual(
+      plan.provenance.stamps.map((stamp) => stamp.source),
+      [
+        "/repo/AGENTS.md",
+        "/engine/skills/implement-agent/SKILL.md",
+        "/repo/.agents.local/skills/review/SKILL.md",
+        "/repo/.agents/mcp/tools.json",
+        "implement Operation Definition",
+      ],
+    );
+    assert.strictEqual(plan.skills[0]?.identity, "local:private/skill/review");
+    assert.strictEqual(plan.commands[0]?.identity, "local:repo/command/release");
+    assert.strictEqual(
+      plan.provenance.resolution.find(({ key }) => key === "contribution:local:repo/mcp/disabled:enabled")
+        ?.dropped[0]?.reason,
+      "contribution entry gate disabled by default",
+    );
+    assert.strictEqual(plan.mcp[0]?.identity, "local:private/mcp/tools");
+    assert.strictEqual(
+      plan.provenance.projection.find(({ member }) => member === "MCP local:private/mcp/tools")?.disposition,
+      "not-projected",
+    );
+    assert.isNotNull(plan.structuredOutput);
+    assert.deepStrictEqual(plan.provenance.observation, plan.workContext.observation);
+    assert.strictEqual(
+      plan.provenance.projection.find(({ member }) => member === "Messages")?.disposition,
+      "projected",
+    );
+    assert.strictEqual(
+      plan.provenance.projection.find(({ member }) => member === "Tools")?.disposition,
+      "not-projected",
+    );
+    assert.isTrue(Object.isFrozen(plan));
+    assert.isTrue(Object.isFrozen(plan.messages));
+    assert.isTrue(Object.isFrozen(plan.workContext.facts.roles));
+  });
+});
