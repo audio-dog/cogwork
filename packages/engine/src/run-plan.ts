@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   ContributionEnabledRow,
   ContributionUnionRow,
-  LocalContribution,
+  FileContribution,
   OperationBinding,
   OperationSettingContext,
   OperationSettingName,
@@ -329,8 +329,8 @@ const contentStamps = (context: AssembledContext) =>
 const projectedName = (identity: string) =>
   `cogwork_${Array.from(identity, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}`;
 
-const contributionMembers = (workspace: RegisteredWorkspace, kind: string) =>
-  workspace.contributions
+const contributionMembers = (contributions: ReadonlyArray<FileContribution>, kind: string) =>
+  contributions
     .filter((contribution) => contribution.kind === kind)
     .map((contribution) =>
       RunPlanContributionMember.make({
@@ -340,14 +340,14 @@ const contributionMembers = (workspace: RegisteredWorkspace, kind: string) =>
       }),
     );
 
-export const admittedContributions = (contributions: ReadonlyArray<LocalContribution>) =>
+export const admittedContributions = (contributions: ReadonlyArray<FileContribution>) =>
   contributions.filter(
     (contribution) =>
       contribution.kind !== "mcp-server" ||
       resolveEngineContributionEnabled([], contribution.authority).value,
   );
 
-const contributionGateTrace = (contribution: LocalContribution) => {
+const contributionGateTrace = (contribution: FileContribution) => {
   const enabled = resolveEngineContributionEnabled([], contribution.authority).value;
   const candidate = RunPlanResolutionCandidate.make({
     scope: contribution.authority,
@@ -407,8 +407,8 @@ const projectionFor = (projectedMembers: ReadonlyArray<RunPlanMemberType>) => {
   );
 };
 
-const unprojectedLocalMcp = (workspace: RegisteredWorkspace) =>
-  contributionMembers(workspace, "mcp-server").map((member) =>
+const unprojectedMcp = (members: ReadonlyArray<RunPlanContributionMember>) =>
+  members.map((member) =>
     RunPlanProjectionDisposition.make({
       member: `MCP ${member.identity}`,
       disposition: "not-projected",
@@ -419,17 +419,24 @@ const unprojectedLocalMcp = (workspace: RegisteredWorkspace) =>
 const mcpIdentity = (name: string, endpoint: string) =>
   `engine/mcp/${revisionOf(JSON.stringify({ name, endpoint }))}`;
 
-const mcpServers = (resolved: ResolvedRunPlanStage) =>
-  resolved.stage.mcpSkills.map((server) => {
-    const identity = mcpIdentity(server.name, server.endpoint);
+const mcpServers = (skills: ReadonlyArray<RunPlanMcpSkillInput>) =>
+  skills.map((server) => {
+    const identity = server.identity ?? mcpIdentity(server.name, server.endpoint);
     return RunPlanMcpServer.make({
       identity,
       name: server.name,
       projectedName: projectedName(identity),
       endpoint: server.endpoint,
-      authenticated: server.auth !== undefined,
+      authenticated: server.authenticated,
     });
   });
+
+export interface RunPlanMcpSkillInput {
+  readonly identity: string | null;
+  readonly name: string;
+  readonly endpoint: string;
+  readonly authenticated: boolean;
+}
 
 export interface AssembleRunPlanInput {
   readonly runId: RunId;
@@ -443,18 +450,22 @@ export interface AssembleRunPlanInput {
   readonly context: AssembledContext;
   readonly projectedMembers: ReadonlyArray<RunPlanMemberType>;
   readonly middleware: ReadonlyArray<string>;
+  readonly contributions: ReadonlyArray<FileContribution>;
+  readonly mcpSkills: ReadonlyArray<RunPlanMcpSkillInput>;
 }
 
 export const assembleRunPlan = (input: AssembleRunPlanInput) => {
   const workContext = input.item.workContext;
   const observation = RunPlanObservation.make({ ...input.observation });
-  const admittedWorkspace = {
-    ...input.workspace,
-    contributions: admittedContributions(input.workspace.contributions),
-  };
-  const mcpServersForRun = mcpServers(input.resolved);
-  const localMcp = contributionMembers(admittedWorkspace, "mcp-server");
-  const mcp = [...mcpServersForRun, ...localMcp];
+  const admitted = admittedContributions(input.contributions);
+  const mcpServersForRun = mcpServers(input.mcpSkills);
+  const resolvedMcpIdentities = new Set(
+    input.mcpSkills.flatMap(({ identity }) => (identity === null ? [] : [identity])),
+  );
+  const unresolvedMcp = contributionMembers(admitted, "mcp-server").filter(
+    ({ identity }) => !resolvedMcpIdentities.has(identity),
+  );
+  const mcp = [...mcpServersForRun, ...unresolvedMcp];
   const operationSource = `${input.item.stage} Operation Definition`;
   const operationRevision = revisionOf(
     JSON.stringify({
@@ -481,10 +492,10 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
       }),
       messages: [RunPlanMessage.make({ role: "user", content: input.prompt })],
       tools: input.projectedMembers.includes("Tools") ? [...ownedToolNames] : [],
-      skills: contributionMembers(admittedWorkspace, "skill"),
+      skills: contributionMembers(admitted, "skill"),
       mcp,
-      subagents: contributionMembers(admittedWorkspace, "subagent"),
-      commands: contributionMembers(admittedWorkspace, "command"),
+      subagents: contributionMembers(admitted, "subagent"),
+      commands: contributionMembers(admitted, "command"),
       hooks: [],
       middleware: [...input.middleware],
       structuredOutput: structuredOutput(input.item.stage),
@@ -511,7 +522,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
         resolution: operationSettingNames
           .map((setting) => resolutionTrace(input.resolved, setting, input.item.stage))
           .concat(
-            input.workspace.contributions
+            input.contributions
               .filter((contribution) => contribution.kind === "mcp-server")
               .map(contributionGateTrace),
           ),
@@ -524,7 +535,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
               RunPlanProjectedName.make({ identity: server.identity, name: server.projectedName }),
             )
           : [],
-        projection: [...projectionFor(input.projectedMembers), ...unprojectedLocalMcp(admittedWorkspace)],
+        projection: [...projectionFor(input.projectedMembers), ...unprojectedMcp(unresolvedMcp)],
         observation,
       }),
     }),

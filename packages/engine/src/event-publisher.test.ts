@@ -31,6 +31,7 @@ import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import { IssueTracker, type IssueTrackerService, type TrackerItem } from "./issue-tracker";
+import { PluginManager } from "./plugin";
 import { classifiedItemsOf, schedulerStatsOf } from "./read-model";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
@@ -48,7 +49,16 @@ const controlStoreLayer = Layer.succeed(ControlStore, {
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
+  installPlugin: () => Effect.succeed(defaultControlStore),
+  uninstallPlugin: () => Effect.succeed(defaultControlStore),
+  updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
+});
+const pluginManagerLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
 });
 
 const id = Schema.decodeSync(WorkItemId);
@@ -342,6 +352,7 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(controlStoreLayer),
+      Layer.provideMerge(pluginManagerLayer),
       Layer.provideMerge(observing(itemsRef)),
     );
 
@@ -522,6 +533,8 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(runRecorderTestLayer),
       Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
+      Layer.provideMerge(controlStoreLayer),
+      Layer.provideMerge(pluginManagerLayer),
       Layer.provideMerge(observing(itemsRef)),
     );
 

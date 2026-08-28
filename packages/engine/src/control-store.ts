@@ -1,4 +1,6 @@
 import {
+  type ContributionSetting,
+  ContributionSetting as ContributionSettingSchema,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimits,
@@ -9,6 +11,8 @@ import {
   type OperationSettingRow,
   OperationSettingRow as OperationSettingRowSchema,
   type OperationSettingUpdate,
+  type PluginInstall,
+  PluginInstall as PluginInstallSchema,
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
@@ -36,6 +40,15 @@ export type ControlStoreService =
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+      readonly installPlugin: (
+        record: PluginInstall,
+        contributionIds: ReadonlyArray<string>,
+        mcpServerIds: ReadonlyArray<string>,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+      readonly uninstallPlugin: (pluginId: string) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
+      readonly updateContributionSetting: (
+        setting: ContributionSetting,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     }
   | {
@@ -48,6 +61,15 @@ export type ControlStoreService =
       ) => Effect.Effect<never, ControlStoreFailure | StaleControlStoreWrite>;
       readonly updateOperationSetting: (
         update: OperationSettingUpdate,
+      ) => Effect.Effect<never, ControlStoreFailure>;
+      readonly installPlugin: (
+        record: PluginInstall,
+        contributionIds: ReadonlyArray<string>,
+        mcpServerIds: ReadonlyArray<string>,
+      ) => Effect.Effect<never, ControlStoreFailure>;
+      readonly uninstallPlugin: (pluginId: string) => Effect.Effect<never, ControlStoreFailure>;
+      readonly updateContributionSetting: (
+        setting: ContributionSetting,
       ) => Effect.Effect<never, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     };
@@ -64,6 +86,8 @@ const storeFailure = (operation: string) => (error: unknown) =>
 
 const decodeDaemonLimits = Schema.decodeUnknownEffect(DaemonLimitsSchema);
 const decodeOperationSettingRow = Schema.decodeUnknownEffect(OperationSettingRowSchema);
+const decodePluginInstall = Schema.decodeUnknownEffect(PluginInstallSchema);
+const decodeContributionSetting = Schema.decodeUnknownEffect(ContributionSettingSchema);
 const JsonValue = Schema.fromJsonString(Schema.Unknown);
 const decodeJson = Schema.decodeUnknownEffect(JsonValue);
 const encodeJson = Schema.encodeUnknownEffect(JsonValue);
@@ -84,6 +108,24 @@ const StoredOperationSettingRow = Schema.Struct({
 type StoredOperationSettingRow = typeof StoredOperationSettingRow.Type;
 
 const decodeStoredOperationSettingRows = Schema.decodeUnknownEffect(Schema.Array(StoredOperationSettingRow));
+
+const StoredPluginInstall = Schema.Struct({
+  pluginId: Schema.String,
+  resolvedIdentity: Schema.String,
+  principal: Schema.String,
+  installedAtMillis: Schema.Finite,
+});
+type StoredPluginInstall = typeof StoredPluginInstall.Type;
+const decodeStoredPluginInstalls = Schema.decodeUnknownEffect(Schema.Array(StoredPluginInstall));
+
+const StoredContributionSetting = Schema.Struct({
+  contribution: Schema.String,
+  scope: Schema.Literals(["settings-profile", "private-workspace-overlay"]),
+  workspace: Schema.String,
+  enabled: Schema.Union([Schema.Boolean, Schema.Finite]),
+});
+type StoredContributionSetting = typeof StoredContributionSetting.Type;
+const decodeStoredContributionSettings = Schema.decodeUnknownEffect(Schema.Array(StoredContributionSetting));
 
 const levelOf = (row: StoredOperationSettingRow) => {
   if (row.level === "default") return { _tag: "Default" };
@@ -117,6 +159,43 @@ const readOperationSettings = (sql: SqlClient.SqlClient) =>
     );
   });
 
+const readPluginInstalls = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    const stored = yield* sql<StoredPluginInstall>`
+      SELECT
+        plugin_id AS pluginId,
+        resolved_identity AS resolvedIdentity,
+        principal,
+        installed_at_millis AS installedAtMillis
+      FROM plugin_installs
+      ORDER BY plugin_id
+    `;
+    const rows = yield* decodeStoredPluginInstalls(stored);
+    return yield* Effect.forEach(rows, (row) => decodePluginInstall(row));
+  });
+
+const contributionSettingScope = (row: StoredContributionSetting) =>
+  row.scope === "settings-profile"
+    ? { _tag: "SettingsProfile" as const }
+    : { _tag: "PrivateWorkspaceOverlay" as const, workspace: row.workspace };
+
+const readContributionSettings = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    const stored = yield* sql<StoredContributionSetting>`
+      SELECT contribution, scope, workspace, enabled
+      FROM contribution_settings
+      ORDER BY contribution, scope, workspace
+    `;
+    const rows = yield* decodeStoredContributionSettings(stored);
+    return yield* Effect.forEach(rows, (row) =>
+      decodeContributionSetting({
+        contribution: row.contribution,
+        scope: contributionSettingScope(row),
+        enabled: row.enabled === true || row.enabled === 1,
+      }),
+    );
+  });
+
 const readPicture = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     const [row] = yield* sql<DaemonLimits>`
@@ -129,8 +208,12 @@ const readPicture = (sql: SqlClient.SqlClient) =>
       WHERE id = 1
     `;
     const daemonLimits = yield* decodeDaemonLimits(row);
-    const operationSettings = yield* readOperationSettings(sql);
-    return { daemonLimits, operationSettings };
+    const [operationSettings, pluginInstalls, contributionSettings] = yield* Effect.all([
+      readOperationSettings(sql),
+      readPluginInstalls(sql),
+      readContributionSettings(sql),
+    ]);
+    return { daemonLimits, operationSettings, pluginInstalls, contributionSettings };
   });
 
 const storedLevel = (level: OperationSettingCell["level"]) => {
@@ -178,6 +261,59 @@ const clearOperationSetting = Effect.fn("ControlStore.clearOperationSetting")(fu
       AND operation = ${stored.operation}
       AND scope = ${stored.scope}
       AND workspace = ${stored.workspace}
+  `;
+});
+
+const storedContributionSetting = (setting: ContributionSetting) =>
+  setting.scope._tag === "SettingsProfile"
+    ? { scope: "settings-profile", workspace: "" }
+    : { scope: "private-workspace-overlay", workspace: setting.scope.workspace };
+
+const writeContributionSetting = Effect.fn("ControlStore.writeContributionSetting")(function* (
+  sql: SqlClient.SqlClient,
+  setting: ContributionSetting,
+) {
+  const scope = storedContributionSetting(setting);
+  const enabled = setting.enabled ? 1 : 0;
+  yield* sql`
+    INSERT INTO contribution_settings (contribution, scope, workspace, enabled)
+    VALUES (${setting.contribution}, ${scope.scope}, ${scope.workspace}, ${enabled})
+    ON CONFLICT (contribution, scope, workspace)
+    DO UPDATE SET enabled = excluded.enabled
+  `;
+});
+
+const retainedContributionIds = (settings: ReadonlyArray<ContributionSetting>, prefix: string) =>
+  settings
+    .filter((setting) => setting.contribution.startsWith(prefix))
+    .map((setting) => setting.contribution);
+
+const deleteDroppedContributionSettings = Effect.fn("ControlStore.deleteDroppedContributionSettings")(
+  function* (sql: SqlClient.SqlClient, pluginId: string, contributionIds: ReadonlyArray<string>) {
+    const current = yield* readContributionSettings(sql);
+    const retained = new Set(contributionIds);
+    const dropped = retainedContributionIds(current, `plugin:${pluginId}/`).filter((id) => !retained.has(id));
+    yield* Effect.forEach(
+      dropped,
+      (id) => sql`DELETE FROM contribution_settings WHERE contribution = ${id}`,
+      {
+        discard: true,
+      },
+    );
+  },
+);
+
+const writePluginInstall = Effect.fn("ControlStore.writePluginInstall")(function* (
+  sql: SqlClient.SqlClient,
+  record: PluginInstall,
+) {
+  yield* sql`
+    INSERT INTO plugin_installs (plugin_id, resolved_identity, principal, installed_at_millis)
+    VALUES (${record.pluginId}, ${record.resolvedIdentity}, ${record.principal}, ${record.installedAtMillis})
+    ON CONFLICT (plugin_id) DO UPDATE SET
+      resolved_identity = excluded.resolved_identity,
+      principal = excluded.principal,
+      installed_at_millis = excluded.installed_at_millis
   `;
 });
 
@@ -249,6 +385,50 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
+  const installPlugin = Effect.fn("ControlStore.installPlugin")(function* (
+    record: PluginInstall,
+    contributionIds: ReadonlyArray<string>,
+    mcpServerIds: ReadonlyArray<string>,
+  ) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        const current = yield* readPluginInstalls(sql);
+        const prior = current.find((entry) => entry.pluginId === record.pluginId);
+        if (prior?.resolvedIdentity === record.resolvedIdentity) return yield* readPicture(sql);
+        yield* deleteDroppedContributionSettings(sql, record.pluginId, contributionIds);
+        yield* writePluginInstall(sql, record);
+        yield* Effect.forEach(
+          mcpServerIds,
+          (contribution) =>
+            sql`
+              INSERT OR IGNORE INTO contribution_settings (contribution, scope, workspace, enabled)
+              VALUES (${contribution}, 'settings-profile', '', 1)
+            `,
+          { discard: true },
+        );
+        return yield* readPicture(sql);
+      }),
+    );
+  });
+  const uninstallPlugin = Effect.fn("ControlStore.uninstallPlugin")(function* (pluginId: string) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* sql`DELETE FROM plugin_installs WHERE plugin_id = ${pluginId}`;
+        yield* sql`DELETE FROM contribution_settings WHERE contribution LIKE ${`plugin:${pluginId}/%`}`;
+        return yield* readPicture(sql);
+      }),
+    );
+  });
+  const updateContributionSetting = Effect.fn("ControlStore.updateContributionSetting")(function* (
+    setting: ContributionSetting,
+  ) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        yield* writeContributionSetting(sql, setting);
+        return yield* readPicture(sql);
+      }),
+    );
+  });
   return {
     health: "available" as const,
     seed,
@@ -257,6 +437,18 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       setDaemonLimit(update).pipe(Effect.mapError(setDaemonLimitFailure)),
     updateOperationSetting: (update: OperationSettingUpdate) =>
       updateOperationSetting(update).pipe(Effect.mapError(storeFailure("update Operation setting"))),
+    installPlugin: (
+      record: PluginInstall,
+      contributionIds: ReadonlyArray<string>,
+      mcpServerIds: ReadonlyArray<string>,
+    ) =>
+      installPlugin(record, contributionIds, mcpServerIds).pipe(
+        Effect.mapError(storeFailure("install Plugin")),
+      ),
+    uninstallPlugin: (pluginId: string) =>
+      uninstallPlugin(pluginId).pipe(Effect.mapError(storeFailure("uninstall Plugin"))),
+    updateContributionSetting: (setting: ContributionSetting) =>
+      updateContributionSetting(setting).pipe(Effect.mapError(storeFailure("update contribution setting"))),
     withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => writeGate.withPermits(1)(effect),
   };
 });
@@ -346,6 +538,9 @@ const unavailable = (message: string): ControlStoreService => {
     picture: Effect.fail(failure),
     setDaemonLimit: () => Effect.fail(failure),
     updateOperationSetting: () => Effect.fail(failure),
+    installPlugin: () => Effect.fail(failure),
+    uninstallPlugin: () => Effect.fail(failure),
+    updateContributionSetting: () => Effect.fail(failure),
     withWrite: (effect) => effect,
   };
 };

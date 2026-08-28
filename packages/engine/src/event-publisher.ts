@@ -2,6 +2,7 @@ import {
   ClassifiedItem,
   type ControlStore as ControlStorePicture,
   itemKey,
+  type PluginOverview,
   SchedulerStats,
   type WorkItemId,
   type WorkspaceId,
@@ -141,12 +142,21 @@ export const make = Effect.gen(function* () {
     return controlStore;
   });
 
+  const publishPlugins = Effect.fn("DaemonEventPublisher.publishPlugins")(function* (
+    plugins: PluginOverview,
+    notices: readonly string[],
+  ) {
+    yield* bus.publish({ _tag: "PluginsChanged", plugins, notices });
+    return plugins;
+  });
+
   return {
     publishItems,
     publishWorkspaces,
     publishWorkspaceRemoved,
     publishScheduler,
     publishControlStore,
+    publishPlugins,
   } as const;
 });
 

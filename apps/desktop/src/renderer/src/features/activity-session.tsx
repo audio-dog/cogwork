@@ -134,7 +134,12 @@ export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
 };
 
 const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): ActivityRow | null => {
-  if (event._tag === "SeedEnd" || event._tag === "RunActivity" || event._tag === "ControlStoreChanged")
+  if (
+    event._tag === "SeedEnd" ||
+    event._tag === "RunActivity" ||
+    event._tag === "ControlStoreChanged" ||
+    event._tag === "PluginsChanged"
+  )
     return null;
   const atMillis = stamp(event, arrival);
   if (event._tag === "ItemChanged") {

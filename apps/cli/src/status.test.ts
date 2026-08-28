@@ -48,6 +48,8 @@ const controlStore: ControlStore = {
     revision: 2,
   },
   operationSettings: [],
+  pluginInstalls: [],
+  contributionSettings: [],
 };
 
 describe("formatStatus", () => {

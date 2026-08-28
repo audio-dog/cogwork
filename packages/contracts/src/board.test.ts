@@ -233,6 +233,8 @@ describe("applyDaemonEvent", () => {
         revision: 0,
       },
       operationSettings: [],
+      pluginInstalls: [],
+      contributionSettings: [],
     });
     const next = controlStore({
       daemonLimits: {
@@ -249,6 +251,8 @@ describe("applyDaemonEvent", () => {
           value: "anthropic/claude-sonnet-4-5",
         },
       ],
+      pluginInstalls: [],
+      contributionSettings: [],
     });
 
     const board = fold([
@@ -257,6 +261,20 @@ describe("applyDaemonEvent", () => {
     ]);
 
     assert.deepStrictEqual(board.controlStore, next);
+  });
+
+  it("replaces Plugin notices with the latest Plugin event", () => {
+    const board = fold([
+      event({
+        _tag: "PluginsChanged",
+        plugins: { plugins: [] },
+        notices: ["GitHub remains connected."],
+      }),
+      event({ _tag: "PluginsChanged", plugins: { plugins: [] }, notices: [] }),
+    ]);
+
+    assert.deepStrictEqual(board.plugins, { plugins: [] });
+    assert.deepStrictEqual(board.pluginNotices, []);
   });
 
   it("keeps running runs and only the recent settled run window", () => {

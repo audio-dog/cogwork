@@ -190,6 +190,8 @@ describe("Run Plan assembly", () => {
       projectedMembers: ["Instructions", "Messages", "MCP", "Sandbox", "Persistence"],
       middleware: ["sandbox"],
       context,
+      contributions: workspace.contributions,
+      mcpSkills: [],
     });
 
     assert.deepStrictEqual(

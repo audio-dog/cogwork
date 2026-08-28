@@ -1,3 +1,4 @@
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -5,6 +6,7 @@ import {
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
+  AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@cogwork/ui/components/alert-dialog";
@@ -23,7 +25,7 @@ import {
   kindLabelsPlural,
   type SetupStep,
 } from "../features/configuration-model";
-import { useConfiguration } from "./configuration-provider";
+import { pluginFailureTitle, useConfiguration } from "./configuration-provider";
 import { ContributionFileRow } from "./contribution-file-row";
 import {
   ListRow,
@@ -66,6 +68,13 @@ function SetupRow({ step }: { step: SetupStep }) {
 
 function UninstallDialog({ plugin }: { plugin: InstalledPlugin }) {
   const [open, setOpen] = useState(false);
+  const {
+    actions: { uninstallPlugin },
+  } = useConfiguration();
+  const uninstall = () => {
+    uninstallPlugin(plugin.record.pluginId);
+    setOpen(false);
+  };
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger render={<Button size="sm" variant="ghost" />}>
@@ -73,15 +82,17 @@ function UninstallDialog({ plugin }: { plugin: InstalledPlugin }) {
         Uninstall
       </AlertDialogTrigger>
       <AlertDialogContent>
-        <AlertDialogTitle>Uninstall {plugin.name}?</AlertDialogTitle>
-        <AlertDialogDescription>
-          This deletes its settings at every place you own — this machine and every private overlay. A
-          committed repository file is not yours to delete, so anything it wrote for this Plugin is left in
-          place and will dangle.
-        </AlertDialogDescription>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Uninstall {plugin.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This deletes its settings at every place you own — this machine and every private overlay. A
+            committed repository file is not yours to delete, so anything it wrote for this Plugin is left in
+            place and will dangle.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Keep it</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={() => setOpen(false)}>
+          <AlertDialogAction variant="destructive" onClick={uninstall}>
             Uninstall
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -97,7 +108,7 @@ function ContributionRow({ contribution }: { contribution: Contribution }) {
 
 export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
   const {
-    meta: { plugins },
+    meta: { plugins, pluginFailure },
   } = useConfiguration();
   const rows = plugins.contributionsOf(plugin);
   const remaining = plugin.setup.filter((step) => !step.done);
@@ -114,6 +125,13 @@ export function PluginDetail({ plugin }: { plugin: InstalledPlugin }) {
           <RiArrowLeftSLine data-icon="inline-start" />
           Customize
         </Button>
+
+        {pluginFailure ? (
+          <Alert variant="destructive">
+            <AlertTitle>{pluginFailureTitle(pluginFailure)}</AlertTitle>
+            <AlertDescription className="whitespace-pre-wrap">{pluginFailure.message}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="flex items-start gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-5">

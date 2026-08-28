@@ -3,6 +3,7 @@ import {
   HarnessName,
   LocalContribution,
   type OperationSettingRow,
+  PluginFailure,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -11,6 +12,7 @@ import {
   WorkItemId,
   WorkspaceConfig,
 } from "@cogwork/contracts";
+
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -46,6 +48,7 @@ import {
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
@@ -228,6 +231,22 @@ const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
         message: "cleanup failed",
       }),
     ),
+});
+
+const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: (request) =>
+    Effect.succeed({
+      layers: request.contributions
+        .filter((contribution) => contribution.kind === "rules")
+        .map((contribution) => ({
+          kind: "rules" as const,
+          source: contribution.file,
+          content: contribution.id,
+        })),
+      skillPath: "/",
+      sources: [],
+    }),
+  cleanup: () => Effect.void,
 });
 
 const assemblerStub = Layer.succeed(McpSkillAssembler, {
@@ -787,6 +806,86 @@ const runControlStub = Layer.succeed(RunControl.RunControl, {
   workspaceFor: () => Effect.succeed(Option.none()),
   cancel: () => Effect.succeed(false),
 });
+const pluginManagerStub = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
+});
+
+const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.succeed([
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server" as const,
+        localName: "linear",
+        summary: "Linear MCP server",
+        file: "/plugins/linear/mcp/linear.json",
+        load: {
+          _tag: "Loaded" as const,
+          mcpServer: {
+            endpoint: "https://mcp.linear.app/mcp",
+            secretEnv: "MISSING_LINEAR_API_KEY",
+            credentialAvailable: false,
+          },
+        },
+      },
+      {
+        id: "plugin:linear/rules/linear",
+        authority: "plugin:linear",
+        kind: "rules" as const,
+        localName: "linear",
+        summary: "Linear rules",
+        file: "/plugins/linear/rules/linear.md",
+        load: { _tag: "Loaded" as const },
+      },
+    ]),
+});
+
+const availablePluginMcpLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.succeed([
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server" as const,
+        localName: "linear",
+        summary: "Linear MCP server",
+        file: "/plugins/linear/mcp/linear.json",
+        load: {
+          _tag: "Loaded" as const,
+          mcpServer: {
+            endpoint: "https://mcp.linear.app/mcp",
+            secretEnv: null,
+            credentialAvailable: true,
+          },
+        },
+      },
+    ]),
+});
+
+const unavailablePluginLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.fail(
+      new PluginFailure({
+        operation: "read Plugin contributions",
+        pluginId: null,
+        file: null,
+        message: "catalog unavailable",
+      }),
+    ),
+});
 
 const controlStoreLayer = (operationSettings: ReadonlyArray<OperationSettingRow>) => {
   const picture = { ...defaultControlStore, operationSettings };
@@ -796,6 +895,9 @@ const controlStoreLayer = (operationSettings: ReadonlyArray<OperationSettingRow>
     picture: Effect.succeed(picture),
     setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
     updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+    installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
+    uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
+    updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
     withWrite: (effect) => effect,
   });
 };
@@ -820,6 +922,7 @@ function provide(
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
   operationSettings: ReadonlyArray<OperationSettingRow> = [],
   contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
+  plugins: Layer.Layer<PluginManager> = pluginManagerStub,
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -847,6 +950,7 @@ function provide(
         assemblerStub,
         contextAssembler,
         controlStoreLayer(operationSettings),
+        plugins,
       ),
     ),
   );
@@ -1329,6 +1433,94 @@ describe("Executor.execute", () => {
         },
       ]);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
+  });
+
+  it.effect("keeps running when an installed Plugin needs an MCP credential", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], []);
+      assert.isTrue(
+        request?.plan.instructions.some(({ source }) => source === "/plugins/linear/rules/linear.md"),
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          contributionContext,
+          missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("projects an installed Plugin MCP server from the accepted Plan", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], [
+        {
+          name: request ? resolvedMcpSkills(request)[0]?.name : undefined,
+          endpoint: "https://mcp.linear.app/mcp",
+          bearer: null,
+        },
+      ]);
+      assert.deepStrictEqual(
+        request?.plan.mcp.filter(({ identity }) => identity === "plugin:linear/mcp/linear").length,
+        1,
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          ContextCleanupCalls.contextAssemblerLayer,
+          availablePluginMcpLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("keeps running when Plugin contributions cannot load", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], []);
+      assert.deepStrictEqual(
+        request?.plan.skills.map(({ identity }) => identity),
+        [privateSkill.id],
+      );
+      assert.isFalse((yield* Ref.get(calls)).some((call) => call.method === "handOff"));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          ContextCleanupCalls.contextAssemblerLayer,
+          unavailablePluginLayer,
+        ),
+      ),
+    );
   });
 
   it.effect("resolves a credential-store bearer for an authed skill without leaking it to the ledger", () => {

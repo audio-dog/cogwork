@@ -46,6 +46,8 @@ const controlStore: ControlStore = {
       value: "workspace-triage-model",
     },
   ],
+  pluginInstalls: [],
+  contributionSettings: [],
 };
 
 describe("Operation settings view", () => {

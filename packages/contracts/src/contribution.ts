@@ -16,6 +16,18 @@ export const LocalContribution = Schema.Struct({
 });
 export type LocalContribution = typeof LocalContribution.Type;
 
+export const PluginContributionAuthority = Schema.TemplateLiteral(["plugin:", TrimmedNonEmptyString]);
+export type PluginContributionAuthority = typeof PluginContributionAuthority.Type;
+
+export const FileContribution = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  authority: Schema.Union([LocalContributionAuthority, PluginContributionAuthority]),
+  kind: FileContributionKind,
+  localName: TrimmedNonEmptyString,
+  file: TrimmedNonEmptyString,
+});
+export type FileContribution = typeof FileContribution.Type;
+
 const identityKind = (kind: FileContributionKind) => (kind === "mcp-server" ? "mcp" : kind);
 
 export const localContributionId = (

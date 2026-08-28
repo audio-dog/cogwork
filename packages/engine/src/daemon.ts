@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import {
   agUiIsTerminal,
   DaemonRpcs,
@@ -26,12 +27,14 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import {
   cancelRun,
   deregisterWorkspace,
+  installPlugin,
   rebindWorkspace,
   reclassify,
   registerWorkspace,
   setDaemonLimit,
   setOperationSetting,
   setScheduling,
+  uninstallPlugin,
 } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
 import {
@@ -49,6 +52,7 @@ import * as Harness from "./harness";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
+import { PluginManager, pluginManagerLayer } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import {
   classifiedItemsOf,
@@ -124,6 +128,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const controlStore = yield* ControlStore;
+  const plugins = yield* PluginManager;
   const ledger = yield* RunLedger;
   const emittedAtMillis = yield* Clock.currentTimeMillis;
   const snapshot = yield* worker.snapshot;
@@ -142,10 +147,18 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     scheduler: schedulerStatsOf(registry, config, stats),
   } as const;
   const controlStoreEvents = yield* controlStoreSeedEvents(controlStore);
-  return [...items, ...workspaces, ...runs, ...controlStoreEvents, scheduling].map((event) => ({
-    ...event,
-    emittedAtMillis,
-  }));
+  const pluginEvents = yield* plugins.overview.pipe(
+    Effect.match({
+      onFailure: () => [],
+      onSuccess: (overview) => [{ _tag: "PluginsChanged" as const, plugins: overview, notices: [] }],
+    }),
+  );
+  return [...items, ...workspaces, ...runs, ...controlStoreEvents, ...pluginEvents, scheduling].map(
+    (event) => ({
+      ...event,
+      emittedAtMillis,
+    }),
+  );
 });
 
 // Subscribe before reading the seed so an event published between the two is not lost.
@@ -193,6 +206,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const store = yield* ControlStore;
     return yield* store.picture;
   }),
+  GetPlugins: Effect.fn("Daemon.GetPlugins")(function* () {
+    return yield* (yield* PluginManager).overview;
+  }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
     return yield* ledger.listRuns(50);
@@ -214,6 +230,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   SetDaemonLimit: setDaemonLimit,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
+  InstallPlugin: installPlugin,
+  UninstallPlugin: uninstallPlugin,
   DeregisterWorkspace: deregisterWorkspace,
   RebindWorkspace: rebindWorkspace,
 });
@@ -230,6 +248,8 @@ export interface HostAdapters<E = never, R = never> {
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
+  readonly pluginCatalogPath?: string;
+  readonly pluginProvisionRoot?: string;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
 }
@@ -246,6 +266,11 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
+  const plugins = pluginManagerLayer({
+    catalogPath:
+      adapters.pluginCatalogPath ?? fileURLToPath(new URL("../plugins/catalog.json", import.meta.url)),
+    provisionRoot: adapters.pluginProvisionRoot ?? `${adapters.controlStorePath}.plugins`,
+  }).pipe(Layer.provide(controlStore));
   const registry = workspaceRegistryLayer(adapters.controlStorePath).pipe(
     Layer.provideMerge(controlStore),
     Layer.provide(storeClient),
@@ -266,6 +291,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const base = Layer.mergeAll(
     registry,
     controlStore,
+    plugins,
     daemonInfoLayer,
     issueTracker,
     runLedger,
