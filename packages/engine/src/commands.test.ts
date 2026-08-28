@@ -243,9 +243,26 @@ const registrationServices = () => {
     MutableRef.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
     return Effect.succeed({ _tag: "Registered" as const, workspace });
   };
+  const deregister: Registry.WorkspaceManagementService["deregister"] = (workspace) => {
+    MutableRef.update(cell, (state) => ({
+      workspaces: state.workspaces.filter((entry) => entry.config.name !== workspace),
+      failures: state.failures.filter((entry) => entry.name !== workspace),
+    }));
+    return Effect.succeed(workspace);
+  };
+  const rebind: Registry.WorkspaceManagementService["rebind"] = (workspace, checkoutPath) => {
+    const current = MutableRef.get(cell).workspaces.find((entry) => entry.config.name === workspace);
+    if (!current) return Effect.die("workspace not found");
+    const rebound = { ...current, config: { ...current.config, checkoutPath } };
+    MutableRef.update(cell, (state) => ({
+      ...state,
+      workspaces: state.workspaces.map((entry) => (entry.config.name === workspace ? rebound : entry)),
+    }));
+    return Effect.succeed({ _tag: "Registered" as const, workspace: rebound });
+  };
   return Layer.mergeAll(
     Layer.succeed(Registry.WorkspaceRegistry, registry),
-    Layer.succeed(Registry.WorkspaceManagement, { register }),
+    Layer.succeed(Registry.WorkspaceManagement, { register, deregister, rebind }),
   );
 };
 
@@ -258,6 +275,8 @@ const failedRegistrationServices = () => {
     ),
     Layer.succeed(Registry.WorkspaceManagement, {
       register: () => Effect.succeed({ _tag: "Failed" as const, failure }),
+      deregister: () => Effect.die("unexpected deregister"),
+      rebind: () => Effect.die("unexpected re-bind"),
     }),
   );
 };
@@ -688,6 +707,58 @@ describe("RegisterWorkspace", () => {
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
         ["WorkspaceChanged", "ItemRemoved"],
+      );
+    }).pipe(
+      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
+});
+
+describe("workspace lifecycle commands", () => {
+  it.effect("returns and publishes a deregistered WorkspaceId", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      if (registered._tag !== "Registered") return assert.fail("expected registration");
+
+      const deregistered = yield* client.DeregisterWorkspace({ workspace: registered.name });
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
+
+      assert.strictEqual(deregistered, registered.name);
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["WorkspaceChanged", "WorkspaceRemoved"],
+      );
+    }).pipe(
+      Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("returns and publishes the re-bound workspace picture", () => {
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      if (registered._tag !== "Registered") return assert.fail("expected registration");
+
+      const rebound = yield* client.RebindWorkspace({
+        workspace: registered.name,
+        checkoutPath: "/repos/moved-acme",
+      });
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
+
+      assert.strictEqual(rebound._tag, "Registered");
+      assert.strictEqual(rebound._tag === "Registered" ? rebound.checkoutPath : null, "/repos/moved-acme");
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["WorkspaceChanged", "WorkspaceChanged"],
       );
     }).pipe(
       Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),

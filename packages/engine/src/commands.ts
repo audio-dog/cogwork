@@ -21,7 +21,12 @@ import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
-import { findWorkspaceIssueTrackerBinding, WorkspaceManagement, WorkspaceRegistry } from "./registry";
+import {
+  findWorkspaceIssueTrackerBinding,
+  WorkspaceManagement,
+  type WorkspaceRegistrationChange,
+  WorkspaceRegistry,
+} from "./registry";
 import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
@@ -156,16 +161,39 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
   );
 });
 
+const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
+  if (change._tag === "Failed") return workspaceFailureState(change.failure);
+  return workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined));
+};
+
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
   readonly registration: WorkspaceRegistration;
 }) {
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const change = yield* management.register(payload.registration);
-  const state =
-    change._tag === "Registered"
-      ? workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined))
-      : workspaceFailureState(change.failure);
+  const state = workspaceStateFromChange(change);
+  yield* publisher.publishWorkspaces();
+  return state;
+});
+
+export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(function* (payload: {
+  readonly workspace: WorkspaceId;
+}) {
+  const management = yield* WorkspaceManagement;
+  const publisher = yield* DaemonEventPublisher;
+  const workspace = yield* management.deregister(payload.workspace);
+  return yield* publisher.publishWorkspaceRemoved(workspace);
+});
+
+export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {
+  readonly workspace: WorkspaceId;
+  readonly checkoutPath: string;
+}) {
+  const management = yield* WorkspaceManagement;
+  const publisher = yield* DaemonEventPublisher;
+  const change = yield* management.rebind(payload.workspace, payload.checkoutPath);
+  const state = workspaceStateFromChange(change);
   yield* publisher.publishWorkspaces();
   return state;
 });

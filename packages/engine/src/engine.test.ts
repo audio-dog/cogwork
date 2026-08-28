@@ -637,6 +637,7 @@ describe("daemon heartbeats", () => {
       const publisherLayer = Layer.succeed(EventPublisher.DaemonEventPublisher, {
         publishItems: () => Ref.update(publishes, (count) => count + 1),
         publishWorkspaces: () => Effect.void,
+        publishWorkspaceRemoved: Effect.succeed,
         publishScheduler: () =>
           Effect.succeed({
             scheduling: "running",

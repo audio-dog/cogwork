@@ -23,7 +23,15 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import { cancelRun, reclassify, registerWorkspace, setDaemonLimit, setScheduling } from "./commands";
+import {
+  cancelRun,
+  deregisterWorkspace,
+  rebindWorkspace,
+  reclassify,
+  registerWorkspace,
+  setDaemonLimit,
+  setScheduling,
+} from "./commands";
 import type { ContextAssembler } from "./context-assembler";
 import {
   bootControlStoreLayer,
@@ -198,6 +206,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   SetScheduling: setScheduling,
   SetDaemonLimit: setDaemonLimit,
   RegisterWorkspace: registerWorkspace,
+  DeregisterWorkspace: deregisterWorkspace,
+  RebindWorkspace: rebindWorkspace,
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;
@@ -228,7 +238,10 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
-  const registry = workspaceRegistryLayer.pipe(Layer.provideMerge(controlStore), Layer.provide(storeClient));
+  const registry = workspaceRegistryLayer(adapters.controlStorePath).pipe(
+    Layer.provideMerge(controlStore),
+    Layer.provide(storeClient),
+  );
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
     runLedgerPublishingLayer.pipe(
       Layer.provide(
