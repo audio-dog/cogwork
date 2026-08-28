@@ -1,0 +1,27 @@
+apps/cli/src/workspace-commands.ts
+  s_c3d7df8e0cdfb9::t_9c9d139f23eef6 77-78
+  s_c3d7df8e0cdfb9::t_be159c59edce74 1,21-22,25,73-76,79-118,123-135
+apps/cli/src/workspace-commands.test.ts
+  s_c3d7df8e0cdfb9::t_9c9d139f23eef6 4,24-29,32-38,41
+  s_c3d7df8e0cdfb9::t_d46cd7c2d069a3 1,7,30-31,40
+  s_c3d7df8e0cdfb9::t_d07080a1e37006 39
+  s_c3d7df8e0cdfb9::t_c53da74811e5a8 42-44
+apps/cli/CONTEXT.md
+  s_c3d7df8e0cdfb9::t_ee08407e98bd9a 46-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6344dc9ef36c318d72b1afa851e5643331805ca3",
+  "prompts": {},
+  "sessions": {
+    "s_c3d7df8e0cdfb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a046a9-a397-73a0-9211-7a4be9957533",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
