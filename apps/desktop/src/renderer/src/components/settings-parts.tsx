@@ -1,16 +1,8 @@
 import { Card } from "@cogwork/ui/components/card";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@cogwork/ui/components/input-group";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiAddLine, RiSubtractLine } from "@remixicon/react";
-import { createContext, type ReactNode, use, useRef, useState } from "react";
+import { createContext, type ReactNode, use, useRef } from "react";
 import type { SettingEntry } from "../features/settings-catalog";
-import { parseCount, sanitizeCountDraft } from "../features/settings-values";
 
 const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});
 
@@ -85,66 +77,5 @@ export function SubSectionCard({ label, children }: { label: string; children: R
         {children}
       </Card>
     </section>
-  );
-}
-
-export function NumberStepper({
-  value,
-  min,
-  max,
-  label,
-  disabled,
-  onChange,
-}: {
-  value: number;
-  min: number;
-  max: number;
-  label: string;
-  disabled?: boolean;
-  onChange: (value: number) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const commit = (next: number) => {
-    setEditing(false);
-    const clamped = Math.min(max, Math.max(min, next));
-    if (clamped !== value) onChange(clamped);
-  };
-  return (
-    <InputGroup className="w-28">
-      <InputGroupInput
-        aria-label={label}
-        inputMode="numeric"
-        disabled={disabled}
-        value={editing ? draft : String(value)}
-        onFocus={() => {
-          setDraft(String(value));
-          setEditing(true);
-        }}
-        onBlur={() => commit(parseCount(draft, min))}
-        onChange={(event) => setDraft(sanitizeCountDraft(event.target.value))}
-        className="text-center tabular-nums"
-      />
-      <InputGroupAddon>
-        <InputGroupButton
-          size="icon-xs"
-          disabled={disabled}
-          aria-label={`Decrease ${label}`}
-          onClick={() => commit(Math.max(min, value - 1))}
-        >
-          <RiSubtractLine />
-        </InputGroupButton>
-      </InputGroupAddon>
-      <InputGroupAddon align="inline-end">
-        <InputGroupButton
-          size="icon-xs"
-          disabled={disabled}
-          aria-label={`Increase ${label}`}
-          onClick={() => commit(value + 1)}
-        >
-          <RiAddLine />
-        </InputGroupButton>
-      </InputGroupAddon>
-    </InputGroup>
   );
 }
