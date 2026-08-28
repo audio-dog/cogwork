@@ -834,7 +834,7 @@ export const make = Effect.gen(function* () {
         endedAtMillis: null,
       };
       yield* ledger.insertRun(record);
-      yield* Effect.withFiber((self) => runControl.register(runId, self));
+      yield* Effect.withFiber((self) => runControl.register(runId, self, workspace));
       const persistSession = (session: SessionId) => {
         const prepared = withSession(record, session);
         return prepared === record

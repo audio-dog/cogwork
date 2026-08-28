@@ -16,6 +16,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
@@ -697,6 +698,7 @@ const unavailableCommentProviderLayer: Layer.Layer<SourceControlProvider | Poste
 
 const runControlStub = Layer.succeed(RunControl.RunControl, {
   register: () => Effect.void,
+  workspaceFor: () => Effect.succeed(Option.none()),
   cancel: () => Effect.succeed(false),
 });
 
