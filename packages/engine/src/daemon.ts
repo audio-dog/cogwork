@@ -25,6 +25,8 @@ import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import {
   cancelRun,
+  deregisterWorkspace,
+  rebindWorkspace,
   reclassify,
   registerWorkspace,
   setDaemonLimit,
@@ -48,7 +50,13 @@ import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
 import type { RegisteredWorkspace } from "./projector";
-import { classifiedItemsOf, schedulerStatsOf, workspaceInfoOf, workspaceStatesOf } from "./read-model";
+import {
+  classifiedItemsOf,
+  currentReconcileStatesOf,
+  schedulerStatsOf,
+  workspaceInfoOf,
+  workspaceStatesOf,
+} from "./read-model";
 import {
   type ReconcileSnapshot,
   ReconcileWorker,
@@ -122,7 +130,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const config = yield* scheduler.config;
   const stats = yield* scheduler.stats;
   const running = yield* ledger.runningRuns;
-  const items = snapshot.workspaces.flatMap((state) =>
+  const items = currentReconcileStatesOf(registry, snapshot).flatMap((state) =>
     classifiedItemsOf(state).map((item) => ({ _tag: "ItemChanged", workspace: state.name, item }) as const),
   );
   const workspaces = workspaceStatesOf(registry, snapshot).map(
@@ -206,6 +214,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   SetDaemonLimit: setDaemonLimit,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
+  DeregisterWorkspace: deregisterWorkspace,
+  RebindWorkspace: rebindWorkspace,
 });
 
 export const serializationLayer = RpcSerialization.layerNdjson;

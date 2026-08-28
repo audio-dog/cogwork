@@ -25,6 +25,11 @@ export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray
 
 export const classifiedItemWithPr = (item: ObservedItem): ClassifiedItem | null => classifiedItemOf(item);
 
+export const currentReconcileStatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot) => {
+  const names = new Set(registry.workspaces.map((workspace) => workspace.config.name));
+  return snapshot.workspaces.filter((state) => names.has(state.name));
+};
+
 export const workspaceInfoOf = (
   workspace: RegisteredWorkspace,
   state: WorkspaceReconcileState | undefined,

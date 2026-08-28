@@ -14,7 +14,12 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { DaemonEventBus } from "./daemon-event-bus";
-import { classifiedItemsOf, schedulerStatsOf, workspaceStatesOf } from "./read-model";
+import {
+  classifiedItemsOf,
+  currentReconcileStatesOf,
+  schedulerStatsOf,
+  workspaceStatesOf,
+} from "./read-model";
 import { ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { Scheduler } from "./scheduler";
@@ -29,18 +34,23 @@ interface PublishedItem {
   readonly id: WorkItemId;
 }
 
+interface PublishedWorkspace {
+  readonly signature: string;
+  readonly state: WorkspaceState;
+}
+
 export const make = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const registry = yield* WorkspaceRegistry;
   const bus = yield* DaemonEventBus;
   const lastItems = yield* Ref.make<ReadonlyMap<string, PublishedItem>>(new Map());
-  const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+  const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, PublishedWorkspace>>(new Map());
   const lastScheduler = yield* Ref.make<string | null>(null);
 
   const publishItems = Effect.fn("DaemonEventPublisher.publishItems")(function* () {
     const snapshot = yield* worker.snapshot;
-    const signed = snapshot.workspaces.flatMap((state) =>
+    const signed = currentReconcileStatesOf(registry, snapshot).flatMap((state) =>
       classifiedItemsOf(state).map(
         (item) =>
           ({
@@ -84,13 +94,24 @@ export const make = Effect.gen(function* () {
       signature: encodeWorkspace(state),
       state,
     }));
-    const changed = signed.filter(({ key, signature }) => previous.get(key) !== signature);
+    const present = new Set(signed.map(({ key }) => key));
+    const changed = signed.filter(({ key, signature }) => previous.get(key)?.signature !== signature);
+    const removed = [...previous].flatMap(([key, published]) => {
+      if (present.has(key) || published.state.name === undefined) return [];
+      return [published.state.name];
+    });
     yield* Effect.forEach(
       changed,
       ({ state }) => bus.publish({ _tag: "WorkspaceChanged", workspace: state }),
       { discard: true },
     );
-    yield* Ref.set(lastWorkspaces, new Map(signed.map(({ key, signature }) => [key, signature] as const)));
+    yield* Effect.forEach(removed, (workspace) => bus.publish({ _tag: "WorkspaceRemoved", workspace }), {
+      discard: true,
+    });
+    yield* Ref.set(
+      lastWorkspaces,
+      new Map(signed.map(({ key, signature, state }) => [key, { signature, state }] as const)),
+    );
   });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
@@ -102,6 +123,17 @@ export const make = Effect.gen(function* () {
     return stats;
   });
 
+  const publishWorkspaceRemoved = Effect.fn("DaemonEventPublisher.publishWorkspaceRemoved")(function* (
+    workspace: WorkspaceId,
+  ) {
+    yield* Ref.update(
+      lastWorkspaces,
+      (current) => new Map([...current].filter(([key]) => key !== workspace)),
+    );
+    yield* bus.publish({ _tag: "WorkspaceRemoved", workspace });
+    return workspace;
+  });
+
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     controlStore: ControlStorePicture,
   ) {
@@ -109,7 +141,13 @@ export const make = Effect.gen(function* () {
     return controlStore;
   });
 
-  return { publishItems, publishWorkspaces, publishScheduler, publishControlStore } as const;
+  return {
+    publishItems,
+    publishWorkspaces,
+    publishWorkspaceRemoved,
+    publishScheduler,
+    publishControlStore,
+  } as const;
 });
 
 export type DaemonEventPublisherService = Effect.Success<typeof make>;
