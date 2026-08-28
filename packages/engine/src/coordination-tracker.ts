@@ -7,7 +7,6 @@ import type {
   WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import type { CommentHost, CoordinationComment, WireCodec } from "./coordination";
 import * as Coordination from "./coordination";
 import type { FollowUpMarker } from "./follow-up";
@@ -125,11 +124,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       const claim: Claim = { ...request, by: host.claimIdentity(ref) };
-      yield* host.addClaim(ref);
       yield* Coordination.upsertCoordination(codec, host.comments(ref), {
         status: Coordination.claimStatusFor(claim),
         marker: Coordination.serializeClaim(codec, claim),
-      }).pipe(Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : host.removeClaim(ref))));
+      });
+      yield* host.addClaim(ref);
     }),
     release: Effect.fn("coordinationTracker.release")(function* (
       workspace: WorkspaceIssueTrackerBinding,
