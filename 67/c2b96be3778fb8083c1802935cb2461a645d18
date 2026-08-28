@@ -1,0 +1,26 @@
+packages/engine/src/provider-runner.ts
+  s_53e12e6d980f4b::t_0222d31f4bddc2 83
+packages/engine/src/provider-runner.test.ts
+  s_53e12e6d980f4b::t_a057251e4501ff 316-317
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "67c2b96be3778fb8083c1802935cb2461a645d18",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_53e12e6d980f4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b9fee68-156e-44f1-8e66-f8f0cdb43cc4",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
