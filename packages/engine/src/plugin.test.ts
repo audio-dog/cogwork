@@ -113,6 +113,32 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("keeps a Plugin MCP server active after its setting is cleared", () =>
+    Effect.gen(function* () {
+      const test = yield* fixture();
+      yield* Effect.gen(function* () {
+        const plugins = yield* PluginManager;
+        yield* plugins.install("linear", localOwnerId);
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return assert.fail(store.message);
+        yield* store.updateContributionSetting({
+          _tag: "Clear",
+          cell: {
+            contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+            scope: { _tag: "SettingsProfile" },
+          },
+        });
+
+        const contributions = yield* plugins.contributions(workspaceId);
+
+        assert.deepStrictEqual(
+          contributions.map((contribution) => contribution.kind),
+          ["mcp-server", "rules"],
+        );
+      }).pipe(Effect.provide(test.managerLayer));
+    }),
+  );
+
   it.effect("adopts a catalog version when a new Plugin manager loads", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

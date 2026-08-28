@@ -1,4 +1,5 @@
 import {
+  defaultContributionEnabled,
   type PluginContribution,
   PluginFailure,
   type PluginInstall,
@@ -486,7 +487,7 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
                 setting.scope._tag === "PrivateWorkspaceOverlay" && setting.scope.workspace === workspace,
             );
             const profile = rows.find((setting) => setting.scope._tag === "SettingsProfile");
-            return (overlay ?? profile)?.enabled === true;
+            return (overlay ?? profile)?.enabled ?? defaultContributionEnabled(contribution.authority);
           });
         }),
         Effect.mapError((error) => failure("read Plugin contributions", null, null, error)),
