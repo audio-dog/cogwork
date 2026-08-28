@@ -66,6 +66,8 @@ describe("McpServerRow", () => {
     const markup = renderContribution(contribution);
 
     expect(markup).toContain("Disabled");
+    expect(markup).toContain("Off · User");
+    expect(markup).not.toContain("Connection needed");
     expect(markup).not.toContain("bg-destructive");
   });
 });
