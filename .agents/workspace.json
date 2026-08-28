@@ -1,0 +1,13 @@
+{
+  "harness": { "preferred": "codex" },
+  "playbook": {
+    "triage": { "enabled": true, "model": "gpt-5.6-sol", "effort": "high" },
+    "implement": { "enabled": true, "model": "gpt-5.6-sol", "effort": "high" },
+    "follow-up": { "enabled": true, "model": "gpt-5.6-sol", "effort": "high" },
+    "verify": { "enabled": true }
+  },
+  "worktrees": {
+    "linkPaths": [".env"],
+    "setup": ["pnpm install", "pnpm setup-worktree"]
+  }
+}
