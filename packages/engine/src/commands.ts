@@ -66,14 +66,6 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
     return yield* new RunAlreadyFinished({ runId: payload.runId, status: run.status });
   }
 
-  const registry = yield* WorkspaceRegistry;
-  const workspace = workspaceById(registry, run.workspace);
-  if (workspace === null) {
-    return yield* Effect.die(
-      new Error(`cancel: run ${payload.runId} names unregistered workspace ${run.workspace}`),
-    );
-  }
-
   const runControl = yield* RunControl;
   yield* runControl.cancel(payload.runId);
 
@@ -87,10 +79,14 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
     });
   }
 
-  const issueTracker = yield* IssueTracker;
-  yield* issueTracker
-    .handOff(workspace, run.workItem, { stage: run.stage, note: payload.note })
-    .pipe(Effect.andThen(issueTracker.release(workspace, run.workItem)), Effect.orDie);
+  const registry = yield* WorkspaceRegistry;
+  const workspace = workspaceById(registry, run.workspace);
+  if (workspace !== null) {
+    const issueTracker = yield* IssueTracker;
+    yield* issueTracker
+      .handOff(workspace, run.workItem, { stage: run.stage, note: payload.note })
+      .pipe(Effect.andThen(issueTracker.release(workspace, run.workItem)), Effect.orDie);
+  }
 
   const snapshot = yield* (yield* ReconcileWorker).snapshot;
   const observed = observedFor(snapshot, run.workspace, run.workItem);

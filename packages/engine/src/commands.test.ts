@@ -68,6 +68,23 @@ const registryLayer = Layer.succeed(
   Registry.readOnlyRegistry({ workspaces: [registered], failures: [] }),
 );
 const registryServices = Layer.mergeAll(registryLayer, Registry.managementReadOnlyLayer);
+const failedWorkspaceRegistryServices = Layer.mergeAll(
+  Layer.succeed(
+    Registry.WorkspaceRegistry,
+    Registry.readOnlyRegistry({
+      workspaces: [],
+      failures: [
+        {
+          name: wsid("example"),
+          source: "/repos/example",
+          message: "invalid Workspace input",
+          issueTracker: registered.config.issueTracker,
+        },
+      ],
+    }),
+  ),
+  Registry.managementReadOnlyLayer,
+);
 
 const stubConfig: Scheduler.SchedulerConfig = { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 };
 
@@ -334,6 +351,25 @@ describe("CancelRun", () => {
       assert.strictEqual(error._tag, "RunAlreadyFinished");
       if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("interrupts a run whose workspace input has failed", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+      const item = yield* client.CancelRun({ runId: rid("run-1") });
+      const run = (yield* client.ListRuns()).find(({ id }) => id === rid("run-1"));
+
+      assert.strictEqual(item._tag, "NeedsHuman");
+      assert.strictEqual(run?.status, "interrupted");
+    }).pipe(
+      Effect.provide(
+        daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), failedWorkspaceRegistryServices),
+      ),
+      Effect.scoped,
+    ),
   );
 });
 
