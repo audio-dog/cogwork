@@ -1,4 +1,5 @@
 import {
+  type ContributionSetting,
   defaultControlStore,
   HarnessName,
   LocalContribution,
@@ -887,8 +888,11 @@ const unavailablePluginLayer = Layer.succeed(PluginManager, {
     ),
 });
 
-const controlStoreLayer = (operationSettings: ReadonlyArray<OperationSettingRow>) => {
-  const picture = { ...defaultControlStore, operationSettings };
+const controlStoreLayer = (
+  operationSettings: ReadonlyArray<OperationSettingRow>,
+  contributionSettings: ReadonlyArray<ContributionSetting> = [],
+) => {
+  const picture = { ...defaultControlStore, operationSettings, contributionSettings };
   return Layer.succeed(ControlStore, {
     health: "available",
     seed: picture,
@@ -923,6 +927,7 @@ function provide(
   operationSettings: ReadonlyArray<OperationSettingRow> = [],
   contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
   plugins: Layer.Layer<PluginManager> = pluginManagerStub,
+  contributionSettings: ReadonlyArray<ContributionSetting> = [],
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -949,7 +954,7 @@ function provide(
         worktree,
         assemblerStub,
         contextAssembler,
-        controlStoreLayer(operationSettings),
+        controlStoreLayer(operationSettings, contributionSettings),
         plugins,
       ),
     ),
@@ -1489,6 +1494,41 @@ describe("Executor.execute", () => {
           [],
           ContextCleanupCalls.contextAssemblerLayer,
           availablePluginMcpLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("omits a Plugin MCP server disabled for the workspace", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], []);
+      const trace = request?.plan.provenance.resolution.find(
+        ({ key }) => key === "contribution:plugin:linear/mcp/linear:enabled",
+      );
+      assert.strictEqual(trace?.winner?.source, "Private workspace overlay gh");
+      assert.strictEqual(trace?.winner?.value, false);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          ContextCleanupCalls.contextAssemblerLayer,
+          availablePluginMcpLayer,
+          [
+            {
+              contribution: "plugin:linear/mcp/linear",
+              scope: { _tag: "PrivateWorkspaceOverlay", workspace: implementWorkspace.config.name },
+              enabled: false,
+            },
+          ],
         ),
       ),
     );

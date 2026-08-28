@@ -56,6 +56,7 @@ import { RunControl } from "./run-control";
 import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
 import {
   admittedContributions,
+  admittedMcpSkills,
   assembleRunPlan,
   type ResolvedRunPlanStage,
   resolveRunPlanStage,
@@ -235,7 +236,7 @@ export const make = Effect.gen(function* () {
 
   const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
     workspace: RegisteredWorkspace,
-    resolved: ResolvedStage,
+    planStage: ResolvedRunPlanStage,
     checkoutPath: string,
     prompt: string,
     session: SessionId | null,
@@ -257,8 +258,15 @@ export const make = Effect.gen(function* () {
       localName: contribution.localName,
       file: contribution.file,
     }));
+    const contributions = [...workspace.contributions, ...fileContributions];
+    const admitted = admittedContributions(
+      contributions,
+      planStage.contributionSettings,
+      workspace.config.name,
+    );
+    const admittedIdentities = new Set(admitted.map(({ id }) => id));
     const pluginMcpSkills: ReadonlyArray<PreparedMcpSkill> = yield* Effect.forEach(
-      loaded.flatMap(availablePluginMcp),
+      loaded.filter(({ id }) => admittedIdentities.has(id)).flatMap(availablePluginMcp),
       ({ id, server }) =>
         Effect.gen(function* () {
           const { endpoint, secretEnv } = server;
@@ -280,13 +288,13 @@ export const make = Effect.gen(function* () {
       identity: null,
     }));
     return {
-      harness: resolved.harness,
-      skill: resolved.skill,
+      harness: planStage.stage.harness,
+      skill: planStage.stage.skill,
       checkoutPath,
       session,
       prompt,
       mcpSkills: [...workspaceMcpSkills, ...pluginMcpSkills],
-      contributions: [...workspace.contributions, ...fileContributions],
+      contributions,
     } satisfies PreparedHarnessRequest;
   });
 
@@ -345,12 +353,18 @@ export const make = Effect.gen(function* () {
     observation: RunPlanObservation,
   ) {
     const request = yield* ops.prepare;
+    const contributions = admittedContributions(
+      request.contributions,
+      ops.planStage.contributionSettings,
+      workspace.config.name,
+    );
+    const mcpSkills = admittedMcpSkills(request.mcpSkills, contributions);
     const context = yield* contextAssembler.assemble({
       runId,
       cwd: request.checkoutPath,
       projectRoot: request.checkoutPath,
       skill: request.skill,
-      contributions: admittedContributions(request.contributions),
+      contributions,
     });
     const session =
       request.session ??
@@ -369,7 +383,7 @@ export const make = Effect.gen(function* () {
       projectedMembers: harness.projectedMembers(request.harness),
       middleware: harness.planMiddleware(request.harness),
       contributions: request.contributions,
-      mcpSkills: request.mcpSkills.map(({ identity, name, endpoint, bearer }) => ({
+      mcpSkills: mcpSkills.map(({ identity, name, endpoint, bearer }) => ({
         identity,
         name,
         endpoint,
@@ -378,7 +392,7 @@ export const make = Effect.gen(function* () {
     });
     const projectedMcp = plan.mcp.filter((server) => "endpoint" in server);
     const mcpCredentials = new Map(
-      request.mcpSkills.flatMap((skill, index) => {
+      mcpSkills.flatMap((skill, index) => {
         const identity = projectedMcp[index]?.identity;
         return identity && skill.bearer ? [[identity, skill.bearer] as const] : [];
       }),
@@ -666,11 +680,11 @@ export const make = Effect.gen(function* () {
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
+    planStage: ResolvedRunPlanStage,
     prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
-    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null);
+    return yield* harnessRequest(workspace, planStage, worktree.path, prompt, null);
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedRunPlanStage) => {
@@ -681,7 +695,7 @@ export const make = Effect.gen(function* () {
       resolved,
       planStage,
       branch: null,
-      prepare: harnessRequest(workspace, resolved, workspace.config.checkoutPath, fullPrompt, null),
+      prepare: harnessRequest(workspace, planStage, workspace.config.checkoutPath, fullPrompt, null),
       complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
       fullPrompt,
       resume: false,
@@ -702,7 +716,7 @@ export const make = Effect.gen(function* () {
       resolved,
       planStage,
       branch,
-      prepare: prepareImplement(workspace, item, resolved, fullPrompt),
+      prepare: prepareImplement(workspace, item, planStage, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
       fullPrompt,
       resume: false,
@@ -780,11 +794,12 @@ export const make = Effect.gen(function* () {
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
+    planStage: ResolvedRunPlanStage,
     branch: string,
     context: FollowUpContext,
     prompt: string,
   ) {
+    const resolved = planStage.stage;
     const worktree = yield* worktrees.ensure(workspace, item, { branch });
     const last = yield* latestResumableBranchRun(workspace, branch);
     const session = last?.session ? yield* ledger.getSession(last.session) : null;
@@ -802,7 +817,7 @@ export const make = Effect.gen(function* () {
     });
     return yield* harnessRequest(
       workspace,
-      resolved,
+      planStage,
       worktree.path,
       prompt,
       decision.kind === "resume" && session?.harness === resolved.harness ? (last?.session ?? null) : null,
@@ -823,7 +838,7 @@ export const make = Effect.gen(function* () {
       resolved,
       planStage,
       branch,
-      prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
+      prepare: prepareFollowUp(workspace, item, planStage, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
       fullPrompt,
       resume: false,
@@ -852,17 +867,17 @@ export const make = Effect.gen(function* () {
   const resumePrepare = Effect.fn("Executor.resumePrepare")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
+    planStage: ResolvedRunPlanStage,
     session: SessionId,
   ) {
     if (item.stage === "triage") {
       const path = workspace.config.checkoutPath;
-      return yield* harnessRequest(workspace, resolved, path, buildContinuationNudge(path), session);
+      return yield* harnessRequest(workspace, planStage, path, buildContinuationNudge(path), session);
     }
     const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
     return yield* harnessRequest(
       workspace,
-      resolved,
+      planStage,
       worktree.path,
       buildContinuationNudge(worktree.path),
       session,
@@ -872,14 +887,14 @@ export const make = Effect.gen(function* () {
   const freshRecoveryPrepare = Effect.fn("Executor.freshRecoveryPrepare")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
+    planStage: ResolvedRunPlanStage,
     prompt: string,
   ) {
     if (item.stage === "triage") {
-      return yield* harnessRequest(workspace, resolved, workspace.config.checkoutPath, prompt, null);
+      return yield* harnessRequest(workspace, planStage, workspace.config.checkoutPath, prompt, null);
     }
     const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null);
+    return yield* harnessRequest(workspace, planStage, worktree.path, prompt, null);
   });
 
   const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedRunPlanStage) => {
@@ -894,7 +909,7 @@ export const make = Effect.gen(function* () {
     if (!session) return ops;
     return {
       ...ops,
-      prepare: resumePrepare(workspace, item, planStage.stage, session),
+      prepare: resumePrepare(workspace, item, planStage, session),
       resume: true,
     } satisfies StageOps;
   };
@@ -903,8 +918,13 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    const rows = controlStore.health === "available" ? (yield* controlStore.picture).operationSettings : [];
-    const resolved = resolveRunPlanStage(workspace.config, item.stage, rows);
+    const picture = controlStore.health === "available" ? yield* controlStore.picture : null;
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      item.stage,
+      picture?.operationSettings ?? [],
+      picture?.contributionSettings ?? [],
+    );
     if (!resolved?.stage.enabled) return null;
     return opsFor(workspace, item, resolved);
   });
@@ -914,7 +934,7 @@ export const make = Effect.gen(function* () {
     if (!item.resume) return fresh;
     return {
       ...fresh,
-      prepare: freshRecoveryPrepare(workspace, item, ops.resolved, fresh.fullPrompt),
+      prepare: freshRecoveryPrepare(workspace, item, ops.planStage, fresh.fullPrompt),
     } satisfies StageOps;
   };
 
