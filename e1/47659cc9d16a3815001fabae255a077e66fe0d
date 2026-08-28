@@ -1,0 +1,32 @@
+packages/engine/src/provider-runner.ts
+  s_3ad8c99e0b0d7f::t_55c0e43b6bf31a 7,21,42,89-98,147-155,161-162,166
+  s_3ad8c99e0b0d7f::t_a91ba74b0866de 84,86,122
+  s_3ad8c99e0b0d7f::t_abde1a8c98e333 117
+  s_3ad8c99e0b0d7f::t_5b49c3d93852ae 82,85,123,139,146,163
+  s_3ad8c99e0b0d7f::t_cb1ca7e5ff16a7 107-116
+  s_3ad8c99e0b0d7f::t_7cb5c1da47cafe 119
+  s_3ad8c99e0b0d7f::t_6a733a7cb1f137 136
+packages/engine/src/provider-runner.test.ts
+  s_3ad8c99e0b0d7f::t_0e7943b8af04fa 122-131,134-138,143,150-161,163-166,168-169
+  s_3ad8c99e0b0d7f::t_363a83a93ef71e 162,167
+  s_3ad8c99e0b0d7f::t_90d80bd2beac78 116
+  s_3ad8c99e0b0d7f::t_786f942a7137c8 139-140,142,144-146,149
+  s_3ad8c99e0b0d7f::t_a97ace6ba72af4 132-133,141,147-148
+  s_3ad8c99e0b0d7f::t_5028d7e9b4939c 1,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e147659cc9d16a3815001fabae255a077e66fe0d",
+  "prompts": {},
+  "sessions": {
+    "s_3ad8c99e0b0d7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-4975-7cf3-8b18-af92906892ca",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
