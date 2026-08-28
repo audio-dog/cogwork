@@ -70,6 +70,7 @@ const schedulerStub = () =>
         awaitIdle: Effect.void,
         drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
         admit: () => Effect.void,
+        isInFlight: () => Effect.succeed(false),
         setScheduling: (desired) =>
           Ref.updateAndGet(stateRef, (state) => ({ ...state, paused: desired === "paused" })),
         setLimit: (update: DaemonLimitUpdate) =>

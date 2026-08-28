@@ -562,6 +562,29 @@ describe("Scheduler.tick", () => {
       ),
     ),
   );
+
+  it.effect("reports an item in flight from reservation through executor completion", () =>
+    Effect.gen(function* () {
+      const scheduler = yield* Scheduler.Scheduler;
+      const probe = yield* SchedulerProbe;
+      const item = work(1);
+
+      assert.isFalse(yield* scheduler.isInFlight(wsA, item.id));
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      assert.isTrue(yield* scheduler.isInFlight(wsA, item.id));
+
+      yield* probe.gate.open;
+      yield* scheduler.awaitIdle;
+      assert.isFalse(yield* scheduler.isInFlight(wsA, item.id));
+    }).pipe(
+      Effect.provide(
+        schedulerLayer(
+          { globalLimit: 5, perWorkspaceLimit: 5, dailyBudget: 100 },
+          { registry: [wsA], snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: waitForGate },
+        ),
+      ),
+    ),
+  );
 });
 
 describe("Scheduler.drain", () => {

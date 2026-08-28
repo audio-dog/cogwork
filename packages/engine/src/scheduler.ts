@@ -1,4 +1,4 @@
-import type { ControlStore, DaemonLimitUpdate, WorkspaceId } from "@cogwork/contracts";
+import type { ControlStore, DaemonLimitUpdate, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { byStageThenPriority as byStageThenPriorityOf } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -164,10 +164,13 @@ export const plan = (
       { state: refreshed(state, stamp, candidates), picks: [] },
     );
 
+const ticketKeyFor = (workspace: RegisteredWorkspace, itemId: WorkItemId) =>
+  `${workspace.config.name}:ticket:${ticketSlug(itemId)}`;
+
 const keysFor = (workspace: RegisteredWorkspace, work: EligibleWork) => {
   const name = workspace.config.name;
   const branch = branchName({ id: work.id, title: work.title });
-  return [`${name}:ticket:${ticketSlug(work.id)}`, `${name}:branch:${branch}`];
+  return [ticketKeyFor(workspace, work.id), `${name}:branch:${branch}`];
 };
 
 const candidateOf = (
@@ -274,6 +277,13 @@ export const make = (config: SchedulerConfig) =>
       yield* FiberSet.run(jobs, runJob(candidate));
     });
 
+    const isInFlight = Effect.fn("Scheduler.isInFlight")(function* (
+      workspace: RegisteredWorkspace,
+      itemId: WorkItemId,
+    ) {
+      return (yield* Ref.get(stateRef)).inflight.has(ticketKeyFor(workspace, itemId));
+    });
+
     const setScheduling = Effect.fn("Scheduler.setScheduling")(function* (desired: "running" | "paused") {
       yield* Ref.update(stateRef, (state) => ({ ...state, paused: desired === "paused" }));
       return yield* Ref.get(stateRef);
@@ -288,6 +298,7 @@ export const make = (config: SchedulerConfig) =>
       awaitIdle,
       drain,
       admit,
+      isInFlight,
       setScheduling,
       setLimit,
       stats: Ref.get(stateRef),

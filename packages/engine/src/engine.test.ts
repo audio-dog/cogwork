@@ -556,6 +556,7 @@ const schedulerStubService = {
   awaitIdle: Effect.void,
   drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
   admit: () => Effect.void,
+  isInFlight: () => Effect.succeed(false),
   setScheduling: () => Effect.succeed(Scheduler.initialState),
   setLimit: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
   config: Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
