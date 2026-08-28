@@ -35,12 +35,14 @@ const worktreeLayer = Layer.succeed(WorktreeManager, {
 const stubRunner: HarnessRunner = {
   name: Schema.decodeSync(HarnessName)("cursor"),
   sessionKind: "opaque-handle",
+  projectedMembers: [],
+  planMiddleware: [],
   execution: fullHarnessExecution,
   run: () => Stream.empty,
 };
 
 const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
-  assemble: () => Effect.succeed({ layers: [], skillPath: "/skills" }),
+  assemble: () => Effect.succeed({ layers: [], skillPath: "/skills", sources: [] }),
 });
 
 const socketServerLayer = (socket: Socket.Socket) =>

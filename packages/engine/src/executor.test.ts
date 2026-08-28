@@ -1,6 +1,8 @@
 import {
+  defaultControlStore,
   HarnessName,
   LocalContribution,
+  type OperationSettingRow,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -26,6 +28,7 @@ import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
+import { ControlStore } from "./control-store";
 import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
@@ -37,6 +40,7 @@ import {
   type HarnessRequest,
   type HarnessRunner,
   layer as harnessLayer,
+  resolvedMcpSkills,
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
@@ -52,10 +56,22 @@ import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManage
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const codex = Schema.decodeSync(HarnessName)("codex");
 const id = Schema.decodeSync(WorkItemId);
+const testObservation = { generation: 1, observedAtMillis: 1 } as const;
+
+const execute = (
+  executor: Effect.Success<typeof Executor.make>,
+  workspace: RegisteredWorkspace,
+  item: EligibleWork,
+) => executor.execute(workspace, item, testObservation);
+
+const workContext = (workItem: WorkItemId, priority: "medium" = "medium") => ({
+  reference: { workItem, url: null },
+  facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority, pr: null },
+});
 const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
-const repoSkill = Schema.decodeSync(LocalContribution)({
-  id: "local:repo/skill/release",
-  authority: "local:repo",
+const privateSkill = Schema.decodeSync(LocalContribution)({
+  id: "local:private/skill/release",
+  authority: "local:private",
   kind: "skill",
   localName: "release",
   file: "/repos/gh/.agents/skills/release/SKILL.md",
@@ -97,6 +113,7 @@ const triageItem = {
   stage: "triage" as const,
   priority: "medium" as const,
   priorFailures: 0,
+  workContext: workContext(id("#7")),
 };
 
 const usage: TokenUsage = { inputTokens: 12, outputTokens: 34, totalTokens: 46 };
@@ -127,7 +144,7 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
-  contributions: [repoSkill],
+  contributions: [privateSkill],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -174,7 +191,7 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
 };
 
 const contextAssemblerStub = Layer.succeed(ContextAssembler.ContextAssembler, {
-  assemble: () => Effect.succeed({ layers: [], skillPath: "/" }),
+  assemble: () => Effect.succeed({ layers: [], skillPath: "/", sources: [] }),
 });
 
 const assemblerStub = Layer.succeed(McpSkillAssembler, {
@@ -194,6 +211,7 @@ const implementItem = {
   stage: "implement" as const,
   priority: "medium" as const,
   priorFailures: 0,
+  workContext: workContext(id("#15")),
 };
 
 const implementBranch = branchName(implementItem);
@@ -275,6 +293,7 @@ const followUpItem = {
   stage: "follow-up" as const,
   priority: "medium" as const,
   priorFailures: 0,
+  workContext: workContext(id("#5")),
   followUp: {
     checks: "failing" as const,
     humanCommentAtMillis: 0,
@@ -461,6 +480,8 @@ const runner = (events: ReadonlyArray<AgUiEvent>, execution = fullHarnessExecuti
   make: () => ({
     name: cursor,
     sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
     execution,
     run: () => Stream.fromArray(events),
   }),
@@ -475,6 +496,8 @@ const capturingRunner = (
   make: (requests) => ({
     name,
     sessionKind,
+    projectedMembers: [],
+    planMiddleware: [],
     execution: fullHarnessExecution,
     run: (request) =>
       Stream.unwrap(
@@ -489,6 +512,8 @@ const gatedRunner: TestRunner = {
   make: (_requests, gate) => ({
     name: cursor,
     sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
     execution: fullHarnessExecution,
     run: () =>
       Stream.concat(
@@ -502,6 +527,8 @@ const observingRunner: TestRunner = {
   make: (_requests, _gate, observation) => ({
     name: cursor,
     sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
     execution: fullHarnessExecution,
     run: () =>
       Stream.unwrap(
@@ -634,6 +661,8 @@ const failingRunner = (error: HarnessError): TestRunner => ({
   make: () => ({
     name: cursor,
     sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
     execution: fullHarnessExecution,
     run: () => Stream.fail(error),
   }),
@@ -643,6 +672,8 @@ const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): TestRunner => 
   make: () => ({
     name: cursor,
     sessionKind: "owned-transcript",
+    projectedMembers: [],
+    planMiddleware: [],
     execution: fullHarnessExecution,
     run: () => Stream.fromArray(events),
   }),
@@ -713,6 +744,18 @@ const runControlStub = Layer.succeed(RunControl.RunControl, {
   cancel: () => Effect.succeed(false),
 });
 
+const controlStoreLayer = (operationSettings: ReadonlyArray<OperationSettingRow>) => {
+  const picture = { ...defaultControlStore, operationSettings };
+  return Layer.succeed(ControlStore, {
+    health: "available",
+    seed: picture,
+    picture: Effect.succeed(picture),
+    setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+    updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+    withWrite: (effect) => effect,
+  });
+};
+
 function testHarness(runners: ReadonlyArray<TestRunner>) {
   return Layer.unwrap(
     Effect.gen(function* () {
@@ -731,6 +774,7 @@ function provide(
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
+  operationSettings: ReadonlyArray<OperationSettingRow> = [],
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -755,6 +799,8 @@ function provide(
         runControlStub,
         worktree,
         assemblerStub,
+        contextAssemblerStub,
+        controlStoreLayer(operationSettings),
       ),
     ),
   );
@@ -764,8 +810,9 @@ describe("Executor.execute", () => {
   it.effect("triages an eligible item into a proposal note, label advance, and ledgered run", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
 
       const log = yield* Ref.get(calls);
       const triaged = log.find((c) => c.method === "triaged");
@@ -785,6 +832,18 @@ describe("Executor.execute", () => {
       assert.deepStrictEqual(firstRun?.usage, usage);
       assert.strictEqual(firstRun?.eventCount, successEvents.length);
 
+      const plan = firstRun ? yield* ledger.getRunPlan(firstRun.id) : null;
+      const [request] = yield* Ref.get(requests);
+      assert.isNotNull(plan);
+      assert.deepStrictEqual(request?.plan, plan);
+      assert.deepStrictEqual(
+        plan?.messages.map(({ role, content }) => ({ role, content })),
+        [{ role: "user", content: request?.plan.messages[0]?.content }],
+      );
+      assert.isTrue(
+        plan?.instructions.every((instruction) => instruction.content !== request?.plan.messages[0]?.content),
+      );
+
       const events = firstRun ? yield* ledger.events(firstRun.id) : [];
       assert.strictEqual(events.length, successEvents.length);
       assert.deepStrictEqual(
@@ -793,14 +852,14 @@ describe("Executor.execute", () => {
       );
       assert.strictEqual(events.at(-2)?.name, "structured-output.complete");
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
-    }).pipe(Effect.provide(provide([runner(successEvents)])));
+    }).pipe(Effect.provide(provide([capturingRunner(successEvents)])));
   });
 
   it.effect("retries a triage run that emits no structured result", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "triaged"));
       assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured");
@@ -823,7 +882,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "triaged"));
       assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "received 2");
@@ -843,7 +902,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "triaged"));
       assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured");
@@ -869,7 +928,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "triaged"));
       assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured");
@@ -887,7 +946,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
 
       const log = yield* Ref.get(calls);
       const attempt = log.find((c) => c.method === "attemptFailed");
@@ -910,7 +969,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
 
       const log = yield* Ref.get(calls);
       const attempt = log.find((c) => c.method === "attemptFailed");
@@ -929,13 +988,15 @@ describe("Executor.execute", () => {
       make: () => ({
         name: cursor,
         sessionKind: "opaque-handle",
+        projectedMembers: [],
+        planMiddleware: [],
         execution: fullHarnessExecution,
         run: () => Stream.never,
       }),
     };
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
-      const execution = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+      const execution = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
       yield* TestClock.adjust(defaultRunBudget("implement"));
       assert.isTrue(yield* Fiber.join(execution));
 
@@ -952,7 +1013,7 @@ describe("Executor.execute", () => {
 
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
 
       const ledger = yield* RunLedger.RunLedger;
       const runs = yield* ledger.listRuns(10);
@@ -969,7 +1030,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(workspace, atCap);
+      yield* execute(executor, workspace, atCap);
 
       const log = yield* Ref.get(calls);
       assert.strictEqual(log.find((c) => c.method === "attemptFailed")?.stage, "triage");
@@ -987,7 +1048,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      const accepted = yield* executor.execute(workspace, triageItem);
+      const accepted = yield* execute(executor, workspace, triageItem);
 
       assert.isFalse(accepted);
       assert.deepStrictEqual(yield* Ref.get(calls), []);
@@ -1002,13 +1063,37 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      const accepted = yield* executor.execute(workspace, triageItem);
+      const accepted = yield* execute(executor, workspace, triageItem);
 
       assert.isFalse(accepted);
       assert.deepStrictEqual(yield* Ref.get(calls), []);
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
     }).pipe(Effect.provide(provide([unsupported])));
+  });
+
+  it.effect("preflights the resolved permission profile", () => {
+    const readOnlyRunner = runner(implementEvents, {
+      ...fullHarnessExecution,
+      profiles: ["read-only"],
+    });
+    const permissionProfile: OperationSettingRow = {
+      setting: "permission-profile",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+      value: "read-only",
+    };
+
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+    }).pipe(
+      Effect.provide(
+        provide([readOnlyRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), [
+          permissionProfile,
+        ]),
+      ),
+    );
   });
 
   it.effect("records no run when claiming fails before execution starts", () => {
@@ -1020,7 +1105,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      const accepted = yield* executor.execute(workspace, triageItem);
+      const accepted = yield* execute(executor, workspace, triageItem);
 
       assert.isFalse(accepted);
       assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "claim", item: triageItem.id }]);
@@ -1037,7 +1122,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      assert.isFalse(yield* executor.execute(disabledWorkspace, triageItem));
+      assert.isFalse(yield* execute(executor, disabledWorkspace, triageItem));
       assert.deepStrictEqual(yield* Ref.get(calls), []);
 
       const ledger = yield* RunLedger.RunLedger;
@@ -1050,15 +1135,24 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const [request] = yield* Ref.get(requests);
-      assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
-      assert.strictEqual(request?.profile, "full");
-      assert.include(request?.prompt ?? "", "implement-agent");
-      assert.include(request?.prompt ?? "", "#15");
-      assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
-      assert.deepStrictEqual(request?.contributions, [repoSkill]);
+      assert.strictEqual(request?.plan.sandbox.workspace, `/wt/${implementBranch}`);
+      assert.strictEqual(request?.plan.harness.profile, "full");
+      assert.include(request?.plan.messages[0]?.content ?? "", "implement-agent");
+      assert.include(request?.plan.messages[0]?.content ?? "", "#15");
+      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], []);
+      assert.deepStrictEqual(
+        request?.plan.skills.map(({ identity, name, source }) => ({ identity, name, source })),
+        [
+          {
+            identity: privateSkill.id,
+            name: `cogwork_${Array.from(privateSkill.id, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}`,
+            source: privateSkill.file,
+          },
+        ],
+      );
 
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((c) => c.method === "implemented"));
@@ -1086,7 +1180,7 @@ describe("Executor.execute", () => {
         });
       });
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem).pipe(Effect.withLogger(logger));
+      yield* execute(executor, implementWorkspace, implementItem).pipe(Effect.withLogger(logger));
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(1);
@@ -1112,7 +1206,7 @@ describe("Executor.execute", () => {
   it.effect("mints an opaque-handle session for a Cursor-served run and captures its handle", () => {
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
@@ -1124,7 +1218,7 @@ describe("Executor.execute", () => {
   it.effect("mints an owned-transcript session for a provider-served run", () => {
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
@@ -1137,13 +1231,16 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(mcpWorkspace, implementItem);
+      yield* execute(executor, mcpWorkspace, implementItem);
 
       const [request] = yield* Ref.get(requests);
-      assert.deepStrictEqual(
-        [...(request?.mcpSkills ?? [])],
-        [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: null }],
-      );
+      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], [
+        {
+          name: request ? resolvedMcpSkills(request)[0]?.name : undefined,
+          endpoint: "https://mcp.linear.app/mcp/readonly",
+          bearer: null,
+        },
+      ]);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
@@ -1151,11 +1248,11 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(mcpAuthWorkspace, implementItem);
+      yield* execute(executor, mcpAuthWorkspace, implementItem);
 
       const [request] = yield* Ref.get(requests);
-      const [skill] = request?.mcpSkills ?? [];
-      assert.strictEqual(skill?.name, "linear");
+      const [skill] = request ? resolvedMcpSkills(request) : [];
+      assert.match(skill?.name ?? "", /^cogwork_/);
       assert.isNotNull(skill?.bearer ?? null);
       assert.strictEqual(skill?.bearer ? Redacted.value(skill.bearer) : null, "token-for-linear");
 
@@ -1173,7 +1270,7 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
-      const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
 
       yield* DaemonEventBus.runActivityStream(Stream.fromSubscription(subscription)).pipe(
         Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
@@ -1200,7 +1297,7 @@ describe("Executor.execute", () => {
       const executor = yield* Executor.Executor;
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
-      const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
 
       yield* DaemonEventBus.runActivityStream(Stream.fromSubscription(subscription)).pipe(
         Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
@@ -1214,21 +1311,20 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
   });
 
-  it.effect("ledgers the branch session before an interrupted worktree prepare", () => {
+  it.effect("does not ledger a Run before interrupted preparation assembles its Plan", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const { entered } = yield* WorktreeProbe;
       const executor = yield* Executor.Executor;
       const ledger = yield* RunLedger.RunLedger;
-      yield* executor.execute(implementWorkspace, implementItem);
-      const running = yield* Effect.forkChild(executor.execute(implementWorkspace, implementItem));
+      yield* execute(executor, implementWorkspace, implementItem);
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
 
       yield* Deferred.await(entered);
 
       const runs = yield* ledger.listRuns(10);
-      const completed = runs.find((run) => run.status === "succeeded");
-      const inFlight = runs.find((run) => run.status === "running");
-      assert.strictEqual(inFlight?.session, completed?.session);
+      assert.strictEqual(runs.length, 1);
+      assert.strictEqual(runs[0]?.status, "succeeded");
 
       yield* Fiber.interrupt(running);
       assert.strictEqual((yield* Ref.get(calls)).filter((call) => call.method === "release").length, 1);
@@ -1244,7 +1340,7 @@ describe("Executor.execute", () => {
 
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
@@ -1256,8 +1352,8 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 2);
@@ -1274,12 +1370,12 @@ describe("Executor.execute", () => {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       const ledger = yield* RunLedger.RunLedger;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
       const [first] = yield* ledger.listRuns(1);
       assert.isDefined(first);
       yield* ledger.updateRun(first.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
 
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 2);
@@ -1291,19 +1387,23 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
-      yield* executor.execute(codexImplementWorkspace, implementItem);
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, codexImplementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const captured = yield* Ref.get(requests);
       assert.deepStrictEqual(
-        captured.map((request) => request.harness),
+        captured.map((request) => request.plan.harness.name),
         [cursor, codex, cursor],
       );
       assert.notStrictEqual(captured[0]?.session, captured[1]?.session);
       assert.notStrictEqual(captured[1]?.session, captured[2]?.session);
       assert.notStrictEqual(captured[0]?.session, captured[2]?.session);
-      assert.isTrue(captured.slice(1).every((request) => !request.prompt.includes("just been resumed")));
+      assert.isTrue(
+        captured
+          .slice(1)
+          .every((request) => !request.plan.messages[0]?.content.includes("just been resumed")),
+      );
     }).pipe(
       Effect.provide(
         provide([
@@ -1319,13 +1419,13 @@ describe("Executor.execute", () => {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       const ledger = yield* RunLedger.RunLedger;
-      yield* executor.execute(implementWorkspace, implementItem);
-      yield* executor.execute(codexImplementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, codexImplementWorkspace, implementItem);
       const [latest] = yield* ledger.listRuns(1);
       assert.isDefined(latest);
       yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
 
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 3);
@@ -1353,17 +1453,17 @@ describe("Executor.execute", () => {
       const { ensured } = yield* WorktreeProbe;
       const executor = yield* Executor.Executor;
       yield* seedResumeSession();
-      yield* executor.execute(implementWorkspace, resumeItem);
+      yield* execute(executor, implementWorkspace, resumeItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 1);
       const [request] = captured;
-      assert.strictEqual(request?.checkoutPath, `/wt/${implementBranch}`);
+      assert.strictEqual(request?.plan.sandbox.workspace, `/wt/${implementBranch}`);
       assert.strictEqual(request?.session, previousSession);
-      assert.include(request?.prompt ?? "", "You were interrupted part-way through");
-      assert.include(request?.prompt ?? "", `Inspect /wt/${implementBranch}`);
-      assert.notInclude(request?.prompt ?? "", "implement-agent");
-      assert.notInclude(request?.prompt ?? "", "IMPLEMENT-RESULT");
+      assert.include(request?.plan.messages[0]?.content ?? "", "You were interrupted part-way through");
+      assert.include(request?.plan.messages[0]?.content ?? "", `Inspect /wt/${implementBranch}`);
+      assert.notInclude(request?.plan.messages[0]?.content ?? "", "implement-agent");
+      assert.notInclude(request?.plan.messages[0]?.content ?? "", "IMPLEMENT-RESULT");
 
       assert.deepStrictEqual(yield* Ref.get(ensured), [true]);
 
@@ -1384,13 +1484,13 @@ describe("Executor.execute", () => {
       const { ensured } = yield* WorktreeProbe;
       yield* seedResumeSession();
       const executor = yield* Executor.Executor;
-      yield* executor.execute(codexImplementWorkspace, resumeItem);
+      yield* execute(executor, codexImplementWorkspace, resumeItem);
 
       const [request] = yield* Ref.get(requests);
-      assert.strictEqual(request?.harness, codex);
+      assert.strictEqual(request?.plan.harness.name, codex);
       assert.notStrictEqual(request?.session, previousSession);
-      assert.include(request?.prompt ?? "", "implement-agent");
-      assert.notInclude(request?.prompt ?? "", "just been resumed");
+      assert.include(request?.plan.messages[0]?.content ?? "", "implement-agent");
+      assert.notInclude(request?.plan.messages[0]?.content ?? "", "just been resumed");
       assert.deepStrictEqual(yield* Ref.get(ensured), [true]);
 
       const callsAfterRun = yield* Ref.get(calls);
@@ -1423,14 +1523,14 @@ describe("Executor.execute", () => {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       yield* seedResumeSession();
-      yield* executor.execute(implementWorkspace, resumeItem);
+      yield* execute(executor, implementWorkspace, resumeItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 1);
 
       const [nudge] = captured;
       assert.strictEqual(nudge?.session, previousSession);
-      assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
+      assert.include(nudge?.plan.messages[0]?.content ?? "", "You were interrupted part-way through");
 
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((c) => c.method === "attemptFailed"));
@@ -1455,14 +1555,14 @@ describe("Executor.execute", () => {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       yield* seedResumeSession();
-      yield* executor.execute(workspace, resumeItem);
+      yield* execute(executor, workspace, resumeItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 1);
 
       const [nudge] = captured;
       assert.strictEqual(nudge?.session, previousSession);
-      assert.include(nudge?.prompt ?? "", "You were interrupted part-way through");
+      assert.include(nudge?.plan.messages[0]?.content ?? "", "You were interrupted part-way through");
 
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((c) => c.method === "attemptFailed"));
@@ -1481,14 +1581,14 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "failed");
       assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
 
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured[1]?.session, run?.session);
       assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
@@ -1501,7 +1601,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const log = yield* Ref.get(calls);
       assert.strictEqual(log.find((c) => c.method === "attemptFailed")?.stage, "implement");
@@ -1521,7 +1621,7 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       assert.strictEqual((yield* Ref.get(requests)).length, 0);
       const log = yield* Ref.get(calls);
@@ -1534,8 +1634,7 @@ describe("Executor.execute", () => {
       assert.include(handOff?.note ?? "", "diverged");
 
       const ledger = yield* RunLedger.RunLedger;
-      const [run] = yield* ledger.listRuns(10);
-      assert.strictEqual(run?.status, "exhausted");
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], divergedWorktree)));
   });
 
@@ -1543,15 +1642,14 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const log = yield* Ref.get(calls);
       assert.strictEqual(log.find((c) => c.method === "attemptFailed")?.stage, "implement");
       assert.isFalse(log.some((c) => c.method === "handOff"));
 
       const ledger = yield* RunLedger.RunLedger;
-      const [run] = yield* ledger.listRuns(10);
-      assert.strictEqual(run?.status, "failed");
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([runner(implementEvents)], unreachableRemoteWorktree)));
   });
 
@@ -1563,16 +1661,15 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
-      yield* executor.execute(implementWorkspace, implementItem);
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
       const runs = yield* ledger.listRuns(10);
       const succeeded = runs.find((run) => run.status === "succeeded");
-      const failed = runs.find((run) => run.status === "failed");
       const captured = yield* Ref.get(requests);
-      assert.strictEqual(failed?.session, succeeded?.session);
+      assert.strictEqual(runs.length, 2);
       assert.strictEqual(captured[1]?.session, succeeded?.session);
       assert.isAbove((yield* ledger.sessionEvents(succeeded?.session ?? previousSession)).length, 0);
     }).pipe(
@@ -1592,15 +1689,15 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
       const runs = yield* ledger.listRuns(10);
       const succeeded = runs.find((run) => run.status === "succeeded");
-      const exhausted = runs.find((run) => run.status === "exhausted");
       const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
-      assert.strictEqual(exhausted?.session, succeeded?.session);
+      assert.strictEqual(runs.length, 1);
+      assert.strictEqual(runs[0]?.session, succeeded?.session);
       assert.include(handOff?.note ?? "", "agent --resume 'sess-42'");
     }).pipe(Effect.provide(provide([runner(implementEvents)], worktree)));
   });
@@ -1609,7 +1706,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const log = yield* Ref.get(calls);
       const attempt = log.find((c) => c.method === "attemptFailed");
@@ -1629,7 +1726,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
 
       const log = yield* Ref.get(calls);
       assert.isFalse(log.some((call) => call.method === "implemented"));
@@ -1646,11 +1743,11 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const [request] = yield* Ref.get(requests);
-      assert.strictEqual(request?.checkoutPath, `/wt/${followUpBranch}`);
-      assert.include(request?.prompt ?? "", "follow-up-agent");
+      assert.strictEqual(request?.plan.sandbox.workspace, `/wt/${followUpBranch}`);
+      assert.include(request?.plan.messages[0]?.content ?? "", "follow-up-agent");
 
       const log = yield* Ref.get(calls);
       const followedUp = log.find((c) => c.method === "followedUp");
@@ -1674,10 +1771,10 @@ describe("Executor.execute", () => {
       const { branches } = yield* WorktreeProbe;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, item);
+      yield* execute(executor, followUpWorkspace, item);
 
       assert.deepStrictEqual(yield* Ref.get(branches), [externalBranch]);
-      assert.strictEqual((yield* Ref.get(requests))[0]?.checkoutPath, `/wt/${externalBranch}`);
+      assert.strictEqual((yield* Ref.get(requests))[0]?.plan.sandbox.workspace, `/wt/${externalBranch}`);
       const [run] = yield* (yield* RunLedger.RunLedger).listRuns(1);
       assert.strictEqual(run?.branch, externalBranch);
     }).pipe(
@@ -1689,7 +1786,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const posted = yield* PostedComments;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const [comment] = yield* Ref.get(posted);
       assert.strictEqual(comment?.item, "#5");
@@ -1702,7 +1799,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((call) => call.method === "followedUp"));
@@ -1719,7 +1816,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const posted = yield* PostedComments;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       assert.isEmpty(yield* Ref.get(posted));
     }).pipe(Effect.provide(provide([runner(stuckFollowUpEvents)], existingWorktree, recordingProvider)));
@@ -1731,7 +1828,7 @@ describe("Executor.execute", () => {
       return Effect.gen(function* () {
         const calls = yield* TrackerCalls;
         const executor = yield* Executor.Executor;
-        yield* executor.execute(followUpWorkspace, followUpItem);
+        yield* execute(executor, followUpWorkspace, followUpItem);
 
         const log = yield* Ref.get(calls);
         const followedUp = log.find((c) => c.method === "followedUp");
@@ -1752,7 +1849,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const log = yield* Ref.get(calls);
       const attempt = log.find((c) => c.method === "attemptFailed");
@@ -1772,7 +1869,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const log = yield* Ref.get(calls);
       assert.include(
@@ -1787,7 +1884,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const log = yield* Ref.get(calls);
       assert.include(
@@ -1802,8 +1899,8 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const captured = yield* Ref.get(requests);
       const ledger = yield* RunLedger.RunLedger;
@@ -1827,10 +1924,10 @@ describe("Executor.execute", () => {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       yield* seedResumeSession();
-      yield* executor.execute(followUpWorkspace, resumeItem);
+      yield* execute(executor, followUpWorkspace, resumeItem);
 
       assert.deepStrictEqual(yield* Ref.get(branches), [externalBranch]);
-      assert.strictEqual((yield* Ref.get(requests))[0]?.checkoutPath, `/wt/${externalBranch}`);
+      assert.strictEqual((yield* Ref.get(requests))[0]?.plan.sandbox.workspace, `/wt/${externalBranch}`);
     }).pipe(
       Effect.provide(provide([capturingRunner(followUpEvents)], branchRecordingWorktree(externalBranch))),
     );
@@ -1841,13 +1938,13 @@ describe("Executor.execute", () => {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       const ledger = yield* RunLedger.RunLedger;
-      yield* executor.execute(followUpWorkspace, followUpItem);
-      yield* executor.execute(codexFollowUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
+      yield* execute(executor, codexFollowUpWorkspace, followUpItem);
       const [latest] = yield* ledger.listRuns(1);
       assert.isDefined(latest);
       yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
 
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 3);
@@ -1875,16 +1972,19 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
-      yield* executor.execute(followUpWorkspace, freshItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, freshItem);
 
       const [freshRequest] = (yield* Ref.get(requests)).slice(-1);
       const ledger = yield* RunLedger.RunLedger;
       const [priorRun, freshRun] = yield* ledger.listRuns(10);
       assert.notStrictEqual(freshRun?.session, priorRun?.session);
       assert.strictEqual(freshRequest?.session, freshRun?.session);
-      assert.include(freshRequest?.prompt ?? "", "follow-up-agent");
-      assert.notInclude(freshRequest?.prompt ?? "", "You were interrupted part-way through");
+      assert.include(freshRequest?.plan.messages[0]?.content ?? "", "follow-up-agent");
+      assert.notInclude(
+        freshRequest?.plan.messages[0]?.content ?? "",
+        "You were interrupted part-way through",
+      );
     }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], existingWorktree)));
   });
 
@@ -1892,8 +1992,8 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const captured = yield* Ref.get(requests);
       const ledger = yield* RunLedger.RunLedger;
@@ -1914,8 +2014,8 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, followUpItem);
-      yield* executor.execute(followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
+      yield* execute(executor, followUpWorkspace, followUpItem);
 
       const captured = yield* Ref.get(requests);
       const ledger = yield* RunLedger.RunLedger;
@@ -1935,7 +2035,7 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, stalledItem);
+      yield* execute(executor, followUpWorkspace, stalledItem);
 
       assert.strictEqual((yield* Ref.get(requests)).length, 0);
       const log = yield* Ref.get(calls);
@@ -1957,7 +2057,7 @@ describe("Executor.execute", () => {
         const calls = yield* TrackerCalls;
         const requests = yield* HarnessRequests;
         const executor = yield* Executor.Executor;
-        yield* executor.execute(implementWorkspace, implementItem);
+        yield* execute(executor, implementWorkspace, implementItem);
 
         const log = yield* Ref.get(calls);
         const attempt = log.find((c) => c.method === "attemptFailed");
@@ -1970,7 +2070,7 @@ describe("Executor.execute", () => {
         assert.strictEqual(firstRun?.status, "failed");
         assert.strictEqual(yield* handleOf(ledger, firstRun?.session), "sess-42");
 
-        yield* executor.execute(implementWorkspace, implementItem);
+        yield* execute(executor, implementWorkspace, implementItem);
         const captured = yield* Ref.get(requests);
         assert.strictEqual(captured[1]?.session, firstRun?.session);
         assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
@@ -1978,12 +2078,12 @@ describe("Executor.execute", () => {
     },
   );
 
-  it.effect("announces the run summary when it starts, gains a session, and settles", () => {
+  it.effect("announces the accepted Run with its session, then settles", () => {
     return Effect.gen(function* () {
       const executor = yield* Executor.Executor;
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
-      yield* executor.execute(workspace, triageItem);
+      yield* execute(executor, workspace, triageItem);
 
       const events = yield* Stream.fromSubscription(subscription).pipe(
         Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "succeeded"),
@@ -1992,11 +2092,10 @@ describe("Executor.execute", () => {
       const runChanges = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
       assert.deepStrictEqual(
         runChanges.map((run) => run.status),
-        ["running", "running", "succeeded"],
+        ["running", "succeeded"],
       );
-      assert.isNull(runChanges[0]?.session ?? null);
-      assert.isNotNull(runChanges[1]?.session ?? null);
-      assert.strictEqual(runChanges[1]?.session, runChanges.at(-1)?.session);
+      assert.isNotNull(runChanges[0]?.session ?? null);
+      assert.strictEqual(runChanges[0]?.session, runChanges.at(-1)?.session);
       assert.strictEqual(runChanges.at(-1)?.eventCount, successEvents.length);
     }).pipe(Effect.provide(provide([runner(successEvents)])), Effect.scoped);
   });

@@ -1,8 +1,8 @@
 import {
   type AgUiEvent,
   type HarnessName,
-  type LifecycleStage,
-  type LocalContribution,
+  type RunPlan,
+  type RunPlanMember,
   type SessionId,
   type SessionKind,
   type StageResultJsonSchema,
@@ -12,6 +12,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ContextAssembler, type ContextAssemblerService } from "./context-assembler";
@@ -28,18 +29,23 @@ export const stageResultSchema = stageResultJsonSchema;
 export type StageResultSchema = StageResultJsonSchema;
 
 export interface HarnessRequest {
-  readonly harness: HarnessName;
-  readonly stage: LifecycleStage;
-  readonly profile: OperationPolicyProfile;
-  readonly skill: string;
-  readonly checkoutPath: string;
+  readonly plan: RunPlan;
   readonly session: SessionId | null;
-  readonly prompt: string;
-  readonly model: string | null;
-  readonly effort: string | null;
-  readonly mcpSkills: ReadonlyArray<ResolvedMcpSkill>;
-  readonly contributions: ReadonlyArray<LocalContribution>;
+  readonly mcpCredentials: ReadonlyMap<string, Redacted.Redacted<string>>;
 }
+
+export const resolvedMcpSkills = (request: HarnessRequest): ReadonlyArray<ResolvedMcpSkill> =>
+  request.plan.mcp.flatMap((server) =>
+    "endpoint" in server
+      ? [
+          {
+            name: server.projectedName,
+            endpoint: server.endpoint,
+            bearer: request.mcpCredentials.get(server.identity) ?? null,
+          },
+        ]
+      : [],
+  );
 
 export interface HarnessExecution {
   readonly nonInteractive: boolean;
@@ -65,6 +71,8 @@ export interface HarnessRunner {
   readonly name: HarnessName;
   readonly sessionKind: SessionKind;
   readonly execution: HarnessExecution;
+  readonly projectedMembers: ReadonlyArray<RunPlanMember>;
+  readonly planMiddleware: ReadonlyArray<string>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
 }
 
@@ -75,6 +83,8 @@ export interface HarnessService {
   ) => Effect.Effect<void, HarnessError>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
+  readonly projectedMembers: (harness: HarnessName) => ReadonlyArray<RunPlanMember>;
+  readonly planMiddleware: (harness: HarnessName) => ReadonlyArray<string>;
 }
 
 export class Harness extends Context.Service<Harness, HarnessService>()("@cogwork/engine/harness") {}
@@ -127,7 +137,9 @@ export const make = (
   return {
     preflight: (harness, profile) => preflightRunner(registry, harness, profile).pipe(Effect.asVoid),
     run: (request) =>
-      Stream.fromEffect(preflightRunner(registry, request.harness, request.profile)).pipe(
+      Stream.fromEffect(
+        preflightRunner(registry, request.plan.harness.name, request.plan.harness.profile),
+      ).pipe(
         Stream.flatMap((runner) => runner.run(request)),
         Stream.provideService(SessionStore, services.sessionStore),
         Stream.provideService(ContextAssembler, services.contextAssembler),
@@ -135,6 +147,8 @@ export const make = (
         Stream.provideService(FileSystem.FileSystem, services.fileSystem),
       ),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
+    projectedMembers: (harness) => registry.get(harness)?.projectedMembers ?? [],
+    planMiddleware: (harness) => registry.get(harness)?.planMiddleware ?? [],
   };
 };
 

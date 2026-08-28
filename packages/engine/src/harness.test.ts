@@ -1,4 +1,4 @@
-import { HarnessName } from "@cogwork/contracts";
+import { HarnessName, RunPlan } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
@@ -156,6 +156,8 @@ describe("Harness", () => {
             {
               name,
               sessionKind: "opaque-handle",
+              projectedMembers: [],
+              planMiddleware: [],
               execution: posture.execution,
               run: () => Stream.succeed({ type: "RUN_STARTED" }),
             },
@@ -164,17 +166,46 @@ describe("Harness", () => {
         );
         const error = yield* harness
           .run({
-            harness: name,
-            stage: "triage",
-            profile: "read-only",
-            skill: "triage-agent",
-            checkoutPath: "/repo",
+            plan: yield* Schema.decodeEffect(RunPlan)({
+              id: "run-harness-test",
+              operation: "triage",
+              harness: { name, model: null, effort: null, profile: "read-only" },
+              instructions: [],
+              operatingInstructions: { name: "triage-agent", path: "/skills/triage-agent" },
+              tools: [],
+              skills: [],
+              mcp: [],
+              subagents: [],
+              commands: [],
+              hooks: [],
+              middleware: [],
+              structuredOutput: null,
+              connections: [],
+              messages: [{ role: "user", content: "triage the issue" }],
+              workContext: {
+                reference: { workItem: "#1", url: null },
+                facts: {
+                  roles: [],
+                  assignees: [],
+                  openBlockers: 0,
+                  claim: null,
+                  priority: "medium",
+                  pr: null,
+                },
+                observation: { generation: 1, observedAtMillis: 1 },
+              },
+              sandbox: { workspace: "/repo", policy: "read-only" },
+              persistence: { sessionKind: "opaque-handle" },
+              provenance: {
+                resolution: [],
+                stamps: [],
+                projectedNames: [],
+                projection: [],
+                observation: { generation: 1, observedAtMillis: 1 },
+              },
+            }),
             session: null,
-            prompt: "triage the issue",
-            model: null,
-            effort: null,
-            mcpSkills: [],
-            contributions: [],
+            mcpCredentials: new Map(),
           })
           .pipe(Stream.runDrain, Effect.flip);
 
