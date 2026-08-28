@@ -17,6 +17,7 @@ const makeUnavailable = () => ({
     unavailable(`read directory ${target}`),
   copyDirectory: (source: string, dest: string): Effect.Effect<void, ContextFsError> =>
     unavailable(`copy ${source} to ${dest}`),
+  removeDirectory: (target: string): Effect.Effect<void, ContextFsError> => unavailable(`remove ${target}`),
 });
 
 export type ContextFsService = ReturnType<typeof makeUnavailable>;

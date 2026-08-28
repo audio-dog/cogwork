@@ -280,6 +280,9 @@ describe("contextFsLayer against a real filesystem", () => {
       assert.strictEqual(yield* fs.readFileString(path.join(dest, "SKILL.md")), "skill body");
       assert.strictEqual(yield* fs.readFileString(path.join(dest, "reference", "notes.md")), "sibling notes");
       assert.isFalse(yield* fs.exists(path.join(dest, "stale.md")));
+
+      yield* context.removeDirectory(dest);
+      assert.isFalse(yield* fs.exists(dest));
     }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 });

@@ -24,6 +24,7 @@ const request: AssembleRequest = {
 const stubFs = (
   files: Record<string, string>,
   copies: Ref.Ref<ReadonlyArray<CopyCall>>,
+  removals?: Ref.Ref<ReadonlyArray<string>>,
 ): ContextFsService => ({
   readFile: (target) =>
     Ref.get(copies).pipe(
@@ -41,6 +42,8 @@ const stubFs = (
         .filter((name) => !name.includes("/")),
     ),
   copyDirectory: (source, dest) => Ref.update(copies, (xs) => [...xs, { source, dest }]),
+  removeDirectory: (target) =>
+    removals ? Ref.update(removals, (targets) => [...targets, target]) : Effect.void,
 });
 
 describe("repoDirsFrom", () => {

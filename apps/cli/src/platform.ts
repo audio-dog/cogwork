@@ -218,6 +218,8 @@ export const contextFsLayer = Layer.effect(
             Effect.andThen(fs.copy(source, dest, { overwrite: true })),
             Effect.mapError(fail(`copy ${source} to ${dest}`)),
           ),
+      removeDirectory: (target) =>
+        fs.remove(target, { recursive: true, force: true }).pipe(Effect.mapError(fail(`remove ${target}`))),
     } satisfies ContextFs.ContextFsService;
   }),
 );
