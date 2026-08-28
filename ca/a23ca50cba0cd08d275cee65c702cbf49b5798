@@ -1,0 +1,29 @@
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_c1c3ea685594ee::t_07dc7d52986df3 1
+  s_c1c3ea685594ee::t_bf0826137d41fa 60,67
+  s_bbfe66acb079f5::t_141de0b273b9e1 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "caa23ca50cba0cd08d275cee65c702cbf49b5798",
+  "prompts": {},
+  "sessions": {
+    "s_bbfe66acb079f5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04938-6db7-7f73-b16b-5d4a81111c2d",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c1c3ea685594ee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0490e-c32b-7f52-bed2-b8c81206469a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
