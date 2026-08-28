@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/features/configuration-resolve.ts
+  s_d6f8a470e8319b::t_9dda1fbf097ba5 37,67-68,70,72,74,77-79,87
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_d6f8a470e8319b::t_589a07f5f91736 13,76-109
+  s_d6f8a470e8319b::t_581424bd98d1b6 110-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "869e8fef5c124c30ba4b551fd43c7258c0def8f3",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
