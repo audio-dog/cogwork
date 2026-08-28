@@ -194,12 +194,12 @@ describe("formatStatus", () => {
             poll: { status: "paused", reason: "auth", message: "auth failed", retryAtMillis: null },
           }),
         ],
-        failures: [{ source: "broken.workspace.ts", message: "boom" }],
+        failures: [{ name: workspaceId("failed-workspace"), source: "broken.workspace.ts", message: "boom" }],
       }),
     );
     assert.include(output, "scheduler: 1/4 in-flight · budget 7/50 · paused (cogwork=1/3)");
     assert.include(output, "      paused: auth (needs attention) — auth failed");
-    assert.include(output, "  ! broken.workspace.ts: boom");
+    assert.include(output, "  ! failed-workspace · broken.workspace.ts: boom");
   });
 
   it("renders a rate-limited pause as self-healing with the retry-at instant", () => {

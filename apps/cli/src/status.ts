@@ -68,6 +68,11 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
   ].join("\n");
 };
 
+const formatFailure = (failure: DaemonStatus["failures"][number]) => {
+  const workspace = failure.name === undefined ? "" : `${failure.name} · `;
+  return `  ! ${workspace}${failure.source}: ${failure.message}`;
+};
+
 export const formatScheduler = (scheduler: SchedulerStats) => {
   const loads = scheduler.perWorkspace.map((load) => `${load.name}=${load.inFlight}/${load.limit}`).join(" ");
   const suffix = loads.length === 0 ? "" : ` (${loads})`;
@@ -94,7 +99,7 @@ export const formatStatus = (status: DaemonStatus) => {
     status.workspaces.length === 0
       ? "  (no workspaces registered)"
       : status.workspaces.map(formatWorkspace).join("\n");
-  const failures = status.failures.map((failure) => `  ! ${failure.source}: ${failure.message}`).join("\n");
+  const failures = status.failures.map(formatFailure).join("\n");
   return [
     header,
     formatScheduler(status.scheduler),
