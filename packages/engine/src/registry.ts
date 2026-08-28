@@ -116,6 +116,7 @@ const workspaceFailure = (row: WorkspaceRow, message: string) => {
   return {
     ...(name ? { name } : {}),
     ...(issueTracker ? { issueTracker } : {}),
+    displayName: row.name,
     source: row.checkoutPath,
     message,
     workspaceLimit: present(row.concurrency),

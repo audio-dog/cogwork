@@ -288,6 +288,7 @@ layer(NodeServices.layer)((it) => {
       if (missingChange._tag !== "Failed") return assert.fail("expected missing input diagnostic");
       if (missingChange.failure.name === undefined) return assert.fail("expected minted workspace identity");
       const missingName = missingChange.failure.name;
+      assert.strictEqual(missingChange.failure.displayName, "missing input");
       assert.strictEqual(missingChange.failure.workspaceLimit, 3);
       const liveIssueTracker = Registry.findWorkspaceIssueTracker(liveRegistry, missingName);
       assert.strictEqual(liveIssueTracker?.type, "github");
@@ -309,6 +310,7 @@ layer(NodeServices.layer)((it) => {
 
       assert.strictEqual(reloaded.workspaces.length, 2);
       assert.strictEqual(reloaded.failures.length, 1);
+      assert.strictEqual(reloaded.failures[0]?.displayName, "missing input");
       assert.strictEqual(reloaded.failures[0]?.workspaceLimit, 3);
       const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloaded, missingName);
       assert.strictEqual(reloadedIssueTracker?.type, "github");
