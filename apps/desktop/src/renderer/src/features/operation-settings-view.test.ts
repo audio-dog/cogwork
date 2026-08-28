@@ -1,6 +1,9 @@
-import type { ControlStore } from "@cogwork/contracts";
+import { type ControlStore, WorkspaceId } from "@cogwork/contracts";
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { operationSettingDisplayRows } from "./operation-settings-view";
+import { operationSettingDisplayRows, operationSettingDisplaySections } from "./operation-settings-view";
+
+const workspace = Schema.decodeSync(WorkspaceId)("example");
 
 const controlStore: ControlStore = {
   daemonLimits: {
@@ -22,6 +25,12 @@ const controlStore: ControlStore = {
       scope: { _tag: "SettingsProfile" },
       value: "operation-model",
     },
+    {
+      setting: "model",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+      value: "workspace-model",
+    },
   ],
 };
 
@@ -30,6 +39,7 @@ describe("Operation settings view", () => {
     const rows = operationSettingDisplayRows(controlStore, {
       workflow: "coding",
       operation: "implement",
+      workspace: null,
     });
 
     expect(rows.find((row) => row.setting === "model")).toEqual({
@@ -39,5 +49,22 @@ describe("Operation settings view", () => {
       rawRows: 2,
     });
     expect(rows.find((row) => row.setting === "harness")?.value).toBe("Not set");
+  });
+
+  it("renders each Private workspace overlay in its own ladder", () => {
+    const sections = operationSettingDisplaySections(controlStore);
+
+    expect(sections.map((section) => section.label)).toEqual([
+      "Coding · Implement",
+      "Coding · Implement · example",
+    ]);
+    const workspaceSection = sections.find((section) => section.context.workspace === workspace);
+    expect(workspaceSection).toBeDefined();
+    if (!workspaceSection) return;
+    expect(
+      operationSettingDisplayRows(controlStore, workspaceSection.context).find(
+        (row) => row.setting === "model",
+      )?.value,
+    ).toBe("workspace-model");
   });
 });

@@ -4,33 +4,42 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { RiSettings3Line } from "@remixicon/react";
 import { useBoard } from "../features/activity-session";
-import { operationSettingDisplayRows } from "../features/operation-settings-view";
+import {
+  operationSettingDisplayRows,
+  operationSettingDisplaySections,
+} from "../features/operation-settings-view";
 import { ListRow, ListRowMedia, ListSection, ListSectionHeader, ListSectionRows } from "./customize-list";
 
-const context = { workflow: "coding", operation: "implement" };
-
 function OperationSettingRows({ controlStore }: { controlStore: ControlStore }) {
-  const rows = operationSettingDisplayRows(controlStore, context);
   return (
-    <ListSection>
-      <ListSectionHeader title="Coding · Implement" count={rows.length} />
-      <ListSectionRows items={rows} keyOf={(row) => row.setting}>
-        {(row) => (
-          <ListRow>
-            <ListRowMedia>
-              <RiSettings3Line />
-            </ListRowMedia>
-            <ItemContent>
-              <ItemTitle>{row.label}</ItemTitle>
-              <ItemDescription>{row.rawRows === 1 ? "1 raw row" : `${row.rawRows} raw rows`}</ItemDescription>
-            </ItemContent>
-            <ItemActions>
-              <Badge variant="outline">{row.value}</Badge>
-            </ItemActions>
-          </ListRow>
-        )}
-      </ListSectionRows>
-    </ListSection>
+    <div className="flex flex-col gap-6">
+      {operationSettingDisplaySections(controlStore).map((section) => {
+        const rows = operationSettingDisplayRows(controlStore, section.context);
+        return (
+          <ListSection key={section.key}>
+            <ListSectionHeader title={section.label} count={rows.length} />
+            <ListSectionRows items={rows} keyOf={(row) => row.setting}>
+              {(row) => (
+                <ListRow>
+                  <ListRowMedia>
+                    <RiSettings3Line />
+                  </ListRowMedia>
+                  <ItemContent>
+                    <ItemTitle>{row.label}</ItemTitle>
+                    <ItemDescription>
+                      {row.rawRows === 1 ? "1 raw row" : `${row.rawRows} raw rows`}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Badge variant="outline">{row.value}</Badge>
+                  </ItemActions>
+                </ListRow>
+              )}
+            </ListSectionRows>
+          </ListSection>
+        );
+      })}
+    </div>
   );
 }
 
