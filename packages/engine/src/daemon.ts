@@ -249,6 +249,7 @@ export interface HostAdapters<E = never, R = never> {
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
+  readonly userAgentsDir: string;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
 }
@@ -265,7 +266,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
-  const registry = workspaceRegistryLayer(adapters.controlStorePath).pipe(
+  const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
     Layer.provide(storeClient),
   );
