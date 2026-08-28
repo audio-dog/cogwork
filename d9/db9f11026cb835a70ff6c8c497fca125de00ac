@@ -1,0 +1,30 @@
+packages/engine/src/context-assembler.ts
+  s_3ad8c99e0b0d7f::t_4fcf97b28050d1 1,23,130-132,161,163-164
+  s_3ad8c99e0b0d7f::t_90d80bd2beac78 19,127-129,133-137,171,173
+  s_3ad8c99e0b0d7f::t_2739a409195a25 73-75,162,166
+  s_3ad8c99e0b0d7f::t_cc8785c5d486a2 138-139
+packages/engine/src/context-assembler.test.ts
+  s_3ad8c99e0b0d7f::t_2739a409195a25 28-35,101-102,246,251
+  s_3ad8c99e0b0d7f::t_827741f9ba24c9 244-245,247,249-250,252
+  s_3ad8c99e0b0d7f::t_24580d5984475e 156-165,167-184
+  s_3ad8c99e0b0d7f::t_f2467f6b803784 166
+  s_3ad8c99e0b0d7f::t_a97ace6ba72af4 272,279
+  s_3ad8c99e0b0d7f::t_4fcf97b28050d1 1,5,17
+  s_3ad8c99e0b0d7f::t_710b435bcd3ff4 185-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d9db9f11026cb835a70ff6c8c497fca125de00ac",
+  "prompts": {},
+  "sessions": {
+    "s_3ad8c99e0b0d7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-4975-7cf3-8b18-af92906892ca",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
