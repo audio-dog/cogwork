@@ -8,6 +8,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   daemonCommand,
   limitsCommand,
+  operationSettingsCommand,
   runEventsCommand,
   runsCommand,
   schedulingCommand,
@@ -22,6 +23,7 @@ const cli = Command.make("cogwork").pipe(
   Command.withSubcommands([
     daemonCommand,
     limitsCommand,
+    operationSettingsCommand,
     schedulingCommand,
     statusCommand,
     runsCommand,
