@@ -1,22 +1,17 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useConfiguration } from "../../../components/configuration-provider";
 import { PluginDetail } from "../../../components/plugin-detail";
-import { placeholderConfiguration } from "../../../features/configuration-placeholder";
-
-// A route guard runs outside React, so it reads the picture directly. This is the seam a
-// loader will take when the daemon answers; components take theirs from the provider.
-const findPlugin = (pluginId: string) =>
-  placeholderConfiguration.plugins.find((plugin) => plugin.record.pluginId === pluginId);
 
 export const Route = createFileRoute("/_app/customize/plugin/$pluginId")({
-  beforeLoad: ({ params }) => {
-    if (findPlugin(params.pluginId)) return;
-    throw redirect({ to: "/customize/$facet", params: { facet: "plugins" } });
-  },
   component: PluginRoute,
 });
 
 function PluginRoute() {
-  const plugin = findPlugin(Route.useParams().pluginId);
-  if (!plugin) return null;
+  const {
+    state: { picture },
+  } = useConfiguration();
+  const { pluginId } = Route.useParams();
+  const plugin = picture.plugins.find((entry) => entry.record.pluginId === pluginId);
+  if (!plugin) throw redirect({ to: "/customize/$facet", params: { facet: "plugins" } });
   return <PluginDetail plugin={plugin} />;
 }
