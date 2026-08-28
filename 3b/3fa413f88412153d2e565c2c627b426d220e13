@@ -1,0 +1,41 @@
+apps/desktop/src/renderer/src/routes/_app/workspaces.tsx
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 1-18
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 26,48
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 1-97
+apps/desktop/src/renderer/src/components/settings-parts.tsx
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 4
+apps/desktop/src/renderer/src/components/workspaces-surface.tsx
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 1-739
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 1-127
+apps/desktop/src/renderer/src/components/workspaces-surface.test.tsx
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 1-15,17-84
+  s_d6f8a470e8319b::t_5a782c4c39ac02 16
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 1-143
+apps/desktop/src/renderer/src/features/settings-catalog.ts
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 1,8,60,67
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 35-39
+  s_d6f8a470e8319b::t_7383961d453060 34
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_d6f8a470e8319b::t_bcb58cadf2d21b 18,56-60,104,116,133,151,163,179,239-245,317,325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3b3fa413f88412153d2e565c2c627b426d220e13",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
