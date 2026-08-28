@@ -22,6 +22,7 @@ import {
 import {
   type DroppedRow,
   diagnosticsOf,
+  displayedEnablement,
   enableScopeFor,
   resolveEnablement,
   settingsSpreadAcross,
@@ -103,7 +104,8 @@ function ContributionProvider({
   } = useConfiguration();
   const target = enableScopeFor(contribution);
   const resolved = resolveEnablement(contribution, viewOf(contribution));
-  const on = resolved.effective ?? defaultContributionEnabled(authorityLabel(contribution.authority));
+  const on =
+    displayedEnablement(resolved) ?? defaultContributionEnabled(authorityLabel(contribution.authority));
   const failed = contribution.load._tag === "failed";
   const notReady = contribution.readiness?._tag === "not-ready";
 
