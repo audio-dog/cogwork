@@ -11,4 +11,9 @@ export const defaultDaemonLimits: DaemonLimits = {
   revision: 0,
 };
 
-export const defaultControlStore = { daemonLimits: defaultDaemonLimits, operationSettings: [] };
+export const defaultControlStore = {
+  daemonLimits: defaultDaemonLimits,
+  operationSettings: [],
+  pluginInstalls: [],
+  contributionSettings: [],
+};
