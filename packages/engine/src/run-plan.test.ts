@@ -1,4 +1,5 @@
 import {
+  type ContributionSetting,
   operationSettingNames,
   RunId,
   type SettingResolutionCase,
@@ -268,5 +269,65 @@ describe("Run Plan assembly", () => {
     assert.isTrue(Object.isFrozen(plan));
     assert.isTrue(Object.isFrozen(plan.messages));
     assert.isTrue(Object.isFrozen(plan.workContext.facts.roles));
+  });
+
+  it("applies workspace MCP settings to resolved servers and their trace", () => {
+    const contribution = {
+      id: "plugin:linear/mcp/linear",
+      authority: "plugin:linear" as const,
+      kind: "mcp-server" as const,
+      localName: "linear",
+      file: "/plugins/linear/mcp/linear.json",
+    };
+    const contributionSettings: ReadonlyArray<ContributionSetting> = [
+      {
+        contribution: contribution.id,
+        scope: { _tag: "SettingsProfile" },
+        enabled: true,
+      },
+      {
+        contribution: contribution.id,
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+        enabled: false,
+      },
+    ];
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [], contributionSettings);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-mcp-gate"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
+      middleware: [],
+      context,
+      contributions: [contribution],
+      mcpSkills: [
+        {
+          identity: contribution.id,
+          name: contribution.id,
+          endpoint: "https://mcp.linear.app/mcp",
+          authenticated: false,
+        },
+      ],
+    });
+
+    assert.deepStrictEqual(plan.mcp, []);
+    const trace = plan.provenance.resolution.find(
+      ({ key }) => key === `contribution:${contribution.id}:enabled`,
+    );
+    assert.strictEqual(trace?.winner?.source, "Private workspace overlay workspace");
+    assert.strictEqual(trace?.winner?.value, false);
+    assert.deepStrictEqual(
+      trace?.shadowed.map(({ value }) => value),
+      [true],
+    );
+    assert.strictEqual(trace?.dropped[0]?.reason, "contribution entry gate disabled");
   });
 });

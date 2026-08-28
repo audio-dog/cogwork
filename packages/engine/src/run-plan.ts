@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type {
   ContributionEnabledRow,
+  ContributionSetting,
   ContributionUnionRow,
   FileContribution,
   OperationBinding,
@@ -92,8 +93,8 @@ export const engineAdmissibleSettingScope = (
   return true;
 };
 
-export const resolveEngineContributionEnabled = (
-  rows: readonly ContributionEnabledRow[],
+export const resolveEngineContributionEnabled = <A extends ContributionEnabledRow>(
+  rows: readonly A[],
   authority: string,
 ) => {
   const ordered = rows.toSorted((left, right) => scopeRank(left.scope) - scopeRank(right.scope));
@@ -220,12 +221,14 @@ export interface ResolvedRunPlanStage {
   readonly stage: ResolvedStage;
   readonly profile: RunPlanPolicyProfile;
   readonly settings: ReadonlyMap<OperationSettingName, ReturnType<typeof resolveEngineOperationSetting>>;
+  readonly contributionSettings: ReadonlyArray<ContributionSetting>;
 }
 
 export const resolveRunPlanStage = (
   config: WorkspaceConfig,
   operation: LifecycleStage,
   rows: readonly OperationSettingRow[],
+  contributionSettings: ReadonlyArray<ContributionSetting> = [],
 ) => {
   const base = resolveStage(config, operation);
   if (!base) return null;
@@ -244,6 +247,7 @@ export const resolveRunPlanStage = (
     },
     profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
     settings,
+    contributionSettings,
   };
 };
 
@@ -340,40 +344,86 @@ const contributionMembers = (contributions: ReadonlyArray<FileContribution>, kin
       }),
     );
 
-export const admittedContributions = (contributions: ReadonlyArray<FileContribution>) =>
-  contributions.filter(
-    (contribution) =>
-      contribution.kind !== "mcp-server" ||
-      resolveEngineContributionEnabled([], contribution.authority).value,
+const contributionRows = (
+  settings: ReadonlyArray<ContributionSetting>,
+  contribution: FileContribution,
+  workspace: WorkspaceConfig["name"] | null,
+) =>
+  settings.filter(
+    (setting) =>
+      setting.contribution === contribution.id &&
+      (setting.scope._tag === "SettingsProfile" || setting.scope.workspace === workspace),
   );
 
-const contributionGateTrace = (contribution: FileContribution) => {
-  const enabled = resolveEngineContributionEnabled([], contribution.authority).value;
-  const candidate = RunPlanResolutionCandidate.make({
-    scope: contribution.authority,
+const contributionGate = (
+  contribution: FileContribution,
+  settings: ReadonlyArray<ContributionSetting>,
+  workspace: WorkspaceConfig["name"] | null,
+) =>
+  resolveEngineContributionEnabled(
+    contributionRows(settings, contribution, workspace),
+    contribution.authority,
+  );
+
+export const admittedContributions = (
+  contributions: ReadonlyArray<FileContribution>,
+  settings: ReadonlyArray<ContributionSetting> = [],
+  workspace: WorkspaceConfig["name"] | null = null,
+) =>
+  contributions.filter(
+    (contribution) =>
+      contribution.kind !== "mcp-server" || contributionGate(contribution, settings, workspace).value,
+  );
+
+const contributionSettingCandidate = (setting: ContributionSetting) =>
+  RunPlanResolutionCandidate.make({
+    scope: scopeName(setting.scope),
     level: "Contribution entry gate",
-    source: contribution.file,
-    value: true,
+    source: scopeName(setting.scope),
+    value: setting.enabled,
   });
+
+const droppedContribution = (
+  contribution: FileContribution,
+  resolution: ReturnType<typeof resolveEngineContributionEnabled>,
+) => {
+  if (resolution.value) return [];
+  const reason = resolution.winning
+    ? "contribution entry gate disabled"
+    : "contribution entry gate disabled by default";
+  return [
+    RunPlanDroppedCandidate.make({
+      candidate: RunPlanResolutionCandidate.make({
+        scope: contribution.authority,
+        level: "Contribution entry gate",
+        source: contribution.file,
+        value: true,
+      }),
+      reason,
+    }),
+  ];
+};
+
+const contributionGateTrace = (
+  contribution: FileContribution,
+  settings: ReadonlyArray<ContributionSetting>,
+  workspace: WorkspaceConfig["name"],
+) => {
+  const resolution = contributionGate(contribution, settings, workspace);
   return RunPlanResolutionTrace.make({
     key: `contribution:${contribution.id}:enabled`,
     operator: "override-scalar",
-    winner: RunPlanResolutionCandidate.make({
-      scope: "Engine",
-      level: "Contribution entry gate",
-      source: `${contribution.authority} default`,
-      value: enabled,
-    }),
+    winner: resolution.winning
+      ? contributionSettingCandidate(resolution.winning)
+      : RunPlanResolutionCandidate.make({
+          scope: "Engine",
+          level: "Contribution entry gate",
+          source: `${contribution.authority} default`,
+          value: resolution.value,
+        }),
     contributors: [],
-    shadowed: [],
-    dropped: enabled
-      ? []
-      : [
-          RunPlanDroppedCandidate.make({
-            candidate,
-            reason: "contribution entry gate disabled by default",
-          }),
-        ],
+    shadowed: resolution.shadowed.map(contributionSettingCandidate),
+    dropped: droppedContribution(contribution, resolution),
   });
 };
 
@@ -431,6 +481,14 @@ const mcpServers = (skills: ReadonlyArray<RunPlanMcpSkillInput>) =>
     });
   });
 
+export const admittedMcpSkills = <A extends { readonly identity: string | null }>(
+  skills: ReadonlyArray<A>,
+  contributions: ReadonlyArray<FileContribution>,
+) => {
+  const admittedIdentities = new Set(contributions.map(({ id }) => id));
+  return skills.filter(({ identity }) => identity === null || admittedIdentities.has(identity));
+};
+
 export interface RunPlanMcpSkillInput {
   readonly identity: string | null;
   readonly name: string;
@@ -457,10 +515,15 @@ export interface AssembleRunPlanInput {
 export const assembleRunPlan = (input: AssembleRunPlanInput) => {
   const workContext = input.item.workContext;
   const observation = RunPlanObservation.make({ ...input.observation });
-  const admitted = admittedContributions(input.contributions);
-  const mcpServersForRun = mcpServers(input.mcpSkills);
+  const admitted = admittedContributions(
+    input.contributions,
+    input.resolved.contributionSettings,
+    input.workspace.config.name,
+  );
+  const admittedSkills = admittedMcpSkills(input.mcpSkills, admitted);
+  const mcpServersForRun = mcpServers(admittedSkills);
   const resolvedMcpIdentities = new Set(
-    input.mcpSkills.flatMap(({ identity }) => (identity === null ? [] : [identity])),
+    admittedSkills.flatMap(({ identity }) => (identity === null ? [] : [identity])),
   );
   const unresolvedMcp = contributionMembers(admitted, "mcp-server").filter(
     ({ identity }) => !resolvedMcpIdentities.has(identity),
@@ -524,7 +587,13 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
           .concat(
             input.contributions
               .filter((contribution) => contribution.kind === "mcp-server")
-              .map(contributionGateTrace),
+              .map((contribution) =>
+                contributionGateTrace(
+                  contribution,
+                  input.resolved.contributionSettings,
+                  input.workspace.config.name,
+                ),
+              ),
           ),
         stamps: [
           ...contentStamps(input.context),
