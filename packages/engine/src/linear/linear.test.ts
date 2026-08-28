@@ -58,6 +58,7 @@ interface Seed {
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
   readonly observeCalls?: Ref.Ref<number>;
+  readonly assigneeFilters?: Array<ReadonlyArray<string> | null>;
 }
 
 const bot = { id: "bot-user" } as const;
@@ -144,10 +145,11 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
         );
 
   return {
-    observeIssues: (ref, coordination) =>
+    observeIssues: (ref, coordination, assigneeIds = null) =>
       guard(
         Effect.gen(function* () {
           if (countObserve) yield* Ref.update(countObserve, (count) => count + 1);
+          yield* Effect.sync(() => seed.assigneeFilters?.push(assigneeIds));
           const issues = yield* Ref.get(issuesRef);
           const comments = yield* Ref.get(commentsRef);
           return issues
@@ -399,6 +401,21 @@ describe("linear work source adapter", () => {
       ),
     ),
   );
+
+  it.effect("hands the workspace assignee allowlist to the client's server-side filter", () => {
+    const assigneeFilters: Array<ReadonlyArray<string> | null> = [];
+    const allowlistWorkspace: RegisteredWorkspace = {
+      ...workspace,
+      config: {
+        ...workspace.config,
+        issueTracker: { ...workspace.config.issueTracker, assigneeAllowlist: ["user-me"] },
+      },
+    };
+    return Effect.gen(function* () {
+      yield* observeItems(allowlistWorkspace);
+      assert.deepStrictEqual(assigneeFilters, [["user-me"]]);
+    }).pipe(Effect.provide(withClient({ issues: [], assigneeFilters })));
+  });
 
   it.effect("uses configured role label strings instead of hardcoded defaults", () =>
     Effect.gen(function* () {

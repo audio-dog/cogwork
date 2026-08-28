@@ -413,6 +413,7 @@ interface Call {
   readonly note?: string;
   readonly checks?: string;
   readonly detail?: string;
+  readonly noProgress?: number;
 }
 
 class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<Call>>>()(
@@ -443,7 +444,12 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
           record(calls, { method: "triaged", item: itemId, role: outcome.role, proposal: outcome.proposal }),
         implemented: (_workspace, itemId) => record(calls, { method: "implemented", item: itemId }),
         followedUp: (_workspace, itemId, outcome) =>
-          record(calls, { method: "followedUp", item: itemId, checks: outcome.marker.checks }),
+          record(calls, {
+            method: "followedUp",
+            item: itemId,
+            checks: outcome.marker.checks,
+            noProgress: outcome.marker.noProgress,
+          }),
         attemptFailed: (_workspace, itemId, outcome) =>
           record(calls, {
             method: "attemptFailed",
@@ -459,6 +465,7 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
             item: itemId,
             checks: outcome.marker.checks,
             detail: outcome.detail,
+            noProgress: outcome.marker.noProgress,
           }),
         reclassify: () => Effect.void,
       }),
@@ -1906,6 +1913,40 @@ describe("Executor.execute", () => {
     },
   );
 
+  it.effect("starts the no-progress count over when the round pushed", () => {
+    const carriedItem = {
+      ...followUpItem,
+      followUp: { ...followUpItem.followUp, noProgress: 2 },
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(followUpWorkspace, carriedItem);
+
+      const log = yield* Ref.get(calls);
+      const followedUp = log.find((c) => c.method === "followedUp");
+      assert.strictEqual(followedUp?.noProgress, 0);
+    }).pipe(Effect.provide(provide([runner(followUpEvents)], existingWorktree)));
+  });
+
+  it.effect("carries the no-progress count forward when the round pushed nothing", () => {
+    const carriedItem = {
+      ...followUpItem,
+      followUp: { ...followUpItem.followUp, noProgress: 2 },
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(followUpWorkspace, carriedItem);
+
+      const log = yield* Ref.get(calls);
+      const followedUp = log.find((c) => c.method === "followedUp");
+      assert.strictEqual(followedUp?.noProgress, 2);
+    }).pipe(Effect.provide(provide([runner(noopFollowUpEvents)], existingWorktree)));
+  });
+
   it.effect("hands a self-reported stuck follow-up to a human without retrying", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -2105,6 +2146,9 @@ describe("Executor.execute", () => {
       assert.include(stalled?.detail ?? "", "no progress");
       assert.strictEqual(stalled?.checks, "failing");
       assert.isFalse(log.some((c) => c.method === "handOff"));
+      // The hand-off parks the count so whoever hands the item back gets a fresh three rounds
+      // instead of an item that claims and abandons in the same breath.
+      assert.strictEqual(stalled?.noProgress, 0);
 
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);

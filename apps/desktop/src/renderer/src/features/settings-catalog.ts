@@ -1,21 +1,15 @@
-import { RiCpuLine, RiPaletteLine, RiSettings3Line } from "@remixicon/react";
+import { RiPaletteLine, RiSettings3Line } from "@remixicon/react";
 import { linkOptions } from "@tanstack/react-router";
-import type { ComponentType } from "react";
 
 /**
  * Every section is its own route, so `linkOptions` checks each target where it is written rather
  * than at each spread site. A typo here fails the build instead of redirecting at runtime.
  */
-const sectionLinks = linkOptions([
-  { to: "/settings/general" },
-  { to: "/settings/appearance" },
-  { to: "/settings/engine" },
-]);
+const sectionLinks = linkOptions([{ to: "/settings/general" }, { to: "/settings/appearance" }]);
 
 export const settingsSections = [
   { id: "general", label: "General", icon: RiSettings3Line, link: sectionLinks[0] },
   { id: "appearance", label: "Appearance", icon: RiPaletteLine, link: sectionLinks[1] },
-  { id: "engine", label: "Engine", icon: RiCpuLine, link: sectionLinks[2] },
 ] as const;
 
 export type SettingsSection = (typeof settingsSections)[number];
@@ -45,27 +39,6 @@ export const settingsIndex = [
     description: "System, light, or dark appearance for the app.",
     keywords: ["theme", "appearance", "dark", "light", "color", "scheme", "system"],
   },
-  {
-    id: "global-limit",
-    sectionId: "engine",
-    title: "Global concurrency",
-    description: "How many runs the scheduler keeps in flight across all workspaces.",
-    keywords: ["scheduler", "concurrency", "limit", "runs", "parallel", "global"],
-  },
-  {
-    id: "per-workspace-limit",
-    sectionId: "engine",
-    title: "Per-workspace concurrency",
-    description: "How many runs stay in flight inside a single workspace.",
-    keywords: ["scheduler", "concurrency", "workspace", "limit", "runs"],
-  },
-  {
-    id: "daily-budget",
-    sectionId: "engine",
-    title: "Daily budget",
-    description: "How many runs the scheduler starts per day before it pauses new work.",
-    keywords: ["budget", "spend", "cost", "runs", "daily", "cap"],
-  },
 ] as const satisfies readonly SettingEntry[];
 
 export function findSection(id: SettingsSectionId) {
@@ -84,11 +57,11 @@ export function searchSettings(query: string) {
   );
 }
 
-export function settingEntry(id: string): SettingEntry {
+export function settingEntry(id: string) {
   const found = settingsIndex.find((entry) => entry.id === id);
   if (!found) throw new Error(`Unknown setting: ${id}`);
   return found;
 }
 
 /** Kept so a section's icon can be looked up by id without narrowing on the literal union. */
-export const sectionIcon = (id: SettingsSectionId): ComponentType | undefined => findSection(id)?.icon;
+export const sectionIcon = (id: SettingsSectionId) => findSection(id)?.icon;

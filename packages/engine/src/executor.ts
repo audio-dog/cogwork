@@ -33,7 +33,7 @@ import { ContextAssembler, type ContextAssemblerError } from "./context-assemble
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
 import type { CredentialError } from "./credential-store";
-import type { FollowUpContext } from "./follow-up";
+import { type FollowUpContext, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest, type ResolvedMcpSkill } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
@@ -642,11 +642,11 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
-  const followUpMarker = (context: FollowUpContext) => ({
+  const followUpMarker = (context: FollowUpContext, noProgress: number) => ({
     checks: context.checks,
     humanCommentAtMillis: context.humanCommentAtMillis,
     botTriggerAtMillis: context.botTriggerAtMillis,
-    noProgress: context.noProgress,
+    noProgress,
     baseDivergence: context.baseDivergence,
   });
 
@@ -677,7 +677,7 @@ export const make = Effect.gen(function* () {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* postFollowUpSummary(workspace, item, result.summary);
     yield* issueTracker.followedUp(workspace, item.id, {
-      marker: followUpMarker(context),
+      marker: followUpMarker(context, noProgressAfterRound(context, result.outcome)),
       atMillis: endedAtMillis,
     });
     yield* settleRun(runId, {
@@ -769,8 +769,13 @@ export const make = Effect.gen(function* () {
   ) {
     const atMillis = yield* Clock.currentTimeMillis;
     const context = item.followUp ?? defaultFollowUp;
+    // The count is spent the moment the hand-off lands: a human owns the PR now, and while it wears
+    // `ready-for-human` no poll can reach a follow-up round to move the count again. Parking it at 0
+    // makes the hand-off a door that opens both ways — whoever hands it back, by any route, gets a
+    // fresh three rounds instead of an item that claims and abandons in the same breath. The detail
+    // still reports the count that parked it.
     yield* issueTracker.stalled(workspace, item.id, {
-      marker: followUpMarker(context),
+      marker: followUpMarker(context, 0),
       atMillis,
       detail: `Follow-up made no progress after ${context.noProgress} attempts — neither the checks turned green nor a human responded. Handing this to a human.`,
     });

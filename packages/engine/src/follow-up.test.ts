@@ -1,7 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
 import {
+  type FollowUpContext,
   followUpContext,
   followUpNoProgressLimit,
+  noProgressAfterRound,
   noProgressCount,
   type ObservedPr,
   triggersFollowUp,
@@ -196,6 +198,66 @@ describe("noProgressCount", () => {
       2,
     );
   });
+
+  it("starts under the limit again once a hand-off parked the count at 0", () => {
+    // An item only reaches here after a human took `ready-for-human` off it, so the round it wakes
+    // must be allowed to run rather than claim and abandon on the count that parked it.
+    const parked = noProgressCount(
+      pr({
+        checks: "failing",
+        followUp: {
+          checks: "failing",
+          humanCommentAtMillis: 0,
+          noProgress: 0,
+          baseDivergence: "none",
+          botTriggerAtMillis: 0,
+        },
+      }),
+    );
+    assert.strictEqual(parked, 1);
+    assert.isBelow(parked, followUpNoProgressLimit);
+  });
+});
+
+describe("noProgressAfterRound", () => {
+  const context = (noProgress: number): FollowUpContext => ({
+    checks: "passing",
+    humanCommentAtMillis: 0,
+    botTriggerAtMillis: 0,
+    noProgress,
+    stalled: noProgress >= followUpNoProgressLimit,
+    fresh: false,
+    baseDivergence: "none",
+  });
+
+  it("starts the count over when the round pushed", () => {
+    assert.strictEqual(noProgressAfterRound(context(0), "pushed"), 0);
+    assert.strictEqual(noProgressAfterRound(context(followUpNoProgressLimit - 1), "pushed"), 0);
+  });
+
+  it("carries the count forward when the round pushed nothing", () => {
+    assert.strictEqual(noProgressAfterRound(context(0), "noop"), 0);
+    assert.strictEqual(noProgressAfterRound(context(2), "noop"), 2);
+  });
+
+  it("keeps a green PR answering a bot round after round, which the external signals alone cannot", () => {
+    // The PR that motivated this: checks green throughout, so they never *turned* green; no human
+    // ever commented; the conflict cleared on the first round only. Every reset the observation can
+    // see stays false, and each round still pushed a real fix.
+    const bot = pr({
+      latestBotTriggerAtMillis: 30,
+      followUp: {
+        checks: "passing",
+        humanCommentAtMillis: 0,
+        noProgress: followUpNoProgressLimit - 1,
+        baseDivergence: "none",
+        botTriggerAtMillis: 20,
+      },
+    });
+    const observed = followUpContext(bot);
+    assert.strictEqual(observed.noProgress, followUpNoProgressLimit);
+    assert.strictEqual(noProgressAfterRound(observed, "pushed"), 0);
+  });
 });
 
 describe("followUpContext", () => {
@@ -242,7 +304,7 @@ describe("followUpContext", () => {
     assert.strictEqual(context.botTriggerAtMillis, 42);
   });
 
-  it("stalls a bot-only back-and-forth once it reaches the no-progress limit", () => {
+  it("stalls a bot round that follows rounds which changed nothing", () => {
     const context = followUpContext(
       pr({
         latestBotTriggerAtMillis: 30,

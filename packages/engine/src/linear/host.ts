@@ -29,6 +29,7 @@ import {
 interface LinearTarget extends LinearTeamRef {
   readonly actorUserId: string | null;
   readonly roleLabels: ReturnType<typeof roleLabelsFor>;
+  readonly assigneeAllowlist: ReadonlyArray<string> | null;
 }
 
 interface LinearRef {
@@ -60,6 +61,7 @@ const targetsFor = (workspace: WorkspaceIssueTrackerBinding): ReadonlyArray<Line
     account,
     actorUserId: source.actorUserId ?? null,
     roleLabels: roleLabelsFor(source.roleLabels),
+    assigneeAllowlist: source.assigneeAllowlist ?? null,
   };
   return linearTeams(source).map((team) => ({ team, ...base }) satisfies LinearTarget);
 };
@@ -129,8 +131,9 @@ export const makeHost = (client: LinearClientService): CoordinationHost<LinearRe
     },
     list: Effect.fn("linear.list")(function* (workspace: WorkspaceIssueTrackerBinding) {
       const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
-        Effect.flatMap(client.observeIssues(target, coordinationScope(target)), (issues) =>
-          Effect.forEach(issues, listItem(target)),
+        Effect.flatMap(
+          client.observeIssues(target, coordinationScope(target), target.assigneeAllowlist),
+          (issues) => Effect.forEach(issues, listItem(target)),
         ),
       );
       return perTeam.flat();
