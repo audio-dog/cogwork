@@ -9,6 +9,7 @@ const picture = (revision: number, globalConcurrency: number): ControlStore => (
     dailyBudget: 50,
     revision,
   },
+  operationSettings: [],
 });
 
 describe("currentControlStore", () => {

@@ -4,7 +4,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@cogwork/ui/components/input-group";
 import { Separator } from "@cogwork/ui/components/separator";
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
-import { RiBox3Line, RiEqualizerLine, RiPulseLine, RiSearchLine } from "@remixicon/react";
+import { RiBox3Line, RiEqualizerLine, RiPulseLine, RiSearchLine, RiSettings3Line } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { kindIcons } from "../features/configuration-icons";
@@ -17,9 +17,10 @@ import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { CustomizePlaceMenu, PlaceFilterNotApplicable } from "./customize-place-menu";
 import { McpFacet } from "./mcp-facet";
+import { OperationSettingsFacet } from "./operation-settings-facet";
 import { PluginsFacet } from "./plugins-facet";
 
-function FacetPill({ facet, active }: { facet: Facet; active: boolean }) {
+function FacetPillContent({ facet }: { facet: Facet }) {
   const {
     meta: { places },
   } = useConfiguration();
@@ -27,21 +28,53 @@ function FacetPill({ facet, active }: { facet: Facet; active: boolean }) {
     state: { places: selected },
   } = useCustomizeFilter();
 
+  if (facet === "plugins")
+    return (
+      <>
+        <RiBox3Line data-icon="inline-start" />
+        {facetLabel(facet)}
+      </>
+    );
+  if (facet === "operations")
+    return (
+      <>
+        <RiSettings3Line data-icon="inline-start" />
+        {facetLabel(facet)}
+      </>
+    );
+  return (
+    <>
+      {facetLabel(facet)}
+      <Badge variant="ghost" className="ms-1 w-4 justify-center px-0 tabular-nums">
+        {places.kindCount(facet, selected)}
+      </Badge>
+    </>
+  );
+}
+
+function ActiveFacetPill({ facet }: { facet: Facet }) {
   return (
     <Button
-      variant={active ? "secondary" : "outline"}
+      variant="secondary"
       size="sm"
       className="rounded-full"
-      aria-current={active ? "page" : undefined}
+      aria-current="page"
       render={<Link to="/customize/$facet" params={{ facet: facetSlug(facet) }} />}
     >
-      {facet === "plugins" ? <RiBox3Line data-icon="inline-start" /> : null}
-      {facetLabel(facet)}
-      {facet === "plugins" ? null : (
-        <Badge variant="ghost" className="ms-1 w-4 justify-center px-0 tabular-nums">
-          {places.kindCount(facet, selected)}
-        </Badge>
-      )}
+      <FacetPillContent facet={facet} />
+    </Button>
+  );
+}
+
+function InactiveFacetPill({ facet }: { facet: Facet }) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="rounded-full"
+      render={<Link to="/customize/$facet" params={{ facet: facetSlug(facet) }} />}
+    >
+      <FacetPillContent facet={facet} />
     </Button>
   );
 }
@@ -66,15 +99,18 @@ function CustomizeSearch() {
   );
 }
 
-/** The Place control for this Facet, then the Facet pills. `children` is the Place control. */
 function CustomizeFilters({ active, children }: { active: Facet; children: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {children}
       <Separator orientation="vertical" className="h-6" />
-      {facets.map((facet) => (
-        <FacetPill key={facet} facet={facet} active={facet === active} />
-      ))}
+      {facets.map((facet) =>
+        facet === active ? (
+          <ActiveFacetPill key={facet} facet={facet} />
+        ) : (
+          <InactiveFacetPill key={facet} facet={facet} />
+        ),
+      )}
     </div>
   );
 }
@@ -147,6 +183,19 @@ export function McpServersFacetView() {
   );
 }
 
+export function OperationSettingsFacetView() {
+  return (
+    <CustomizeFrame>
+      <CustomizeFilters active="operations">
+        <PlaceFilterNotApplicable>
+          Operation settings resolve by level, then by Scope. This view shows Coding · Implement.
+        </PlaceFilterNotApplicable>
+      </CustomizeFilters>
+      <OperationSettingsFacet />
+    </CustomizeFrame>
+  );
+}
+
 export function HooksFacetView() {
   return (
     <CustomizeFrame>
@@ -167,7 +216,6 @@ export function HooksFacetView() {
   );
 }
 
-/** Skills, Subagents, Rules and Commands are one view: the kind is data, not a mode. */
 export function ContributionFacetView({ kind }: { kind: ContributionKind }) {
   return (
     <CustomizeFrame>
