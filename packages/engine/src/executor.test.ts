@@ -40,6 +40,7 @@ import {
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
@@ -712,6 +713,12 @@ const runControlStub = Layer.succeed(RunControl.RunControl, {
   register: () => Effect.void,
   cancel: () => Effect.succeed(false),
 });
+const pluginManagerStub = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
+});
 
 function testHarness(runners: ReadonlyArray<TestRunner>) {
   return Layer.unwrap(
@@ -755,6 +762,7 @@ function provide(
         runControlStub,
         worktree,
         assemblerStub,
+        pluginManagerStub,
       ),
     ),
   );

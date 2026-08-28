@@ -1,4 +1,12 @@
-import type { LifecycleStage, RunRecord, Session, SessionId, TokenUsage } from "@cogwork/contracts";
+import type {
+  FileContribution,
+  LifecycleStage,
+  PluginFailure,
+  RunRecord,
+  Session,
+  SessionId,
+  TokenUsage,
+} from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
@@ -10,6 +18,7 @@ import {
   type TriageStageResult,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -20,12 +29,12 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
-import type { CredentialError } from "./credential-store";
+import { CredentialError } from "./credential-store";
 import type { FollowUpContext } from "./follow-up";
 import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
-import { McpSkillAssembler } from "./mcp-skill";
+import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
 import { operationPolicyProfile } from "./operation-policy";
 import {
   buildContinuationNudge,
@@ -35,6 +44,7 @@ import {
   type ResolvedStage,
   resolveStage,
 } from "./playbook";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { decideResume } from "./resume-policy";
@@ -46,7 +56,7 @@ import { SourceControlProvider } from "./source-control";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
-type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError;
+type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError | PluginFailure;
 
 interface RunAccumulator {
   readonly handle: string | null;
@@ -144,7 +154,7 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
 
 // A credential error is a configuration problem (no account, missing secret env) that retrying
 // cannot fix, so it goes straight to a human like a diverged worktree does.
-const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError"]);
+const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError", "PluginFailure"]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
   if (error._tag === "HarnessError") return error.retryable;
@@ -163,6 +173,7 @@ export const make = Effect.gen(function* () {
   const recorder = yield* RunRecorder;
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
+  const plugins = yield* PluginManager;
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
@@ -177,6 +188,36 @@ export const make = Effect.gen(function* () {
     session: SessionId | null,
     stage: LifecycleStage,
   ) {
+    const pluginContributions = yield* plugins.contributions(workspace.config.name);
+    const loaded = pluginContributions.filter((contribution) => contribution.load._tag === "Loaded");
+    const fileContributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
+      id: contribution.id,
+      authority: contribution.authority,
+      kind: contribution.kind,
+      localName: contribution.localName,
+      file: contribution.file,
+    }));
+    const pluginMcpSkills: ReadonlyArray<ResolvedMcpSkill> = yield* Effect.forEach(
+      loaded.filter((contribution) => contribution.load._tag === "Loaded" && contribution.load.mcpServer),
+      (contribution) =>
+        Effect.gen(function* () {
+          if (contribution.load._tag !== "Loaded" || !contribution.load.mcpServer) {
+            return yield* Effect.die(new Error("loaded MCP contribution lost its server"));
+          }
+          const { endpoint, secretEnv } = contribution.load.mcpServer;
+          if (!secretEnv) return { name: contribution.id, endpoint, bearer: null };
+          const bearer = yield* Config.redacted(secretEnv).pipe(
+            Effect.mapError(
+              (error) =>
+                new CredentialError({
+                  account: contribution.id,
+                  message: `MCP server needs environment key ${secretEnv}: ${error.message}`,
+                }),
+            ),
+          );
+          return { name: contribution.id, endpoint, bearer };
+        }),
+    );
     return {
       harness: resolved.harness,
       stage,
@@ -187,8 +228,8 @@ export const make = Effect.gen(function* () {
       prompt,
       model: resolved.model,
       effort: resolved.effort,
-      mcpSkills: yield* assembler.assemble(workspace.config),
-      contributions: workspace.contributions,
+      mcpSkills: [...(yield* assembler.assemble(workspace.config)), ...pluginMcpSkills],
+      contributions: [...workspace.contributions, ...fileContributions],
     } satisfies HarnessRequest;
   });
 
