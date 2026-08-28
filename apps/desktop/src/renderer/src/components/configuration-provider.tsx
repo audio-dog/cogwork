@@ -1,6 +1,7 @@
-import type { ContributionSettingUpdate } from "@cogwork/contracts";
+import type { ContributionSettingCell, ContributionSettingUpdate, ControlStore } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
-import { createContext, type ReactNode, use } from "react";
+import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import { createContext, type ReactNode, use, useRef } from "react";
 import { setContributionSettingAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
 import type {
@@ -40,6 +41,61 @@ const ConfigurationContext = createContext<ConfigurationContextValue | null>(nul
 const emptyConfigurationPicture: ConfigurationPicture = { workspaces: [], plugins: [], contributions: [] };
 const inertConfigurationActions: ConfigurationActions = { setContributionSetting: () => undefined };
 
+interface ContributionSettingSubmission {
+  readonly baseline: ControlStore | null;
+  readonly update: ContributionSettingUpdate;
+  readonly previousResult: AsyncResult.AsyncResult<ControlStore, unknown>;
+}
+
+const contributionSettingKey = (cell: ContributionSettingCell) =>
+  cell.scope._tag === "SettingsProfile"
+    ? `${cell.contribution.id}:settings-profile`
+    : `${cell.contribution.id}:private-workspace-overlay:${cell.scope.workspace}`;
+
+const applyContributionSetting = (controlStore: ControlStore | null, update: ContributionSettingUpdate) => {
+  if (controlStore === null) return null;
+  const cell = update._tag === "Set" ? update.row : update.cell;
+  const remaining = controlStore.contributionSettings.filter(
+    (row) => contributionSettingKey(row) !== contributionSettingKey(cell),
+  );
+  const contributionSettings = update._tag === "Set" ? [...remaining, update.row] : remaining;
+  return { ...controlStore, contributionSettings };
+};
+
+const contributionSettingMatches = (controlStore: ControlStore | null, update: ContributionSettingUpdate) => {
+  if (controlStore === null) return false;
+  const cell = update._tag === "Set" ? update.row : update.cell;
+  const stored = controlStore.contributionSettings.find(
+    (row) => contributionSettingKey(row) === contributionSettingKey(cell),
+  );
+  if (update._tag === "Clear") return stored === undefined;
+  return stored?.enabled === update.row.enabled;
+};
+
+export const contributionSettingState = (
+  board: ControlStore | null,
+  result: AsyncResult.AsyncResult<ControlStore, unknown>,
+  submission: ContributionSettingSubmission | null,
+) => {
+  if (submission === null) return { controlStore: board, waiting: result.waiting, settled: false };
+  if (board !== submission.baseline && contributionSettingMatches(board, submission.update))
+    return { controlStore: board, waiting: result.waiting, settled: true };
+  if (result === submission.previousResult)
+    return {
+      controlStore: applyContributionSetting(board, submission.update),
+      waiting: true,
+      settled: false,
+    };
+  if (result._tag === "Failure") return { controlStore: board, waiting: false, settled: true };
+  if (result._tag !== "Success" || result.waiting)
+    return {
+      controlStore: applyContributionSetting(board, submission.update),
+      waiting: true,
+      settled: false,
+    };
+  return { controlStore: result.value, waiting: true, settled: false };
+};
+
 export function useConfiguration() {
   const value = use(ConfigurationContext);
   if (!value) throw new Error("Configuration readers must render inside a configuration provider");
@@ -77,11 +133,22 @@ export function StaticConfigurationProvider({
 export function LiveConfigurationProvider({ children }: { children: ReactNode }) {
   const result = useBoard();
   const [write, run] = useAtom(setContributionSettingAtom);
-  const picture = result._tag === "Success" ? configurationPicture(result.board) : emptyConfigurationPicture;
+  const submission = useRef<ContributionSettingSubmission | null>(null);
+  const board = result._tag === "Success" ? result.board : null;
+  const settingState = contributionSettingState(board?.controlStore ?? null, write, submission.current);
+  if (settingState.settled) submission.current = null;
+  const picture = board
+    ? configurationPicture({ ...board, controlStore: settingState.controlStore })
+    : emptyConfigurationPicture;
   const value = configurationContextValue(
     picture,
-    { setContributionSetting: (update) => run({ payload: { update } }) },
-    write.waiting,
+    {
+      setContributionSetting: (update) => {
+        submission.current = { baseline: board?.controlStore ?? null, update, previousResult: write };
+        run({ payload: { update } });
+      },
+    },
+    settingState.waiting,
   );
   return <ConfigurationContext value={value}>{children}</ConfigurationContext>;
 }
