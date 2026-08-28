@@ -1,15 +1,12 @@
-import {
-  type LifecycleStage,
-  OperationSettingRefused,
-  type OperationSettingUpdate,
-} from "@cogwork/contracts";
+import { LifecycleStage, OperationSettingRefused, type OperationSettingUpdate } from "@cogwork/contracts";
+import * as Schema from "effect/Schema";
 
 export type OperationPolicyProfile = "read-only" | "full";
 
 export const operationPolicyProfile = (stage: LifecycleStage): OperationPolicyProfile =>
   stage === "implement" || stage === "follow-up" ? "full" : "read-only";
 
-const codingOperations: readonly string[] = ["triage", "implement", "follow-up", "verify"];
+const isLifecycleStage = Schema.is(LifecycleStage);
 
 const cellOf = (update: OperationSettingUpdate) => (update._tag === "Set" ? update.row : update.cell);
 
@@ -23,7 +20,7 @@ export const operationSettingRefusal = (update: OperationSettingUpdate) => {
       reason: `Unknown Workflow ${cell.level.workflow}`,
     });
   if (cell.level._tag === "Workflow") return null;
-  if (!codingOperations.includes(cell.level.operation))
+  if (!isLifecycleStage(cell.level.operation))
     return OperationSettingRefused.make({
       setting: cell.setting,
       source: "coding Workflow Definition",
