@@ -37,20 +37,23 @@ const runLogin = Effect.fn("login.linear")(
     readonly credentials: string;
   }) =>
     Effect.gen(function* () {
-      const result = yield* loginLinear({ clientId: options.clientId, redirectPort: options.redirectPort });
       const client = yield* RpcClient.make(DaemonRpcs);
+      const connections = yield* client.GetConnections();
+      const existing = connections.connections.find((item) => item.system === "linear")?.connection;
+      const result = yield* loginLinear({
+        clientId: options.clientId,
+        redirectPort: options.redirectPort,
+        expectedOrganization: existing?.account,
+      });
       const establishment = {
         system: "linear",
         account: result.organization,
         source: { _tag: "Stored" },
       } satisfies ConnectionEstablishment;
-      const connections = yield* client.GetConnections();
-      const existing = connections.connections.find((item) => item.system === "linear")?.connection;
-      if (existing?.account === result.organization) {
-        yield* client.ReconnectConnection({ establishment });
-      } else {
-        yield* client.EstablishConnection({ establishment });
-      }
+      const mutation = existing
+        ? client.ReconnectConnection({ establishment })
+        : client.EstablishConnection({ establishment });
+      yield* mutation;
       yield* Console.log(
         `Logged in to Linear org "${result.organization}" as ${result.actorUserId}; Connection established.`,
       );
