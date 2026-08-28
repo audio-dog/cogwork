@@ -25,6 +25,7 @@ interface ConfigurationMeta {
   readonly places: CustomizePlaces;
   readonly plugins: PluginsView;
   readonly contributionById: (id?: string) => Contribution | undefined;
+  readonly contributionByFile: (path: string) => Contribution | undefined;
   readonly workspaceById: (id?: WorkspaceId) => Workspace | undefined;
   readonly contributionSettingWaiting: boolean;
 }
@@ -56,6 +57,7 @@ const configurationContextValue = (
     places: customizePlaces(picture),
     plugins: pluginsView(picture),
     contributionById: (id) => picture.contributions.find((contribution) => contribution.id === id),
+    contributionByFile: (path) => picture.contributions.find((contribution) => contribution.file === path),
     workspaceById: (id) => picture.workspaces.find((workspace) => workspace.id === id),
     contributionSettingWaiting,
   },

@@ -101,7 +101,7 @@ const surfaceBodyByKind: SurfaceComponents = {
   ),
   terminal: () => <TerminalSurfaceBody />,
   // Not gated: a file is not a Run, so it does not wait on the engine.
-  file: ({ surface }) => <FileSurfaceBody contributionId={surface.contributionId} path={surface.path} />,
+  file: ({ surface }) => <FileSurfaceBody path={surface.path} />,
   item: ({ surface }) => (
     <GatedBody>
       <ItemTab key={`${surface.id}:${surface.runId ?? ""}`} selection={surface} />

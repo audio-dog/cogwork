@@ -1,4 +1,8 @@
-import { type ContributionSettingUpdate, defaultContributionEnabled } from "@cogwork/contracts";
+import {
+  type ContributionSettingScope,
+  type ContributionSettingUpdate,
+  defaultContributionEnabled,
+} from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
@@ -59,9 +63,13 @@ export function useContribution() {
 }
 
 const contributionSettingScope = (target: ScopeRef | undefined) => {
-  if (target?.kind === "settings-profile") return { _tag: "SettingsProfile" as const };
+  if (target?.kind === "settings-profile")
+    return { _tag: "SettingsProfile" } satisfies ContributionSettingScope;
   if (target?.kind !== "private-overlay" || target.workspaceId === undefined) return null;
-  return { _tag: "PrivateWorkspaceOverlay" as const, workspace: target.workspaceId };
+  return {
+    _tag: "PrivateWorkspaceOverlay",
+    workspace: target.workspaceId,
+  } satisfies ContributionSettingScope;
 };
 
 const contributionSettingUpdate = (

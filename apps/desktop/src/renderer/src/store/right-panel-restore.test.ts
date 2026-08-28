@@ -26,9 +26,8 @@ describe("restoring persisted surfaces", () => {
       surfaces: [
         { id: "terminal", kind: "terminal" },
         {
-          id: "file:local/skill/commit-style",
+          id: "file:~/a/SKILL.md",
           kind: "file",
-          contributionId: "local/skill/commit-style",
           path: "~/a/SKILL.md",
           title: "SKILL.md",
         },

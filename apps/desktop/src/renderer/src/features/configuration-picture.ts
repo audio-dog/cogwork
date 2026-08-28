@@ -6,14 +6,15 @@ import type {
   LocalContributionAuthority,
   WorkspaceId,
 } from "@cogwork/contracts";
-import type {
-  AuthoringTree,
-  ConfigurationPicture,
-  Contribution,
-  Diagnostic,
-  EnablementRow,
-  ScopeRef,
-  Workspace,
+import {
+  type AuthoringTree,
+  type ConfigurationPicture,
+  type Contribution,
+  contributionInstanceKey,
+  type Diagnostic,
+  type EnablementRow,
+  type ScopeRef,
+  type Workspace,
 } from "./configuration-model";
 
 const treeByAuthority: Record<LocalContributionAuthority, AuthoringTree> = {
@@ -43,16 +44,17 @@ const diagnosticOf = (diagnostic: ContributionSettingDiagnostic) =>
 const settingApplies = (
   row: ContributionSettingRow,
   contribution: LocalContribution,
-  workspace: WorkspaceId,
+  workspace: WorkspaceId | undefined,
 ) => {
   if (row.contribution.id !== contribution.id) return false;
   if (row.scope._tag === "SettingsProfile") return true;
+  if (workspace === undefined) return true;
   return row.scope.workspace === workspace;
 };
 
 const enablementRows = (
   contribution: LocalContribution,
-  workspace: WorkspaceId,
+  workspace: WorkspaceId | undefined,
   rows: readonly ContributionSettingRow[],
 ) =>
   rows
@@ -80,9 +82,13 @@ const contributionOf = (
     summary: contribution.file,
     file: contribution.file,
     definedAt: definedAtByAuthority[contribution.authority],
-    definedIn: workspace,
+    ...(contribution.authority === "local:user" ? {} : { definedIn: workspace }),
     load: { _tag: "loaded" },
-    rows: enablementRows(contribution, workspace, settings),
+    rows: enablementRows(
+      contribution,
+      contribution.authority === "local:user" ? undefined : workspace,
+      settings,
+    ),
   }) satisfies Contribution;
 
 const registeredWorkspaces = (board: Board) =>
@@ -95,14 +101,24 @@ const workspaceOf = (state: ReturnType<typeof registeredWorkspaces>[number]) =>
     checkoutPath: state.checkoutPath,
   }) satisfies Workspace;
 
+const uniqueContributions = (contributions: readonly Contribution[]) =>
+  [
+    ...contributions.reduce(
+      (unique, contribution) => new Map(unique).set(contributionInstanceKey(contribution), contribution),
+      new Map<string, Contribution>(),
+    ),
+  ].map(([, contribution]) => contribution);
+
 export const configurationPicture = (board: Board) => {
   const registered = registeredWorkspaces(board);
   const settings = board.controlStore?.contributionSettings ?? [];
   return {
     workspaces: registered.map(workspaceOf),
     plugins: [],
-    contributions: registered.flatMap((state) =>
-      state.contributions.map((contribution) => contributionOf(contribution, state.name, settings)),
+    contributions: uniqueContributions(
+      registered.flatMap((state) =>
+        state.contributions.map((contribution) => contributionOf(contribution, state.name, settings)),
+      ),
     ),
   } satisfies ConfigurationPicture;
 };

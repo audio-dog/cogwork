@@ -18,7 +18,7 @@ function FileRowBody() {
     <ListRow>
       <ListRowOpen
         label={`Open ${contribution.localName}`}
-        onClick={() => openFile(contribution.id, contribution.file, fileName(contribution.file))}
+        onClick={() => openFile(contribution.file, fileName(contribution.file))}
       />
       <ListRowMedia status={status}>
         <Icon />

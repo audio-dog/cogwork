@@ -1,6 +1,6 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiServerLine } from "@remixicon/react";
-import type { Contribution } from "../features/configuration-model";
+import { type Contribution, contributionInstanceKey } from "../features/configuration-model";
 import { diagnosticsOf } from "../features/configuration-resolve";
 import { useConfiguration } from "./configuration-provider";
 import { FilteredEmpty } from "./customize-empty";
@@ -13,8 +13,6 @@ function troubled(contribution: Contribution) {
   if (contribution.readiness?._tag === "not-ready") return true;
   return diagnosticsOf(contribution).length > 0;
 }
-
-const contributionKey = (contribution: Contribution) => contribution.id;
 
 export function McpFacet() {
   const {
@@ -35,7 +33,7 @@ export function McpFacet() {
       {attention.length > 0 ? (
         <ListSection>
           <ListSectionHeader title="Needs Attention" count={attention.length} />
-          <ListSectionRows items={attention} keyOf={contributionKey}>
+          <ListSectionRows items={attention} keyOf={contributionInstanceKey}>
             {(contribution) => <McpServerRow contribution={contribution} />}
           </ListSectionRows>
         </ListSection>
@@ -56,7 +54,7 @@ export function McpFacet() {
             </Empty>
           </ListSectionBody>
         ) : (
-          <ListSectionRows items={ready} keyOf={contributionKey}>
+          <ListSectionRows items={ready} keyOf={contributionInstanceKey}>
             {(contribution) => <McpServerRow contribution={contribution} />}
           </ListSectionRows>
         )}

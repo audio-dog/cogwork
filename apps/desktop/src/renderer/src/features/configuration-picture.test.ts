@@ -1,4 +1,4 @@
-import { type Board, WorkspaceId, WorkspaceState } from "@cogwork/contracts";
+import { type Board, LocalContribution, WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { configurationPicture } from "./configuration-picture";
@@ -30,27 +30,29 @@ const registeredWorkspace = Schema.decodeSync(WorkspaceState)({
   ],
 });
 
+const controlStore = {
+  daemonLimits: {
+    globalConcurrency: 4,
+    perWorkspaceConcurrency: 4,
+    dailyBudget: 50,
+    revision: 0,
+  },
+  contributionSettings: [
+    {
+      contribution: { id: "local:repo/mcp/tools", kind: "mcp-server" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+      enabled: true,
+    },
+  ],
+  operationSettings: [],
+} satisfies NonNullable<Board["controlStore"]>;
+
 const board: Board = {
   items: new Map(),
   runs: new Map(),
   scheduler: null,
   workspaces: new Map([[workspace, registeredWorkspace]]),
-  controlStore: {
-    daemonLimits: {
-      globalConcurrency: 4,
-      perWorkspaceConcurrency: 4,
-      dailyBudget: 50,
-      revision: 0,
-    },
-    contributionSettings: [
-      {
-        contribution: { id: "local:repo/mcp/tools", kind: "mcp-server" },
-        scope: { _tag: "PrivateWorkspaceOverlay", workspace },
-        enabled: true,
-      },
-    ],
-    operationSettings: [],
-  },
+  controlStore,
 };
 
 describe("configurationPicture", () => {
@@ -91,5 +93,60 @@ describe("configurationPicture", () => {
         rows: [],
       },
     ]);
+  });
+
+  it("keeps workspace contribution instances distinct and deduplicates profile contributions", () => {
+    const other = Schema.decodeSync(WorkspaceId)("other");
+    const userServer = Schema.decodeSync(LocalContribution)({
+      id: "local:user/mcp/review",
+      authority: "local:user",
+      kind: "mcp-server",
+      localName: "review",
+      file: "/home/.agents/mcp/review.json",
+    });
+    const sharedRepoServer = {
+      id: "local:repo/mcp/tools",
+      authority: "local:repo",
+      kind: "mcp-server",
+      localName: "tools",
+    } satisfies Omit<LocalContribution, "file">;
+    const projectedWorkspace = (name: WorkspaceId, checkoutPath: string) =>
+      Schema.decodeSync(WorkspaceState)({
+        _tag: "Registered",
+        name,
+        displayName: name,
+        checkoutPath,
+        issueTracker: "github",
+        harness: "codex",
+        poll: { status: "ok" },
+        contributions: [userServer, { ...sharedRepoServer, file: `${checkoutPath}/tools.json` }],
+      });
+    const picture = configurationPicture({
+      ...board,
+      controlStore: {
+        ...controlStore,
+        contributionSettings: [workspace, other].map((workspaceId) => ({
+          contribution: { id: userServer.id, kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId },
+          enabled: true,
+        })),
+      },
+      workspaces: new Map([
+        [workspace, projectedWorkspace(workspace, "/repos/example")],
+        [other, projectedWorkspace(other, "/repos/other")],
+      ]),
+    });
+
+    const [projectedUserServer] = picture.contributions.filter(
+      (contribution) => contribution.id === userServer.id,
+    );
+    expect(projectedUserServer).toBeDefined();
+    expect(projectedUserServer).not.toHaveProperty("definedIn");
+    expect(projectedUserServer?.rows.map((row) => row.scope.workspaceId)).toEqual([workspace, other]);
+    expect(
+      picture.contributions
+        .filter((contribution) => contribution.id === sharedRepoServer.id)
+        .map((contribution) => contribution.definedIn),
+    ).toEqual([workspace, other]);
   });
 });

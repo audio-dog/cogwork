@@ -119,6 +119,9 @@ export interface Contribution {
   readonly readiness?: McpReadiness;
 }
 
+export const contributionInstanceKey = (contribution: Contribution) =>
+  contribution.definedIn ? `${contribution.id}:${contribution.definedIn}` : contribution.id;
+
 export type McpReadiness =
   | { readonly _tag: "ready" }
   | { readonly _tag: "not-ready"; readonly reason: string };
