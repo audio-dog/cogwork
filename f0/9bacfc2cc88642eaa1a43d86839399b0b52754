@@ -1,0 +1,53 @@
+apps/desktop/src/renderer/src/components/customize-facet-view.tsx
+  s_d6f8a470e8319b::t_8add4b59e412b2 11-15,154
+apps/desktop/src/renderer/src/store/right-panel.ts
+  s_d6f8a470e8319b::t_5536965d61db58 74-75,78,86-89,171
+  s_d6f8a470e8319b::t_02f237679d8da4 45,80,116,142
+  s_d6f8a470e8319b::t_8add4b59e412b2 46
+  s_d6f8a470e8319b::t_d7a8f012e15ede 90
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_d6f8a470e8319b::t_8add4b59e412b2 28,60
+apps/desktop/src/renderer/src/components/file-surface.tsx
+  s_d6f8a470e8319b::t_8add4b59e412b2 38,40
+  s_d6f8a470e8319b::t_02f237679d8da4 36
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_d6f8a470e8319b::t_02f237679d8da4 104
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_d6f8a470e8319b::t_758806705ecf30 1,102,106,109-110,112
+  s_d6f8a470e8319b::t_40199db19fcf52 33-49,55,100-101,103,105,122,126-133,141
+  s_d6f8a470e8319b::t_cedd93afa54252 97-99,104,107-108,111,124-125,134,137-139,146-151
+  s_d6f8a470e8319b::t_68c200a882621f 113-121,123,135-136
+  s_d6f8a470e8319b::t_cb37be9fe193ab 140,143-145
+  s_d6f8a470e8319b::t_66da0c9dd8f5d2 142
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_d6f8a470e8319b::t_8add4b59e412b2 122-124
+apps/desktop/src/renderer/src/components/contribution-file-row.tsx
+  s_d6f8a470e8319b::t_02f237679d8da4 21
+apps/desktop/src/renderer/src/store/right-panel-restore.test.ts
+  s_d6f8a470e8319b::t_02f237679d8da4 29
+apps/desktop/src/renderer/src/features/configuration-picture.ts
+  s_d6f8a470e8319b::t_a0a0a06d3c4ddb 9-17
+  s_d6f8a470e8319b::t_758806705ecf30 47,57,87-91
+  s_d6f8a470e8319b::t_a1e2aa0982ce0a 51,104-110
+  s_d6f8a470e8319b::t_8add4b59e412b2 85,111,118-121
+apps/desktop/src/renderer/src/components/contribution.tsx
+  s_d6f8a470e8319b::t_527dec73fb892d 1-5,66-67,69-72
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_d6f8a470e8319b::t_8add4b59e412b2 3,36,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f09bacfc2cc88642eaa1a43d86839399b0b52754",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
