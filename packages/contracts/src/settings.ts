@@ -176,12 +176,10 @@ const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSet
 export const operationSettingRowsForContext = (
   rows: readonly OperationSettingRow[],
   context: OperationSettingContext,
-) => rows.filter((row) => scopeApplies(row.scope, context));
+) => rows.filter((row) => scopeApplies(row.scope, context) && levelRank(row.level, context) >= 0);
 
 const selectedLevelRows = (rows: readonly OperationSettingRow[], context: OperationSettingContext) => {
-  const matching = operationSettingRowsForContext(rows, context).filter(
-    (row) => levelRank(row.level, context) >= 0,
-  );
+  const matching = operationSettingRowsForContext(rows, context);
   const selectedRank = Math.max(-1, ...matching.map((row) => levelRank(row.level, context)));
   return matching.filter((row) => levelRank(row.level, context) === selectedRank);
 };
