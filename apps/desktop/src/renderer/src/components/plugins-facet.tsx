@@ -15,10 +15,52 @@ const matches = (query: string, ...fields: readonly string[]) => {
 
 const pluginKey = (plugin: InstalledPlugin) => plugin.record.pluginId;
 
+function LoadingPlugins() {
+  return (
+    <Empty className="py-16">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <RiBox3Line />
+        </EmptyMedia>
+        <EmptyTitle>Loading Plugins</EmptyTitle>
+        <EmptyDescription>Waiting for the daemon.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function NoPluginsInstalled() {
+  return (
+    <Empty className="py-10">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <RiBox3Line />
+        </EmptyMedia>
+        <EmptyTitle>No Plugins installed</EmptyTitle>
+        <EmptyDescription>Install one from the Catalog below.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function AllInstalledPluginsNeedAttention() {
+  return (
+    <Empty className="py-10">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <RiBox3Line />
+        </EmptyMedia>
+        <EmptyTitle>All installed Plugins need attention</EmptyTitle>
+        <EmptyDescription>Resolve them in Needs Attention above.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
 export function PluginsFacet() {
   const {
     state: { picture },
-    meta: { plugins: pluginAxis, notices, pluginFailure },
+    meta: { plugins: pluginAxis, notices, pluginFailure, pluginLoadState },
   } = useConfiguration();
   const {
     state: { query },
@@ -28,8 +70,11 @@ export function PluginsFacet() {
   const attention = found.filter(pluginAxis.needsAttention);
   const settled = found.filter((plugin) => !pluginAxis.needsAttention(plugin));
   const catalog = picture.catalogPlugins.filter((plugin) => matches(query, plugin.name, plugin.summary));
+  const installedEmpty = attention.length > 0 ? <AllInstalledPluginsNeedAttention /> : <NoPluginsInstalled />;
 
-  if (found.length === 0 && catalog.length === 0) return <SearchEmpty icon={RiBox3Line} label="Plugins" />;
+  const empty = found.length === 0 && catalog.length === 0;
+  if (empty && pluginLoadState === "loading") return <LoadingPlugins />;
+  if (empty && !pluginFailure) return <SearchEmpty icon={RiBox3Line} label="Plugins" />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -66,17 +111,7 @@ export function PluginsFacet() {
       <ListSection>
         <ListSectionHeader title="Installed" count={settled.length} />
         {settled.length === 0 ? (
-          <ListSectionBody>
-            <Empty className="py-10">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <RiBox3Line />
-                </EmptyMedia>
-                <EmptyTitle>No Plugins installed</EmptyTitle>
-                <EmptyDescription>Install one from the Catalog below.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </ListSectionBody>
+          <ListSectionBody>{installedEmpty}</ListSectionBody>
         ) : (
           <ListSectionRows items={settled} keyOf={pluginKey}>
             {(plugin) => <PluginRow plugin={plugin} />}
