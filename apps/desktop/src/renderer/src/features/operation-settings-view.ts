@@ -57,7 +57,7 @@ export const operationSettingDisplaySections = (controlStore: ControlStore) => {
   return [
     { key: "global", label: "Coding · Implement", context: codingImplementContext(null) },
     ...workspaces.map((workspace) => ({
-      key: workspace,
+      key: `workspace:${workspace}`,
       label: `Coding · Implement · ${workspace}`,
       context: codingImplementContext(workspace),
     })),

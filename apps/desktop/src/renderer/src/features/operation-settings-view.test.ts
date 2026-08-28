@@ -5,6 +5,7 @@ import { operationSettingDisplayRows, operationSettingDisplaySections } from "./
 
 const workspace = Schema.decodeSync(WorkspaceId)("example");
 const unrelatedWorkspace = Schema.decodeSync(WorkspaceId)("unrelated");
+const globalWorkspace = Schema.decodeSync(WorkspaceId)("global");
 
 const controlStore: ControlStore = {
   daemonLimits: {
@@ -79,5 +80,26 @@ describe("Operation settings view", () => {
         (row) => row.setting === "model",
       )?.value,
     ).toBe("workspace-model");
+  });
+
+  it("gives machine and workspace ladders distinct keys", () => {
+    const sections = operationSettingDisplaySections({
+      ...controlStore,
+      operationSettings: [
+        ...controlStore.operationSettings,
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: globalWorkspace },
+          value: "global-workspace-model",
+        },
+      ],
+    });
+
+    expect(sections.map((section) => section.key)).toEqual([
+      "global",
+      "workspace:example",
+      "workspace:global",
+    ]);
   });
 });
