@@ -2,6 +2,8 @@ import {
   type ClassifiedItem,
   type DaemonLimitUpdate,
   type OperationSettingUpdate,
+  type PluginId,
+  Principal,
   RunAlreadyFinished,
   type RunId,
   RunNotFound,
@@ -20,6 +22,7 @@ import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import { operationSettingRefusal } from "./operation-policy";
+import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
@@ -184,4 +187,33 @@ export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function*
       : workspaceFailureState(change.failure);
   yield* publisher.publishWorkspaces();
   return state;
+});
+
+const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function* (
+  mutation: Effect.Effect<
+    import("@cogwork/contracts").PluginMutationResult,
+    import("@cogwork/contracts").PluginFailure
+  >,
+) {
+  const publisher = yield* DaemonEventPublisher;
+  const store = yield* ControlStore;
+  const result = yield* mutation;
+  yield* publisher.publishPlugins(result.overview);
+  yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+  return result;
+});
+
+export const installPlugin = Effect.fn("Daemon.InstallPlugin")(function* (payload: {
+  readonly pluginId: PluginId;
+}) {
+  const plugins = yield* PluginManager;
+  const principal = yield* Principal;
+  return yield* publishPluginMutation(plugins.install(payload.pluginId, principal.id));
+});
+
+export const uninstallPlugin = Effect.fn("Daemon.UninstallPlugin")(function* (payload: {
+  readonly pluginId: PluginId;
+}) {
+  const plugins = yield* PluginManager;
+  return yield* publishPluginMutation(plugins.uninstall(payload.pluginId));
 });

@@ -33,6 +33,7 @@ import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import type { HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
+import { PluginManager } from "./plugin";
 import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
@@ -165,6 +166,12 @@ const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<Trac
 
 const runLedgerLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
 const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedgerLayer));
+const pluginManagerLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
+});
 
 const picture: ControlStorePicture = {
   daemonLimits: {
@@ -174,6 +181,8 @@ const picture: ControlStorePicture = {
     revision: 0,
   },
   operationSettings: [],
+  pluginInstalls: [],
+  contributionSettings: [],
 };
 
 const controlStoreStub = (
@@ -190,6 +199,8 @@ const controlStoreStub = (
         revision: picture.daemonLimits.revision + 1,
       },
       operationSettings: picture.operationSettings,
+      pluginInstalls: picture.pluginInstalls,
+      contributionSettings: picture.contributionSettings,
     }),
   updateOperationSetting: ControlStoreService["updateOperationSetting"] = (update) =>
     Effect.succeed({
@@ -203,6 +214,9 @@ const controlStoreStub = (
     picture: Effect.succeed(picture),
     setDaemonLimit,
     updateOperationSetting,
+    installPlugin: () => Effect.succeed(picture),
+    uninstallPlugin: () => Effect.succeed(picture),
+    updateContributionSetting: () => Effect.succeed(picture),
     withWrite: (effect) => effect,
   });
 
@@ -223,6 +237,7 @@ const daemonLayer = (
     Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(RunControl.layer),
     Layer.provideMerge(controlStore),
+    Layer.provideMerge(pluginManagerLayer),
     Layer.provideMerge(source),
   );
 
