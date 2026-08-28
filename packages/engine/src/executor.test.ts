@@ -1,4 +1,6 @@
 import {
+  ControlStoreFailure,
+  defaultControlStore,
   HarnessName,
   LocalContribution,
   PluginFailure,
@@ -28,6 +30,7 @@ import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
+import { ControlStore, type ControlStoreService } from "./control-store";
 import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
@@ -62,6 +65,13 @@ const repoSkill = Schema.decodeSync(LocalContribution)({
   kind: "skill",
   localName: "release",
   file: "/repos/gh/.agents/skills/release/SKILL.md",
+});
+const repoMcp = Schema.decodeSync(LocalContribution)({
+  id: "local:repo/mcp/tools",
+  authority: "local:repo",
+  kind: "mcp-server",
+  localName: "tools",
+  file: "/repos/gh/.agents/mcp/tools.json",
 });
 
 const handleOf = (ledger: RunLedger.RunLedgerService, session: SessionId | null | undefined) =>
@@ -130,7 +140,7 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
-  contributions: [repoSkill],
+  contributions: [repoSkill, repoMcp],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -190,6 +200,22 @@ const assemblerStub = Layer.succeed(McpSkillAssembler, {
       })),
     ),
 });
+
+const controlStoreStub = (
+  picture = defaultControlStore,
+  read: ControlStoreService["picture"] = Effect.succeed(picture),
+) =>
+  Layer.succeed(ControlStore, {
+    health: "available",
+    seed: picture,
+    picture: read,
+    setDaemonLimit: () => Effect.succeed(picture),
+    updateOperationSetting: () => Effect.succeed(picture),
+    installPlugin: () => Effect.succeed(picture),
+    uninstallPlugin: () => Effect.succeed(picture),
+    updateContributionSetting: () => Effect.succeed(picture),
+    withWrite: (effect) => effect,
+  } satisfies ControlStoreService);
 
 const implementItem = {
   id: id("#15"),
@@ -764,6 +790,31 @@ const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
     ]),
 });
 
+const pluginMcpLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.succeed([
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server" as const,
+        localName: "linear",
+        summary: "Linear MCP server",
+        file: "/plugins/linear/mcp/linear.json",
+        load: {
+          _tag: "Loaded" as const,
+          mcpServer: {
+            endpoint: "https://mcp.linear.app/mcp",
+            secretEnv: null,
+            credentialAvailable: true,
+          },
+        },
+      },
+    ]),
+});
+
 const unavailablePluginLayer = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -797,6 +848,7 @@ function provide(
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
+  controlStore = controlStoreStub(),
   plugins: Layer.Layer<PluginManager> = pluginManagerStub,
 ) {
   const bus = DaemonEventBus.layer;
@@ -822,6 +874,7 @@ function provide(
         runControlStub,
         worktree,
         assemblerStub,
+        controlStore,
         plugins,
       ),
     ),
@@ -1144,6 +1197,67 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
   });
 
+  it.effect("includes a repository MCP offer after the principal enables it", () => {
+    const enabled = {
+      ...defaultControlStore,
+      contributionSettings: [
+        {
+          contribution: { id: repoMcp.id, kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: true,
+        },
+      ],
+    } satisfies ControlStoreService["seed"];
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.contributions, [repoSkill, repoMcp]);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(enabled),
+        ),
+      ),
+    );
+  });
+
+  it.effect("does not dispatch when contribution settings cannot be read", () =>
+    Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      assert.deepStrictEqual(yield* Ref.get(requests), []);
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(1);
+      assert.strictEqual(run?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(
+            defaultControlStore,
+            Effect.fail(
+              ControlStoreFailure.make({ operation: "read Control store", message: "database unavailable" }),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
   it.effect("correlates claimed-run library logs and spans", () => {
     return Effect.gen(function* () {
       const observation = yield* HarnessObservation;
@@ -1233,7 +1347,44 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
+          controlStoreStub(),
           missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("excludes a disabled Plugin MCP server from harness dispatch", () => {
+    const disabled = {
+      ...defaultControlStore,
+      contributionSettings: [
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: false,
+        },
+      ],
+    } satisfies ControlStoreService["seed"];
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.mcpSkills, []);
+      assert.isFalse(
+        request?.contributions.some((contribution) => contribution.id === "plugin:linear/mcp/linear"),
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(disabled),
+          pluginMcpLayer,
         ),
       ),
     );
@@ -1257,6 +1408,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
+          controlStoreStub(),
           unavailablePluginLayer,
         ),
       ),

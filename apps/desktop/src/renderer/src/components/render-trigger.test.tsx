@@ -15,11 +15,11 @@ import { McpServerRow } from "./mcp-server-row";
  */
 function render(node: ReactElement) {
   return renderToStaticMarkup(
-    <Configuration.Provider picture={placeholderConfiguration}>
+    <Configuration.StaticProvider picture={placeholderConfiguration}>
       <TooltipProvider>
         <CustomizeFilterProvider>{node}</CustomizeFilterProvider>
       </TooltipProvider>
-    </Configuration.Provider>,
+    </Configuration.StaticProvider>,
   );
 }
 

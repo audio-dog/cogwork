@@ -1,21 +1,22 @@
+import { defaultContributionEnabled } from "@cogwork/contracts";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiServerLine } from "@remixicon/react";
-import type { Contribution } from "../features/configuration-model";
-import { diagnosticsOf } from "../features/configuration-resolve";
+import { authorityLabel, type Contribution, contributionInstanceKey } from "../features/configuration-model";
+import { diagnosticsOf, resolveEnablement, viewOf } from "../features/configuration-resolve";
 import { useConfiguration } from "./configuration-provider";
 import { FilteredEmpty } from "./customize-empty";
 import { useCustomizeFilter } from "./customize-filter";
 import { ListSection, ListSectionBody, ListSectionHeader, ListSectionRows } from "./customize-list";
 import { McpServerRow } from "./mcp-server-row";
 
-/** Whether a server needs a look. Like a diagnostic, this is a fact about the server, not the view. */
 function troubled(contribution: Contribution) {
   if (contribution.load._tag === "failed") return true;
-  if (contribution.readiness?._tag === "not-ready") return true;
-  return diagnosticsOf(contribution).length > 0;
+  if (diagnosticsOf(contribution).length > 0) return true;
+  const on =
+    resolveEnablement(contribution, viewOf(contribution)).effective ??
+    defaultContributionEnabled(authorityLabel(contribution.authority));
+  return on && contribution.readiness?._tag === "not-ready";
 }
-
-const contributionKey = (contribution: Contribution) => contribution.id;
 
 export function McpFacet() {
   const {
@@ -27,10 +28,8 @@ export function McpFacet() {
 
   const servers = places.visibleContributions("mcp-server", selected, query);
   const attention = servers.filter(troubled);
-  const connected = servers.filter((contribution) => !troubled(contribution));
+  const ready = servers.filter((contribution) => !troubled(contribution));
 
-  // With nothing left after the filter there is no split to show, and "Nothing connected" would
-  // report a status the filter invented.
   if (servers.length === 0) return <FilteredEmpty icon={RiServerLine} label="MCP servers" />;
 
   return (
@@ -38,28 +37,28 @@ export function McpFacet() {
       {attention.length > 0 ? (
         <ListSection>
           <ListSectionHeader title="Needs Attention" count={attention.length} />
-          <ListSectionRows items={attention} keyOf={contributionKey}>
+          <ListSectionRows items={attention} keyOf={contributionInstanceKey}>
             {(contribution) => <McpServerRow contribution={contribution} />}
           </ListSectionRows>
         </ListSection>
       ) : null}
 
       <ListSection>
-        <ListSectionHeader title="Connected" count={connected.length} />
-        {connected.length === 0 ? (
+        <ListSectionHeader title="Ready" count={ready.length} />
+        {ready.length === 0 ? (
           <ListSectionBody>
             <Empty className="py-10">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <RiServerLine />
                 </EmptyMedia>
-                <EmptyTitle>Nothing connected</EmptyTitle>
+                <EmptyTitle>Nothing ready</EmptyTitle>
                 <EmptyDescription>Every server needs a look.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           </ListSectionBody>
         ) : (
-          <ListSectionRows items={connected} keyOf={contributionKey}>
+          <ListSectionRows items={ready} keyOf={contributionInstanceKey}>
             {(contribution) => <McpServerRow contribution={contribution} />}
           </ListSectionRows>
         )}

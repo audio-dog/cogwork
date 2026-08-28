@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
+import { TrimmedNonEmptyString } from "./base-schemas";
 import { FileContributionKind, PluginContributionAuthority } from "./contribution";
 import { PrincipalId } from "./principal";
 
@@ -64,21 +64,6 @@ export const PluginMutationResult = Schema.Struct({
   notices: Schema.Array(TrimmedNonEmptyString),
 });
 export type PluginMutationResult = typeof PluginMutationResult.Type;
-
-export const ContributionSettingScope = Schema.Union([
-  Schema.TaggedStruct("SettingsProfile", {}),
-  Schema.TaggedStruct("PrivateWorkspaceOverlay", {
-    workspace: WorkspaceId,
-  }),
-]);
-export type ContributionSettingScope = typeof ContributionSettingScope.Type;
-
-export const ContributionSetting = Schema.Struct({
-  contribution: TrimmedNonEmptyString,
-  scope: ContributionSettingScope,
-  enabled: Schema.Boolean,
-});
-export type ContributionSetting = typeof ContributionSetting.Type;
 
 export class PluginFailure extends Schema.TaggedError<PluginFailure>()("PluginFailure", {
   operation: TrimmedNonEmptyString,

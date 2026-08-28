@@ -26,23 +26,20 @@ export function useCustomizeFilter() {
   return value;
 }
 
-/**
- * Mounted on the Customize layout route, so the Place filter and the search text survive a drill-in
- * to a Plugin and back. Neither is in the URL: the Facet is the route, these two are not.
- */
 export function CustomizeFilterProvider({ children }: { children: ReactNode }) {
   const {
     meta: { places: placeAxis },
   } = useConfiguration();
   const [places, setPlaces] = useState<readonly string[]>(placeAxis.allPlaceKeys);
   const [query, setQuery] = useState("");
+  const togglePlace = (key: string) => setPlaces((current) => toggle(current, key));
 
   const value: CustomizeFilterContextValue = {
     state: { places, query },
     actions: {
       setQuery,
       setPlaces,
-      togglePlace: (key) => setPlaces((current) => toggle(current, key)),
+      togglePlace,
     },
   };
 

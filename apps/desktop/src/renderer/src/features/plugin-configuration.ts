@@ -1,7 +1,15 @@
 import type { Board, ControlStore, PluginItem, PluginOverview } from "@cogwork/contracts";
 import type * as Cause from "effect/Cause";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
-import type { ConfigurationPicture, Contribution, InstalledPlugin, ScopeRef } from "./configuration-model";
+import type {
+  ConfigurationPicture,
+  Contribution,
+  InstalledPlugin,
+  ScopeRef,
+  Workspace,
+  WorkspaceId,
+} from "./configuration-model";
+import { withDanglingSettings } from "./configuration-picture";
 
 export const pluginOverviewOf = <E>(
   board: PluginOverview | null,
@@ -59,10 +67,29 @@ const scopeOf = (setting: ControlStore["contributionSettings"][number]): ScopeRe
     ? { kind: "settings-profile" }
     : { kind: "private-overlay", workspaceId: setting.scope.workspace };
 
+const settingApplies = (
+  setting: ControlStore["contributionSettings"][number],
+  contributionId: string,
+  workspace: WorkspaceId | undefined,
+) => {
+  if (setting.contribution.id !== contributionId) return false;
+  if (setting.scope._tag === "SettingsProfile") return true;
+  return setting.scope.workspace === workspace;
+};
+
+const contributionWorkspaces = (
+  contribution: PluginItem["contributions"][number],
+  workspaces: readonly Workspace[],
+) => {
+  if (contribution.kind !== "mcp-server" || workspaces.length === 0) return [undefined];
+  return workspaces.map((workspace) => workspace.id);
+};
+
 const contributionOf = (
   plugin: PluginItem,
   contribution: PluginItem["contributions"][number],
   controlStore: ControlStore | null,
+  workspace: WorkspaceId | undefined,
 ): Contribution => ({
   id: contribution.id,
   kind: contribution.kind,
@@ -71,16 +98,26 @@ const contributionOf = (
   summary: contribution.summary,
   file: contribution.file,
   definedAt: "settings-profile",
+  ...(workspace === undefined ? {} : { definedIn: workspace }),
   load:
     contribution.load._tag === "Loaded"
       ? { _tag: "loaded" }
       : { _tag: "failed", reason: contribution.load.reason },
   rows: (controlStore?.contributionSettings ?? [])
-    .filter((setting) => setting.contribution === contribution.id)
+    .filter((setting) => settingApplies(setting, contribution.id, workspace))
     .map((setting) => ({
       scope: scopeOf(setting),
       value: setting.enabled,
       source: setting.scope._tag === "SettingsProfile" ? "Control store" : "Private overlay",
+      ...(setting.diagnostic
+        ? {
+            diagnostic: {
+              _tag: "dangling" as const,
+              source: setting.diagnostic.source,
+              detail: setting.diagnostic.detail,
+            },
+          }
+        : {}),
     })),
   ...(contribution.kind === "mcp-server" && contribution.load._tag === "Loaded"
     ? {
@@ -132,7 +169,11 @@ export const configurationWithPlugins = (
   });
   const contributions = overview.plugins.flatMap((plugin) =>
     plugin.record
-      ? plugin.contributions.map((contribution) => contributionOf(plugin, contribution, controlStore))
+      ? plugin.contributions.flatMap((contribution) =>
+          contributionWorkspaces(contribution, base.workspaces).map((workspace) =>
+            contributionOf(plugin, contribution, controlStore, workspace),
+          ),
+        )
       : [],
   );
   return {
@@ -149,7 +190,7 @@ export const configurationWithPlugins = (
       })),
     contributions: [
       ...base.contributions.filter((contribution) => contribution.authority._tag !== "plugin"),
-      ...contributions,
+      ...withDanglingSettings(contributions, controlStore?.contributionSettings ?? []),
     ],
   };
 };

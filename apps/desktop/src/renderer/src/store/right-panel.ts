@@ -18,7 +18,6 @@ type ItemSurface = {
 type FileSurface = {
   readonly id: `file:${string}`;
   readonly kind: "file";
-  readonly contributionId: string;
   readonly path: string;
   readonly title: string;
 };
@@ -43,10 +42,9 @@ const itemSurface = (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId):
   ...runFields(run),
 });
 
-const fileSurface = (contributionId: string, path: string, title: string): FileSurface => ({
-  id: `file:${contributionId}`,
+const fileSurface = (path: string, title: string): FileSurface => ({
+  id: `file:${path}`,
   kind: "file",
-  contributionId,
   path,
   title,
 });
@@ -73,17 +71,36 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isString = (value: unknown) => typeof value === "string" && value.length > 0;
 
+const isToolKind = (value: unknown): value is ToolKind => toolKinds.some((kind) => kind === value);
+
 const isRestorableSurface = (value: unknown): value is Surface => {
   if (!isRecord(value) || !isString(value.id)) return false;
-  if (toolKinds.includes(value.kind as ToolKind)) return value.kind === value.id;
+  if (isToolKind(value.kind)) return value.kind === value.id;
   if (value.kind === "item") return isString(value.workspace) && isString(value.workItem);
-  if (value.kind === "file") {
-    return isString(value.contributionId) && isString(value.path) && isString(value.title);
-  }
+  if (value.kind === "file") return isString(value.path) && isString(value.title);
   return false;
 };
 
-const restoreSurfaces = (value: unknown) => (Array.isArray(value) ? value.filter(isRestorableSurface) : []);
+const restoreSurface = (value: unknown) => {
+  if (!isRestorableSurface(value)) return null;
+  if (value.kind !== "file") return value;
+  return fileSurface(value.path, value.title);
+};
+
+const restoreSurfaces = (value: unknown) =>
+  Array.isArray(value) ? value.flatMap((surface) => restoreSurface(surface) ?? []) : [];
+
+const restoredActive = (surfaces: unknown, active: unknown) => {
+  if (!Array.isArray(surfaces) || !isString(active)) return active;
+  const surface = surfaces.find((candidate) => isRecord(candidate) && candidate.id === active);
+  if (!isRecord(surface) || surface.kind !== "file" || !isString(surface.path)) return active;
+  return `file:${surface.path}`;
+};
+
+const restoredActiveSurfaceId = (surfaces: readonly Surface[], active: unknown) =>
+  (isString(active) ? surfaces.find((surface) => surface.id === active)?.id : undefined) ??
+  surfaces.at(-1)?.id ??
+  null;
 
 const persistedSurface = (surface: Surface) => {
   if (surface.kind !== "item") return surface;
@@ -110,7 +127,7 @@ export interface RightPanelState {
   readonly togglePanel: () => void;
   readonly openItem: (workspace: WorkspaceId, workItem: WorkItemId, run?: RunId) => void;
   readonly openTool: (kind: ToolKind) => void;
-  readonly openFile: (contributionId: string, path: string, title: string) => void;
+  readonly openFile: (path: string, title: string) => void;
   readonly closeSurface: (id: SurfaceId) => void;
   readonly closeOtherSurfaces: (id: SurfaceId) => void;
   readonly closeAllSurfaces: () => void;
@@ -136,8 +153,7 @@ export const useRightPanelStore = create<RightPanelState>()(
       openItem: (workspace, workItem, run) =>
         set((state) => open(state.surfaces, itemSurface(workspace, workItem, run))),
       openTool: (kind) => set((state) => open(state.surfaces, { id: kind, kind })),
-      openFile: (contributionId, path, title) =>
-        set((state) => open(state.surfaces, fileSurface(contributionId, path, title))),
+      openFile: (path, title) => set((state) => open(state.surfaces, fileSurface(path, title))),
       closeSurface: (id) =>
         set((state) => {
           const surfaces = state.surfaces.filter((surface) => surface.id !== id);
@@ -166,10 +182,8 @@ export const useRightPanelStore = create<RightPanelState>()(
       merge: (persisted, current) => {
         const stored = isRecord(persisted) ? persisted : {};
         const surfaces = restoreSurfaces(stored.surfaces);
-        const active = surfaces.some((surface) => surface.id === stored.active)
-          ? (stored.active as SurfaceId)
-          : (surfaces.at(-1)?.id ?? null);
-        return { ...current, surfaces, active };
+        const active = restoredActive(stored.surfaces, stored.active);
+        return { ...current, surfaces, active: restoredActiveSurfaceId(surfaces, active) };
       },
     },
   ),

@@ -85,10 +85,12 @@ const engineSkillsDir = nodePath.resolve(
   "../skills",
 );
 
+const userAgentsDir = nodePath.join(os.homedir(), ".agents");
+
 const contextAssemblerLayer = (homeDir: string) =>
   ContextAssembler.layer({
     homeDir,
-    userAgentsDir: nodePath.join(os.homedir(), ".agents"),
+    userAgentsDir,
     skillsDir: engineSkillsDir,
   }).pipe(Layer.provide(contextFsLayer));
 
@@ -99,6 +101,7 @@ export const serverLayer = (options: DaemonOptions) =>
     contextAssembler: contextAssemblerLayer(nodePath.dirname(options.credentialsPath)),
     runLedger: ledgerLayer,
     controlStorePath: options.controlStorePath,
+    userAgentsDir,
     worktrees: worktreeManagerLayer,
     harnessRunners,
   });

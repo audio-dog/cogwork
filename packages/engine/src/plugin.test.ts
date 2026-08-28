@@ -102,13 +102,39 @@ layer(NodeServices.layer)((it) => {
         assert.strictEqual(picture.pluginInstalls.length, 1);
         assert.deepStrictEqual(picture.contributionSettings, [
           {
-            contribution: "plugin:linear/mcp/linear",
+            contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
             scope: { _tag: "SettingsProfile" },
             enabled: true,
           },
         ]);
         assert.isTrue(yield* fs.exists(path.join(test.provisionRoot, "linear@1.0.0")));
         assert.deepStrictEqual((yield* fs.readDirectory(test.provisionRoot)).sort(), ["linear@1.0.0"]);
+      }).pipe(Effect.provide(test.managerLayer));
+    }),
+  );
+
+  it.effect("keeps a Plugin MCP server active after its setting is cleared", () =>
+    Effect.gen(function* () {
+      const test = yield* fixture();
+      yield* Effect.gen(function* () {
+        const plugins = yield* PluginManager;
+        yield* plugins.install("linear", localOwnerId);
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return assert.fail(store.message);
+        yield* store.updateContributionSetting({
+          _tag: "Clear",
+          cell: {
+            contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+            scope: { _tag: "SettingsProfile" },
+          },
+        });
+
+        const contributions = yield* plugins.contributions(workspaceId);
+
+        assert.deepStrictEqual(
+          contributions.map((contribution) => contribution.kind),
+          ["mcp-server", "rules"],
+        );
       }).pipe(Effect.provide(test.managerLayer));
     }),
   );
@@ -160,7 +186,7 @@ layer(NodeServices.layer)((it) => {
 
         assert.strictEqual(item?.contributions.find((row) => row.kind === "rules")?.load._tag, "Loaded");
         assert.strictEqual(item?.contributions.find((row) => row.kind === "mcp-server")?.load._tag, "Failed");
-        assert.strictEqual(picture.contributionSettings[0]?.contribution, "plugin:linear/mcp/linear");
+        assert.strictEqual(picture.contributionSettings[0]?.contribution.id, "plugin:linear/mcp/linear");
       }).pipe(Effect.provide(test.managerLayer));
     }),
   );
@@ -237,12 +263,15 @@ layer(NodeServices.layer)((it) => {
         const store = yield* ControlStore;
         if (store.health === "unavailable") return assert.fail(store.message);
         yield* store.updateContributionSetting({
-          contribution: "plugin:linear/mcp/linear",
-          scope: {
-            _tag: "PrivateWorkspaceOverlay",
-            workspace: workspaceId,
+          _tag: "Set",
+          row: {
+            contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+            scope: {
+              _tag: "PrivateWorkspaceOverlay",
+              workspace: workspaceId,
+            },
+            enabled: false,
           },
-          enabled: false,
         });
         const contributions = yield* plugins.contributions(workspaceId);
 

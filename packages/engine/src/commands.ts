@@ -1,5 +1,7 @@
 import {
   type ClassifiedItem,
+  ContributionSettingRefused,
+  type ContributionSettingUpdate,
   type DaemonLimitUpdate,
   type OperationSettingUpdate,
   type PluginFailure,
@@ -43,6 +45,9 @@ import { Scheduler } from "./scheduler";
 
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
+
+const workspaceIsRegistered = (registry: RegistryState, name: WorkspaceId) =>
+  workspaceById(registry, name) !== null || registry.failures.some((failure) => failure.name === name);
 
 const pluginMembership = (overview: PluginOverview) =>
   overview.plugins.map((plugin) => `${plugin.pluginId}:${plugin.record?.resolvedIdentity ?? ""}`);
@@ -204,6 +209,34 @@ const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
   if (change._tag === "Failed") return workspaceFailureState(change.failure);
   return workspaceStateFromInfo(workspaceInfoOf(change.workspace, undefined));
 };
+
+const contributionSettingRefusal = (update: ContributionSettingUpdate, registry: RegistryState) => {
+  const cell = update._tag === "Set" ? update.row : update.cell;
+  const overlayWorkspace = cell.scope._tag === "PrivateWorkspaceOverlay" ? cell.scope.workspace : null;
+  if (overlayWorkspace && !workspaceIsRegistered(registry, overlayWorkspace)) {
+    return ContributionSettingRefused.make({
+      contribution: cell.contribution.id,
+      source: "Workspace registry",
+      reason: `Workspace ${overlayWorkspace} is not registered`,
+    });
+  }
+  return null;
+};
+
+export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")(function* (payload: {
+  readonly update: ContributionSettingUpdate;
+}) {
+  const registry = yield* WorkspaceRegistry;
+  const refusal = contributionSettingRefusal(payload.update, registry);
+  if (refusal) return yield* refusal;
+  const store = yield* ControlStore;
+  const publisher = yield* DaemonEventPublisher;
+  return yield* store.withWrite(
+    Effect.flatMap(store.updateContributionSetting(payload.update), (controlStore) =>
+      publisher.publishControlStore(controlStore),
+    ),
+  );
+});
 
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
   readonly registration: WorkspaceRegistration;

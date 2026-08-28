@@ -29,6 +29,23 @@ export const daemonLimits = sqliteTable(
   ],
 );
 
+export const contributionSettings = sqliteTable(
+  "contribution_settings",
+  {
+    contribution: text("contribution").notNull(),
+    scope: text("scope").notNull(),
+    workspace: text("workspace").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.contribution, table.scope, table.workspace] }),
+    check(
+      "contribution_settings_scope",
+      sql`(${table.scope} = 'settings-profile' AND ${table.workspace} = '') OR (${table.scope} = 'private-workspace-overlay' AND ${table.workspace} <> '')`,
+    ),
+  ],
+);
+
 export const operationSettings = sqliteTable(
   "operation_settings",
   {
@@ -65,23 +82,6 @@ export const pluginInstalls = sqliteTable("plugin_installs", {
   principal: text("principal").notNull(),
   installedAtMillis: integer("installed_at_millis").notNull(),
 });
-
-export const contributionSettings = sqliteTable(
-  "contribution_settings",
-  {
-    contribution: text("contribution").notNull(),
-    scope: text("scope").notNull(),
-    workspace: text("workspace").notNull(),
-    enabled: integer("enabled", { mode: "boolean" }).notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.contribution, table.scope, table.workspace] }),
-    check(
-      "contribution_settings_scope",
-      sql`(${table.scope} = 'settings-profile' AND ${table.workspace} = '') OR (${table.scope} = 'private-workspace-overlay' AND ${table.workspace} <> '')`,
-    ),
-  ],
-);
 
 // Effect's `Migrator` creates and owns its own bookkeeping table, so it is deliberately absent
 // here: including it would make drizzle-kit generate a rival definition of the same table.
