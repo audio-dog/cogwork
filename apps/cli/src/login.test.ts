@@ -99,6 +99,39 @@ describe("login linear", () => {
       assert.deepStrictEqual(stored[0]?.token.scopes, ["read", "write"]);
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
+
+  it.live("does not store a login for a different established organization", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-login-" });
+      const filePath = path.join(dir, "credentials.json");
+      const switchedConfig = { ...config, expectedOrganization: "other" };
+
+      const error = yield* Effect.flip(
+        loginLinear(switchedConfig).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              Layer.effect(
+                CredentialStore.CredentialStore,
+                Effect.gen(function* () {
+                  const stored = yield* makeFileStore(filePath);
+                  return CredentialStore.make({ stored });
+                }),
+              ),
+              fakeBrowser,
+              FetchHttpClient.layer,
+            ),
+          ),
+          Effect.provideService(FetchHttpClient.Fetch, routedFetch),
+        ),
+      );
+
+      assert.include(error.message, "other");
+      assert.deepStrictEqual(yield* (yield* makeFileStore(filePath)).load, []);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
 });
 
 const onDiskStore = <A, E>(
