@@ -14,11 +14,13 @@ import * as Schema from "effect/Schema";
 import { RpcClientDefect, RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { SocketOpenError } from "effect/unstable/socket/Socket";
 import {
+  contributionSettingsCommand,
   daemonOrStore,
   daemonStatusPicture,
   formatDaemonLimits,
   formatOperationSettings,
   limitsCommand,
+  makeContributionSettingUpdate,
   makeOperationSettingUpdate,
   operationSettingsCommand,
   resolveTarget,
@@ -101,6 +103,7 @@ describe("limits", () => {
           dailyBudget: 20,
           revision: 2,
         },
+        contributionSettings: [],
         operationSettings: [],
       }),
       "global-concurrency: 8\nper-workspace-concurrency: 3\ndaily-budget: 20",
@@ -120,6 +123,7 @@ describe("operation settings", () => {
             dailyBudget: 50,
             revision: 0,
           },
+          contributionSettings: [],
           operationSettings: [
             {
               setting: "model",
@@ -188,6 +192,52 @@ describe("operation settings", () => {
           setting: "harness",
           scope: { _tag: "RuntimeHost" },
           level: { _tag: "Default" },
+        },
+      });
+    }),
+  );
+});
+
+describe("contribution settings", () => {
+  it.effect("maps the set form to an MCP server row", () =>
+    Effect.gen(function* () {
+      const update = yield* makeContributionSettingUpdate(
+        {
+          contribution: "local:repo/mcp/tools",
+          scope: "overlay",
+          workspace: Option.some("example"),
+        },
+        Option.some("on"),
+      );
+
+      assert.deepStrictEqual(update, {
+        _tag: "Set",
+        row: {
+          contribution: { id: "local:repo/mcp/tools", kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId("example") },
+          enabled: true,
+        },
+      });
+      assert.isDefined(contributionSettingsCommand);
+    }),
+  );
+
+  it.effect("maps the clear form to a Settings profile cell", () =>
+    Effect.gen(function* () {
+      const update = yield* makeContributionSettingUpdate(
+        {
+          contribution: "plugin:linear/mcp/linear",
+          scope: "profile",
+          workspace: Option.none(),
+        },
+        Option.none(),
+      );
+
+      assert.deepStrictEqual(update, {
+        _tag: "Clear",
+        cell: {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
         },
       });
     }),

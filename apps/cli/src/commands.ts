@@ -1,6 +1,7 @@
 import {
   applyDaemonEvent,
   type Board,
+  ContributionSettingUpdate,
   type ControlStore,
   type DaemonEvent,
   DaemonRpcs,
@@ -88,6 +89,12 @@ const daemonLimitKeyArgument = Argument.choice("limit", [
 ]);
 
 const daemonLimitValueArgument = Argument.integer("value");
+const contributionSettingArgument = Argument.string("contribution");
+const contributionSettingValueArgument = Argument.choice("value", ["on", "off"]);
+const contributionSettingScopeFlag = Flag.choice("scope", ["profile", "overlay"]).pipe(
+  Flag.withDefault("profile"),
+);
+const contributionSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
 const operationSettingArgument = Argument.choice("setting", [
   "enabled",
   "harness",
@@ -140,6 +147,44 @@ export const formatOperationSettings = (controlStore: ControlStore, context: Ope
 class OperationSettingInputError extends Data.TaggedError("OperationSettingInputError")<{
   readonly message: string;
 }> {}
+
+class ContributionSettingInputError extends Data.TaggedError("ContributionSettingInputError")<{
+  readonly message: string;
+}> {}
+
+interface ContributionSettingOptions {
+  readonly contribution: string;
+  readonly scope: "profile" | "overlay";
+  readonly workspace: Option.Option<string>;
+}
+
+const contributionSettingScope = (options: ContributionSettingOptions) =>
+  options.scope === "profile"
+    ? { _tag: "SettingsProfile" }
+    : {
+        _tag: "PrivateWorkspaceOverlay",
+        workspace: Option.getOrElse(options.workspace, () => ""),
+      };
+
+const decodeContributionSettingUpdate = (input: unknown) =>
+  Schema.decodeUnknownEffect(ContributionSettingUpdate)(input).pipe(
+    Effect.mapError((error) => new ContributionSettingInputError({ message: error.message })),
+  );
+
+export const makeContributionSettingUpdate = (
+  options: ContributionSettingOptions,
+  value: Option.Option<"on" | "off">,
+) => {
+  const cell = {
+    contribution: { id: options.contribution, kind: "mcp-server" },
+    scope: contributionSettingScope(options),
+  };
+  if (Option.isNone(value)) return decodeContributionSettingUpdate({ _tag: "Clear", cell });
+  return decodeContributionSettingUpdate({
+    _tag: "Set",
+    row: { ...cell, enabled: value.value === "on" },
+  });
+};
 
 interface OperationSettingOptions {
   readonly setting: OperationSettingName;
@@ -389,17 +434,22 @@ const runStatus = Effect.fn("commands.runStatus")(function* (options: {
   ).pipe(Effect.flatMap(Console.log));
 });
 
-const showLimits = Effect.fn("commands.showLimits")(function* (options: {
+interface ControlStoreReadOptions {
   readonly socketPath: string;
   readonly controlStorePath: string;
-}) {
-  yield* daemonOrStore(
+}
+
+const currentControlStore = (options: ControlStoreReadOptions) =>
+  daemonOrStore(
     Effect.gen(function* () {
       const client = yield* RpcClient.make(DaemonRpcs);
       return yield* client.GetControlStore();
     }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
     readControlStore(options.controlStorePath),
-  ).pipe(Effect.map(formatDaemonLimits), Effect.flatMap(Console.log));
+  );
+
+const showLimits = Effect.fn("commands.showLimits")(function* (options: ControlStoreReadOptions) {
+  yield* currentControlStore(options).pipe(Effect.map(formatDaemonLimits), Effect.flatMap(Console.log));
 });
 
 const setLimit = Effect.fn("commands.setLimit")(
@@ -430,17 +480,46 @@ const showOperationSettings = Effect.fn("commands.showOperationSettings")(functi
   readonly workspace: Option.Option<string>;
 }) {
   const context = yield* operationSettingContext(options);
-  yield* daemonOrStore(
-    Effect.gen(function* () {
-      const client = yield* RpcClient.make(DaemonRpcs);
-      return yield* client.GetControlStore();
-    }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
-    readControlStore(options.controlStorePath),
-  ).pipe(
+  yield* currentControlStore(options).pipe(
     Effect.map((controlStore) => formatOperationSettings(controlStore, context)),
     Effect.flatMap(Console.log),
   );
 });
+
+export const formatContributionSettings = (controlStore: ControlStore) => {
+  if (controlStore.contributionSettings.length === 0) return "(no contribution settings)";
+  return controlStore.contributionSettings
+    .map((row) => {
+      const scope = row.scope._tag === "SettingsProfile" ? "profile" : `overlay:${row.scope.workspace}`;
+      const diagnostic = row.diagnostic ? ` (${row.diagnostic._tag.toLowerCase()})` : "";
+      return `${row.contribution.id} [${scope}]: ${row.enabled ? "on" : "off"}${diagnostic}`;
+    })
+    .join("\n");
+};
+
+const showContributionSettings = Effect.fn("commands.showContributionSettings")(function* (
+  options: ControlStoreReadOptions,
+) {
+  yield* currentControlStore(options).pipe(
+    Effect.map(formatContributionSettings),
+    Effect.flatMap(Console.log),
+  );
+});
+
+const changeContributionSetting = Effect.fn("commands.changeContributionSetting")(
+  function* (
+    options: ContributionSettingOptions & {
+      readonly socketPath: string;
+      readonly value: Option.Option<"on" | "off">;
+    },
+  ) {
+    const client = yield* RpcClient.make(DaemonRpcs);
+    const update = yield* makeContributionSettingUpdate(options, options.value);
+    const controlStore = yield* client.SetContributionSetting({ update });
+    yield* Console.log(formatContributionSettings(controlStore));
+  },
+  (effect, options) => overSocket(effect, options.socketPath),
+);
 
 const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
   function* (
@@ -575,6 +654,46 @@ export const operationSettingsCommand = Command.make("operation-settings").pipe(
     operationSettingsShowCommand,
     operationSettingsSetCommand,
     operationSettingsClearCommand,
+  ]),
+);
+
+const contributionSettingsShowCommand = Command.make("show", {
+  socket: socketFlag,
+  controlStore: controlStoreFlag,
+}).pipe(
+  Command.withHandler(({ socket, controlStore }) =>
+    showContributionSettings({ socketPath: socket, controlStorePath: controlStore }),
+  ),
+);
+
+const contributionSettingOptions = {
+  socket: socketFlag,
+  contribution: contributionSettingArgument,
+  scope: contributionSettingScopeFlag,
+  workspace: contributionSettingWorkspaceFlag,
+};
+
+const contributionSettingsSetCommand = Command.make("set", {
+  ...contributionSettingOptions,
+  value: contributionSettingValueArgument,
+}).pipe(
+  Command.withHandler(({ socket, value, ...options }) =>
+    changeContributionSetting({ socketPath: socket, ...options, value: Option.some(value) }),
+  ),
+);
+
+const contributionSettingsClearCommand = Command.make("clear", contributionSettingOptions).pipe(
+  Command.withHandler(({ socket, ...options }) =>
+    changeContributionSetting({ socketPath: socket, ...options, value: Option.none() }),
+  ),
+);
+
+export const contributionSettingsCommand = Command.make("contribution-settings").pipe(
+  Command.withDescription("Show, set, or clear contribution settings"),
+  Command.withSubcommands([
+    contributionSettingsShowCommand,
+    contributionSettingsSetCommand,
+    contributionSettingsClearCommand,
   ]),
 );
 

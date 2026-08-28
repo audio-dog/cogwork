@@ -20,6 +20,7 @@ const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   blocked: [],
   needsHuman: [],
   ...over,
+  contributions: over.contributions ?? [],
 });
 
 const status = (over: Partial<DaemonStatus> = {}): DaemonStatus => ({
@@ -47,6 +48,7 @@ const controlStore: ControlStore = {
     dailyBudget: 20,
     revision: 2,
   },
+  contributionSettings: [],
   operationSettings: [],
 };
 
