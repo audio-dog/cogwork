@@ -1,9 +1,14 @@
-import type { ContributionSettingCell, ContributionSettingUpdate, ControlStore } from "@cogwork/contracts";
+import type {
+  Board,
+  ContributionSettingCell,
+  ContributionSettingUpdate,
+  ControlStore,
+} from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import { setContributionSettingAtom } from "../daemon/atoms";
-import { useBoard } from "../features/activity-session";
+import { type BoardResult, useBoard } from "../features/activity-session";
 import type {
   ConfigurationPicture,
   Contribution,
@@ -96,6 +101,11 @@ export const contributionSettingState = (
   return { controlStore: result.value, waiting: true, settled: false };
 };
 
+export const retainConfigurationBoard = (board: Board | null, result: BoardResult) => {
+  if (result._tag !== "Success") return board;
+  return result.board;
+};
+
 export function useConfiguration() {
   const value = use(ConfigurationContext);
   if (!value) throw new Error("Configuration readers must render inside a configuration provider");
@@ -131,10 +141,14 @@ export function StaticConfigurationProvider({
 }
 
 export function LiveConfigurationProvider({ children }: { children: ReactNode }) {
-  const result = useBoard();
+  const boardResult = useBoard();
   const [write, run] = useAtom(setContributionSettingAtom);
   const [submission, setSubmission] = useState<ContributionSettingSubmission | null>(null);
-  const board = result._tag === "Success" ? result.board : null;
+  const [retainedBoard, setRetainedBoard] = useState<Board | null>(() =>
+    retainConfigurationBoard(null, boardResult),
+  );
+  const board = retainConfigurationBoard(retainedBoard, boardResult);
+  if (board !== retainedBoard) setRetainedBoard(board);
   const settingState = contributionSettingState(board?.controlStore ?? null, write, submission);
   if (settingState.settled) setSubmission(null);
   const picture = board
@@ -148,7 +162,7 @@ export function LiveConfigurationProvider({ children }: { children: ReactNode })
         run({ payload: { update } });
       },
     },
-    settingState.waiting,
+    settingState.waiting || boardResult._tag !== "Success",
   );
   return <ConfigurationContext value={value}>{children}</ConfigurationContext>;
 }

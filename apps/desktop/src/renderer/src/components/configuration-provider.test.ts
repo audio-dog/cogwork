@@ -1,7 +1,7 @@
-import type { ContributionSettingUpdate, ControlStore } from "@cogwork/contracts";
+import { type ContributionSettingUpdate, type ControlStore, initialBoard } from "@cogwork/contracts";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
-import { contributionSettingState } from "./configuration-provider";
+import { contributionSettingState, retainConfigurationBoard } from "./configuration-provider";
 
 const contribution = { id: "repo-tools", kind: "mcp-server" } as const;
 const update = {
@@ -95,5 +95,19 @@ describe("contributionSettingState", () => {
       waiting: false,
       settled: true,
     });
+  });
+});
+
+describe("retainConfigurationBoard", () => {
+  it("keeps the last live board through reconnecting and lost states", () => {
+    const live = { ...initialBoard, controlStore: picture(false) };
+    const replacement = { ...initialBoard, controlStore: picture(true) };
+
+    expect(retainConfigurationBoard(null, { _tag: "Initial" })).toBeNull();
+    expect(retainConfigurationBoard(live, { _tag: "Initial" })).toBe(live);
+    expect(retainConfigurationBoard(live, { _tag: "Failure" })).toBe(live);
+    expect(retainConfigurationBoard(live, { _tag: "Success", board: replacement, previews: new Map() })).toBe(
+      replacement,
+    );
   });
 });
