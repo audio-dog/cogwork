@@ -139,20 +139,25 @@ describe("configurationWithPlugins", () => {
       ],
     });
 
-    expect(
-      picture.contributions
-        .filter((contribution) => contribution.id === "plugin:linear/mcp/linear")
-        .flatMap((contribution) => contribution.rows),
-    ).toContainEqual({
-      scope: { kind: "private-overlay", workspaceId: removed },
-      value: false,
-      source: "Control store",
-      diagnostic: {
-        _tag: "dangling",
+    const instances = picture.contributions.filter(
+      (contribution) => contribution.id === "plugin:linear/mcp/linear",
+    );
+    const live = instances.filter((contribution) => contribution.definedIn !== removed);
+    const dangling = instances.find((contribution) => contribution.definedIn === removed);
+
+    expect(live.every((contribution) => contribution.rows.length === 0)).toBe(true);
+    expect(dangling?.rows).toEqual([
+      {
+        scope: { kind: "private-overlay", workspaceId: removed },
+        value: false,
         source: "Control store",
-        detail: "No loaded MCP server has this identity.",
+        diagnostic: {
+          _tag: "dangling",
+          source: "Control store",
+          detail: "No loaded MCP server has this identity.",
+        },
       },
-    });
+    ]);
   });
 
   it("keeps a catalog query failure visible", () => {
