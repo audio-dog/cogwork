@@ -5,7 +5,10 @@ import {
   DaemonRpcs,
   HarnessName,
   IssueTrackerError,
+  localOwnerId,
   type OperationSettingUpdate,
+  type PluginItem,
+  type PluginOverview,
   RunId,
   type RunRecord,
   type TriageRole,
@@ -17,6 +20,7 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -174,6 +178,55 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
   contributions: () => Effect.succeed([]),
 });
 
+const installedPlugin = (pluginId: string) =>
+  ({
+    pluginId,
+    name: pluginId,
+    summary: `${pluginId} tools`,
+    record: {
+      pluginId,
+      resolvedIdentity: `${pluginId}@1.0.0`,
+      principal: localOwnerId,
+      installedAtMillis: 1,
+    },
+    resolvedIdentity: `${pluginId}@1.0.0`,
+    requiredConnections: [],
+    contributions: [],
+    manifestFailure: null,
+  }) satisfies PluginItem;
+
+const concurrentPluginManagerLayer = (
+  firstReady: Deferred.Deferred<void>,
+  releaseFirst: Deferred.Deferred<void>,
+) =>
+  Layer.effect(
+    PluginManager,
+    Effect.gen(function* () {
+      const current = yield* Ref.make<PluginOverview>({ plugins: [] });
+      const calls = yield* Ref.make(0);
+      return {
+        overview: Ref.get(current),
+        install: (pluginId) =>
+          Effect.gen(function* () {
+            const call = yield* Ref.getAndUpdate(calls, (count) => count + 1);
+            const overview = {
+              plugins:
+                call === 0
+                  ? [installedPlugin(pluginId)]
+                  : [installedPlugin("github"), installedPlugin(pluginId)],
+            } satisfies PluginOverview;
+            yield* Ref.set(current, overview);
+            if (call > 0) return { overview, notices: [] };
+            yield* Deferred.succeed(firstReady, undefined);
+            yield* Deferred.await(releaseFirst);
+            return { overview, notices: [] };
+          }),
+        uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+        contributions: () => Effect.succeed([]),
+      };
+    }),
+  );
+
 const picture: ControlStorePicture = {
   daemonLimits: {
     globalConcurrency: 4,
@@ -235,6 +288,7 @@ const daemonLayer = (
   scheduler = schedulerStub(),
   controlStore = controlStoreStub(),
   registries = registryServices,
+  plugins: Layer.Layer<PluginManager> = pluginManagerLayer,
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -247,7 +301,7 @@ const daemonLayer = (
     Layer.provideMerge(runLedgerLayer),
     Layer.provideMerge(RunControl.layer),
     Layer.provideMerge(controlStore),
-    Layer.provideMerge(pluginManagerLayer),
+    Layer.provideMerge(plugins),
     Layer.provideMerge(source),
   );
 
@@ -937,4 +991,44 @@ describe("workspace lifecycle commands", () => {
       Effect.scoped,
     );
   });
+});
+
+describe("Plugin lifecycle commands", () => {
+  it.effect("never publishes an older Plugin snapshot after a newer mutation", () =>
+    Effect.gen(function* () {
+      const firstReady = yield* Deferred.make<void>();
+      const releaseFirst = yield* Deferred.make<void>();
+      const plugins = concurrentPluginManagerLayer(firstReady, releaseFirst);
+
+      return yield* Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const subscription = yield* bus.subscribe();
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const first = yield* Effect.forkChild(client.InstallPlugin({ pluginId: "github" }));
+
+        yield* Deferred.await(firstReady);
+        yield* client.InstallPlugin({ pluginId: "linear" });
+        yield* Deferred.succeed(releaseFirst, undefined);
+        yield* Fiber.join(first);
+        yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
+
+        const events = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+          Stream.runCollect,
+        );
+        const snapshots = [...events]
+          .filter((event) => event._tag === "PluginsChanged")
+          .map((event) => event.plugins.plugins.map((plugin) => plugin.pluginId));
+        assert.deepStrictEqual(snapshots, [
+          ["github", "linear"],
+          ["github", "linear"],
+        ]);
+      }).pipe(
+        Effect.provide(
+          daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registryServices, plugins),
+        ),
+        Effect.scoped,
+      );
+    }),
+  );
 });

@@ -237,11 +237,17 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
   >,
 ) {
   const publisher = yield* DaemonEventPublisher;
+  const plugins = yield* PluginManager;
   const store = yield* ControlStore;
-  const result = yield* mutation;
-  yield* publisher.publishPlugins(result.overview, result.notices);
-  yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
-  return result;
+  const completed = yield* mutation;
+  return yield* store.withWrite(
+    Effect.gen(function* () {
+      const overview = yield* plugins.overview;
+      yield* publisher.publishPlugins(overview, completed.notices);
+      yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+      return { overview, notices: completed.notices };
+    }),
+  );
 });
 
 export const installPlugin = Effect.fn("Daemon.InstallPlugin")(function* (payload: {
