@@ -102,6 +102,8 @@ describe("limits", () => {
           revision: 2,
         },
         operationSettings: [],
+        pluginInstalls: [],
+        contributionSettings: [],
       }),
       "global-concurrency: 8\nper-workspace-concurrency: 3\ndaily-budget: 20",
     );
@@ -134,6 +136,8 @@ describe("operation settings", () => {
               value: "operation-model",
             },
           ],
+          pluginInstalls: [],
+          contributionSettings: [],
         },
         { workflow: "coding", operation: "implement", workspace: null },
       ),

@@ -1,4 +1,4 @@
-import type { LocalContribution, LocalContributionAuthority } from "@cogwork/contracts";
+import type { FileContribution } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -22,7 +22,7 @@ export interface AssembleRequest {
   readonly cwd: string;
   readonly projectRoot: string;
   readonly skill: string;
-  readonly contributions: ReadonlyArray<LocalContribution>;
+  readonly contributions: ReadonlyArray<FileContribution>;
 }
 
 export interface ContextAssemblerConfig {
@@ -108,8 +108,8 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
   });
 
   const contributionRules = Effect.fn("ContextAssembler.contributionRules")(function* (
-    contributions: ReadonlyArray<LocalContribution>,
-    authority: LocalContributionAuthority,
+    contributions: ReadonlyArray<FileContribution>,
+    authority: FileContribution["authority"],
   ) {
     const rules = contributions
       .filter((contribution) => contribution.authority === authority && contribution.kind === "rules")
@@ -147,7 +147,17 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       const repo = yield* repoLayers(request);
       const repoRules = yield* contributionRules(request.contributions, "local:repo");
       const privateRules = yield* contributionRules(request.contributions, "local:private");
-      const layers = [...rules, ...repo, ...repoRules, ...privateRules, playbook];
+      const pluginAuthorities = [
+        ...new Set(
+          request.contributions.flatMap((contribution) =>
+            contribution.authority.startsWith("plugin:") ? [contribution.authority] : [],
+          ),
+        ),
+      ].sort();
+      const pluginRules = yield* Effect.forEach(pluginAuthorities, (authority) =>
+        contributionRules(request.contributions, authority),
+      ).pipe(Effect.map((groups) => groups.flat()));
+      const layers = [...rules, ...repo, ...repoRules, ...privateRules, ...pluginRules, playbook];
       return { layers, skillPath } satisfies AssembledContext;
     }),
   };

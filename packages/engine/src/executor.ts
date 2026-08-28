@@ -1,4 +1,13 @@
-import type { LifecycleStage, RunRecord, Session, SessionId, TokenUsage } from "@cogwork/contracts";
+import type {
+  FileContribution,
+  LifecycleStage,
+  PluginContribution,
+  PluginMcpServer,
+  RunRecord,
+  Session,
+  SessionId,
+  TokenUsage,
+} from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
@@ -10,6 +19,7 @@ import {
   type TriageStageResult,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -20,12 +30,12 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
-import type { CredentialError } from "./credential-store";
+import { CredentialError } from "./credential-store";
 import { type FollowUpContext, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
-import { McpSkillAssembler } from "./mcp-skill";
+import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
 import { operationPolicyProfile } from "./operation-policy";
 import {
   buildContinuationNudge,
@@ -35,6 +45,7 @@ import {
   type ResolvedStage,
   resolveStage,
 } from "./playbook";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { decideResume } from "./resume-policy";
@@ -155,6 +166,19 @@ const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
+const noPluginContributions: ReadonlyArray<PluginContribution> = [];
+
+interface PluginMcpContribution {
+  readonly id: string;
+  readonly server: PluginMcpServer;
+}
+
+const availablePluginMcp = (contribution: PluginContribution) => {
+  if (contribution.load._tag !== "Loaded") return [];
+  const server = contribution.load.mcpServer;
+  if (!server?.credentialAvailable) return [];
+  return [{ id: contribution.id, server }] satisfies ReadonlyArray<PluginMcpContribution>;
+};
 
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
@@ -163,6 +187,7 @@ export const make = Effect.gen(function* () {
   const recorder = yield* RunRecorder;
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
+  const plugins = yield* PluginManager;
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
@@ -177,6 +202,41 @@ export const make = Effect.gen(function* () {
     session: SessionId | null,
     stage: LifecycleStage,
   ) {
+    const pluginContributions = yield* plugins
+      .contributions(workspace.config.name)
+      .pipe(
+        Effect.catchTag("PluginFailure", (error) =>
+          Effect.logWarning("Plugin contributions unavailable", { message: error.message }).pipe(
+            Effect.map(() => noPluginContributions),
+          ),
+        ),
+      );
+    const loaded = pluginContributions.filter((contribution) => contribution.load._tag === "Loaded");
+    const fileContributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
+      id: contribution.id,
+      authority: contribution.authority,
+      kind: contribution.kind,
+      localName: contribution.localName,
+      file: contribution.file,
+    }));
+    const pluginMcpSkills: ReadonlyArray<ResolvedMcpSkill> = yield* Effect.forEach(
+      loaded.flatMap(availablePluginMcp),
+      ({ id, server }) =>
+        Effect.gen(function* () {
+          const { endpoint, secretEnv } = server;
+          if (!secretEnv) return { name: id, endpoint, bearer: null };
+          const bearer = yield* Config.redacted(secretEnv).pipe(
+            Effect.mapError(
+              (error) =>
+                new CredentialError({
+                  account: id,
+                  message: `MCP server needs environment key ${secretEnv}: ${error.message}`,
+                }),
+            ),
+          );
+          return { name: id, endpoint, bearer };
+        }),
+    );
     return {
       harness: resolved.harness,
       stage,
@@ -187,8 +247,8 @@ export const make = Effect.gen(function* () {
       prompt,
       model: resolved.model,
       effort: resolved.effort,
-      mcpSkills: yield* assembler.assemble(workspace.config),
-      contributions: workspace.contributions,
+      mcpSkills: [...(yield* assembler.assemble(workspace.config)), ...pluginMcpSkills],
+      contributions: [...workspace.contributions, ...fileContributions],
     } satisfies HarnessRequest;
   });
 

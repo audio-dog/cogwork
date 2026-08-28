@@ -10,6 +10,8 @@ const picture = (revision: number, globalConcurrency: number): ControlStore => (
     revision,
   },
   operationSettings: [],
+  pluginInstalls: [],
+  contributionSettings: [],
 });
 
 describe("currentControlStore", () => {

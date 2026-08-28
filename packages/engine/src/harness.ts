@@ -1,8 +1,8 @@
 import {
   type AgUiEvent,
+  type FileContribution,
   type HarnessName,
   type LifecycleStage,
-  type LocalContribution,
   type SessionId,
   type SessionKind,
   type StageResultJsonSchema,
@@ -38,7 +38,7 @@ export interface HarnessRequest {
   readonly model: string | null;
   readonly effort: string | null;
   readonly mcpSkills: ReadonlyArray<ResolvedMcpSkill>;
-  readonly contributions: ReadonlyArray<LocalContribution>;
+  readonly contributions: ReadonlyArray<FileContribution>;
 }
 
 export interface HarnessExecution {

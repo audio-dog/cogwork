@@ -1,0 +1,21 @@
+{
+  "pluginId": "linear",
+  "version": "1.0.0",
+  "provenance": "cogwork-0.0.1",
+  "authRecipe": null,
+  "requiredConnections": ["linear"],
+  "contributions": [
+    {
+      "kind": "mcp-server",
+      "localName": "linear",
+      "summary": "Linear's hosted MCP server.",
+      "file": "mcp/linear.json"
+    },
+    {
+      "kind": "rules",
+      "localName": "linear-issues",
+      "summary": "Plain-language issue-writing guidance.",
+      "file": "rules/linear-issues.md"
+    }
+  ]
+}

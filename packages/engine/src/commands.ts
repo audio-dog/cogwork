@@ -2,6 +2,11 @@ import {
   type ClassifiedItem,
   type DaemonLimitUpdate,
   type OperationSettingUpdate,
+  type PluginFailure,
+  type PluginId,
+  type PluginMutationResult,
+  type PluginOverview,
+  Principal,
   RunAlreadyFinished,
   type RunId,
   RunNotFound,
@@ -22,6 +27,7 @@ import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
 import { operationSettingRefusal } from "./operation-policy";
+import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
 import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
@@ -37,6 +43,18 @@ import { Scheduler } from "./scheduler";
 
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
+
+const pluginMembership = (overview: PluginOverview) =>
+  overview.plugins.map((plugin) => `${plugin.pluginId}:${plugin.record?.resolvedIdentity ?? ""}`);
+
+const samePluginMembership = (left: PluginOverview, right: PluginOverview) => {
+  const leftMembership = pluginMembership(left);
+  const rightMembership = pluginMembership(right);
+  return (
+    leftMembership.length === rightMembership.length &&
+    leftMembership.every((membership, index) => membership === rightMembership[index])
+  );
+};
 
 const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workItem: WorkItemId) =>
   snapshot.workspaces
@@ -225,4 +243,37 @@ export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (pa
   const state = workspaceStateFromChange(change);
   yield* publisher.publishWorkspaces();
   return state;
+});
+
+const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function* (
+  mutation: Effect.Effect<PluginMutationResult, PluginFailure>,
+) {
+  const publisher = yield* DaemonEventPublisher;
+  const plugins = yield* PluginManager;
+  const store = yield* ControlStore;
+  const completed = yield* mutation;
+  return yield* store.withWrite(
+    Effect.gen(function* () {
+      const overview = yield* plugins.overview;
+      const notices = samePluginMembership(completed.overview, overview) ? completed.notices : [];
+      yield* publisher.publishPlugins(overview, notices);
+      yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+      return { overview, notices };
+    }),
+  );
+});
+
+export const installPlugin = Effect.fn("Daemon.InstallPlugin")(function* (payload: {
+  readonly pluginId: PluginId;
+}) {
+  const plugins = yield* PluginManager;
+  const principal = yield* Principal;
+  return yield* publishPluginMutation(plugins.install(payload.pluginId, principal.id));
+});
+
+export const uninstallPlugin = Effect.fn("Daemon.UninstallPlugin")(function* (payload: {
+  readonly pluginId: PluginId;
+}) {
+  const plugins = yield* PluginManager;
+  return yield* publishPluginMutation(plugins.uninstall(payload.pluginId));
 });

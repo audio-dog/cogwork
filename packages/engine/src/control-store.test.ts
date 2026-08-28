@@ -68,8 +68,10 @@ layer(NodeServices.layer)((it) => {
           "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
         ),
         [
+          { name: "contribution_settings" },
           { name: "daemon_limits" },
           { name: "operation_settings" },
+          { name: "plugin_installs" },
           { name: "run_events" },
           { name: "runs" },
           { name: "sessions" },

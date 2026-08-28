@@ -5,7 +5,7 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { RiCollapseDiagonalLine, RiExpandDiagonalLine, RiLayoutRightLine } from "@remixicon/react";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { ActivityViewProvider } from "../../components/activity-view";
-import { PlaceholderConfigurationProvider } from "../../components/configuration-provider";
+import { DaemonConfigurationProvider } from "../../components/configuration-provider";
 import { AppSidebar } from "../../components/nav-sidebar";
 import { RightPanel } from "../../components/right-panel";
 import { RightPanelResizeHandle, useRightPanelWidthActions } from "../../components/right-panel-resize";
@@ -138,9 +138,7 @@ function AppShell() {
   const rightPanel = useRightPanelWidthActions();
 
   return (
-    // The right panel opens files too, so the configuration sits above the whole shell, not inside
-    // Customize.
-    <PlaceholderConfigurationProvider>
+    <DaemonConfigurationProvider>
       <AppSidebar />
       <SidebarInset className="h-svh overflow-hidden">
         <ActivityViewProvider>
@@ -149,7 +147,7 @@ function AppShell() {
       </SidebarInset>
       <SidebarControl />
       <SidebarResizeHandle onCommit={setWidth} onReset={reset} />
-    </PlaceholderConfigurationProvider>
+    </DaemonConfigurationProvider>
   );
 }
 
