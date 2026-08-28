@@ -1,4 +1,4 @@
-import type { ControlStore, PluginItem, PluginOverview } from "@cogwork/contracts";
+import type { Board, ControlStore, PluginItem, PluginOverview } from "@cogwork/contracts";
 import type * as Cause from "effect/Cause";
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import type { ConfigurationPicture, Contribution, InstalledPlugin, ScopeRef } from "./configuration-model";
@@ -15,6 +15,14 @@ export const pluginOverviewOf = <E>(
 export const pluginQueryFailure = <E>(
   queried: AsyncResult.AsyncResult<PluginOverview, E>,
 ): Cause.Cause<E> | null => (queried._tag === "Failure" ? queried.cause : null);
+
+export const pluginSurfaceOf = <E>(
+  board: Pick<Board, "plugins" | "pluginNotices"> | null,
+  queried: AsyncResult.AsyncResult<PluginOverview, E>,
+) => ({
+  overview: pluginOverviewOf(board?.plugins ?? null, queried),
+  notices: board?.pluginNotices ?? [],
+});
 
 const scopeOf = (setting: ControlStore["contributionSettings"][number]): ScopeRef =>
   setting.scope._tag === "SettingsProfile"

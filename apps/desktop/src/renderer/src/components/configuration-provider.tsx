@@ -13,8 +13,8 @@ import { placeholderConfiguration } from "../features/configuration-placeholder"
 import { type CustomizePlaces, customizePlaces } from "../features/customize-places";
 import {
   configurationWithPlugins,
-  pluginOverviewOf,
   pluginQueryFailure,
+  pluginSurfaceOf,
 } from "../features/plugin-configuration";
 import { type PluginsView, pluginsView } from "../features/plugins-view";
 
@@ -95,10 +95,7 @@ export function DaemonConfigurationProvider({ children }: { children: ReactNode 
   const [operation, setOperation] = useState<"install" | "uninstall" | null>(null);
   const board = boardResult._tag === "Success" ? boardResult.board : null;
   const activeResult = operation === "install" ? installResult : uninstallResult;
-  const mutationOverview = operation && activeResult._tag === "Success" ? activeResult.value.overview : null;
-  const overview = mutationOverview ?? pluginOverviewOf(board?.plugins ?? null, pluginQuery);
-  const notices =
-    operation === "uninstall" && activeResult._tag === "Success" ? activeResult.value.notices : [];
+  const { overview, notices } = pluginSurfaceOf(board, pluginQuery);
   const queryFailure = pluginQueryFailure(pluginQuery);
   const pluginFailureCause = activeResult._tag === "Failure" ? activeResult.cause : queryFailure;
   const pluginFailure = pluginFailureCause ? Cause.pretty(pluginFailureCause) : null;

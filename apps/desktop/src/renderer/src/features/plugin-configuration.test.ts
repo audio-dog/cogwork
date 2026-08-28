@@ -1,9 +1,14 @@
-import { defaultControlStore, localOwnerId, type PluginOverview } from "@cogwork/contracts";
+import { defaultControlStore, initialBoard, localOwnerId, type PluginOverview } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
 import { placeholderConfiguration } from "./configuration-placeholder";
-import { configurationWithPlugins, pluginOverviewOf, pluginQueryFailure } from "./plugin-configuration";
+import {
+  configurationWithPlugins,
+  pluginOverviewOf,
+  pluginQueryFailure,
+  pluginSurfaceOf,
+} from "./plugin-configuration";
 
 const overview: PluginOverview = {
   plugins: [
@@ -77,5 +82,19 @@ describe("configurationWithPlugins", () => {
 
     expect(pluginOverviewOf(null, failed)).toEqual({ plugins: [] });
     expect(pluginQueryFailure(failed)).toBe(cause);
+  });
+
+  it("uses the latest live Plugin event after a mutation", () => {
+    const queried = AsyncResult.success(overview);
+    const live = {
+      ...initialBoard,
+      plugins: { plugins: [] },
+      pluginNotices: ["GitHub remains connected."],
+    };
+
+    expect(pluginSurfaceOf(live, queried)).toEqual({
+      overview: { plugins: [] },
+      notices: ["GitHub remains connected."],
+    });
   });
 });
