@@ -1,0 +1,43 @@
+packages/engine/src/linear/account.ts
+  s_131eaddb8a39f4::t_4a3cc1be44235d 4-5,8,14
+packages/engine/src/commands.ts
+  s_131eaddb8a39f4::t_900c78d6eeb0d9 24,83-84
+packages/engine/src/registry.ts
+  s_131eaddb8a39f4::t_a518bf2013fdad 133,135
+  s_131eaddb8a39f4::t_900c78d6eeb0d9 32,36,129-132,136-137,139
+  s_131eaddb8a39f4::t_11abe351aaa0f9 128
+  s_131eaddb8a39f4::t_38b7338b00264b 134
+packages/engine/src/issue-tracker.ts
+  s_131eaddb8a39f4::t_900c78d6eeb0d9 15,92,98,103,110,118,120,122-123,125,127,129,131-136,138,140,153-156
+packages/engine/src/coordination-tracker.ts
+  s_131eaddb8a39f4::t_900c78d6eeb0d9 27,50,52,54-57
+  s_131eaddb8a39f4::t_4a3cc1be44235d 116,121,134,141,149,159,168,177,189,199,209
+packages/engine/src/linear/host.ts
+  s_131eaddb8a39f4::t_4a3cc1be44235d 9,55,77,125,130
+  s_131eaddb8a39f4::t_c6cce5755d805d 138
+packages/engine/src/github/host.ts
+  s_131eaddb8a39f4::t_4a3cc1be44235d 14,39,67,122
+  s_131eaddb8a39f4::t_99d19af59de545 134
+packages/engine/src/issue-tracker-router.ts
+  s_131eaddb8a39f4::t_900c78d6eeb0d9 8,11
+packages/engine/src/projector.ts
+  s_131eaddb8a39f4::t_900c78d6eeb0d9 3-7
+packages/engine/src/commands.test.ts
+  s_131eaddb8a39f4::t_1dff17286e2b08 356-358,365,369-372,375-380,383-384
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2e54c8701f874c0be45f594b21851a4db5ad12ce",
+  "prompts": {},
+  "sessions": {
+    "s_131eaddb8a39f4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a045d8-5cd6-78c0-a7a5-8d19080cbcbd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
