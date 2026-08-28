@@ -14,6 +14,7 @@ const controlStore: ControlStore = {
     dailyBudget: 50,
     revision: 0,
   },
+  contributionSettings: [],
   operationSettings: [
     {
       setting: "model",
