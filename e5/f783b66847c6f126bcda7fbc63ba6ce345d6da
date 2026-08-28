@@ -1,0 +1,45 @@
+packages/engine/src/linear/client.ts
+  s_9cd3b681ba111c::t_4c9e654654fe58 301,305
+  s_9cd3b681ba111c::t_a093b9e806b6da 115-119,121-122,124
+  s_9cd3b681ba111c::t_58e480aaccf4bd 457-458,462,464-466,470-472,474-476,478-479,481-482
+  s_9cd3b681ba111c::t_aefa3b2c645a2e 480
+  s_9cd3b681ba111c::t_3053e61098379c 227,230,233-240
+  s_9cd3b681ba111c::t_215d98c9f3d42e 123
+  s_9cd3b681ba111c::t_0a2077e7562f2d 477
+  s_9cd3b681ba111c::t_b57d227341fb3f 473
+  s_9cd3b681ba111c::t_026e7e0d2237bf 241
+packages/engine/src/linear/host.ts
+  s_9cd3b681ba111c::t_ba8f9b0eec4c90 64
+  s_9cd3b681ba111c::t_e01e2d357581bd 134-136
+  s_9cd3b681ba111c::t_61cee8814cbe39 32
+packages/engine/src/linear/linear.test.ts
+  s_9cd3b681ba111c::t_b2e43d24541e9f 148
+  s_9cd3b681ba111c::t_2371d465ef0e0b 405-418
+  s_9cd3b681ba111c::t_47e47aa042c9fe 419
+  s_9cd3b681ba111c::t_832a908d234983 152
+  s_9cd3b681ba111c::t_cf545364cbb7b9 61
+packages/engine/src/linear/client.test.ts
+  s_9cd3b681ba111c::t_70cd602f0f6f80 289-291
+  s_9cd3b681ba111c::t_f8bf69f36b6484 75,77-78
+  s_9cd3b681ba111c::t_908a4f1548d3b1 357-361,386-390
+  s_9cd3b681ba111c::t_706926ce3eb9cf 123-124,129
+  s_9cd3b681ba111c::t_c043ed66e829af 206
+  s_9cd3b681ba111c::t_af6744c533aaf1 188-205,207-243
+  s_9cd3b681ba111c::t_0dbc9726e4d9da 311-312
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e5f783b66847c6f126bcda7fbc63ba6ce345d6da",
+  "prompts": {},
+  "sessions": {
+    "s_9cd3b681ba111c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e782321b-796a-4c23-b1b2-8ec31ca1954f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
