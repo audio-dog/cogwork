@@ -228,7 +228,10 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
-  const registry = workspaceRegistryLayer.pipe(Layer.provideMerge(controlStore), Layer.provide(storeClient));
+  const registry = workspaceRegistryLayer(adapters.controlStorePath).pipe(
+    Layer.provideMerge(controlStore),
+    Layer.provide(storeClient),
+  );
   const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
     runLedgerPublishingLayer.pipe(
       Layer.provide(
