@@ -528,6 +528,9 @@ export const layer = (controlStorePath: string) =>
             if (!row) return yield* new WorkspaceNotFound({ workspace });
             yield* sql.withTransaction(
               Effect.gen(function* () {
+                yield* sql`DELETE FROM contribution_settings
+                  WHERE scope = 'private-workspace-overlay'
+                    AND workspace = ${workspace}`;
                 yield* sql`DELETE FROM operation_settings
                   WHERE scope = 'private-workspace-overlay'
                     AND workspace = ${workspace}`;

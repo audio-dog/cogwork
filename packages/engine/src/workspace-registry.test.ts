@@ -335,7 +335,7 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("re-binds identity and deregisters without deleting Run history", () =>
+  it.effect("re-binds identity and deregisters private overlays without deleting Run history", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -374,6 +374,11 @@ layer(NodeServices.layer)((it) => {
             ) VALUES
               ('model', 'default', '', '', 'private-workspace-overlay', ${workspace}, '"overlay-model"'),
               ('model', 'default', '', '', 'private-workspace-overlay', 'other-workspace', '"other-model"')`,
+          sql`INSERT INTO contribution_settings (
+              contribution, scope, workspace, enabled
+            ) VALUES
+              ('repo-tools', 'private-workspace-overlay', ${workspace}, 1),
+              ('other-tools', 'private-workspace-overlay', 'other-workspace', 1)`,
         ]),
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
 
@@ -408,6 +413,12 @@ layer(NodeServices.layer)((it) => {
           sql<{ readonly workspace: string }>`SELECT workspace FROM operation_settings ORDER BY workspace`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
       assert.deepStrictEqual(overlaysAfterDeregister, [{ workspace: "other-workspace" }]);
+      const contributionOverlaysAfterDeregister = yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) =>
+          sql<{ readonly workspace: string }>`SELECT workspace FROM contribution_settings ORDER BY workspace`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+      assert.deepStrictEqual(contributionOverlaysAfterDeregister, [{ workspace: "other-workspace" }]);
 
       const registeredAgain = yield* management.register(
         githubRegistration("moving workspace", secondCheckout),
