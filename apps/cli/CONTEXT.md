@@ -14,6 +14,9 @@ worktree upkeep.
 
 **Client**:
 Anything that talks to a running daemon over the RPC transport (a Unix socket): the CLI's `status` / `runs` / `watch` / `limits` / `scheduling` subcommands, and the desktop mission-control UI.
+When the daemon cannot be reached, read-only management commands open the Control store read-only.
+They show its durable rows and label every daemon-derived section *needs a daemon*. Live and write
+commands still require the daemon; the CLI never starts one for a client command.
 _Avoid_: Frontend. Note: the `worktree` subcommand embeds the engine directly rather than going through a daemon, so "clients never embed the engine" is not a rule here.
 
 **Daemon host**:
