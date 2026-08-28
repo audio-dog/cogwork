@@ -1,0 +1,20 @@
+packages/engine/src/scheduler.test.ts
+  s_c3d7df8e0cdfb9::t_1c28cdfecea79e 398-410,421
+  s_c3d7df8e0cdfb9::t_64fba006ed8274 17,571-633
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "363535cce83b62f7ed73553be857d5621a2369f7",
+  "prompts": {},
+  "sessions": {
+    "s_c3d7df8e0cdfb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a046a9-a397-73a0-9211-7a4be9957533",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
