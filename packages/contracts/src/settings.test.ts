@@ -1,6 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Schema from "effect/Schema";
 import {
   admissibleSettingScope,
+  ContributionSettingUpdate,
   defaultContributionEnabled,
   resolveContributionEnabled,
   resolveContributionUnion,
@@ -45,4 +47,34 @@ describe("shared setting resolution cases", () => {
       );
     });
   }
+});
+
+describe("ContributionSettingUpdate", () => {
+  const contribution = { id: "local:repo/mcp/tools", kind: "mcp-server" };
+
+  it("accepts an MCP server row at a Private workspace overlay", () => {
+    assert.isTrue(
+      Schema.is(ContributionSettingUpdate)({
+        _tag: "Set",
+        row: {
+          contribution,
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: "workspace" },
+          enabled: true,
+        },
+      }),
+    );
+  });
+
+  it("makes a Workspace input row unrepresentable", () => {
+    assert.isFalse(
+      Schema.is(ContributionSettingUpdate)({
+        _tag: "Set",
+        row: {
+          contribution,
+          scope: { _tag: "WorkspaceInput", workspace: "workspace" },
+          enabled: true,
+        },
+      }),
+    );
+  });
 });
