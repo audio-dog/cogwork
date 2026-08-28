@@ -53,6 +53,7 @@ const sampleRegistry: Registry.RegistryState = {
   failures: [
     {
       name: workspaceId("broken"),
+      displayName: "Broken workspace",
       source: "control-store:broken",
       message: "invalid Workspace input",
     },
@@ -737,6 +738,7 @@ describe("daemon status over rpc", () => {
       assert.deepStrictEqual(status.workspaces[0]?.eligible, []);
       assert.strictEqual(status.failures.length, 2);
       assert.strictEqual(status.failures[0]?.name, "broken");
+      assert.strictEqual(status.failures[0]?.displayName, "Broken workspace");
       assert.isAtLeast(status.uptimeMillis, 0);
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
