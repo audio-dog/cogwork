@@ -16,7 +16,12 @@ import { IssueTrackerError } from "./issue-tracker";
 import { PrincipalMiddleware } from "./principal";
 import { RunActivity, RunEvent, RunId, RunStatus, RunSummary } from "./run";
 import { TriageRole } from "./triage";
-import { WorkspaceRegistration, WorkspaceRegistrationError } from "./workspace";
+import {
+  WorkspaceManagementError,
+  WorkspaceNotFound,
+  WorkspaceRegistration,
+  WorkspaceRegistrationError,
+} from "./workspace";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
 
@@ -106,12 +111,26 @@ export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
   error: WorkspaceRegistrationError,
 });
 
+export const DeregisterWorkspace = Rpc.make("DeregisterWorkspace", {
+  payload: { workspace: WorkspaceId },
+  success: WorkspaceId,
+  error: Schema.Union([WorkspaceNotFound, WorkspaceManagementError]),
+});
+
+export const RebindWorkspace = Rpc.make("RebindWorkspace", {
+  payload: { workspace: WorkspaceId, checkoutPath: TrimmedNonEmptyString },
+  success: WorkspaceState,
+  error: Schema.Union([WorkspaceNotFound, WorkspaceManagementError]),
+});
+
 export const DaemonCommands = RpcGroup.make(
   CancelRun,
   Reclassify,
   SetScheduling,
   SetDaemonLimit,
   RegisterWorkspace,
+  DeregisterWorkspace,
+  RebindWorkspace,
 ).middleware(PrincipalMiddleware);
 
 export const DaemonRpcs = DaemonQueries.merge(DaemonCommands);

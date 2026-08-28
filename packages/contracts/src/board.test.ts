@@ -355,6 +355,22 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(recovered.workspaces.get("acme")?._tag, "Registered");
   });
 
+  it("removes a deregistered workspace and its items", () => {
+    const registeredBoard = fold([
+      event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
+      event({
+        _tag: "ItemChanged",
+        workspace: "acme",
+        item: eligible("#1", "implement"),
+      }),
+    ]);
+
+    const removed = applyDaemonEvent(registeredBoard, event({ _tag: "WorkspaceRemoved", workspace: "acme" }));
+
+    assert.strictEqual(removed.workspaces.size, 0);
+    assert.strictEqual(removed.items.size, 0);
+  });
+
   it("starts empty", () => {
     assert.strictEqual(initialBoard.items.size, 0);
     assert.strictEqual(initialBoard.runs.size, 0);
