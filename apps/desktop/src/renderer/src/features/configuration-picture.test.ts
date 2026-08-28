@@ -236,7 +236,7 @@ describe("configurationPicture", () => {
     ]);
   });
 
-  it("projects a dangling workspace overlay on the matching user contribution", () => {
+  it("keeps a dangling workspace overlay separate from the live user contribution", () => {
     const missing = Schema.decodeSync(WorkspaceId)("missing");
     const userServer = Schema.decodeSync(LocalContribution)({
       id: "local:user/mcp/review",
@@ -275,9 +275,17 @@ describe("configurationPicture", () => {
       workspaces: new Map([[workspace, state]]),
     });
 
-    expect(picture.contributions).toEqual([
-      expect.objectContaining({
+    expect(
+      picture.contributions.map((contribution) => ({
+        id: contribution.id,
+        definedIn: contribution.definedIn,
+        rows: contribution.rows,
+      })),
+    ).toEqual([
+      { id: userServer.id, definedIn: workspace, rows: [] },
+      {
         id: userServer.id,
+        definedIn: missing,
         rows: [
           {
             scope: { kind: "private-overlay", workspaceId: missing },
@@ -290,7 +298,7 @@ describe("configurationPicture", () => {
             },
           },
         ],
-      }),
+      },
     ]);
   });
 });

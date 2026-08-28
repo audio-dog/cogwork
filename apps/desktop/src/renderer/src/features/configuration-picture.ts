@@ -114,6 +114,18 @@ const sameSettingScope = (enablement: EnablementRow, setting: ContributionSettin
   return enablement.scope.kind === scope.kind && enablement.scope.workspaceId === scope.workspaceId;
 };
 
+const danglingContribution = (matches: readonly Contribution[], setting: ContributionSettingRow) => {
+  if (setting.scope._tag !== "PrivateWorkspaceOverlay") return undefined;
+  const prototype = matches.at(0);
+  if (prototype === undefined) return undefined;
+  const { definedIn: _definedIn, ...contribution } = prototype;
+  return {
+    ...contribution,
+    definedIn: setting.scope.workspace,
+    rows: [...prototype.rows.filter((row) => row.scope.workspaceId === undefined), enablementRowOf(setting)],
+  };
+};
+
 export const withDanglingSettings = (
   contributions: readonly Contribution[],
   settings: readonly ContributionSettingRow[],
@@ -125,13 +137,8 @@ export const withDanglingSettings = (
       if (matches.some((contribution) => contribution.rows.some((row) => sameSettingScope(row, setting)))) {
         return projected;
       }
-      const target = matches.find((contribution) => contribution.definedIn === undefined) ?? matches.at(0);
-      if (target === undefined) return projected;
-      return projected.map((contribution) =>
-        contribution === target
-          ? { ...contribution, rows: [...contribution.rows, enablementRowOf(setting)] }
-          : contribution,
-      );
+      const dangling = danglingContribution(matches, setting);
+      return dangling ? projected.concat(dangling) : projected;
     }, contributions);
 
 export const configurationPicture = (board: Board) => {
