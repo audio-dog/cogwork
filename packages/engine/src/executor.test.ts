@@ -372,7 +372,7 @@ class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<C
 const record = (calls: Ref.Ref<ReadonlyArray<Call>>, entry: Call) =>
   Ref.update(calls, (xs) => [...xs, entry]);
 
-function trackerRecorder() {
+function trackerRecorder(claimFailure?: IssueTrackerError) {
   return Layer.effect(
     IssueTracker,
     Effect.map(
@@ -380,7 +380,11 @@ function trackerRecorder() {
       (calls): IssueTrackerService => ({
         rateLimitScope: () => null,
         observe: () => Effect.succeed([]),
-        claim: (_workspace, itemId) => record(calls, { method: "claim", item: itemId }),
+        claim: (_workspace, itemId) => {
+          const recorded = record(calls, { method: "claim", item: itemId });
+          if (!claimFailure) return recorded;
+          return recorded.pipe(Effect.andThen(Effect.fail(claimFailure)));
+        },
         release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
         note: () => Effect.void,
         triaged: (_workspace, itemId, outcome) =>
@@ -717,6 +721,7 @@ function provide(
   runners: ReadonlyArray<TestRunner>,
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
+  issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -731,7 +736,7 @@ function provide(
   return Executor.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        trackerRecorder(),
+        issueTracker,
         sourceControl,
         sessionStore,
         testHarness(runners).pipe(Layer.provide(runnerServices)),
@@ -995,6 +1000,28 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);
     }).pipe(Effect.provide(provide([unsupported])));
+  });
+
+  it.effect("records no run when claiming fails before execution starts", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: "coordination marker write failed",
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const accepted = yield* executor.execute(workspace, triageItem);
+
+      assert.isFalse(accepted);
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "claim", item: triageItem.id }]);
+      const ledger = yield* RunLedger.RunLedger;
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
   });
 
   it.effect("does nothing when triage is disabled in the playbook", () => {
