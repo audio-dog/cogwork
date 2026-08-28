@@ -4,7 +4,10 @@ import {
   FollowUpStageResult,
   HarnessName,
   ImplementStageResult,
+  type LifecycleStage,
+  RunPlan,
   SessionId,
+  stageResultJsonSchema,
   TriageStageResult,
 } from "@cogwork/contracts";
 import { type ContextAssembler, type CredentialStore, Harness, type SessionStore } from "@cogwork/engine";
@@ -41,6 +44,7 @@ const assembled: ContextAssembler.AssembledContext = {
     { kind: "playbook", source: "/skills/implement/SKILL.md", content: "playbook rules" },
   ],
   skillPath: "/home/skills/implement",
+  sources: [],
 };
 
 const persistence = memoryPersistence();
@@ -67,20 +71,75 @@ const credentialStore: CredentialStore.CredentialStoreService = {
 
 const fileSystem = FileSystem.makeNoop({});
 
-const makeRequest = (overrides: Partial<Harness.HarnessRequest> = {}): Harness.HarnessRequest => ({
-  harness: name,
-  stage: "implement",
-  skill: "implement-agent",
-  checkoutPath: "/repo",
-  session,
-  prompt: "implement the issue",
-  model: "gpt-5.6-sol",
-  effort: "high",
-  mcpSkills: [],
-  contributions: [],
-  ...overrides,
-  profile: overrides.profile ?? "full",
-});
+interface RequestOverrides {
+  readonly checkoutPath?: string;
+  readonly session?: Harness.HarnessRequest["session"];
+  readonly stage?: LifecycleStage;
+  readonly skill?: string;
+  readonly prompt?: string;
+  readonly mcpSkills?: ReadonlyArray<Harness.ResolvedMcpSkill>;
+}
+
+const testMcpIdentity = (name: string, index: number) =>
+  `cogwork_mcp_${Array.from(name, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}_${index}`;
+
+const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest => {
+  const stage = overrides.stage ?? "implement";
+  const profile = stage === "triage" || stage === "verify" ? "read-only" : "full";
+  const skill = overrides.skill ?? "implement-agent";
+  const mcpSkills = overrides.mcpSkills ?? [];
+  const structuredOutput =
+    stageResultJsonSchema(stage)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
+  const mcp = mcpSkills.map((server, index) => ({
+    identity: `test/mcp/${index}`,
+    name: server.name,
+    projectedName: testMcpIdentity(server.name, index),
+    endpoint: server.endpoint,
+    authenticated: server.bearer !== null,
+  }));
+  return {
+    plan: Schema.decodeSync(RunPlan)({
+      id: "run-codex-test",
+      operation: stage,
+      harness: { name, model: "gpt-5.6-sol", effort: "high", profile },
+      instructions: assembled.layers.map((layer) => ({
+        ...layer,
+        kind: layer.kind === "playbook" ? "operating-instructions" : layer.kind,
+      })),
+      operatingInstructions: { name: skill, path: assembled.skillPath },
+      tools: [],
+      skills: [],
+      mcp,
+      subagents: [],
+      commands: [],
+      hooks: [],
+      middleware: ["sandbox"],
+      structuredOutput,
+      connections: [],
+      messages: [{ role: "user", content: overrides.prompt ?? "implement the issue" }],
+      workContext: {
+        reference: { workItem: "#1", url: null },
+        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+      sandbox: { workspace: overrides.checkoutPath ?? "/repo", policy: profile },
+      persistence: { sessionKind: "opaque-handle" },
+      provenance: {
+        resolution: [],
+        stamps: [],
+        projectedNames: mcp.map(({ identity, projectedName: name }) => ({ identity, name })),
+        projection: [],
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+    }),
+    session: overrides.session === undefined ? session : overrides.session,
+    mcpCredentials: new Map(
+      mcpSkills.flatMap((server, index) =>
+        server.bearer ? ([[`test/mcp/${index}`, server.bearer]] as const) : [],
+      ),
+    ),
+  };
+};
 
 const testRunner = (options: Omit<CodexRunnerOptions, "name">) =>
   codexRunner({
