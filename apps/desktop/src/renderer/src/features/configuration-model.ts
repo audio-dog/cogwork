@@ -13,8 +13,6 @@ export interface ScopeRef {
   readonly workspaceId?: WorkspaceId;
 }
 
-export type WorkspaceId = string & { readonly __brand: "WorkspaceId" };
-
 export function scopeKey(scope: ScopeRef): string {
   return scope.workspaceId ? `${scope.kind}:${scope.workspaceId}` : scope.kind;
 }
@@ -163,9 +161,11 @@ export interface Workspace {
 }
 
 export interface ConfigurationPicture {
-  readonly principal: string;
-  readonly hostId: string;
   readonly workspaces: readonly Workspace[];
   readonly plugins: readonly InstalledPlugin[];
   readonly contributions: readonly Contribution[];
 }
+
+import type { WorkspaceId } from "@cogwork/contracts";
+
+export type { WorkspaceId } from "@cogwork/contracts";
