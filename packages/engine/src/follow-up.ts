@@ -1,3 +1,4 @@
+import type { FollowUpResultOutcome } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { CheckState } from "./ci";
@@ -50,8 +51,9 @@ const botTriggerAt = (pr: ObservedPr) => pr.latestBotTriggerAtMillis ?? 0;
 
 const hasNewHumanComment = (pr: ObservedPr) => humanCommentAt(pr) > (pr.followUp?.humanCommentAtMillis ?? 0);
 
-// Kept out of `progressSince`: a bot round wakes a follow-up but is never progress, so pure bot
-// back-and-forth still reaches the no-progress limit and hands off to a human.
+// Kept out of `progressSince`: a bot comment wakes a follow-up but is never progress on its own.
+// What settles the count is what the round then does about it — see `noProgressAfterRound` — so a
+// bot exchange that keeps producing real fixes keeps going, and one that produces nothing hands off.
 const hasNewBotTrigger = (pr: ObservedPr) => botTriggerAt(pr) > (pr.followUp?.botTriggerAtMillis ?? 0);
 
 export const triggersFollowUp = (pr: ObservedPr) =>
@@ -72,6 +74,13 @@ const progressSince = (marker: FollowUpMarker, pr: ObservedPr) => {
 
 export const noProgressCount = (pr: ObservedPr) =>
   pr.followUp && !progressSince(pr.followUp, pr) ? pr.followUp.noProgress + 1 : 0;
+
+// The count measures consecutive rounds that changed nothing, so the round's own verdict settles it:
+// a round that pushed did work and starts the count over, whatever the world around the PR did. Only
+// a no-op carries the count forward for the next poll to increment. `stuck` never reaches here — it
+// is a failed attempt, and a failed attempt writes no follow-up marker.
+export const noProgressAfterRound = (context: FollowUpContext, outcome: FollowUpResultOutcome) =>
+  outcome === "pushed" ? 0 : context.noProgress;
 
 export const followUpContext = (pr: ObservedPr): FollowUpContext => {
   const noProgress = noProgressCount(pr);

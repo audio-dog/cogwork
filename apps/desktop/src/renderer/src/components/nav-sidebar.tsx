@@ -23,6 +23,7 @@ import {
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import {
   RiEqualizerLine,
+  RiFoldersLine,
   RiNodeTree,
   RiPlugLine,
   RiPulseLine,
@@ -44,6 +45,7 @@ interface View {
 
 const views: ReadonlyArray<View> = [
   { label: "Feed", icon: RiPulseLine, to: "/" },
+  { label: "Workspaces", icon: RiFoldersLine, to: "/workspaces" },
   { label: "Workflows", icon: RiNodeTree, to: "/workflows" },
   { label: "Connections", icon: RiPlugLine, to: "/connections" },
   { label: "Customize", icon: RiEqualizerLine, to: "/customize" },
