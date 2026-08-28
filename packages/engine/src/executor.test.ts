@@ -1922,7 +1922,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, carriedItem);
+      yield* execute(executor, followUpWorkspace, carriedItem);
 
       const log = yield* Ref.get(calls);
       const followedUp = log.find((c) => c.method === "followedUp");
@@ -1939,7 +1939,7 @@ describe("Executor.execute", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      yield* executor.execute(followUpWorkspace, carriedItem);
+      yield* execute(executor, followUpWorkspace, carriedItem);
 
       const log = yield* Ref.get(calls);
       const followedUp = log.find((c) => c.method === "followedUp");
