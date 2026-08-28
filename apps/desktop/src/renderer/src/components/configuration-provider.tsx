@@ -1,4 +1,8 @@
-import { createContext, type ReactNode, use } from "react";
+import { useAtom } from "@effect/atom-react";
+import * as Cause from "effect/Cause";
+import { createContext, type ReactNode, use, useState } from "react";
+import { installPluginAtom, uninstallPluginAtom } from "../daemon/atoms";
+import { useBoard } from "../features/activity-session";
 import type {
   ConfigurationPicture,
   Contribution,
@@ -7,6 +11,7 @@ import type {
 } from "../features/configuration-model";
 import { placeholderConfiguration } from "../features/configuration-placeholder";
 import { type CustomizePlaces, customizePlaces } from "../features/customize-places";
+import { configurationWithPlugins } from "../features/plugin-configuration";
 import { type PluginsView, pluginsView } from "../features/plugins-view";
 
 interface ConfigurationState {
@@ -18,10 +23,18 @@ interface ConfigurationMeta {
   readonly plugins: PluginsView;
   readonly contributionById: (id?: string) => Contribution | undefined;
   readonly workspaceById: (id?: WorkspaceId) => Workspace | undefined;
+  readonly notices: readonly string[];
+  readonly pluginFailure: string | null;
+}
+
+interface ConfigurationActions {
+  readonly installPlugin: (pluginId: string) => void;
+  readonly uninstallPlugin: (pluginId: string) => void;
 }
 
 interface ConfigurationContextValue {
   readonly state: ConfigurationState;
+  readonly actions: ConfigurationActions;
   readonly meta: ConfigurationMeta;
 }
 
@@ -33,33 +46,76 @@ export function useConfiguration() {
   return value;
 }
 
-/**
- * The one place that knows where the configuration comes from. Every reader below takes the picture
- * from here, so swapping the fixture for the daemon's answer is a change to this file alone.
- */
 function ConfigurationProvider({
   picture,
+  actions,
+  notices = [],
+  pluginFailure = null,
   children,
 }: {
   picture: ConfigurationPicture;
+  actions?: ConfigurationActions;
+  notices?: readonly string[];
+  pluginFailure?: string | null;
   children: ReactNode;
 }) {
+  const unavailableActions: ConfigurationActions = {
+    installPlugin: () => undefined,
+    uninstallPlugin: () => undefined,
+  };
   const value: ConfigurationContextValue = {
     state: { picture },
+    actions: actions ?? unavailableActions,
     meta: {
       places: customizePlaces(picture),
       plugins: pluginsView(picture),
       contributionById: (id) => picture.contributions.find((contribution) => contribution.id === id),
       workspaceById: (id) => picture.workspaces.find((workspace) => workspace.id === id),
+      notices,
+      pluginFailure,
     },
   };
 
   return <ConfigurationContext value={value}>{children}</ConfigurationContext>;
 }
 
-/** Nothing here talks to the Engine yet. The fixture is a provider, not an import in every leaf. */
 export function PlaceholderConfigurationProvider({ children }: { children: ReactNode }) {
   return <ConfigurationProvider picture={placeholderConfiguration}>{children}</ConfigurationProvider>;
+}
+
+export function DaemonConfigurationProvider({ children }: { children: ReactNode }) {
+  const boardResult = useBoard();
+  const [installResult, install] = useAtom(installPluginAtom);
+  const [uninstallResult, uninstall] = useAtom(uninstallPluginAtom);
+  const [operation, setOperation] = useState<"install" | "uninstall" | null>(null);
+  const board = boardResult._tag === "Success" ? boardResult.board : null;
+  const activeResult = operation === "install" ? installResult : uninstallResult;
+  const mutationOverview = operation && activeResult._tag === "Success" ? activeResult.value.overview : null;
+  const overview = mutationOverview ?? board?.plugins ?? { plugins: [] };
+  const notices =
+    operation === "uninstall" && activeResult._tag === "Success" ? activeResult.value.notices : [];
+  const pluginFailure = activeResult._tag === "Failure" ? Cause.pretty(activeResult.cause) : null;
+  const picture = configurationWithPlugins(placeholderConfiguration, overview, board?.controlStore ?? null);
+  const actions: ConfigurationActions = {
+    installPlugin: (pluginId) => {
+      setOperation("install");
+      install({ payload: { pluginId } });
+    },
+    uninstallPlugin: (pluginId) => {
+      setOperation("uninstall");
+      uninstall({ payload: { pluginId } });
+    },
+  };
+  return (
+    <ConfigurationProvider
+      picture={picture}
+      actions={actions}
+      notices={notices}
+      pluginFailure={pluginFailure}
+    >
+      {children}
+    </ConfigurationProvider>
+  );
 }
 
 export const Configuration = { Provider: ConfigurationProvider };
