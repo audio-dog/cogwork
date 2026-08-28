@@ -1,0 +1,25 @@
+packages/engine/src/workspace-registry.test.ts
+  s_d6f8a470e8319b::t_4c2767bf1d9bc4 72-74
+  s_d6f8a470e8319b::t_9146bf9e000e4f 527-547
+  s_d6f8a470e8319b::t_4244d19f76e331 548-550
+packages/engine/src/registry.ts
+  s_d6f8a470e8319b::t_e1227e82bc15f1 41-45,205,316,326-328,343
+  s_d6f8a470e8319b::t_fa14f1f197ad87 241,318,330,346,405,412,415,443,481-483,520,567,575
+  s_d6f8a470e8319b::t_7d571400f6cb65 564
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "76bf766db2b03db1efec591e6ab5991bd28249d5",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
