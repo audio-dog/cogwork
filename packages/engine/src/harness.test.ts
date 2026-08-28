@@ -17,6 +17,7 @@ const harnessServices = {
   },
   contextAssembler: {
     assemble: () => Effect.die("unexpected context assembly"),
+    cleanup: () => Effect.die("unexpected context cleanup"),
   },
   credentialStore: {
     bearerToken: () => Effect.die("unexpected bearer lookup"),

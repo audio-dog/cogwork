@@ -38,7 +38,7 @@ const unexpected = () => Effect.die(new Error("unexpected service access"));
 
 const harnessServices: Harness.HarnessRunnerServices = {
   sessionStore,
-  contextAssembler: { assemble: unexpected },
+  contextAssembler: { assemble: unexpected, cleanup: unexpected },
   credentialStore: {
     bearerToken: unexpected,
     persist: unexpected,

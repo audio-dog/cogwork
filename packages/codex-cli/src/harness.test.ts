@@ -57,6 +57,7 @@ const sessionStore: SessionStore.SessionStoreService = {
 
 const contextAssembler: ContextAssembler.ContextAssemblerService = {
   assemble: () => Effect.succeed(assembled),
+  cleanup: () => Effect.void,
 };
 
 const unexpected = () => Effect.die(new Error("unexpected credential-store access"));

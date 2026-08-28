@@ -193,6 +193,7 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
 
 const contextAssemblerStub = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () => Effect.succeed({ layers: [], skillPath: "/", sources: [] }),
+  cleanup: () => Effect.void,
 });
 
 const assemblerStub = Layer.succeed(McpSkillAssembler, {

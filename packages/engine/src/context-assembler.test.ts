@@ -260,6 +260,20 @@ describe("ContextAssembler.assemble", () => {
     }),
   );
 
+  it.effect("removes the isolated run directory during cleanup", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const removals = yield* Ref.make<ReadonlyArray<string>>([]);
+      const assembler = make(config, stubFs({}, copies, removals));
+
+      yield* assembler.cleanup(request.runId);
+
+      assert.deepStrictEqual(yield* Ref.get(removals), [
+        "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74",
+      ]);
+    }),
+  );
+
   it.effect("fails when the playbook skill has no readable SKILL.md", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);

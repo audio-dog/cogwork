@@ -43,6 +43,7 @@ const stubRunner: HarnessRunner = {
 
 const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () => Effect.succeed({ layers: [], skillPath: "/skills", sources: [] }),
+  cleanup: () => Effect.void,
 });
 
 const socketServerLayer = (socket: Socket.Socket) =>

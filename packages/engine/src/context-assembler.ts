@@ -80,6 +80,7 @@ export interface ContextAssemblerService {
   readonly assemble: (
     request: AssembleRequest,
   ) => Effect.Effect<AssembledContext, ContextFsError | ContextAssemblerError>;
+  readonly cleanup: (runId: RunId) => Effect.Effect<void, ContextFsError>;
 }
 
 export class ContextAssembler extends Context.Service<ContextAssembler, ContextAssemblerService>()(
@@ -87,6 +88,8 @@ export class ContextAssembler extends Context.Service<ContextAssembler, ContextA
 ) {}
 
 export const make = (config: ContextAssemblerConfig, fs: ContextFsService): ContextAssemblerService => {
+  const runPath = (runId: RunId) => joinPath(joinPath(config.homeDir, "run-plans"), runPathSegment(runId));
+
   const nonEmpty = (content: string | null) =>
     content !== null && content.trim().length > 0 ? content : null;
 
@@ -158,10 +161,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
         });
       }
       const skillDir = joinPath(config.skillsDir, request.skill);
-      const skillPath = joinPath(
-        joinPath(joinPath(config.homeDir, "run-plans"), runPathSegment(request.runId)),
-        `skills/${request.skill}`,
-      );
+      const skillPath = joinPath(runPath(request.runId), `skills/${request.skill}`);
       yield* fs.copyDirectory(skillDir, skillPath);
       const playbook = yield* playbookLayer(request.skill, skillPath);
       const rules = yield* userRules();
@@ -172,6 +172,7 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       const layers = [...rules, ...repo, ...repoRules, ...privateRules, playbook];
       return { layers, skillPath, sources } satisfies AssembledContext;
     }),
+    cleanup: (runId) => fs.removeDirectory(runPath(runId)),
   };
 };
 

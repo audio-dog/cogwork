@@ -114,6 +114,7 @@ const sessionLayer = (thread: ReadonlyArray<ModelMessage>) =>
 
 const contextService = (layers: ReadonlyArray<InstructionLayer>): ContextAssemblerService => ({
   assemble: () => Effect.succeed({ layers, skillPath: "/skills/implement-agent", sources: [] }),
+  cleanup: () => Effect.void,
 });
 
 const contextLayer = (layers: ReadonlyArray<InstructionLayer>) =>
