@@ -14,6 +14,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { DaemonEventBus } from "./daemon-event-bus";
+import type { RegistryState } from "./projector";
 import {
   classifiedItemsOf,
   currentReconcileStatesOf,
@@ -38,6 +39,46 @@ interface PublishedWorkspace {
   readonly signature: string;
   readonly state: WorkspaceState;
 }
+
+const withoutContributionDiagnostic = ({
+  diagnostic: _diagnostic,
+  ...row
+}: ControlStorePicture["contributionSettings"][number]) => row;
+
+const contributionSettingAppliesToWorkspace = (
+  scope: ControlStorePicture["contributionSettings"][number]["scope"],
+  workspace: RegistryState["workspaces"][number],
+) => scope._tag === "SettingsProfile" || workspace.config.name === scope.workspace;
+
+const contributionSettingExists = (
+  registry: RegistryState,
+  row: ControlStorePicture["contributionSettings"][number],
+) =>
+  registry.workspaces.some(
+    (workspace) =>
+      contributionSettingAppliesToWorkspace(row.scope, workspace) &&
+      workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
+  );
+
+export const controlStoreWithDiagnostics = (controlStore: ControlStorePicture, registry: RegistryState) => {
+  const contributionSettings: ControlStorePicture["contributionSettings"] =
+    controlStore.contributionSettings.map((stored) => {
+      const row = withoutContributionDiagnostic(stored);
+      if (contributionSettingExists(registry, row)) return row;
+      return {
+        ...row,
+        diagnostic: {
+          _tag: "Dangling",
+          source: "Control store",
+          detail: `No loaded MCP server has identity ${row.contribution.id}. The setting remains stored and will apply if the contribution returns.`,
+        },
+      };
+    });
+  return {
+    ...controlStore,
+    contributionSettings,
+  } satisfies ControlStorePicture;
+};
 
 export const make = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
@@ -137,8 +178,9 @@ export const make = Effect.gen(function* () {
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     controlStore: ControlStorePicture,
   ) {
-    yield* bus.publish({ _tag: "ControlStoreChanged", controlStore });
-    return controlStore;
+    const published = controlStoreWithDiagnostics(controlStore, registry);
+    yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: published });
+    return published;
   });
 
   return {

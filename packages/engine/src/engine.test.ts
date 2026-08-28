@@ -495,6 +495,7 @@ const availableControlStore = Layer.succeed(ControlStore, {
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
+  updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
 });
 

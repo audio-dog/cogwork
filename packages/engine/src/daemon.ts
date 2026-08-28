@@ -29,6 +29,7 @@ import {
   rebindWorkspace,
   reclassify,
   registerWorkspace,
+  setContributionSetting,
   setDaemonLimit,
   setOperationSetting,
   setScheduling,
@@ -42,14 +43,18 @@ import {
 } from "./control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
-import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
+import {
+  controlStoreWithDiagnostics,
+  DaemonEventPublisher,
+  layer as eventPublisherLayer,
+} from "./event-publisher";
 import * as Executor from "./executor";
 import * as GitHub from "./github";
 import * as Harness from "./harness";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
-import type { RegisteredWorkspace } from "./projector";
+import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
   classifiedItemsOf,
   currentReconcileStatesOf,
@@ -90,12 +95,18 @@ const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.ev
 
 const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(function* (
   store: ControlStoreService,
+  registry: RegistryState,
 ) {
   if (store.health === "unavailable") return [];
   return yield* store.picture.pipe(
     Effect.match({
       onFailure: () => [],
-      onSuccess: (controlStore) => [{ _tag: "ControlStoreChanged" as const, controlStore }],
+      onSuccess: (controlStore) => [
+        {
+          _tag: "ControlStoreChanged" as const,
+          controlStore: controlStoreWithDiagnostics(controlStore, registry),
+        },
+      ],
     }),
   );
 });
@@ -141,7 +152,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     _tag: "SchedulerChanged",
     scheduler: schedulerStatsOf(registry, config, stats),
   } as const;
-  const controlStoreEvents = yield* controlStoreSeedEvents(controlStore);
+  const controlStoreEvents = yield* controlStoreSeedEvents(controlStore, registry);
   return [...items, ...workspaces, ...runs, ...controlStoreEvents, scheduling].map((event) => ({
     ...event,
     emittedAtMillis,
@@ -191,7 +202,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetControlStore: Effect.fn("Daemon.GetControlStore")(function* () {
     const store = yield* ControlStore;
-    return yield* store.picture;
+    const registry = yield* WorkspaceRegistry;
+    return controlStoreWithDiagnostics(yield* store.picture, registry);
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
@@ -212,6 +224,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   Reclassify: reclassify,
   SetScheduling: setScheduling,
   SetDaemonLimit: setDaemonLimit,
+  SetContributionSetting: setContributionSetting,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
   DeregisterWorkspace: deregisterWorkspace,
