@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_d6f8a470e8319b::t_20656b8e712d6a 1,4-5,14-18
+apps/desktop/src/renderer/src/components/mcp-facet.test.tsx
+  s_d6f8a470e8319b::t_96e758b8c58ef5 1-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d0f0a16b78426fc73fa6ea415c2fa9ea0563271d",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
