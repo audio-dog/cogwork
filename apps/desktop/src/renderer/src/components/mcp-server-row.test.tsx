@@ -1,6 +1,7 @@
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { Contribution } from "../features/configuration-model";
 import { contributionById, placeholderConfiguration } from "../features/configuration-placeholder";
 import { Configuration } from "./configuration-provider";
 import { McpServerRow } from "./mcp-server-row";
@@ -11,14 +12,18 @@ function required(id: string) {
   return contribution;
 }
 
-function render(id: string) {
+function renderContribution(contribution: Contribution) {
   return renderToStaticMarkup(
     <Configuration.StaticProvider picture={placeholderConfiguration}>
       <TooltipProvider>
-        <McpServerRow contribution={required(id)} />
+        <McpServerRow contribution={contribution} />
       </TooltipProvider>
     </Configuration.StaticProvider>,
   );
+}
+
+function render(id: string) {
+  return renderContribution(required(id));
 }
 
 function buttonDepth(markup: string) {
@@ -49,5 +54,18 @@ describe("McpServerRow", () => {
     const markup = render("local:repo/mcp/repo-tools");
     expect(markup).toContain("Disabled");
     expect(markup).toContain("opacity-60");
+  });
+
+  it("renders a disabled disconnected server as off without error status", () => {
+    const contribution = {
+      ...required("plugin:linear/mcp/linear"),
+      readiness: { _tag: "not-ready", reason: "Connection needed" },
+      rows: [{ scope: { kind: "settings-profile" }, value: false, source: "Control store" }],
+    } satisfies Contribution;
+
+    const markup = renderContribution(contribution);
+
+    expect(markup).toContain("Disabled");
+    expect(markup).not.toContain("bg-destructive");
   });
 });

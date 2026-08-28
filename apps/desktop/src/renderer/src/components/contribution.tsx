@@ -112,7 +112,7 @@ function ContributionProvider({
       contribution,
       on,
       failed,
-      status: failed || notReady ? "error" : "ok",
+      status: failed || (on && notReady) ? "error" : "ok",
       diagnostics: diagnosticsOf(contribution),
       spread: settingsSpreadAcross(contribution).map((kind) => scopeCopy[kind].name),
       writing: contributionSettingWaiting,
