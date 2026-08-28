@@ -1,6 +1,7 @@
 import {
   applyDaemonEvent,
   ClassifiedItem,
+  type ControlStore as ControlStorePicture,
   DaemonRpcs,
   defaultControlStore,
   HarnessName,
@@ -17,6 +18,8 @@ import {
   workspaceStateFromInfo,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -24,9 +27,10 @@ import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
-import { ControlStore } from "./control-store";
+import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
@@ -51,6 +55,27 @@ const controlStoreLayer = Layer.succeed(ControlStore, {
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
 });
+
+interface ControlStoreProbeService {
+  readonly current: Ref.Ref<ControlStorePicture>;
+  readonly readStarted: Deferred.Deferred<void>;
+  readonly releaseRead: Deferred.Deferred<void>;
+}
+
+class ControlStoreProbe extends Context.Service<ControlStoreProbe, ControlStoreProbeService>()(
+  "@cogwork/engine/event-publisher.test/ControlStoreProbe",
+) {
+  static readonly layer = Layer.effect(
+    ControlStoreProbe,
+    Effect.gen(function* () {
+      return {
+        current: yield* Ref.make(defaultControlStore),
+        readStarted: yield* Deferred.make<void>(),
+        releaseRead: yield* Deferred.make<void>(),
+      };
+    }),
+  );
+}
 
 const id = Schema.decodeSync(WorkItemId);
 const stats = Schema.decodeSync(SchedulerStats);
@@ -192,6 +217,7 @@ const publisherLayer = (
   itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
   statsRef: Ref.Ref<Scheduler.SchedulerState>,
   workspaces = registryLayer,
+  store = controlStoreLayer,
 ) =>
   eventPublisherLayer.pipe(
     Layer.provideMerge(
@@ -199,13 +225,85 @@ const publisherLayer = (
         Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
         workspaces,
         schedulerStub(statsRef),
-        controlStoreLayer,
+        store,
         DaemonEventBus.layer,
       ),
     ),
   );
 
 describe("DaemonEventPublisher", () => {
+  it.layer(
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([]);
+        const statsRef = yield* Ref.make(schedulerState(0));
+        return publisherLayer(
+          itemsRef,
+          statsRef,
+          registryLayer,
+          Layer.effect(
+            ControlStore,
+            Effect.gen(function* () {
+              const probe = yield* ControlStoreProbe;
+              const gate = Semaphore.makeUnsafe(1);
+              return {
+                health: "available",
+                seed: defaultControlStore,
+                picture: Ref.get(probe.current).pipe(
+                  Effect.tap(() => Deferred.succeed(probe.readStarted, undefined)),
+                  Effect.tap(() => Deferred.await(probe.releaseRead)),
+                ),
+                setDaemonLimit: () => Ref.get(probe.current),
+                updateOperationSetting: () => Ref.get(probe.current),
+                updateContributionSetting: () => Ref.get(probe.current),
+                withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
+              } satisfies ControlStoreService;
+            }),
+          ).pipe(Layer.provideMerge(ControlStoreProbe.layer)),
+        ).pipe(Layer.provideMerge(ControlStoreProbe.layer));
+      }),
+    ),
+  )("Control store refresh", (it) => {
+    it.effect("keeps a concurrent write newer than a workspace refresh", () =>
+      Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const worker = yield* Reconcile.ReconcileWorker;
+        const publisher = yield* DaemonEventPublisher;
+        const store = yield* ControlStore;
+        const probe = yield* ControlStoreProbe;
+        const subscription = yield* bus.subscribe();
+        const updated: ControlStorePicture = {
+          ...defaultControlStore,
+          contributionSettings: [
+            {
+              contribution: { id: "github", kind: "mcp-server" },
+              scope: { _tag: "SettingsProfile" },
+              enabled: true,
+            },
+          ],
+        };
+
+        yield* worker.submit();
+        const refresh = yield* Effect.forkChild(publisher.publishWorkspaces());
+        yield* Deferred.await(probe.readStarted);
+        const write = yield* Effect.forkChild(
+          store.withWrite(
+            Ref.set(probe.current, updated).pipe(Effect.andThen(publisher.publishControlStore(updated))),
+          ),
+        );
+        yield* Effect.yieldNow;
+        yield* Deferred.succeed(probe.releaseRead, undefined);
+        yield* Fiber.join(refresh);
+        yield* Fiber.join(write);
+        yield* bus.publish(itemSentinelEvent);
+
+        const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(4), Stream.runCollect);
+        const board = [...events].reduce(applyDaemonEvent, initialBoard);
+        assert.strictEqual(board.controlStore?.contributionSettings[0]?.enabled, true);
+      }),
+    );
+  });
+
   it.effect("does not publish stale items after their workspace leaves the registry", () =>
     Effect.gen(function* () {
       const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("stale")]);

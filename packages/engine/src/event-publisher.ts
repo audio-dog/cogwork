@@ -101,10 +101,12 @@ export const make = Effect.gen(function* () {
 
   const refreshControlStore = Effect.fn("DaemonEventPublisher.refreshControlStore")(function* () {
     if (controlStore.health === "unavailable") return;
-    yield* controlStore.picture.pipe(
-      Effect.flatMap(publishControlStore),
-      Effect.catchTag("ControlStoreFailure", (error) =>
-        Effect.logWarning("Control store diagnostic refresh failed", { message: error.message }),
+    yield* controlStore.withWrite(
+      controlStore.picture.pipe(
+        Effect.flatMap(publishControlStore),
+        Effect.catchTag("ControlStoreFailure", (error) =>
+          Effect.logWarning("Control store diagnostic refresh failed", { message: error.message }),
+        ),
       ),
     );
   });
