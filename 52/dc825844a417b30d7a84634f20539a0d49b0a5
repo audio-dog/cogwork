@@ -1,0 +1,42 @@
+packages/engine/src/run-ledger.ts
+  s_3ad8c99e0b0d7f::t_e18a677e4597c2 4,21,30-34,169,174,179-180,182-183,185-187,312
+  s_3ad8c99e0b0d7f::t_827741f9ba24c9 45-48,50-51
+  s_3ad8c99e0b0d7f::t_2d8b5e54bbbb51 175,177
+  s_3ad8c99e0b0d7f::t_2be6f9a3c6d051 35-37,176,184
+  s_3ad8c99e0b0d7f::t_4fcf97b28050d1 11-16,38-44,49,178,181
+  s_3ad8c99e0b0d7f::t_f4c6572cf0ffdf 69-70,109-113,117-120
+  s_3ad8c99e0b0d7f::t_9e75fb86fb5102 190-191,313
+  s_3ad8c99e0b0d7f::t_9b970c7743ccd6 192-197
+  s_3ad8c99e0b0d7f::t_1bb925b3bf6f20 52
+  s_3ad8c99e0b0d7f::t_026296d8262317 188
+packages/engine/src/control-store-schema.ts
+  s_3ad8c99e0b0d7f::t_2c2cc2a1a1c3cd 84-87
+packages/engine/src/control-store-create.gen.ts
+  s_3ad8c99e0b0d7f::t_e8ee7d566b2c34 7
+packages/engine/src/control-store.test.ts
+  s_3ad8c99e0b0d7f::t_9c1c5f33f567b4 74
+packages/engine/src/run-ledger.test.ts
+  s_3ad8c99e0b0d7f::t_27828fa2225857 94,112
+  s_3ad8c99e0b0d7f::t_786f942a7137c8 35-37,39-44
+  s_3ad8c99e0b0d7f::t_313899267b7792 64
+  s_3ad8c99e0b0d7f::t_ca45a715f81197 102-107
+  s_3ad8c99e0b0d7f::t_ab93b5a4dbbd82 4,29-34,38,45-63,65-68,96-101,108-111
+  s_3ad8c99e0b0d7f::t_f38563a8fe546c 95
+  s_3ad8c99e0b0d7f::t_059aedc0dc1816 113-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "52dc825844a417b30d7a84634f20539a0d49b0a5",
+  "prompts": {},
+  "sessions": {
+    "s_3ad8c99e0b0d7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-4975-7cf3-8b18-af92906892ca",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
