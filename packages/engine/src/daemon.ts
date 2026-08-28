@@ -23,7 +23,14 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import { cancelRun, reclassify, registerWorkspace, setDaemonLimit, setScheduling } from "./commands";
+import {
+  cancelRun,
+  reclassify,
+  registerWorkspace,
+  setDaemonLimit,
+  setOperationSetting,
+  setScheduling,
+} from "./commands";
 import type { ContextAssembler } from "./context-assembler";
 import {
   bootControlStoreLayer,
@@ -197,6 +204,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   Reclassify: reclassify,
   SetScheduling: setScheduling,
   SetDaemonLimit: setDaemonLimit,
+  SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
 });
 

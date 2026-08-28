@@ -47,6 +47,7 @@ const controlStore: ControlStore = {
     dailyBudget: 20,
     revision: 2,
   },
+  operationSettings: [],
 };
 
 describe("formatStatus", () => {

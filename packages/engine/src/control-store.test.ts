@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { resolveOperationSetting, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -6,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import {
   bootControlStoreLayer,
@@ -52,6 +54,7 @@ const temporaryStore = Effect.fn("test.temporaryStore")(function* (name = "contr
 });
 
 const retentionWindowMillis = 1000 * 60 * 60 * 24 * 30;
+const workspace = Schema.decodeSync(WorkspaceId)("example");
 
 layer(NodeServices.layer)((it) => {
   it.effect("creates the schema once and boots again unchanged", () =>
@@ -66,6 +69,7 @@ layer(NodeServices.layer)((it) => {
         ),
         [
           { name: "daemon_limits" },
+          { name: "operation_settings" },
           { name: "run_events" },
           { name: "runs" },
           { name: "sessions" },
@@ -98,6 +102,71 @@ layer(NodeServices.layer)((it) => {
         dailyBudget: 20,
         revision: 3,
       });
+    }),
+  );
+
+  it.effect("sets, clears, and reloads raw Operation setting rows", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* Effect.gen(function* () {
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
+        yield* store.updateOperationSetting({
+          _tag: "Set",
+          row: {
+            setting: "model",
+            level: { _tag: "Default" },
+            scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+            value: "overlay-default",
+          },
+        });
+        yield* store.updateOperationSetting({
+          _tag: "Set",
+          row: {
+            setting: "model",
+            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+            scope: { _tag: "SettingsProfile" },
+            value: "profile-operation",
+          },
+        });
+      }).pipe(Effect.provide(storeLayerAt(storePath)));
+
+      const reloaded = yield* Effect.gen(function* () {
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
+        return store.seed;
+      }).pipe(Effect.provide(storeLayerAt(storePath)));
+
+      assert.strictEqual(
+        resolveOperationSetting(reloaded.operationSettings, "model", {
+          workflow: "coding",
+          operation: "implement",
+          workspace,
+        }),
+        "profile-operation",
+      );
+
+      const cleared = yield* Effect.gen(function* () {
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
+        return yield* store.updateOperationSetting({
+          _tag: "Clear",
+          cell: {
+            setting: "model",
+            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+            scope: { _tag: "SettingsProfile" },
+          },
+        });
+      }).pipe(Effect.provide(storeLayerAt(storePath)));
+
+      assert.strictEqual(
+        resolveOperationSetting(cleared.operationSettings, "model", {
+          workflow: "coding",
+          operation: "implement",
+          workspace,
+        }),
+        "overlay-default",
+      );
     }),
   );
 

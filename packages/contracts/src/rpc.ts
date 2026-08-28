@@ -15,6 +15,7 @@ import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { IssueTrackerError } from "./issue-tracker";
 import { PrincipalMiddleware } from "./principal";
 import { RunActivity, RunEvent, RunId, RunStatus, RunSummary } from "./run";
+import { OperationSettingRefused, OperationSettingUpdate } from "./settings";
 import { TriageRole } from "./triage";
 import { WorkspaceRegistration, WorkspaceRegistrationError } from "./workspace";
 
@@ -100,6 +101,12 @@ export const SetDaemonLimit = Rpc.make("SetDaemonLimit", {
   error: Schema.Union([ControlStoreFailure, StaleControlStoreWrite]),
 });
 
+export const SetOperationSetting = Rpc.make("SetOperationSetting", {
+  payload: { update: OperationSettingUpdate },
+  success: ControlStore,
+  error: Schema.Union([ControlStoreFailure, OperationSettingRefused]),
+});
+
 export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
   payload: { registration: WorkspaceRegistration },
   success: WorkspaceState,
@@ -111,6 +118,7 @@ export const DaemonCommands = RpcGroup.make(
   Reclassify,
   SetScheduling,
   SetDaemonLimit,
+  SetOperationSetting,
   RegisterWorkspace,
 ).middleware(PrincipalMiddleware);
 

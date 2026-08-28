@@ -29,6 +29,36 @@ export const daemonLimits = sqliteTable(
   ],
 );
 
+export const operationSettings = sqliteTable(
+  "operation_settings",
+  {
+    setting: text("setting").notNull(),
+    level: text("level").notNull(),
+    workflow: text("workflow").notNull(),
+    operation: text("operation").notNull(),
+    scope: text("scope").notNull(),
+    workspace: text("workspace").notNull(),
+    value: text("value").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.setting, table.level, table.workflow, table.operation, table.scope, table.workspace],
+    }),
+    check(
+      "operation_settings_level",
+      sql`(${table.level} = 'default' AND ${table.workflow} = '' AND ${table.operation} = '') OR (${table.level} = 'workflow' AND ${table.workflow} <> '' AND ${table.operation} = '') OR (${table.level} = 'operation' AND ${table.workflow} <> '' AND ${table.operation} <> '')`,
+    ),
+    check(
+      "operation_settings_scope",
+      sql`(${table.scope} IN ('settings-profile', 'runtime-host') AND ${table.workspace} = '') OR (${table.scope} = 'private-workspace-overlay' AND ${table.workspace} <> '')`,
+    ),
+    check(
+      "operation_settings_runtime_host",
+      sql`${table.scope} <> 'runtime-host' OR ${table.setting} = 'harness'`,
+    ),
+  ],
+);
+
 // Effect's `Migrator` creates and owns its own bookkeeping table, so it is deliberately absent
 // here: including it would make drizzle-kit generate a rival definition of the same table.
 export const runs = sqliteTable(

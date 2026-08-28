@@ -10,6 +10,7 @@ export * from "./principal";
 export * from "./rpc";
 export * from "./run";
 export * from "./scheduler-defaults";
+export * from "./settings";
 export * from "./triage";
 export * from "./work-item";
 export * from "./workspace";

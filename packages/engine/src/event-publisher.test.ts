@@ -46,6 +46,7 @@ const controlStoreLayer = Layer.succeed(ControlStore, {
   seed: defaultControlStore,
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
+  updateOperationSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
 });
 
