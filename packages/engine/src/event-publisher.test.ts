@@ -139,6 +139,31 @@ describe("controlStoreWithDiagnostics", () => {
 
     assert.isUndefined(picture.contributionSettings[0]?.diagnostic);
   });
+
+  it("marks an installed Plugin overlay for a removed workspace dangling", () => {
+    const controlStore: ControlStorePicture = {
+      ...defaultControlStore,
+      pluginInstalls: [
+        {
+          pluginId: "linear",
+          resolvedIdentity: "linear@1.0.0",
+          principal: localOwnerId,
+          installedAtMillis: 1,
+        },
+      ],
+      contributionSettings: [
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId("removed") },
+          enabled: false,
+        },
+      ],
+    };
+
+    const picture = controlStoreWithDiagnostics(controlStore, { workspaces: [], failures: [] });
+
+    assert.strictEqual(picture.contributionSettings[0]?.diagnostic?._tag, "Dangling");
+  });
 });
 
 const mutableRegistryLayer = (state: MutableRef.MutableRef<Registry.RegistryState>) =>

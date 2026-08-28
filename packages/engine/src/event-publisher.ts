@@ -52,17 +52,28 @@ const contributionSettingAppliesToWorkspace = (
   workspace: RegistryState["workspaces"][number],
 ) => scope._tag === "SettingsProfile" || workspace.config.name === scope.workspace;
 
+const contributionSettingScopeExists = (
+  scope: ControlStorePicture["contributionSettings"][number]["scope"],
+  registry: RegistryState,
+) => {
+  if (scope._tag === "SettingsProfile") return true;
+  return registry.workspaces.some((workspace) => workspace.config.name === scope.workspace);
+};
+
 const contributionSettingExists = (
   controlStore: ControlStorePicture,
   registry: RegistryState,
   row: ControlStorePicture["contributionSettings"][number],
 ) =>
-  controlStore.pluginInstalls.some(({ pluginId }) => row.contribution.id.startsWith(`plugin:${pluginId}/`)) ||
-  registry.workspaces.some(
-    (workspace) =>
-      contributionSettingAppliesToWorkspace(row.scope, workspace) &&
-      workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
-  );
+  contributionSettingScopeExists(row.scope, registry) &&
+  (controlStore.pluginInstalls.some(({ pluginId }) =>
+    row.contribution.id.startsWith(`plugin:${pluginId}/`),
+  ) ||
+    registry.workspaces.some(
+      (workspace) =>
+        contributionSettingAppliesToWorkspace(row.scope, workspace) &&
+        workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
+    ));
 
 export const controlStoreWithDiagnostics = (controlStore: ControlStorePicture, registry: RegistryState) => {
   const contributionSettings: ControlStorePicture["contributionSettings"] =

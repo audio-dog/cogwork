@@ -9,6 +9,7 @@ import type {
   Workspace,
   WorkspaceId,
 } from "./configuration-model";
+import { withDanglingSettings } from "./configuration-picture";
 
 export const pluginOverviewOf = <E>(
   board: PluginOverview | null,
@@ -189,7 +190,7 @@ export const configurationWithPlugins = (
       })),
     contributions: [
       ...base.contributions.filter((contribution) => contribution.authority._tag !== "plugin"),
-      ...contributions,
+      ...withDanglingSettings(contributions, controlStore?.contributionSettings ?? []),
     ],
   };
 };

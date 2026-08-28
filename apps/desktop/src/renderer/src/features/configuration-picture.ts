@@ -114,7 +114,7 @@ const sameSettingScope = (enablement: EnablementRow, setting: ContributionSettin
   return enablement.scope.kind === scope.kind && enablement.scope.workspaceId === scope.workspaceId;
 };
 
-const withDanglingSettings = (
+export const withDanglingSettings = (
   contributions: readonly Contribution[],
   settings: readonly ContributionSettingRow[],
 ) =>
