@@ -790,6 +790,31 @@ const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
     ]),
 });
 
+const pluginMcpLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.succeed([
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server" as const,
+        localName: "linear",
+        summary: "Linear MCP server",
+        file: "/plugins/linear/mcp/linear.json",
+        load: {
+          _tag: "Loaded" as const,
+          mcpServer: {
+            endpoint: "https://mcp.linear.app/mcp",
+            secretEnv: null,
+            credentialAvailable: true,
+          },
+        },
+      },
+    ]),
+});
+
 const unavailablePluginLayer = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -1324,6 +1349,42 @@ describe("Executor.execute", () => {
           trackerRecorder(),
           controlStoreStub(),
           missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("excludes a disabled Plugin MCP server from harness dispatch", () => {
+    const disabled = {
+      ...defaultControlStore,
+      contributionSettings: [
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: false,
+        },
+      ],
+    } satisfies ControlStoreService["seed"];
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.mcpSkills, []);
+      assert.isFalse(
+        request?.contributions.some((contribution) => contribution.id === "plugin:linear/mcp/linear"),
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          controlStoreStub(disabled),
+          pluginMcpLayer,
         ),
       ),
     );

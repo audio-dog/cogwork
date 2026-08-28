@@ -8,7 +8,6 @@ import {
   type FollowUpStageResult,
   type ImplementStageResult,
   type LifecycleStage,
-  type LocalContribution,
   type PluginContribution,
   type PluginMcpServer,
   RunId,
@@ -190,7 +189,7 @@ const availablePluginMcp = (contribution: PluginContribution) => {
 };
 
 const contributionSettingApplies = (
-  contribution: LocalContribution,
+  contribution: FileContribution,
   workspace: RegisteredWorkspace,
   row: ContributionSettingRow,
 ) => {
@@ -200,7 +199,7 @@ const contributionSettingApplies = (
 };
 
 const contributionEnabled = (
-  contribution: LocalContribution,
+  contribution: FileContribution,
   workspace: RegisteredWorkspace,
   rows: readonly ContributionSettingRow[],
 ) => {
@@ -242,7 +241,11 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
-    const loaded = pluginContributions.filter((contribution) => contribution.load._tag === "Loaded");
+    const loaded = pluginContributions.filter(
+      (contribution) =>
+        contribution.load._tag === "Loaded" &&
+        contributionEnabled(contribution, workspace, picture.contributionSettings),
+    );
     const fileContributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
       id: contribution.id,
       authority: contribution.authority,
