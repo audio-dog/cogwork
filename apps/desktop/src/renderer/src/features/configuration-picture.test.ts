@@ -95,7 +95,7 @@ describe("configurationPicture", () => {
     ]);
   });
 
-  it("keeps workspace contribution instances distinct and deduplicates profile contributions", () => {
+  it("projects each user MCP overlay in its workspace view", () => {
     const other = Schema.decodeSync(WorkspaceId)("other");
     const userServer = Schema.decodeSync(LocalContribution)({
       id: "local:user/mcp/review",
@@ -103,6 +103,13 @@ describe("configurationPicture", () => {
       kind: "mcp-server",
       localName: "review",
       file: "/home/.agents/mcp/review.json",
+    });
+    const userSkill = Schema.decodeSync(LocalContribution)({
+      id: "local:user/skill/commit",
+      authority: "local:user",
+      kind: "skill",
+      localName: "commit",
+      file: "/home/.agents/skills/commit/SKILL.md",
     });
     const sharedRepoServer = {
       id: "local:repo/mcp/tools",
@@ -119,16 +126,16 @@ describe("configurationPicture", () => {
         issueTracker: "github",
         harness: "codex",
         poll: { status: "ok" },
-        contributions: [userServer, { ...sharedRepoServer, file: `${checkoutPath}/tools.json` }],
+        contributions: [userServer, userSkill, { ...sharedRepoServer, file: `${checkoutPath}/tools.json` }],
       });
     const picture = configurationPicture({
       ...board,
       controlStore: {
         ...controlStore,
-        contributionSettings: [workspace, other].map((workspaceId) => ({
+        contributionSettings: [workspace, other].map((workspaceId, index) => ({
           contribution: { id: userServer.id, kind: "mcp-server" },
           scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId },
-          enabled: true,
+          enabled: index === 1,
         })),
       },
       workspaces: new Map([
@@ -137,12 +144,31 @@ describe("configurationPicture", () => {
       ]),
     });
 
-    const [projectedUserServer] = picture.contributions.filter(
+    const projectedUserServers = picture.contributions.filter(
       (contribution) => contribution.id === userServer.id,
     );
-    expect(projectedUserServer).toBeDefined();
-    expect(projectedUserServer).not.toHaveProperty("definedIn");
-    expect(projectedUserServer?.rows.map((row) => row.scope.workspaceId)).toEqual([workspace, other]);
+    expect(projectedUserServers.map((contribution) => contribution.definedIn)).toEqual([workspace, other]);
+    expect(projectedUserServers.map((contribution) => contribution.rows)).toEqual([
+      [
+        {
+          scope: { kind: "private-overlay", workspaceId: workspace },
+          value: false,
+          source: "Control store",
+        },
+      ],
+      [
+        {
+          scope: { kind: "private-overlay", workspaceId: other },
+          value: true,
+          source: "Control store",
+        },
+      ],
+    ]);
+    const projectedUserSkills = picture.contributions.filter(
+      (contribution) => contribution.id === userSkill.id,
+    );
+    expect(projectedUserSkills).toHaveLength(1);
+    expect(projectedUserSkills[0]).not.toHaveProperty("definedIn");
     expect(
       picture.contributions
         .filter((contribution) => contribution.id === sharedRepoServer.id)

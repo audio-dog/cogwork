@@ -48,8 +48,24 @@ const settingApplies = (
 ) => {
   if (row.contribution.id !== contribution.id) return false;
   if (row.scope._tag === "SettingsProfile") return true;
-  if (workspace === undefined) return true;
+  if (workspace === undefined) return false;
   return row.scope.workspace === workspace;
+};
+
+const definedInWorkspace = (
+  contribution: LocalContribution,
+  workspace: WorkspaceId,
+  rows: readonly ContributionSettingRow[],
+) => {
+  if (contribution.authority !== "local:user") return workspace;
+  if (contribution.kind !== "mcp-server") return undefined;
+  const hasOverlay = rows.some(
+    (row) =>
+      row.contribution.id === contribution.id &&
+      row.scope._tag === "PrivateWorkspaceOverlay" &&
+      row.scope.workspace === workspace,
+  );
+  return hasOverlay ? workspace : undefined;
 };
 
 const enablementRows = (
@@ -73,8 +89,9 @@ const contributionOf = (
   contribution: LocalContribution,
   workspace: WorkspaceId,
   settings: readonly ContributionSettingRow[],
-) =>
-  ({
+) => {
+  const definedIn = definedInWorkspace(contribution, workspace, settings);
+  return {
     id: contribution.id,
     kind: contribution.kind,
     localName: contribution.localName,
@@ -82,14 +99,11 @@ const contributionOf = (
     summary: contribution.file,
     file: contribution.file,
     definedAt: definedAtByAuthority[contribution.authority],
-    ...(contribution.authority === "local:user" ? {} : { definedIn: workspace }),
+    ...(definedIn === undefined ? {} : { definedIn }),
     load: { _tag: "loaded" },
-    rows: enablementRows(
-      contribution,
-      contribution.authority === "local:user" ? undefined : workspace,
-      settings,
-    ),
-  }) satisfies Contribution;
+    rows: enablementRows(contribution, definedIn, settings),
+  } satisfies Contribution;
+};
 
 const registeredWorkspaces = (board: Board) =>
   [...board.workspaces.values()].flatMap((state) => (state._tag === "Registered" ? [state] : []));
