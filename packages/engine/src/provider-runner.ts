@@ -4,6 +4,7 @@ import {
   type AnyTool,
   type ChatMiddleware,
   chat,
+  type JSONSchema,
   type ModelMessage,
   maxIterations,
   type StreamChunk,
@@ -16,21 +17,8 @@ import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
-import {
-  type AssembleRequest,
-  ContextAssembler,
-  type ContextAssemblerService,
-  type InstructionLayer,
-} from "./context-assembler";
 import { CredentialStore } from "./credential-store";
-import {
-  fullHarnessExecution,
-  HarnessError,
-  type HarnessRequest,
-  type HarnessRunner,
-  type StageResultSchema,
-  stageResultSchema,
-} from "./harness";
+import { fullHarnessExecution, HarnessError, type HarnessRunner } from "./harness";
 import { defaultModelAdapterFactory, type ModelAdapterFactory } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
@@ -51,7 +39,7 @@ export interface RunChatOptions {
   readonly agentLoopStrategy: AgentLoopStrategy;
   readonly abortController: AbortController;
   readonly threadId?: string;
-  readonly outputSchema?: StageResultSchema;
+  readonly outputSchema?: JSONSchema;
 }
 
 export type RunChat = (options: RunChatOptions) => AsyncIterable<StreamChunk>;
@@ -91,28 +79,22 @@ export const defaultRunBudget = (stage: LifecycleStage) =>
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });
 
-// Falls back to the run-start layers when a refresh fails, so a broken read never
-// strips context mid-run.
-export const resolveContextLayers = Effect.fn("ProviderRunner.resolveContextLayers")(
-  (assembler: ContextAssemblerService, request: AssembleRequest, fallback: ReadonlyArray<InstructionLayer>) =>
-    assembler
-      .assemble(request)
-      .pipe(Effect.match({ onFailure: () => fallback, onSuccess: (value) => value.layers })),
-);
-
-// Runs on every turn so a mid-run edit to an AGENTS.md reaches the next prompt.
-const contextMiddleware = (
-  runPromise: Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<HttpClient.HttpClient>>>,
-  assembler: ContextAssemblerService,
-  request: AssembleRequest,
-  fallback: ReadonlyArray<InstructionLayer>,
-): ChatMiddleware => ({
+const contextMiddleware = (instructions: ReadonlyArray<{ readonly content: string }>): ChatMiddleware => ({
   name: "cogwork-context",
-  onConfig: (_ctx, config) =>
-    runPromise(resolveContextLayers(assembler, request, fallback)).then((layers) => ({
-      systemPrompts: [...config.systemPrompts, ...layers.map((layer) => layer.content)],
-    })),
+  onConfig: (_ctx, config) => ({
+    systemPrompts: [...config.systemPrompts, ...instructions.map((instruction) => instruction.content)],
+  }),
 });
+
+const providerMiddleware = (
+  name: string,
+  persistence: ChatMiddleware,
+  instructions: ReadonlyArray<{ readonly content: string }>,
+): ReadonlyArray<ChatMiddleware> => {
+  if (name === "persistence") return [persistence];
+  if (name === "instruction-context") return [contextMiddleware(instructions)];
+  return [];
+};
 
 export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner => {
   const defaultModel = options.defaultModel ?? "anthropic/claude-sonnet-4-5";
@@ -122,61 +104,66 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
   return {
     name: options.name,
     sessionKind: "owned-transcript",
+    projectedMembers: [
+      "Harness Adapter",
+      "Instructions",
+      "Messages",
+      "Tools",
+      "Middleware",
+      "Sandbox",
+      "Structured Output",
+      "Persistence",
+    ],
+    planMiddleware: ["persistence", "instruction-context"],
     execution: fullHarnessExecution,
-    run: (request: HarnessRequest) =>
+    run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {
-          const reference = request.model ?? defaultModel;
+          const plan = request.plan;
+          const reference = plan.harness.model ?? defaultModel;
           const credentials = yield* CredentialStore;
           const adapter = yield* resolveModelAdapter(credentials, reference, makeAdapter).pipe(
             Effect.mapError((error) => launchError(false, error.message)),
           );
 
-          const assembler = yield* ContextAssembler;
-          const assembleRequest: AssembleRequest = {
-            cwd: request.checkoutPath,
-            projectRoot: request.checkoutPath,
-            skill: request.skill,
-            contributions: request.contributions,
-          };
-          const assembled = yield* assembler
-            .assemble(assembleRequest)
-            .pipe(Effect.mapError((error) => launchError(false, error.message)));
           const store = yield* SessionStore;
           const session = request.session;
-          // History comes from the ledger-backed message store; the new prompt
-          // is this run's only fresh turn. We pass the full list so the middleware
-          // uses it verbatim rather than reloading — the ledger stays the truth.
           const history = session
             ? yield* Effect.promise(() => store.persistence.stores.messages.loadThread(session))
             : [];
           const messages: ReadonlyArray<ModelMessage> = [
             ...history,
-            { role: "user", content: request.prompt },
+            ...plan.messages.map(({ role, content }) => ({ role, content })),
           ];
 
-          const sandbox = yield* openWorktreeSandbox(request.checkoutPath).pipe(
+          const sandbox = yield* openWorktreeSandbox(plan.sandbox.workspace).pipe(
             Effect.mapError((error) => launchError(true, error.message)),
           );
           const baseSha = yield* resolveBaseSha(sandbox);
           const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
             Effect.provide(FetchHttpClient.layer),
           );
-          const toolSet = makeOwnedToolSet(sandbox, runPromise, policyForProfile(request.profile));
+          const toolSet = makeOwnedToolSet(sandbox, runPromise, policyForProfile(plan.harness.profile));
+          const toolsByName: ReadonlyMap<string, AnyTool> = new Map(Object.entries(toolSet));
+          const tools = plan.tools.flatMap((name) => {
+            const tool = toolsByName.get(name);
+            return tool ? [tool] : [];
+          });
+          const persistence = withPersistence(store.persistence);
+          const middleware = plan.middleware.flatMap((name) =>
+            providerMiddleware(name, persistence, plan.instructions),
+          );
 
           const abortController = new AbortController();
           const chatStream = runChat({
             adapter,
             messages,
-            tools: Object.values(toolSet),
-            middleware: [
-              withPersistence(store.persistence),
-              contextMiddleware(runPromise, assembler, assembleRequest, assembled.layers),
-            ],
-            agentLoopStrategy: maxIterations(defaultLoopBudget(request.stage)),
+            tools,
+            middleware,
+            agentLoopStrategy: maxIterations(defaultLoopBudget(plan.operation)),
             abortController,
             threadId: session ?? undefined,
-            outputSchema: stageResultSchema(request.stage),
+            outputSchema: plan.structuredOutput ?? undefined,
           });
 
           // Live diffs are a nicety: a dead feed must not end the run, but it
