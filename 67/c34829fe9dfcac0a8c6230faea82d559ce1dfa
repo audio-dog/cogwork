@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/components/mcp-server-row.test.tsx
+  s_d6f8a470e8319b::t_b2a80fadd6a202 4,15,19,25-28,58-69
+  s_d6f8a470e8319b::t_03509ddd89e608 70
+apps/desktop/src/renderer/src/components/contribution.tsx
+  s_d6f8a470e8319b::t_4e7f16e4c04b10 115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "67c34829fe9dfcac0a8c6230faea82d559ce1dfa",
+  "prompts": {},
+  "sessions": {
+    "s_d6f8a470e8319b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e9-f643-70a1-a7c6-7a5eaeb44f6e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
