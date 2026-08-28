@@ -58,8 +58,8 @@ describe("formatStatus", () => {
     assert.include(output, "scheduler: needs a daemon");
     assert.include(output, "workspace state: needs a daemon");
     assert.include(output, "availability: needs a daemon");
-    assert.include(output, "readiness: needs a daemon");
-    assert.include(output, "effective settings: needs a daemon");
+    assert.notInclude(output, "readiness:");
+    assert.notInclude(output, "effective settings:");
   });
 
   it("shows the stored rows and full daemon picture online", () => {

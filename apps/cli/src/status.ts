@@ -114,6 +114,4 @@ export const formatOfflineStatus = (controlStore: ControlStore) =>
     "scheduler: needs a daemon",
     "workspace state: needs a daemon",
     "availability: needs a daemon",
-    "readiness: needs a daemon",
-    "effective settings: needs a daemon",
   ].join("\n");
