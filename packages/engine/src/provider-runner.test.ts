@@ -40,7 +40,7 @@ const sampleLayer: InstructionLayer = {
   content: "Follow the implement playbook.",
 };
 
-const reqStub = { cwd: "/repo", projectRoot: "/repo", skill: "implement-agent" };
+const reqStub = { cwd: "/repo", projectRoot: "/repo", skill: "implement-agent", contributions: [] };
 
 const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => {
   const iterator = items[Symbol.iterator]();
@@ -137,6 +137,7 @@ const request = (overrides: Partial<HarnessRequest>): HarnessRequest => ({
   model: "openai/gpt-4o",
   effort: null,
   mcpSkills: [],
+  contributions: [],
   ...overrides,
   profile: overrides.profile ?? "full",
 });
