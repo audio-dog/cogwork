@@ -10,6 +10,7 @@ export * from "./mcp-skill";
 export * from "./principal";
 export * from "./rpc";
 export * from "./run";
+export * from "./run-plan";
 export * from "./scheduler-defaults";
 export * from "./settings";
 export * from "./triage";

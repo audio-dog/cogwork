@@ -1,0 +1,195 @@
+import * as Schema from "effect/Schema";
+import { HarnessName, TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
+import { Claim } from "./coordination";
+import { PrSummary } from "./daemon";
+import { RunId, SessionKind } from "./run";
+import { ResolutionOperator } from "./settings";
+import { LifecycleStage, Priority, TriageRole } from "./triage";
+
+export const RunPlanPolicyProfile = Schema.Literals(["read-only", "full"]);
+export type RunPlanPolicyProfile = typeof RunPlanPolicyProfile.Type;
+
+export class RunPlanHarness extends Schema.Class<RunPlanHarness>("RunPlanHarness")({
+  name: HarnessName,
+  model: Schema.NullOr(TrimmedNonEmptyString),
+  effort: Schema.NullOr(TrimmedNonEmptyString),
+  profile: RunPlanPolicyProfile,
+}) {}
+
+export class RunPlanInstruction extends Schema.Class<RunPlanInstruction>("RunPlanInstruction")({
+  kind: Schema.Literals(["rules", "repo", "operating-instructions"]),
+  source: TrimmedNonEmptyString,
+  content: TrimmedNonEmptyString,
+}) {}
+
+export class RunPlanOperatingInstructions extends Schema.Class<RunPlanOperatingInstructions>(
+  "RunPlanOperatingInstructions",
+)({
+  name: TrimmedNonEmptyString,
+  path: TrimmedNonEmptyString,
+}) {}
+
+export class RunPlanMcpServer extends Schema.Class<RunPlanMcpServer>("RunPlanMcpServer")({
+  identity: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  projectedName: TrimmedNonEmptyString,
+  endpoint: TrimmedNonEmptyString,
+  authenticated: Schema.Boolean,
+}) {}
+
+export class RunPlanContributionMember extends Schema.Class<RunPlanContributionMember>(
+  "RunPlanContributionMember",
+)({
+  identity: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  source: TrimmedNonEmptyString,
+}) {}
+
+export class RunPlanMessage extends Schema.Class<RunPlanMessage>("RunPlanMessage")({
+  role: Schema.Literal("user"),
+  content: TrimmedNonEmptyString,
+}) {}
+
+export class RunPlanObservation extends Schema.Class<RunPlanObservation>("RunPlanObservation")({
+  generation: Schema.Natural,
+  observedAtMillis: Schema.Natural,
+}) {}
+
+export class RunPlanWorkContextReference extends Schema.Class<RunPlanWorkContextReference>(
+  "RunPlanWorkContextReference",
+)({
+  workItem: WorkItemId,
+  url: Schema.NullOr(TrimmedNonEmptyString),
+}) {}
+
+export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFacts>("RunPlanWorkContextFacts")(
+  {
+    roles: Schema.Array(TriageRole),
+    assignees: Schema.Array(TrimmedNonEmptyString),
+    openBlockers: Schema.Natural,
+    claim: Schema.NullOr(Claim),
+    priority: Priority,
+    pr: Schema.NullOr(PrSummary),
+  },
+) {}
+
+export const RunPlanMcpMember = Schema.Union([RunPlanMcpServer, RunPlanContributionMember]);
+export type RunPlanMcpMember = typeof RunPlanMcpMember.Type;
+
+export class RunPlanWorkContext extends Schema.Class<RunPlanWorkContext>("RunPlanWorkContext")({
+  reference: RunPlanWorkContextReference,
+  facts: RunPlanWorkContextFacts,
+  observation: RunPlanObservation,
+}) {}
+
+export class RunPlanResolutionCandidate extends Schema.Class<RunPlanResolutionCandidate>(
+  "RunPlanResolutionCandidate",
+)({
+  scope: TrimmedNonEmptyString,
+  level: TrimmedNonEmptyString,
+  source: TrimmedNonEmptyString,
+  value: Schema.Unknown,
+}) {}
+
+export class RunPlanDroppedCandidate extends Schema.Class<RunPlanDroppedCandidate>("RunPlanDroppedCandidate")(
+  {
+    candidate: RunPlanResolutionCandidate,
+    reason: TrimmedNonEmptyString,
+  },
+) {}
+
+export class RunPlanResolutionTrace extends Schema.Class<RunPlanResolutionTrace>("RunPlanResolutionTrace")({
+  key: TrimmedNonEmptyString,
+  operator: ResolutionOperator,
+  winner: Schema.NullOr(RunPlanResolutionCandidate),
+  contributors: Schema.Array(RunPlanResolutionCandidate),
+  shadowed: Schema.Array(RunPlanResolutionCandidate),
+  dropped: Schema.Array(RunPlanDroppedCandidate),
+}) {}
+
+export class RunPlanContentRevision extends Schema.TaggedClass<RunPlanContentRevision>()("ContentRevision", {
+  source: TrimmedNonEmptyString,
+  revision: TrimmedNonEmptyString,
+}) {}
+
+export class RunPlanDeclaredVersion extends Schema.TaggedClass<RunPlanDeclaredVersion>()("DeclaredVersion", {
+  source: TrimmedNonEmptyString,
+  version: TrimmedNonEmptyString,
+}) {}
+
+export const RunPlanProvenanceStamp = Schema.Union([RunPlanContentRevision, RunPlanDeclaredVersion]);
+export type RunPlanProvenanceStamp = typeof RunPlanProvenanceStamp.Type;
+
+export class RunPlanProjectedName extends Schema.Class<RunPlanProjectedName>("RunPlanProjectedName")({
+  identity: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+}) {}
+
+export const RunPlanMember = Schema.Literals([
+  "Harness Adapter",
+  "Instructions",
+  "Messages",
+  "Work Context",
+  "Tools",
+  "Skills",
+  "MCP",
+  "Subagents",
+  "Commands",
+  "Hooks",
+  "Middleware",
+  "Sandbox",
+  "Structured Output",
+  "Persistence",
+  "Connections",
+  "Provenance",
+]);
+export type RunPlanMember = typeof RunPlanMember.Type;
+
+export class RunPlanProjectionDisposition extends Schema.Class<RunPlanProjectionDisposition>(
+  "RunPlanProjectionDisposition",
+)({
+  member: TrimmedNonEmptyString,
+  disposition: Schema.Literals(["projected", "not-projected"]),
+  reason: Schema.optionalKey(TrimmedNonEmptyString),
+}) {}
+
+export class RunPlanProvenance extends Schema.Class<RunPlanProvenance>("RunPlanProvenance")({
+  resolution: Schema.Array(RunPlanResolutionTrace),
+  stamps: Schema.Array(RunPlanProvenanceStamp),
+  projectedNames: Schema.Array(RunPlanProjectedName),
+  projection: Schema.Array(RunPlanProjectionDisposition),
+  observation: RunPlanObservation,
+}) {}
+
+export class RunPlanSandbox extends Schema.Class<RunPlanSandbox>("RunPlanSandbox")({
+  workspace: TrimmedNonEmptyString,
+  policy: RunPlanPolicyProfile,
+}) {}
+
+export class RunPlanPersistence extends Schema.Class<RunPlanPersistence>("RunPlanPersistence")({
+  sessionKind: SessionKind,
+}) {}
+
+const StructuredOutput = Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown));
+
+export class RunPlan extends Schema.Class<RunPlan>("RunPlan")({
+  id: RunId,
+  operation: LifecycleStage,
+  harness: RunPlanHarness,
+  instructions: Schema.Array(RunPlanInstruction),
+  operatingInstructions: RunPlanOperatingInstructions,
+  messages: Schema.Array(RunPlanMessage),
+  tools: Schema.Array(TrimmedNonEmptyString),
+  skills: Schema.Array(RunPlanContributionMember),
+  mcp: Schema.Array(RunPlanMcpMember),
+  subagents: Schema.Array(RunPlanContributionMember),
+  commands: Schema.Array(RunPlanContributionMember),
+  hooks: Schema.Array(RunPlanContributionMember),
+  middleware: Schema.Array(TrimmedNonEmptyString),
+  structuredOutput: StructuredOutput,
+  connections: Schema.Array(TrimmedNonEmptyString),
+  workContext: RunPlanWorkContext,
+  sandbox: RunPlanSandbox,
+  persistence: RunPlanPersistence,
+  provenance: RunPlanProvenance,
+}) {}
