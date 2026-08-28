@@ -722,6 +722,40 @@ const pluginManagerStub = Layer.succeed(PluginManager, {
   contributions: () => Effect.succeed([]),
 });
 
+const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () =>
+    Effect.succeed([
+      {
+        id: "plugin:linear/mcp/linear",
+        authority: "plugin:linear",
+        kind: "mcp-server" as const,
+        localName: "linear",
+        summary: "Linear MCP server",
+        file: "/plugins/linear/mcp/linear.json",
+        load: {
+          _tag: "Loaded" as const,
+          mcpServer: {
+            endpoint: "https://mcp.linear.app/mcp",
+            secretEnv: "MISSING_LINEAR_API_KEY",
+            credentialAvailable: false,
+          },
+        },
+      },
+      {
+        id: "plugin:linear/rules/linear",
+        authority: "plugin:linear",
+        kind: "rules" as const,
+        localName: "linear",
+        summary: "Linear rules",
+        file: "/plugins/linear/rules/linear.md",
+        load: { _tag: "Loaded" as const },
+      },
+    ]),
+});
+
 function testHarness(runners: ReadonlyArray<TestRunner>) {
   return Layer.unwrap(
     Effect.gen(function* () {
@@ -740,6 +774,7 @@ function provide(
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
+  plugins: Layer.Layer<PluginManager> = pluginManagerStub,
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -764,7 +799,7 @@ function provide(
         runControlStub,
         worktree,
         assemblerStub,
-        pluginManagerStub,
+        plugins,
       ),
     ),
   );
@@ -1155,6 +1190,30 @@ describe("Executor.execute", () => {
         [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: null }],
       );
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
+  });
+
+  it.effect("keeps running when an installed Plugin needs an MCP credential", () => {
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request?.mcpSkills, []);
+      assert.isTrue(
+        request?.contributions.some((contribution) => contribution.id === "plugin:linear/rules/linear"),
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          missingPluginCredentialLayer,
+        ),
+      ),
+    );
   });
 
   it.effect("resolves a credential-store bearer for an authed skill without leaking it to the ledger", () => {

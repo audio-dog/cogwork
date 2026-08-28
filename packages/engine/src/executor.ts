@@ -1,7 +1,9 @@
 import type {
   FileContribution,
   LifecycleStage,
+  PluginContribution,
   PluginFailure,
+  PluginMcpServer,
   RunRecord,
   Session,
   SessionId,
@@ -166,6 +168,18 @@ const handoffCause = (retryable: boolean, attempts: number) =>
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
 
+interface PluginMcpContribution {
+  readonly id: string;
+  readonly server: PluginMcpServer;
+}
+
+const availablePluginMcp = (contribution: PluginContribution) => {
+  if (contribution.load._tag !== "Loaded") return [];
+  const server = contribution.load.mcpServer;
+  if (!server?.credentialAvailable) return [];
+  return [{ id: contribution.id, server }] satisfies ReadonlyArray<PluginMcpContribution>;
+};
+
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const harness = yield* Harness;
@@ -198,24 +212,21 @@ export const make = Effect.gen(function* () {
       file: contribution.file,
     }));
     const pluginMcpSkills: ReadonlyArray<ResolvedMcpSkill> = yield* Effect.forEach(
-      loaded.filter((contribution) => contribution.load._tag === "Loaded" && contribution.load.mcpServer),
-      (contribution) =>
+      loaded.flatMap(availablePluginMcp),
+      ({ id, server }) =>
         Effect.gen(function* () {
-          if (contribution.load._tag !== "Loaded" || !contribution.load.mcpServer) {
-            return yield* Effect.die(new Error("loaded MCP contribution lost its server"));
-          }
-          const { endpoint, secretEnv } = contribution.load.mcpServer;
-          if (!secretEnv) return { name: contribution.id, endpoint, bearer: null };
+          const { endpoint, secretEnv } = server;
+          if (!secretEnv) return { name: id, endpoint, bearer: null };
           const bearer = yield* Config.redacted(secretEnv).pipe(
             Effect.mapError(
               (error) =>
                 new CredentialError({
-                  account: contribution.id,
+                  account: id,
                   message: `MCP server needs environment key ${secretEnv}: ${error.message}`,
                 }),
             ),
           );
-          return { name: contribution.id, endpoint, bearer };
+          return { name: id, endpoint, bearer };
         }),
     );
     return {
