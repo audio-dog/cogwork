@@ -72,12 +72,33 @@ const stamp = (day: number, generation = 1): Scheduler.TickStamp => ({ day, gene
 describe("Scheduler.seedState", () => {
   const base = { globalLimit: 10, perWorkspaceLimit: 10, dailyBudget: 100 };
 
-  it("starts running by default so the headless daemon schedules immediately", () => {
+  it("supports a running initial state for isolated scheduler layers", () => {
     assert.strictEqual(Scheduler.seedState(base).paused, false);
   });
 
-  it("starts paused when startPaused is set so a desktop launch holds until resumed", () => {
+  it("starts paused when requested", () => {
     assert.strictEqual(Scheduler.seedState({ ...base, startPaused: true }).paused, true);
+  });
+});
+
+describe("Scheduler.configFromControlStore", () => {
+  it("seeds every durable limit and starts every daemon paused", () => {
+    const config = Scheduler.configFromControlStore({
+      daemonLimits: {
+        globalConcurrency: 8,
+        perWorkspaceConcurrency: 3,
+        dailyBudget: 20,
+        revision: 2,
+      },
+    });
+
+    assert.deepStrictEqual(config, {
+      globalLimit: 8,
+      perWorkspaceLimit: 3,
+      dailyBudget: 20,
+      startPaused: true,
+    });
+    assert.isTrue(Scheduler.seedState(config).paused);
   });
 });
 

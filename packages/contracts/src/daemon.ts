@@ -8,6 +8,7 @@ import {
 } from "./base-schemas";
 import { Claim } from "./coordination";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
+import { WorkspaceConcurrency } from "./workspace";
 
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -104,10 +105,17 @@ export const WorkspaceFailureInfo = Schema.Struct({
 });
 export type WorkspaceFailureInfo = typeof WorkspaceFailureInfo.Type;
 
+export const maxSchedulerLimit = 1000;
+export const SchedulerLimit = Schema.Int.check(
+  Schema.isGreaterThan(0),
+  Schema.isLessThanOrEqualTo(maxSchedulerLimit),
+);
+export type SchedulerLimit = typeof SchedulerLimit.Type;
+
 export const WorkspaceLoad = Schema.Struct({
   name: WorkspaceId,
   inFlight: Schema.Natural,
-  limit: Schema.Natural,
+  limit: WorkspaceConcurrency,
 });
 export type WorkspaceLoad = typeof WorkspaceLoad.Type;
 
@@ -125,23 +133,45 @@ export const SchedulerStats = Schema.Struct({
 });
 export type SchedulerStats = typeof SchedulerStats.Type;
 
-// A scheduler limit or daily budget is at least one run, and capped so a stray or hostile write
-// can't set an absurd value that removes the concurrency and cost guardrails entirely.
-export const maxSchedulerLimit = 1000;
-export const SchedulerLimit = Schema.Int.check(
-  Schema.isGreaterThan(0),
-  Schema.isLessThanOrEqualTo(maxSchedulerLimit),
-);
-export type SchedulerLimit = typeof SchedulerLimit.Type;
+export const DaemonLimitKey = Schema.Literals([
+  "global-concurrency",
+  "per-workspace-concurrency",
+  "daily-budget",
+]);
+export type DaemonLimitKey = typeof DaemonLimitKey.Type;
 
-// A write to the scheduler's limits and daily budget. Every field is optional, so a caller can
-// edit one setting without resending the rest; an absent field leaves that limit untouched.
-export const SchedulerConfigUpdate = Schema.Struct({
-  globalLimit: Schema.optional(SchedulerLimit),
-  perWorkspaceLimit: Schema.optional(SchedulerLimit),
-  dailyBudget: Schema.optional(SchedulerLimit),
+export const DaemonLimitUpdate = Schema.Struct({
+  key: DaemonLimitKey,
+  value: SchedulerLimit,
+  expectedRevision: Schema.Natural,
 });
-export type SchedulerConfigUpdate = typeof SchedulerConfigUpdate.Type;
+export type DaemonLimitUpdate = typeof DaemonLimitUpdate.Type;
+
+export const DaemonLimits = Schema.Struct({
+  globalConcurrency: SchedulerLimit,
+  perWorkspaceConcurrency: SchedulerLimit,
+  dailyBudget: SchedulerLimit,
+  revision: Schema.Natural,
+});
+export type DaemonLimits = typeof DaemonLimits.Type;
+
+export const ControlStore = Schema.Struct({
+  daemonLimits: DaemonLimits,
+});
+export type ControlStore = typeof ControlStore.Type;
+
+export class ControlStoreFailure extends Schema.TaggedError<ControlStoreFailure>()("ControlStoreFailure", {
+  operation: Schema.String,
+  message: Schema.String,
+}) {}
+
+export class StaleControlStoreWrite extends Schema.TaggedError<StaleControlStoreWrite>()(
+  "StaleControlStoreWrite",
+  {
+    expectedRevision: Schema.Natural,
+    actualRevision: Schema.Natural,
+  },
+) {}
 
 export const DaemonStatus = Schema.Struct({
   health: DaemonHealth,

@@ -1,6 +1,7 @@
 import {
   agUiIsTerminal,
   DaemonRpcs,
+  defaultControlStore,
   localOwner,
   Principal,
   PrincipalMiddleware,
@@ -22,9 +23,14 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import { cancelRun, reclassify, registerWorkspace, setSchedulerConfig, setScheduling } from "./commands";
+import { cancelRun, reclassify, registerWorkspace, setDaemonLimit, setScheduling } from "./commands";
 import type { ContextAssembler } from "./context-assembler";
-import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
+import {
+  bootControlStoreLayer,
+  ControlStore,
+  type ControlStoreService,
+  controlStoreClientLayer,
+} from "./control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
@@ -52,7 +58,7 @@ import {
   publishingLayer as runLedgerPublishingLayer,
 } from "./run-ledger";
 import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
-import { type DrainOptions, Scheduler, type SchedulerConfig, layer as schedulerLayer } from "./scheduler";
+import { configFromControlStore, type DrainOptions, Scheduler, layer as schedulerLayer } from "./scheduler";
 import * as SessionStore from "./session-store";
 import { ticketSlug, WorktreeManager } from "./worktree";
 
@@ -66,6 +72,18 @@ export const daemonInfoLayer = Layer.effect(
 );
 
 const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
+
+const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(function* (
+  store: ControlStoreService,
+) {
+  if (store.health === "unavailable") return [];
+  return yield* store.picture.pipe(
+    Effect.match({
+      onFailure: () => [],
+      onSuccess: (controlStore) => [{ _tag: "ControlStoreChanged" as const, controlStore }],
+    }),
+  );
+});
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
   const bus = yield* DaemonEventBus;
@@ -90,6 +108,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const registry = yield* WorkspaceRegistry;
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
+  const controlStore = yield* ControlStore;
   const ledger = yield* RunLedger;
   const emittedAtMillis = yield* Clock.currentTimeMillis;
   const snapshot = yield* worker.snapshot;
@@ -105,9 +124,13 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const runs = running.map((run) => ({ _tag: "RunChanged", run }) as const);
   const scheduling = {
     _tag: "SchedulerChanged",
-    scheduler: schedulerStatsOf(config, stats, registry),
+    scheduler: schedulerStatsOf(registry, config, stats),
   } as const;
-  return [...items, ...workspaces, ...runs, scheduling].map((event) => ({ ...event, emittedAtMillis }));
+  const controlStoreEvents = yield* controlStoreSeedEvents(controlStore);
+  return [...items, ...workspaces, ...runs, ...controlStoreEvents, scheduling].map((event) => ({
+    ...event,
+    emittedAtMillis,
+  }));
 });
 
 // Subscribe before reading the seed so an event published between the two is not lost.
@@ -141,7 +164,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       health: controlStore.health === "available" ? "running" : "store-unavailable",
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
-      scheduler: schedulerStatsOf(config, stats, registry),
+      scheduler: schedulerStatsOf(registry, config, stats),
       workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
       failures: registry.failures.map(({ name, source, message }) => ({
         ...(name === undefined ? {} : { name }),
@@ -149,6 +172,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
         message,
       })),
     };
+  }),
+  GetControlStore: Effect.fn("Daemon.GetControlStore")(function* () {
+    const store = yield* ControlStore;
+    return yield* store.picture;
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
@@ -168,7 +195,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   CancelRun: cancelRun,
   Reclassify: reclassify,
   SetScheduling: setScheduling,
-  SetSchedulerConfig: setSchedulerConfig,
+  SetDaemonLimit: setDaemonLimit,
   RegisterWorkspace: registerWorkspace,
 });
 
@@ -186,7 +213,6 @@ export interface HostAdapters<E = never, R = never> {
   readonly controlStorePath: string;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
   readonly harnessRunners: ReadonlyArray<Harness.HarnessRunner>;
-  readonly scheduler: SchedulerConfig;
 }
 
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
@@ -237,9 +263,21 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const services = Layer.mergeAll(reconcileLayer, Executor.layer).pipe(
     Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),
   );
-  const scheduler = schedulerLayer(adapters.scheduler).pipe(Layer.provideMerge(services));
-  const withRecovery = recoveryLayer.pipe(Layer.provideMerge(scheduler));
-  return eventPublisherLayer.pipe(Layer.provideMerge(withRecovery));
+  return eventPublisherLayer.pipe(
+    Layer.provideMerge(
+      recoveryLayer.pipe(
+        Layer.provideMerge(
+          Layer.unwrap(
+            Effect.map(ControlStore, (store) =>
+              schedulerLayer(
+                configFromControlStore(store.health === "available" ? store.seed : defaultControlStore),
+              ),
+            ),
+          ).pipe(Layer.provideMerge(services)),
+        ),
+      ),
+    ),
+  );
 }
 
 export const serverLayer = <E, R>(adapters: HostAdapters<E, R>) =>

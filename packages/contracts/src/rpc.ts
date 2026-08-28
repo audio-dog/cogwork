@@ -2,7 +2,15 @@ import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
-import { DaemonStatus, SchedulerConfigUpdate, SchedulerStats, SchedulingState } from "./daemon";
+import {
+  ControlStore,
+  ControlStoreFailure,
+  DaemonLimitUpdate,
+  DaemonStatus,
+  SchedulerStats,
+  SchedulingState,
+  StaleControlStoreWrite,
+} from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { IssueTrackerError } from "./issue-tracker";
 import { PrincipalMiddleware } from "./principal";
@@ -11,6 +19,11 @@ import { TriageRole } from "./triage";
 import { WorkspaceRegistration, WorkspaceRegistrationError } from "./workspace";
 
 export const GetStatus = Rpc.make("GetStatus", { success: DaemonStatus });
+
+export const GetControlStore = Rpc.make("GetControlStore", {
+  success: ControlStore,
+  error: ControlStoreFailure,
+});
 
 export const ListRuns = Rpc.make("ListRuns", { success: Schema.Array(RunSummary) });
 
@@ -37,6 +50,7 @@ export const WatchEvents = Rpc.make("WatchEvents", {
 
 export const DaemonQueries = RpcGroup.make(
   GetStatus,
+  GetControlStore,
   ListRuns,
   GetRunEvents,
   ResolveWatchTarget,
@@ -80,9 +94,10 @@ export const SetScheduling = Rpc.make("SetScheduling", {
   success: SchedulerStats,
 });
 
-export const SetSchedulerConfig = Rpc.make("SetSchedulerConfig", {
-  payload: { update: SchedulerConfigUpdate },
-  success: SchedulerStats,
+export const SetDaemonLimit = Rpc.make("SetDaemonLimit", {
+  payload: { update: DaemonLimitUpdate },
+  success: ControlStore,
+  error: Schema.Union([ControlStoreFailure, StaleControlStoreWrite]),
 });
 
 export const RegisterWorkspace = Rpc.make("RegisterWorkspace", {
@@ -95,7 +110,7 @@ export const DaemonCommands = RpcGroup.make(
   CancelRun,
   Reclassify,
   SetScheduling,
-  SetSchedulerConfig,
+  SetDaemonLimit,
   RegisterWorkspace,
 ).middleware(PrincipalMiddleware);
 

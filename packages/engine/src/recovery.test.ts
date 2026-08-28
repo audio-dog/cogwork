@@ -202,7 +202,7 @@ const schedulerStub = (admitted: Ref.Ref<ReadonlyArray<EligibleWork>>, paused?: 
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: (_workspace, work) => Ref.update(admitted, (xs) => [...xs, work]),
     setScheduling: () => Effect.succeed(Scheduler.initialState),
-    setConfig: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 100 }),
+    setLimit: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 100 }),
     stats: paused
       ? Effect.map(Ref.get(paused), (value) => ({ ...Scheduler.initialState, paused: value }))
       : Effect.succeed(Scheduler.initialState),

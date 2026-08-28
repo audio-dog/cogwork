@@ -51,7 +51,7 @@ export const workspaceStatesOf = (registry: RegistryState, snapshot: ReconcileSn
   ];
 };
 
-const workspaceLoadsOf = (config: SchedulerConfig, state: SchedulerState, registry: RegistryState) => [
+const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, state: SchedulerState) => [
   ...registry.workspaces.map((workspace) => ({
     name: workspace.config.name,
     inFlight: state.perWorkspace.get(workspace.config.name) ?? 0,
@@ -70,9 +70,9 @@ const workspaceLoadsOf = (config: SchedulerConfig, state: SchedulerState, regist
 ];
 
 export const schedulerStatsOf = (
+  registry: RegistryState,
   config: SchedulerConfig,
   state: SchedulerState,
-  registry?: RegistryState,
 ): SchedulerStats => ({
   scheduling: state.paused ? "paused" : "running",
   globalInFlight: state.global,
@@ -80,11 +80,5 @@ export const schedulerStatsOf = (
   perWorkspaceLimit: config.perWorkspaceLimit,
   dailyBudgetUsed: state.budgetUsed,
   dailyBudgetLimit: config.dailyBudget,
-  perWorkspace: registry
-    ? workspaceLoadsOf(config, state, registry)
-    : [...state.perWorkspace].map(([name, inFlight]) => ({
-        name,
-        inFlight,
-        limit: config.perWorkspaceLimit,
-      })),
+  perWorkspace: workspaceLoadsOf(registry, config, state),
 });

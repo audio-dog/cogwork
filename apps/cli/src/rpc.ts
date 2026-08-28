@@ -24,12 +24,8 @@ export interface DaemonOptions {
   readonly socketPath: string;
   readonly controlStorePath: string;
   readonly credentialsPath: string;
-  readonly maxConcurrency: number;
-  readonly maxPerWorkspace: number;
-  readonly dailyBudget: number;
   readonly pollIntervalMillis: number;
   readonly drainGraceMillis: number;
-  readonly startPaused: boolean;
 }
 
 const prepareSocketDir = (socketPath: string) =>
@@ -105,12 +101,6 @@ export const serverLayer = (options: DaemonOptions) =>
     controlStorePath: options.controlStorePath,
     worktrees: worktreeManagerLayer,
     harnessRunners,
-    scheduler: {
-      globalLimit: options.maxConcurrency,
-      perWorkspaceLimit: options.maxPerWorkspace,
-      dailyBudget: options.dailyBudget,
-      startPaused: options.startPaused,
-    },
   });
 
 export const clientLayer = (socketPath: string) =>

@@ -5,7 +5,15 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Command from "effect/unstable/cli/Command";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { daemonCommand, runEventsCommand, runsCommand, statusCommand, watchCommand } from "./commands";
+import {
+  daemonCommand,
+  limitsCommand,
+  runEventsCommand,
+  runsCommand,
+  schedulingCommand,
+  statusCommand,
+  watchCommand,
+} from "./commands";
 import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
 import { workspaceCommand } from "./workspace-commands";
@@ -14,6 +22,8 @@ import { worktreeCommand } from "./worktree-commands";
 const cli = Command.make("cogwork").pipe(
   Command.withSubcommands([
     daemonCommand,
+    limitsCommand,
+    schedulingCommand,
     statusCommand,
     runsCommand,
     runEventsCommand,

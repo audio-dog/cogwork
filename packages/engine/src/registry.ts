@@ -20,7 +20,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import {
   bootControlStoreLayer,
   ControlStore,
-  type ControlStoreStatus,
+  type ControlStoreService,
   controlStoreClientLayer,
 } from "./control-store";
 import {
@@ -223,7 +223,7 @@ const selectWorkspaceBinding = Effect.fn("WorkspaceRegistry.selectWorkspaceBindi
   return row;
 });
 
-const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: ControlStoreStatus) {
+const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: ControlStoreService) {
   if (store.health === "unavailable") return emptyRegistry;
   const rows = yield* selectRows();
   const outcomes = yield* Effect.forEach(rows, (row) => Effect.result(loadWorkspace(row)));

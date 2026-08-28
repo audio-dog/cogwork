@@ -96,6 +96,9 @@ export const WorktreeConfig = Schema.Struct({
 });
 export type WorktreeConfig = typeof WorktreeConfig.Type;
 
+export const WorkspaceConcurrency = Schema.Int.check(Schema.isGreaterThan(0));
+export type WorkspaceConcurrency = typeof WorkspaceConcurrency.Type;
+
 export const WorkspaceInputWorktreeConfig = Schema.Struct({
   linkPaths: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   setup: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
@@ -126,7 +129,7 @@ export const WorkspaceRegistration = Schema.Struct({
   sourceControl: Schema.optional(SourceControlConfig),
   linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   worktrees: Schema.optional(WorkspaceBindingWorktreeConfig),
-  concurrency: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+  concurrency: Schema.optional(WorkspaceConcurrency),
 });
 export type WorkspaceRegistration = typeof WorkspaceRegistration.Type;
 export type WorkspaceRegistrationInput = Schema.Codec.Encoded<typeof WorkspaceRegistration>;

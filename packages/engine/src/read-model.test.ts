@@ -178,10 +178,11 @@ describe("workspaceInfoOf", () => {
 describe("schedulerStatsOf", () => {
   it("reports the durable workspace limit even with no run in flight", () => {
     const registered = { ...workspace, workspaceLimit: 2 };
-    const stats = schedulerStatsOf({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }, initialState, {
-      workspaces: [registered],
-      failures: [],
-    });
+    const stats = schedulerStatsOf(
+      { workspaces: [registered], failures: [] },
+      { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
+      initialState,
+    );
 
     assert.deepStrictEqual(stats.perWorkspace, [{ name: workspace.config.name, inFlight: 0, limit: 2 }]);
   });
@@ -189,8 +190,6 @@ describe("schedulerStatsOf", () => {
   it("reports in-flight work for a registered workspace whose input failed", () => {
     const failed = workspaceId("failed");
     const stats = schedulerStatsOf(
-      { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
-      { ...initialState, global: 1, perWorkspace: new Map([[failed, 1]]) },
       {
         workspaces: [],
         failures: [
@@ -202,6 +201,8 @@ describe("schedulerStatsOf", () => {
           },
         ],
       },
+      { globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 },
+      { ...initialState, global: 1, perWorkspace: new Map([[failed, 1]]) },
     );
 
     assert.deepStrictEqual(stats.perWorkspace, [{ name: failed, inFlight: 1, limit: 2 }]);

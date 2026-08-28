@@ -21,7 +21,6 @@ const daemonArgs = (socketPath: string, drainGraceSeconds: number): readonly str
   socketPath,
   "--drain-grace",
   String(drainGraceSeconds),
-  "--start-paused",
 ];
 
 export const resolveEngineCommand = (input: ResolveEngineCommandInput): EngineCommand => {

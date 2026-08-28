@@ -1,4 +1,4 @@
-import type { SchedulerConfigUpdate, WorkspaceId } from "@cogwork/contracts";
+import type { ControlStore, DaemonLimitUpdate, WorkspaceId } from "@cogwork/contracts";
 import { byStageThenPriority as byStageThenPriorityOf } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -23,12 +23,18 @@ export interface SchedulerConfig {
   readonly startPaused?: boolean;
 }
 
-// Apply a partial config write, leaving any absent field at its current value.
-const applyConfigUpdate = (config: SchedulerConfig, update: SchedulerConfigUpdate): SchedulerConfig => ({
-  globalLimit: update.globalLimit ?? config.globalLimit,
-  perWorkspaceLimit: update.perWorkspaceLimit ?? config.perWorkspaceLimit,
-  dailyBudget: update.dailyBudget ?? config.dailyBudget,
+export const configFromControlStore = (controlStore: ControlStore): SchedulerConfig => ({
+  globalLimit: controlStore.daemonLimits.globalConcurrency,
+  perWorkspaceLimit: controlStore.daemonLimits.perWorkspaceConcurrency,
+  dailyBudget: controlStore.daemonLimits.dailyBudget,
+  startPaused: true,
 });
+
+const applyLimit = (config: SchedulerConfig, update: DaemonLimitUpdate): SchedulerConfig => {
+  if (update.key === "global-concurrency") return { ...config, globalLimit: update.value };
+  if (update.key === "per-workspace-concurrency") return { ...config, perWorkspaceLimit: update.value };
+  return { ...config, dailyBudget: update.value };
+};
 
 export interface SchedulerState {
   readonly global: number;
@@ -194,8 +200,6 @@ export const make = (config: SchedulerConfig) =>
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(seedState(config));
-    // The limits and budget are writable at runtime (the config-write RPC), so they live in a Ref
-    // rather than the closure — every tick and admit reads the current value.
     const configRef = yield* Ref.make(config);
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
@@ -275,8 +279,8 @@ export const make = (config: SchedulerConfig) =>
       return yield* Ref.get(stateRef);
     });
 
-    const setConfig = Effect.fn("Scheduler.setConfig")(function* (update: SchedulerConfigUpdate) {
-      return yield* Ref.updateAndGet(configRef, (current) => applyConfigUpdate(current, update));
+    const setLimit = Effect.fn("Scheduler.setLimit")(function* (update: DaemonLimitUpdate) {
+      return yield* Ref.updateAndGet(configRef, (current) => applyLimit(current, update));
     });
 
     return {
@@ -285,7 +289,7 @@ export const make = (config: SchedulerConfig) =>
       drain,
       admit,
       setScheduling,
-      setConfig,
+      setLimit,
       stats: Ref.get(stateRef),
       config: Ref.get(configRef),
     } as const;

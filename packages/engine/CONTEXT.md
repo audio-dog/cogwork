@@ -34,7 +34,7 @@ A per-workspace precondition inside `classify`: when `issueTracker.assigneeAllow
 _Avoid_: Assignee filter (it gates all stages, not just a view), permission check
 
 **Scheduler**:
-The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. In-flight counts and budgets live here and nowhere else. It acts on a given work item at most once per snapshot generation: a completed item is not re-picked until a newer snapshot re-confirms it is eligible, which is what stops a fast execute tick from re-running work that a slow reconcile has not yet caught up on (see ADR 0001).
+The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. The limits are seeded from durable Control store rows; in-flight counts and daily usage stay in memory. It acts on a given work item at most once per snapshot generation: a completed item is not re-picked until a newer snapshot re-confirms it is eligible, which is what stops a fast execute tick from re-running work that a slow reconcile has not yet caught up on (see ADR 0001).
 _Avoid_: Queue, dispatcher, runner
 
 **Drain**:

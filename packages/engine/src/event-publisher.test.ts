@@ -2,6 +2,7 @@ import {
   applyDaemonEvent,
   ClassifiedItem,
   DaemonRpcs,
+  defaultControlStore,
   HarnessName,
   initialBoard,
   itemKey,
@@ -24,6 +25,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
@@ -39,6 +41,13 @@ import { SourceControlProvider } from "./source-control";
 
 const runLedgerTestLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
 const runRecorderTestLayer = runRecorderLayer.pipe(Layer.provide(runLedgerTestLayer));
+const controlStoreLayer = Layer.succeed(ControlStore, {
+  health: "available",
+  seed: defaultControlStore,
+  picture: Effect.succeed(defaultControlStore),
+  setDaemonLimit: () => Effect.succeed(defaultControlStore),
+  withWrite: (effect) => effect,
+});
 
 const id = Schema.decodeSync(WorkItemId);
 const stats = Schema.decodeSync(SchedulerStats);
@@ -109,7 +118,7 @@ const schedulerStub = (statsRef: Ref.Ref<Scheduler.SchedulerState>) =>
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: () => Effect.void,
     setScheduling: () => Ref.get(statsRef),
-    setConfig: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
+    setLimit: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
     config: Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
     stats: Ref.get(statsRef),
   });
@@ -288,6 +297,7 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(runRecorderTestLayer),
       Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
+      Layer.provideMerge(controlStoreLayer),
       Layer.provideMerge(observing(itemsRef)),
     );
 
@@ -331,11 +341,17 @@ describe("DaemonEventPublisher", () => {
         const worker = yield* Reconcile.ReconcileWorker;
         const ledger = yield* RunLedger.RunLedger;
         const scheduler = yield* Scheduler.Scheduler;
+        const registry = yield* Registry.WorkspaceRegistry;
 
         yield* worker.submit();
         yield* ledger.insertRun(runningRun);
 
-        const seed = [...(yield* client.WatchEvents().pipe(Stream.take(4), Stream.runCollect))];
+        const seed = [
+          ...(yield* client.WatchEvents().pipe(
+            Stream.takeUntil((event) => event._tag === "SeedEnd"),
+            Stream.runCollect,
+          )),
+        ];
         const board = seed.reduce(applyDaemonEvent, initialBoard);
 
         const state = (yield* worker.snapshot).workspaces[0];
@@ -346,8 +362,7 @@ describe("DaemonEventPublisher", () => {
           ),
         );
         const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
-        const registry = yield* Registry.WorkspaceRegistry;
-        const expectedScheduler = schedulerStatsOf(yield* scheduler.config, yield* scheduler.stats, registry);
+        const expectedScheduler = schedulerStatsOf(registry, yield* scheduler.config, yield* scheduler.stats);
 
         const status = yield* client.GetStatus();
         const expectedWorkspaces = new Map(
@@ -361,6 +376,7 @@ describe("DaemonEventPublisher", () => {
         assert.deepStrictEqual(board.runs, expectedRuns);
         assert.deepStrictEqual(board.workspaces, expectedWorkspaces);
         assert.deepStrictEqual(board.scheduler, expectedScheduler);
+        assert.deepStrictEqual(board.controlStore, defaultControlStore);
       }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
     }),
   );
@@ -380,9 +396,13 @@ describe("DaemonEventPublisher", () => {
         if (state === undefined) return assert.fail("expected a reconciled workspace");
         const [item] = classifiedItemsOf(state);
         if (item === undefined) return assert.fail("expected a classified item");
-        const live = { _tag: "ItemChanged", workspace: state.name, item } as const;
+        const live = { _tag: "ItemRemoved", workspace: state.name, id: item.id } as const;
 
-        const watcher = yield* client.WatchEvents().pipe(Stream.take(5), Stream.runCollect, Effect.forkChild);
+        const watcher = yield* client.WatchEvents().pipe(
+          Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
         const busEvent = yield* Stream.fromSubscription(subscription).pipe(
           Stream.take(1),
           Stream.runCollect,
@@ -397,12 +417,12 @@ describe("DaemonEventPublisher", () => {
         const seed = received.slice(0, boundaryIndex);
 
         assert.strictEqual(boundary.length, 1);
-        assert.strictEqual(received[boundaryIndex + 1]?._tag, "ItemChanged");
+        assert.strictEqual(received[boundaryIndex + 1]?._tag, "ItemRemoved");
         assert.strictEqual(new Set(seed.map((event) => event.emittedAtMillis)).size, 1);
         assert.strictEqual(typeof boundary[0]?.emittedAtMillis, "number");
         assert.deepStrictEqual(
           observedByBus.map((event) => event._tag),
-          ["ItemChanged"],
+          ["ItemRemoved"],
         );
       }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
     }),

@@ -43,7 +43,7 @@ _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot neve
 ### Configuration
 
 **Control store**:
-The daemon's single local database of everything Cogwork itself has been told on this machine — install records, Connection records, settings at every Scope that is not a file, Runtime host bindings, minted Scope identities, and the store's own schema metadata. One database per machine, under `~/.cogwork`.
+The daemon's single local database of everything Cogwork itself has been told on this machine — install records, Connection records, settings at every Scope that is not a file, Runtime host bindings, minted Scope identities, daemon runtime limits, and the store's own schema metadata. One database per machine, under `~/.cogwork`.
 **It fails closed.** Unlike the Credential store it holds no secrets, and unlike the Run ledger it is not disposable — it is the authority the Engine resolves a Run Plan from, so a store it cannot open or trust stops dispatch rather than degrading it. The Run ledger's rows live here too, and stay disposable by policy rather than by sitting in a separate file. See ADR 0015.
 _Avoid_: Settings store (it holds identities and bindings, not only settings), Run ledger (that one is disposable), Credential store (that one is secret), Settings profile (a Scope, not a store), database, config
 
@@ -294,7 +294,7 @@ One execution of one run plan by one harness, captured with its events, outcome,
 _Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
-The daemon's local store of runs and their events — in-memory, or a region of the Control store on disk. Holds run history, harness sessions, and token usage. It does not hold scheduling budgets (those live only in the scheduler's memory), and losing it is safe because the issue tracker stays authoritative for coordination.
+The daemon's local store of runs and their events — in-memory, or a region of the Control store on disk. Holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because the issue tracker stays authoritative for coordination.
 _Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it). Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
 
 **Run event**:
@@ -376,7 +376,7 @@ _Avoid_: Observed PR (the engine-internal form the provider reads, which also ca
 ### Client RPC
 
 **Query RPC / command RPC**:
-The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* is an imperative that changes daemon state or behavior — cancel a run, reclassify a work item, pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries. `DaemonQueries` and `DaemonCommands` are the two groups; `DaemonRpcs` is their merge, what the daemon serves and a client generates against. The command group holds `CancelRun`, `Reclassify`, `SetScheduling`, and `SetSchedulerConfig` today, and fills in further with the settings and Plugin management slice.
+The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* is an imperative that changes daemon state or behavior — cancel a run, reclassify a work item, pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries. `DaemonQueries` and `DaemonCommands` are the two groups; `DaemonRpcs` is their merge, what the daemon serves and a client generates against. The command group holds `CancelRun`, `Reclassify`, `SetScheduling`, and `SetDaemonLimit` today, and fills in further with the settings and Plugin management slice.
 _Avoid_: Write RPC (too narrow — a command may change behavior, like pausing the scheduler, not only write data), mutation, getter
 
 **Principal**:
@@ -384,7 +384,7 @@ The caller behind an RPC, injected into every handler's context by one `RpcMiddl
 _Avoid_: User, account, session (the harness's conversation handle), token (the credential, not the caller)
 
 **Daemon event**:
-The unit a client watches on the daemon's live feed — a tagged envelope over everything a client view must react to: a harness event on a run (run activity), a work item's classification change or removal, a run summary change, a workspace's state change, and a scheduler change. The subscription self-seeds — it opens by replaying the current state as ordinary events — so one subscription per client is the whole story; the client fans out its own views. Each seed is complete: derived state folds from the newest subscription's seed, and anything the seed does not re-state is gone. `RunActivity` is live-only on `WatchEvents`. `SeedEnd` is a subscription-control event: it carries a delivery fact, not a domain fact, and changes no derived state. The watch endpoint emits it after the seed and before the live tail; the daemon event bus never carries it.
+The unit a client watches on the daemon's live feed — a tagged envelope over everything a client view must react to: a harness event on a run (run activity), a work item's classification change or removal, a run summary change, a workspace's state change, the whole Control store picture, and a scheduler change. The subscription self-seeds — it opens by replaying the current state as ordinary events — so one subscription per client is the whole story; the client fans out its own views. Each seed is complete: derived state folds from the newest subscription's seed, and anything the seed does not re-state is gone. `RunActivity` is live-only on `WatchEvents`. `SeedEnd` is a subscription-control event: it carries a delivery fact, not a domain fact, and changes no derived state. The watch endpoint emits it after the seed and before the live tail; the daemon event bus never carries it.
 _Avoid_: Run activity (now one kind of daemon event), notification, log line
 
 **Board**:

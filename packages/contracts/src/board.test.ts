@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { WorkspaceId } from "./base-schemas";
 import { applyDaemonEvent, initialBoard, liveOnly } from "./board";
-import { SchedulerStats } from "./daemon";
+import { ControlStore, SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
 
@@ -12,6 +12,7 @@ const workspace = Schema.decodeSync(WorkspaceId);
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
 const runSummary = Schema.decodeSync(RunSummary);
 const schedulerStats = Schema.decodeSync(SchedulerStats);
+const controlStore = Schema.decodeSync(ControlStore);
 const workspaceState = Schema.decodeSync(WorkspaceState);
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
@@ -198,7 +199,7 @@ describe("applyDaemonEvent", () => {
       perWorkspaceLimit: 4,
       dailyBudgetUsed: 2,
       dailyBudgetLimit: 10,
-      perWorkspace: [{ name: "acme", inFlight: 1, limit: 4 }],
+      perWorkspace: [{ name: "acme", inFlight: 1, limit: 3 }],
     });
 
     const board = fold([
@@ -208,6 +209,32 @@ describe("applyDaemonEvent", () => {
 
     assert.strictEqual(board.runs.get("run-1")?.status, "running");
     assert.strictEqual(board.scheduler?.globalInFlight, 1);
+  });
+
+  it("tracks the latest whole Control store picture", () => {
+    const first = controlStore({
+      daemonLimits: {
+        globalConcurrency: 4,
+        perWorkspaceConcurrency: 4,
+        dailyBudget: 50,
+        revision: 0,
+      },
+    });
+    const next = controlStore({
+      daemonLimits: {
+        globalConcurrency: 8,
+        perWorkspaceConcurrency: 3,
+        dailyBudget: 20,
+        revision: 1,
+      },
+    });
+
+    const board = fold([
+      event({ _tag: "ControlStoreChanged", controlStore: first }),
+      event({ _tag: "ControlStoreChanged", controlStore: next }),
+    ]);
+
+    assert.deepStrictEqual(board.controlStore, next);
   });
 
   it("keeps running runs and only the recent settled run window", () => {

@@ -9,11 +9,15 @@ import * as Path from "effect/Path";
 import * as TestClock from "effect/testing/TestClock";
 import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
 
+const storeLayerAt = (storePath: string) =>
+  bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath)));
+
 const storeAt = (storePath: string) =>
-  Effect.provide(
-    ControlStore,
-    bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath))),
-  );
+  Effect.map(ControlStore, (store) =>
+    store.health === "available"
+      ? { health: store.health }
+      : { health: store.health, message: store.message },
+  ).pipe(Effect.provide(storeLayerAt(storePath)));
 
 const poke = (storePath: string, statements: string) =>
   Effect.acquireUseRelease(
@@ -55,9 +59,66 @@ layer(NodeServices.layer)((it) => {
           storePath,
           "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
         ),
-        [{ name: "run_events" }, { name: "runs" }, { name: "sessions" }, { name: "workspaces" }],
+        [
+          { name: "daemon_limits" },
+          { name: "run_events" },
+          { name: "runs" },
+          { name: "sessions" },
+          { name: "workspaces" },
+        ],
       );
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+    }),
+  );
+
+  it.effect("persists every limit column and reads them after restart", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* Effect.gen(function* () {
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return assert.fail(store.message);
+        yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
+        yield* store.setDaemonLimit({ key: "per-workspace-concurrency", value: 3, expectedRevision: 1 });
+        yield* store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 2 });
+      }).pipe(Effect.provide(storeLayerAt(storePath)));
+      const seed = yield* Effect.gen(function* () {
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
+        return store.seed;
+      }).pipe(Effect.provide(storeLayerAt(storePath)));
+
+      assert.deepStrictEqual(seed.daemonLimits, {
+        globalConcurrency: 8,
+        perWorkspaceConcurrency: 3,
+        dailyBudget: 20,
+        revision: 3,
+      });
+    }),
+  );
+
+  it.effect("rejects a stale revision without changing the durable row", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const stale = yield* Effect.gen(function* () {
+        const store = yield* ControlStore;
+        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
+        yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
+        return yield* Effect.flip(
+          store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 0 }),
+        );
+      }).pipe(Effect.provide(storeLayerAt(storePath)));
+
+      assert.strictEqual(stale._tag, "StaleControlStoreWrite");
+      if (stale._tag !== "StaleControlStoreWrite") return assert.fail("expected stale write");
+      assert.strictEqual(stale.expectedRevision, 0);
+      assert.strictEqual(stale.actualRevision, 1);
+      assert.deepStrictEqual(
+        yield* query(
+          storePath,
+          "SELECT global_concurrency, per_workspace_concurrency, daily_budget, revision FROM daemon_limits",
+        ),
+        [{ global_concurrency: 8, per_workspace_concurrency: 4, daily_budget: 50, revision: 1 }],
+      );
     }),
   );
 

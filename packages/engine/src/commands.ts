@@ -1,9 +1,9 @@
 import {
   type ClassifiedItem,
+  type DaemonLimitUpdate,
   RunAlreadyFinished,
   type RunId,
   RunNotFound,
-  type SchedulerConfigUpdate,
   type TriageRole,
   type WorkItemId,
   WorkItemNotFound,
@@ -14,6 +14,7 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
@@ -142,13 +143,21 @@ export const setScheduling = Effect.fn("Daemon.SetScheduling")(function* (payloa
   return yield* publisher.publishScheduler();
 });
 
-export const setSchedulerConfig = Effect.fn("Daemon.SetSchedulerConfig")(function* (payload: {
-  readonly update: SchedulerConfigUpdate;
+export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payload: {
+  readonly update: DaemonLimitUpdate;
 }) {
+  const store = yield* ControlStore;
   const scheduler = yield* Scheduler;
   const publisher = yield* DaemonEventPublisher;
-  yield* scheduler.setConfig(payload.update);
-  return yield* publisher.publishScheduler();
+  return yield* store.withWrite(
+    Effect.gen(function* () {
+      const controlStore = yield* store.setDaemonLimit(payload.update);
+      yield* scheduler.setLimit(payload.update);
+      const published = yield* publisher.publishControlStore(controlStore);
+      yield* publisher.publishScheduler();
+      return published;
+    }),
+  );
 });
 
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
