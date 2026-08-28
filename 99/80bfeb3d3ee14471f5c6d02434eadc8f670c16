@@ -1,0 +1,22 @@
+packages/engine/src/context-assembler.test.ts
+  s_3ad8c99e0b0d7f::t_1e762ac6832709 286
+  s_3ad8c99e0b0d7f::t_347370c3712329 293-298,300,302
+packages/engine/src/context-assembler.ts
+  s_3ad8c99e0b0d7f::t_02a372dee56379 165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9980bfeb3d3ee14471f5c6d02434eadc8f670c16",
+  "prompts": {},
+  "sessions": {
+    "s_3ad8c99e0b0d7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-4975-7cf3-8b18-af92906892ca",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
