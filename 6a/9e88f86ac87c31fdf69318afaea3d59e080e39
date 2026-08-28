@@ -1,0 +1,21 @@
+apps/cli/src/worktree-commands.ts
+  s_131eaddb8a39f4::t_611024c24b3c36 51
+apps/cli/src/login-commands.ts
+  s_131eaddb8a39f4::t_611024c24b3c36 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6a9e88f86ac87c31fdf69318afaea3d59e080e39",
+  "prompts": {},
+  "sessions": {
+    "s_131eaddb8a39f4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a045d8-5cd6-78c0-a7a5-8d19080cbcbd",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
