@@ -313,8 +313,8 @@ describe("defaultRunBudget", () => {
   it("gives read-only stages less wall-clock time than writing stages", () => {
     assert.strictEqual(defaultRunBudget("triage"), "15 minutes");
     assert.strictEqual(defaultRunBudget("verify"), "15 minutes");
-    assert.strictEqual(defaultRunBudget("implement"), "45 minutes");
-    assert.strictEqual(defaultRunBudget("follow-up"), "45 minutes");
+    assert.strictEqual(defaultRunBudget("implement"), "2 hours");
+    assert.strictEqual(defaultRunBudget("follow-up"), "2 hours");
   });
 });
 
