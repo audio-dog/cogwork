@@ -90,6 +90,7 @@ describe("Scheduler.configFromControlStore", () => {
         dailyBudget: 20,
         revision: 2,
       },
+      operationSettings: [],
     });
 
     assert.deepStrictEqual(config, {
