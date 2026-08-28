@@ -180,6 +180,18 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       raw: pretty(event.run),
       lowSignal: false,
     };
+  if (event._tag === "WorkspaceRemoved")
+    return {
+      id: rowId(ordinal),
+      kind: "workspace",
+      atMillis,
+      label: activityLabels.workspace,
+      summary: `${event.workspace} deregistered`,
+      severity: "info",
+      entity: null,
+      raw: pretty({ workspace: event.workspace }),
+      lowSignal: false,
+    };
   if (event._tag === "WorkspaceChanged") {
     const workspace: WorkspaceState = event.workspace;
     const failed = workspace._tag === "Failed";

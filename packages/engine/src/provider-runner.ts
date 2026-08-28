@@ -80,7 +80,7 @@ const isReadOnlyStage = (stage: LifecycleStage) => stage === "triage" || stage =
 const readOnlyLoopBudget = 12;
 const writingLoopBudget = 40;
 const readOnlyRunBudget = "15 minutes";
-const writingRunBudget = "45 minutes";
+const writingRunBudget = "2 hours";
 
 export const defaultLoopBudget = (stage: LifecycleStage) =>
   isReadOnlyStage(stage) ? readOnlyLoopBudget : writingLoopBudget;

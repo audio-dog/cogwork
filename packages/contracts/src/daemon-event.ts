@@ -51,6 +51,7 @@ export const DaemonEvent = Schema.TaggedUnion({
   ItemRemoved: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId, id: WorkItemId },
   RunChanged: { emittedAtMillis: Schema.Finite, run: RunSummary },
   WorkspaceChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceState },
+  WorkspaceRemoved: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId },
   ControlStoreChanged: { emittedAtMillis: Schema.Finite, controlStore: ControlStore },
   PluginsChanged: { emittedAtMillis: Schema.Finite, plugins: PluginOverview },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },

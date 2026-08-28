@@ -15,7 +15,8 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "vendor": "node scripts/vendor.mjs",
-    "setup-worktree": "node scripts/setup-worktree.mjs"
+    "setup-worktree": "node scripts/setup-worktree.mjs",
+    "register-workspaces": "node scripts/register-workspaces.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",

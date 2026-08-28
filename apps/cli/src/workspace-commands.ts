@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
+import { DaemonRpcs, WorkspaceId, WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
 import { Git } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -18,8 +18,11 @@ const socketFlag = Flag.string("socket").pipe(
 );
 
 const inputFlag = Flag.string("input").pipe(Flag.withDescription("One-time JSON registration input"));
+const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("WorkspaceId to manage"));
+const checkoutFlag = Flag.string("checkout").pipe(Flag.withDescription("New absolute checkout path"));
 
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceRegistration));
+const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
 
 const readRegistration = Effect.fn("workspace.readRegistration")(function* (inputPath: string) {
   const fs = yield* FileSystem.FileSystem;
@@ -67,8 +70,66 @@ export const registerWorkspace = Effect.fn("workspace.registerWithLayers")(funct
   );
 });
 
+export const formatRebindResult = (workspace: WorkspaceState) => {
+  if (workspace._tag === "Failed") {
+    return `Re-bound ${workspace.displayName ?? workspace.name ?? workspace.source}, but Workspace input failed: ${workspace.message}`;
+  }
+  const identity = workspace.displayName ? `${workspace.displayName} (${workspace.name})` : workspace.name;
+  return `Re-bound ${identity} to ${workspace.checkoutPath}.`;
+};
+
+const runDeregister = Effect.fn("workspace.deregister")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+}) {
+  const workspace = yield* decodeWorkspaceId(options.workspace);
+  const client = yield* RpcClient.make(DaemonRpcs);
+  const deregistered = yield* client.DeregisterWorkspace({ workspace });
+  yield* Console.log(`Deregistered ${deregistered}.`);
+});
+
+const runRebind = Effect.fn("workspace.rebind")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+  readonly checkout: string;
+}) {
+  const workspace = yield* decodeWorkspaceId(options.workspace);
+  const client = yield* RpcClient.make(DaemonRpcs);
+  const rebound = yield* client.RebindWorkspace({ workspace, checkoutPath: options.checkout });
+  const message = formatRebindResult(rebound);
+  if (rebound._tag === "Failed") return yield* Console.error(message);
+  yield* Console.log(message);
+});
+
+export const deregisterWorkspace = Effect.fn("workspace.deregisterWithLayers")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+}) {
+  return yield* runDeregister(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
+});
+
+export const rebindWorkspace = Effect.fn("workspace.rebindWithLayers")(function* (options: {
+  readonly socket: string;
+  readonly workspace: string;
+  readonly checkout: string;
+}) {
+  return yield* runRebind(options).pipe(Effect.scoped, Effect.provide(clientLayer(options.socket)));
+});
+
 const registerCommand = Command.make("register", { socket: socketFlag, input: inputFlag }).pipe(
   Command.withHandler(registerWorkspace),
 );
 
-export const workspaceCommand = Command.make("workspace").pipe(Command.withSubcommands([registerCommand]));
+const deregisterCommand = Command.make("deregister", { socket: socketFlag, workspace: workspaceFlag }).pipe(
+  Command.withHandler(deregisterWorkspace),
+);
+
+const rebindCommand = Command.make("re-bind", {
+  socket: socketFlag,
+  workspace: workspaceFlag,
+  checkout: checkoutFlag,
+}).pipe(Command.withHandler(rebindWorkspace));
+
+export const workspaceCommand = Command.make("workspace").pipe(
+  Command.withSubcommands([registerCommand, deregisterCommand, rebindCommand]),
+);

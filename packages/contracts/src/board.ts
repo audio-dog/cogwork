@@ -70,8 +70,11 @@ export const workspaceFailureState = (failure: WorkspaceFailureInfo) => ({
   message: failure.message,
 });
 
-const withoutItem = (items: ReadonlyMap<string, BoardItem>, key: string) =>
+const withoutKey = <A>(items: ReadonlyMap<string, A>, key: string) =>
   new Map([...items].filter(([entryKey]) => entryKey !== key));
+
+const withoutWorkspaceItems = (items: ReadonlyMap<string, BoardItem>, workspace: WorkspaceId) =>
+  new Map([...items].filter(([, item]) => item.workspace !== workspace));
 
 export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
   DaemonEvent.match(event, {
@@ -83,7 +86,7 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
     }),
     ItemRemoved: ({ workspace, id }) => ({
       ...board,
-      items: withoutItem(board.items, itemKey(workspace, id)),
+      items: withoutKey(board.items, itemKey(workspace, id)),
     }),
     RunChanged: ({ run }) => ({
       ...board,
@@ -92,6 +95,11 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
     WorkspaceChanged: ({ workspace }) => ({
       ...board,
       workspaces: new Map(board.workspaces).set(workspaceKey(workspace), workspace),
+    }),
+    WorkspaceRemoved: ({ workspace }) => ({
+      ...board,
+      items: withoutWorkspaceItems(board.items, workspace),
+      workspaces: withoutKey(board.workspaces, workspace),
     }),
     ControlStoreChanged: ({ controlStore }) => ({ ...board, controlStore }),
     PluginsChanged: ({ plugins }) => ({ ...board, plugins }),
