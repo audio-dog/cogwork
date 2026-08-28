@@ -22,6 +22,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as MutableRef from "effect/MutableRef";
+import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -525,9 +526,10 @@ describe("RunControl", () => {
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
       const fiber = yield* Effect.forkChild(Effect.void);
-      yield* control.register(rid("run-1"), fiber);
+      yield* control.register(rid("run-1"), fiber, registered);
       yield* Fiber.await(fiber);
 
+      assert.isTrue(Option.isNone(yield* control.workspaceFor(rid("run-1"))));
       assert.isFalse(yield* control.cancel(rid("run-1")));
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
   );
@@ -551,13 +553,15 @@ describe("RunControl", () => {
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
       const fiber = yield* Effect.forkChild(Effect.never);
-      yield* control.register(rid("run-1"), fiber);
+      yield* control.register(rid("run-1"), fiber, registered);
 
+      assert.deepStrictEqual(yield* control.workspaceFor(rid("run-1")), Option.some(registered));
       const cancelled = yield* control.cancel(rid("run-1"));
       const exit = yield* Fiber.await(fiber);
       assert.isTrue(cancelled);
       assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
 
+      assert.isTrue(Option.isNone(yield* control.workspaceFor(rid("run-1"))));
       assert.isFalse(yield* control.cancel(rid("run-1")));
       assert.isFalse(yield* control.cancel(rid("ghost")));
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
@@ -826,6 +830,40 @@ describe("workspace lifecycle commands", () => {
       );
     }).pipe(
       Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("keeps cancellation cleanup for a deregistered in-flight Run", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const registeredState = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      if (registeredState._tag !== "Registered") return assert.fail("expected registration");
+
+      const registry = yield* Registry.WorkspaceRegistry;
+      const registeredWorkspace = registry.workspaces.at(0);
+      if (!registeredWorkspace) return assert.fail("expected registered workspace");
+
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord({ workspace: registeredState.name }));
+      const fiber = yield* Effect.forkChild(Effect.never);
+      const control = yield* RunControl.RunControl;
+      yield* control.register(rid("run-1"), fiber, registeredWorkspace);
+
+      yield* client.DeregisterWorkspace({ workspace: registeredState.name });
+      yield* client.CancelRun({ runId: rid("run-1") });
+
+      const recorded = yield* Ref.get(calls);
+      assert.deepStrictEqual(recorded.handOff, [
+        { workItem: id("AUD-1"), outcome: { stage: "implement", note: undefined } },
+      ]);
+      assert.deepStrictEqual(recorded.released, [id("AUD-1")]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(recordingTracker([], calls), schedulerStub(), controlStoreStub(), registries),
+      ),
       Effect.scoped,
     );
   });

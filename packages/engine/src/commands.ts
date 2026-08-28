@@ -15,6 +15,7 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
@@ -74,6 +75,7 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const runControl = yield* RunControl;
+  const controlledWorkspace = yield* runControl.workspaceFor(payload.runId);
   yield* runControl.cancel(payload.runId);
 
   const endedAtMillis = yield* Clock.currentTimeMillis;
@@ -87,7 +89,8 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const registry = yield* WorkspaceRegistry;
-  const workspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
+  const workspace =
+    Option.getOrUndefined(controlledWorkspace) ?? findWorkspaceIssueTrackerBinding(registry, run.workspace);
   if (workspace !== undefined) {
     const issueTracker = yield* IssueTracker;
     yield* issueTracker
