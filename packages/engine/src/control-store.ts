@@ -5,6 +5,10 @@ import {
   DaemonLimits as DaemonLimitsSchema,
   type DaemonLimitUpdate,
   defaultDaemonLimits,
+  type OperationSettingCell,
+  type OperationSettingRow,
+  OperationSettingRow as OperationSettingRowSchema,
+  type OperationSettingUpdate,
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
@@ -29,6 +33,9 @@ export type ControlStoreService =
       readonly setDaemonLimit: (
         update: DaemonLimitUpdate,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure | StaleControlStoreWrite>;
+      readonly updateOperationSetting: (
+        update: OperationSettingUpdate,
+      ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     }
   | {
@@ -39,6 +46,9 @@ export type ControlStoreService =
       readonly setDaemonLimit: (
         update: DaemonLimitUpdate,
       ) => Effect.Effect<never, ControlStoreFailure | StaleControlStoreWrite>;
+      readonly updateOperationSetting: (
+        update: OperationSettingUpdate,
+      ) => Effect.Effect<never, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     };
 export class ControlStoreBootError extends Data.TaggedError("ControlStoreBootError")<{
@@ -53,10 +63,59 @@ const storeFailure = (operation: string) => (error: unknown) =>
   ControlStoreFailure.make({ operation, message: messageOf(error) });
 
 const decodeDaemonLimits = Schema.decodeUnknownEffect(DaemonLimitsSchema);
+const decodeOperationSettingRow = Schema.decodeUnknownEffect(OperationSettingRowSchema);
+const JsonValue = Schema.fromJsonString(Schema.Unknown);
+const decodeJson = Schema.decodeUnknownEffect(JsonValue);
+const encodeJson = Schema.encodeUnknownEffect(JsonValue);
 const isStaleControlStoreWrite = Schema.is(StaleControlStoreWrite);
 
 const setDaemonLimitFailure = (error: unknown) =>
   isStaleControlStoreWrite(error) ? error : storeFailure("set daemon limit")(error);
+
+const StoredOperationSettingRow = Schema.Struct({
+  setting: Schema.String,
+  level: Schema.Literals(["default", "workflow", "operation"]),
+  workflow: Schema.String,
+  operation: Schema.String,
+  scope: Schema.Literals(["settings-profile", "runtime-host", "private-workspace-overlay"]),
+  workspace: Schema.String,
+  value: Schema.String,
+});
+type StoredOperationSettingRow = typeof StoredOperationSettingRow.Type;
+
+const decodeStoredOperationSettingRows = Schema.decodeUnknownEffect(Schema.Array(StoredOperationSettingRow));
+
+const levelOf = (row: StoredOperationSettingRow) => {
+  if (row.level === "default") return { _tag: "Default" };
+  if (row.level === "workflow") return { _tag: "Workflow", workflow: row.workflow };
+  return { _tag: "Operation", workflow: row.workflow, operation: row.operation };
+};
+
+const scopeOf = (row: StoredOperationSettingRow) => {
+  if (row.scope === "settings-profile") return { _tag: "SettingsProfile" };
+  if (row.scope === "runtime-host") return { _tag: "RuntimeHost" };
+  return { _tag: "PrivateWorkspaceOverlay", workspace: row.workspace };
+};
+
+const readOperationSettings = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    const stored = yield* sql<StoredOperationSettingRow>`
+      SELECT setting, level, workflow, operation, scope, workspace, value
+      FROM operation_settings
+      ORDER BY setting, level, workflow, operation, scope, workspace
+    `;
+    const rows = yield* decodeStoredOperationSettingRows(stored);
+    return yield* Effect.forEach(rows, (row) =>
+      Effect.flatMap(decodeJson(row.value), (value) =>
+        decodeOperationSettingRow({
+          setting: row.setting,
+          level: levelOf(row),
+          scope: scopeOf(row),
+          value,
+        }),
+      ),
+    );
+  });
 
 const readPicture = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
@@ -70,8 +129,57 @@ const readPicture = (sql: SqlClient.SqlClient) =>
       WHERE id = 1
     `;
     const daemonLimits = yield* decodeDaemonLimits(row);
-    return { daemonLimits };
+    const operationSettings = yield* readOperationSettings(sql);
+    return { daemonLimits, operationSettings };
   });
+
+const storedLevel = (level: OperationSettingCell["level"]) => {
+  if (level._tag === "Default") return { level: "default", workflow: "", operation: "" };
+  if (level._tag === "Workflow") return { level: "workflow", workflow: level.workflow, operation: "" };
+  return { level: "operation", workflow: level.workflow, operation: level.operation };
+};
+
+const storedScope = (scope: OperationSettingCell["scope"]) => {
+  if (scope._tag === "SettingsProfile") return { scope: "settings-profile", workspace: "" };
+  if (scope._tag === "RuntimeHost") return { scope: "runtime-host", workspace: "" };
+  return { scope: "private-workspace-overlay", workspace: scope.workspace };
+};
+
+const storedCell = (cell: OperationSettingCell) => ({
+  setting: cell.setting,
+  ...storedLevel(cell.level),
+  ...storedScope(cell.scope),
+});
+
+const setOperationSetting = Effect.fn("ControlStore.setOperationSetting")(function* (
+  sql: SqlClient.SqlClient,
+  row: OperationSettingRow,
+) {
+  const cell = storedCell(row);
+  const value = yield* encodeJson(row.value);
+  yield* sql`
+    INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
+    VALUES (${cell.setting}, ${cell.level}, ${cell.workflow}, ${cell.operation}, ${cell.scope}, ${cell.workspace}, ${value})
+    ON CONFLICT (setting, level, workflow, operation, scope, workspace)
+    DO UPDATE SET value = excluded.value
+  `;
+});
+
+const clearOperationSetting = Effect.fn("ControlStore.clearOperationSetting")(function* (
+  sql: SqlClient.SqlClient,
+  cell: OperationSettingCell,
+) {
+  const stored = storedCell(cell);
+  yield* sql`
+    DELETE FROM operation_settings
+    WHERE setting = ${stored.setting}
+      AND level = ${stored.level}
+      AND workflow = ${stored.workflow}
+      AND operation = ${stored.operation}
+      AND scope = ${stored.scope}
+      AND workspace = ${stored.workspace}
+  `;
+});
 
 const updateLimitRevision = (sql: SqlClient.SqlClient, update: DaemonLimitUpdate) => {
   if (update.key === "global-concurrency") {
@@ -116,12 +224,25 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
+  const updateOperationSetting = Effect.fn("ControlStore.updateOperationSetting")(function* (
+    update: OperationSettingUpdate,
+  ) {
+    return yield* sql.withTransaction(
+      Effect.gen(function* () {
+        if (update._tag === "Set") yield* setOperationSetting(sql, update.row);
+        else yield* clearOperationSetting(sql, update.cell);
+        return yield* readPicture(sql);
+      }),
+    );
+  });
   return {
     health: "available" as const,
     seed,
     picture: picture(),
     setDaemonLimit: (update: DaemonLimitUpdate) =>
       setDaemonLimit(update).pipe(Effect.mapError(setDaemonLimitFailure)),
+    updateOperationSetting: (update: OperationSettingUpdate) =>
+      updateOperationSetting(update).pipe(Effect.mapError(storeFailure("update Operation setting"))),
     withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => writeGate.withPermits(1)(effect),
   };
 });
@@ -210,6 +331,7 @@ const unavailable = (message: string): ControlStoreService => {
     seed: null,
     picture: Effect.fail(failure),
     setDaemonLimit: () => Effect.fail(failure),
+    updateOperationSetting: () => Effect.fail(failure),
     withWrite: (effect) => effect,
   };
 };
