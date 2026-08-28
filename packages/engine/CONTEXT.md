@@ -58,7 +58,7 @@ A schedulable pairing of a registered workspace with one eligible work item, plu
 _Avoid_: Job, task
 
 **Executor**:
-The unit that runs one candidate end to end: claim, worktree, resolve its operation, dispatch the run plan to the harness, stream events through the run recorder, decode the terminal structured operation result once through the shared Effect Schema, and record the attempt. A missing, duplicate, or malformed operation result is a retryable harness failure, not a text-parsing fallback.
+The unit that runs one candidate end to end: claim, worktree, resolve its operation, assemble and atomically persist the Run with its Run Plan, dispatch the accepted plan to the harness, stream events through the run recorder, decode the terminal structured operation result once through the shared Effect Schema, and record the attempt. A Run without a Plan is never dispatched. A missing, duplicate, or malformed operation result is a retryable harness failure, not a text-parsing fallback.
 _Avoid_: Runner, worker, harness
 
 **Run recorder**:
@@ -70,7 +70,7 @@ The place sessions are minted and the read model a runner pulls a session's hist
 _Avoid_: Message store (that's the persistence library's term for the one piece of the adapter), transcript database, second store
 
 **Harness request**:
-The envelope the executor hands the harness for one run: the checkout path, the turn's prompt, model/effort, MCP servers, and a `session` reference — the `SessionId` this run continues, or null for a fresh start. It references a session rather than shipping one; no frozen transcript ever crosses the seam, so compaction can live inside the runner's loop where context actually grows. The prompt is only this run's instruction, never accumulated history.
+The projection the executor hands the harness for one accepted Run Plan, plus secret MCP credentials and a `session` reference — the `SessionId` this run continues, or null for a fresh start. The harness consumes the Plan's frozen Messages, Instructions, model, effort, and policy. It references a session rather than shipping one; no frozen transcript crosses the seam, so compaction can live inside the runner's loop where context actually grows.
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
