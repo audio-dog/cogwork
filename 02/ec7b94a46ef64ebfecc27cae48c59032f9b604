@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_c1c3ea685594ee::t_07dc7d52986df3 26,48
+apps/desktop/src/renderer/src/routes/_app/workspaces.tsx
+  s_c1c3ea685594ee::t_07dc7d52986df3 1-18
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_c1c3ea685594ee::t_75c62b253debf1 18,56-60,104,116,133,151,163,179,239-245,317,325
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "02ec7b94a46ef64ebfecc27cae48c59032f9b604",
+  "prompts": {},
+  "sessions": {
+    "s_c1c3ea685594ee": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0490e-c32b-7f52-bed2-b8c81206469a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
