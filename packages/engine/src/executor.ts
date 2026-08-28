@@ -204,6 +204,15 @@ export const make = Effect.gen(function* () {
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
+  const cleanupRunContext = (runId: RunId) =>
+    contextAssembler
+      .cleanup(runId)
+      .pipe(
+        Effect.catchTag("ContextFsError", (error) =>
+          Effect.logWarning("run context cleanup failed", { runId, message: error.message }),
+        ),
+      );
+
   const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
     workspace: RegisteredWorkspace,
     resolved: ResolvedStage,
@@ -926,7 +935,11 @@ export const make = Effect.gen(function* () {
           },
         }),
       );
-    }).pipe(Effect.annotateLogs(correlation), Effect.annotateSpans(correlation));
+    }).pipe(
+      Effect.annotateLogs(correlation),
+      Effect.annotateSpans(correlation),
+      Effect.ensuring(cleanupRunContext(runId)),
+    );
   });
 
   const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (

@@ -191,10 +191,21 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   }),
 };
 
-const contextAssemblerStub = Layer.succeed(ContextAssembler.ContextAssembler, {
-  assemble: () => Effect.succeed({ layers: [], skillPath: "/", sources: [] }),
-  cleanup: () => Effect.void,
-});
+class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<ReadonlyArray<string>>>()(
+  "@cogwork/engine/executor.test/ContextCleanupCalls",
+) {
+  static readonly layer = Layer.effect(ContextCleanupCalls, Ref.make<ReadonlyArray<string>>([]));
+  static readonly contextAssemblerLayer = Layer.effect(
+    ContextAssembler.ContextAssembler,
+    Effect.gen(function* () {
+      const cleanups = yield* ContextCleanupCalls;
+      return {
+        assemble: () => Effect.succeed({ layers: [], skillPath: "/", sources: [] }),
+        cleanup: (runId) => Ref.update(cleanups, (calls) => [...calls, runId]),
+      };
+    }),
+  ).pipe(Layer.provideMerge(ContextCleanupCalls.layer));
+}
 
 const assemblerStub = Layer.succeed(McpSkillAssembler, {
   assemble: (config) =>
@@ -785,7 +796,7 @@ function provide(
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerServices = Layer.mergeAll(
     sessionStore,
-    contextAssemblerStub,
+    ContextCleanupCalls.contextAssemblerLayer,
     CredentialStore.layerEnv,
     FileSystem.layerNoop({}),
   );
@@ -802,7 +813,7 @@ function provide(
         runControlStub,
         worktree,
         assemblerStub,
-        contextAssemblerStub,
+        ContextCleanupCalls.contextAssemblerLayer,
         controlStoreLayer(operationSettings),
       ),
     ),
@@ -1297,6 +1308,7 @@ describe("Executor.execute", () => {
   it.effect("holds the claim when the run is interrupted so recovery can resume it", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
+      const cleanups = yield* ContextCleanupCalls;
       const executor = yield* Executor.Executor;
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const subscription = yield* bus.subscribe();
@@ -1311,12 +1323,14 @@ describe("Executor.execute", () => {
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((c) => c.method === "claim"));
       assert.isFalse(log.some((c) => c.method === "release"));
+      assert.lengthOf(yield* Ref.get(cleanups), 1);
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
   });
 
   it.effect("releases the claim without ledgering a Run when preparation is interrupted", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
+      const cleanups = yield* ContextCleanupCalls;
       const { entered } = yield* WorktreeProbe;
       const executor = yield* Executor.Executor;
       const ledger = yield* RunLedger.RunLedger;
@@ -1331,6 +1345,7 @@ describe("Executor.execute", () => {
 
       yield* Fiber.interrupt(running);
       assert.strictEqual((yield* Ref.get(calls)).filter((call) => call.method === "release").length, 2);
+      assert.lengthOf(yield* Ref.get(cleanups), 2);
     }).pipe(Effect.provide(provide([runner(implementEvents)], interruptiblePrepareWorktree)), Effect.scoped);
   });
 
