@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/features/operation-settings-view.test.ts
+  s_49dab12e61e1a0::t_19547b9a787b30 49-50
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_49dab12e61e1a0::t_19547b9a787b30 13-14
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_49dab12e61e1a0::t_e64c8d7f24dff5 1-2,18
+  s_49dab12e61e1a0::t_3bfa916511e743 158
+  s_49dab12e61e1a0::t_672fbc0189b48e 153-157,180
+  s_49dab12e61e1a0::t_ce56da705060f6 159-160
+apps/desktop/src/renderer/src/features/configuration-placeholder.ts
+  s_49dab12e61e1a0::t_672fbc0189b48e 430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e81219f7e06f0d37fa739f9de8cbbac2c72093ea",
+  "prompts": {},
+  "sessions": {
+    "s_49dab12e61e1a0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a048e5-48c8-7272-a200-7f3fee38255b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
