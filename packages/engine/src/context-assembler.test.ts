@@ -1,6 +1,8 @@
+import { RunId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import { type AssembleRequest, make, repoDirsFrom } from "./context-assembler";
 import type { ContextFsService } from "./context-fs";
 
@@ -12,6 +14,7 @@ interface CopyCall {
 const config = { homeDir: "/home/.cogwork", userAgentsDir: "/home/.agents", skillsDir: "/engine/skills" };
 
 const request: AssembleRequest = {
+  runId: Schema.decodeSync(RunId)("run-context-test"),
   cwd: "/repos/app/packages/web",
   projectRoot: "/repos/app",
   skill: "implement-agent",
@@ -22,7 +25,14 @@ const stubFs = (
   files: Record<string, string>,
   copies: Ref.Ref<ReadonlyArray<CopyCall>>,
 ): ContextFsService => ({
-  readFile: (target) => Effect.succeed(files[target] ?? null),
+  readFile: (target) =>
+    Ref.get(copies).pipe(
+      Effect.map((calls) => {
+        const copy = calls.findLast(({ dest }) => target === dest || target.startsWith(`${dest}/`));
+        const resolved = copy ? `${copy.source}${target.slice(copy.dest.length)}` : target;
+        return files[resolved] ?? null;
+      }),
+    ),
   readDirectory: (target) =>
     Effect.succeed(
       Object.keys(files)
@@ -88,7 +98,8 @@ describe("ContextAssembler.assemble", () => {
           { kind: "repo", source: "/repos/app/packages/web/AGENTS.md", content: "web package rules" },
           {
             kind: "playbook",
-            source: "/engine/skills/implement-agent/SKILL.md",
+            source:
+              "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/skills/implement-agent/SKILL.md",
             content: "implement skill body",
           },
         ],
@@ -139,6 +150,38 @@ describe("ContextAssembler.assemble", () => {
         assembled.layers.map((layer) => layer.content),
         ["global rules", "repo instructions", "repo rules", "private rules", "implement skill body"],
       );
+    }),
+  );
+
+  it.effect("reads each Rules contribution once", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const reads = yield* Ref.make(0);
+      const rule = "/repos/app/.agents/rules/style.md";
+      const base = stubFs({ "/engine/skills/implement-agent/SKILL.md": "playbook" }, copies);
+      const assembler = make(config, {
+        ...base,
+        readFile: (target) =>
+          target === rule
+            ? Ref.update(reads, (count) => count + 1).pipe(Effect.map(() => "rule content"))
+            : base.readFile(target),
+      });
+
+      const assembled = yield* assembler.assemble({
+        ...request,
+        contributions: [
+          {
+            id: "local:repo/rules/style",
+            authority: "local:repo",
+            kind: "rules",
+            localName: "style",
+            file: rule,
+          },
+        ],
+      });
+
+      assert.strictEqual(yield* Ref.get(reads), 1);
+      assert.deepStrictEqual(assembled.sources, []);
     }),
   );
 
@@ -198,9 +241,15 @@ describe("ContextAssembler.assemble", () => {
 
       const assembled = yield* assembler.assemble(request);
 
-      assert.strictEqual(assembled.skillPath, "/home/.cogwork/skills/implement-agent");
+      assert.strictEqual(
+        assembled.skillPath,
+        "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/skills/implement-agent",
+      );
       assert.deepStrictEqual(yield* Ref.get(copies), [
-        { source: "/engine/skills/implement-agent", dest: "/home/.cogwork/skills/implement-agent" },
+        {
+          source: "/engine/skills/implement-agent",
+          dest: "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/skills/implement-agent",
+        },
       ]);
       assert.isTrue(assembled.skillPath.startsWith(config.homeDir));
       assert.isFalse(assembled.skillPath.startsWith(request.projectRoot));
@@ -220,14 +269,14 @@ describe("ContextAssembler.assemble", () => {
     }),
   );
 
-  it.effect("does not provision when the playbook skill is missing", () =>
+  it.effect("fails when the isolated playbook copy has no SKILL.md", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const assembler = make(config, stubFs({}, copies));
 
       yield* Effect.flip(assembler.assemble(request));
 
-      assert.deepStrictEqual(yield* Ref.get(copies), []);
+      assert.lengthOf(yield* Ref.get(copies), 1);
     }),
   );
 

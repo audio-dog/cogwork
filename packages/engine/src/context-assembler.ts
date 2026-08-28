@@ -1,4 +1,4 @@
-import type { LocalContribution, LocalContributionAuthority } from "@cogwork/contracts";
+import type { LocalContribution, LocalContributionAuthority, RunId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,9 +16,11 @@ export interface InstructionLayer {
 export interface AssembledContext {
   readonly layers: ReadonlyArray<InstructionLayer>;
   readonly skillPath: string;
+  readonly sources: ReadonlyArray<{ readonly source: string; readonly content: string }>;
 }
 
 export interface AssembleRequest {
+  readonly runId: RunId;
   readonly cwd: string;
   readonly projectRoot: string;
   readonly skill: string;
@@ -67,6 +69,9 @@ export const repoDirsFrom = (cwd: string, projectRoot: string) => {
 const safeSkillSegment = /^[A-Za-z0-9._-]+$/;
 
 const isSafeSkill = (skill: string) => skill !== "." && skill !== ".." && safeSkillSegment.test(skill);
+
+const runPathSegment = (runId: RunId) =>
+  `run-${Array.from(runId, (character) => character.codePointAt(0)?.toString(16) ?? "").join("-")}`;
 
 const presentLayers = (layers: ReadonlyArray<InstructionLayer | null>) =>
   layers.filter((layer): layer is InstructionLayer => layer !== null);
@@ -119,6 +124,19 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
     );
   });
 
+  const contributionSources = Effect.fn("ContextAssembler.contributionSources")(function* (
+    contributions: ReadonlyArray<LocalContribution>,
+  ) {
+    const sources = yield* Effect.forEach(
+      contributions.filter((contribution) => contribution.kind !== "rules"),
+      (contribution) =>
+        Effect.map(fs.readFile(contribution.file), (content) =>
+          content === null ? [] : [{ source: contribution.file, content }],
+        ),
+    );
+    return sources.flat();
+  });
+
   const playbookLayer = Effect.fn("ContextAssembler.playbookLayer")(function* (
     skill: string,
     skillDir: string,
@@ -140,15 +158,19 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
         });
       }
       const skillDir = joinPath(config.skillsDir, request.skill);
-      const skillPath = joinPath(joinPath(config.homeDir, "skills"), request.skill);
-      const playbook = yield* playbookLayer(request.skill, skillDir);
+      const skillPath = joinPath(
+        joinPath(joinPath(config.homeDir, "run-plans"), runPathSegment(request.runId)),
+        `skills/${request.skill}`,
+      );
       yield* fs.copyDirectory(skillDir, skillPath);
+      const playbook = yield* playbookLayer(request.skill, skillPath);
       const rules = yield* userRules();
       const repo = yield* repoLayers(request);
       const repoRules = yield* contributionRules(request.contributions, "local:repo");
       const privateRules = yield* contributionRules(request.contributions, "local:private");
+      const sources = yield* contributionSources(request.contributions);
       const layers = [...rules, ...repo, ...repoRules, ...privateRules, playbook];
-      return { layers, skillPath } satisfies AssembledContext;
+      return { layers, skillPath, sources } satisfies AssembledContext;
     }),
   };
 };
