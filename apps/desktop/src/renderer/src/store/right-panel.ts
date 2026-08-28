@@ -81,7 +81,21 @@ const isRestorableSurface = (value: unknown): value is Surface => {
   return false;
 };
 
-const restoreSurfaces = (value: unknown) => (Array.isArray(value) ? value.filter(isRestorableSurface) : []);
+const restoreSurface = (value: unknown) => {
+  if (!isRestorableSurface(value)) return null;
+  if (value.kind !== "file") return value;
+  return fileSurface(value.path, value.title);
+};
+
+const restoreSurfaces = (value: unknown) =>
+  Array.isArray(value) ? value.flatMap((surface) => restoreSurface(surface) ?? []) : [];
+
+const restoredActive = (surfaces: unknown, active: unknown) => {
+  if (!Array.isArray(surfaces) || !isString(active)) return active;
+  const surface = surfaces.find((candidate) => isRecord(candidate) && candidate.id === active);
+  if (!isRecord(surface) || surface.kind !== "file" || !isString(surface.path)) return active;
+  return `file:${surface.path}`;
+};
 
 const restoredActiveSurfaceId = (surfaces: readonly Surface[], active: unknown) =>
   (isString(active) ? surfaces.find((surface) => surface.id === active)?.id : undefined) ??
@@ -168,7 +182,8 @@ export const useRightPanelStore = create<RightPanelState>()(
       merge: (persisted, current) => {
         const stored = isRecord(persisted) ? persisted : {};
         const surfaces = restoreSurfaces(stored.surfaces);
-        return { ...current, surfaces, active: restoredActiveSurfaceId(surfaces, stored.active) };
+        const active = restoredActive(stored.surfaces, stored.active);
+        return { ...current, surfaces, active: restoredActiveSurfaceId(surfaces, active) };
       },
     },
   ),
