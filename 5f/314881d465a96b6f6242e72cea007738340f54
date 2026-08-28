@@ -1,0 +1,30 @@
+packages/contracts/src/rpc.ts
+  s_c3d7df8e0cdfb9::t_b872c5ef7c97d8 19-24,114-125,132-133
+packages/contracts/src/workspace.ts
+  s_c3d7df8e0cdfb9::t_b872c5ef7c97d8 142-150
+packages/contracts/src/board.ts
+  s_c3d7df8e0cdfb9::t_b872c5ef7c97d8 73-75,96-98
+  s_c3d7df8e0cdfb9::t_e8379fe47c7b98 70,86,99
+  s_c3d7df8e0cdfb9::t_7dda68bedec330 100
+packages/contracts/src/daemon-event.ts
+  s_c3d7df8e0cdfb9::t_b872c5ef7c97d8 53
+packages/contracts/src/board.test.ts
+  s_c3d7df8e0cdfb9::t_97ce5ffcc1e134 364
+  s_c3d7df8e0cdfb9::t_87d633f6451097 358-363,365-373
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "5f314881d465a96b6f6242e72cea007738340f54",
+  "prompts": {},
+  "sessions": {
+    "s_c3d7df8e0cdfb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a046a9-a397-73a0-9211-7a4be9957533",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
