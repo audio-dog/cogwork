@@ -135,7 +135,7 @@ describe("operation settings", () => {
             },
           ],
         },
-        { workflow: "coding", operation: "implement" },
+        { workflow: "coding", operation: "implement", workspace: null },
       ),
       "enabled: unset\nharness: unset\nmodel: operation-model\neffort: unset\npermission-profile: unset\nbindings: unset",
     );

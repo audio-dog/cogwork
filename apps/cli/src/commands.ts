@@ -9,6 +9,7 @@ import {
   type OperationSettingContext,
   type OperationSettingName,
   OperationSettingUpdate,
+  operationSettingNames,
   type RunActivity,
   type RunEvent,
   RunId,
@@ -16,6 +17,7 @@ import {
   resolveOperationSetting,
   type SchedulingState,
   WorkItemId,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import { Daemon, Registry, readControlStore } from "@cogwork/engine";
 import * as Console from "effect/Console";
@@ -127,15 +129,6 @@ export const daemonOrStore = <A, E, R, E2, R2>(
 ): Effect.Effect<A, E | E2 | RpcClientError, R | R2> =>
   Effect.catchIf(daemon, isUnavailableDaemonError, () => store);
 
-const operationSettingNames: readonly OperationSettingName[] = [
-  "enabled",
-  "harness",
-  "model",
-  "effort",
-  "permission-profile",
-  "bindings",
-];
-
 const formatOperationSettingValue = (value: ReturnType<typeof resolveOperationSetting>) => {
   if (value === null) return "unset";
   if (Array.isArray(value)) return value.length === 0 ? "unset" : JSON.stringify(value);
@@ -207,6 +200,17 @@ const decodeOperationSettingUpdate = (input: unknown) =>
   Schema.decodeUnknownEffect(OperationSettingUpdate)(input).pipe(
     Effect.mapError((error) => new OperationSettingInputError({ message: error.message })),
   );
+
+const operationSettingContext = Effect.fn("commands.operationSettingContext")(function* (options: {
+  readonly workflow: string;
+  readonly operation: string;
+  readonly workspace: Option.Option<string>;
+}) {
+  const workspace = Option.isSome(options.workspace)
+    ? yield* Schema.decodeUnknownEffect(WorkspaceId)(options.workspace.value)
+    : null;
+  return { workflow: options.workflow, operation: options.operation, workspace };
+});
 
 export const makeOperationSettingUpdate = (
   options: OperationSettingOptions,
@@ -427,23 +431,25 @@ const setLimit = Effect.fn("commands.setLimit")(
   (effect, options) => overSocket(effect, options.socketPath),
 );
 
-const showOperationSettings = Effect.fn("commands.showOperationSettings")(
-  function* (options: {
-    readonly socketPath: string;
-    readonly workflow: string;
-    readonly operation: string;
-  }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
-    const controlStore = yield* client.GetControlStore();
-    yield* Console.log(
-      formatOperationSettings(controlStore, {
-        workflow: options.workflow,
-        operation: options.operation,
-      }),
-    );
-  },
-  (effect, options) => overSocket(effect, options.socketPath),
-);
+const showOperationSettings = Effect.fn("commands.showOperationSettings")(function* (options: {
+  readonly socketPath: string;
+  readonly controlStorePath: string;
+  readonly workflow: string;
+  readonly operation: string;
+  readonly workspace: Option.Option<string>;
+}) {
+  const context = yield* operationSettingContext(options);
+  yield* daemonOrStore(
+    Effect.gen(function* () {
+      const client = yield* RpcClient.make(DaemonRpcs);
+      return yield* client.GetControlStore();
+    }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
+    readControlStore(options.controlStorePath),
+  ).pipe(
+    Effect.map((controlStore) => formatOperationSettings(controlStore, context)),
+    Effect.flatMap(Console.log),
+  );
+});
 
 const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
   function* (
@@ -455,12 +461,7 @@ const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
     const client = yield* RpcClient.make(DaemonRpcs);
     const update = yield* makeOperationSettingUpdate(options, options.value);
     const controlStore = yield* client.SetOperationSetting({ update });
-    yield* Console.log(
-      formatOperationSettings(controlStore, {
-        workflow: options.workflow,
-        operation: options.operation,
-      }),
-    );
+    yield* Console.log(formatOperationSettings(controlStore, yield* operationSettingContext(options)));
   },
   (effect, options) => overSocket(effect, options.socketPath),
 );
@@ -538,11 +539,19 @@ export const limitsCommand = Command.make("limits").pipe(
 
 const operationSettingsShowCommand = Command.make("show", {
   socket: socketFlag,
+  controlStore: controlStoreFlag,
   workflow: operationSettingWorkflowFlag,
   operation: operationSettingOperationFlag,
+  workspace: operationSettingWorkspaceFlag,
 }).pipe(
-  Command.withHandler(({ socket, workflow, operation }) =>
-    showOperationSettings({ socketPath: socket, workflow, operation }),
+  Command.withHandler(({ socket, controlStore, workflow, operation, workspace }) =>
+    showOperationSettings({
+      socketPath: socket,
+      controlStorePath: controlStore,
+      workflow,
+      operation,
+      workspace,
+    }),
   ),
 );
 
