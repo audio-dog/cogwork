@@ -30,6 +30,7 @@ export const make = Effect.gen(function* () {
   const scheduler = yield* Scheduler;
   const releaseClaim = makeReleaseClaim(issueTracker);
   const recoveredWorkspaces = yield* Ref.make<ReadonlySet<WorkspaceId>>(new Set());
+  const recoveredGenerations = yield* Ref.make<ReadonlyMap<WorkspaceId, number>>(new Map());
   const orphanSweepComplete = yield* Ref.make(false);
   const recoveryGate = Semaphore.makeUnsafe(1);
 
@@ -191,14 +192,39 @@ export const make = Effect.gen(function* () {
   const pollDetail = (poll: PollState) =>
     poll.status === "paused" ? { poll: poll.status, reason: poll.reason } : { poll: poll.status };
 
-  const recoverState = (workspace: RegisteredWorkspace, state: WorkspaceReconcileState) => {
+  const recoverOrphan = Effect.fn("Recovery.recoverOrphan")(function* (
+    workspace: RegisteredWorkspace,
+    item: ObservedItem,
+  ) {
+    if (yield* scheduler.isInFlight(workspace, item.id)) return;
+    const latest = yield* ledger.latestRunForItem(workspace.config.name, item.id);
+    if (latest?.status === "running" || latest?.status === "interrupted") return;
+    yield* releaseClaim(workspace, item.id);
+  });
+
+  const recoverOrphans = Effect.fn("Recovery.recoverOrphans")(function* (
+    workspace: RegisteredWorkspace,
+    observed: ReadonlyArray<ObservedItem>,
+  ) {
+    yield* Effect.forEach(
+      observed.filter((item) => item.claimedByUs),
+      (item) => recoverOrphan(workspace, item),
+      { discard: true },
+    );
+  });
+
+  const recoverState = (
+    workspace: RegisteredWorkspace,
+    state: WorkspaceReconcileState,
+    recoverObserved: typeof recoverWorkspace,
+  ) => {
     if (state.poll.status !== "ok") {
       return Effect.logWarning("claim recovery deferred; workspace poll is not ok", {
         workspace: workspace.config.name,
         ...pollDetail(state.poll),
       }).pipe(Effect.map(() => null));
     }
-    return recoverWorkspace(workspace, state.observed).pipe(
+    return recoverObserved(workspace, state.observed).pipe(
       Effect.map(() => workspace.config.name),
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("claim recovery skipped", {
@@ -212,20 +238,22 @@ export const make = Effect.gen(function* () {
   const recoverSnapshot = Effect.fn("Recovery.recoverSnapshot")(function* (
     snapshot: ReconcileSnapshot,
     completed: ReadonlySet<WorkspaceId>,
+    generations: ReadonlyMap<WorkspaceId, number>,
   ) {
     const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
     const results = yield* Effect.forEach(snapshot.workspaces, (state) => {
-      if (completed.has(state.name)) return Effect.succeed(null);
+      if (generations.get(state.name) === snapshot.generation) return Effect.succeed(null);
       const workspace = byName.get(state.name);
       if (!workspace) return Effect.succeed(null);
-      return recoverState(workspace, state);
+      const recoverObserved = completed.has(state.name) ? recoverOrphans : recoverWorkspace;
+      return recoverState(workspace, state, recoverObserved);
     });
     return results.filter((workspace): workspace is WorkspaceId => workspace !== null);
   });
 
   const recover = Effect.fn("Recovery.recover")(function* () {
     const snapshot = yield* worker.snapshot;
-    yield* recoverSnapshot(snapshot, new Set<WorkspaceId>());
+    yield* recoverSnapshot(snapshot, new Set<WorkspaceId>(), new Map());
   });
 
   const recoverWhenLiveUnlocked = Effect.fn("Recovery.recoverWhenLive")(function* () {
@@ -234,11 +262,17 @@ export const make = Effect.gen(function* () {
     const snapshot = yield* worker.snapshot;
     if (snapshot.generation === 0) return;
     const sweepComplete = yield* Ref.get(orphanSweepComplete);
-    // Recovery admits new runs; take the cutoff first so the orphan sweep cannot interrupt them.
+    // Captured before recovery so runs it re-admits survive the startup interruption sweep.
     const orphanCutoffMillis = sweepComplete ? null : yield* Clock.currentTimeMillis;
     const completed = yield* Ref.get(recoveredWorkspaces);
-    const recovered = yield* recoverSnapshot(snapshot, completed);
+    const generations = yield* Ref.get(recoveredGenerations);
+    const recovered = yield* recoverSnapshot(snapshot, completed, generations);
     yield* Ref.update(recoveredWorkspaces, (current) => new Set([...current, ...recovered]));
+    yield* Ref.update(
+      recoveredGenerations,
+      (current) =>
+        new Map([...current, ...recovered.map((workspace) => [workspace, snapshot.generation] as const)]),
+    );
     if (orphanCutoffMillis === null) return;
     yield* ledger.interruptRunningBefore(orphanCutoffMillis, yield* Clock.currentTimeMillis);
     yield* Ref.set(orphanSweepComplete, true);

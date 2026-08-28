@@ -19,6 +19,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { scanAuthoringTrees } from "./authoring-tree";
 import {
   bootControlStoreLayer,
   ControlStore,
@@ -194,7 +195,10 @@ const mergedWorktrees = (row: WorkspaceRow, input: WorkspaceInput) => {
   };
 };
 
-const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (row: WorkspaceRow) {
+const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
+  row: WorkspaceRow,
+  cogworkHome: string,
+) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const inputPath = workspaceInputPath(path, row.checkoutPath);
@@ -226,9 +230,15 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (ro
     worktrees: mergedWorktrees(row, input),
     linearHistory: row.linearHistory === 1,
   }).pipe(Effect.mapError((error) => registrationError(error)));
+  const contributions = yield* scanAuthoringTrees({
+    workspace: name,
+    repoRoot: row.checkoutPath,
+    cogworkHome,
+  }).pipe(Effect.mapError(registrationError));
   return {
     source: `control-store:${row.id}`,
     config,
+    contributions,
     workspaceLimit: present(row.concurrency),
   } satisfies RegisteredWorkspace;
 });
@@ -298,8 +308,9 @@ const updateCheckoutPath = Effect.fn("WorkspaceRegistry.updateCheckoutPath")(fun
 
 const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChange")(function* (
   row: WorkspaceRow,
+  cogworkHome: string,
 ) {
-  return yield* loadWorkspace(row).pipe(
+  return yield* loadWorkspace(row, cogworkHome).pipe(
     Effect.map((workspace) => ({ _tag: "Registered" as const, workspace })),
     Effect.catchTag("WorkspaceRegistrationError", (error) =>
       Effect.succeed({ _tag: "Failed" as const, failure: workspaceFailure(row, error.message) }),
@@ -307,9 +318,9 @@ const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChan
   );
 });
 
-const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(function* () {
+const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(function* (cogworkHome: string) {
   const rows = yield* selectRows();
-  const outcomes = yield* Effect.forEach(rows, (row) => Effect.result(loadWorkspace(row)));
+  const outcomes = yield* Effect.forEach(rows, (row) => Effect.result(loadWorkspace(row, cogworkHome)));
   const workspaces = outcomes.flatMap((outcome) => (outcome._tag === "Success" ? [outcome.success] : []));
   const failures = outcomes.flatMap((outcome, index) => {
     if (outcome._tag === "Success") return [];
@@ -320,9 +331,12 @@ const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(fun
   return { workspaces, failures } satisfies RegistryState;
 });
 
-const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (store: ControlStoreService) {
+const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (
+  store: ControlStoreService,
+  cogworkHome: string,
+) {
   if (store.health === "unavailable") return emptyRegistry;
-  return yield* loadAvailableState();
+  return yield* loadAvailableState(cogworkHome);
 });
 
 const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function* (
@@ -381,15 +395,16 @@ const foldRegistration = (state: RegistryState, change: WorkspaceRegistrationCha
   return { ...current, failures: [...current.failures, change.failure] };
 };
 
-export const layer = (storePath: string) =>
+export const layer = (controlStorePath: string) =>
   Layer.effectContext(
     Effect.gen(function* () {
       const crypto = yield* Crypto.Crypto;
       const path = yield* Path.Path;
-      const privateWorkspaceRoot = path.join(path.dirname(storePath), "workspaces");
       const store = yield* ControlStore;
+      const cogworkHome = path.dirname(controlStorePath);
+      const privateWorkspaceRoot = path.join(cogworkHome, "workspaces");
       const dependencies = yield* Effect.context<FileSystem.FileSystem | Path.Path | SqlClient.SqlClient>();
-      const initial = yield* loadState(store);
+      const initial = yield* loadState(store, cogworkHome);
       const cell = MutableRef.make(initial);
       const revision = MutableRef.make(0);
       const commitChange = (change: WorkspaceRegistrationChange) => {
@@ -417,7 +432,7 @@ export const layer = (storePath: string) =>
         },
         refresh: Effect.sync(() => MutableRef.get(revision)).pipe(
           Effect.flatMap((startedAt) =>
-            loadState(store).pipe(
+            loadState(store, cogworkHome).pipe(
               Effect.provide(dependencies),
               Effect.mapError((error) => registrationError(error)),
               Effect.map((state) => commitRefresh(startedAt, state)),
@@ -455,7 +470,7 @@ export const layer = (storePath: string) =>
               Effect.provide(dependencies),
               Effect.mapError((error) => registrationError(error)),
             );
-            const change = yield* loadRegistrationChange(row).pipe(Effect.provide(dependencies));
+            const change = yield* loadRegistrationChange(row, cogworkHome).pipe(Effect.provide(dependencies));
             return commitChange(change);
           }),
         );
@@ -490,7 +505,10 @@ export const layer = (storePath: string) =>
               });
             }
             yield* sql.withTransaction(updateCheckoutPath(workspace, normalizedPath));
-            const change = yield* loadRegistrationChange({ ...current, checkoutPath: normalizedPath });
+            const change = yield* loadRegistrationChange(
+              { ...current, checkoutPath: normalizedPath },
+              cogworkHome,
+            );
             return commitChange(change);
           }).pipe(Effect.provide(dependencies), Effect.mapError(managementError("re-bind workspace"))),
         );
@@ -539,5 +557,8 @@ export const layerAt = (storePath: string) => {
 export const readOnlyLayerAt = (storePath: string) =>
   Layer.effect(
     WorkspaceRegistry,
-    loadAvailableState().pipe(Effect.map(readOnlyRegistry), Effect.mapError(registrationError)),
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      return readOnlyRegistry(yield* loadAvailableState(path.dirname(storePath)));
+    }).pipe(Effect.mapError(registrationError)),
   ).pipe(Layer.provide(readOnlyControlStoreClientLayer(storePath)));

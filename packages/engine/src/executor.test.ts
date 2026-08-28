@@ -1,5 +1,6 @@
 import {
   HarnessName,
+  LocalContribution,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -53,6 +54,13 @@ const cursor = Schema.decodeSync(HarnessName)("cursor");
 const codex = Schema.decodeSync(HarnessName)("codex");
 const id = Schema.decodeSync(WorkItemId);
 const previousSession = Schema.decodeSync(SessionIdSchema)("sess-prev");
+const repoSkill = Schema.decodeSync(LocalContribution)({
+  id: "local:repo/skill/release",
+  authority: "local:repo",
+  kind: "skill",
+  localName: "release",
+  file: "/repos/gh/.agents/skills/release/SKILL.md",
+});
 
 const handleOf = (ledger: RunLedger.RunLedgerService, session: SessionId | null | undefined) =>
   session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
@@ -74,6 +82,7 @@ const seedResumeSession = (handle: string | null = "sess-prev") =>
 
 const workspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -119,6 +128,7 @@ const finished: AgUiEvent = {
 
 const implementWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [repoSkill],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -138,6 +148,7 @@ const codexImplementWorkspace: RegisteredWorkspace = {
 
 const mcpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -150,6 +161,7 @@ const mcpWorkspace: RegisteredWorkspace = {
 
 const mcpAuthWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -162,9 +174,6 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
   }),
 };
 
-// A stand-in for the real credential-store-backed assembler: it hands back a redacted bearer for any
-// skill that declares auth, so the executor tests can prove the token reaches the request without
-// wiring a live credential store.
 const contextAssemblerStub = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () => Effect.succeed({ layers: [], skillPath: "/" }),
 });
@@ -243,6 +252,7 @@ const malformedImplementResultEvents: ReadonlyArray<AgUiEvent> = [
 
 const followUpWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -330,8 +340,6 @@ const malformedFollowUpResultEvents: ReadonlyArray<AgUiEvent> = [
   finished,
 ];
 
-// An owned-transcript run never hands back a session handle — its conversation
-// lives in the run ledger — so these events carry no session id.
 const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   text("Fixed the failing check and pushed."),
@@ -344,6 +352,7 @@ const ownedFollowUpEvents: ReadonlyArray<AgUiEvent> = [
 
 const disabledWorkspace: RegisteredWorkspace = {
   source: workspace.source,
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "gh",
     checkoutPath: "/repos/gh",
@@ -373,7 +382,7 @@ class TrackerCalls extends Context.Service<TrackerCalls, Ref.Ref<ReadonlyArray<C
 const record = (calls: Ref.Ref<ReadonlyArray<Call>>, entry: Call) =>
   Ref.update(calls, (xs) => [...xs, entry]);
 
-function trackerRecorder() {
+function trackerRecorder(claimFailure?: IssueTrackerError) {
   return Layer.effect(
     IssueTracker,
     Effect.map(
@@ -381,7 +390,11 @@ function trackerRecorder() {
       (calls): IssueTrackerService => ({
         rateLimitScope: () => null,
         observe: () => Effect.succeed([]),
-        claim: (_workspace, itemId) => record(calls, { method: "claim", item: itemId }),
+        claim: (_workspace, itemId) => {
+          const recorded = record(calls, { method: "claim", item: itemId });
+          if (!claimFailure) return recorded;
+          return recorded.pipe(Effect.andThen(Effect.fail(claimFailure)));
+        },
         release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
         note: () => Effect.void,
         triaged: (_workspace, itemId, outcome) =>
@@ -719,6 +732,7 @@ function provide(
   runners: ReadonlyArray<TestRunner>,
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
+  issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -733,7 +747,7 @@ function provide(
   return Executor.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        trackerRecorder(),
+        issueTracker,
         sourceControl,
         sessionStore,
         testHarness(runners).pipe(Layer.provide(runnerServices)),
@@ -999,6 +1013,28 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([unsupported])));
   });
 
+  it.effect("records no run when claiming fails before execution starts", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: "coordination marker write failed",
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const accepted = yield* executor.execute(workspace, triageItem);
+
+      assert.isFalse(accepted);
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "claim", item: triageItem.id }]);
+      const ledger = yield* RunLedger.RunLedger;
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
   it.effect("does nothing when triage is disabled in the playbook", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -1024,6 +1060,7 @@ describe("Executor.execute", () => {
       assert.include(request?.prompt ?? "", "implement-agent");
       assert.include(request?.prompt ?? "", "#15");
       assert.deepStrictEqual([...(request?.mcpSkills ?? [])], []);
+      assert.deepStrictEqual(request?.contributions, [repoSkill]);
 
       const log = yield* Ref.get(calls);
       assert.isTrue(log.some((c) => c.method === "implemented"));

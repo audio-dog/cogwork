@@ -1,3 +1,4 @@
+import type { LocalContribution, LocalContributionAuthority } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -21,6 +22,7 @@ export interface AssembleRequest {
   readonly cwd: string;
   readonly projectRoot: string;
   readonly skill: string;
+  readonly contributions: ReadonlyArray<LocalContribution>;
 }
 
 export interface ContextAssemblerConfig {
@@ -105,6 +107,18 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
     ).pipe(Effect.map(presentLayers));
   });
 
+  const contributionRules = Effect.fn("ContextAssembler.contributionRules")(function* (
+    contributions: ReadonlyArray<LocalContribution>,
+    authority: LocalContributionAuthority,
+  ) {
+    const rules = contributions
+      .filter((contribution) => contribution.authority === authority && contribution.kind === "rules")
+      .sort((left, right) => left.id.localeCompare(right.id));
+    return yield* Effect.forEach(rules, (rule) => readLayer("rules", rule.file)).pipe(
+      Effect.map(presentLayers),
+    );
+  });
+
   const playbookLayer = Effect.fn("ContextAssembler.playbookLayer")(function* (
     skill: string,
     skillDir: string,
@@ -131,8 +145,9 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       yield* fs.copyDirectory(skillDir, skillPath);
       const rules = yield* userRules();
       const repo = yield* repoLayers(request);
-      // Later layers refine earlier ones: Rules → repo instructions → Operating Instructions.
-      const layers = [...rules, ...repo, playbook];
+      const repoRules = yield* contributionRules(request.contributions, "local:repo");
+      const privateRules = yield* contributionRules(request.contributions, "local:private");
+      const layers = [...rules, ...repo, ...repoRules, ...privateRules, playbook];
       return { layers, skillPath } satisfies AssembledContext;
     }),
   };

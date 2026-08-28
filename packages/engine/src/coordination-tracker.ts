@@ -124,11 +124,11 @@ export const makeCoordinationTracker = <Ref, CommentId>(
     ) {
       const ref = yield* host.resolve(workspace, id);
       const claim: Claim = { ...request, by: host.claimIdentity(ref) };
-      yield* host.addClaim(ref);
       yield* Coordination.upsertCoordination(codec, host.comments(ref), {
         status: Coordination.claimStatusFor(claim),
         marker: Coordination.serializeClaim(codec, claim),
       });
+      yield* host.addClaim(ref);
     }),
     release: Effect.fn("coordinationTracker.release")(function* (
       workspace: WorkspaceIssueTrackerBinding,

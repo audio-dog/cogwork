@@ -10,6 +10,7 @@ const id = Schema.decodeSync(WorkItemId);
 
 const workspace: RegisteredWorkspace = {
   source: "a.workspace.ts",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "a",
     checkoutPath: "/repos/a",

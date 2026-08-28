@@ -57,6 +57,7 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
 
 const registered: Registry.RegisteredWorkspace = {
   source: "control-store:example",
+  contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
     name: "example",
     checkoutPath: "/repos/example",
@@ -101,6 +102,7 @@ const schedulerStub = () =>
         awaitIdle: Effect.void,
         drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
         admit: () => Effect.void,
+        isInFlight: () => Effect.succeed(false),
         setScheduling: (desired) =>
           Ref.updateAndGet(stateRef, (state) => ({ ...state, paused: desired === "paused" })),
         setLimit: (update: DaemonLimitUpdate) =>
@@ -248,6 +250,7 @@ const registrationServices = () => {
   const register: Registry.WorkspaceManagementService["register"] = (registration) => {
     const workspace: Registry.RegisteredWorkspace = {
       source: "control-store:minted",
+      contributions: [],
       config: {
         name: wsid("0198f16a-21d7-7000-8000-000000000001"),
         displayName: registration.name,
