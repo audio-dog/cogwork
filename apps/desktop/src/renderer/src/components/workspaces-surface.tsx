@@ -71,9 +71,11 @@ import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../fea
 import { parseCount, sanitizeCountDraft } from "../features/settings-values";
 import {
   absoluteCheckoutPathFrom,
-  registrationSubmissionStatus,
   type WorkspaceTracker,
+  workspaceOutcomeError,
   workspaceRegistrationFrom,
+  workspaceSubmissionIsLocked,
+  workspaceSubmissionStatus,
 } from "../features/workspace-registration";
 import { LiveWorkspacesProvider, useWorkspaces, WorkspacesProvider } from "./workspaces-provider";
 
@@ -182,10 +184,11 @@ function RegisterWorkspaceDialog() {
   const [tracker, setTracker] = useState<WorkspaceTracker>("github");
   const [invalid, setInvalid] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const status = registrationSubmissionStatus({
+  const status = workspaceSubmissionStatus({
     submitted,
     pending: registerPending,
     error: registerError,
+    outcomeError: null,
     outcome: registerOutcome,
   });
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -213,7 +216,7 @@ function RegisterWorkspaceDialog() {
   };
   const activeError = status === "failed" ? registerError : null;
   const activeOutcome = status === "complete" ? registerOutcome : null;
-  const disabled = status === "submitting" || status === "complete";
+  const disabled = workspaceSubmissionIsLocked(status);
 
   return (
     <Dialog onOpenChange={changeOpen}>
@@ -330,9 +333,20 @@ function RebindWorkspaceDialog({
     meta: { rebindPending, rebindError, rebindOutcome, rebindTarget },
   } = useWorkspaces();
   const [invalid, setInvalid] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const targeted = rebindTarget === workspace;
+  const activeOutcome = targeted ? rebindOutcome : null;
+  const outcomeError = workspaceOutcomeError(activeOutcome);
+  const status = workspaceSubmissionStatus({
+    submitted,
+    pending: rebindPending,
+    error: targeted ? rebindError : null,
+    outcomeError,
+    outcome: activeOutcome,
+  });
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (rebindPending || workspaceSubmissionIsLocked(status)) return;
     const checkoutPath = absoluteCheckoutPathFrom(
       textFrom(new FormData(event.currentTarget), "checkoutPath"),
     );
@@ -341,12 +355,20 @@ function RebindWorkspaceDialog({
       return;
     }
     setInvalid(false);
+    setSubmitted(true);
     rebind(workspace, checkoutPath);
   };
-  const rebound = targeted && rebindOutcome !== null && !rebindPending;
+  const changeOpen = (open: boolean) => {
+    if (!open) return;
+    setSubmitted(false);
+    setInvalid(false);
+  };
+  const activeError = status === "failed" ? (rebindError ?? outcomeError) : null;
+  const rebound = status === "complete";
+  const disabled = rebindPending || workspaceSubmissionIsLocked(status);
 
   return (
-    <Dialog>
+    <Dialog onOpenChange={changeOpen}>
       <DialogTrigger render={<Button size="sm" variant="outline" disabled={rebindPending} />}>
         Re-bind path
       </DialogTrigger>
@@ -371,7 +393,7 @@ function RebindWorkspaceDialog({
               <FieldDescription>Use an absolute path.</FieldDescription>
               {invalid ? <FieldError>Enter an absolute checkout path.</FieldError> : null}
             </Field>
-            {targeted && rebindError ? <FieldError>{rebindError}</FieldError> : null}
+            {activeError ? <FieldError>{activeError}</FieldError> : null}
             {rebound ? (
               <Alert>
                 <RiFolderTransferLine />
@@ -382,7 +404,7 @@ function RebindWorkspaceDialog({
           </FieldGroup>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-            <Button type="submit" disabled={rebindPending}>
+            <Button type="submit" disabled={disabled}>
               {targeted && rebindPending ? (
                 <Spinner data-icon="inline-start" />
               ) : (
