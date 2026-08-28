@@ -13,6 +13,7 @@ import { placeholderConfiguration } from "../features/configuration-placeholder"
 import { type CustomizePlaces, customizePlaces } from "../features/customize-places";
 import {
   configurationWithPlugins,
+  type PluginLoadState,
   pluginQueryFailure,
   pluginSurfaceOf,
 } from "../features/plugin-configuration";
@@ -29,6 +30,7 @@ interface ConfigurationMeta {
   readonly workspaceById: (id?: WorkspaceId) => Workspace | undefined;
   readonly notices: readonly string[];
   readonly pluginFailure: string | null;
+  readonly pluginLoadState: PluginLoadState;
 }
 
 interface ConfigurationActions {
@@ -55,12 +57,14 @@ function ConfigurationProvider({
   actions,
   notices = [],
   pluginFailure = null,
+  pluginLoadState = "ready",
   children,
 }: {
   picture: ConfigurationPicture;
   actions?: ConfigurationActions;
   notices?: readonly string[];
   pluginFailure?: string | null;
+  pluginLoadState?: PluginLoadState;
   children: ReactNode;
 }) {
   const unavailableActions: ConfigurationActions = {
@@ -77,6 +81,7 @@ function ConfigurationProvider({
       workspaceById: (id) => picture.workspaces.find((workspace) => workspace.id === id),
       notices,
       pluginFailure,
+      pluginLoadState,
     },
   };
 
@@ -95,7 +100,7 @@ export function DaemonConfigurationProvider({ children }: { children: ReactNode 
   const [operation, setOperation] = useState<"install" | "uninstall" | null>(null);
   const board = boardResult._tag === "Success" ? boardResult.board : null;
   const activeResult = operation === "install" ? installResult : uninstallResult;
-  const { overview, notices } = pluginSurfaceOf(board, pluginQuery);
+  const { loadState, notices, overview } = pluginSurfaceOf(board, pluginQuery);
   const queryFailure = pluginQueryFailure(pluginQuery);
   const pluginFailureCause = activeResult._tag === "Failure" ? activeResult.cause : queryFailure;
   const pluginFailure = pluginFailureCause ? Cause.pretty(pluginFailureCause) : null;
@@ -116,6 +121,7 @@ export function DaemonConfigurationProvider({ children }: { children: ReactNode 
       actions={actions}
       notices={notices}
       pluginFailure={pluginFailure}
+      pluginLoadState={loadState}
     >
       {children}
     </ConfigurationProvider>

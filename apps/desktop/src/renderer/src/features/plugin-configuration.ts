@@ -16,12 +16,42 @@ export const pluginQueryFailure = <E>(
   queried: AsyncResult.AsyncResult<PluginOverview, E>,
 ): Cause.Cause<E> | null => (queried._tag === "Failure" ? queried.cause : null);
 
+export type PluginLoadState = "loading" | "ready" | "failed";
+
+const pluginLoadStateOf = <E>(
+  board: Pick<Board, "plugins"> | null,
+  queried: AsyncResult.AsyncResult<PluginOverview, E>,
+): PluginLoadState => {
+  if (board?.plugins || queried._tag === "Success") return "ready";
+  if (queried._tag === "Failure") return "failed";
+  return "loading";
+};
+
+export type PluginDetailState =
+  | { readonly _tag: "Loading" }
+  | { readonly _tag: "Failed" }
+  | { readonly _tag: "Missing" }
+  | { readonly _tag: "Ready"; readonly plugin: InstalledPlugin };
+
+export const pluginDetailOf = (
+  plugins: readonly InstalledPlugin[],
+  pluginId: string,
+  loadState: PluginLoadState,
+): PluginDetailState => {
+  const plugin = plugins.find((candidate) => candidate.record.pluginId === pluginId);
+  if (plugin) return { _tag: "Ready", plugin };
+  if (loadState === "loading") return { _tag: "Loading" };
+  if (loadState === "failed") return { _tag: "Failed" };
+  return { _tag: "Missing" };
+};
+
 export const pluginSurfaceOf = <E>(
   board: Pick<Board, "plugins" | "pluginNotices"> | null,
   queried: AsyncResult.AsyncResult<PluginOverview, E>,
 ) => ({
   overview: pluginOverviewOf(board?.plugins ?? null, queried),
   notices: board?.pluginNotices ?? [],
+  loadState: pluginLoadStateOf(board, queried),
 });
 
 const scopeOf = (setting: ControlStore["contributionSettings"][number]): ScopeRef =>

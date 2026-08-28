@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { placeholderConfiguration } from "./configuration-placeholder";
 import {
   configurationWithPlugins,
+  pluginDetailOf,
   pluginOverviewOf,
   pluginQueryFailure,
   pluginSurfaceOf,
@@ -95,6 +96,16 @@ describe("configurationWithPlugins", () => {
     expect(pluginSurfaceOf(live, queried)).toEqual({
       overview: { plugins: [] },
       notices: ["GitHub remains connected."],
+      loadState: "ready",
     });
+  });
+
+  it("stays loading until Plugin data settles", () => {
+    expect(pluginSurfaceOf(null, AsyncResult.initial()).loadState).toBe("loading");
+  });
+
+  it("keeps a deep-linked Plugin route while data loads", () => {
+    expect(pluginDetailOf([], "linear", "loading")).toEqual({ _tag: "Loading" });
+    expect(pluginDetailOf([], "linear", "ready")).toEqual({ _tag: "Missing" });
   });
 });
