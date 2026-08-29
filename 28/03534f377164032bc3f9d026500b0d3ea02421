@@ -1,0 +1,19 @@
+.gitignore
+  s_e08ce8bc6f25a6::t_c4ef3908cf13fa 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2803534f377164032bc3f9d026500b0d3ea02421",
+  "prompts": {},
+  "sessions": {
+    "s_e08ce8bc6f25a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04ad2-fbfe-7c83-a775-c8f9a9e42410",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
