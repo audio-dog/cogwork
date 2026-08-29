@@ -20,6 +20,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { DaemonEventBus, type DaemonEventBusService } from "./daemon-event-bus";
+import { freezeRunPlan } from "./run-plan";
 
 export interface RunUpdate {
   readonly status: RunSummary["status"];
@@ -36,16 +37,10 @@ export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLed
 const runLedgerError = (operation: string, message: string) =>
   Effect.fail(RunLedgerError.make({ operation, message, retryable: false }));
 
-const deepFreeze = <A>(value: A): A => {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  Object.values(value).forEach(deepFreeze);
-  return Object.freeze(value);
-};
-
 const snapshotRunPlan = (plan: RunPlan) =>
   Schema.encodeEffect(RunPlanSchema)(plan).pipe(
     Effect.flatMap(Schema.decodeEffect(RunPlanSchema)),
-    Effect.map(deepFreeze),
+    Effect.map(freezeRunPlan),
     Effect.mapError((error) =>
       RunLedgerError.make({
         operation: "accept Run",
