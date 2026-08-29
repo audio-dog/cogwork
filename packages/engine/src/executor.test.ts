@@ -53,7 +53,13 @@ import * as RunLedger from "./run-ledger";
 import { layer as runRecorderLayer } from "./run-recorder";
 import * as SessionStore from "./session-store";
 import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
-import { branchName, WorktreeDivergedError, WorktreeManager, type WorktreeManagerService } from "./worktree";
+import {
+  branchName,
+  WorktreeDivergedError,
+  WorktreeManager,
+  type WorktreeManagerService,
+  WorktreeOperationInProgressError,
+} from "./worktree";
 
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 const codex = Schema.decodeSync(HarnessName)("codex");
@@ -609,6 +615,19 @@ const divergedWorktree = worktreeDouble(() => ({
         remote: "origin",
         branch: branchName(item),
         message: "branch has diverged from origin and replaying the local commits failed",
+      }),
+    ),
+}));
+
+const operationInProgressWorktree = worktreeDouble(() => ({
+  ...worktreeStub,
+  ensure: (_workspace, item) =>
+    Effect.fail(
+      new WorktreeOperationInProgressError({
+        branch: branchName(item),
+        operation: "merge",
+        unmergedPaths: ["src/index.ts"],
+        message: `branch ${branchName(item)} has a merge in progress: src/index.ts`,
       }),
     ),
 }));
@@ -1805,6 +1824,23 @@ describe("Executor.execute", () => {
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], divergedWorktree)));
+  });
+
+  it.effect("hands a worktree with an operation in progress to a human on the first attempt", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* executor.execute(implementWorkspace, implementItem);
+
+      assert.strictEqual((yield* Ref.get(requests)).length, 0);
+      const log = yield* Ref.get(calls);
+      const attempt = log.find((call) => call.method === "attemptFailed");
+      assert.include(attempt?.reason ?? "", "merge in progress");
+      const handOff = log.find((call) => call.method === "handOff");
+      assert.include(handOff?.note ?? "", "non-retryable failure");
+      assert.include(handOff?.note ?? "", "src/index.ts");
+    }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], operationInProgressWorktree)));
   });
 
   it.effect("keeps retrying a prepare failure that is not a divergence", () => {

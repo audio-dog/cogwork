@@ -57,13 +57,19 @@ import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SourceControlProvider } from "./source-control";
-import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
+import {
+  branchName,
+  type WorktreeDivergedError,
+  WorktreeManager,
+  type WorktreeOperationInProgressError,
+} from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError =
   | GitError
   | WorktreeFsError
   | WorktreeDivergedError
+  | WorktreeOperationInProgressError
   | CredentialError
   | ControlStoreFailure;
 
@@ -163,7 +169,11 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
 
 // A credential error is a configuration problem (no account, missing secret env) that retrying
 // cannot fix, so it goes straight to a human like a diverged worktree does.
-const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError"]);
+const nonRetryablePrepare = new Set([
+  "WorktreeDivergedError",
+  "WorktreeOperationInProgressError",
+  "CredentialError",
+]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
   if (error._tag === "HarnessError") return error.retryable;
