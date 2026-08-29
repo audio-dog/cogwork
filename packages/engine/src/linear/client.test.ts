@@ -252,6 +252,15 @@ describe("linear client", () => {
     }).pipe(withToken("test-key", "env")),
   );
 
+  it.effect("sends a stored API key as the bare Authorization value", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null);
+      assert.strictEqual(authorizationOf(fetchStub), "stored-key");
+    }).pipe(withToken("stored-key", "stored-key")),
+  );
+
   it.effect("sends a stored OAuth token as a Bearer credential", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));

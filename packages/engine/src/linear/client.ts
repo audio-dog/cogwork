@@ -362,7 +362,7 @@ const requireSuccess = (operation: string, payload: { readonly success: boolean 
 // A Linear API key authenticates as itself; an OAuth token is a bearer credential and has to reach
 // the SDK as `accessToken` or it is sent without the `Bearer` prefix.
 const sdkAuth = (credential: Credential) =>
-  credential.source === "env"
+  credential.source === "env" || credential.source === "stored-key"
     ? { apiKey: Redacted.value(credential.token) }
     : { accessToken: Redacted.value(credential.token) };
 
