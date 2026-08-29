@@ -69,7 +69,7 @@ const persistConnectionState = Effect.fn("test.persistConnectionState")((storePa
   }).pipe(Effect.provide(storeLayerAt(storePath))),
 );
 
-const establishDuplicateSystem = Effect.fn("test.establishDuplicateSystem")((storePath: string) =>
+const establishSecondAccount = Effect.fn("test.establishSecondAccount")((storePath: string) =>
   Effect.gen(function* () {
     const store = yield* ControlStore;
     if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
@@ -130,15 +130,16 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("permits only one Connection for each system", () =>
+  it.effect("stores Connections by system and account", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      const error = yield* Effect.flip(establishDuplicateSystem(storePath));
+      yield* establishSecondAccount(storePath);
 
-      assert.strictEqual(error._tag, "ControlStoreFailure");
-      if (error._tag === "ControlStoreFailure") {
-        assert.strictEqual(error.operation, "establish Connection");
-      }
+      const reloaded = yield* readControlStore(storePath);
+      assert.deepStrictEqual(reloaded.connections.map((connection) => connection.id).sort(), [
+        "linear/acme",
+        "linear/other",
+      ]);
     }),
   );
 
