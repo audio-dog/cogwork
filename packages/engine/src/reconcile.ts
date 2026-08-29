@@ -215,21 +215,9 @@ export const make = Effect.gen(function* () {
   const clearCooldown = (scope: string | null) =>
     scope === null ? Effect.void : Ref.update(cooldowns, (current) => withoutScope(current, scope));
 
-  const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
+  const pollReadyWorkspace = Effect.fn("ReconcileWorker.pollReadyWorkspace")(function* (
     workspace: RegisteredWorkspace,
   ) {
-    const readiness = yield* Effect.result(
-      Effect.forEach(connectionIdsOf(workspace), (connectionId) => connections.requireReady(connectionId), {
-        discard: true,
-      }),
-    );
-    if (readiness._tag === "Failure") {
-      return pausedState(workspace, {
-        reason: "auth",
-        message: readiness.failure.message,
-        retryAtMillis: null,
-      });
-    }
     const scope = issueTracker.rateLimitScope(workspace);
     const held = yield* heldCooldown(scope);
     if (held) {
@@ -245,6 +233,28 @@ export const make = Effect.gen(function* () {
         okState(workspace, items, classify(items, workspace.config.issueTracker.assigneeAllowlist)),
       ),
       Effect.catchTag("IssueTrackerError", (error) => pauseFor(workspace, scope, error)),
+    );
+  });
+
+  const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
+    workspace: RegisteredWorkspace,
+  ) {
+    return yield* Effect.forEach(
+      connectionIdsOf(workspace),
+      (connectionId) => connections.requireReady(connectionId),
+      { discard: true },
+    ).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.succeed(
+            pausedState(workspace, {
+              reason: "auth",
+              message: error.message,
+              retryAtMillis: null,
+            }),
+          ),
+        onSuccess: () => pollReadyWorkspace(workspace),
+      }),
     );
   });
 
