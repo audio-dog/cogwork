@@ -66,6 +66,14 @@ describe("comments", () => {
       "git worktree add: denied",
     );
     assert.strictEqual(
+      prepareFailureReason({
+        _tag: "GitError",
+        command: "git merge --ff-only origin/main",
+        message: "denied",
+      }),
+      "git merge --ff-only origin/main: denied",
+    );
+    assert.strictEqual(
       prepareFailureReason({ _tag: "WorktreeFsError", operation: "pnpm install", message: "exit 1" }),
       "pnpm install: exit 1",
     );

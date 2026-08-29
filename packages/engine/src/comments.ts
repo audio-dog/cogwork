@@ -52,13 +52,15 @@ export const recoveryReason = "worker did not survive a daemon restart";
 
 export const statusReason = (reason: string) => oneLine(truncate(stripMarkers(reason)));
 
+const gitCommand = (command: string) => (command.startsWith("git ") ? command : `git ${command}`);
+
 export const prepareFailureReason = (error: {
   readonly _tag: string;
   readonly message: string;
   readonly command?: string;
   readonly operation?: string;
 }) => {
-  if (error._tag === "GitError" && error.command) return `git ${error.command}: ${error.message}`;
+  if (error._tag === "GitError" && error.command) return `${gitCommand(error.command)}: ${error.message}`;
   if (error._tag === "WorktreeFsError" && error.operation) {
     return `${error.operation}: ${error.message}`;
   }
