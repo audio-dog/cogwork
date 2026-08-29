@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
 import { Claim } from "./coordination";
 import { PrSummary } from "./daemon";
+import { ProvenanceStamp } from "./provenance";
 import { RunId, SessionKind } from "./run";
 import { ResolutionOperator } from "./settings";
 import { LifecycleStage, Priority, TriageRole } from "./triage";
@@ -22,11 +23,17 @@ export class RunPlanInstruction extends Schema.Class<RunPlanInstruction>("RunPla
   content: TrimmedNonEmptyString,
 }) {}
 
+export class RunPlanResource extends Schema.Class<RunPlanResource>("RunPlanResource")({
+  source: TrimmedNonEmptyString,
+  content: TrimmedNonEmptyString,
+}) {}
+
 export class RunPlanOperatingInstructions extends Schema.Class<RunPlanOperatingInstructions>(
   "RunPlanOperatingInstructions",
 )({
   name: TrimmedNonEmptyString,
   path: TrimmedNonEmptyString,
+  resources: Schema.Array(RunPlanResource),
 }) {}
 
 export class RunPlanMcpServer extends Schema.Class<RunPlanMcpServer>("RunPlanMcpServer")({
@@ -107,19 +114,6 @@ export class RunPlanResolutionTrace extends Schema.Class<RunPlanResolutionTrace>
   dropped: Schema.Array(RunPlanDroppedCandidate),
 }) {}
 
-export class RunPlanContentRevision extends Schema.TaggedClass<RunPlanContentRevision>()("ContentRevision", {
-  source: TrimmedNonEmptyString,
-  revision: TrimmedNonEmptyString,
-}) {}
-
-export class RunPlanDeclaredVersion extends Schema.TaggedClass<RunPlanDeclaredVersion>()("DeclaredVersion", {
-  source: TrimmedNonEmptyString,
-  version: TrimmedNonEmptyString,
-}) {}
-
-export const RunPlanProvenanceStamp = Schema.Union([RunPlanContentRevision, RunPlanDeclaredVersion]);
-export type RunPlanProvenanceStamp = typeof RunPlanProvenanceStamp.Type;
-
 export class RunPlanProjectedName extends Schema.Class<RunPlanProjectedName>("RunPlanProjectedName")({
   identity: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
@@ -155,7 +149,7 @@ export class RunPlanProjectionDisposition extends Schema.Class<RunPlanProjection
 
 export class RunPlanProvenance extends Schema.Class<RunPlanProvenance>("RunPlanProvenance")({
   resolution: Schema.Array(RunPlanResolutionTrace),
-  stamps: Schema.Array(RunPlanProvenanceStamp),
+  stamps: Schema.Array(ProvenanceStamp),
   projectedNames: Schema.Array(RunPlanProjectedName),
   projection: Schema.Array(RunPlanProjectionDisposition),
   observation: RunPlanObservation,
@@ -169,6 +163,9 @@ export class RunPlanSandbox extends Schema.Class<RunPlanSandbox>("RunPlanSandbox
 export class RunPlanPersistence extends Schema.Class<RunPlanPersistence>("RunPlanPersistence")({
   sessionKind: SessionKind,
 }) {}
+
+export const RunPlanMiddlewareName = Schema.Literals(["sandbox", "persistence", "instruction-context"]);
+export type RunPlanMiddlewareName = typeof RunPlanMiddlewareName.Type;
 
 const StructuredOutput = Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown));
 
@@ -185,7 +182,7 @@ export class RunPlan extends Schema.Class<RunPlan>("RunPlan")({
   subagents: Schema.Array(RunPlanContributionMember),
   commands: Schema.Array(RunPlanContributionMember),
   hooks: Schema.Array(RunPlanContributionMember),
-  middleware: Schema.Array(TrimmedNonEmptyString),
+  middleware: Schema.Array(RunPlanMiddlewareName),
   structuredOutput: StructuredOutput,
   connections: Schema.Array(TrimmedNonEmptyString),
   workContext: RunPlanWorkContext,
