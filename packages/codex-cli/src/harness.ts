@@ -73,10 +73,10 @@ export const codexRuntimeConfig = (
 
 export const renderContext = (assembled: {
   readonly layers: ReadonlyArray<{ readonly content: string }>;
-  readonly skillPath: string;
+  readonly operatingInstructionsPath: string;
 }) => [
   ...assembled.layers.map((layer) => layer.content),
-  `Mandatory playbook resources: ${assembled.skillPath}`,
+  `Mandatory Operating Instructions: ${assembled.operatingInstructionsPath}`,
 ];
 
 export const codexModelOptions = (handle: string | null, effort: CodexEffort): CodexTextProviderOptions => ({
@@ -235,7 +235,10 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
         Effect.gen(function* () {
           const plan = request.plan;
           const effort = yield* resolveEffort(plan.harness.effort, "high");
-          const assembled = { layers: plan.instructions, skillPath: plan.operatingInstructions.path };
+          const assembled = {
+            layers: plan.instructions,
+            operatingInstructionsPath: plan.operatingInstructions.path,
+          };
           const store = yield* SessionStore.SessionStore;
           const handle = request.session ? yield* store.resumeHandle(request.session) : null;
           const model = plan.harness.model ?? "gpt-5.6-sol";

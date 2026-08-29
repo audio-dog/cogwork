@@ -41,9 +41,14 @@ const assembled: ContextAssembler.AssembledContext = {
   layers: [
     { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
     { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },
-    { kind: "playbook", source: "/skills/implement/SKILL.md", content: "playbook rules" },
+    {
+      kind: "operating-instructions",
+      source: "/operating-instructions/implement/INSTRUCTIONS.md",
+      content: "Operating Instructions rules",
+    },
   ],
-  skillPath: "/home/skills/implement",
+  operatingInstructionsPath: "/home/operating-instructions/implement",
+  operatingInstructionResources: [],
   sources: [],
 };
 
@@ -105,9 +110,9 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
       harness: { name, model: "gpt-5.6-sol", effort: "high", profile },
       instructions: assembled.layers.map((layer) => ({
         ...layer,
-        kind: layer.kind === "playbook" ? "operating-instructions" : layer.kind,
+        kind: layer.kind === "operating-instructions" ? "operating-instructions" : layer.kind,
       })),
-      operatingInstructions: { name: skill, path: assembled.skillPath },
+      operatingInstructions: { name: skill, path: assembled.operatingInstructionsPath, resources: [] },
       tools: [],
       skills: [],
       mcp,
@@ -505,8 +510,11 @@ describe("codexRunner", () => {
       assert.notInclude(capture.args, "resume");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
-      assert.include(capture.prompt, "playbook rules");
-      assert.include(capture.prompt, "Mandatory playbook resources: /home/skills/implement");
+      assert.include(capture.prompt, "Operating Instructions rules");
+      assert.include(
+        capture.prompt,
+        "Mandatory Operating Instructions: /home/operating-instructions/implement",
+      );
       assert.include(capture.prompt, "implement the issue");
       assert.strictEqual(capture.cwd?.split("/").at(-1), handle.id.split("/").at(-1));
       assert.isTrue(
@@ -710,8 +718,11 @@ describe("codexRunner", () => {
       assert.notInclude(capture.args, "danger-full-access");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
-      assert.include(capture.prompt, "playbook rules");
-      assert.include(capture.prompt, "Mandatory playbook resources: /home/skills/implement");
+      assert.include(capture.prompt, "Operating Instructions rules");
+      assert.include(
+        capture.prompt,
+        "Mandatory Operating Instructions: /home/operating-instructions/implement",
+      );
       assert.include(capture.prompt, "current run prompt");
       assert.notInclude(capture.prompt, "first run prompt");
     }),
@@ -778,12 +789,12 @@ describe("codexChildEnvironment", () => {
 });
 
 describe("renderContext", () => {
-  it("keeps every instruction layer ordered and exposes the provisioned playbook path", () => {
+  it("keeps every instruction layer ordered and exposes the provisioned instruction path", () => {
     assert.deepStrictEqual(renderContext(assembled), [
       "global rules",
       "repo rules",
-      "playbook rules",
-      "Mandatory playbook resources: /home/skills/implement",
+      "Operating Instructions rules",
+      "Mandatory Operating Instructions: /home/operating-instructions/implement",
     ]);
   });
 });
