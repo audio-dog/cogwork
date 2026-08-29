@@ -13,8 +13,10 @@ const unavailable = Effect.fn("ContextFs.unavailable")(function* (operation: str
 
 const makeUnavailable = () => ({
   readFile: (target: string): Effect.Effect<string | null, ContextFsError> => unavailable(`read ${target}`),
-  readDirectory: (target: string): Effect.Effect<ReadonlyArray<string>, ContextFsError> =>
-    unavailable(`read directory ${target}`),
+  readDirectory: (
+    target: string,
+    _options?: { readonly recursive?: boolean },
+  ): Effect.Effect<ReadonlyArray<string>, ContextFsError> => unavailable(`read directory ${target}`),
   copyDirectory: (source: string, dest: string): Effect.Effect<void, ContextFsError> =>
     unavailable(`copy ${source} to ${dest}`),
   removeDirectory: (target: string): Effect.Effect<void, ContextFsError> => unavailable(`remove ${target}`),

@@ -196,9 +196,9 @@ export const contextFsLayer = Layer.effect(
     const fail = (operation: string) => (cause: unknown) =>
       new ContextFs.ContextFsError({ operation, message: describe(cause) });
 
-    const readDirectory = (target: string) =>
+    const readDirectory = (target: string, options?: { readonly recursive?: boolean }) =>
       fs
-        .readDirectory(target)
+        .readDirectory(target, options)
         .pipe(
           Effect.catch((error) =>
             error.reason._tag === "NotFound"

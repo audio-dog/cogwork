@@ -42,7 +42,13 @@ const stubRunner: HarnessRunner = {
 };
 
 const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
-  assemble: () => Effect.succeed({ layers: [], skillPath: "/skills", sources: [] }),
+  assemble: () =>
+    Effect.succeed({
+      layers: [],
+      operatingInstructionsPath: "/skills",
+      operatingInstructionResources: [],
+      sources: [],
+    }),
   cleanup: () => Effect.void,
 });
 
