@@ -1,0 +1,26 @@
+packages/engine/operating-instructions/triage-agent/OUT-OF-SCOPE.md
+  s_d5aac6a69f142e::t_c281b05b7cdfb1 1-5,7-103,105
+  s_d5aac6a69f142e::t_e9899fc39f1bda 6,104
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_d5aac6a69f142e::t_41d70b5660e39e 3,8,12,16,18-19,23,27,44,48,59,79
+  s_d5aac6a69f142e::t_69b0822e0e8822 10
+  s_d5aac6a69f142e::t_c281b05b7cdfb1 1-2,4-7,9,11,13-15,17,20-22,24-26,28-43,45-47,49-58,60-78,80-118
+packages/engine/operating-instructions/triage-agent/AGENT-BRIEF.md
+  s_d5aac6a69f142e::t_c281b05b7cdfb1 1-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "55886d46763d4d117747dac2153aab4b1ba4985c",
+  "prompts": {},
+  "sessions": {
+    "s_d5aac6a69f142e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04adb-8aef-7852-9d2b-1588a232b1b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
