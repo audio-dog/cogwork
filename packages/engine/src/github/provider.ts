@@ -1,4 +1,4 @@
-import type { ConnectionId, WorkItemId } from "@cogwork/contracts";
+import type { ConnectionBindingId, ConnectionId, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { checkState } from "../ci";
@@ -30,17 +30,18 @@ interface GitHubTarget extends GitHubRepoRef {
 
 const targetFromRepo = (
   repo: string,
-  connectionId: ConnectionId,
+  connectionId: ConnectionBindingId,
   actorLogin: string | undefined,
   botAllowlist: ReadonlyArray<string> | undefined,
 ): GitHubTarget | null => {
   const [owner, name] = repo.split("/");
   if (!owner || !name) return null;
+  const boundConnectionId: ConnectionId | undefined = connectionId === "unbound" ? undefined : connectionId;
   return {
     owner,
     name,
     tokenEnv: "GITHUB_TOKEN",
-    connectionId,
+    ...(boundConnectionId ? { connectionId: boundConnectionId } : {}),
     actorLogin: actorLogin ?? null,
     botAllowlist: new Set(botAllowlist ?? []),
   };

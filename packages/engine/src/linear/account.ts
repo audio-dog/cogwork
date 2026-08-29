@@ -15,12 +15,13 @@ export const credentialAccountFor = (config: LinearWorkspaceConfig): CredentialA
   const key = linearAccountKey(config);
   if (key === null) return null;
   const source = config.issueTracker;
-  const account = connectionAccountOf(source.connectionId);
+  const connectionId = source.connectionId === "unbound" ? undefined : source.connectionId;
+  const account = connectionId ? connectionAccountOf(connectionId) : null;
   return {
-    connectionId: source.connectionId,
+    ...(connectionId ? { connectionId } : {}),
     key,
     issueTracker: "linear",
-    organization: account === "default" || source.connectionId === "unbound" ? null : account,
+    organization: account === "default" ? null : account,
     tokenEnv: "LINEAR_API_KEY",
     clientCredentials: null,
     oauthClientId: null,
