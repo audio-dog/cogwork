@@ -5,8 +5,11 @@ export const connectionStatus = (item: ConnectionItem) => {
   return item.readiness._tag === "Ready" ? "Established" : "Needs re-connect";
 };
 
-export const connectionAction = (item: ConnectionItem) =>
-  !item.connection ? "establish" : item.readiness._tag === "Ready" ? "none" : "re-connect";
+export const connectionAction = (item: ConnectionItem) => {
+  if (!item.connection) return "establish";
+  if (item.readiness._tag === "Ready") return "none";
+  return "re-connect";
+};
 
 export const connectionPluginLabel = (item: ConnectionItem) =>
   item.pluginId ? `Plugin: ${item.pluginId}` : "No Plugin";

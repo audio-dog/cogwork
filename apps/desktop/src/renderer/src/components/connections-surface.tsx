@@ -443,7 +443,7 @@ function ConnectionsContent() {
       <header className="flex flex-col gap-1">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Connections</h1>
         <p className="text-sm text-muted-foreground">
-          Accounts Cogwork can use for work sources and Plugins.
+          Accounts Cogwork can use for issue trackers and Plugins.
         </p>
       </header>
       {failure ? (
