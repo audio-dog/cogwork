@@ -56,13 +56,15 @@ const parseDivergence = (stdout: string) => {
 
 const gitCommandDeadline = "5 minutes";
 
-const operationHeads: ReadonlyArray<{
+const operationMarkers: ReadonlyArray<{
   readonly operation: Git.GitOperation;
-  readonly head: string;
+  readonly marker: string;
 }> = [
-  { operation: "merge", head: "MERGE_HEAD" },
-  { operation: "rebase", head: "REBASE_HEAD" },
-  { operation: "cherry-pick", head: "CHERRY_PICK_HEAD" },
+  { operation: "merge", marker: "MERGE_HEAD" },
+  { operation: "rebase", marker: "REBASE_HEAD" },
+  { operation: "rebase", marker: "rebase-merge" },
+  { operation: "rebase", marker: "rebase-apply/rebasing" },
+  { operation: "cherry-pick", marker: "CHERRY_PICK_HEAD" },
 ];
 
 export const gitLayer = Layer.effect(
@@ -95,25 +97,26 @@ export const gitLayer = Layer.effect(
       );
     };
 
-    const operationMarkerExists = (worktreePath: string, head: string) =>
-      runGit(worktreePath, ["rev-parse", "--git-path", head]).pipe(
-        Effect.map((value) => path.resolve(worktreePath, value.trim())),
-        Effect.flatMap((markerPath) =>
-          fs.exists(markerPath).pipe(
-            Effect.mapError(
-              (cause) =>
-                new Git.GitError({
-                  command: `git rev-parse --git-path ${head}`,
-                  message: describe(cause),
-                }),
-            ),
-          ),
+    const operationMarkerExists = Effect.fn("Git.operationMarkerExists")(function* (
+      worktreePath: string,
+      marker: string,
+    ) {
+      const value = yield* runGit(worktreePath, ["rev-parse", "--git-path", marker]);
+      const markerPath = path.resolve(worktreePath, value.trim());
+      return yield* fs.exists(markerPath).pipe(
+        Effect.mapError(
+          (cause) =>
+            new Git.GitError({
+              command: `git rev-parse --git-path ${marker}`,
+              message: describe(cause),
+            }),
         ),
       );
+    });
 
     const operationInProgress = Effect.fn("Git.operationInProgress")(function* (worktreePath: string) {
-      const found = yield* Effect.findFirst(operationHeads, ({ head }) =>
-        operationMarkerExists(worktreePath, head),
+      const found = yield* Effect.findFirst(operationMarkers, ({ marker }) =>
+        operationMarkerExists(worktreePath, marker),
       );
       if (Option.isNone(found)) return null;
       const unmergedPaths = yield* runGit(worktreePath, ["diff", "--name-only", "--diff-filter=U"]).pipe(

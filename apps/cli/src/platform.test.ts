@@ -197,24 +197,57 @@ const operationFixtures: ReadonlyArray<{
 ];
 
 describe("gitLayer against a real repository", () => {
-  it.effect.each(operationFixtures)(
-    "reports a $operation in progress and its unmerged paths",
-    ({ operation, head, command }) =>
+  layer(testLayer)((it) => {
+    it.effect.each(operationFixtures)(
+      "reports a $operation in progress and its unmerged paths",
+      ({ operation, head, command }) =>
+        Effect.gen(function* () {
+          const git = yield* Git.Git;
+          const { worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
+
+          yield* shell(
+            worktree,
+            `${command(branch)} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path ${head})"`,
+          );
+
+          assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
+            operation,
+            unmergedPaths: ["shared.txt"],
+          });
+        }).pipe(Effect.scoped),
+    );
+
+    it.effect("reports a paused rebase without REBASE_HEAD", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
-        const { worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
+        const { worktree } = yield* fixture("84-paused-rebase-probe");
 
         yield* shell(
           worktree,
-          `${command(branch)} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path ${head})"`,
+          `GIT_SEQUENCE_EDITOR=true git rebase -i --exec false HEAD~1 >/dev/null 2>&1 || { test -d "$(git rev-parse --git-path rebase-merge)" && test ! -f "$(git rev-parse --git-path REBASE_HEAD)"; }`,
         );
 
         assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
-          operation,
-          unmergedPaths: ["shared.txt"],
+          operation: "rebase",
+          unmergedPaths: [],
         });
-      }).pipe(Effect.scoped, Effect.provide(testLayer)),
-  );
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("does not report git am as a rebase", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { worktree } = yield* fixture("84-git-am-probe");
+
+        yield* shell(
+          worktree,
+          `echo base > shared.txt && git add -A && git commit -qm shared && echo theirs > shared.txt && git commit -qam theirs && git format-patch -1 --stdout > ../theirs.patch && git reset --hard -q HEAD~1 && echo ours > shared.txt && git commit -qam ours && git am ../theirs.patch >/dev/null 2>&1 || test -f "$(git rev-parse --git-path rebase-apply/applying)"`,
+        );
+
+        assert.isNull(yield* git.operationInProgress(worktree));
+      }).pipe(Effect.scoped),
+    );
+  });
 
   it.effect("stops reporting a branch that was deleted on the remote", () =>
     Effect.gen(function* () {
