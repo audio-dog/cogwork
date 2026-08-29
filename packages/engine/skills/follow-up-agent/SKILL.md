@@ -42,6 +42,8 @@ Completion: you can state, in one list, every concrete change this follow-up mus
 
 ## 2. Integrate the base (when diverged)
 
+If the resumed worktree already has a merge in progress, finish it or abort it before anything else.
+
 If [step 1](#1-read-the-state) found the base diverged, bring `main` back into the branch before touching checks. Do this in your working tree now; the push itself happens once at [step 5](#5-push-and-summarize), after the gate is green. Integrating first also tells you which check failures were only the conflict — those clear on their own — and which are real.
 
 **Default — merge the base.** Merge `main` into the PR's branch and resolve the conflicts. This rides the existing plain-push flow and grants no new authority: the merge commit is review-safe (it doesn't re-anchor in-progress review comments or drop reviewers' "viewed" state) and it disappears when the PR is squash-merged.
