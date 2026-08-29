@@ -1,0 +1,21 @@
+packages/contracts/src/index.ts
+  s_d5aac6a69f142e::t_bd25aece360fd8 12
+packages/contracts/src/provenance.ts
+  s_d5aac6a69f142e::t_bd25aece360fd8 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e47f8d8c814b734d2ce56589ad34bcef294fe6cc",
+  "prompts": {},
+  "sessions": {
+    "s_d5aac6a69f142e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04adb-8aef-7852-9d2b-1588a232b1b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
