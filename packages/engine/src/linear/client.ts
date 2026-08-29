@@ -10,6 +10,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import {
   type Credential,
   type CredentialAccount,
@@ -471,14 +472,21 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       : {};
     const filter = issuesFilter(assigneeIds);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
-    const issues: Array<typeof IssueNode.Type> = [];
-    let after: string | null = null;
-    do {
-      const team: typeof IssuesTeamNode.Type = yield* loadPage(after);
-      issues.push(...team.issues.nodes);
-      const page = team.issues.pageInfo;
-      after = page.hasNextPage ? page.endCursor : null;
-    } while (after !== null);
+    const issues = yield* Stream.paginate<string | null, typeof IssueNode.Type, IssueTrackerError>(
+      null,
+      (after) =>
+        Effect.gen(function* () {
+          const team: typeof IssuesTeamNode.Type = yield* loadPage(after);
+          const page = team.issues.pageInfo;
+          const next: Option.Option<string> = page.hasNextPage
+            ? Option.fromNullOr(page.endCursor)
+            : Option.none();
+          return [team.issues.nodes, next] satisfies readonly [
+            ReadonlyArray<typeof IssueNode.Type>,
+            Option.Option<string>,
+          ];
+        }),
+    ).pipe(Stream.runCollect);
     return issues.map(toObservedIssue);
   });
 
