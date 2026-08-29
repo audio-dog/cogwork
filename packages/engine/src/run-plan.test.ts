@@ -121,9 +121,19 @@ const item: EligibleWork = {
 const context: AssembledContext = {
   layers: [
     { kind: "repo", source: "/repo/AGENTS.md", content: "repository rules" },
-    { kind: "playbook", source: "/engine/skills/implement-agent/SKILL.md", content: "playbook" },
+    {
+      kind: "operating-instructions",
+      source: "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md",
+      content: "operating-instructions",
+    },
   ],
-  skillPath: "/home/.cogwork/skills/implement-agent",
+  operatingInstructionsPath: "/home/.cogwork/run-plans/run-228/operating-instructions/implement-agent",
+  operatingInstructionResources: [
+    {
+      source: "/engine/operating-instructions/implement-agent/CHECKLIST.md",
+      content: "verification checklist",
+    },
+  ],
   sources: [
     {
       source: "/repo/.agents.local/skills/review/SKILL.md",
@@ -138,44 +148,55 @@ const context: AssembledContext = {
 
 describe("Run Plan assembly", () => {
   it("freezes Messages, admitting Work Context facts, and provenance", () => {
-    const resolved = resolveRunPlanStage(workspace.config, "implement", [
-      {
-        setting: "model",
-        level: { _tag: "Default" },
-        scope: { _tag: "SettingsProfile" },
-        value: "default-model",
-      },
-      {
-        setting: "model",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "SettingsProfile" },
-        value: "profile-model",
-      },
-      {
-        setting: "model",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
-        value: "private-model",
-      },
-      {
-        setting: "model",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
-        value: "other-workspace-model",
-      },
-      {
-        setting: "permission-profile",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
-        value: "read-only",
-      },
-      {
-        setting: "bindings",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "SettingsProfile" },
-        value: [{ need: "review", contribution: "local:private/skill/review" }],
-      },
-    ]);
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      "implement",
+      [
+        {
+          setting: "model",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "default-model",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "profile-model",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+          value: "private-model",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
+          value: "other-workspace-model",
+        },
+        {
+          setting: "permission-profile",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+          value: "read-only",
+        },
+        {
+          setting: "bindings",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: [{ need: "review", contribution: "local:private/skill/review" }],
+        },
+      ],
+      [
+        {
+          contribution: { id: "local:private/mcp/tools", kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
+          enabled: false,
+        },
+      ],
+    );
     assert.isNotNull(resolved);
     if (!resolved) return;
 
@@ -192,7 +213,8 @@ describe("Run Plan assembly", () => {
       middleware: ["sandbox"],
       context,
       contributions: workspace.contributions,
-      mcpSkills: [],
+      mcpServers: [],
+      provenanceStamps: [{ _tag: "DeclaredVersion", source: "plugin:linear", version: "1.2.3" }],
     });
 
     assert.deepStrictEqual(
@@ -238,13 +260,29 @@ describe("Run Plan assembly", () => {
       plan.provenance.stamps.map((stamp) => stamp.source),
       [
         "/repo/AGENTS.md",
-        "/engine/skills/implement-agent/SKILL.md",
+        "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md",
+        "/engine/operating-instructions/implement-agent/CHECKLIST.md",
         "/repo/.agents.local/skills/review/SKILL.md",
         "/repo/.agents/mcp/tools.json",
+        "plugin:linear",
         "implement Operation Definition",
+        "Engine Harness Adapter",
+        "Engine Messages",
+        "Engine Work Context",
+        "Engine Tools",
+        "Engine Middleware",
+        "Engine Sandbox",
+        "Engine Structured Output",
+        "Engine Persistence",
+        "Engine Connections",
       ],
     );
     assert.strictEqual(plan.skills[0]?.identity, "local:private/skill/review");
+    assert.strictEqual(
+      plan.provenance.resolution.find(({ key }) => key === "contribution:local:private/mcp/tools:enabled")
+        ?.dropped[0]?.reason,
+      "scope does not apply to this workspace",
+    );
     assert.strictEqual(plan.commands[0]?.identity, "local:repo/command/release");
     assert.strictEqual(
       plan.provenance.resolution.find(({ key }) => key === "contribution:local:repo/mcp/disabled:enabled")
@@ -308,7 +346,7 @@ describe("Run Plan assembly", () => {
       middleware: [],
       context,
       contributions: [contribution],
-      mcpSkills: [
+      mcpServers: [
         {
           identity: contribution.id,
           name: contribution.id,
@@ -316,6 +354,7 @@ describe("Run Plan assembly", () => {
           authenticated: false,
         },
       ],
+      provenanceStamps: [],
     });
 
     assert.deepStrictEqual(plan.mcp, []);

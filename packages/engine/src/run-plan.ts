@@ -13,12 +13,13 @@ import type {
   WorkspaceConfig,
 } from "@cogwork/contracts";
 import {
+  ContentRevision,
   HarnessName,
   type LifecycleStage,
   operationSettingNames,
+  type ProvenanceStamp,
   type RunId,
   RunPlan,
-  RunPlanContentRevision,
   RunPlanContributionMember,
   RunPlanDroppedCandidate,
   RunPlanHarness,
@@ -27,6 +28,7 @@ import {
   RunPlanMember,
   type RunPlanMember as RunPlanMemberType,
   RunPlanMessage,
+  type RunPlanMiddlewareName,
   RunPlanObservation,
   RunPlanOperatingInstructions,
   RunPlanPersistence,
@@ -36,6 +38,7 @@ import {
   RunPlanProvenance,
   RunPlanResolutionCandidate,
   RunPlanResolutionTrace,
+  RunPlanResource,
   RunPlanSandbox,
   RunPlanWorkContext,
   RunPlanWorkContextFacts,
@@ -196,12 +199,6 @@ export const resolveEngineOperationSetting = (
 export const operatorForSetting = (setting: OperationSettingName) =>
   setting === "bindings" ? "union-values" : "override-scalar";
 
-const settingValue = (
-  rows: readonly OperationSettingRow[],
-  setting: OperationSettingName,
-  context: OperationSettingContext,
-) => resolveEngineOperationSetting(rows, setting, context);
-
 const stringValue = (value: unknown, fallback: string | null) =>
   typeof value === "string" ? value : fallback;
 
@@ -217,7 +214,7 @@ const isPolicyProfile = Schema.is(RunPlanPolicyProfile);
 const policyProfileValue = (value: unknown, fallback: RunPlanPolicyProfile) =>
   isPolicyProfile(value) ? value : fallback;
 
-export interface ResolvedRunPlanStage {
+export interface ResolvedOperation {
   readonly stage: ResolvedStage;
   readonly profile: RunPlanPolicyProfile;
   readonly settings: ReadonlyMap<OperationSettingName, ReturnType<typeof resolveEngineOperationSetting>>;
@@ -234,7 +231,9 @@ export const resolveRunPlanStage = (
   if (!base) return null;
   const context = { workflow: "coding", operation, workspace: config.name };
   const settings = new Map(
-    operationSettingNames.map((setting) => [setting, settingValue(rows, setting, context)] as const),
+    operationSettingNames.map(
+      (setting) => [setting, resolveEngineOperationSetting(rows, setting, context)] as const,
+    ),
   );
   const settingValueOf = (setting: OperationSettingName) => settings.get(setting)?.value;
   return {
@@ -286,7 +285,7 @@ const winningRows = (winning: OperationSettingRow | readonly OperationSettingRow
   return "setting" in winning ? [winning] : winning;
 };
 
-const effectiveSettingValue = (resolved: ResolvedRunPlanStage, setting: OperationSettingName) => {
+const effectiveSettingValue = (resolved: ResolvedOperation, setting: OperationSettingName) => {
   if (setting === "enabled") return resolved.stage.enabled;
   if (setting === "harness") return resolved.stage.harness;
   if (setting === "model") return resolved.stage.model;
@@ -296,7 +295,7 @@ const effectiveSettingValue = (resolved: ResolvedRunPlanStage, setting: Operatio
 };
 
 const resolutionTrace = (
-  resolved: ResolvedRunPlanStage,
+  resolved: ResolvedOperation,
   setting: OperationSettingName,
   operation: LifecycleStage,
 ) => {
@@ -320,15 +319,29 @@ const resolutionTrace = (
 
 const revisionOf = (content: string) => createHash("sha256").update(content).digest("hex");
 
-const contentStamps = (context: AssembledContext) =>
-  [...context.layers, ...context.sources]
+const contentStamps = (
+  context: AssembledContext,
+  contributions: ReadonlyArray<FileContribution>,
+  supplied: ReadonlyArray<ProvenanceStamp>,
+) => {
+  const stampedSources = new Set(supplied.map(({ source }) => source));
+  const suppliedFiles = new Set(
+    contributions.filter(({ authority }) => stampedSources.has(authority)).map(({ file }) => file),
+  );
+  return [...context.layers, ...context.operatingInstructionResources, ...context.sources]
+    .filter(({ source }) => !suppliedFiles.has(source))
     .filter(
       (source, index, sources) =>
         sources.findIndex((candidate) => candidate.source === source.source) === index,
     )
-    .map((source) =>
-      RunPlanContentRevision.make({ source: source.source, revision: revisionOf(source.content) }),
-    );
+    .map((source) => ContentRevision.make({ source: source.source, revision: revisionOf(source.content) }));
+};
+
+const contentStamp = (source: string, content: unknown) =>
+  ContentRevision.make({
+    source,
+    revision: revisionOf(typeof content === "string" ? content : JSON.stringify(content)),
+  });
 
 const projectedName = (identity: string) =>
   `cogwork_${Array.from(identity, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}`;
@@ -355,6 +368,25 @@ const contributionRows = (
       (setting.scope._tag === "SettingsProfile" || setting.scope.workspace === workspace),
   );
 
+const droppedContributionSettings = (
+  settings: ReadonlyArray<ContributionSettingRow>,
+  contribution: FileContribution,
+  workspace: WorkspaceConfig["name"],
+) =>
+  settings
+    .filter(
+      (setting) =>
+        setting.contribution.id === contribution.id &&
+        setting.scope._tag === "PrivateWorkspaceOverlay" &&
+        setting.scope.workspace !== workspace,
+    )
+    .map((setting) =>
+      RunPlanDroppedCandidate.make({
+        candidate: contributionSettingCandidate(setting),
+        reason: "scope does not apply to this workspace",
+      }),
+    );
+
 const contributionGate = (
   contribution: FileContribution,
   settings: ReadonlyArray<ContributionSettingRow>,
@@ -378,7 +410,7 @@ export const admittedContributions = (
 const contributionSettingCandidate = (setting: ContributionSettingRow) =>
   RunPlanResolutionCandidate.make({
     scope: scopeName(setting.scope),
-    level: "Contribution entry gate",
+    level: "Default",
     source: scopeName(setting.scope),
     value: setting.enabled,
   });
@@ -395,7 +427,7 @@ const droppedContribution = (
     RunPlanDroppedCandidate.make({
       candidate: RunPlanResolutionCandidate.make({
         scope: contribution.authority,
-        level: "Contribution entry gate",
+        level: "Default",
         source: contribution.file,
         value: true,
       }),
@@ -417,13 +449,16 @@ const contributionGateTrace = (
       ? contributionSettingCandidate(resolution.winning)
       : RunPlanResolutionCandidate.make({
           scope: "Engine",
-          level: "Contribution entry gate",
+          level: "Default",
           source: `${contribution.authority} default`,
           value: resolution.value,
         }),
     contributors: [],
     shadowed: resolution.shadowed.map(contributionSettingCandidate),
-    dropped: droppedContribution(contribution, resolution),
+    dropped: [
+      ...droppedContributionSettings(settings, contribution, workspace),
+      ...droppedContribution(contribution, resolution),
+    ],
   });
 };
 
@@ -431,7 +466,6 @@ const instructions = (context: AssembledContext) =>
   context.layers.map((layer) =>
     RunPlanInstruction.make({
       ...layer,
-      kind: layer.kind === "playbook" ? "operating-instructions" : layer.kind,
     }),
   );
 
@@ -440,6 +474,8 @@ const deepFreeze = <A>(value: A): A => {
   Object.values(value).forEach(deepFreeze);
   return Object.freeze(value);
 };
+
+export const freezeRunPlan = (plan: RunPlan) => deepFreeze(plan);
 
 const structuredOutput = (operation: LifecycleStage) =>
   stageResultJsonSchema(operation)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
@@ -469,8 +505,8 @@ const unprojectedMcp = (members: ReadonlyArray<RunPlanContributionMember>) =>
 const mcpIdentity = (name: string, endpoint: string) =>
   `engine/mcp/${revisionOf(JSON.stringify({ name, endpoint }))}`;
 
-const mcpServers = (skills: ReadonlyArray<RunPlanMcpSkillInput>) =>
-  skills.map((server) => {
+const mcpServers = (servers: ReadonlyArray<RunPlanMcpServerInput>) =>
+  servers.map((server) => {
     const identity = server.identity ?? mcpIdentity(server.name, server.endpoint);
     return RunPlanMcpServer.make({
       identity,
@@ -481,15 +517,15 @@ const mcpServers = (skills: ReadonlyArray<RunPlanMcpSkillInput>) =>
     });
   });
 
-export const admittedMcpSkills = <A extends { readonly identity: string | null }>(
-  skills: ReadonlyArray<A>,
+export const admittedMcpServers = <A extends { readonly identity: string | null }>(
+  servers: ReadonlyArray<A>,
   contributions: ReadonlyArray<FileContribution>,
 ) => {
   const admittedIdentities = new Set(contributions.map(({ id }) => id));
-  return skills.filter(({ identity }) => identity === null || admittedIdentities.has(identity));
+  return servers.filter(({ identity }) => identity === null || admittedIdentities.has(identity));
 };
 
-export interface RunPlanMcpSkillInput {
+export interface RunPlanMcpServerInput {
   readonly identity: string | null;
   readonly name: string;
   readonly endpoint: string;
@@ -501,15 +537,16 @@ export interface AssembleRunPlanInput {
   readonly workspace: RegisteredWorkspace;
   readonly item: EligibleWork;
   readonly observation: RunPlanObservation;
-  readonly resolved: ResolvedRunPlanStage;
+  readonly resolved: ResolvedOperation;
   readonly prompt: string;
   readonly checkoutPath: string;
   readonly sessionKind: SessionKind;
   readonly context: AssembledContext;
   readonly projectedMembers: ReadonlyArray<RunPlanMemberType>;
-  readonly middleware: ReadonlyArray<string>;
+  readonly middleware: ReadonlyArray<RunPlanMiddlewareName>;
   readonly contributions: ReadonlyArray<FileContribution>;
-  readonly mcpSkills: ReadonlyArray<RunPlanMcpSkillInput>;
+  readonly mcpServers: ReadonlyArray<RunPlanMcpServerInput>;
+  readonly provenanceStamps: ReadonlyArray<ProvenanceStamp>;
 }
 
 export const assembleRunPlan = (input: AssembleRunPlanInput) => {
@@ -520,25 +557,41 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     input.resolved.contributionSettings,
     input.workspace.config.name,
   );
-  const admittedSkills = admittedMcpSkills(input.mcpSkills, admitted);
-  const mcpServersForRun = mcpServers(admittedSkills);
+  const admittedServers = admittedMcpServers(input.mcpServers, admitted);
+  const mcpServersForRun = mcpServers(admittedServers);
   const resolvedMcpIdentities = new Set(
-    admittedSkills.flatMap(({ identity }) => (identity === null ? [] : [identity])),
+    admittedServers.flatMap(({ identity }) => (identity === null ? [] : [identity])),
   );
   const unresolvedMcp = contributionMembers(admitted, "mcp-server").filter(
     ({ identity }) => !resolvedMcpIdentities.has(identity),
   );
   const mcp = [...mcpServersForRun, ...unresolvedMcp];
-  const operationSource = `${input.item.stage} Operation Definition`;
-  const operationRevision = revisionOf(
-    JSON.stringify({
+  const engineStamps = [
+    contentStamp(`${input.item.stage} Operation Definition`, {
       operation: input.item.stage,
-      stage: input.resolved.stage,
-      prompt: input.prompt,
-      skillPath: input.context.skillPath,
+      operatingInstructions: input.resolved.stage.skill,
     }),
-  );
-  return deepFreeze(
+    contentStamp("Engine Harness Adapter", {
+      name: input.resolved.stage.harness,
+      model: input.resolved.stage.model,
+      effort: input.resolved.stage.effort,
+      profile: input.resolved.profile,
+    }),
+    contentStamp("Engine Messages", [{ role: "user", content: input.prompt }]),
+    contentStamp("Engine Work Context", { ...workContext, observation }),
+    contentStamp("Engine Tools", ownedToolNames),
+    contentStamp("Engine Middleware", input.middleware),
+    contentStamp("Engine Sandbox", { workspace: input.checkoutPath, policy: input.resolved.profile }),
+    contentStamp("Engine Structured Output", structuredOutput(input.item.stage)),
+    contentStamp("Engine Persistence", { sessionKind: input.sessionKind }),
+    contentStamp(
+      "Engine Connections",
+      input.resolved.stage.mcpSkills
+        .filter((server) => server.auth !== undefined)
+        .map((server) => server.name),
+    ),
+  ];
+  return freezeRunPlan(
     RunPlan.make({
       id: input.runId,
       operation: input.item.stage,
@@ -551,7 +604,10 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
       instructions: instructions(input.context),
       operatingInstructions: RunPlanOperatingInstructions.make({
         name: input.resolved.stage.skill,
-        path: input.context.skillPath,
+        path: input.context.operatingInstructionsPath,
+        resources: input.context.operatingInstructionResources.map((resource) =>
+          RunPlanResource.make(resource),
+        ),
       }),
       messages: [RunPlanMessage.make({ role: "user", content: input.prompt })],
       tools: input.projectedMembers.includes("Tools") ? [...ownedToolNames] : [],
@@ -596,8 +652,9 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
               ),
           ),
         stamps: [
-          ...contentStamps(input.context),
-          RunPlanContentRevision.make({ source: operationSource, revision: operationRevision }),
+          ...contentStamps(input.context, input.contributions, input.provenanceStamps),
+          ...input.provenanceStamps,
+          ...engineStamps,
         ],
         projectedNames: input.projectedMembers.includes("MCP")
           ? mcpServersForRun.map((server) =>
