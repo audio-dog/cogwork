@@ -1,4 +1,9 @@
-import type { ConnectionId, GitHubPrioritySource, Priority } from "@cogwork/contracts";
+import {
+  type ConnectionId,
+  connectionAccountOf,
+  type GitHubPrioritySource,
+  type Priority,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
@@ -384,7 +389,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     request: HttpClientRequest.HttpClientRequest,
   ) {
     if (repo.connectionId && credentialStore) {
-      const account = repo.connectionId.slice(repo.connectionId.indexOf("/") + 1);
+      const account = connectionAccountOf(repo.connectionId);
       const credential = yield* credentialStore
         .bearerToken({
           connectionId: repo.connectionId,
