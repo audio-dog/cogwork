@@ -1,0 +1,25 @@
+packages/engine/src/coordination.test.ts
+  s_41b37bac6bb640::t_c9315438e8a8ab 188,470,502
+  s_41b37bac6bb640::t_d28b8075f262c4 192-198
+  s_41b37bac6bb640::t_ecf6285d1f22a1 189-191
+packages/engine/src/coordination.ts
+  s_41b37bac6bb640::t_bbbf1ba8a3ba62 5,69
+packages/engine/src/coordination-tracker.test.ts
+  s_41b37bac6bb640::t_c9315438e8a8ab 261,422
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c4b34824496b8ba0aca57e9ee0f1fa88deb506cd",
+  "prompts": {},
+  "sessions": {
+    "s_41b37bac6bb640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04ad2-fcd3-7d21-97b2-203dbfc8aba5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
