@@ -1,0 +1,48 @@
+apps/cli/src/rpc.ts
+  s_d5aac6a69f142e::t_d24a0217b68de8 83,85,94
+apps/cli/src/platform.ts
+  s_d5aac6a69f142e::t_46c22939681c40 199,201
+packages/engine/src/context-fs.ts
+  s_d5aac6a69f142e::t_46c22939681c40 16-19
+packages/engine/src/context-assembler.test.ts
+  s_d5aac6a69f142e::t_8fa32a8c0da88c 281
+  s_d5aac6a69f142e::t_533d343dd1521e 343,356
+  s_d5aac6a69f142e::t_51bce8f87bf7ab 292-296,316-323
+  s_d5aac6a69f142e::t_76b0f10d08f693 41-50
+  s_d5aac6a69f142e::t_e4cec8d090c839 95,136,226,249
+  s_d5aac6a69f142e::t_94da5d31c15e2a 14-18,111,113,188-191,236,259,291,298,304-305,309-315,359-362,379
+  s_d5aac6a69f142e::t_b3a685a8e8e6f6 1,273-274,277
+  s_d5aac6a69f142e::t_f613167951bfe1 24,260,382-384,397-399
+  s_d5aac6a69f142e::t_00fb643e8194fb 114,177
+  s_d5aac6a69f142e::t_025e7edee1308d 121,286,376,392
+  s_d5aac6a69f142e::t_8e38a38977f778 264-269,271-272,275-276,278-280,282
+  s_d5aac6a69f142e::t_f69ee5eb725e90 261-263
+  s_d5aac6a69f142e::t_59c1347cac310a 297
+packages/engine/src/context-assembler.ts
+  s_d5aac6a69f142e::t_6cdaef1a3afde8 19-22,171-182,203,227-232
+  s_d5aac6a69f142e::t_c65b803b79f554 72,74-75,162,186
+  s_d5aac6a69f142e::t_f613167951bfe1 71
+  s_d5aac6a69f142e::t_e6b30635173d3d 8,18,30,37,158-160,166,189,192-202,219-226
+  s_d5aac6a69f142e::t_69de1066ff98f6 43,144,147-154,165,188
+  s_d5aac6a69f142e::t_9577a5743be62b 129-137
+  s_d5aac6a69f142e::t_484f45cfee20c4 170
+  s_d5aac6a69f142e::t_8a57b3bae33445 183
+packages/engine/src/daemon-composition.test.ts
+  s_d5aac6a69f142e::t_980e607ff8631f 45-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "88f506b3dff55247fa96ac82483407e5043fe744",
+  "prompts": {},
+  "sessions": {
+    "s_d5aac6a69f142e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04adb-8aef-7852-9d2b-1588a232b1b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
