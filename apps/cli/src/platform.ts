@@ -56,10 +56,21 @@ const parseDivergence = (stdout: string) => {
 
 const gitCommandDeadline = "5 minutes";
 
+const operationHeads: ReadonlyArray<{
+  readonly operation: Git.GitOperation;
+  readonly head: string;
+}> = [
+  { operation: "merge", head: "MERGE_HEAD" },
+  { operation: "rebase", head: "REBASE_HEAD" },
+  { operation: "cherry-pick", head: "CHERRY_PICK_HEAD" },
+];
+
 export const gitLayer = Layer.effect(
   Git.Git,
   Effect.gen(function* () {
     const capture = captureWith(yield* ChildProcessSpawner);
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
 
     const runGit = (cwd: string, args: ReadonlyArray<string>) => {
       const command = `git ${args.join(" ")}`;
@@ -83,6 +94,33 @@ export const gitLayer = Layer.effect(
         ),
       );
     };
+
+    const operationMarkerExists = (worktreePath: string, head: string) =>
+      runGit(worktreePath, ["rev-parse", "--git-path", head]).pipe(
+        Effect.map((value) => path.resolve(worktreePath, value.trim())),
+        Effect.flatMap((markerPath) =>
+          fs.exists(markerPath).pipe(
+            Effect.mapError(
+              (cause) =>
+                new Git.GitError({
+                  command: `git rev-parse --git-path ${head}`,
+                  message: describe(cause),
+                }),
+            ),
+          ),
+        ),
+      );
+
+    const operationInProgress = Effect.fn("Git.operationInProgress")(function* (worktreePath: string) {
+      const found = yield* Effect.findFirst(operationHeads, ({ head }) =>
+        operationMarkerExists(worktreePath, head),
+      );
+      if (Option.isNone(found)) return null;
+      const unmergedPaths = yield* runGit(worktreePath, ["diff", "--name-only", "--diff-filter=U"]).pipe(
+        Effect.map((stdout) => stdout.split("\n").filter(Boolean)),
+      );
+      return { operation: found.value.operation, unmergedPaths } satisfies Git.GitOperationInProgress;
+    });
 
     return {
       fetch: (repoPath, remote) => runGit(repoPath, ["fetch", "--prune", remote]).pipe(Effect.asVoid),
@@ -118,6 +156,7 @@ export const gitLayer = Layer.effect(
           }),
         );
       },
+      operationInProgress,
       rebase: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["rebase", `${remote}/${branch}`, branch]).pipe(
           Effect.onExit((exit) =>
