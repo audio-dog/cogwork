@@ -1,5 +1,5 @@
 import {
-  type ConnectionId,
+  ConnectionId,
   type ConnectionSource,
   connectionAccountOf,
   connectionSystemOf,
@@ -61,14 +61,14 @@ export type StoredProviderKey = typeof StoredProviderKey.Type;
 
 export const StoredConnectionCredential = Schema.TaggedUnion({
   Stored: {
-    connectionId: TrimmedNonEmptyString,
+    connectionId: ConnectionId,
   },
   Env: {
-    connectionId: TrimmedNonEmptyString,
+    connectionId: ConnectionId,
     name: TrimmedNonEmptyString,
   },
   ApiKey: {
-    connectionId: TrimmedNonEmptyString,
+    connectionId: ConnectionId,
     key: Schema.RedactedFromValue(TrimmedNonEmptyString),
   },
 });

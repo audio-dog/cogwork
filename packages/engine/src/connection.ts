@@ -90,10 +90,10 @@ const missingStore: ConnectionStoreService = {
   readiness: () => Effect.succeed({ _tag: "NotReady", reason: "Connection store unavailable" }),
   requireReady: (connectionId) =>
     Effect.fail(new ConnectionNotReady({ connectionId, message: "Connection store unavailable" })),
-  requireSystemReady: (system) =>
+  requireSystemReady: (_system) =>
     Effect.fail(
       new ConnectionNotReady({
-        connectionId: connectionIdOf(system, "unavailable"),
+        connectionId: null,
         message: "Connection store unavailable",
       }),
     ),
@@ -168,7 +168,7 @@ export const layer = Layer.effect(
       const connection = yield* findSystem(system);
       if (connection) return yield* requireReady(connection.id);
       return yield* new ConnectionNotReady({
-        connectionId: connectionIdOf(system, "missing"),
+        connectionId: null,
         message: `${system} Connection is not established`,
       });
     });

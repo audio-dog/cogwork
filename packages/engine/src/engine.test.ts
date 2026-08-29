@@ -1,5 +1,7 @@
 import {
   type ConnectionId,
+  type ConnectionReadiness,
+  connectionIdOf,
   DaemonRpcs,
   defaultControlStore,
   WorkItemId,
@@ -471,7 +473,7 @@ describe("reconcile worker", () => {
         find: () => Effect.succeed(null),
         findSystem: () => Effect.succeed(null),
         bearer: () => Effect.die("unexpected Connection bearer"),
-        readiness: () => Effect.succeed({ _tag: "Ready" as const }),
+        readiness: () => Effect.succeed({ _tag: "Ready" } satisfies ConnectionReadiness),
         requireReady: () => Effect.void,
         requireSystemReady: () => Effect.void,
         establish: () => Effect.die("unexpected Connection establish"),
@@ -487,9 +489,7 @@ describe("reconcile worker", () => {
         yield* worker.submit();
       }).pipe(Effect.provide(layer), Effect.scoped);
 
-      assert.deepStrictEqual(yield* Ref.get(revoked), [
-        connectedGithubWorkspace.config.issueTracker.connectionId,
-      ]);
+      assert.deepStrictEqual(yield* Ref.get(revoked), [connectionIdOf("github", "acme")]);
     }),
   );
 
