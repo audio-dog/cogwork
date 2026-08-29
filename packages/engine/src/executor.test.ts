@@ -1,9 +1,12 @@
 import {
   type ContributionSettingRow,
+  DeclaredVersion,
   defaultControlStore,
   HarnessName,
   LocalContribution,
+  localOwnerId,
   type OperationSettingRow,
+  type PluginContribution,
   PluginFailure,
   type SessionId,
   SessionId as SessionIdSchema,
@@ -205,26 +208,38 @@ class ContextCleanupCalls extends Context.Service<ContextCleanupCalls, Ref.Ref<R
     Effect.gen(function* () {
       const cleanups = yield* ContextCleanupCalls;
       return {
-        assemble: () => Effect.succeed({ layers: [], skillPath: "/", sources: [] }),
+        assemble: () =>
+          Effect.succeed({
+            layers: [],
+            operatingInstructionsPath: "/",
+            operatingInstructionResources: [],
+            sources: [],
+          }),
         cleanup: (runId) => Ref.update(cleanups, (calls) => [...calls, runId]),
       };
     }),
   ).pipe(Layer.provideMerge(ContextCleanupCalls.layer));
 }
 
-const missingPlaybookContext = Layer.succeed(ContextAssembler.ContextAssembler, {
+const missingOperatingInstructionsContext = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: (request) =>
     Effect.fail(
       new ContextAssembler.ContextAssemblerError({
-        skill: request.skill,
-        message: `playbook skill "${request.skill}" has no readable SKILL.md`,
+        source: request.operatingInstructions,
+        message: `Operating Instructions "${request.operatingInstructions}" have no readable INSTRUCTIONS.md`,
       }),
     ),
   cleanup: () => Effect.void,
 });
 
 const failingCleanupContext = Layer.succeed(ContextAssembler.ContextAssembler, {
-  assemble: () => Effect.succeed({ layers: [], skillPath: "/", sources: [] }),
+  assemble: () =>
+    Effect.succeed({
+      layers: [],
+      operatingInstructionsPath: "/",
+      operatingInstructionResources: [],
+      sources: [],
+    }),
   cleanup: () =>
     Effect.fail(
       new ContextFsError({
@@ -244,7 +259,8 @@ const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
           source: contribution.file,
           content: contribution.id,
         })),
-      skillPath: "/",
+      operatingInstructionsPath: "/",
+      operatingInstructionResources: [],
       sources: [],
     }),
   cleanup: () => Effect.void,
@@ -814,78 +830,96 @@ const pluginManagerStub = Layer.succeed(PluginManager, {
   contributions: () => Effect.succeed([]),
 });
 
+const installedPlugin = (contributions: ReadonlyArray<PluginContribution>) => ({
+  pluginId: "linear",
+  name: "Linear",
+  summary: "Linear integration",
+  record: {
+    pluginId: "linear",
+    resolvedIdentity: "linear@1.2.3",
+    principal: localOwnerId,
+    installedAtMillis: 1,
+  },
+  resolvedIdentity: "linear@1.2.3",
+  provenanceStamp: DeclaredVersion.make({ source: "plugin:linear", version: "1.2.3" }),
+  requiredConnections: [],
+  contributions,
+  manifestFailure: null,
+});
+
+const missingPluginCredentialContributions = [
+  {
+    id: "plugin:linear/mcp/linear",
+    authority: "plugin:linear",
+    kind: "mcp-server",
+    localName: "linear",
+    summary: "Linear MCP server",
+    file: "/plugins/linear/mcp/linear.json",
+    load: {
+      _tag: "Loaded",
+      mcpServer: {
+        endpoint: "https://mcp.linear.app/mcp",
+        secretEnv: "MISSING_LINEAR_API_KEY",
+        credentialAvailable: false,
+      },
+    },
+  },
+  {
+    id: "plugin:linear/rules/linear",
+    authority: "plugin:linear",
+    kind: "rules",
+    localName: "linear",
+    summary: "Linear rules",
+    file: "/plugins/linear/rules/linear.md",
+    load: { _tag: "Loaded" },
+  },
+] satisfies ReadonlyArray<PluginContribution>;
+
+const availablePluginMcpContributions = [
+  {
+    id: "plugin:linear/mcp/linear",
+    authority: "plugin:linear",
+    kind: "mcp-server",
+    localName: "linear",
+    summary: "Linear MCP server",
+    file: "/plugins/linear/mcp/linear.json",
+    load: {
+      _tag: "Loaded",
+      mcpServer: {
+        endpoint: "https://mcp.linear.app/mcp",
+        secretEnv: null,
+        credentialAvailable: true,
+      },
+    },
+  },
+] satisfies ReadonlyArray<PluginContribution>;
+
 const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
-  overview: Effect.succeed({ plugins: [] }),
+  overview: Effect.succeed({ plugins: [installedPlugin(missingPluginCredentialContributions)] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
-  contributions: () =>
-    Effect.succeed([
-      {
-        id: "plugin:linear/mcp/linear",
-        authority: "plugin:linear",
-        kind: "mcp-server" as const,
-        localName: "linear",
-        summary: "Linear MCP server",
-        file: "/plugins/linear/mcp/linear.json",
-        load: {
-          _tag: "Loaded" as const,
-          mcpServer: {
-            endpoint: "https://mcp.linear.app/mcp",
-            secretEnv: "MISSING_LINEAR_API_KEY",
-            credentialAvailable: false,
-          },
-        },
-      },
-      {
-        id: "plugin:linear/rules/linear",
-        authority: "plugin:linear",
-        kind: "rules" as const,
-        localName: "linear",
-        summary: "Linear rules",
-        file: "/plugins/linear/rules/linear.md",
-        load: { _tag: "Loaded" as const },
-      },
-    ]),
+  contributions: () => Effect.succeed(missingPluginCredentialContributions),
 });
 
 const availablePluginMcpLayer = Layer.succeed(PluginManager, {
-  overview: Effect.succeed({ plugins: [] }),
+  overview: Effect.succeed({ plugins: [installedPlugin(availablePluginMcpContributions)] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
-  contributions: () =>
-    Effect.succeed([
-      {
-        id: "plugin:linear/mcp/linear",
-        authority: "plugin:linear",
-        kind: "mcp-server" as const,
-        localName: "linear",
-        summary: "Linear MCP server",
-        file: "/plugins/linear/mcp/linear.json",
-        load: {
-          _tag: "Loaded" as const,
-          mcpServer: {
-            endpoint: "https://mcp.linear.app/mcp",
-            secretEnv: null,
-            credentialAvailable: true,
-          },
-        },
-      },
-    ]),
+  contributions: () => Effect.succeed(availablePluginMcpContributions),
 });
 
 const unavailablePluginLayer = Layer.succeed(PluginManager, {
-  overview: Effect.succeed({ plugins: [] }),
+  overview: Effect.fail(
+    new PluginFailure({
+      operation: "read Plugin snapshot",
+      pluginId: null,
+      file: null,
+      message: "catalog unavailable",
+    }),
+  ),
   install: () => Effect.die(new Error("unexpected Plugin install")),
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
-  contributions: () =>
-    Effect.fail(
-      new PluginFailure({
-        operation: "read Plugin contributions",
-        pluginId: null,
-        file: null,
-        message: "catalog unavailable",
-      }),
-    ),
+  contributions: () => Effect.succeed([]),
 });
 
 const controlStoreLayer = (
@@ -905,6 +939,56 @@ const controlStoreLayer = (
     withWrite: (effect) => effect,
   });
 };
+
+const changingControlStoreLayer = (
+  firstOperationSettings: ReadonlyArray<OperationSettingRow>,
+  secondOperationSettings: ReadonlyArray<OperationSettingRow>,
+  firstContributionSettings: ReadonlyArray<ContributionSettingRow> = [],
+  secondContributionSettings: ReadonlyArray<ContributionSettingRow> = [],
+) =>
+  Layer.effect(
+    ControlStore,
+    Effect.gen(function* () {
+      const reads = yield* Ref.make(0);
+      const writeActive = yield* Ref.make(false);
+      const picture = (
+        operationSettings: ReadonlyArray<OperationSettingRow>,
+        contributionSettings: ReadonlyArray<ContributionSettingRow>,
+      ) => ({
+        ...defaultControlStore,
+        operationSettings,
+        contributionSettings,
+      });
+      return {
+        health: "available" as const,
+        seed: picture(firstOperationSettings, firstContributionSettings),
+        picture: Ref.getAndUpdate(reads, (count) => count + 1).pipe(
+          Effect.flatMap((count) => {
+            if (count === 0) {
+              return Effect.succeed(picture(firstOperationSettings, firstContributionSettings));
+            }
+            return Ref.get(writeActive).pipe(
+              Effect.flatMap((active) =>
+                active
+                  ? Effect.succeed(picture(secondOperationSettings, secondContributionSettings))
+                  : Effect.die(new Error("planning read escaped the Control store write gate")),
+              ),
+            );
+          }),
+        ),
+        setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+        updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+        installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
+        uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
+        updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
+        withWrite: (effect) =>
+          Ref.set(writeActive, true).pipe(
+            Effect.andThen(effect),
+            Effect.ensuring(Ref.set(writeActive, false)),
+          ),
+      };
+    }),
+  );
 
 function testHarness(runners: ReadonlyArray<TestRunner>) {
   return Layer.unwrap(
@@ -928,6 +1012,10 @@ function provide(
   contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
   plugins: Layer.Layer<PluginManager> = pluginManagerStub,
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
+  controlStore: ReturnType<typeof controlStoreLayer> = controlStoreLayer(
+    operationSettings,
+    contributionSettings,
+  ),
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
@@ -954,7 +1042,7 @@ function provide(
         worktree,
         assemblerStub,
         contextAssembler,
-        controlStoreLayer(operationSettings, contributionSettings),
+        controlStore,
         plugins,
       ),
     ),
@@ -1251,6 +1339,74 @@ describe("Executor.execute", () => {
     );
   });
 
+  it.effect("assembles the Plan from settings refreshed inside the write gate", () => {
+    const refreshedModel: OperationSettingRow = {
+      setting: "model",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace: implementWorkspace.config.name },
+      value: "refreshed-model",
+    };
+    const refreshedStore = changingControlStoreLayer([], [refreshedModel]);
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const [request] = yield* Ref.get(requests);
+      assert.strictEqual(request?.plan.harness.model, "refreshed-model");
+      const model = request?.plan.provenance.resolution.find(({ key }) => key === "model");
+      assert.strictEqual(model?.winner?.value, "refreshed-model");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          refreshedStore,
+        ),
+      ),
+    );
+  });
+
+  it.effect("uses refreshed contribution settings before preparing MCP credentials", () => {
+    const enabled: ContributionSettingRow = {
+      contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace: implementWorkspace.config.name },
+      enabled: true,
+    };
+    const disabled = { ...enabled, enabled: false };
+    const refreshedStore = changingControlStoreLayer([], [], [enabled], [disabled]);
+
+    return Effect.gen(function* () {
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      assert.isTrue(yield* execute(executor, implementWorkspace, implementItem));
+
+      const [request] = yield* Ref.get(requests);
+      assert.deepStrictEqual(request ? [...resolvedMcpSkills(request)] : [], []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          ContextCleanupCalls.contextAssemblerLayer,
+          missingPluginCredentialLayer,
+          [],
+          refreshedStore,
+        ),
+      ),
+    );
+  });
+
   it.effect("records no run when claiming fails before execution starts", () => {
     const failure = new IssueTrackerError({
       reason: "unavailable",
@@ -1273,7 +1429,7 @@ describe("Executor.execute", () => {
     );
   });
 
-  it.effect("does nothing when triage is disabled in the playbook", () => {
+  it.effect("does nothing when triage is disabled in the Operation Definition", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
@@ -1282,6 +1438,34 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+    }).pipe(Effect.provide(provide([runner(successEvents)])));
+  });
+
+  it.effect("releases an interrupted claim when its operation is now disabled", () => {
+    const resumed: EligibleWork = {
+      ...triageItem,
+      resume: { session: previousSession, reason: "interrupted" },
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      assert.isFalse(yield* execute(executor, disabledWorkspace, resumed));
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: resumed.id }]);
+    }).pipe(Effect.provide(provide([runner(successEvents)])));
+  });
+
+  it.effect("releases a sessionless interrupted claim when its operation is now disabled", () => {
+    const recovered: EligibleWork = {
+      ...triageItem,
+      recovery: "interrupted",
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      assert.isFalse(yield* execute(executor, disabledWorkspace, recovered));
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: recovered.id }]);
     }).pipe(Effect.provide(provide([runner(successEvents)])));
   });
 
@@ -1483,6 +1667,10 @@ describe("Executor.execute", () => {
       assert.deepStrictEqual(
         request?.plan.mcp.filter(({ identity }) => identity === "plugin:linear/mcp/linear").length,
         1,
+      );
+      assert.deepStrictEqual(
+        request?.plan.provenance.stamps.find(({ source }) => source === "plugin:linear"),
+        DeclaredVersion.make({ source: "plugin:linear", version: "1.2.3" }),
       );
     }).pipe(
       Effect.provide(
@@ -1961,7 +2149,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)], divergedWorktree)));
   });
 
-  it.effect("hands a missing playbook to a human on the first attempt without retrying", () => {
+  it.effect("hands missing Operating Instructions to a human without retrying", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
@@ -1970,7 +2158,7 @@ describe("Executor.execute", () => {
       const log = yield* Ref.get(calls);
       const attempt = log.find((call) => call.method === "attemptFailed");
       assert.strictEqual(attempt?.stage, "implement");
-      assert.include(attempt?.reason ?? "", "no readable SKILL.md");
+      assert.include(attempt?.reason ?? "", "no readable INSTRUCTIONS.md");
       const handOff = log.find((call) => call.method === "handOff");
       assert.strictEqual(handOff?.stage, "implement");
       assert.include(handOff?.note ?? "", "non-retryable failure");
@@ -1985,7 +2173,7 @@ describe("Executor.execute", () => {
           noopProviderLayer,
           trackerRecorder(),
           [],
-          missingPlaybookContext,
+          missingOperatingInstructionsContext,
         ),
       ),
     );
