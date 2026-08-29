@@ -1,0 +1,22 @@
+packages/engine/src/comments.ts
+  s_41b37bac6bb640::t_cac5ef5d3c6382 55-56,63
+packages/engine/src/comments.test.ts
+  s_41b37bac6bb640::t_8af8b7ce3b324a 69-75
+  s_41b37bac6bb640::t_1bbe02c834130c 68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "25ccffcc2c34fd1a6a155361996ceb2088bddb3e",
+  "prompts": {},
+  "sessions": {
+    "s_41b37bac6bb640": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04ad2-fcd3-7d21-97b2-203dbfc8aba5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
