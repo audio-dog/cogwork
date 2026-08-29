@@ -18,6 +18,7 @@ import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } f
 import {
   defaultLoopBudget,
   defaultRunBudget,
+  providerInstructionContext,
   providerRunner,
   type RunChat,
   type RunChatOptions,
@@ -29,8 +30,8 @@ const harnessName = Schema.decodeSync(HarnessName)("provider");
 const sessionId = Schema.decodeSync(SessionId)("sess-resume-1");
 
 const sampleLayer: InstructionLayer = {
-  kind: "playbook",
-  source: "/skills/implement-agent/SKILL.md",
+  kind: "operating-instructions",
+  source: "/operating-instructions/implement-agent/INSTRUCTIONS.md",
   content: "Follow the implement playbook.",
 };
 
@@ -113,7 +114,13 @@ const sessionLayer = (thread: ReadonlyArray<ModelMessage>) =>
   Layer.succeed(SessionStore, sessionStore(thread));
 
 const contextService = (layers: ReadonlyArray<InstructionLayer>): ContextAssemblerService => ({
-  assemble: () => Effect.succeed({ layers, skillPath: "/skills/implement-agent", sources: [] }),
+  assemble: () =>
+    Effect.succeed({
+      layers,
+      operatingInstructionsPath: "/operating-instructions/implement-agent",
+      operatingInstructionResources: [],
+      sources: [],
+    }),
   cleanup: () => Effect.void,
 });
 
@@ -138,7 +145,11 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
       operation: stage,
       harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", effort: null, profile },
       instructions: [{ ...sampleLayer, kind: "repo" }],
-      operatingInstructions: { name: "implement-agent", path: "/skills/implement-agent" },
+      operatingInstructions: {
+        name: "implement-agent",
+        path: "/operating-instructions/implement-agent",
+        resources: [{ source: "/operating-instructions/implement-agent/GUIDE.md", content: "guide" }],
+      },
       tools: ["read", "write", "edit", "bash", "glob", "grep", "webfetch"],
       skills: [],
       mcp: [],
@@ -178,6 +189,13 @@ const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
 });
 
 describe("providerRunner", () => {
+  it("projects Operating Instructions resources into provider context", () => {
+    assert.deepStrictEqual(
+      providerInstructionContext(request({}).plan).map(({ content }) => content),
+      [sampleLayer.content, "guide"],
+    );
+  });
+
   it("declares the owned-transcript session kind", () => {
     assert.strictEqual(providerRunner({ name: harnessName }).sessionKind, "owned-transcript");
   });

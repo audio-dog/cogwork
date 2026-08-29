@@ -1,4 +1,4 @@
-import type { HarnessName, LifecycleStage } from "@cogwork/contracts";
+import type { HarnessName, LifecycleStage, RunPlan } from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -96,6 +96,11 @@ const providerMiddleware = (
   return [];
 };
 
+export const providerInstructionContext = (plan: Pick<RunPlan, "instructions" | "operatingInstructions">) => [
+  ...plan.instructions,
+  ...plan.operatingInstructions.resources,
+];
+
 export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner => {
   const defaultModel = options.defaultModel ?? "anthropic/claude-sonnet-4-5";
   const makeAdapter = options.makeAdapter ?? defaultModelAdapterFactory;
@@ -150,8 +155,9 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             return tool ? [tool] : [];
           });
           const persistence = withPersistence(store.persistence);
+          const instructions = providerInstructionContext(plan);
           const middleware = plan.middleware.flatMap((name) =>
-            providerMiddleware(name, persistence, plan.instructions),
+            providerMiddleware(name, persistence, instructions),
           );
 
           const abortController = new AbortController();
