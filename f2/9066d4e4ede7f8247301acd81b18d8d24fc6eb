@@ -1,0 +1,24 @@
+packages/contracts/src/plugin.ts
+  s_d5aac6a69f142e::t_bd25aece360fd8 5
+  s_d5aac6a69f142e::t_091631e24617c3 52
+packages/contracts/src/run-plan.ts
+  s_d5aac6a69f142e::t_9022c5690d5bd7 26-30,36
+  s_d5aac6a69f142e::t_7393bf9cb039ec 167-169,185
+  s_d5aac6a69f142e::t_bd25aece360fd8 5,152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f29066d4e4ede7f8247301acd81b18d8d24fc6eb",
+  "prompts": {},
+  "sessions": {
+    "s_d5aac6a69f142e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04adb-8aef-7852-9d2b-1588a232b1b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
