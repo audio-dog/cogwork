@@ -1,5 +1,6 @@
 import {
   Connection,
+  type ConnectionEstablishment,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   connectionIdOf,
@@ -34,7 +35,7 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
-import { ConnectionStore } from "./connection";
+import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -58,7 +59,7 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
   gitRemote: "git@github.com:acme/repo.git",
-  issueTracker: { type: "github", repo: "acme/repo" },
+  issueTracker: { type: "github", connectionId: "github/acme", repo: "acme/repo" },
   linearHistory: false,
   concurrency: 2,
 });
@@ -192,6 +193,7 @@ const pluginManagerLayer = Layer.succeed(PluginManager, {
 const connectionStoreLayerWithStatus = (
   status: "established" | "revoked",
   existing: Connection | null = null,
+  remove: ConnectionStoreService["remove"] = () => Effect.die("unexpected Connection remove"),
 ) =>
   Layer.succeed(ConnectionStore, {
     overview: () => Effect.succeed({ connections: [] }),
@@ -211,7 +213,7 @@ const connectionStoreLayerWithStatus = (
     requireSystemReady: () => Effect.void,
     establish: () => Effect.die("unexpected Connection establish"),
     revoke: () => Effect.die("unexpected Connection revoke"),
-    remove: () => Effect.die("unexpected Connection remove"),
+    remove,
   });
 const connectionStoreLayer = connectionStoreLayerWithStatus("established");
 
@@ -954,11 +956,11 @@ describe("Connection mutations", () => {
     pluginManagerLayer,
     connectionStoreLayerWithStatus("established", existing),
   );
-  const establishment = {
+  const establishment: ConnectionEstablishment = {
     system: "linear",
     account: "other",
     source: { _tag: "Stored" },
-  } as const;
+  };
 
   it.effect("directs account switches through removal", () =>
     Effect.gen(function* () {
@@ -976,6 +978,62 @@ describe("Connection mutations", () => {
       );
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
+
+  it.effect("warns when a failed workspace uses the removed source-control Connection", () => {
+    const github = connectionIdOf("github", "acme");
+    const failed = Schema.decodeSync(WorkspaceConfig)({
+      name: "failed",
+      checkoutPath: "/repos/failed",
+      issueTracker: {
+        type: "linear",
+        connectionId: "linear/acme",
+        teams: ["ENG"],
+      },
+      sourceControl: {
+        type: "github",
+        connectionId: github,
+        repo: "acme/repo",
+      },
+      harness: { preferred: "cursor" },
+    });
+    const registries = Layer.mergeAll(
+      Layer.succeed(
+        Registry.WorkspaceRegistry,
+        Registry.readOnlyRegistry({
+          workspaces: [],
+          failures: [
+            {
+              name: failed.name,
+              displayName: "Failed",
+              source: failed.checkoutPath,
+              message: "invalid Workspace input",
+              issueTracker: failed.issueTracker,
+              sourceControl: failed.sourceControl,
+            },
+          ],
+        }),
+      ),
+      Registry.managementReadOnlyLayer,
+    );
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const result = yield* client.RemoveConnection({ connectionId: github });
+
+      assert.deepStrictEqual(result.danglingWorkspaces, [failed.name]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(),
+          registries,
+          pluginManagerLayer,
+          connectionStoreLayerWithStatus("established", null, () => Effect.void),
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
 });
 
 describe("workspace lifecycle commands", () => {

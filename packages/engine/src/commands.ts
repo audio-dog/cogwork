@@ -246,12 +246,22 @@ const connectionSystemFor = Effect.fn("Daemon.connectionSystemFor")(function* (t
   return yield* new WorkspaceRegistrationError({ message: `${type} has no Connection system` });
 });
 
+const requireConfiguredBinding = Effect.fn("Daemon.requireConfiguredConnectionBinding")(function* (
+  connectionId: WorkspaceRegistration["issueTracker"]["connectionId"],
+  system: ConnectionSystem,
+) {
+  if (connectionId === "unbound") {
+    return yield* new WorkspaceRegistrationError({ message: `${system} needs an established Connection` });
+  }
+  return yield* requireBinding(connectionId, system);
+});
+
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
   readonly registration: WorkspaceRegistration;
 }) {
   const { issueTracker, sourceControl } = payload.registration;
-  yield* requireBinding(issueTracker.connectionId, yield* connectionSystemFor(issueTracker.type));
-  if (sourceControl) yield* requireBinding(sourceControl.connectionId, "github");
+  yield* requireConfiguredBinding(issueTracker.connectionId, yield* connectionSystemFor(issueTracker.type));
+  if (sourceControl) yield* requireConfiguredBinding(sourceControl.connectionId, "github");
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const change = yield* management.register(payload.registration);
@@ -439,8 +449,8 @@ const boundWorkspaceName = (workspace: RegistryState["workspaces"][number], conn
 
 const boundFailureName = (failure: RegistryState["failures"][number], connectionId: ConnectionId) => {
   if (failure.name === undefined) return null;
-  if (failure.issueTracker?.connectionId !== connectionId) return null;
-  return failure.name;
+  if (failure.issueTracker?.connectionId === connectionId) return failure.name;
+  return failure.sourceControl?.connectionId === connectionId ? failure.name : null;
 };
 
 const boundWorkspaceIds = (registry: RegistryState, connectionId: ConnectionId) => [
