@@ -9,6 +9,7 @@ export * from "./issue-tracker";
 export * from "./mcp-skill";
 export * from "./plugin";
 export * from "./principal";
+export * from "./provenance";
 export * from "./rpc";
 export * from "./run";
 export * from "./run-plan";
