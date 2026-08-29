@@ -54,6 +54,13 @@ export const statusReason = (reason: string) => oneLine(truncate(stripMarkers(re
 
 const gitCommand = (command: string) => (command.startsWith("git ") ? command : `git ${command}`);
 
+export const markdownCode = (value: string) => {
+  const longestRun = (value.match(/`+/g) ?? []).reduce((longest, run) => Math.max(longest, run.length), 0);
+  const fence = "`".repeat(longestRun + 1);
+  const padding = value.startsWith("`") || value.endsWith("`") ? " " : "";
+  return `${fence}${padding}${value}${padding}${fence}`;
+};
+
 export const prepareFailureReason = (error: {
   readonly _tag: string;
   readonly message: string;
@@ -92,7 +99,7 @@ export const handoffComment = (
     "",
     "Applied `ready-for-human`; a human needs to take over.",
     "",
-    `Last failure: ${truncate(stripMarkers(reason))}`,
+    `Last failure: ${markdownCode(statusReason(reason))}`,
   ];
   return resume === undefined
     ? lines.join("\n")
