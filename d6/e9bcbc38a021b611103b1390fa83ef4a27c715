@@ -1,0 +1,21 @@
+packages/engine/src/harness.ts
+  s_d5aac6a69f142e::t_7393bf9cb039ec 6,76,88
+packages/engine/src/harness.test.ts
+  s_d5aac6a69f142e::t_980e607ff8631f 175-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d6e9bcbc38a021b611103b1390fa83ef4a27c715",
+  "prompts": {},
+  "sessions": {
+    "s_d5aac6a69f142e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04adb-8aef-7852-9d2b-1588a232b1b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
