@@ -67,6 +67,7 @@ export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
   issueTracker: info.issueTracker,
   harness: info.harness,
   poll: info.poll,
+  contributions: info.contributions,
 });
 
 export const workspaceFailureState = (failure: WorkspaceFailureInfo) => ({

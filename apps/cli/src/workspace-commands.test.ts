@@ -36,6 +36,7 @@ describe("formatRebindResult", () => {
           issueTracker: "github",
           harness: "codex",
           poll: { status: "pending" },
+          contributions: [],
         }),
       ),
       `Re-bound Cogwork (${name}) to /repos/moved.`,

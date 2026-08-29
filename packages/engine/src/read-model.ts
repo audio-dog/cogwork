@@ -40,6 +40,7 @@ export const workspaceInfoOf = (
   issueTracker: workspace.config.issueTracker.type,
   harness: workspace.config.harness.preferred,
   poll: state?.poll ?? pendingPoll,
+  contributions: workspace.contributions,
   eligible: (state?.eligible ?? []).map(actionableOf),
   claimed: state?.claimed ?? [],
   blocked: state?.blocked ?? [],

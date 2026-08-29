@@ -2,8 +2,11 @@ import {
   type Connection,
   type ConnectionId,
   Connection as ConnectionSchema,
-  type ContributionSetting,
-  ContributionSetting as ContributionSettingSchema,
+  type ContributionSettingCell,
+  type ContributionSettingRow,
+  ContributionSettingRow as ContributionSettingRowSchema,
+  type ContributionSettingUpdate,
+  type ContributionSettingValue,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimits,
@@ -18,6 +21,7 @@ import {
   PluginInstall as PluginInstallSchema,
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
+
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -59,7 +63,7 @@ export type ControlStoreService =
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly uninstallPlugin: (pluginId: string) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly updateContributionSetting: (
-        setting: ContributionSetting,
+        update: ContributionSettingUpdate,
       ) => Effect.Effect<ControlStorePicture, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     }
@@ -84,7 +88,7 @@ export type ControlStoreService =
       ) => Effect.Effect<never, ControlStoreFailure>;
       readonly uninstallPlugin: (pluginId: string) => Effect.Effect<never, ControlStoreFailure>;
       readonly updateContributionSetting: (
-        setting: ContributionSetting,
+        update: ContributionSettingUpdate,
       ) => Effect.Effect<never, ControlStoreFailure>;
       readonly withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
     };
@@ -101,9 +105,9 @@ const storeFailure = (operation: string) => (error: unknown) =>
 
 const decodeDaemonLimits = Schema.decodeUnknownEffect(DaemonLimitsSchema);
 const decodeConnection = Schema.decodeUnknownEffect(ConnectionSchema);
+const decodeContributionSettingRow = Schema.decodeUnknownEffect(ContributionSettingRowSchema);
 const decodeOperationSettingRow = Schema.decodeUnknownEffect(OperationSettingRowSchema);
 const decodePluginInstall = Schema.decodeUnknownEffect(PluginInstallSchema);
-const decodeContributionSetting = Schema.decodeUnknownEffect(ContributionSettingSchema);
 const JsonValue = Schema.fromJsonString(Schema.Unknown);
 const decodeJson = Schema.decodeUnknownEffect(JsonValue);
 const encodeJson = Schema.encodeUnknownEffect(JsonValue);
@@ -123,6 +127,18 @@ const StoredOperationSettingRow = Schema.Struct({
 });
 type StoredOperationSettingRow = typeof StoredOperationSettingRow.Type;
 
+const StoredContributionSettingRow = Schema.Struct({
+  contribution: Schema.String,
+  scope: Schema.Literals(["settings-profile", "private-workspace-overlay"]),
+  workspace: Schema.String,
+  enabled: Schema.Literals([0, 1]),
+});
+type StoredContributionSettingRow = typeof StoredContributionSettingRow.Type;
+
+const decodeStoredContributionSettingRows = Schema.decodeUnknownEffect(
+  Schema.Array(StoredContributionSettingRow),
+);
+
 const decodeStoredOperationSettingRows = Schema.decodeUnknownEffect(Schema.Array(StoredOperationSettingRow));
 
 const StoredPluginInstall = Schema.Struct({
@@ -134,14 +150,33 @@ const StoredPluginInstall = Schema.Struct({
 type StoredPluginInstall = typeof StoredPluginInstall.Type;
 const decodeStoredPluginInstalls = Schema.decodeUnknownEffect(Schema.Array(StoredPluginInstall));
 
-const StoredContributionSetting = Schema.Struct({
-  contribution: Schema.String,
-  scope: Schema.Literals(["settings-profile", "private-workspace-overlay"]),
-  workspace: Schema.String,
-  enabled: Schema.Union([Schema.Boolean, Schema.Finite]),
-});
-type StoredContributionSetting = typeof StoredContributionSetting.Type;
-const decodeStoredContributionSettings = Schema.decodeUnknownEffect(Schema.Array(StoredContributionSetting));
+const contributionScopeOf = (row: StoredContributionSettingRow) =>
+  row.scope === "settings-profile"
+    ? ({ _tag: "SettingsProfile" } satisfies { readonly _tag: "SettingsProfile" })
+    : ({
+        _tag: "PrivateWorkspaceOverlay",
+        workspace: row.workspace,
+      } satisfies {
+        readonly _tag: "PrivateWorkspaceOverlay";
+        readonly workspace: string | null;
+      });
+
+const readContributionSettings = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    const stored = yield* sql<StoredContributionSettingRow>`
+      SELECT contribution, scope, workspace, enabled
+      FROM contribution_settings
+      ORDER BY contribution, scope, workspace
+    `;
+    const rows = yield* decodeStoredContributionSettingRows(stored);
+    return yield* Effect.forEach(rows, (row) =>
+      decodeContributionSettingRow({
+        contribution: { id: row.contribution, kind: "mcp-server" },
+        scope: contributionScopeOf(row),
+        enabled: row.enabled === 1,
+      }),
+    );
+  });
 
 const StoredConnection = Schema.Struct({
   id: Schema.String,
@@ -209,28 +244,6 @@ const readPluginInstalls = (sql: SqlClient.SqlClient) =>
     return yield* Effect.forEach(rows, (row) => decodePluginInstall(row));
   });
 
-const contributionSettingScope = (row: StoredContributionSetting) =>
-  row.scope === "settings-profile"
-    ? { _tag: "SettingsProfile" as const }
-    : { _tag: "PrivateWorkspaceOverlay" as const, workspace: row.workspace };
-
-const readContributionSettings = (sql: SqlClient.SqlClient) =>
-  Effect.gen(function* () {
-    const stored = yield* sql<StoredContributionSetting>`
-      SELECT contribution, scope, workspace, enabled
-      FROM contribution_settings
-      ORDER BY contribution, scope, workspace
-    `;
-    const rows = yield* decodeStoredContributionSettings(stored);
-    return yield* Effect.forEach(rows, (row) =>
-      decodeContributionSetting({
-        contribution: row.contribution,
-        scope: contributionSettingScope(row),
-        enabled: row.enabled === true || row.enabled === 1,
-      }),
-    );
-  });
-
 const readPicture = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     const [row] = yield* sql<DaemonLimits>`
@@ -251,6 +264,42 @@ const readPicture = (sql: SqlClient.SqlClient) =>
     ]);
     return { daemonLimits, connections, operationSettings, pluginInstalls, contributionSettings };
   });
+
+const storedContributionScope = (scope: ContributionSettingCell["scope"]) =>
+  scope._tag === "SettingsProfile"
+    ? { scope: "settings-profile", workspace: "" }
+    : { scope: "private-workspace-overlay", workspace: scope.workspace };
+
+const storedContributionCell = (cell: ContributionSettingCell) => ({
+  contribution: cell.contribution.id,
+  ...storedContributionScope(cell.scope),
+});
+
+const setContributionSetting = Effect.fn("ControlStore.setContributionSetting")(function* (
+  sql: SqlClient.SqlClient,
+  row: ContributionSettingValue,
+) {
+  const cell = storedContributionCell(row);
+  yield* sql`
+    INSERT INTO contribution_settings (contribution, scope, workspace, enabled)
+    VALUES (${cell.contribution}, ${cell.scope}, ${cell.workspace}, ${row.enabled ? 1 : 0})
+    ON CONFLICT (contribution, scope, workspace)
+    DO UPDATE SET enabled = excluded.enabled
+  `;
+});
+
+const clearContributionSetting = Effect.fn("ControlStore.clearContributionSetting")(function* (
+  sql: SqlClient.SqlClient,
+  cell: ContributionSettingCell,
+) {
+  const stored = storedContributionCell(cell);
+  yield* sql`
+    DELETE FROM contribution_settings
+    WHERE contribution = ${stored.contribution}
+      AND scope = ${stored.scope}
+      AND workspace = ${stored.workspace}
+  `;
+});
 
 const storedLevel = (level: OperationSettingCell["level"]) => {
   if (level._tag === "Default") return { level: "default", workflow: "", operation: "" };
@@ -300,29 +349,10 @@ const clearOperationSetting = Effect.fn("ControlStore.clearOperationSetting")(fu
   `;
 });
 
-const storedContributionSetting = (setting: ContributionSetting) =>
-  setting.scope._tag === "SettingsProfile"
-    ? { scope: "settings-profile", workspace: "" }
-    : { scope: "private-workspace-overlay", workspace: setting.scope.workspace };
-
-const writeContributionSetting = Effect.fn("ControlStore.writeContributionSetting")(function* (
-  sql: SqlClient.SqlClient,
-  setting: ContributionSetting,
-) {
-  const scope = storedContributionSetting(setting);
-  const enabled = setting.enabled ? 1 : 0;
-  yield* sql`
-    INSERT INTO contribution_settings (contribution, scope, workspace, enabled)
-    VALUES (${setting.contribution}, ${scope.scope}, ${scope.workspace}, ${enabled})
-    ON CONFLICT (contribution, scope, workspace)
-    DO UPDATE SET enabled = excluded.enabled
-  `;
-});
-
-const retainedContributionIds = (settings: ReadonlyArray<ContributionSetting>, prefix: string) =>
+const retainedContributionIds = (settings: ReadonlyArray<ContributionSettingRow>, prefix: string) =>
   settings
-    .filter((setting) => setting.contribution.startsWith(prefix))
-    .map((setting) => setting.contribution);
+    .filter((setting) => setting.contribution.id.startsWith(prefix))
+    .map((setting) => setting.contribution.id);
 
 const deleteDroppedContributionSettings = Effect.fn("ControlStore.deleteDroppedContributionSettings")(
   function* (sql: SqlClient.SqlClient, pluginId: string, contributionIds: ReadonlyArray<string>) {
@@ -489,11 +519,12 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
     );
   });
   const updateContributionSetting = Effect.fn("ControlStore.updateContributionSetting")(function* (
-    setting: ContributionSetting,
+    update: ContributionSettingUpdate,
   ) {
     return yield* sql.withTransaction(
       Effect.gen(function* () {
-        yield* writeContributionSetting(sql, setting);
+        if (update._tag === "Set") yield* setContributionSetting(sql, update.row);
+        else yield* clearContributionSetting(sql, update.cell);
         return yield* readPicture(sql);
       }),
     );
@@ -522,8 +553,8 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       ),
     uninstallPlugin: (pluginId: string) =>
       uninstallPlugin(pluginId).pipe(Effect.mapError(storeFailure("uninstall Plugin"))),
-    updateContributionSetting: (setting: ContributionSetting) =>
-      updateContributionSetting(setting).pipe(Effect.mapError(storeFailure("update contribution setting"))),
+    updateContributionSetting: (update: ContributionSettingUpdate) =>
+      updateContributionSetting(update).pipe(Effect.mapError(storeFailure("update contribution setting"))),
     withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => writeGate.withPermits(1)(effect),
   };
 });

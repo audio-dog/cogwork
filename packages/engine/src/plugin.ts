@@ -2,6 +2,7 @@ import {
   type ConnectionReadiness,
   ConnectionSystem,
   type ConnectionSystem as ConnectionSystemType,
+  defaultContributionEnabled,
   type PluginContribution,
   PluginFailure,
   type PluginInstall,
@@ -14,6 +15,7 @@ import {
   TrimmedNonEmptyString,
   type WorkspaceId,
 } from "@cogwork/contracts";
+
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -120,17 +122,6 @@ const missingReadiness = (system: string) =>
 
 const installedContributionsOf = (plugins: readonly PluginItem[]) =>
   plugins.flatMap((plugin) => (plugin.record ? plugin.contributions : []));
-
-const requirementsFor = (plugins: readonly PluginItem[], contributions: readonly PluginContribution[]) => {
-  const authorities = new Set(
-    contributions.flatMap((contribution) =>
-      contribution.kind === "mcp-server" ? [contribution.authority] : [],
-    ),
-  );
-  return plugins.flatMap((plugin) =>
-    plugin.record && authorities.has(`plugin:${plugin.pluginId}`) ? plugin.requiredConnections : [],
-  );
-};
 
 const loadedContribution = (
   pluginId: string,
@@ -260,12 +251,6 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
       ? yield* connections.readiness(connection.id)
       : missingReadiness(requirement);
     return { connection, readiness };
-  });
-
-  const ensureRequirementsReady = Effect.fn("PluginManager.ensureRequirementsReady")(function* (
-    requirements: readonly ConnectionSystemType[],
-  ) {
-    yield* Effect.forEach(requirements, (requirement) => connections.requireSystemReady(requirement));
   });
 
   const contributionsOf = Effect.fn("PluginManager.contributionsOf")(function* (
@@ -544,25 +529,21 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     uninstall,
     contributions: (workspace) =>
       Effect.all([overview(), store.picture]).pipe(
-        Effect.flatMap(([overview, controlStore]) =>
-          Effect.gen(function* () {
-            const contributions = installedContributionsOf(overview.plugins);
-            const enabled = contributions.filter((contribution) => {
-              if (contribution.kind !== "mcp-server") return true;
-              const rows = controlStore.contributionSettings.filter(
-                (setting) => setting.contribution === contribution.id,
-              );
-              const overlay = rows.find(
-                (setting) =>
-                  setting.scope._tag === "PrivateWorkspaceOverlay" && setting.scope.workspace === workspace,
-              );
-              const profile = rows.find((setting) => setting.scope._tag === "SettingsProfile");
-              return (overlay ?? profile)?.enabled === true;
-            });
-            yield* ensureRequirementsReady(requirementsFor(overview.plugins, enabled));
-            return enabled;
-          }),
-        ),
+        Effect.map(([overview, controlStore]) => {
+          const contributions = installedContributionsOf(overview.plugins);
+          return contributions.filter((contribution) => {
+            if (contribution.kind !== "mcp-server") return true;
+            const rows = controlStore.contributionSettings.filter(
+              (setting) => setting.contribution.id === contribution.id,
+            );
+            const overlay = rows.find(
+              (setting) =>
+                setting.scope._tag === "PrivateWorkspaceOverlay" && setting.scope.workspace === workspace,
+            );
+            const profile = rows.find((setting) => setting.scope._tag === "SettingsProfile");
+            return (overlay ?? profile)?.enabled ?? defaultContributionEnabled(contribution.authority);
+          });
+        }),
         Effect.mapError((error) => failure("read Plugin contributions", null, null, error)),
       ),
   } satisfies PluginManagerService;

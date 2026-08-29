@@ -1,4 +1,10 @@
-import type { ConnectionItem } from "@cogwork/contracts";
+import type { ConnectionItem, ConnectionOverview } from "@cogwork/contracts";
+
+export const readyConnections = (overview: ConnectionOverview | null | undefined) =>
+  overview?.connections.flatMap((item) => {
+    if (!item.connection || item.readiness._tag !== "Ready") return [];
+    return [item.connection];
+  }) ?? [];
 
 export const connectionStatus = (item: ConnectionItem) => {
   if (!item.connection) return "Not connected";

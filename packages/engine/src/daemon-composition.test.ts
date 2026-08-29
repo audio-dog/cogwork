@@ -80,6 +80,7 @@ describe("daemon server composition", () => {
         contextAssembler: contextAssemblerLayer,
         runLedger: RunLedger.layerMemoryCore,
         controlStorePath: controlStore.path,
+        userAgentsDir: join(controlStore.dir, ".agents"),
         worktrees: worktreeLayer,
         harnessRunners: [stubRunner],
       });

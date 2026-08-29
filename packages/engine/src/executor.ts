@@ -1,21 +1,23 @@
-import type {
-  FileContribution,
-  LifecycleStage,
-  PluginContribution,
-  PluginMcpServer,
-  RunRecord,
-  Session,
-  SessionId,
-  TokenUsage,
-} from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
+  type ContributionSettingRow,
+  type ControlStoreFailure,
+  defaultContributionEnabled,
+  type FileContribution,
   type FollowUpStageResult,
   type ImplementStageResult,
+  type LifecycleStage,
+  type PluginContribution,
+  type PluginMcpServer,
   RunId,
+  type RunRecord,
+  resolveContributionEnabled,
+  type Session,
+  type SessionId,
   sessionHandle,
   stageResultCompletionSchema,
+  type TokenUsage,
   type TriageStageResult,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
@@ -31,6 +33,8 @@ import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
 import { ConnectionStore } from "./connection";
+import { ControlStore } from "./control-store";
+
 import { CredentialError } from "./credential-store";
 import { type FollowUpContext, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
@@ -58,7 +62,12 @@ import { SourceControlProvider } from "./source-control";
 import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
-type PrepareError = GitError | WorktreeFsError | WorktreeDivergedError | CredentialError;
+type PrepareError =
+  | GitError
+  | WorktreeFsError
+  | WorktreeDivergedError
+  | CredentialError
+  | ControlStoreFailure;
 
 interface RunAccumulator {
   readonly handle: string | null;
@@ -184,6 +193,28 @@ const availablePluginMcp = (contribution: PluginContribution) => {
   return [{ id: contribution.id, server }] satisfies ReadonlyArray<PluginMcpContribution>;
 };
 
+const noPluginContributions: ReadonlyArray<PluginContribution> = [];
+
+const contributionSettingApplies = (
+  contribution: FileContribution,
+  workspace: RegisteredWorkspace,
+  row: ContributionSettingRow,
+) => {
+  if (row.contribution.id !== contribution.id) return false;
+  if (row.scope._tag === "SettingsProfile") return true;
+  return row.scope.workspace === workspace.config.name;
+};
+
+const contributionEnabled = (
+  contribution: FileContribution,
+  workspace: RegisteredWorkspace,
+  rows: readonly ContributionSettingRow[],
+) => {
+  if (contribution.kind !== "mcp-server") return true;
+  const applicable = rows.filter((row) => contributionSettingApplies(contribution, workspace, row));
+  return resolveContributionEnabled(applicable) ?? defaultContributionEnabled(contribution.authority);
+};
+
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const harness = yield* Harness;
@@ -196,6 +227,7 @@ export const make = Effect.gen(function* () {
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
+  const controlStore = yield* ControlStore;
   const releaseClaim = makeReleaseClaim(issueTracker);
   const releaseSettledClaim = <A, E, R>(
     effect: Effect.Effect<A, E, R>,
@@ -208,17 +240,22 @@ export const make = Effect.gen(function* () {
   const runCounter = yield* Ref.make(0);
 
   const runPlanInputs = Effect.fn("Executor.runPlanInputs")(function* (workspace: RegisteredWorkspace) {
-    const pluginContributions = yield* plugins.contributions(workspace.config.name).pipe(
-      Effect.mapError(
-        (error) =>
-          new CredentialError({
-            account: workspace.config.name,
-            message: error.message,
-          }),
-      ),
+    const picture = yield* controlStore.picture;
+    const pluginContributions = yield* plugins
+      .contributions(workspace.config.name)
+      .pipe(
+        Effect.catchTag("PluginFailure", (error) =>
+          Effect.logWarning("Plugin contributions unavailable", { message: error.message }).pipe(
+            Effect.map(() => noPluginContributions),
+          ),
+        ),
+      );
+    const loaded = pluginContributions.filter(
+      (contribution) =>
+        contribution.load._tag === "Loaded" &&
+        contributionEnabled(contribution, workspace, picture.contributionSettings),
     );
-    const loaded = pluginContributions.filter((contribution) => contribution.load._tag === "Loaded");
-    const contributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
+    const fileContributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
       id: contribution.id,
       authority: contribution.authority,
       kind: contribution.kind,
@@ -262,7 +299,12 @@ export const make = Effect.gen(function* () {
     );
     return {
       mcpSkills: [...(yield* assembler.assemble(workspace.config)), ...mcpSkills],
-      contributions: [...workspace.contributions, ...contributions],
+      contributions: [
+        ...workspace.contributions.filter((contribution) =>
+          contributionEnabled(contribution, workspace, picture.contributionSettings),
+        ),
+        ...fileContributions,
+      ],
     } satisfies RunPlanInputs;
   });
 

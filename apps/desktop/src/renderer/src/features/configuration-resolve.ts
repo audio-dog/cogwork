@@ -34,6 +34,7 @@ export interface DroppedRow {
 
 export interface ResolvedEnablement {
   readonly effective?: boolean;
+  readonly stored?: EnablementRow;
   readonly winner?: EnablementRow;
   readonly shadowed: readonly EnablementRow[];
   readonly dropped: readonly DroppedRow[];
@@ -63,13 +64,18 @@ export function resolveEnablement(contribution: Contribution, view: ViewContext)
   const dropped = diagnosticsOf(contribution).filter((entry) => inView(entry.row, view));
 
   const droppedRows = new Set(dropped.map((entry) => entry.row));
-  const candidates = visible
-    .filter((row) => !droppedRows.has(row))
+  const storedRows = visible
+    .filter((row) => admissibleFor(contribution.kind, row))
     .toSorted((a, b) => scopeRank(b.scope.kind) - scopeRank(a.scope.kind));
+  const candidates = storedRows.filter((row) => !droppedRows.has(row));
 
+  const [stored] = storedRows;
   const [winner, ...shadowed] = candidates;
-  return { effective: winner?.value, winner, shadowed, dropped };
+  return { effective: winner?.value, stored, winner, shadowed, dropped };
 }
+
+export const displayedEnablement = (resolved: ResolvedEnablement) =>
+  resolved.stored?.value ?? resolved.effective;
 
 /** The workspace a Contribution's own settings resolve against. */
 export function viewOf(contribution: Contribution): ViewContext {
@@ -78,6 +84,8 @@ export function viewOf(contribution: Contribution): ViewContext {
 
 export function enableScopeFor(contribution: Contribution): ScopeRef | undefined {
   const permitted = enablementScopes[contribution.kind];
+  const current = resolveEnablement(contribution, viewOf(contribution)).stored?.scope;
+  if (current && permitted.includes(current.kind)) return current;
   const preferred = permitted.includes(contribution.definedAt) ? contribution.definedAt : permitted.at(-1);
   if (preferred === undefined) return undefined;
   if (preferred === "settings-profile") return { kind: preferred };
@@ -86,9 +94,9 @@ export function enableScopeFor(contribution: Contribution): ScopeRef | undefined
 }
 
 export function definedScope(contribution: Contribution): ScopeRef {
-  return contribution.definedIn === undefined
-    ? { kind: contribution.definedAt }
-    : { kind: contribution.definedAt, workspaceId: contribution.definedIn };
+  if (contribution.definedAt === "settings-profile") return { kind: contribution.definedAt };
+  if (contribution.definedIn === undefined) return { kind: contribution.definedAt };
+  return { kind: contribution.definedAt, workspaceId: contribution.definedIn };
 }
 
 export function offeredElsewhere(contribution: Contribution): boolean {

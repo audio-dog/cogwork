@@ -1,8 +1,16 @@
-import { defaultControlStore, initialBoard, localOwnerId, type PluginOverview } from "@cogwork/contracts";
+import {
+  defaultControlStore,
+  initialBoard,
+  localOwnerId,
+  type PluginOverview,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
+import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
 import { placeholderConfiguration } from "./configuration-placeholder";
+import { resolveEnablement, viewOf } from "./configuration-resolve";
 import {
   configurationWithPlugins,
   pluginDetailOf,
@@ -64,7 +72,7 @@ describe("configurationWithPlugins", () => {
       ...defaultControlStore,
       contributionSettings: [
         {
-          contribution: "plugin:linear/mcp/linear",
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
           scope: { _tag: "SettingsProfile" },
           enabled: true,
         },
@@ -75,6 +83,81 @@ describe("configurationWithPlugins", () => {
     expect(picture.catalogPlugins.map((plugin) => plugin.pluginId)).toEqual(["github"]);
     expect(picture.contributions.at(-1)?.rows[0]?.value).toBe(true);
     expect(picture.contributions.at(-1)?.readiness?._tag).toBe("not-ready");
+  });
+
+  it("projects Plugin MCP enablement for each workspace overlay", () => {
+    const firstWorkspace = placeholderConfiguration.workspaces.at(0);
+    if (!firstWorkspace) throw new Error("fixture needs a workspace");
+    const picture = configurationWithPlugins(placeholderConfiguration, overview, {
+      ...defaultControlStore,
+      contributionSettings: [
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: true,
+        },
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: firstWorkspace.id },
+          enabled: false,
+        },
+      ],
+    });
+
+    const instances = picture.contributions.filter(
+      (contribution) => contribution.id === "plugin:linear/mcp/linear",
+    );
+
+    expect(
+      instances.map((contribution) => ({
+        workspace: contribution.definedIn,
+        enabled: resolveEnablement(contribution, viewOf(contribution)).effective,
+      })),
+    ).toEqual(
+      picture.workspaces.map((workspace) => ({
+        workspace: workspace.id,
+        enabled: workspace.id !== firstWorkspace.id,
+      })),
+    );
+  });
+
+  it("projects a dangling Plugin overlay for a removed workspace", () => {
+    const removed = Schema.decodeSync(WorkspaceId)("removed");
+    const picture = configurationWithPlugins(placeholderConfiguration, overview, {
+      ...defaultControlStore,
+      contributionSettings: [
+        {
+          contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: removed },
+          enabled: false,
+          diagnostic: {
+            _tag: "Dangling",
+            source: "Control store",
+            detail: "No loaded MCP server has this identity.",
+          },
+        },
+      ],
+    });
+
+    const instances = picture.contributions.filter(
+      (contribution) => contribution.id === "plugin:linear/mcp/linear",
+    );
+    const live = instances.filter((contribution) => contribution.definedIn !== removed);
+    const dangling = instances.find((contribution) => contribution.definedIn === removed);
+
+    expect(live.every((contribution) => contribution.rows.length === 0)).toBe(true);
+    expect(dangling?.rows).toEqual([
+      {
+        scope: { kind: "private-overlay", workspaceId: removed },
+        value: false,
+        source: "Control store",
+        diagnostic: {
+          _tag: "dangling",
+          source: "Control store",
+          detail: "No loaded MCP server has this identity.",
+        },
+      },
+    ]);
   });
 
   it("keeps a catalog query failure visible", () => {

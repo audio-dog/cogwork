@@ -1,9 +1,13 @@
+import {
+  type ContributionSettingScope,
+  type ContributionSettingUpdate,
+  defaultContributionEnabled,
+} from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiErrorWarningLine } from "@remixicon/react";
 import { createContext, type ReactNode, use } from "react";
-import { draftCellAt, withDraft } from "../features/configuration-draft";
 import {
   type Authority,
   authorityLabel,
@@ -18,12 +22,13 @@ import {
 import {
   type DroppedRow,
   diagnosticsOf,
+  displayedEnablement,
   enableScopeFor,
   resolveEnablement,
   settingsSpreadAcross,
   viewOf,
 } from "../features/configuration-resolve";
-import { useConfigurationDraftStore } from "../store/configuration-draft";
+import { useConfiguration } from "./configuration-provider";
 import type { RowStatus } from "./customize-list";
 
 interface ContributionState {
@@ -33,6 +38,7 @@ interface ContributionState {
   readonly status: RowStatus;
   readonly diagnostics: readonly DroppedRow[];
   readonly spread: readonly string[];
+  readonly writing: boolean;
 }
 
 interface ContributionActions {
@@ -40,7 +46,6 @@ interface ContributionActions {
 }
 
 interface ContributionMeta {
-  /** The Scope a switch writes to, or undefined when this kind has no on / off at all. */
   readonly target: ScopeRef | undefined;
 }
 
@@ -58,10 +63,34 @@ export function useContribution() {
   return value;
 }
 
-/**
- * Resolves one Contribution once, for the row, its badges and its dialog together. Each of those
- * used to repeat the same five lines, so a mistake in them was a mistake in three places.
- */
+const contributionSettingScope = (target: ScopeRef | undefined) => {
+  if (target?.kind === "settings-profile")
+    return { _tag: "SettingsProfile" } satisfies ContributionSettingScope;
+  if (target?.kind !== "private-overlay" || target.workspaceId === undefined) return null;
+  return {
+    _tag: "PrivateWorkspaceOverlay",
+    workspace: target.workspaceId,
+  } satisfies ContributionSettingScope;
+};
+
+const contributionSettingUpdate = (
+  contribution: ContributionRecord,
+  target: ScopeRef | undefined,
+  enabled: boolean,
+): ContributionSettingUpdate | null => {
+  if (contribution.kind !== "mcp-server") return null;
+  const scope = contributionSettingScope(target);
+  if (scope === null) return null;
+  return {
+    _tag: "Set",
+    row: {
+      contribution: { id: contribution.id, kind: "mcp-server" },
+      scope,
+      enabled,
+    },
+  };
+};
+
 function ContributionProvider({
   contribution,
   children,
@@ -69,13 +98,14 @@ function ContributionProvider({
   contribution: ContributionRecord;
   children: ReactNode;
 }) {
-  const cells = useConfigurationDraftStore((state) => state.cells);
-  const setCell = useConfigurationDraftStore((state) => state.setCell);
-
-  const edited = withDraft(contribution, cells);
+  const {
+    actions: { setContributionSetting },
+    meta: { contributionSettingWaiting },
+  } = useConfiguration();
   const target = enableScopeFor(contribution);
-  const resolved = resolveEnablement(edited, viewOf(contribution));
-  const on = target ? draftCellAt(contribution, target, cells) === "on" : resolved.effective === true;
+  const resolved = resolveEnablement(contribution, viewOf(contribution));
+  const on =
+    displayedEnablement(resolved) ?? defaultContributionEnabled(authorityLabel(contribution.authority));
   const failed = contribution.load._tag === "failed";
   const notReady = contribution.readiness?._tag === "not-ready";
 
@@ -84,14 +114,15 @@ function ContributionProvider({
       contribution,
       on,
       failed,
-      status: failed || notReady ? "error" : "ok",
-      // A diagnostic is a fact about this Contribution, not about the view, so it is never hidden.
-      diagnostics: diagnosticsOf(edited),
-      spread: settingsSpreadAcross(edited).map((kind) => scopeCopy[kind].name),
+      status: failed || (on && notReady) ? "error" : "ok",
+      diagnostics: diagnosticsOf(contribution),
+      spread: settingsSpreadAcross(contribution).map((kind) => scopeCopy[kind].name),
+      writing: contributionSettingWaiting,
     },
     actions: {
       setEnabled: (enabled) => {
-        if (target) setCell(contribution.id, target, enabled ? "on" : "off");
+        const update = contributionSettingUpdate(contribution, target, enabled);
+        if (update) setContributionSetting(update);
       },
     },
     meta: { target },
@@ -145,13 +176,14 @@ function SpreadBadge({ places }: { places: readonly string[] }) {
 
 function ContributionBadges() {
   const {
-    state: { contribution, diagnostics, spread, failed },
+    state: { contribution, diagnostics, spread, failed, on },
   } = useContribution();
 
   return (
     <>
       <AuthorityBadge authority={contribution.authority} />
-      {contribution.readiness ? <ReadinessBadge readiness={contribution.readiness} /> : null}
+      {on && contribution.readiness ? <ReadinessBadge readiness={contribution.readiness} /> : null}
+      {!on ? <Badge variant="secondary">Disabled</Badge> : null}
       {diagnostics.map((entry) => (
         <DiagnosticBadge
           key={`${entry.diagnostic._tag}:${scopeKey(entry.row.scope)}`}
@@ -166,7 +198,7 @@ function ContributionBadges() {
 
 function ContributionSwitch({ label }: { label: string }) {
   const {
-    state: { on, failed },
+    state: { on, failed, writing },
     actions: { setEnabled },
     meta: { target },
   } = useContribution();
@@ -175,7 +207,7 @@ function ContributionSwitch({ label }: { label: string }) {
     <Switch
       aria-label={label}
       checked={on}
-      disabled={failed || target === undefined}
+      disabled={failed || writing || target === undefined}
       onCheckedChange={setEnabled}
     />
   );

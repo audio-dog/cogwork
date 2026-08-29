@@ -7,6 +7,7 @@ import {
   WorkspaceId,
 } from "./base-schemas";
 import { ConnectionOverview } from "./connection";
+import { LocalContribution } from "./contribution";
 import {
   ActionableItem,
   BlockedItem,
@@ -35,6 +36,7 @@ export const WorkspaceState = Schema.TaggedUnion({
     issueTracker: IssueTrackerType,
     harness: HarnessName,
     poll: PollState,
+    contributions: Schema.Array(LocalContribution),
   },
   Failed: {
     name: Schema.optional(WorkspaceId),

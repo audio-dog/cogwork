@@ -12,6 +12,7 @@ import {
   type RunActivity,
   type RunId,
 } from "@cogwork/contracts";
+
 import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -37,11 +38,13 @@ import {
   reconnectConnection,
   registerWorkspace,
   removeConnection,
+  setContributionSetting,
   setDaemonLimit,
   setOperationSetting,
   setScheduling,
   uninstallPlugin,
 } from "./commands";
+
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import type { ContextAssembler } from "./context-assembler";
 import {
@@ -52,7 +55,11 @@ import {
 } from "./control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
-import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
+import {
+  controlStoreWithDiagnostics,
+  DaemonEventPublisher,
+  layer as eventPublisherLayer,
+} from "./event-publisher";
 import * as Executor from "./executor";
 import * as GitHub from "./github";
 import * as Harness from "./harness";
@@ -60,7 +67,7 @@ import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
 import { PluginManager, pluginManagerLayer } from "./plugin";
-import type { RegisteredWorkspace } from "./projector";
+import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
   classifiedItemsOf,
   currentReconcileStatesOf,
@@ -99,14 +106,25 @@ export const daemonInfoLayer = Layer.effect(
 
 const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
 
+type ControlStoreSeedEvent = Omit<
+  Extract<DaemonEvent, { readonly _tag: "ControlStoreChanged" }>,
+  "emittedAtMillis"
+>;
+
 const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(function* (
   store: ControlStoreService,
+  registry: RegistryState,
 ) {
   if (store.health === "unavailable") return [];
   return yield* store.picture.pipe(
     Effect.match({
       onFailure: () => [],
-      onSuccess: (controlStore) => [{ _tag: "ControlStoreChanged" as const, controlStore }],
+      onSuccess: (controlStore) => [
+        {
+          _tag: "ControlStoreChanged",
+          controlStore: controlStoreWithDiagnostics(controlStore, registry),
+        } satisfies ControlStoreSeedEvent,
+      ],
     }),
   );
 });
@@ -161,7 +179,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     _tag: "SchedulerChanged",
     scheduler: schedulerStatsOf(registry, config, stats),
   } as const;
-  const controlStoreEvents = yield* controlStoreSeedEvents(controlStore);
+  const controlStoreEvents = yield* controlStoreSeedEvents(controlStore, registry);
   const pluginEvents = yield* plugins.overview.pipe(
     Effect.match({
       onFailure: () => [],
@@ -232,7 +250,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetControlStore: Effect.fn("Daemon.GetControlStore")(function* () {
     const store = yield* ControlStore;
-    return yield* store.picture;
+    const registry = yield* WorkspaceRegistry;
+    return controlStoreWithDiagnostics(yield* store.picture, registry);
   }),
   GetPlugins: Effect.fn("Daemon.GetPlugins")(function* () {
     return yield* (yield* PluginManager).overview;
@@ -271,6 +290,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   Reclassify: reclassify,
   SetScheduling: setScheduling,
   SetDaemonLimit: setDaemonLimit,
+  SetContributionSetting: setContributionSetting,
   SetOperationSetting: setOperationSetting,
   RegisterWorkspace: registerWorkspace,
   InstallPlugin: installPlugin,
@@ -294,6 +314,7 @@ export interface HostAdapters<E = never, R = never> {
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
+  readonly userAgentsDir: string;
   readonly pluginCatalogPath?: string;
   readonly pluginProvisionRoot?: string;
   readonly worktrees: Layer.Layer<WorktreeManager, E, R>;
@@ -318,7 +339,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
       adapters.pluginCatalogPath ?? fileURLToPath(new URL("../plugins/catalog.json", import.meta.url)),
     provisionRoot: adapters.pluginProvisionRoot ?? `${adapters.controlStorePath}.plugins`,
   }).pipe(Layer.provide(controlStore), Layer.provide(connections));
-  const registry = workspaceRegistryLayer(adapters.controlStorePath).pipe(
+  const registry = workspaceRegistryLayer(adapters.controlStorePath, adapters.userAgentsDir).pipe(
     Layer.provideMerge(controlStore),
     Layer.provide(storeClient),
   );

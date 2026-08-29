@@ -15,7 +15,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
+import type { RegistryState } from "./projector";
 import {
   classifiedItemsOf,
   currentReconcileStatesOf,
@@ -41,14 +43,88 @@ interface PublishedWorkspace {
   readonly state: WorkspaceState;
 }
 
+const withoutContributionDiagnostic = ({
+  diagnostic: _diagnostic,
+  ...row
+}: ControlStorePicture["contributionSettings"][number]) => row;
+
+const contributionSettingAppliesToWorkspace = (
+  scope: ControlStorePicture["contributionSettings"][number]["scope"],
+  workspace: RegistryState["workspaces"][number],
+) => scope._tag === "SettingsProfile" || workspace.config.name === scope.workspace;
+
+const contributionSettingScopeExists = (
+  scope: ControlStorePicture["contributionSettings"][number]["scope"],
+  registry: RegistryState,
+) => {
+  if (scope._tag === "SettingsProfile") return true;
+  return registry.workspaces.some((workspace) => workspace.config.name === scope.workspace);
+};
+
+const contributionSettingExists = (
+  controlStore: ControlStorePicture,
+  registry: RegistryState,
+  row: ControlStorePicture["contributionSettings"][number],
+) =>
+  contributionSettingScopeExists(row.scope, registry) &&
+  (controlStore.pluginInstalls.some(({ pluginId }) =>
+    row.contribution.id.startsWith(`plugin:${pluginId}/`),
+  ) ||
+    registry.workspaces.some(
+      (workspace) =>
+        contributionSettingAppliesToWorkspace(row.scope, workspace) &&
+        workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
+    ));
+
+export const controlStoreWithDiagnostics = (controlStore: ControlStorePicture, registry: RegistryState) => {
+  const contributionSettings: ControlStorePicture["contributionSettings"] =
+    controlStore.contributionSettings.map((stored) => {
+      const row = withoutContributionDiagnostic(stored);
+      if (contributionSettingExists(controlStore, registry, row)) return row;
+      return {
+        ...row,
+        diagnostic: {
+          _tag: "Dangling",
+          source: "Control store",
+          detail: `No loaded MCP server has identity ${row.contribution.id}. The setting remains stored and will apply if the contribution returns.`,
+        },
+      };
+    });
+  return {
+    ...controlStore,
+    contributionSettings,
+  } satisfies ControlStorePicture;
+};
+
 export const make = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const registry = yield* WorkspaceRegistry;
+  const controlStore = yield* ControlStore;
   const bus = yield* DaemonEventBus;
   const lastItems = yield* Ref.make<ReadonlyMap<string, PublishedItem>>(new Map());
   const lastWorkspaces = yield* Ref.make<ReadonlyMap<string, PublishedWorkspace>>(new Map());
   const lastScheduler = yield* Ref.make<string | null>(null);
+
+  const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
+    picture: ControlStorePicture,
+  ) {
+    const published = controlStoreWithDiagnostics(picture, registry);
+    yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: published });
+    return published;
+  });
+
+  const refreshControlStore = Effect.fn("DaemonEventPublisher.refreshControlStore")(function* () {
+    if (controlStore.health === "unavailable") return;
+    yield* controlStore.withWrite(
+      controlStore.picture.pipe(
+        Effect.flatMap(publishControlStore),
+        Effect.catchTag("ControlStoreFailure", (error) =>
+          Effect.logWarning("Control store diagnostic refresh failed", { message: error.message }),
+        ),
+      ),
+    );
+  });
 
   const publishItems = Effect.fn("DaemonEventPublisher.publishItems")(function* () {
     const snapshot = yield* worker.snapshot;
@@ -114,6 +190,7 @@ export const make = Effect.gen(function* () {
       lastWorkspaces,
       new Map(signed.map(({ key, signature, state }) => [key, { signature, state }] as const)),
     );
+    if (changed.length > 0 || removed.length > 0) yield* refreshControlStore();
   });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
@@ -136,13 +213,6 @@ export const make = Effect.gen(function* () {
     return workspace;
   });
 
-  const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
-    controlStore: ControlStorePicture,
-  ) {
-    yield* bus.publish({ _tag: "ControlStoreChanged", controlStore });
-    return controlStore;
-  });
-
   const publishPlugins = Effect.fn("DaemonEventPublisher.publishPlugins")(function* (
     plugins: PluginOverview,
     notices: readonly string[],
@@ -150,7 +220,6 @@ export const make = Effect.gen(function* () {
     yield* bus.publish({ _tag: "PluginsChanged", plugins, notices });
     return plugins;
   });
-
   const publishConnections = Effect.fn("DaemonEventPublisher.publishConnections")(function* (
     connections: ConnectionOverview,
     danglingWorkspaces: readonly WorkspaceId[],

@@ -13,6 +13,7 @@ const workspace = Schema.decodeSync(WorkspaceState)({
   issueTracker: "github",
   harness: "codex",
   poll: { status: "ok" },
+  contributions: [],
 });
 
 const value: WorkspacesValue = {

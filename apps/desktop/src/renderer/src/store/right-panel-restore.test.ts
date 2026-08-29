@@ -26,9 +26,8 @@ describe("restoring persisted surfaces", () => {
       surfaces: [
         { id: "terminal", kind: "terminal" },
         {
-          id: "file:local/skill/commit-style",
+          id: "file:~/a/SKILL.md",
           kind: "file",
-          contributionId: "local/skill/commit-style",
           path: "~/a/SKILL.md",
           title: "SKILL.md",
         },
@@ -37,6 +36,32 @@ describe("restoring persisted surfaces", () => {
     });
     expect(state.surfaces.map((surface) => surface.kind)).toEqual(["terminal", "file"]);
     expect(state.active).toBe("terminal");
+  });
+
+  it("canonicalizes a legacy file tab before the same path opens again", async () => {
+    const path = "~/a/SKILL.md";
+    const state = await restore({
+      surfaces: [
+        {
+          id: "file:plugin:skill-id",
+          kind: "file",
+          path,
+          title: "SKILL.md",
+        },
+        { id: "terminal", kind: "terminal" },
+      ],
+      active: "file:plugin:skill-id",
+    });
+
+    expect(state.surfaces.map((surface) => surface.id)).toEqual([`file:${path}`, "terminal"]);
+    expect(state.active).toBe(`file:${path}`);
+
+    state.openFile(path, "SKILL.md");
+    const { useRightPanelStore } = await import("./right-panel");
+    expect(useRightPanelStore.getState().surfaces.map((surface) => surface.id)).toEqual([
+      `file:${path}`,
+      "terminal",
+    ]);
   });
 
   it("drops a surface kind it does not know", async () => {

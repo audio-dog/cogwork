@@ -119,6 +119,54 @@ export const OperationSettingUpdate = Schema.Union([
 ]);
 export type OperationSettingUpdate = typeof OperationSettingUpdate.Type;
 
+export const ContributionSettingScope = Schema.Union([SettingsProfileScope, PrivateWorkspaceOverlayScope]);
+export type ContributionSettingScope = typeof ContributionSettingScope.Type;
+
+export const McpContributionRef = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  kind: Schema.Literal("mcp-server"),
+});
+export type McpContributionRef = typeof McpContributionRef.Type;
+
+export const ContributionSettingCell = Schema.Struct({
+  contribution: McpContributionRef,
+  scope: ContributionSettingScope,
+});
+export type ContributionSettingCell = typeof ContributionSettingCell.Type;
+
+export const ContributionSettingValue = Schema.Struct({
+  ...ContributionSettingCell.fields,
+  enabled: Schema.Boolean,
+});
+export type ContributionSettingValue = typeof ContributionSettingValue.Type;
+
+export const ContributionSettingUpdate = Schema.Union([
+  Schema.TaggedStruct("Set", { row: ContributionSettingValue }),
+  Schema.TaggedStruct("Clear", { cell: ContributionSettingCell }),
+]);
+export type ContributionSettingUpdate = typeof ContributionSettingUpdate.Type;
+
+export const ContributionSettingDiagnostic = Schema.TaggedStruct("Dangling", {
+  source: TrimmedNonEmptyString,
+  detail: TrimmedNonEmptyString,
+});
+export type ContributionSettingDiagnostic = typeof ContributionSettingDiagnostic.Type;
+
+export const ContributionSettingRow = Schema.Struct({
+  ...ContributionSettingValue.fields,
+  diagnostic: Schema.optionalKey(ContributionSettingDiagnostic),
+});
+export type ContributionSettingRow = typeof ContributionSettingRow.Type;
+
+export class ContributionSettingRefused extends Schema.TaggedError<ContributionSettingRefused>()(
+  "ContributionSettingRefused",
+  {
+    contribution: TrimmedNonEmptyString,
+    source: TrimmedNonEmptyString,
+    reason: TrimmedNonEmptyString,
+  },
+) {}
+
 export class OperationSettingRefused extends Schema.TaggedError<OperationSettingRefused>()(
   "OperationSettingRefused",
   {

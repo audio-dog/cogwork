@@ -1,6 +1,11 @@
 import { type ConnectionItem, connectionIdOf } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
-import { connectionAction, connectionPluginLabel, connectionStatus } from "./connections-view";
+import {
+  connectionAction,
+  connectionPluginLabel,
+  connectionStatus,
+  readyConnections,
+} from "./connections-view";
 
 const item = (over: Partial<ConnectionItem>): ConnectionItem => ({
   system: "linear",
@@ -57,5 +62,20 @@ describe("Connections view", () => {
   it("makes a missing Plugin explicit", () => {
     expect(connectionPluginLabel(item({ pluginId: null }))).toBe("No Plugin");
     expect(connectionPluginLabel(item({ pluginId: "linear" }))).toBe("Plugin: linear");
+  });
+
+  it("selects ready workspace bindings from the Connection overview", () => {
+    const linear = item({
+      connection: {
+        id: connectionIdOf("linear", "acme"),
+        system: "linear",
+        account: "acme",
+        status: "established",
+      },
+      readiness: { _tag: "Ready" },
+    });
+    const github = item({ system: "github", pluginId: null });
+
+    expect(readyConnections({ connections: [linear, github] })).toEqual([linear.connection]);
   });
 });

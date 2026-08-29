@@ -455,8 +455,6 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return team;
     });
 
-  // A team's backlog can exceed one page, and Linear's default ordering is newest-created first, so
-  // stopping at one page would silently hide every older work item; every page is fetched instead.
   const observeIssues = Effect.fn("linear.observeIssues")(function* (
     ref: LinearTeamRef,
     coordination: CoordinationScope | null,

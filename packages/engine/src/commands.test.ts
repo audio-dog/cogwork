@@ -1,6 +1,7 @@
 import {
   Connection,
   type ConnectionEstablishment,
+  type ContributionSettingUpdate,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   connectionIdOf,
@@ -8,6 +9,7 @@ import {
   DaemonRpcs,
   HarnessName,
   IssueTrackerError,
+  type LocalContribution,
   localOwnerId,
   type OperationSettingUpdate,
   type PluginItem,
@@ -20,6 +22,7 @@ import {
   WorkspaceId,
   WorkspaceRegistration,
 } from "@cogwork/contracts";
+
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -283,6 +286,7 @@ interface ControlStoreStubOptions {
   readonly seed?: ControlStorePicture;
   readonly read?: Effect.Effect<ControlStorePicture, ControlStoreFailure>;
   readonly setDaemonLimit?: ControlStoreService["setDaemonLimit"];
+  readonly updateContributionSetting?: ControlStoreService["updateContributionSetting"];
   readonly updateOperationSetting?: ControlStoreService["updateOperationSetting"];
 }
 
@@ -311,6 +315,11 @@ const controlStoreStub = ({
       ...picture,
       operationSettings: update._tag === "Set" ? [update.row] : [],
     }),
+  updateContributionSetting = (update) =>
+    Effect.succeed({
+      ...picture,
+      contributionSettings: update._tag === "Set" ? [update.row] : [],
+    }),
 }: ControlStoreStubOptions = {}) =>
   Layer.succeed(ControlStore, {
     health: "available",
@@ -323,7 +332,7 @@ const controlStoreStub = ({
     updateOperationSetting,
     installPlugin: () => Effect.succeed(picture),
     uninstallPlugin: () => Effect.succeed(picture),
-    updateContributionSetting: () => Effect.succeed(picture),
+    updateContributionSetting,
     withWrite: (effect) => effect,
   });
 
@@ -351,7 +360,7 @@ const daemonLayer = (
     Layer.provideMerge(source),
   );
 
-const registrationServices = () => {
+const registrationServices = (contributions: readonly LocalContribution[] = []) => {
   const cell = MutableRef.make<Registry.RegistryState>(Registry.emptyRegistry);
   const registry: Registry.WorkspaceRegistryService = {
     get workspaces() {
@@ -365,7 +374,7 @@ const registrationServices = () => {
   const register: Registry.WorkspaceManagementService["register"] = (registration) => {
     const workspace: Registry.RegisteredWorkspace = {
       source: "control-store:minted",
-      contributions: [],
+      contributions,
       config: {
         name: wsid("0198f16a-21d7-7000-8000-000000000001"),
         displayName: registration.name,
@@ -851,6 +860,86 @@ describe("SetOperationSetting", () => {
   );
 });
 
+describe("SetContributionSetting", () => {
+  const update: ContributionSettingUpdate = {
+    _tag: "Set",
+    row: {
+      contribution: { id: "local:repo/mcp/tools", kind: "mcp-server" },
+      scope: { _tag: "PrivateWorkspaceOverlay", workspace: wsid("example") },
+      enabled: true,
+    },
+  };
+
+  it.effect("accepts a disk-dependent dangling row and publishes the returned picture", () =>
+    Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetContributionSetting({ update });
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.take(1),
+        Stream.runCollect,
+      );
+
+      assert.strictEqual(published?._tag, "ControlStoreChanged");
+      if (published?._tag !== "ControlStoreChanged") return assert.fail("expected ControlStoreChanged");
+      assert.deepStrictEqual(published.controlStore, returned);
+      assert.strictEqual(returned.contributionSettings[0]?.diagnostic?._tag, "Dangling");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("refuses a Private workspace overlay the engine does not own", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const failure = yield* Effect.flip(
+        client.SetContributionSetting({
+          update: {
+            ...update,
+            row: {
+              ...update.row,
+              scope: { _tag: "PrivateWorkspaceOverlay", workspace: wsid("unknown") },
+            },
+          },
+        }),
+      );
+
+      assert.strictEqual(failure._tag, "ContributionSettingRefused");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
+  it.effect("clears an overlay for a failed registered workspace", () => {
+    const stored = { ...picture, contributionSettings: [update.row] } satisfies ControlStorePicture;
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const returned = yield* client.SetContributionSetting({
+        update: {
+          _tag: "Clear",
+          cell: {
+            contribution: update.row.contribution,
+            scope: update.row.scope,
+          },
+        },
+      });
+
+      assert.deepStrictEqual(returned.contributionSettings, []);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub({
+            seed: stored,
+            read: Effect.succeed(stored),
+            updateContributionSetting: () => Effect.succeed(picture),
+          }),
+          failedWorkspaceRegistryServices,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+});
+
 describe("RegisterWorkspace", () => {
   it.effect("rejects a tracker bound to the wrong Connection system", () =>
     Effect.gen(function* () {
@@ -904,7 +993,7 @@ describe("RegisterWorkspace", () => {
       }
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
-        ["WorkspaceChanged", "ItemRemoved"],
+        ["WorkspaceChanged", "ControlStoreChanged", "ItemRemoved"],
       );
     }).pipe(
       Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
@@ -932,10 +1021,55 @@ describe("RegisterWorkspace", () => {
       });
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
-        ["WorkspaceChanged", "ItemRemoved"],
+        ["WorkspaceChanged", "ControlStoreChanged", "ItemRemoved"],
       );
     }).pipe(
       Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("refreshes contribution diagnostics after inventory changes", () => {
+    const contribution = {
+      id: "local:repo/mcp/tools",
+      authority: "local:repo",
+      kind: "mcp-server",
+      localName: "tools",
+      file: "/repos/acme/.agents/mcp/tools.json",
+    } satisfies LocalContribution;
+    const stored = {
+      ...picture,
+      contributionSettings: [
+        {
+          contribution: { id: contribution.id, kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: true,
+        },
+      ],
+    } satisfies ControlStorePicture;
+    const registries = registrationServices([contribution]);
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+
+      yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      const [published] = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter((event) => event._tag === "ControlStoreChanged"),
+        Stream.take(1),
+        Stream.runCollect,
+      );
+
+      assert.strictEqual(published?.controlStore.contributionSettings[0]?.diagnostic, undefined);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub({ seed: stored, read: Effect.succeed(stored) }),
+          registries,
+        ),
+      ),
       Effect.scoped,
     );
   });
@@ -1077,7 +1211,7 @@ describe("workspace lifecycle commands", () => {
       assert.strictEqual(deregistered, registered.name);
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
-        ["WorkspaceChanged", "WorkspaceRemoved", "ControlStoreChanged", "ItemRemoved"],
+        ["WorkspaceChanged", "ControlStoreChanged", "WorkspaceRemoved", "ControlStoreChanged", "ItemRemoved"],
       );
       const controlStoreChanged = [...events].find((event) => event._tag === "ControlStoreChanged");
       assert.deepStrictEqual(controlStoreChanged?.controlStore, afterDeregister);
@@ -1107,13 +1241,13 @@ describe("workspace lifecycle commands", () => {
         workspace: registered.name,
         checkoutPath: "/repos/moved-acme",
       });
-      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(4), Stream.runCollect);
 
       assert.strictEqual(rebound._tag, "Registered");
       assert.strictEqual(rebound._tag === "Registered" ? rebound.checkoutPath : null, "/repos/moved-acme");
       assert.deepStrictEqual(
         [...events].map((event) => event._tag),
-        ["WorkspaceChanged", "WorkspaceChanged"],
+        ["WorkspaceChanged", "ControlStoreChanged", "WorkspaceChanged", "ControlStoreChanged"],
       );
     }).pipe(
       Effect.provide(daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registries)),

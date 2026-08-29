@@ -427,8 +427,6 @@ const plugins: readonly InstalledPlugin[] = [
 ];
 
 export const placeholderConfiguration: ConfigurationPicture = {
-  principal: "taylor",
-  hostId: "host_01H7QK",
   workspaces,
   plugins,
   catalogPlugins: [],

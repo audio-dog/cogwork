@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Command from "effect/unstable/cli/Command";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
+  contributionSettingsCommand,
   daemonCommand,
   limitsCommand,
   operationSettingsCommand,
@@ -25,6 +26,7 @@ import { worktreeCommand } from "./worktree-commands";
 const cli = Command.make("cogwork").pipe(
   Command.withSubcommands([
     daemonCommand,
+    contributionSettingsCommand,
     limitsCommand,
     operationSettingsCommand,
     schedulingCommand,
