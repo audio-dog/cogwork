@@ -1,0 +1,21 @@
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_d5aac6a69f142e::t_69b0822e0e8822 10
+  s_d5aac6a69f142e::t_c281b05b7cdfb1 1-2,4-7,9,11,13-20,22-24,26-29,31-39,41-82,84,86-107,109
+  s_d5aac6a69f142e::t_41d70b5660e39e 3,8,12,21,25,30,40,83,85,108,110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a28a95f45fd2f09f0233dadfb53e6319b963db00",
+  "prompts": {},
+  "sessions": {
+    "s_d5aac6a69f142e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a04adb-8aef-7852-9d2b-1588a232b1b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
