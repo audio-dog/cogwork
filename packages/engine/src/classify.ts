@@ -27,6 +27,7 @@ export interface EligibleWork extends ActionableItem {
   readonly priorFailures: number;
   readonly followUp?: FollowUpContext;
   readonly resume?: ResumeContext;
+  readonly recovery?: ResumeContext["reason"];
   readonly followUpBranch?: string;
   readonly workContext: {
     readonly reference: RunPlanWorkContextReference;

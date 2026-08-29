@@ -131,7 +131,9 @@ export const make = Effect.gen(function* () {
     observation: RunPlanObservation,
   ) {
     const observed = eligibleWork(item, stage);
-    const work: EligibleWork = session ? { ...observed, resume: { session, reason } } : observed;
+    const work: EligibleWork = session
+      ? { ...observed, recovery: reason, resume: { session, reason } }
+      : { ...observed, recovery: reason };
     yield* Effect.logInfo("rescheduled resumable run", {
       workspace: workspace.config.name,
       item: item.id,
