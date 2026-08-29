@@ -3,6 +3,7 @@ import {
   type HarnessName,
   type RunPlan,
   type RunPlanMember,
+  type RunPlanMiddlewareName,
   type SessionId,
   type SessionKind,
   type StageResultJsonSchema,
@@ -72,7 +73,7 @@ export interface HarnessRunner {
   readonly sessionKind: SessionKind;
   readonly execution: HarnessExecution;
   readonly projectedMembers: ReadonlyArray<RunPlanMember>;
-  readonly planMiddleware: ReadonlyArray<string>;
+  readonly planMiddleware: ReadonlyArray<RunPlanMiddlewareName>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
 }
 
@@ -84,7 +85,7 @@ export interface HarnessService {
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
   readonly projectedMembers: (harness: HarnessName) => ReadonlyArray<RunPlanMember>;
-  readonly planMiddleware: (harness: HarnessName) => ReadonlyArray<string>;
+  readonly planMiddleware: (harness: HarnessName) => ReadonlyArray<RunPlanMiddlewareName>;
 }
 
 export class Harness extends Context.Service<Harness, HarnessService>()("@cogwork/engine/harness") {}

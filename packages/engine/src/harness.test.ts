@@ -172,7 +172,11 @@ describe("Harness", () => {
               operation: "triage",
               harness: { name, model: null, effort: null, profile: "read-only" },
               instructions: [],
-              operatingInstructions: { name: "triage-agent", path: "/skills/triage-agent" },
+              operatingInstructions: {
+                name: "triage-agent",
+                path: "/operating-instructions/triage-agent",
+                resources: [],
+              },
               tools: [],
               skills: [],
               mcp: [],
