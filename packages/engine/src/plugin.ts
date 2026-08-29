@@ -1,6 +1,7 @@
 import {
   type ConnectionReadiness,
-  connectionSystemOf,
+  ConnectionSystem,
+  type ConnectionSystem as ConnectionSystemType,
   type PluginContribution,
   PluginFailure,
   type PluginInstall,
@@ -47,7 +48,7 @@ const PluginManifest = Schema.Struct({
   version: Schema.optionalKey(TrimmedNonEmptyString),
   provenance: TrimmedNonEmptyString,
   authRecipe: Schema.Unknown,
-  requiredConnections: Schema.Array(TrimmedNonEmptyString),
+  requiredConnections: Schema.Array(ConnectionSystem),
   contributions: Schema.Array(ManifestContribution),
 });
 type PluginManifest = typeof PluginManifest.Type;
@@ -247,39 +248,24 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     return yield* failure("load Plugin contribution", pluginId, file, "file is empty");
   });
 
-  const requireConnectionSystem = Effect.fn("PluginManager.requireConnectionSystem")(function* (
-    operation: string,
-    pluginId: string | null,
-    file: string | null,
-    requirement: string,
-  ) {
-    const system = connectionSystemOf(requirement);
-    if (system) return system;
-    return yield* failure(operation, pluginId, file, `unknown Connection ${requirement}`);
-  });
-
   const loadRequirement = Effect.fn("PluginManager.loadRequirement")(function* (
     pluginId: string,
     file: string,
-    requirement: string,
+    requirement: ConnectionSystemType,
   ) {
-    const system = yield* requireConnectionSystem("load Plugin manifest", pluginId, file, requirement);
     const connection = yield* connections
-      .findSystem(system)
+      .findSystem(requirement)
       .pipe(Effect.mapError((error) => failure("load Plugin contribution", pluginId, file, error)));
-    const readiness = connection ? yield* connections.readiness(connection.id) : missingReadiness(system);
+    const readiness = connection
+      ? yield* connections.readiness(connection.id)
+      : missingReadiness(requirement);
     return { connection, readiness };
   });
 
   const ensureRequirementsReady = Effect.fn("PluginManager.ensureRequirementsReady")(function* (
-    requirements: readonly string[],
+    requirements: readonly ConnectionSystemType[],
   ) {
-    yield* Effect.forEach(requirements, (requirement) =>
-      Effect.gen(function* () {
-        const system = yield* requireConnectionSystem("read Plugin contributions", null, null, requirement);
-        return yield* connections.requireSystemReady(system);
-      }),
-    );
+    yield* Effect.forEach(requirements, (requirement) => connections.requireSystemReady(requirement));
   });
 
   const contributionsOf = Effect.fn("PluginManager.contributionsOf")(function* (
@@ -386,10 +372,8 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
   ) {
     const retained = yield* Effect.forEach(item.requiredConnections, (requirement) =>
       Effect.gen(function* () {
-        const system = connectionSystemOf(requirement);
-        if (!system) return null;
         const connection = yield* connections
-          .findSystem(system)
+          .findSystem(requirement)
           .pipe(Effect.mapError((error) => failure("uninstall Plugin", item.pluginId, null, error)));
         return connection?.status === "established" ? requirement : null;
       }),

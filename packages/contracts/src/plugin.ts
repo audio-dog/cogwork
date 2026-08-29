@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
-import { ConnectionId } from "./connection";
+import { ConnectionId, ConnectionSystem } from "./connection";
 import { FileContributionKind, PluginContributionAuthority } from "./contribution";
 import { PrincipalId } from "./principal";
 
@@ -50,7 +50,7 @@ export const PluginItem = Schema.Struct({
   summary: TrimmedNonEmptyString,
   record: Schema.NullOr(PluginInstall),
   resolvedIdentity: Schema.NullOr(TrimmedNonEmptyString),
-  requiredConnections: Schema.Array(TrimmedNonEmptyString),
+  requiredConnections: Schema.Array(ConnectionSystem),
   contributions: Schema.Array(PluginContribution),
   manifestFailure: Schema.NullOr(TrimmedNonEmptyString),
 });
