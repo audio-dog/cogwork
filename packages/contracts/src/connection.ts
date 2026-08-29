@@ -1,11 +1,16 @@
 import * as Schema from "effect/Schema";
-import { makeBrand, TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
-
-export const ConnectionId = makeBrand("ConnectionId");
-export type ConnectionId = typeof ConnectionId.Type;
+import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
 
 export const ConnectionSystem = Schema.Literals(["github", "linear"]);
 export type ConnectionSystem = typeof ConnectionSystem.Type;
+
+export const ConnectionId = TrimmedNonEmptyString.check(Schema.isPattern(/^(github|linear)\/.+$/)).pipe(
+  Schema.brand("ConnectionId"),
+);
+export type ConnectionId = typeof ConnectionId.Type;
+
+export const ConnectionBindingId = Schema.Union([ConnectionId, Schema.Literal("unbound")]);
+export type ConnectionBindingId = typeof ConnectionBindingId.Type;
 
 export const ConnectionStatus = Schema.Literals(["established", "revoked"]);
 export type ConnectionStatus = typeof ConnectionStatus.Type;
@@ -63,7 +68,7 @@ export class ConnectionFailure extends Schema.TaggedError<ConnectionFailure>()("
 }) {}
 
 export class ConnectionNotReady extends Schema.TaggedError<ConnectionNotReady>()("ConnectionNotReady", {
-  connectionId: ConnectionId,
+  connectionId: Schema.NullOr(ConnectionId),
   message: TrimmedNonEmptyString,
 }) {}
 

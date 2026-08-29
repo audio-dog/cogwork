@@ -1,7 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { Connection, ConnectionEstablishment, connectionIdOf, connectionSystemOf } from "./connection";
+import {
+  Connection,
+  ConnectionEstablishment,
+  ConnectionId,
+  connectionIdOf,
+  connectionSystemOf,
+} from "./connection";
 
 describe("Connection", () => {
   it("identifies one system account binding", () => {
@@ -27,5 +33,12 @@ describe("Connection", () => {
     assert.strictEqual(establishment.source._tag, "ApiKey");
     if (establishment.source._tag !== "ApiKey") return;
     assert.strictEqual(Redacted.value(establishment.source.key), "secret");
+  });
+
+  it("rejects ids without a known system and account", () => {
+    const decode = Schema.decodeSync(ConnectionId);
+    assert.throws(() => decode("unbound"));
+    assert.throws(() => decode("linear/"));
+    assert.throws(() => decode("unknown/acme"));
   });
 });
