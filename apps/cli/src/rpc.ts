@@ -80,9 +80,9 @@ export const harnessRunners = [
   Provider.providerRunner({ name: providerName }),
 ];
 
-const engineSkillsDir = nodePath.resolve(
+const engineOperatingInstructionsDir = nodePath.resolve(
   nodePath.dirname(fileURLToPath(import.meta.resolve("@cogwork/engine"))),
-  "../skills",
+  "../operating-instructions",
 );
 
 const userAgentsDir = nodePath.join(os.homedir(), ".agents");
@@ -91,7 +91,7 @@ const contextAssemblerLayer = (homeDir: string) =>
   ContextAssembler.layer({
     homeDir,
     userAgentsDir,
-    skillsDir: engineSkillsDir,
+    operatingInstructionsDir: engineOperatingInstructionsDir,
   }).pipe(Layer.provide(contextFsLayer));
 
 export const serverLayer = (options: DaemonOptions) =>

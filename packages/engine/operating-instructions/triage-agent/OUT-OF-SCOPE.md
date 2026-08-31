@@ -3,7 +3,7 @@
 The `.out-of-scope/` directory in a repo stores persistent records of rejected feature requests. It serves two purposes:
 
 1. **Institutional memory** — why a feature was rejected, so the reasoning isn't lost when the issue is closed
-2. **Deduplication** — when a new issue comes in that matches a prior rejection, the skill can surface the previous decision instead of re-litigating it
+2. **Deduplication** — when a new issue comes in that matches a prior rejection, the operation can surface the previous decision instead of re-litigating it
 
 ## Directory structure
 
@@ -101,5 +101,5 @@ The flow:
 If the maintainer changes their mind about a previously rejected concept:
 
 - Delete the `.out-of-scope/` file
-- The skill does not need to reopen old issues — they're historical records
+- The operation does not need to reopen old issues — they're historical records
 - The new issue that triggered the reconsideration proceeds through normal triage

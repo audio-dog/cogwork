@@ -56,6 +56,10 @@ const work = (
   stage,
   priority,
   priorFailures,
+  workContext: {
+    reference: { workItem: id(`#${n}`), url: null },
+    facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority, pr: null },
+  },
 });
 
 const candidate = (
@@ -67,6 +71,7 @@ const candidate = (
   work: item,
   workspaceLimit,
   keys: [`${workspace.config.name}:ticket:${item.id}`],
+  observation: { generation: 1, observedAtMillis: 1 },
 });
 
 const stamp = (day: number, generation = 1): Scheduler.TickStamp => ({ day, generation });
@@ -299,6 +304,7 @@ interface SnapshotEntry {
 
 const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileSnapshot => ({
   generation: 1,
+  observedAtMillis: 1,
   workspaces: entries.map(({ workspace, eligible }) => ({
     name: workspace.config.name,
     poll: { status: "ok" },

@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./base-schemas";
 import { FileContributionKind, PluginContributionAuthority } from "./contribution";
 import { PrincipalId } from "./principal";
+import { ProvenanceStamp } from "./provenance";
 
 export const PluginId = TrimmedNonEmptyString;
 export type PluginId = typeof PluginId.Type;
@@ -48,6 +49,7 @@ export const PluginItem = Schema.Struct({
   summary: TrimmedNonEmptyString,
   record: Schema.NullOr(PluginInstall),
   resolvedIdentity: Schema.NullOr(TrimmedNonEmptyString),
+  provenanceStamp: Schema.optionalKey(Schema.NullOr(ProvenanceStamp)),
   requiredConnections: Schema.Array(TrimmedNonEmptyString),
   contributions: Schema.Array(PluginContribution),
   manifestFailure: Schema.NullOr(TrimmedNonEmptyString),

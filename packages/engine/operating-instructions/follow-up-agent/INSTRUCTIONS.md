@@ -1,11 +1,11 @@
 ---
 name: follow-up-agent
-description: Headless follow-up playbook for the orchestration daemon's follow-up job. Use when autonomously moving a bot-authored pull request forward with no human in the session — the engine has resumed (or freshly started) a session in the PR's existing worktree because the PR has failing checks or new human review comments. Read the PR's checks and review feedback, make the fix, pass a hard local gate, and push to the same branch. Never merge and never resolve review threads. Not for interactive, human-in-the-loop review — use the `implement` skill for that.
+description: Headless Operating Instructions for moving a bot-authored pull request forward.
 ---
 
 # Follow-up agent
 
-The headless follow-up playbook the daemon runs for a `follow-up` job. There is **no human in the session** — the daemon's prompt is a thin invoker that names this skill and the work item. A pull request that resolves the work item already exists; your job is to move it forward, not to open a new one.
+The headless follow-up operation the daemon runs for a `follow-up` operation. There is **no human in the session** — the daemon's user message names these Operating Instructions and the work item. A pull request that resolves the work item already exists; your operation is to move it forward, not to open a new one.
 
 The engine triggers a follow-up when the bot PR has **failing required checks**, a **new human comment / changes-requested review**, or a **base that has diverged** — the branch and `main` both moved and now conflict, so the PR can no longer merge. It has already placed you in the **worktree on that PR's branch** and, when it was safe to, resumed the prior session so you keep the context you built while implementing. **The engine owns this branch — never create, rename, or switch branches;** build on the one you are on and push there.
 
@@ -83,7 +83,7 @@ Commit with the `git-master` skill and push to the **same branch** the PR is on.
 
 Then write your round summary as your **final message**. Don't post it as a PR comment yourself. The engine posts the structured summary to the PR under the daemon's account with the coordination marker attached.
 
-This split is deliberate, and it's the whole point of this playbook. The marker is what keeps the daemon's own writing out of the human-feedback signal — the engine reads a write-access comment with no `cogwork` marker as human feedback, and human feedback wakes another round. You used to write that marker yourself, and one wrong marker turned a summary into a trigger that woke round after round, a loop that never settled. So the marker is the engine's job now, not yours. Write plain prose and let it own the marker.
+This split is deliberate, and it's the whole point of this operation. The marker is what keeps the daemon's own writing out of the human-feedback signal — the engine reads a write-access comment with no `cogwork` marker as human feedback, and human feedback wakes another round. You used to write that marker yourself, and one wrong marker turned a summary into a trigger that woke round after round, a loop that never settled. So the marker is the engine's operation now, not yours. Write plain prose and let it own the marker.
 
 Make the summary self-contained, the way a reviewer could read it without re-deriving your reasoning: if you integrated the base, say whether you merged or rebased (and, for a rebase, that you force-pushed and why); which checks you fixed and how; and how you addressed each review request. Do not resolve the review threads yourself.
 

@@ -50,6 +50,10 @@ const eligibleWithPr: EligibleWork = {
   },
   resume: { session, reason: "interrupted" },
   pr: prSummary,
+  workContext: {
+    reference: { workItem: id("e-pr"), url: "https://github.com/owner/repo/issues/e-pr" },
+    facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: prSummary },
+  },
 };
 const eligibleNoPr: EligibleWork = {
   id: id("e"),
@@ -58,6 +62,10 @@ const eligibleNoPr: EligibleWork = {
   stage: "implement",
   priority: "medium",
   priorFailures: 0,
+  workContext: {
+    reference: { workItem: id("e"), url: null },
+    facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+  },
 };
 
 const claimedWithPr: ClaimedItem = {

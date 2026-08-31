@@ -1,7 +1,14 @@
 import { ndJsonStream } from "@agentclientprotocol/sdk";
 import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
 import { Harness, SessionStore } from "@cogwork/engine";
-import { type ChatMiddleware, chat, EventType, type ModelMessage, type StreamChunk } from "@tanstack/ai";
+import {
+  type ChatMiddleware,
+  chat,
+  EventType,
+  type JSONSchema,
+  type ModelMessage,
+  type StreamChunk,
+} from "@tanstack/ai";
 import {
   type AcpCompatibleTextAdapter,
   type AcpHarnessContext,
@@ -47,7 +54,7 @@ export interface CursorRunChatOptions {
   readonly middleware: ReadonlyArray<ChatMiddleware>;
   readonly abortController: AbortController;
   readonly modelOptions?: CursorModelOptions;
-  readonly outputSchema?: Harness.StageResultSchema;
+  readonly outputSchema?: JSONSchema;
 }
 
 export type CursorRunChat = (options: CursorRunChatOptions) => AsyncIterable<StreamChunk>;
@@ -233,6 +240,17 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
   return {
     name: options.name,
     sessionKind: "opaque-handle",
+    projectedMembers: [
+      "Harness Adapter",
+      "Messages",
+      "MCP",
+      "Middleware",
+      "Sandbox",
+      "Structured Output",
+      "Persistence",
+      "Connections",
+    ],
+    planMiddleware: ["sandbox"],
     execution: {
       nonInteractive: false,
       worktreeConfined: false,
@@ -241,9 +259,10 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {
+          const plan = request.plan;
           const store = yield* SessionStore.SessionStore;
           const handle = request.session ? yield* store.resumeHandle(request.session) : null;
-          const model = request.model ?? defaultModel;
+          const model = plan.harness.model ?? defaultModel;
           const emptyModelOptions: CursorModelOptions = {};
           const adapter = acpCompatible({
             name: options.name,
@@ -253,28 +272,30 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
             planEventName: `${options.name}.plan`,
             authMethodId,
           });
-          const projection = mcpWorkspaceProjection(request.mcpSkills);
+          const projection = mcpWorkspaceProjection(Harness.resolvedMcpSkills(request));
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,
             fileEvents: false,
-            provider: localProcessSandbox({ dir: request.checkoutPath, scrubEnv }),
+            provider: localProcessSandbox({ dir: plan.sandbox.workspace, scrubEnv }),
             workspace: defineWorkspace({
               source: { type: "none" },
               ...(projection.skills.length > 0 ? { skills: [...projection.skills] } : {}),
               ...(projection.hasSecrets ? { secrets: projection.secrets } : {}),
             }),
           });
-          const modelOptions = cursorModelOptions(handle, request.effort);
+          const effort = plan.harness.effort;
+          const modelOptions = cursorModelOptions(handle, effort);
           const abortController = new AbortController();
           const stream = runChat({
             adapter: adapter(model),
-            messages: [{ role: "user", content: request.prompt }],
-            middleware: [withSandbox(sandbox)],
+            messages: plan.messages.map(({ role, content }) => ({ role, content })),
+            middleware: plan.middleware.includes("sandbox") ? [withSandbox(sandbox)] : [],
             abortController,
-            ...(handle || request.effort ? { modelOptions } : {}),
-            outputSchema: Harness.stageResultSchema(request.stage),
+            ...(handle || effort ? { modelOptions } : {}),
+            outputSchema: plan.structuredOutput ?? undefined,
           });
-          return withEstimatedUsage(request.prompt.length, bridge(stream)).pipe(
+          const promptLength = plan.messages.reduce((total, message) => total + message.content.length, 0);
+          return withEstimatedUsage(promptLength, bridge(stream)).pipe(
             Stream.ensuring(Effect.sync(() => abortController.abort())),
           );
         }),
