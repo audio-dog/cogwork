@@ -1,0 +1,19 @@
+packages/engine/src/executor.test.ts
+  s_129f1344b48785::t_dc01c68cbec772 61,1547,1819
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c706ab55f6339da8ecc539c815c345cde92415f0",
+  "prompts": {},
+  "sessions": {
+    "s_129f1344b48785": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a058cd-0343-72d3-802c-0a93baa7ddfe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
