@@ -159,7 +159,11 @@ export const make = Effect.gen(function* () {
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
-    const crashes = yield* ledger.consecutiveCrashes(workspace.config.name, item.id);
+    const crashes = yield* ledger.consecutiveCrashes(
+      workspace.config.name,
+      item.id,
+      item.handback?.atMillis ?? 0,
+    );
     if (crashes < maxCrashesPerItem) {
       return yield* reschedule(workspace, item, stage, "crashed", session);
     }
