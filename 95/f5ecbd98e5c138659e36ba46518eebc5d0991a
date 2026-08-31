@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/markdown.tsx
+  s_a153a0b5417fd5::t_d306bd6a411c7c 18-36,40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "95f5ecbd98e5c138659e36ba46518eebc5d0991a",
+  "prompts": {},
+  "sessions": {
+    "s_a153a0b5417fd5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d165e350-952d-4af6-8faa-b60d6f44b711",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
