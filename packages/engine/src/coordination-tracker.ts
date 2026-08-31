@@ -203,7 +203,7 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       outcome: HandBackOutcome,
     ) {
       const ref = yield* host.resolve(workspace, id);
-      yield* Coordination.upsertCoordination(codec, host.comments(ref), {
+      yield* Coordination.editCoordination(codec, host.comments(ref), {
         status: Coordination.handbackStatus(outcome.record, outcome.note),
         marker: Coordination.serializeHandback(codec, outcome.record),
       });

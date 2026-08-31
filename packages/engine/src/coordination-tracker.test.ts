@@ -482,6 +482,22 @@ describe("coordination outcomes", () => {
     }),
   );
 
+  it.effect("handBack never creates a coordination comment", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 18, labels: ["ready-for-human"] }]);
+      const tracker = makeCoordinationTracker(host);
+      const error = yield* Effect.flip(
+        tracker.handBack(workspace, decodeId("#18"), {
+          record: { by: "local-owner", atMillis: 5 },
+          changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+        }),
+      );
+
+      assert.strictEqual(error._tag, "IssueTrackerError");
+      assert.strictEqual((yield* itemAt(18))?.comments.length, 0);
+    }),
+  );
+
   it.effect("stalled records the abandonment, carries the detail, and adds ready-for-human", () =>
     Effect.gen(function* () {
       const { host, itemAt } = yield* makeFakeHost([{ number: 15, labels: ["ready-for-agent"] }]);

@@ -4,7 +4,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { parseTriageProposal, statusReason } from "./comments";
 import { FollowUpMarker } from "./follow-up";
-import type { IssueTrackerError } from "./issue-tracker";
+import { IssueTrackerError } from "./issue-tracker";
 
 export interface MarkerSpan {
   readonly name: string;
@@ -248,12 +248,11 @@ const nextDetail = (codec: WireCodec, update: CoordinationUpdate, previous: stri
   return update.detail ?? null;
 };
 
-export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(function* <Id>(
+const coordinationUpdate = <Id>(
   codec: WireCodec,
-  host: CommentHost<Id>,
+  comments: ReadonlyArray<CoordinationComment<Id>>,
   update: CoordinationUpdate,
-) {
-  const comments = yield* host.comments;
+) => {
   const ledger = selectLedger(codec, comments);
   const previous = ledger?.body ?? "";
   const markers = coordinationMarkers(codec, previous);
@@ -262,11 +261,37 @@ export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(f
     markers: update.marker === undefined ? markers : [...markers, update.marker],
     detail: nextDetail(codec, update, previous),
   });
+  return { ledger, body };
+};
+
+export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(function* <Id>(
+  codec: WireCodec,
+  host: CommentHost<Id>,
+  update: CoordinationUpdate,
+) {
+  const comments = yield* host.comments;
+  const { ledger, body } = coordinationUpdate(codec, comments, update);
   if (ledger) {
     yield* host.edit(ledger.id, body);
     return;
   }
   yield* host.create(body);
+});
+
+export const editCoordination = Effect.fn("coordination.editCoordination")(function* <Id>(
+  codec: WireCodec,
+  host: CommentHost<Id>,
+  update: CoordinationUpdate,
+) {
+  const comments = yield* host.comments;
+  const { ledger, body } = coordinationUpdate(codec, comments, update);
+  if (!ledger) {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: "Cannot hand back a work item without a coordination comment",
+    });
+  }
+  yield* host.edit(ledger.id, body);
 });
 
 export const postNote = Effect.fn("coordination.postNote")(function* <Id>(
