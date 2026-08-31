@@ -1,0 +1,178 @@
+apps/cli/src/ledger.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 5,13,15,32-34,88-131,167-199
+packages/engine/src/context-fs.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 16-19,22
+packages/engine/src/worktree.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 5,18-27,124-133,207-219,239
+  s_147d66794d8a61::t_71b378699047e8 240
+packages/engine/src/run-ledger.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 4,11-16,21,23,31-52,69-70,109-113,117-120,169,174-188,190-197,312-313
+packages/engine/src/scheduler.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 59-62,74,308
+apps/cli/src/platform.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 58-60,119-125,168-198,200-251,374-376
+packages/engine/src/git.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 28-34,43-44,57-58
+packages/engine/operating-instructions/triage-agent/OUT-OF-SCOPE.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-105
+packages/engine/src/comments.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 9,69-76,92,115-129,176
+packages/engine/src/recovery.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 154,670-674,696-700
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_147d66794d8a61::t_6a183ac90be3a2 37-40
+packages/cursor-acp/src/harness.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 2,41,56-93,95
+packages/engine/src/provider-runner.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1,7,21,42,82,84-86,89-103,112-122,124,127-128,141,144,151-161,167-169,172
+packages/engine/docs/adr/0011-coordination-records-are-append-only.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-29
+packages/engine/src/daemon.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 371
+packages/engine/src/scheduler.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1-7,90,186,192,197-200,204,220,228,283,286
+packages/contracts/src/plugin.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 6,54
+packages/engine/src/plugin.test.ts
+  s_147d66794d8a61::t_ee9ed950c76479 140,142-144
+  s_147d66794d8a61::t_5c14bef17d7de4 355,377
+  s_147d66794d8a61::t_732d289848a73e 1
+  s_147d66794d8a61::t_6a183ac90be3a2 135-138,328
+  s_147d66794d8a61::t_8e5e13f4bae136 141,145-146
+docs/agent-patterns/effect-observability.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-135
+packages/contracts/src/run-plan.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1-192
+packages/engine/src/plugin.ts
+  s_147d66794d8a61::t_732d289848a73e 540
+  s_147d66794d8a61::t_6a183ac90be3a2 5-6,111-115,317,330,538-539
+packages/contracts/src/provenance.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1-15
+packages/engine/src/comments.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 55-63,70,102
+packages/engine/src/classify.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 12-13,30,32-35,166-176
+docs/agent-patterns/effect-process-edges.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-170
+packages/engine/src/coordination-tracker.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 261,422
+packages/engine/src/provider-runner.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1,13,21,33-34,119-126,132-183,194-200
+packages/engine/src/run-ledger.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 4,29-72,98-117
+  s_147d66794d8a61::t_f7891f4bf78323 118-119
+packages/engine/src/tools/owned-tools.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 280-281
+packages/cursor-acp/src/harness.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 5-11,57,243-253,262,265,275,279,286-287,291-292,294-295,297-298
+  s_147d66794d8a61::t_21bf59bbc51be3 4
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-118
+packages/engine/src/recovery.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1-7,131,134-136,143,168,174,182,187,190,198,201,232,240,257-260,266
+packages/engine/src/control-store.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 127
+packages/engine/src/worktree.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 13,41,57,74-77,201-228,370,382
+packages/engine/operating-instructions/triage-agent/AGENT-BRIEF.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-207
+packages/engine/src/read-model.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 53-56,65-68
+packages/engine/src/coordination.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 188-198,470,502
+apps/cli/src/rpc.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 83,85,94
+packages/engine/CONTEXT.md
+  s_147d66794d8a61::t_6a183ac90be3a2 61,73,181
+docs/agent-patterns/effect-test-layers.md
+  s_147d66794d8a61::t_6a183ac90be3a2 125-126
+packages/engine/src/executor.test.ts
+  s_147d66794d8a61::t_8e5e13f4bae136 2,78,928,1762,1764-1765
+  s_147d66794d8a61::t_99ecedf1cccdb1 1763
+  s_147d66794d8a61::t_d65b03b2285c5b 987-989
+  s_147d66794d8a61::t_03e08d002cbd1c 1733
+  s_147d66794d8a61::t_98ce5ccced8c53 1130
+  s_147d66794d8a61::t_802943d9a02fac 39,962-974
+  s_147d66794d8a61::t_42d9cf69f94093 2780-2781
+  s_147d66794d8a61::t_0b9cc136328569 1035-1037
+  s_147d66794d8a61::t_6a183ac90be3a2 3-4,8-10,20,34,41,54,66-72,77,79-89,91-93,135,166,212-276,296,378,572-573,588-589,604-605,619-620,696-708,736-748,779-780,790-791,869-927,929-933,935,938,941-942,945,949-956,959,975-986,990-1034,1038-1050,1064-1084,1090-1091,1093-1100,1104,1109,1123,1127,1140,1142,1162-1173,1182,1189,1212,1232,1258,1276,1299,1318-1319,1326,1343,1360,1378,1393,1402-1510,1520,1533,1537,1545-1572,1578,1581-1595,1623,1646-1686,1690,1702,1715,1718-1724,1747-1748,1755-1761,1766-1787,1789,1793,1796-1798,1800-1801,1809-1818,1829,1832-1836,1845-1846,1857,1860-1861,1879,1903,1907,1918,1922,1925,1929-1930,1935-1936,1939-1940,1953,1965-1966,1983,1988,2000-2002,2006,2012-2016,2032-2033,2038,2066,2071,2073-2076,2097,2100,2102-2103,2136,2143,2168,2175,2194,2201,2214,2234,2247,2251-2297,2302,2309,2313-2341,2350-2352,2358,2378-2379,2385-2386,2395,2415,2432,2435-2436,2460,2463,2475,2488,2505,2517,2543,2560,2572,2592,2607,2622-2623,2647,2650,2661-2662,2667,2695-2696,2703-2707,2715-2716,2737-2738,2758,2795,2808,2816,2821,2830,2832-2833
+  s_147d66794d8a61::t_b10e6e3c4eeac1 1101
+packages/engine/src/executor.ts
+  s_147d66794d8a61::t_5c14bef17d7de4 1203
+  s_147d66794d8a61::t_48c09772205730 328,355
+  s_147d66794d8a61::t_c16173b77a0ad3 1035-1050
+  s_147d66794d8a61::t_d780e89ca81dc4 1030-1034,1051
+  s_147d66794d8a61::t_6a183ac90be3a2 1-14,19-20,24,39-40,60-67,71-76,80,84,86-92,100-129,154,156,221-226,229,237-238,264,268-270,272-273,276-289,291-293,301-309,330,340,343-346,348-349,353-354,356-359,400-421,424,426,428,431,433-467,469-501,549,559,622,655,659-670,696-697,699,701-704,707-708,711-715,757-763,789,792-793,798,801-802,812-813,819,821,875-881,912-913,915-923,926-927,934,936,969,972-974,976,985,988,991-994,997-998,1003,1008-1026,1028,1054,1058,1092-1115,1121,1131-1147,1149-1157,1159-1163,1167-1171,1174,1177-1179,1182,1184-1198,1200,1202,1209-1210
+  s_147d66794d8a61::t_3d2224441bd96a 800,803-804
+  s_129f1344b48785::t_03fef1d1358db4 1029
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_147d66794d8a61::t_6a183ac90be3a2 120-121
+packages/engine/src/harness.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 4-6,16,33,35,38-50,75-76,87-88,141-143,151-152
+packages/engine/src/run-plan.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1-372
+packages/contracts/CONTEXT.md
+  s_147d66794d8a61::t_6a183ac90be3a2 265,278-281,291,301
+packages/contracts/src/index.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 13,16
+packages/engine/src/reconcile.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 50,139-143,271,274
+packages/codex-cli/src/harness.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 7-8,10,44-48,50-52,65,82-150,515-519,723-727,794,798-799
+docs/agent-patterns/effect-schema-unions.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-153
+packages/engine/src/coordination.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 5,69
+apps/cli/src/ledger.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1,5,13,20,22,41-52,147-150,162,183-196,232-258,260
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-100
+packages/engine/src/context-assembler.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1,5,14-18,21,24,31,33-50,53-54,95,111-114,121,136,177,183-217,226,236,249,259,264,269-298,303-306,308-324,329-380,389,393,396-404,406,408-409,413,416,419-421,429,434-436
+packages/engine/src/run-plan.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1-669
+packages/engine/src/control-store-create.gen.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 10
+docs/agent-patterns/effect-time-bounds.md
+  s_147d66794d8a61::t_6a183ac90be3a2 29,51-52,56-57,59-63,70-71,122-123
+packages/engine/src/tools/index.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 18
+apps/cli/src/platform.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 59-69,74-75,100-127,162,241,243,263-264
+packages/codex-cli/src/harness.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 2-9,44,74-77,79,170-171,216-227,236-241,244-245,248-254,260,268,270,273
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_147d66794d8a61::t_6a183ac90be3a2 1-110
+packages/engine/src/context-assembler.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1,8,18-23,27,30,37,43,71-72,74-78,87,95-100,106,131-156,160-162,164,167-168,172-186,189,191-192,195-206,211,222-235,237
+packages/engine/src/control-store-schema.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 122-125
+packages/engine/src/daemon-composition.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 38-39,45-52
+packages/engine/src/harness.test.ts
+  s_147d66794d8a61::t_6a183ac90be3a2 1,20,162-163,172-213,215
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4804735542d0ad5ec6fbb897fa7490c43b65d044",
+  "prompts": {},
+  "sessions": {
+    "s_129f1344b48785": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a058cd-0343-72d3-802c-0a93baa7ddfe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_147d66794d8a61": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a058cd-036d-7840-abfb-45207667dcc6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
