@@ -1,6 +1,7 @@
 import {
   type ContributionSettingRow,
   type FileContribution,
+  type OperationSettingRow,
   operationSettingNames,
   RunId,
   type SettingResolutionCase,
@@ -100,8 +101,6 @@ const workspace: RegisteredWorkspace = {
     name: "workspace",
     checkoutPath: "/repo",
     issueTracker: { type: "github", repo: "owner/repo" },
-    harness: { preferred: "codex" },
-    playbook: { implement: { enabled: true, model: "definition-model" } },
   }),
 };
 
@@ -109,7 +108,6 @@ const otherWorkspace = Schema.decodeSync(WorkspaceConfig)({
   name: "other-workspace",
   checkoutPath: "/other",
   issueTracker: { type: "github", repo: "owner/other" },
-  harness: { preferred: "codex" },
 }).name;
 
 const item: EligibleWork = {
@@ -162,6 +160,65 @@ const context: AssembledContext = {
     },
   ],
 };
+
+const bareConfig = Schema.decodeSync(WorkspaceConfig)({
+  name: "bare-workspace",
+  checkoutPath: "/bare",
+  issueTracker: { type: "github", repo: "owner/bare" },
+});
+
+const profileDefault = { level: { _tag: "Default" }, scope: { _tag: "SettingsProfile" } } as const;
+
+const stageEnabled: OperationSettingRow = { ...profileDefault, setting: "enabled", value: true };
+const codexHarness: OperationSettingRow = { ...profileDefault, setting: "harness", value: "codex" };
+const hostHarness: OperationSettingRow = {
+  level: { _tag: "Default" },
+  scope: { _tag: "RuntimeHost" },
+  setting: "harness",
+  value: "cursor",
+};
+const solModel: OperationSettingRow = { ...profileDefault, setting: "model", value: "gpt-5.6-sol" };
+const highEffort: OperationSettingRow = { ...profileDefault, setting: "effort", value: "high" };
+
+describe("stage settings come from Operation settings", () => {
+  it("enables a stage from an Operation setting rather than the Workspace input", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled, codexHarness]);
+
+    assert.isNotNull(resolved);
+    assert.strictEqual(resolved?.stage.enabled, true);
+    assert.strictEqual(resolved?.stage.harness, "codex");
+  });
+
+  it("leaves a stage disabled when no Operation setting enables it", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [codexHarness]);
+
+    assert.strictEqual(resolved?.stage.enabled, false);
+  });
+
+  it("resolves no stage when no harness is configured anywhere", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled]);
+
+    assert.isNull(resolved);
+  });
+
+  it("takes the harness from the Runtime host scope", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled, hostHarness]);
+
+    assert.strictEqual(resolved?.stage.harness, "cursor");
+  });
+
+  it("carries model and effort from Operation settings", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [
+      stageEnabled,
+      codexHarness,
+      solModel,
+      highEffort,
+    ]);
+
+    assert.strictEqual(resolved?.stage.model, "gpt-5.6-sol");
+    assert.strictEqual(resolved?.stage.effort, "high");
+  });
+});
 
 describe("Run Plan assembly", () => {
   it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
@@ -294,6 +351,7 @@ describe("Run Plan assembly", () => {
       workspace.config,
       "implement",
       [
+        codexHarness,
         {
           setting: "model",
           level: { _tag: "Default" },
@@ -471,7 +529,7 @@ describe("Run Plan assembly", () => {
         enabled: false,
       },
     ];
-    const resolved = resolveRunPlanStage(workspace.config, "implement", [], contributionSettings);
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness], contributionSettings);
     assert.isNotNull(resolved);
     if (!resolved) return;
 
