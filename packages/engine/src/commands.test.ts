@@ -1,4 +1,5 @@
 import {
+  ClassifiedItem,
   type ContributionSettingUpdate,
   ControlStoreFailure,
   type ControlStore as ControlStorePicture,
@@ -34,6 +35,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
@@ -532,7 +534,7 @@ describe("Reclassify", () => {
         note: "picking this up",
       });
 
-      assert.strictEqual(result?._tag, "Eligible");
+      assert.isTrue(result !== null && ClassifiedItem.guards.Eligible(result));
       const recorded = yield* Ref.get(calls);
       assert.deepStrictEqual(recorded.reclassify, [
         {
@@ -633,6 +635,7 @@ describe("HandBack", () => {
     return Effect.gen(function* () {
       const worker = yield* Reconcile.ReconcileWorker;
       yield* worker.submit();
+      yield* TestClock.adjust("4 millis");
 
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const result = yield* client.HandBack({
@@ -647,7 +650,7 @@ describe("HandBack", () => {
         {
           workItem: id("AUD-5"),
           outcome: {
-            record: { by: localOwnerId, atMillis: 0 },
+            record: { by: localOwnerId, atMillis: 4 },
             changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
             note: "worktree setup repaired",
           },

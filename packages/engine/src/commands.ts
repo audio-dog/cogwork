@@ -28,6 +28,7 @@ import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
+import { applyHandbackBarrier } from "./observe";
 import { operationSettingRefusal } from "./operation-policy";
 import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
@@ -65,6 +66,11 @@ const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workIt
   snapshot.workspaces
     .find((state) => state.name === workspace)
     ?.observed.find((item) => item.id === workItem) ?? null;
+
+const roleChanges = (roles: ReadonlyArray<TriageRole>, role: TriageRole) => ({
+  remove: roles.filter((current) => current !== role),
+  add: roles.includes(role) ? [] : [role],
+});
 
 const resolveObserved = Effect.fn("Daemon.resolveObserved")(function* (
   workspaceId: WorkspaceId,
@@ -162,10 +168,8 @@ export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
   const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
 
   const issueTracker = yield* IssueTracker;
-  const remove = observed.roles.filter((role) => role !== payload.role);
-  const add = observed.roles.includes(payload.role) ? [] : [payload.role];
   yield* issueTracker.reclassify(workspace, payload.workItem, {
-    changes: { remove, add },
+    changes: roleChanges(observed.roles, payload.role),
     note: payload.note,
   });
 
@@ -183,21 +187,16 @@ export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
   const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
   const principal = yield* Principal;
   const record = { by: principal.id, atMillis: yield* Clock.currentTimeMillis };
-  const remove = observed.roles.filter((role) => role !== payload.role);
-  const add = observed.roles.includes(payload.role) ? [] : [payload.role];
   const issueTracker = yield* IssueTracker;
   yield* issueTracker.handBack(workspace, payload.workItem, {
     record,
-    changes: { remove, add },
+    changes: roleChanges(observed.roles, payload.role),
     note: payload.note,
   });
 
-  const item = classifiedItemWithPr({
-    ...observed,
-    roles: [payload.role],
-    attempts: [],
-    handback: record,
-  });
+  const item = classifiedItemWithPr(
+    applyHandbackBarrier({ ...observed, roles: [payload.role], handback: record }),
+  );
   yield* publishChangedItem(payload.workspace, item);
   return item;
 });
