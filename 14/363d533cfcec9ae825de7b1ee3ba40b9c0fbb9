@@ -1,0 +1,26 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_a153a0b5417fd5::t_36acc1c6e61e63 522,615
+  s_a153a0b5417fd5::t_c65e18701cca0a 40-41
+  s_a153a0b5417fd5::t_3e0c4bc0a643ec 48,520-521,523,601,612-614,616-617
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_a153a0b5417fd5::t_57298d63b7d922 25,76,98-105,137,144,154,225-227,232,239-241,275-277,368,381
+  s_a153a0b5417fd5::t_36acc1c6e61e63 173,181-182,199,279,328-341,343-348,395
+  s_a153a0b5417fd5::t_9f7d05a481e066 23,32,223
+  s_a153a0b5417fd5::t_2b71413e4723dc 1-22,24,26-31,33-75,77-97,106-136,138-143,145-153,155-172,174-180,183-198,200-222,224,228-231,233-238,242-274,278,280-327,342,349-367,369-380,382-394,396
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "14363d533cfcec9ae825de7b1ee3ba40b9c0fbb9",
+  "prompts": {},
+  "sessions": {
+    "s_a153a0b5417fd5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d165e350-952d-4af6-8faa-b60d6f44b711",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
