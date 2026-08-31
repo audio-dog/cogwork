@@ -157,7 +157,7 @@ export const gitLayer = Layer.effect(
         runGit(repoPath, ["worktree", "list", "--porcelain", "-z"]).pipe(
           Effect.map(parseWorktrees),
           Effect.tap(({ hasPrunable }) =>
-            hasPrunable ? runGit(repoPath, ["worktree", "prune"]) : Effect.void,
+            hasPrunable ? Effect.ignore(runGit(repoPath, ["worktree", "prune"])) : Effect.void,
           ),
           Effect.map(({ entries }) => entries),
         ),

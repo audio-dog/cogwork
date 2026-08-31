@@ -200,6 +200,57 @@ describe("worktree porcelain", () => {
       ),
     ),
   );
+
+  it.effect("returns live entries when pruning stale registrations fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const entries = yield* git.listWorktrees("/repo");
+
+      assert.deepStrictEqual(entries, [{ path: "/repo", branch: "main" }]);
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git worktree list --porcelain -z",
+        "git worktree prune",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              Layer.effect(
+                ChildProcessSpawner.ChildProcessSpawner,
+                Effect.gen(function* () {
+                  const commands = yield* GitCommands;
+                  return ChildProcessSpawner.make((command) =>
+                    Effect.gen(function* () {
+                      const text = commandText(command);
+                      yield* Ref.update(commands, (current) => [...current, text]);
+                      const isPrune = text === "git worktree prune";
+                      const stdout = isPrune
+                        ? Stream.empty
+                        : Stream.make(
+                            new TextEncoder().encode(
+                              [
+                                "worktree /repo\0branch refs/heads/main",
+                                "worktree /repo.worktrees/277-stale\0branch refs/heads/277-stale\0prunable stale",
+                              ].join("\0\0"),
+                            ),
+                          );
+                      return processHandle(
+                        Effect.succeed(ChildProcessSpawner.ExitCode(isPrune ? 1 : 0)),
+                        stdout,
+                      );
+                    }),
+                  );
+                }),
+              ).pipe(Layer.provideMerge(GitCommands.layer)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 });
 
 describe("worktree removal", () => {
