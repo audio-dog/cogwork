@@ -27,6 +27,7 @@ packages/*/.claude/
 
 # Sandbox projection written by the TanStack AI local-process harness at runtime
 .tanstack-projected*
+.tanstack-output-schema*
 
 # Vendored reference source (Effect v4, etc.), pinned by `pnpm vendor`.
 # No trailing slash: a real dir in the main checkout, a symlink in a hydrated worktree.
