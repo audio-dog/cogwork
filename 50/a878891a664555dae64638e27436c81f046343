@@ -1,0 +1,28 @@
+packages/engine/src/executor.ts
+  s_c9346782afcc5c::t_eb13f576945343 64
+packages/engine/src/playbook.test.ts
+  s_c9346782afcc5c::t_1d5695a585dd59 24,27,30,40-45,60,69-72
+  s_c9346782afcc5c::t_f80f90be778dac 164
+  s_c9346782afcc5c::t_cf74194f04d44f 32
+packages/engine/src/playbook.ts
+  s_c9346782afcc5c::t_9ce4957b9413ea 144-148
+  s_c9346782afcc5c::t_eb5027ff412880 3,46,78,110,123,132
+  s_c9346782afcc5c::t_202e099d68b20e 1
+  s_c9346782afcc5c::t_d8ade91ba0bde1 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "50a878891a664555dae64638e27436c81f046343",
+  "prompts": {},
+  "sessions": {
+    "s_c9346782afcc5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ecd53b-6ab9-4977-9d1e-dd24f161841f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
