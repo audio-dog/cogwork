@@ -1,0 +1,37 @@
+packages/engine/src/executor.test.ts
+  s_c9346782afcc5c::t_3f2a4c445a517e 169,350
+  s_c9346782afcc5c::t_66d961f744405f 969-1000
+  s_c9346782afcc5c::t_92b3aa4f840617 2704-2705,2710,2725-2731
+  s_c9346782afcc5c::t_20c04ee3b51099 2051-2053
+  s_c9346782afcc5c::t_8319f2f5a53d5c 2069
+  s_c9346782afcc5c::t_9d1892abaf2a4b 945-950
+  s_c9346782afcc5c::t_2d00e07406e310 2078-2079,2084,2090
+  s_c9346782afcc5c::t_12ac16aa4953a1 2159-2161
+  s_c9346782afcc5c::t_5dcf878bb7bd52 1578-1582
+  s_c9346782afcc5c::t_0226763be6dcf8 1596-1600,1614-1618
+  s_c9346782afcc5c::t_9ce4957b9413ea 1118
+  s_c9346782afcc5c::t_413b2d1b4b19f4 952-968
+  s_c9346782afcc5c::t_65341e51f27a19 1116-1117
+  s_c9346782afcc5c::t_c014dfcbc20a9e 2136
+  s_c9346782afcc5c::t_6e74b6d7250752 1455,1469
+  s_c9346782afcc5c::t_0e340d9e4356fd 1001-1003
+  s_c9346782afcc5c::t_24f4101026b439 1112,1487,1521,1537,1728,1794,1831,1859,1895,2333,2373,2377
+  s_c9346782afcc5c::t_7caf89fcc75aff 1155-1170
+  s_c9346782afcc5c::t_971aad5406ead2 951
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "12f783ab95d1e73ce2dcb95e3f7895d28bd98dcb",
+  "prompts": {},
+  "sessions": {
+    "s_c9346782afcc5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ecd53b-6ab9-4977-9d1e-dd24f161841f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

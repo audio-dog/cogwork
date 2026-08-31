@@ -1,0 +1,21 @@
+packages/contracts/src/daemon-event.ts
+  s_c9346782afcc5c::t_3f2a4c445a517e 2
+packages/contracts/src/daemon.ts
+  s_c9346782afcc5c::t_3f2a4c445a517e 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0cb9d95459bc607b80cd4a0d597bfd732c1ef702",
+  "prompts": {},
+  "sessions": {
+    "s_c9346782afcc5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ecd53b-6ab9-4977-9d1e-dd24f161841f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

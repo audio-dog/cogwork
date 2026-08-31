@@ -1,0 +1,30 @@
+packages/engine/src/run-plan.test.ts
+  s_c9346782afcc5c::t_6ed4769930ceb0 3
+  s_c9346782afcc5c::t_1c048527d03cc0 390
+  s_c9346782afcc5c::t_e081286af765c5 153-164,168,176,182,188,195-198
+  s_c9346782afcc5c::t_8ff490b99dae96 212
+  s_c9346782afcc5c::t_d6b38ac7f36ea1 147-152,165-167,169-175,177-181,183-187,189-194,199-205
+packages/engine/src/run-plan.ts
+  s_c9346782afcc5c::t_eb5027ff412880 53,216
+  s_c9346782afcc5c::t_832d797d3db252 246,250-253
+  s_c9346782afcc5c::t_48aab6a3a3011f 217-221
+  s_c9346782afcc5c::t_403734377edfc7 209
+  s_c9346782afcc5c::t_e00a86dcab3611 245
+  s_c9346782afcc5c::t_1f8349e9413626 222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e9bddc84b99daf3a879583f99eff8bc577e4e533",
+  "prompts": {},
+  "sessions": {
+    "s_c9346782afcc5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ecd53b-6ab9-4977-9d1e-dd24f161841f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

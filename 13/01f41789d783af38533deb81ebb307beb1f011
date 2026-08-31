@@ -1,0 +1,31 @@
+packages/engine/src/workspace-registry.test.ts
+  s_c9346782afcc5c::t_b532fd735426bf 143
+  s_c9346782afcc5c::t_6873436c9fb65c 147-163
+  s_c9346782afcc5c::t_ed588a8c9c7ad1 351
+  s_c9346782afcc5c::t_cf74194f04d44f 141-142
+  s_c9346782afcc5c::t_8588343415f4fa 299,326,329
+  s_c9346782afcc5c::t_a6faa4e88c6511 128-140,144-146
+  s_c9346782afcc5c::t_ca456d8cbe516d 270-271
+packages/engine/src/registry.ts
+  s_c9346782afcc5c::t_8661007fa6c6fd 125
+  s_c9346782afcc5c::t_59c36a8edae118 20
+  s_c9346782afcc5c::t_68b6e6bea0c6ea 216
+  s_c9346782afcc5c::t_f1190eb582843a 124,126
+  s_c9346782afcc5c::t_3b5eed043af7e9 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1301f41789d783af38533deb81ebb307beb1f011",
+  "prompts": {},
+  "sessions": {
+    "s_c9346782afcc5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ecd53b-6ab9-4977-9d1e-dd24f161841f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
