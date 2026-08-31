@@ -102,6 +102,7 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
     projectedName: testMcpIdentity(server.name, index),
     endpoint: server.endpoint,
     authenticated: server.bearer !== null,
+    unavailableReason: null,
   }));
   return {
     plan: Schema.decodeSync(RunPlan)({
