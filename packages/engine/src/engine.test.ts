@@ -1,4 +1,5 @@
 import {
+  Connection,
   type ConnectionId,
   type ConnectionReadiness,
   connectionIdOf,
@@ -20,9 +21,10 @@ import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
-import { ConnectionStore } from "./connection";
+import { ConnectionStore, connectionOverview } from "./connection";
 import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -490,6 +492,66 @@ describe("reconcile worker", () => {
       }).pipe(Effect.provide(layer), Effect.scoped);
 
       assert.deepStrictEqual(yield* Ref.get(revoked), [connectionIdOf("github", "acme")]);
+    }),
+  );
+
+  it.effect("publishes revoked Connection readiness after an auth failure", () =>
+    Effect.gen(function* () {
+      const revoked = yield* Ref.make(false);
+      const connectionStore = Layer.succeed(ConnectionStore, {
+        overview: (plugins) =>
+          Ref.get(revoked).pipe(
+            Effect.map((isRevoked) => {
+              const connection = Connection.make({
+                id: connectionIdOf("github", "acme"),
+                system: "github",
+                account: "acme",
+                status: isRevoked ? "revoked" : "established",
+              });
+              const readiness = isRevoked
+                ? ({ _tag: "NotReady", reason: "Connection needs re-connect" } satisfies ConnectionReadiness)
+                : ({ _tag: "Ready" } satisfies ConnectionReadiness);
+              return connectionOverview([connection], plugins, new Map([[connection.id, readiness]]));
+            }),
+          ),
+        find: () => Effect.succeed(null),
+        findSystem: () => Effect.succeed(null),
+        bearer: () => Effect.die("unexpected Connection bearer"),
+        readiness: () => Effect.succeed({ _tag: "Ready" } satisfies ConnectionReadiness),
+        requireReady: () => Effect.void,
+        requireSystemReady: () => Effect.void,
+        establish: () => Effect.die("unexpected Connection establish"),
+        revoke: () => Ref.set(revoked, true),
+        remove: () => Effect.die("unexpected Connection remove"),
+      });
+      const registry = Layer.succeed(
+        Registry.WorkspaceRegistry,
+        Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
+      );
+      const layer = Reconcile.layer.pipe(
+        Layer.provideMerge(DaemonEventBus.layer),
+        Layer.provide(pluginManagerLayer),
+        Layer.provide(Layer.mergeAll(registry, authFailingSource, connectionStore)),
+      );
+
+      const events = yield* Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const subscription = yield* bus.subscribe();
+        const published = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.filter((event) => event._tag === "ConnectionsChanged"),
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+        yield* (yield* Reconcile.ReconcileWorker).submit();
+        return yield* Fiber.join(published);
+      }).pipe(Effect.provide(layer), Effect.scoped);
+
+      const event = events[0];
+      if (event?._tag !== "ConnectionsChanged") return assert.fail("expected ConnectionsChanged");
+      const github = event.connections.connections.find((connection) => connection.system === "github");
+      assert.strictEqual(github?.connection?.status, "revoked");
+      assert.strictEqual(github?.readiness._tag, "NotReady");
     }),
   );
 
