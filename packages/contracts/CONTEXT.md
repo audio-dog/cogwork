@@ -262,7 +262,7 @@ An item is *blocked* when its issue tracker reports one or more open **blockers*
 _Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those are needs-human — a person clears them); stuck / exhausted / stalled (failure outcomes, not dependencies).
 
 **Needs-human reason**:
-Why triage parked an item for a person: `needs-info` (waiting on the reporter) or `ready-for-human` (needs a human implementer). A needs-human item is neither eligible, claimed, nor blocked; a person clears it by changing the role.
+Why triage parked an item for a person: `needs-info` (waiting on the reporter) or `ready-for-human` (needs a human implementer). A needs-human item is neither eligible, claimed, nor blocked. Where a role parks it, a person clears it by changing the role; where a **failure counter** parks it — exhaustion, stall, or crash loop — changing the role is not enough, and the person **hands the item back**.
 _Avoid_: Block reason (blocking now means open dependencies), error, failure.
 
 ### Coordination
@@ -274,6 +274,10 @@ _Avoid_: Lock, lease, reservation
 **Attempt record**:
 A coordination record of one finished operation attempt on an item: its operation, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the issue tracker.
 _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
+
+**Handback record**:
+A coordination record of a person returning a parked item to the control plane: `by` and `atMillis`. Persisted on the issue tracker. The three failure counters — exhaustion, stall, and crash loop — count only what happened after the newest handback, so a handback discounts an item's failure history without erasing it. The inverse of a hand-off: the control plane hands an item off to a person when it gives up, and a person hands it back. A second handback moves the line forward.
+_Avoid_: Retry (the control plane's own automatic re-attempt of a *retryable* failure — a handback is a person acting, not the engine), reset, unpark, pardon
 
 ### Credentials
 
