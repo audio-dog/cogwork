@@ -1,0 +1,19 @@
+packages/engine/src/scheduler.ts
+  s_ab9c0da8f5fa93::t_a622a231f6f2c4 219-225,229,232-233,235
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ec84b6b50e67e40665ebba08f25876ea467ff930",
+  "prompts": {},
+  "sessions": {
+    "s_ab9c0da8f5fa93": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7d792f41-ccf2-4c1e-811e-09490c2d3c96",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
