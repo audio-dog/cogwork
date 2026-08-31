@@ -20,6 +20,7 @@ const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   blocked: [],
   needsHuman: [],
   ...over,
+  availability: over.availability ?? [],
   contributions: over.contributions ?? [],
 });
 
