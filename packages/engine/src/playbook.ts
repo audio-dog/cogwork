@@ -1,16 +1,6 @@
-import type {
-  HarnessName,
-  LifecycleStage,
-  McpSkill,
-  PlaybookStageConfig,
-  WorkspaceConfig,
-} from "@cogwork/contracts";
+import type { LifecycleStage, McpSkill, PlaybookStageConfig, WorkspaceConfig } from "@cogwork/contracts";
 
-export interface ResolvedStage {
-  readonly enabled: boolean;
-  readonly harness: HarnessName;
-  readonly model: string | null;
-  readonly effort: string | null;
+export interface OperationDefinition {
   readonly skill: string;
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
@@ -53,11 +43,7 @@ const resolveStageConfig = (
   config: WorkspaceConfig,
   stage: PlaybookStageConfig | undefined,
   defaults: StageDefaults,
-): ResolvedStage => ({
-  enabled: stage?.enabled ?? false,
-  harness: stage?.harness ?? config.harness.preferred,
-  model: stage?.model ?? null,
-  effort: stage?.effort ?? null,
+): OperationDefinition => ({
   skill: stage?.skill ?? defaults.skill,
   promptTemplate: stage?.prompt ?? defaults.promptTemplate,
   resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
@@ -89,7 +75,7 @@ export const resolveFollowUp = (config: WorkspaceConfig) =>
     resumeMaxTokens: null,
   });
 
-const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) => ResolvedStage>> = {
+const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) => OperationDefinition>> = {
   triage: resolveTriage,
   implement: resolveImplement,
   "follow-up": resolveFollowUp,
@@ -97,9 +83,6 @@ const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) =
 
 export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
   stageResolvers[stage]?.(config) ?? null;
-
-export const runnable = (config: WorkspaceConfig, stage: LifecycleStage) =>
-  resolveStage(config, stage)?.enabled ?? false;
 
 const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match);
@@ -124,7 +107,7 @@ const communicationStyle = [
 ].join("\n");
 
 const buildPrompt = (
-  resolved: ResolvedStage,
+  resolved: OperationDefinition,
   item: PromptItem,
   footer: string | null,
   extra: Record<string, string> = {},
@@ -137,7 +120,7 @@ const buildPrompt = (
   ].join("\n");
 };
 
-export const buildTriagePrompt = (resolved: ResolvedStage, item: PromptItem) =>
+export const buildTriagePrompt = (resolved: OperationDefinition, item: PromptItem) =>
   buildPrompt(resolved, item, null);
 
 const implementFooter = [
@@ -146,7 +129,7 @@ const implementFooter = [
   "for this branch is already open; if it is, push your work to that one instead of opening another.",
 ].join("\n");
 
-export const buildImplementPrompt = (resolved: ResolvedStage, item: PromptItem) =>
+export const buildImplementPrompt = (resolved: OperationDefinition, item: PromptItem) =>
   buildPrompt(resolved, item, implementFooter);
 
 export const buildContinuationNudge = (worktreePath: string) =>
@@ -158,7 +141,11 @@ export const buildContinuationNudge = (worktreePath: string) =>
     "already complete, say COMPLETE and stop.",
   ].join("\n");
 
-export const buildFollowUpPrompt = (resolved: ResolvedStage, item: PromptItem, linearHistory: boolean) =>
+export const buildFollowUpPrompt = (
+  resolved: OperationDefinition,
+  item: PromptItem,
+  linearHistory: boolean,
+) =>
   buildPrompt(resolved, item, null, {
     linearHistory: linearHistory ? "required" : "not required",
   });
