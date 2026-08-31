@@ -1,6 +1,7 @@
 import { ContextFs, Git, WorktreeFs } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -18,11 +19,14 @@ const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 const isolated = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" };
 
-const processHandle = (exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>) =>
+const processHandle = (
+  exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>,
+  stdout: Stream.Stream<Uint8Array> = Stream.empty,
+) =>
   ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1),
     stdin: Sink.drain,
-    stdout: Stream.empty,
+    stdout,
     stderr: Stream.empty,
     all: Stream.empty,
     exitCode,
@@ -42,6 +46,23 @@ const hangingSpawnerLayer = Layer.succeed(
   ChildProcessSpawner.ChildProcessSpawner,
   ChildProcessSpawner.make(() => Effect.succeed(processHandle(Effect.never))),
 );
+
+const gitLayerWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
+  gitLayer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        FileSystem.layerNoop({}),
+        Path.layer,
+      ),
+    ),
+  );
+
+class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<string>>>()(
+  "@cogwork/cli/platform.test/GitCommands",
+) {
+  static readonly layer = Layer.effect(GitCommands, Ref.make<ReadonlyArray<string>>([]));
+}
 
 const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
   Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer)),
@@ -115,15 +136,7 @@ describe("subprocess deadlines", () => {
           return processHandle(Effect.succeed(exitCode));
         }),
       );
-      const interruptedGitLayer = gitLayer.pipe(
-        Layer.provide(
-          Layer.mergeAll(
-            Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
-            FileSystem.layerNoop({}),
-            Path.layer,
-          ),
-        ),
-      );
+      const interruptedGitLayer = gitLayerWithSpawner(spawner);
       const fiber = yield* Effect.forkChild(
         Effect.gen(function* () {
           const git = yield* Git.Git;
@@ -136,6 +149,96 @@ describe("subprocess deadlines", () => {
 
       assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
     }),
+  );
+});
+
+describe("worktree porcelain", () => {
+  it.effect("does not report entries marked prunable", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const entries = yield* git.listWorktrees("/repo");
+
+      assert.deepStrictEqual(entries, [
+        { path: "/repo", branch: "main" },
+        { path: "/repo.worktrees/278-live\nprunable-looking-path", branch: "278-live" },
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayerWithSpawner(
+          ChildProcessSpawner.make(() =>
+            Effect.succeed(
+              processHandle(
+                Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+                Stream.make(
+                  new TextEncoder().encode(
+                    [
+                      [
+                        "worktree /repo",
+                        "HEAD 1111111111111111111111111111111111111111",
+                        "branch refs/heads/main",
+                      ],
+                      [
+                        "worktree /repo.worktrees/277-stale",
+                        "HEAD 2222222222222222222222222222222222222222",
+                        "branch refs/heads/277-stale",
+                        "prunable gitdir file points to non-existent location",
+                      ],
+                      [
+                        "worktree /repo.worktrees/278-live\nprunable-looking-path",
+                        "HEAD 3333333333333333333333333333333333333333",
+                        "branch refs/heads/278-live",
+                      ],
+                    ]
+                      .map((fields) => fields.join("\0"))
+                      .join("\0\0"),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
+describe("worktree removal", () => {
+  it.effect("prunes after remove fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const error = yield* Effect.flip(git.removeWorktree("/repo", "/repo.worktrees/277-stale", true));
+
+      assert.strictEqual(error.command, "git worktree remove --force /repo.worktrees/277-stale");
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git worktree remove --force /repo.worktrees/277-stale",
+        "git worktree prune",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              Layer.effect(
+                ChildProcessSpawner.ChildProcessSpawner,
+                Effect.gen(function* () {
+                  const commands = yield* GitCommands;
+                  return ChildProcessSpawner.make((command) =>
+                    Effect.gen(function* () {
+                      const text = commandText(command);
+                      yield* Ref.update(commands, (current) => [...current, text]);
+                      const exitCode = text.includes(" worktree remove ") ? 1 : 0;
+                      return processHandle(Effect.succeed(ChildProcessSpawner.ExitCode(exitCode)));
+                    }),
+                  );
+                }),
+              ).pipe(Layer.provideMerge(GitCommands.layer)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 });
 

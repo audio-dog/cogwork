@@ -28,13 +28,13 @@ const captureWith = (spawner: ChildProcessSpawner["Service"]) => (command: Child
 
 const parseWorktrees = (stdout: string) =>
   stdout
-    .split("\n\n")
-    .map((block) => block.trim())
-    .filter((block) => block.length > 0)
+    .split("\0\0")
+    .filter(Boolean)
     .flatMap((block) => {
-      const lines = block.split("\n");
+      const fields = block.split("\0");
+      if (fields.some((field) => field === "prunable" || field.startsWith("prunable "))) return [];
       const field = (prefix: string) =>
-        lines.find((line) => line.startsWith(prefix))?.slice(prefix.length) ?? null;
+        fields.find((value) => value.startsWith(prefix))?.slice(prefix.length) ?? null;
       const worktreePath = field("worktree ");
       if (!worktreePath) return [];
       const branchRef = field("branch ");
@@ -137,13 +137,16 @@ export const gitLayer = Layer.effect(
         ),
       addWorktree: ({ repoPath, worktreePath, branch, startPoint }) =>
         runGit(repoPath, ["worktree", "add", "-B", branch, worktreePath, startPoint]).pipe(Effect.asVoid),
-      removeWorktree: (repoPath, worktreePath, force) =>
-        runGit(repoPath, ["worktree", "remove", ...(force ? ["--force"] : []), worktreePath]).pipe(
-          Effect.andThen(runGit(repoPath, ["worktree", "prune"])),
+      removeWorktree: (repoPath, worktreePath, force) => {
+        const prune = runGit(repoPath, ["worktree", "prune"]);
+        return runGit(repoPath, ["worktree", "remove", ...(force ? ["--force"] : []), worktreePath]).pipe(
+          Effect.onError(() => Effect.ignore(prune)),
+          Effect.andThen(prune),
           Effect.asVoid,
-        ),
+        );
+      },
       listWorktrees: (repoPath) =>
-        runGit(repoPath, ["worktree", "list", "--porcelain"]).pipe(Effect.map(parseWorktrees)),
+        runGit(repoPath, ["worktree", "list", "--porcelain", "-z"]).pipe(Effect.map(parseWorktrees)),
       fastForward: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
       divergence: (worktreePath, remote, branch) => {
