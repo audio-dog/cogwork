@@ -1,0 +1,23 @@
+docs/agent-patterns/effect-observability.md
+  s_10d54901fda76b::t_083eef53ad15a0 1-135
+docs/agent-patterns/effect-schema-unions.md
+  s_10d54901fda76b::t_2d06b1ce10d3c0 1-150
+docs/agent-patterns/effect-process-edges.md
+  s_10d54901fda76b::t_f5e675f540639a 1-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "79d2bdff54abd4388cb7c0a15ca206734ab8b7d5",
+  "prompts": {},
+  "sessions": {
+    "s_10d54901fda76b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49d22256-a80a-4e3f-9f46-e991b6f39bee",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
