@@ -30,13 +30,14 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as ContextAssembler from "./context-assembler";
 import { ContextFsError } from "./context-fs";
-import { ControlStore } from "./control-store";
+import { ControlStore, type ControlStoreService } from "./control-store";
 import * as CredentialStore from "./credential-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
@@ -710,6 +711,19 @@ const interruptiblePrepareWorktree = worktreeDouble((probe) => ({
     ),
 }));
 
+const blockedPrepareWorktree = worktreeDouble((probe) => ({
+  ...worktreeStubCreated(false),
+  ensure: (_workspace, item) =>
+    Deferred.succeed(probe.entered, undefined).pipe(
+      Effect.andThen(Deferred.await(probe.release)),
+      Effect.map(() => ({
+        branch: branchName(item),
+        path: `/wt/${branchName(item)}`,
+        created: false,
+      })),
+    ),
+}));
+
 const failSecondPrepareWorktree = (failure: GitError | WorktreeDivergedError) =>
   worktreeDouble((probe) => ({
     ...worktreeStubCreated(false),
@@ -927,6 +941,7 @@ const controlStoreLayer = (
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
 ) => {
   const picture = { ...defaultControlStore, operationSettings, contributionSettings };
+  const gate = Semaphore.makeUnsafe(1);
   return Layer.succeed(ControlStore, {
     health: "available",
     seed: picture,
@@ -936,8 +951,8 @@ const controlStoreLayer = (
     installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
     uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
     updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
-    withWrite: (effect) => effect,
-  });
+    withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
+  } satisfies ControlStoreService);
 };
 
 const changingControlStoreLayer = (
@@ -1396,6 +1411,23 @@ describe("Executor.execute", () => {
         ),
       ),
     );
+  });
+
+  it.effect("leaves the Control store write gate available during worktree preparation", () => {
+    return Effect.gen(function* () {
+      const controlStore = yield* ControlStore;
+      const { entered, release } = yield* WorktreeProbe;
+      const executor = yield* Executor.Executor;
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+
+      yield* Deferred.await(entered);
+      const writer = yield* Effect.forkChild(controlStore.withWrite(Effect.succeed("written")));
+      yield* Effect.yieldNow;
+      assert.isDefined(writer.pollUnsafe());
+
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(running);
+    }).pipe(Effect.provide(provide([runner(implementEvents)], blockedPrepareWorktree)), Effect.scoped);
   });
 
   it.effect("uses refreshed contribution settings before preparing MCP credentials", () => {

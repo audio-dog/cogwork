@@ -101,6 +101,21 @@ interface PreparedHarnessRequest {
   readonly provenanceStamps: ReadonlyArray<ProvenanceStamp>;
 }
 
+interface PreparedRun {
+  readonly checkoutPath: string;
+  readonly session: SessionId | null;
+  readonly prompt: string;
+  readonly resumeCandidate?: PreparedResumeCandidate;
+}
+
+interface PreparedResumeCandidate {
+  readonly session: Session | null;
+  readonly lastRunStartedAtMillis: number | null;
+  readonly lastRunTotalTokens: number | null;
+  readonly worktreeRecreated: boolean;
+  readonly fresh: boolean;
+}
+
 interface PreparedMcpServer extends ResolvedMcpSkill {
   readonly identity: string | null;
 }
@@ -131,7 +146,7 @@ interface CommonStageOps {
   readonly resolved: ResolvedStage;
   readonly planStage: ResolvedOperation;
   readonly branch: string | null;
-  readonly prepare: Effect.Effect<PreparedHarnessRequest, PrepareError>;
+  readonly prepare: Effect.Effect<PreparedRun, PrepareError>;
   readonly fullPrompt: string;
   readonly resume: boolean;
   readonly resumePolicy: boolean;
@@ -350,11 +365,35 @@ export const make = Effect.gen(function* () {
     return null;
   });
 
+  const resumeCandidateSession = Effect.fn("Executor.resumeCandidateSession")(function* (
+    ops: StageOps,
+    prepared: PreparedRun,
+  ) {
+    const candidate = prepared.resumeCandidate;
+    if (!candidate) return null;
+    const now = yield* Clock.currentTimeMillis;
+    const decision = decideResume({
+      sessionKind: candidate.session?.kind ?? null,
+      handle: sessionHandle(candidate.session),
+      lastRunStartedAtMillis: candidate.lastRunStartedAtMillis,
+      lastRunTotalTokens: candidate.lastRunTotalTokens,
+      now,
+      worktreeRecreated: candidate.worktreeRecreated,
+      fresh: candidate.fresh,
+      maxAgeMillis: ops.resolved.resumeMaxAgeMillis,
+      maxTokens: ops.resolved.resumeMaxTokens,
+    });
+    if (decision.kind !== "resume") return null;
+    if (candidate.session?.harness !== ops.resolved.harness) return null;
+    return candidate.session.id;
+  });
+
   const planSession = Effect.fn("Executor.planSession")(function* (
     runId: RunId,
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     ops: StageOps,
+    prepared: PreparedRun,
     startedAtMillis: number,
     previous: SessionId | null,
     observation: RunPlanObservation,
@@ -367,9 +406,8 @@ export const make = Effect.gen(function* () {
       .preflight(currentPlanStage.stage.harness, currentPlanStage.profile)
       .pipe(Effect.mapError((error) => PlanDeclined.make({ message: error.message })));
     const currentOps = opsFor(workspace, item, currentPlanStage);
-    const preparationOps = ops.resume ? currentOps : freshRecoveryOps(workspace, item, currentOps);
-    const prepared = yield* preparationOps.prepare;
-    const preparedSessionId = prepared.session ?? (ops.resumePolicy ? null : previous);
+    const policySession = ops.resumePolicy ? yield* resumeCandidateSession(currentOps, prepared) : previous;
+    const preparedSessionId = prepared.session ?? policySession;
     const preparedSession = preparedSessionId ? yield* ledger.getSession(preparedSessionId) : null;
     const compatiblePrevious = yield* compatibleSession(currentOps, preparedSession);
     const resumesPrevious = compatiblePrevious !== null;
@@ -713,11 +751,10 @@ export const make = Effect.gen(function* () {
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    planStage: ResolvedOperation,
     prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
-    return yield* harnessRequest(workspace, planStage, worktree.path, prompt, null);
+    return { checkoutPath: worktree.path, prompt, session: null } satisfies PreparedRun;
   });
 
   const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
@@ -728,7 +765,11 @@ export const make = Effect.gen(function* () {
       resolved,
       planStage,
       branch: null,
-      prepare: harnessRequest(workspace, planStage, workspace.config.checkoutPath, fullPrompt, null),
+      prepare: Effect.succeed({
+        checkoutPath: workspace.config.checkoutPath,
+        prompt: fullPrompt,
+        session: null,
+      }),
       complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
       fullPrompt,
       resume: false,
@@ -745,7 +786,7 @@ export const make = Effect.gen(function* () {
       resolved,
       planStage,
       branch,
-      prepare: prepareImplement(workspace, item, planStage, fullPrompt),
+      prepare: prepareImplement(workspace, item, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
       fullPrompt,
       resume: false,
@@ -829,34 +870,25 @@ export const make = Effect.gen(function* () {
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    planStage: ResolvedOperation,
     branch: string,
     context: FollowUpContext,
     prompt: string,
   ) {
-    const resolved = planStage.stage;
     const worktree = yield* worktrees.ensure(workspace, item, { branch });
     const last = yield* latestResumableBranchRun(workspace, branch);
     const session = last?.session ? yield* ledger.getSession(last.session) : null;
-    const now = yield* Clock.currentTimeMillis;
-    const decision = decideResume({
-      sessionKind: session?.kind ?? null,
-      handle: sessionHandle(session),
-      lastRunStartedAtMillis: last?.startedAtMillis ?? null,
-      lastRunTotalTokens: meteredTotalTokens(last?.usage),
-      now,
-      worktreeRecreated: worktree.created,
-      fresh: context.fresh,
-      maxAgeMillis: resolved.resumeMaxAgeMillis,
-      maxTokens: resolved.resumeMaxTokens,
-    });
-    return yield* harnessRequest(
-      workspace,
-      planStage,
-      worktree.path,
+    return {
+      checkoutPath: worktree.path,
       prompt,
-      decision.kind === "resume" && session?.harness === resolved.harness ? (last?.session ?? null) : null,
-    );
+      session: null,
+      resumeCandidate: {
+        session,
+        lastRunStartedAtMillis: last?.startedAtMillis ?? null,
+        lastRunTotalTokens: meteredTotalTokens(last?.usage),
+        worktreeRecreated: worktree.created,
+        fresh: context.fresh,
+      },
+    } satisfies PreparedRun;
   });
 
   const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
@@ -869,7 +901,7 @@ export const make = Effect.gen(function* () {
       resolved,
       planStage,
       branch,
-      prepare: prepareFollowUp(workspace, item, planStage, branch, context, fullPrompt),
+      prepare: prepareFollowUp(workspace, item, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
       fullPrompt,
       resume: false,
@@ -898,34 +930,30 @@ export const make = Effect.gen(function* () {
   const resumePrepare = Effect.fn("Executor.resumePrepare")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    planStage: ResolvedOperation,
     session: SessionId,
   ) {
     if (item.stage === "triage") {
       const path = workspace.config.checkoutPath;
-      return yield* harnessRequest(workspace, planStage, path, buildContinuationNudge(path), session);
+      return { checkoutPath: path, prompt: buildContinuationNudge(path), session } satisfies PreparedRun;
     }
     const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    return yield* harnessRequest(
-      workspace,
-      planStage,
-      worktree.path,
-      buildContinuationNudge(worktree.path),
+    return {
+      checkoutPath: worktree.path,
+      prompt: buildContinuationNudge(worktree.path),
       session,
-    );
+    } satisfies PreparedRun;
   });
 
   const freshRecoveryPrepare = Effect.fn("Executor.freshRecoveryPrepare")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    planStage: ResolvedOperation,
     prompt: string,
   ) {
     if (item.stage === "triage") {
-      return yield* harnessRequest(workspace, planStage, workspace.config.checkoutPath, prompt, null);
+      return { checkoutPath: workspace.config.checkoutPath, prompt, session: null } satisfies PreparedRun;
     }
     const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    return yield* harnessRequest(workspace, planStage, worktree.path, prompt, null);
+    return { checkoutPath: worktree.path, prompt, session: null } satisfies PreparedRun;
   });
 
   const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
@@ -940,7 +968,7 @@ export const make = Effect.gen(function* () {
     if (!session) return ops;
     return {
       ...ops,
-      prepare: resumePrepare(workspace, item, planStage, session),
+      prepare: resumePrepare(workspace, item, session),
       resume: true,
     } satisfies StageOps;
   };
@@ -972,7 +1000,7 @@ export const make = Effect.gen(function* () {
     if (!item.resume) return fresh;
     return {
       ...fresh,
-      prepare: freshRecoveryPrepare(workspace, item, ops.planStage, fresh.fullPrompt),
+      prepare: freshRecoveryPrepare(workspace, item, fresh.fullPrompt),
     } satisfies StageOps;
   };
 
@@ -1046,30 +1074,41 @@ export const make = Effect.gen(function* () {
     };
     return yield* Effect.gen(function* () {
       const previous = yield* candidateSession(workspace, item, ops.branch);
-      const selectedOps = previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-      return yield* controlStore
-        .withWrite(
-          planSession(runId, workspace, item, selectedOps, startedAtMillis, previous, observation).pipe(
-            Effect.flatMap((planned) => acceptPlannedRun(runId, workspace, item, startedAtMillis, planned)),
+      const selectedOps: StageOps =
+        previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+      return yield* selectedOps.prepare.pipe(
+        Effect.flatMap((prepared) =>
+          controlStore.withWrite(
+            planSession(
+              runId,
+              workspace,
+              item,
+              selectedOps,
+              prepared,
+              startedAtMillis,
+              previous,
+              observation,
+            ).pipe(
+              Effect.flatMap((planned) => acceptPlannedRun(runId, workspace, item, startedAtMillis, planned)),
+            ),
           ),
-        )
-        .pipe(
-          Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
-          Effect.matchEffect({
-            onFailure: (error) => {
-              if (error._tag === "PlanDeclined") return Effect.void;
-              return handleOf(ledger, previous).pipe(
-                Effect.flatMap((handle) =>
-                  reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
-                ),
-              );
-            },
-            onSuccess: ({ request, selectedOps: acceptedOps, record }) =>
-              Effect.withFiber((self) => runControl.register(runId, self, workspace)).pipe(
-                Effect.andThen(settleOutcome(workspace, item, acceptedOps, record, runId, request)),
+        ),
+        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+        Effect.matchEffect({
+          onFailure: (error) => {
+            if (error._tag === "PlanDeclined") return Effect.void;
+            return handleOf(ledger, previous).pipe(
+              Effect.flatMap((handle) =>
+                reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
               ),
-          }),
-        );
+            );
+          },
+          onSuccess: ({ request, selectedOps: acceptedOps, record }) =>
+            Effect.withFiber((self) => runControl.register(runId, self, workspace)).pipe(
+              Effect.andThen(settleOutcome(workspace, item, acceptedOps, record, runId, request)),
+            ),
+        }),
+      );
     }).pipe(
       Effect.ensuring(cleanupRunContext(runId)),
       Effect.annotateLogs(correlation),
