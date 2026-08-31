@@ -66,6 +66,22 @@ export const HarnessPreferences = Schema.Struct({
 });
 export type HarnessPreferences = typeof HarnessPreferences.Type;
 
+export const OperationNeedKind = Schema.Literals([
+  "mcp-server",
+  "skill",
+  "subagent",
+  "command",
+  "hook",
+  "connection",
+]);
+export type OperationNeedKind = typeof OperationNeedKind.Type;
+
+export const OperationNeed = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  kind: OperationNeedKind,
+});
+export type OperationNeed = typeof OperationNeed.Type;
+
 export const PlaybookStageConfig = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
   prompt: Schema.optional(TrimmedNonEmptyString),
@@ -75,6 +91,7 @@ export const PlaybookStageConfig = Schema.Struct({
   effort: Schema.optional(TrimmedNonEmptyString),
   resumeMaxAgeMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
   resumeMaxTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+  needs: Schema.optional(Schema.Array(OperationNeed)),
 });
 export type PlaybookStageConfig = typeof PlaybookStageConfig.Type;
 
