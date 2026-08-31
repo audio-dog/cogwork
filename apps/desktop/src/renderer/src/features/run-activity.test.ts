@@ -1,13 +1,7 @@
 import { type AgUiEvent, DaemonEvent, type RunActivity } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import {
-  applyRunPreview,
-  foldTranscript,
-  previewMap,
-  type RunPreviewState,
-  statusLine,
-} from "./run-activity";
+import { applyRunPreview, foldTranscript, previewMap, type RunPreviewState } from "./run-activity";
 
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
@@ -132,45 +126,5 @@ describe("foldTranscript", () => {
     ]);
 
     expect(entries).toMatchObject([{ kind: "tool", name: "read", complete: true }]);
-  });
-});
-
-describe("statusLine", () => {
-  it("describes the live edge in agent language", () => {
-    expect(statusLine([], "succeeded")).toBe("Run finished.");
-    expect(statusLine([runActivity(0, { type: "TEXT_MESSAGE_CONTENT", delta: "answering" })], "failed")).toBe(
-      "Run failed.",
-    );
-    expect(statusLine([runActivity(0, { type: "REASONING_MESSAGE_CONTENT", delta: "checking" })])).toBe(
-      "Thinking…",
-    );
-    expect(statusLine([runActivity(0, { type: "TEXT_MESSAGE_CONTENT", delta: "answering" })])).toBe(
-      "Responding…",
-    );
-    expect(
-      statusLine([runActivity(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "rg" })]),
-    ).toBe("Running rg…");
-    expect(
-      statusLine([
-        runActivity(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "rg" }),
-        runActivity(1, { type: "TOOL_CALL_ARGS", toolCallId: "t1", delta: "--files" }),
-      ]),
-    ).toBe("Running rg…");
-    expect(
-      statusLine([
-        runActivity(0, {
-          type: "CUSTOM",
-          name: "sandbox.file.diff",
-          value: { path: "src/app.ts", diff: "-old\n+new" },
-        }),
-      ]),
-    ).toBe("Editing src/app.ts");
-    expect(
-      statusLine([
-        runActivity(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "rg" }),
-        runActivity(1, { type: "TOOL_CALL_RESULT", toolCallId: "t1", result: "match" }),
-      ]),
-    ).toBe("Ran rg");
-    expect(statusLine([runActivity(0, { type: "RUN_FINISHED" })])).toBe("Run finished.");
   });
 });
