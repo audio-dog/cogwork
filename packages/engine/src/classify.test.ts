@@ -17,6 +17,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   claim: over.claim ?? null,
   claimedByUs: over.claimedByUs ?? false,
   attempts: over.attempts ?? [],
+  handback: over.handback ?? null,
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
   proposal: over.proposal ?? null,
