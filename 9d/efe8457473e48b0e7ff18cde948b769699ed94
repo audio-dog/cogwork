@@ -1,0 +1,20 @@
+packages/contracts/src/run-plan.ts
+  s_edbf1ac71fb3fd::t_eecfd6a726bede 57
+  s_edbf1ac71fb3fd::t_afa106e3f511ac 1,46-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9defe8457473e48b0e7ff18cde948b769699ed94",
+  "prompts": {},
+  "sessions": {
+    "s_edbf1ac71fb3fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a058e8-a122-7900-aa4d-3dc1425c7a82",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
