@@ -67,7 +67,12 @@ import {
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SourceControlProvider } from "./source-control";
-import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
+import {
+  branchName,
+  type WorktreeDivergedError,
+  WorktreeManager,
+  type WorktreeOperationInProgressError,
+} from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError =
@@ -75,6 +80,7 @@ type PrepareError =
   | GitError
   | WorktreeFsError
   | WorktreeDivergedError
+  | WorktreeOperationInProgressError
   | CredentialError
   | ContextFsError
   | ContextAssemblerError
@@ -209,7 +215,14 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
 
-const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError", "ContextAssemblerError"]);
+// A credential error is a configuration problem (no account, missing secret env) that retrying
+// cannot fix, so it goes straight to a human like a diverged worktree does.
+const nonRetryablePrepare = new Set([
+  "WorktreeDivergedError",
+  "WorktreeOperationInProgressError",
+  "CredentialError",
+  "ContextAssemblerError",
+]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
   if (error._tag === "HarnessError" || error._tag === "RunLedgerError") return error.retryable;

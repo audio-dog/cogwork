@@ -6,6 +6,7 @@ import {
   followUpNoteBody,
   handoffComment,
   handoffNote,
+  markdownCode,
   oneLine,
   parseTriageProposal,
   prepareFailureReason,
@@ -66,6 +67,14 @@ describe("comments", () => {
       "git worktree add: denied",
     );
     assert.strictEqual(
+      prepareFailureReason({
+        _tag: "GitError",
+        command: "git merge --ff-only origin/main",
+        message: "denied",
+      }),
+      "git merge --ff-only origin/main: denied",
+    );
+    assert.strictEqual(
       prepareFailureReason({ _tag: "WorktreeFsError", operation: "pnpm install", message: "exit 1" }),
       "pnpm install: exit 1",
     );
@@ -80,7 +89,7 @@ describe("comments", () => {
     );
     assert.include(body, "Exhausted after 3 failed implement attempts.");
     assert.include(body, "ready-for-human");
-    assert.include(body, "Last failure: network blip");
+    assert.include(body, "Last failure: `network blip`");
     assert.include(body, "```sh");
     assert.include(body, "cd '/wt/15-feature' && agent --resume 'sess-1'");
   });
@@ -101,6 +110,21 @@ describe("comments", () => {
     const body = handoffComment("triage", { kind: "non-retryable" }, "no cli", undefined);
     assert.include(body, "non-retryable failure");
     assert.notInclude(body, "Resume the session");
+  });
+
+  it("renders failure reasons as code without active Markdown", () => {
+    const body = handoffComment(
+      "implement",
+      { kind: "non-retryable" },
+      "conflicts: `tag`, @security, [review](https://example.com)",
+      undefined,
+    );
+    assert.include(body, "``conflicts: `tag`, @security, [review](https://example.com)``");
+  });
+
+  it("separates code-span fences from boundary backticks", () => {
+    assert.strictEqual(markdownCode("`leading"), "`` `leading ``");
+    assert.strictEqual(markdownCode("trailing`"), "`` trailing` ``");
   });
 
   it("shell-quotes paths and session ids", () => {
@@ -149,7 +173,7 @@ describe("comments", () => {
       session: "sess-1",
     });
     assert.include(note, "Exhausted after 3 failed implement attempts.");
-    assert.include(note, "Last failure: boom");
+    assert.include(note, "Last failure: `boom`");
     assert.include(note, "agent --resume 'sess-1'");
   });
 
