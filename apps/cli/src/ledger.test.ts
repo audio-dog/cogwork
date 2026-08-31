@@ -316,10 +316,11 @@ describe("sqlite RunLedger", () => {
         yield* ledger.crashRunning("gh", "#101", 2500);
 
         assert.strictEqual((yield* ledger.getRun(runId("crash-running")))?.status, "crashed");
-        assert.strictEqual(yield* ledger.consecutiveCrashes("gh", "#101"), 2);
+        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, crashItem, 0), 2);
+        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, crashItem, 1500), 1);
 
         yield* ledger.insertRun(record("crash-ok", 3000, { workItem: crashItem, status: "succeeded" }));
-        assert.strictEqual(yield* ledger.consecutiveCrashes("gh", "#101"), 0);
+        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, crashItem, 0), 0);
       }),
     );
 
@@ -523,7 +524,7 @@ describe("sqlite RunLedger against a broken store", () => {
         assert.deepStrictEqual(yield* ledger.events(runId("broken-1")), []);
         assert.isNull(yield* ledger.getRun(runId("broken-1")));
         assert.isNull(yield* ledger.getSession(session));
-        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, workItem), 0);
+        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, workItem, 0), 0);
       }),
     );
   });
