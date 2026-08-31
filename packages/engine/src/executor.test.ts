@@ -1003,6 +1003,27 @@ function testHarness(runners: ReadonlyArray<TestRunner>) {
   );
 }
 
+const runLedgerIdentity = (layer: Layer.Layer<RunLedger.RunLedger>) => layer;
+
+const failRunAcceptance = (retryable: boolean) => (layer: Layer.Layer<RunLedger.RunLedger>) =>
+  Layer.effect(
+    RunLedger.RunLedger,
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      return {
+        ...ledger,
+        acceptRun: () =>
+          Effect.fail(
+            RunLedger.RunLedgerError.make({
+              operation: "accept Run",
+              message: "persistence rejected",
+              retryable,
+            }),
+          ),
+      } satisfies RunLedger.RunLedgerService;
+    }),
+  ).pipe(Layer.provide(layer));
+
 function provide(
   runners: ReadonlyArray<TestRunner>,
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
@@ -1016,9 +1037,12 @@ function provide(
     operationSettings,
     contributionSettings,
   ),
+  transformRunLedger: (
+    layer: Layer.Layer<RunLedger.RunLedger>,
+  ) => Layer.Layer<RunLedger.RunLedger> = runLedgerIdentity,
 ) {
   const bus = DaemonEventBus.layer;
-  const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
+  const runLedger = transformRunLedger(RunLedger.layerMemory.pipe(Layer.provide(bus)));
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerServices = Layer.mergeAll(
@@ -2192,6 +2216,35 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([runner(implementEvents)], unreachableRemoteWorktree)));
+  });
+
+  it.effect("hands a permanent Run acceptance failure to a human without retrying", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const log = yield* Ref.get(calls);
+      const attempt = log.find((call) => call.method === "attemptFailed");
+      assert.include(attempt?.reason ?? "", "persistence rejected");
+      const handOff = log.find((call) => call.method === "handOff");
+      assert.include(handOff?.note ?? "", "non-retryable failure");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [],
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer([]),
+          failRunAcceptance(false),
+        ),
+      ),
+    );
   });
 
   it.effect("keeps an owned transcript through a failed prepare and retry", () => {

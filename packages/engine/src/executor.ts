@@ -197,7 +197,7 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
 const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError", "ContextAssemblerError"]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
-  if (error._tag === "HarnessError") return error.retryable;
+  if (error._tag === "HarnessError" || error._tag === "RunLedgerError") return error.retryable;
   return !nonRetryablePrepare.has(error._tag);
 };
 
