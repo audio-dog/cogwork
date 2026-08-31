@@ -194,7 +194,7 @@ describe("cursorRunner", () => {
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 
-      assert.strictEqual(error.reason, "launch");
+      assert.strictEqual(error.reason, "policy");
       assert.isFalse(error.retryable);
       assert.match(error.message, /cursor.*non-interactive/);
     }),
@@ -214,7 +214,7 @@ describe("cursorRunner", () => {
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 
-      assert.strictEqual(error.reason, "launch");
+      assert.strictEqual(error.reason, "policy");
       assert.isFalse(error.retryable);
     }),
   );
