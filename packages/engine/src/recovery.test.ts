@@ -1,6 +1,8 @@
 import {
   type AttemptRecord,
+  DaemonEvent,
   HarnessName,
+  type OperationAvailability,
   type PollState,
   RunId,
   type RunRecord,
@@ -20,6 +22,7 @@ import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
 import * as DaemonEventBus from "./daemon-event-bus";
+import * as Executor from "./executor";
 import type { ObservedItem } from "./issue-tracker";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -161,6 +164,7 @@ const snapshotOf = (
       blocked: [],
       needsHuman: [],
       observed,
+      availability: [],
     },
   ],
 });
@@ -169,12 +173,14 @@ const workerLayer = (observed: ReadonlyArray<ObservedItem>, poll: PollState = ok
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
     snapshot: Effect.succeed(snapshotOf(observed, poll)),
+    invalidateAvailability: () => Effect.void,
   });
 
 const workerSnapshotLayer = (snapshot: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
     snapshot: Ref.get(snapshot),
+    invalidateAvailability: () => Effect.void,
   });
 
 const registryLayer = Layer.succeed(
@@ -228,27 +234,31 @@ interface RecoveryDeps {
   readonly paused?: Ref.Ref<boolean>;
   readonly inFlight?: Ref.Ref<ReadonlySet<WorkItemIdType>>;
   readonly snapshot?: Ref.Ref<Reconcile.ReconcileSnapshot>;
+  readonly availability?: OperationAvailability;
 }
 
-const recoveryLayer = (deps: RecoveryDeps) => {
-  const bus = DaemonEventBus.layer;
-  const runLedger = RunLedger.publishingLayer.pipe(
-    Layer.provide(Layer.succeed(RunLedger.CoreRunLedger, deps.ledger)),
-    Layer.provide(bus),
-  );
-  return Recovery.layer.pipe(
+const recoveryLayer = (deps: RecoveryDeps) =>
+  Recovery.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
         registryLayer,
         deps.snapshot ? workerSnapshotLayer(deps.snapshot) : workerLayer(deps.observed, deps.poll ?? okPoll),
         schedulerStub(deps.admitted, deps.paused, deps.inFlight),
+        Layer.succeed(Executor.Executor, {
+          availabilityOf: (_workspace, item) =>
+            Effect.succeed(deps.availability ?? { operation: item.stage, available: true, causes: [] }),
+          refreshAvailability: () => Effect.succeed([]),
+          execute: () => Effect.succeed(false),
+        }),
         issueTrackerStub(deps.issueTracker ?? {}),
-        runLedger,
+        RunLedger.publishingLayer.pipe(
+          Layer.provide(Layer.succeed(RunLedger.CoreRunLedger, deps.ledger)),
+          Layer.provide(DaemonEventBus.layer),
+        ),
       ),
     ),
-    Layer.provideMerge(bus),
+    Layer.provideMerge(DaemonEventBus.layer),
   );
-};
 
 interface LiveRecoveryProbeState {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
@@ -272,6 +282,34 @@ class LiveRecoveryProbe extends Context.Service<LiveRecoveryProbe, LiveRecoveryP
         ledger: yield* RunLedger.makeMemory,
         released: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
         snapshot: yield* Ref.make<Reconcile.ReconcileSnapshot>(snapshotOf([])),
+      };
+    }),
+  );
+}
+
+interface UnavailableRecoveryProbeState {
+  readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
+  readonly attempts: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+  readonly handoffs: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+  readonly ledger: RunLedger.RunLedgerService;
+  readonly notes: Ref.Ref<ReadonlyArray<string>>;
+  readonly released: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+}
+
+class UnavailableRecoveryProbe extends Context.Service<
+  UnavailableRecoveryProbe,
+  UnavailableRecoveryProbeState
+>()("@cogwork/engine/recovery.test/UnavailableRecoveryProbe") {
+  static readonly layer = Layer.effect(
+    UnavailableRecoveryProbe,
+    Effect.gen(function* () {
+      return {
+        admitted: yield* Ref.make<ReadonlyArray<EligibleWork>>([]),
+        attempts: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
+        handoffs: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
+        ledger: yield* RunLedger.makeMemory,
+        notes: yield* Ref.make<ReadonlyArray<string>>([]),
+        released: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
       };
     }),
   );
@@ -569,6 +607,57 @@ describe("Recovery.recover", () => {
     }),
   );
 
+  it.effect("rejects an unavailable resume before the crash cap", () =>
+    Effect.gen(function* () {
+      const probe = yield* UnavailableRecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* probe.ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* probe.ledger.insertRun(crashedRun("crash-c", 3, "running"));
+      yield* recovery.recover();
+      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
+      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
+      const note = (yield* Ref.get(probe.notes))[0] ?? "";
+      assert.include(note, "Required skill need is unbound.");
+      assert.notInclude(note, "@security-team");
+    }).pipe(
+      Effect.provide(
+        Layer.unwrap(
+          Effect.map(UnavailableRecoveryProbe, (probe) =>
+            recoveryLayer({
+              observed: [claimedByUs],
+              ledger: probe.ledger,
+              admitted: probe.admitted,
+              issueTracker: {
+                release: (_workspace, itemId) => Ref.update(probe.released, (items) => [...items, itemId]),
+                attemptFailed: (_workspace, itemId) =>
+                  Ref.update(probe.attempts, (items) => [...items, itemId]),
+                handOff: (_workspace, itemId) => Ref.update(probe.handoffs, (items) => [...items, itemId]),
+                note: (_workspace, _itemId, detail) => Ref.update(probe.notes, (items) => [...items, detail]),
+              },
+              availability: {
+                operation: "implement",
+                available: false,
+                causes: [
+                  {
+                    _tag: "UnsatisfiedNeed",
+                    need: "review",
+                    kind: "skill",
+                    reason: "unbound",
+                    contribution: null,
+                    message: "@security-team [click](https://attacker.invalid)",
+                  },
+                ],
+              },
+            }),
+          ),
+        ).pipe(Layer.provideMerge(UnavailableRecoveryProbe.layer)),
+      ),
+    ),
+  );
+
   it.effect("defers recovery for a workspace whose bootstrap poll is paused", () =>
     Effect.gen(function* () {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
@@ -624,10 +713,12 @@ describe("Recovery.recover", () => {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
         const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "crashed"),
+          Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "crashed"),
           Stream.runCollect,
         );
-        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        const changed = [...events].flatMap((event) =>
+          DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
+        );
         assert.deepStrictEqual(
           changed.map((run) => run.status),
           ["crashed"],
@@ -649,10 +740,12 @@ describe("Recovery.recover", () => {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
         const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "failed"),
+          Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "failed"),
           Stream.runCollect,
         );
-        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        const changed = [...events].flatMap((event) =>
+          DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
+        );
         assert.deepStrictEqual(
           changed.map((run) => run.status),
           ["failed"],
