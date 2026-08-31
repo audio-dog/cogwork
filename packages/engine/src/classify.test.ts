@@ -1,4 +1,4 @@
-import { type Claim, WorkItemId } from "@cogwork/contracts";
+import { type Claim, type LifecycleStage, type OperationAvailability, WorkItemId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
@@ -46,6 +46,32 @@ describe("classify", () => {
       eligible.map((e) => e.stage),
       ["implement"],
     );
+  });
+
+  it("holds an unavailable Operation out of eligible work", () => {
+    const availability = new Map<LifecycleStage, OperationAvailability>([
+      [
+        "implement",
+        {
+          operation: "implement",
+          available: false,
+          causes: [
+            {
+              _tag: "UnsatisfiedNeed",
+              need: "review",
+              kind: "skill",
+              reason: "unbound",
+              contribution: null,
+              message: "review is unbound",
+            },
+          ],
+        },
+      ],
+    ]);
+
+    const result = classify([item({ id: "1", roles: ["ready-for-agent"] })], undefined, availability);
+
+    assert.deepStrictEqual(result.eligible, []);
   });
 
   it("routes needs-triage with no PR to triage", () => {
