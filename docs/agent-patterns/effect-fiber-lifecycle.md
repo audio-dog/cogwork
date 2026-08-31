@@ -117,8 +117,8 @@ What this buys:
 - `.repos/effect/packages/effect/src/FiberSet.ts`: `makeRuntimePromise` returns a context-preserving `(effect) => Promise`.
 - `.repos/effect/packages/effect/src/Effect.ts`: `forkChild`, `forkScoped`, `forkIn`, `forkDetach`; plain `fork` no longer exists in v4.
 - `packages/engine/src/scheduler.ts`: `FiberSet` with `awaitEmpty`, `clear`, and interrupt-aware crash reporting — the in-repo exemplar.
-- `packages/engine/src/reconcile.ts`: the worker-loop seam this pattern's supervision section hardens.
-- `packages/engine/src/run-control.ts` and `packages/engine/src/executor.ts`: the hand-rolled registry shape that `FiberMap` replaces.
+- `packages/engine/src/reconcile.ts`: the supervised worker loop with a bounded receipt await — the in-repo exemplar of this pattern's supervision section.
+- `packages/engine/src/run-control.ts`: the in-repo `FiberMap` registry keyed by run id (`cancel` must still read-and-interrupt in one atomic step, not `has` then `remove`).
 - `packages/engine/src/tools/owned-tools.ts`: the Promise-shaped tool boundary.
 - `.repos/opencode/packages/opencode/src/control-plane/workspace.ts`: `FiberMap` keyed by workspace id for sync loops.
 - `.repos/opencode/packages/opencode/src/effect/runner.ts`: converting interrupt-only causes into a typed `Cancelled` failure.

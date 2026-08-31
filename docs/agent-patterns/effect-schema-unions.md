@@ -57,7 +57,7 @@ Declare the union with `Schema.TaggedUnion`, or pipe an existing `Schema.Union` 
 
 ## String-keyed handler tables are drift
 
-Three consumer surfaces fold the harness event stream today — the engine's transcript fold, the CLI watch renderer, and the desktop run preview — and each keeps its own `Record<string, Handler>` or `Map` keyed by `event.type` with a silent `?? ignore` fallback:
+Three dispatch tables fold the harness event stream today — one in the CLI watch renderer, two in the desktop renderer (run preview and transcript) — and each is a `Record<string, Handler>` or `Map` keyed by `event.type` with a silent `?? ignore` fallback:
 
 ```ts
 // Avoid: nothing checks these keys against anything
@@ -72,11 +72,14 @@ const handle = handlers[event.type] ?? ignore;
 The tables have already drifted: the desktop transcript handles `REASONING_MESSAGE_CONTENT`, the CLI table does not, and no compiler knows. A discriminated union turns each table into `matchOrElse`, where the fallback is one deliberate, visible choice instead of a lookup miss:
 
 ```ts
-AgUiEvent.matchOrElse(event, {
-  TEXT_MESSAGE_CONTENT: ({ delta }) => appendText(state, delta),
-  TOOL_CALL_START: ({ toolCallId, toolCallName }) => openTool(state, toolCallId, toolCallName),
-  orElse: () => state,
-});
+AgUiEvent.matchOrElse(
+  event,
+  {
+    TEXT_MESSAGE_CONTENT: ({ delta }) => appendText(state, delta),
+    TOOL_CALL_START: ({ toolCallId, toolCallName }) => openTool(state, toolCallId, toolCallName),
+  },
+  () => state,
+);
 ```
 
 For the harness event specifically, the openness is a recorded decision (`packages/contracts/CONTEXT.md`, "Harness event": unnamed keys ride along instead of being dropped at decode). The pattern respects it: each named variant keeps its rest-record for unnamed keys, a catch-all variant carries every type the union does not name, and only the discriminant becomes closed. The target is the three parallel tables and the re-decoding helpers, not the openness.
@@ -102,7 +105,7 @@ Choose deliberately: `Schema.TaggedUnion` when the value is ever encoded, persis
 
 `packages/contracts/src/base-schemas.ts` owns the house brand shape — `TrimmedNonEmptyString.pipe(Schema.brand("X"))` via `makeBrand`, exported as a `const`/`type` pair. The gap is enforcement: the run ledger brands `RunId` and `SessionId` but takes `(workspace: string, workItem: string, branch: string)` on the same service, so a swapped-argument call compiles.
 
-Ports take branded ids. The conversion from raw strings happens once, at the boundary that reads them (decode) or mints them (`Schema.decodeSync` on a constant, or the schema's `makeSync`), never inside business logic.
+Ports take branded ids. The conversion from raw strings happens once, at the boundary that reads them (decode) or mints them (`Schema.decodeSync` on a constant, or the schema's `make`), never inside business logic.
 
 ## Decode once, at the boundary
 

@@ -10,6 +10,7 @@ import {
   type BranchDivergence,
   Git,
   GitError,
+  type GitOperationInProgress,
   type GitService,
   type WorktreeEntry,
 } from "./git";
@@ -37,6 +38,7 @@ const makeRecorder = Effect.fn("test.makeRecorder")(function* () {
     removed: yield* Ref.make<ReadonlyArray<{ readonly path: string; readonly force: boolean }>>([]),
     fastForwarded: yield* Ref.make<ReadonlyArray<string>>([]),
     rebased: yield* Ref.make<ReadonlyArray<string>>([]),
+    operationProbes: yield* Ref.make<ReadonlyArray<string>>([]),
     linked: yield* Ref.make<ReadonlyArray<{ readonly target: string; readonly linkPath: string }>>([]),
     commands: yield* Ref.make<ReadonlyArray<{ readonly cwd: string; readonly command: string }>>([]),
   };
@@ -52,6 +54,7 @@ const fakeGit = (
     readonly worktrees?: ReadonlyArray<WorktreeEntry>;
     readonly remoteBranches?: ReadonlyArray<string>;
     readonly divergence?: BranchDivergence;
+    readonly operation?: GitOperationInProgress;
     readonly rebaseFailure?: GitError;
   },
 ) => {
@@ -68,6 +71,10 @@ const fakeGit = (
       Ref.update(recorder.fastForwarded, (log) => [...log, worktreePath]),
     divergence: (_worktreePath: string, _remote: string, _branch: string) =>
       Effect.succeed(options.divergence ?? inSync),
+    operationInProgress: (worktreePath: string) =>
+      Ref.update(recorder.operationProbes, (log) => [...log, worktreePath]).pipe(
+        Effect.map(() => options.operation ?? null),
+      ),
     rebase: (worktreePath: string, _remote: string, _branch: string) =>
       options.rebaseFailure === undefined
         ? Ref.update(recorder.rebased, (log) => [...log, worktreePath])
@@ -188,6 +195,34 @@ describe("Worktree.ensure", () => {
       assert.deepStrictEqual(fastForwarded, [worktreePath]);
       const added = yield* Ref.get(recorder.added);
       assert.strictEqual(added.length, 0);
+    }),
+  );
+
+  it.effect("refuses to sync a reused worktree with a git operation in progress", () =>
+    Effect.gen(function* () {
+      const recorder = yield* makeRecorder();
+      const worktreePath = Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), "13-worktree-lifecycle");
+      const git = fakeGit(recorder, {
+        worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
+        remoteBranches: ["13-worktree-lifecycle"],
+        operation: { operation: "merge", unmergedPaths: ["src/a.ts", "src/b.ts"] },
+      });
+      const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
+
+      const failure = yield* Effect.flip(
+        manager.ensure(workspaceWith({ setup: ["pnpm install"] }), {
+          id: "#13",
+          title: "Worktree lifecycle",
+        }),
+      );
+
+      assert.strictEqual(failure._tag, "WorktreeOperationInProgressError");
+      assert.include(failure.message, "branch 13-worktree-lifecycle");
+      assert.include(failure.message, "merge");
+      assert.include(failure.message, "src/a.ts, src/b.ts");
+      assert.deepStrictEqual(yield* Ref.get(recorder.operationProbes), [worktreePath]);
+      assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
     }),
   );
 
@@ -332,6 +367,7 @@ describe("Worktree.ensure", () => {
         worktrees: [{ path: worktreePath, branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 2, behind: 5 },
+        operation: { operation: "merge", unmergedPaths: ["src/a.ts"] },
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
       const result = yield* manager.ensure(
@@ -343,6 +379,7 @@ describe("Worktree.ensure", () => {
       assert.strictEqual(result.path, worktreePath);
       assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
+      assert.deepStrictEqual(yield* Ref.get(recorder.operationProbes), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
     }),
   );

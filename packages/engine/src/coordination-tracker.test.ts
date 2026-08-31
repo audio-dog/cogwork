@@ -258,7 +258,7 @@ describe("coordination tracker", () => {
       assert.strictEqual(stored?.comments.length, 1);
       assert.include(
         stored?.comments[0]?.body ?? "",
-        "Last implement attempt failed: git worktree add: boom",
+        "Last implement attempt failed: `git worktree add: boom`",
       );
     }),
   );
@@ -419,7 +419,7 @@ describe("coordination outcomes", () => {
       const stored = yield* itemAt(13);
       assert.include(
         ledgerBody(stored?.comments ?? []),
-        "Last implement attempt failed: pnpm install: exit 1",
+        "Last implement attempt failed: `pnpm install: exit 1`",
       );
       const item = yield* observed(tracker, "#13");
       assert.deepStrictEqual(item?.attempts, [{ stage: "implement", outcome: "failed", atMillis: 14 }]);

@@ -1,6 +1,7 @@
 import {
   HarnessName,
   RunId,
+  RunPlan,
   type RunRecord,
   type Session,
   SessionId,
@@ -25,6 +26,50 @@ const session = Schema.decodeSync(SessionId)("sess-abc");
 const laterSession = Schema.decodeSync(SessionId)("sess-later");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
+const runPlan = (id: string) =>
+  Schema.decodeSync(RunPlan)({
+    id: runId(id),
+    operation: "triage",
+    harness: { name: harness, model: null, effort: null, profile: "read-only" },
+    instructions: [],
+    operatingInstructions: {
+      name: "triage-agent",
+      path: "/operating-instructions/triage-agent",
+      resources: [],
+    },
+    tools: [],
+    skills: [],
+    mcp: [],
+    subagents: [],
+    commands: [],
+    hooks: [],
+    middleware: [],
+    structuredOutput: null,
+    connections: [],
+    messages: [{ role: "user", content: "Triage #7" }],
+    workContext: {
+      reference: { workItem, url: "https://example.test/issues/7" },
+      facts: {
+        roles: ["needs-triage"],
+        assignees: [],
+        openBlockers: 0,
+        claim: null,
+        priority: "medium",
+        pr: null,
+      },
+      observation: { generation: 3, observedAtMillis: 1000 },
+    },
+    sandbox: { workspace: "/repo", policy: "read-only" },
+    persistence: { sessionKind: "opaque-handle" },
+    provenance: {
+      resolution: [],
+      stamps: [],
+      projectedNames: [],
+      projection: [],
+      observation: { generation: 3, observedAtMillis: 1000 },
+    },
+  });
+
 const record = (id: string, startedAtMillis: number, over: Partial<RunRecord> = {}): RunRecord => ({
   id: runId(id),
   workspace,
@@ -48,6 +93,28 @@ const sessionRecord = (over: Partial<Session> = {}): Session => ({
   createdAtMillis: 0,
   handle: "cursor-abc",
   ...over,
+});
+
+describe("accepted Run Plan", () => {
+  it.layer(layerMemory)((it) => {
+    it.effect("accepts one immutable Plan with its Run", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        const accepted = runPlan("accepted");
+        yield* ledger.acceptRun(record("accepted", 1000), accepted);
+
+        assert.isTrue(Reflect.set(accepted.messages[0] ?? {}, "content", "changed after acceptance"));
+        const stored = yield* ledger.getRunPlan(accepted.id);
+
+        assert.strictEqual(stored?.messages[0]?.content, "Triage #7");
+        assert.isTrue(Object.isFrozen(stored));
+        assert.isTrue(Object.isFrozen(stored?.messages));
+        const error = yield* Effect.flip(ledger.acceptRun(record("accepted", 2000), runPlan("accepted")));
+        assert.strictEqual(error._tag, "RunLedgerError");
+        assert.isFalse(error.retryable);
+      }),
+    );
+  });
 });
 
 describe("RunLedger (memory)", () => {

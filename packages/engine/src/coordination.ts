@@ -2,7 +2,7 @@ import { AttemptRecord, Claim, HandbackRecord, type LifecycleStage } from "@cogw
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import { parseTriageProposal, statusReason } from "./comments";
+import { markdownCode, parseTriageProposal, statusReason } from "./comments";
 import { FollowUpMarker } from "./follow-up";
 import { IssueTrackerError } from "./issue-tracker";
 
@@ -66,7 +66,7 @@ export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) =>
   if (attempt.outcome === "succeeded") return `${attempt.stage} completed.`;
   if (attempt.outcome === "abandoned") return `${attempt.stage} abandoned.`;
   const trimmed = reason ? statusReason(reason) : "";
-  if (trimmed) return `Last ${attempt.stage} attempt failed: ${trimmed}`;
+  if (trimmed) return `Last ${attempt.stage} attempt failed: ${markdownCode(trimmed)}`;
   return `Last ${attempt.stage} attempt failed.`;
 };
 

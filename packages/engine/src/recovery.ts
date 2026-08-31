@@ -1,4 +1,10 @@
-import type { LifecycleStage, PollState, SessionId, WorkspaceId } from "@cogwork/contracts";
+import type {
+  LifecycleStage,
+  PollState,
+  RunPlanObservation,
+  SessionId,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -122,16 +128,19 @@ export const make = Effect.gen(function* () {
     stage: LifecycleStage,
     reason: "interrupted" | "crashed",
     session: SessionId | null,
+    observation: RunPlanObservation,
   ) {
     const observed = eligibleWork(item, stage);
-    const work: EligibleWork = session ? { ...observed, resume: { session, reason } } : observed;
+    const work: EligibleWork = session
+      ? { ...observed, recovery: reason, resume: { session, reason } }
+      : { ...observed, recovery: reason };
     yield* Effect.logInfo("rescheduled resumable run", {
       workspace: workspace.config.name,
       item: item.id,
       stage,
       reason,
     });
-    yield* scheduler.admit(workspace, work);
+    yield* scheduler.admit(workspace, work, observation);
   });
 
   const handoffCrashLoop = Effect.fn("Recovery.handoffCrashLoop")(function* (
@@ -156,6 +165,7 @@ export const make = Effect.gen(function* () {
     item: ObservedItem,
     stage: LifecycleStage,
     session: SessionId | null,
+    observation: RunPlanObservation,
   ) {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* ledger.crashRunning(workspace.config.name, item.id, endedAtMillis);
@@ -165,7 +175,7 @@ export const make = Effect.gen(function* () {
       item.handback?.atMillis ?? 0,
     );
     if (crashes < maxCrashesPerItem) {
-      return yield* reschedule(workspace, item, stage, "crashed", session);
+      return yield* reschedule(workspace, item, stage, "crashed", session, observation);
     }
     yield* handoffCrashLoop(workspace, item, stage, crashes, session);
   });
@@ -173,14 +183,15 @@ export const make = Effect.gen(function* () {
   const recoverItem = Effect.fn("Recovery.recoverItem")(function* (
     workspace: RegisteredWorkspace,
     item: ObservedItem,
+    observation: RunPlanObservation,
   ) {
     const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
     const stage = observedStage(item);
     if (stage && last?.status === "interrupted") {
-      return yield* reschedule(workspace, item, stage, "interrupted", last.session);
+      return yield* reschedule(workspace, item, stage, "interrupted", last.session, observation);
     }
     if (stage && last?.status === "running") {
-      return yield* recoverCrashed(workspace, item, stage, last.session);
+      return yield* recoverCrashed(workspace, item, stage, last.session, observation);
     }
     yield* recoverStale(workspace, item, stage, last?.session ?? null);
   });
@@ -188,9 +199,10 @@ export const make = Effect.gen(function* () {
   const recoverWorkspace = Effect.fn("Recovery.recoverWorkspace")(function* (
     workspace: RegisteredWorkspace,
     observed: ReadonlyArray<ObservedItem>,
+    observation: RunPlanObservation,
   ) {
     const ours = observed.filter((item) => item.claimedByUs);
-    yield* Effect.forEach(ours, (item) => recoverItem(workspace, item), { discard: true });
+    yield* Effect.forEach(ours, (item) => recoverItem(workspace, item, observation), { discard: true });
   });
 
   const pollDetail = (poll: PollState) =>
@@ -221,6 +233,7 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     state: WorkspaceReconcileState,
     recoverObserved: typeof recoverWorkspace,
+    observation: RunPlanObservation,
   ) => {
     if (state.poll.status !== "ok") {
       return Effect.logWarning("claim recovery deferred; workspace poll is not ok", {
@@ -228,7 +241,7 @@ export const make = Effect.gen(function* () {
         ...pollDetail(state.poll),
       }).pipe(Effect.map(() => null));
     }
-    return recoverObserved(workspace, state.observed).pipe(
+    return recoverObserved(workspace, state.observed, observation).pipe(
       Effect.map(() => workspace.config.name),
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("claim recovery skipped", {
@@ -245,12 +258,16 @@ export const make = Effect.gen(function* () {
     generations: ReadonlyMap<WorkspaceId, number>,
   ) {
     const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
+    const observation = {
+      generation: snapshot.generation,
+      observedAtMillis: snapshot.observedAtMillis,
+    };
     const results = yield* Effect.forEach(snapshot.workspaces, (state) => {
       if (generations.get(state.name) === snapshot.generation) return Effect.succeed(null);
       const workspace = byName.get(state.name);
       if (!workspace) return Effect.succeed(null);
       const recoverObserved = completed.has(state.name) ? recoverOrphans : recoverWorkspace;
-      return recoverState(workspace, state, recoverObserved);
+      return recoverState(workspace, state, recoverObserved, observation);
     });
     return results.filter((workspace): workspace is WorkspaceId => workspace !== null);
   });

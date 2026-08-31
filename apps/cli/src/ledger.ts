@@ -1,6 +1,7 @@
 import type {
   RunEvent,
   RunId,
+  RunPlan,
   RunRecord,
   Session,
   TokenUsage,
@@ -10,6 +11,7 @@ import type {
 import {
   RunEvent as RunEventSchema,
   RunId as RunIdSchema,
+  RunPlan as RunPlanSchema,
   RunRecord as RunRecordSchema,
   RunSummary as RunSummarySchema,
   SessionId,
@@ -17,14 +19,16 @@ import {
   workItemCandidates,
 } from "@cogwork/contracts";
 import { ControlStoreSchema, RunLedger } from "@cogwork/engine";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { and, desc, eq, gt, gte, inArray, isNotNull, lt, notInArray, or, type SQL, sql } from "drizzle-orm";
 import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as SqlError from "effect/unstable/sql/SqlError";
 
-const { runEvents, runs, sessions } = ControlStoreSchema;
+const { runEvents, runPlans, runs, sessions } = ControlStoreSchema;
 
 const unresumableStatuses = ["interrupted", "crashed", "exhausted"];
 
@@ -41,6 +45,18 @@ const runColumns = (record: {
   estimated: record.usage?.estimated ?? null,
   status: record.status,
   endedAt: record.endedAtMillis,
+});
+
+const runValues = (record: RunRecord) => ({
+  id: record.id,
+  workspace: record.workspace,
+  workItem: record.workItem,
+  stage: record.stage,
+  harness: record.harness,
+  branch: record.branch,
+  session: record.session,
+  startedAt: record.startedAtMillis,
+  ...runColumns(record),
 });
 
 const sessionValues = (session: Session) => ({
@@ -137,6 +153,10 @@ const decodeEvent = Schema.decodeUnknownEffect(RunEventSchema);
 const decodeRun = Schema.decodeUnknownEffect(RunRecordSchema);
 const decodeSession = Schema.decodeUnknownEffect(SessionSchema);
 const decodeSessionId = Schema.decodeUnknownEffect(SessionId);
+const decodeRunPlan = Schema.decodeUnknownEffect(Schema.fromJsonString(RunPlanSchema));
+const encodeRunPlan = Schema.encodeSync(Schema.fromJsonString(RunPlanSchema));
+const runPlanError = (operation: string, message: string) =>
+  Effect.fail(RunLedger.RunLedgerError.make({ operation, message, retryable: false }));
 
 const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows: ReadonlyArray<unknown>) =>
   Effect.forEach(rows, (row) =>
@@ -148,6 +168,7 @@ const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows
 
 const make = Effect.fn("ledger.make")(function* () {
   const db = yield* SQLiteNodeDrizzle.makeWithDefaults();
+  const sqlClient = yield* SqliteClient.SqliteClient;
 
   // Taken as a thunk: building the query runs Drizzle's compiler, which can throw before any
   // Effect exists to fail.
@@ -167,6 +188,20 @@ const make = Effect.fn("ledger.make")(function* () {
 
   const readRows = <A, E>(operation: string, query: () => Effect.Effect<ReadonlyArray<A>, E>) =>
     swallow(operation, query, () => [] as ReadonlyArray<A>);
+
+  const hardWrite = <A, E>(operation: string, query: () => Effect.Effect<A, E>) =>
+    Effect.suspend(query).pipe(
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+        const retryable = cause.reasons.some(
+          (reason) =>
+            Cause.isFailReason(reason) && SqlError.isSqlError(reason.error) && reason.error.isRetryable,
+        );
+        return Effect.fail(
+          RunLedger.RunLedgerError.make({ operation, message: Cause.pretty(cause), retryable }),
+        );
+      }),
+    );
 
   const writeIds = <E>(
     operation: string,
@@ -203,18 +238,35 @@ const make = Effect.fn("ledger.make")(function* () {
     );
 
   const service: RunLedger.RunLedgerService = {
+    acceptRun: (record: RunRecord, plan: RunPlan) => {
+      if (record.id !== plan.id) {
+        return runPlanError("accept Run", `Run ${record.id} does not match Plan ${plan.id}`);
+      }
+      return hardWrite("accept Run", () =>
+        sqlClient.withTransaction(
+          Effect.gen(function* () {
+            yield* db.insert(runs).values(runValues(record)).run();
+            yield* db
+              .insert(runPlans)
+              .values({ runId: record.id, plan: encodeRunPlan(plan) })
+              .run();
+          }),
+        ),
+      ).pipe(Effect.asVoid);
+    },
+
+    getRunPlan: (runId: RunId) =>
+      readRows("getRunPlan", () =>
+        db.select({ plan: runPlans.plan }).from(runPlans).where(eq(runPlans.runId, runId)).limit(1).all(),
+      ).pipe(
+        Effect.flatMap((rows) => {
+          const plan = rows[0]?.plan;
+          return plan ? decodeRunPlan(plan).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null);
+        }),
+      ),
+
     insertRun: (record: RunRecord) => {
-      const values = {
-        id: record.id,
-        workspace: record.workspace,
-        workItem: record.workItem,
-        stage: record.stage,
-        harness: record.harness,
-        branch: record.branch,
-        session: record.session,
-        startedAt: record.startedAtMillis,
-        ...runColumns(record),
-      };
+      const values = runValues(record);
       return write("insertRun", () =>
         db.insert(runs).values(values).onConflictDoUpdate({ target: runs.id, set: values }).run(),
       );

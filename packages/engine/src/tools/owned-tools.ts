@@ -277,6 +277,8 @@ const bindServer =
       );
   };
 
+export const ownedToolNames = ["read", "write", "edit", "bash", "glob", "grep", "webfetch"] as const;
+
 export const makeOwnedToolSet = (
   sandbox: WorktreeSandbox,
   runPromise: ToolRunPromise,

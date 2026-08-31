@@ -52,13 +52,22 @@ export const recoveryReason = "worker did not survive a daemon restart";
 
 export const statusReason = (reason: string) => oneLine(truncate(stripMarkers(reason)));
 
+const gitCommand = (command: string) => (command.startsWith("git ") ? command : `git ${command}`);
+
+export const markdownCode = (value: string) => {
+  const longestRun = (value.match(/`+/g) ?? []).reduce((longest, run) => Math.max(longest, run.length), 0);
+  const fence = "`".repeat(longestRun + 1);
+  const padding = value.startsWith("`") || value.endsWith("`") ? " " : "";
+  return `${fence}${padding}${value}${padding}${fence}`;
+};
+
 export const prepareFailureReason = (error: {
   readonly _tag: string;
   readonly message: string;
   readonly command?: string;
   readonly operation?: string;
 }) => {
-  if (error._tag === "GitError" && error.command) return `git ${error.command}: ${error.message}`;
+  if (error._tag === "GitError" && error.command) return `${gitCommand(error.command)}: ${error.message}`;
   if (error._tag === "WorktreeFsError" && error.operation) {
     return `${error.operation}: ${error.message}`;
   }
@@ -90,7 +99,7 @@ export const handoffComment = (
     "",
     "Applied `ready-for-human`; a human needs to take over.",
     "",
-    `Last failure: ${truncate(stripMarkers(reason))}`,
+    `Last failure: ${markdownCode(statusReason(reason))}`,
   ];
   return resume === undefined
     ? lines.join("\n")

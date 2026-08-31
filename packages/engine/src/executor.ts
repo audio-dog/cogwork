@@ -1,24 +1,27 @@
+import type {
+  ControlStoreFailure,
+  FileContribution,
+  HarnessName,
+  PluginContribution,
+  PluginMcpServer,
+  PluginOverview,
+  ProvenanceStamp,
+  RunPlanObservation,
+  RunRecord,
+  Session,
+  SessionId,
+  TokenUsage,
+} from "@cogwork/contracts";
 import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
-  type ContributionSettingRow,
-  type ControlStoreFailure,
-  defaultContributionEnabled,
-  type FileContribution,
   type FollowUpStageResult,
-  type ImplementStageResult,
-  type LifecycleStage,
-  type PluginContribution,
-  type PluginMcpServer,
+  FollowUpStageResultCompletion,
+  ImplementStageResultCompletion,
   RunId,
-  type RunRecord,
-  resolveContributionEnabled,
-  type Session,
-  type SessionId,
   sessionHandle,
-  stageResultCompletionSchema,
-  type TokenUsage,
   type TriageStageResult,
+  TriageStageResultCompletion,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
@@ -32,6 +35,8 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
+import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
+import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
 import { CredentialError } from "./credential-store";
 import { type FollowUpContext, noProgressAfterRound } from "./follow-up";
@@ -39,38 +44,86 @@ import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
-import { operationPolicyProfile } from "./operation-policy";
 import {
   buildContinuationNudge,
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
   type ResolvedStage,
-  resolveStage,
 } from "./playbook";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { decideResume } from "./resume-policy";
 import { RunControl } from "./run-control";
-import { handleOf, RunLedger, type RunUpdate } from "./run-ledger";
+import { handleOf, RunLedger, type RunLedgerError, type RunUpdate } from "./run-ledger";
+import {
+  admittedContributions,
+  admittedMcpServers,
+  assembleRunPlan,
+  type ResolvedOperation,
+  resolveRunPlanStage,
+} from "./run-plan";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SourceControlProvider } from "./source-control";
-import { branchName, type WorktreeDivergedError, WorktreeManager } from "./worktree";
+import {
+  branchName,
+  type WorktreeDivergedError,
+  WorktreeManager,
+  type WorktreeOperationInProgressError,
+} from "./worktree";
 import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError =
+  | ControlStoreFailure
   | GitError
   | WorktreeFsError
   | WorktreeDivergedError
+  | WorktreeOperationInProgressError
   | CredentialError
-  | ControlStoreFailure;
+  | ContextFsError
+  | ContextAssemblerError
+  | RunLedgerError;
+
+class PlanDeclined extends Schema.TaggedError<PlanDeclined>()("PlanDeclined", {
+  message: Schema.String,
+}) {}
 
 interface RunAccumulator {
   readonly handle: string | null;
   readonly usage: TokenUsage | null;
   readonly structuredOutputs: ReadonlyArray<unknown>;
+}
+
+interface PreparedHarnessRequest {
+  readonly harness: HarnessName;
+  readonly operatingInstructions: string;
+  readonly checkoutPath: string;
+  readonly session: SessionId | null;
+  readonly prompt: string;
+  readonly mcpServers: ReadonlyArray<PreparedMcpServer>;
+  readonly contributions: ReadonlyArray<FileContribution>;
+  readonly provenanceStamps: ReadonlyArray<ProvenanceStamp>;
+}
+
+interface PreparedRun {
+  readonly checkoutPath: string;
+  readonly session: SessionId | null;
+  readonly prompt: string;
+  readonly resumeCandidate?: PreparedResumeCandidate;
+}
+
+interface PreparedResumeCandidate {
+  readonly session: Session | null;
+  readonly lastRunStartedAtMillis: number | null;
+  readonly lastRunTotalTokens: number | null;
+  readonly worktreeRecreated: boolean;
+  readonly fresh: boolean;
+}
+
+interface PreparedMcpServer extends ResolvedMcpSkill {
+  readonly identity: string | null;
 }
 
 interface TriageAccumulator extends RunAccumulator {
@@ -97,8 +150,9 @@ export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
 
 interface CommonStageOps {
   readonly resolved: ResolvedStage;
+  readonly planStage: ResolvedOperation;
   readonly branch: string | null;
-  readonly prepare: Effect.Effect<HarnessRequest, PrepareError>;
+  readonly prepare: Effect.Effect<PreparedRun, PrepareError>;
   readonly fullPrompt: string;
   readonly resume: boolean;
   readonly resumePolicy: boolean;
@@ -163,10 +217,15 @@ const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
 
 // A credential error is a configuration problem (no account, missing secret env) that retrying
 // cannot fix, so it goes straight to a human like a diverged worktree does.
-const nonRetryablePrepare = new Set(["WorktreeDivergedError", "CredentialError"]);
+const nonRetryablePrepare = new Set([
+  "WorktreeDivergedError",
+  "WorktreeOperationInProgressError",
+  "CredentialError",
+  "ContextAssemblerError",
+]);
 
 const retryableOf = (error: PrepareError | HarnessError) => {
-  if (error._tag === "HarnessError") return error.retryable;
+  if (error._tag === "HarnessError" || error._tag === "RunLedgerError") return error.retryable;
   return !nonRetryablePrepare.has(error._tag);
 };
 
@@ -174,7 +233,7 @@ const handoffCause = (retryable: boolean, attempts: number) =>
   retryable ? ({ kind: "max-attempts", attempts } as const) : ({ kind: "non-retryable" } as const);
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
-const noPluginContributions: ReadonlyArray<PluginContribution> = [];
+const noPlugins = { plugins: [] } satisfies PluginOverview;
 
 interface PluginMcpContribution {
   readonly id: string;
@@ -186,26 +245,6 @@ const availablePluginMcp = (contribution: PluginContribution) => {
   const server = contribution.load.mcpServer;
   if (!server?.credentialAvailable) return [];
   return [{ id: contribution.id, server }] satisfies ReadonlyArray<PluginMcpContribution>;
-};
-
-const contributionSettingApplies = (
-  contribution: FileContribution,
-  workspace: RegisteredWorkspace,
-  row: ContributionSettingRow,
-) => {
-  if (row.contribution.id !== contribution.id) return false;
-  if (row.scope._tag === "SettingsProfile") return true;
-  return row.scope.workspace === workspace.config.name;
-};
-
-const contributionEnabled = (
-  contribution: FileContribution,
-  workspace: RegisteredWorkspace,
-  rows: readonly ContributionSettingRow[],
-) => {
-  if (contribution.kind !== "mcp-server") return true;
-  const applicable = rows.filter((row) => contributionSettingApplies(contribution, workspace, row));
-  return resolveContributionEnabled(applicable) ?? defaultContributionEnabled(contribution.authority);
 };
 
 export const make = Effect.gen(function* () {
@@ -220,32 +259,36 @@ export const make = Effect.gen(function* () {
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
   const controlStore = yield* ControlStore;
+  const contextAssembler = yield* ContextAssembler;
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
+  const cleanupRunContext = (runId: RunId) =>
+    contextAssembler
+      .cleanup(runId)
+      .pipe(
+        Effect.catchTag("ContextFsError", (error) =>
+          Effect.logWarning("run context cleanup failed", { message: error.message }),
+        ),
+      );
+
   const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
     workspace: RegisteredWorkspace,
-    resolved: ResolvedStage,
+    planStage: ResolvedOperation,
     checkoutPath: string,
     prompt: string,
     session: SessionId | null,
-    stage: LifecycleStage,
   ) {
-    const picture = yield* controlStore.picture;
-    const pluginContributions = yield* plugins
-      .contributions(workspace.config.name)
-      .pipe(
-        Effect.catchTag("PluginFailure", (error) =>
-          Effect.logWarning("Plugin contributions unavailable", { message: error.message }).pipe(
-            Effect.map(() => noPluginContributions),
-          ),
+    const overview = yield* plugins.overview.pipe(
+      Effect.catchTag("PluginFailure", (error) =>
+        Effect.logWarning("Plugin snapshot unavailable", { message: error.message }).pipe(
+          Effect.map(() => noPlugins),
         ),
-      );
-    const loaded = pluginContributions.filter(
-      (contribution) =>
-        contribution.load._tag === "Loaded" &&
-        contributionEnabled(contribution, workspace, picture.contributionSettings),
+      ),
     );
+    const installedPlugins = overview.plugins.filter(({ record }) => record !== null);
+    const pluginContributions = installedPlugins.flatMap(({ contributions }) => contributions);
+    const loaded = pluginContributions.filter((contribution) => contribution.load._tag === "Loaded");
     const fileContributions: ReadonlyArray<FileContribution> = loaded.map((contribution) => ({
       id: contribution.id,
       authority: contribution.authority,
@@ -253,12 +296,19 @@ export const make = Effect.gen(function* () {
       localName: contribution.localName,
       file: contribution.file,
     }));
-    const pluginMcpSkills: ReadonlyArray<ResolvedMcpSkill> = yield* Effect.forEach(
-      loaded.flatMap(availablePluginMcp),
+    const contributions = [...workspace.contributions, ...fileContributions];
+    const admitted = admittedContributions(
+      contributions,
+      planStage.contributionSettings,
+      workspace.config.name,
+    );
+    const admittedIdentities = new Set(admitted.map(({ id }) => id));
+    const pluginMcpServers: ReadonlyArray<PreparedMcpServer> = yield* Effect.forEach(
+      loaded.filter(({ id }) => admittedIdentities.has(id)).flatMap(availablePluginMcp),
       ({ id, server }) =>
         Effect.gen(function* () {
           const { endpoint, secretEnv } = server;
-          if (!secretEnv) return { name: id, endpoint, bearer: null };
+          if (!secretEnv) return { identity: id, name: id, endpoint, bearer: null };
           const bearer = yield* Config.redacted(secretEnv).pipe(
             Effect.mapError(
               (error) =>
@@ -268,27 +318,25 @@ export const make = Effect.gen(function* () {
                 }),
             ),
           );
-          return { name: id, endpoint, bearer };
+          return { identity: id, name: id, endpoint, bearer };
         }),
     );
+    const workspaceMcpServers = (yield* assembler.assemble(workspace.config)).map((server) => ({
+      ...server,
+      identity: null,
+    }));
     return {
-      harness: resolved.harness,
-      stage,
-      profile: operationPolicyProfile(stage),
-      skill: resolved.skill,
+      harness: planStage.stage.harness,
+      operatingInstructions: planStage.stage.skill,
       checkoutPath,
       session,
       prompt,
-      model: resolved.model,
-      effort: resolved.effort,
-      mcpSkills: [...(yield* assembler.assemble(workspace.config)), ...pluginMcpSkills],
-      contributions: [
-        ...workspace.contributions.filter((contribution) =>
-          contributionEnabled(contribution, workspace, picture.contributionSettings),
-        ),
-        ...fileContributions,
-      ],
-    } satisfies HarnessRequest;
+      mcpServers: [...workspaceMcpServers, ...pluginMcpServers],
+      contributions,
+      provenanceStamps: installedPlugins.flatMap(({ provenanceStamp }) =>
+        provenanceStamp ? [provenanceStamp] : [],
+      ),
+    } satisfies PreparedHarnessRequest;
   });
 
   const nextRunId = (startedAtMillis: number) =>
@@ -330,28 +378,109 @@ export const make = Effect.gen(function* () {
     return null;
   });
 
-  const priorSession = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) =>
-    candidateSession(workspace, item, ops.branch).pipe(
-      Effect.flatMap((id) => (id ? ledger.getSession(id) : Effect.succeed(null))),
-      Effect.flatMap((session) => compatibleSession(ops, session)),
-    );
-
-  const planSession = Effect.fn("Executor.planSession")(function* (
-    workspace: RegisteredWorkspace,
+  const resumeCandidateSession = Effect.fn("Executor.resumeCandidateSession")(function* (
     ops: StageOps,
-    startedAtMillis: number,
-    previous: SessionId | null,
+    prepared: PreparedRun,
   ) {
-    const request = yield* ops.prepare;
-    const session =
-      request.session ??
-      (ops.resumePolicy ? null : previous) ??
-      (yield* mintSession(workspace, ops, startedAtMillis));
-    return { request: { ...request, session }, session };
+    const candidate = prepared.resumeCandidate;
+    if (!candidate) return null;
+    const now = yield* Clock.currentTimeMillis;
+    const decision = decideResume({
+      sessionKind: candidate.session?.kind ?? null,
+      handle: sessionHandle(candidate.session),
+      lastRunStartedAtMillis: candidate.lastRunStartedAtMillis,
+      lastRunTotalTokens: candidate.lastRunTotalTokens,
+      now,
+      worktreeRecreated: candidate.worktreeRecreated,
+      fresh: candidate.fresh,
+      maxAgeMillis: ops.resolved.resumeMaxAgeMillis,
+      maxTokens: ops.resolved.resumeMaxTokens,
+    });
+    if (decision.kind !== "resume") return null;
+    if (candidate.session?.harness !== ops.resolved.harness) return null;
+    return candidate.session.id;
   });
 
-  const withSession = (record: RunRecord, session: SessionId) =>
-    record.session === session ? record : { ...record, session };
+  const planSession = Effect.fn("Executor.planSession")(function* (
+    runId: RunId,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    ops: StageOps,
+    prepared: PreparedRun,
+    startedAtMillis: number,
+    previous: SessionId | null,
+    observation: RunPlanObservation,
+  ) {
+    const currentPlanStage = yield* resolvePlanStage(workspace, item);
+    if (!currentPlanStage?.stage.enabled) {
+      return yield* PlanDeclined.make({ message: `${item.stage} is disabled` });
+    }
+    yield* harness
+      .preflight(currentPlanStage.stage.harness, currentPlanStage.profile)
+      .pipe(Effect.mapError((error) => PlanDeclined.make({ message: error.message })));
+    const currentOps = opsFor(workspace, item, currentPlanStage);
+    const policySession = ops.resumePolicy ? yield* resumeCandidateSession(currentOps, prepared) : previous;
+    const preparedSessionId = prepared.session ?? policySession;
+    const preparedSession = preparedSessionId ? yield* ledger.getSession(preparedSessionId) : null;
+    const compatiblePrevious = yield* compatibleSession(currentOps, preparedSession);
+    const resumesPrevious = compatiblePrevious !== null;
+    const selectedOps = resumesPrevious ? currentOps : freshRecoveryOps(workspace, item, currentOps);
+    const prompt = resumesPrevious ? prepared.prompt : selectedOps.fullPrompt;
+    const preparedRequest = yield* harnessRequest(
+      workspace,
+      currentPlanStage,
+      prepared.checkoutPath,
+      prompt,
+      resumesPrevious ? compatiblePrevious : null,
+    );
+    const contributions = admittedContributions(
+      preparedRequest.contributions,
+      currentPlanStage.contributionSettings,
+      workspace.config.name,
+    );
+    const mcpServers = admittedMcpServers(preparedRequest.mcpServers, contributions);
+    const context = yield* contextAssembler.assemble({
+      runId,
+      cwd: preparedRequest.checkoutPath,
+      projectRoot: preparedRequest.checkoutPath,
+      operatingInstructions: preparedRequest.operatingInstructions,
+      contributions,
+    });
+    const session =
+      preparedRequest.session ??
+      (selectedOps.resumePolicy ? null : compatiblePrevious) ??
+      (yield* mintSession(workspace, selectedOps, startedAtMillis));
+    const plan = assembleRunPlan({
+      runId,
+      workspace,
+      item,
+      observation,
+      resolved: currentPlanStage,
+      prompt: preparedRequest.prompt,
+      checkoutPath: preparedRequest.checkoutPath,
+      sessionKind: harness.sessionKind(preparedRequest.harness),
+      context,
+      projectedMembers: harness.projectedMembers(preparedRequest.harness),
+      middleware: harness.planMiddleware(preparedRequest.harness),
+      contributions: preparedRequest.contributions,
+      mcpServers: mcpServers.map(({ identity, name, endpoint, bearer }) => ({
+        identity,
+        name,
+        endpoint,
+        authenticated: bearer !== null,
+      })),
+      provenanceStamps: preparedRequest.provenanceStamps,
+    });
+    const projectedMcp = plan.mcp.filter((server) => "endpoint" in server);
+    const mcpCredentials = new Map(
+      mcpServers.flatMap((server, index) => {
+        const identity = projectedMcp[index]?.identity;
+        return identity && server.bearer ? [[identity, server.bearer] as const] : [];
+      }),
+    );
+    const runRequest = { plan, session, mcpCredentials } satisfies HarnessRequest;
+    return { request: runRequest, session, plan, selectedOps };
+  });
 
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
     workspace: RegisteredWorkspace,
@@ -398,7 +527,7 @@ export const make = Effect.gen(function* () {
     initial: A,
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
   ) => {
-    const budget = defaultRunBudget(request.stage);
+    const budget = defaultRunBudget(request.plan.operation);
     return Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
       Effect.timeout(budget),
       Effect.catchTag("TimeoutError", () =>
@@ -408,7 +537,7 @@ export const make = Effect.gen(function* () {
               new HarnessError({
                 reason: "turn",
                 retryable: true,
-                message: `${request.stage} harness run timed out after ${budget}`,
+                message: `${request.plan.operation} harness run timed out after ${budget}`,
               }),
             ),
           ),
@@ -471,10 +600,9 @@ export const make = Effect.gen(function* () {
     return yield* foldTriageResume(record, request, expected);
   });
 
-  const applyFailure = Effect.fn("Executor.applyFailure")(function* (
+  const reportFailure = Effect.fn("Executor.reportFailure")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    runId: RunId,
     retryable: boolean,
     reason: string,
     handle: string | null,
@@ -505,11 +633,22 @@ export const make = Effect.gen(function* () {
         }),
       });
     }
-    yield* settleRun(runId, {
+    return {
       status: exhausted ? "exhausted" : "failed",
       usage: null,
       endedAtMillis,
-    });
+    } satisfies RunUpdate;
+  });
+
+  const applyFailure = Effect.fn("Executor.applyFailure")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    runId: RunId,
+    retryable: boolean,
+    reason: string,
+    handle: string | null,
+  ) {
+    yield* settleRun(runId, yield* reportFailure(workspace, item, retryable, reason, handle));
   });
 
   const applyTriageSuccess = Effect.fn("Executor.applyTriageSuccess")(function* (
@@ -535,29 +674,26 @@ export const make = Effect.gen(function* () {
   const structuredResultError = (message: string) =>
     new HarnessError({ reason: "turn", retryable: true, message });
 
-  const decodeStageResult = Effect.fn("Executor.decodeStageResult")(function* (
-    stage: LifecycleStage,
+  const expectSingleStructuredResult = (
+    stage: "triage" | "implement" | "follow-up",
     acc: Pick<RunAccumulator, "structuredOutputs">,
-  ) {
+  ) => {
     if (acc.structuredOutputs.length !== 1) {
-      return yield* structuredResultError(
-        `expected exactly one structured ${stage} result, received ${acc.structuredOutputs.length}`,
+      return Effect.fail(
+        structuredResultError(
+          `expected exactly one structured ${stage} result, received ${acc.structuredOutputs.length}`,
+        ),
       );
     }
-    const schema = stageResultCompletionSchema(stage);
-    if (!schema) {
-      return yield* structuredResultError(`structured ${stage} result has no shared schema`);
-    }
-    const completion = yield* Schema.decodeUnknownEffect(schema)(acc.structuredOutputs[0]).pipe(
-      Effect.mapError((error) =>
-        structuredResultError(`invalid structured ${stage} result: ${error.message}`),
-      ),
-    );
-    return completion.object;
-  });
+    return Effect.succeed(acc.structuredOutputs[0]);
+  };
 
   const decodeTriageResult = (acc: TriageAccumulator) =>
-    decodeStageResult("triage", acc).pipe(Effect.map((result) => result as TriageStageResult));
+    expectSingleStructuredResult("triage", acc).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(TriageStageResultCompletion)),
+      Effect.mapError((error) => structuredResultError(`invalid structured triage result: ${error.message}`)),
+      Effect.map((completion) => completion.object),
+    );
 
   const completeTriage = Effect.fn("Executor.completeTriage")(function* (
     workspace: RegisteredWorkspace,
@@ -599,7 +735,13 @@ export const make = Effect.gen(function* () {
   });
 
   const decodeImplementResult = (acc: RunAccumulator) =>
-    decodeStageResult("implement", acc).pipe(Effect.map((result) => result as ImplementStageResult));
+    expectSingleStructuredResult("implement", acc).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(ImplementStageResultCompletion)),
+      Effect.mapError((error) =>
+        structuredResultError(`invalid structured implement result: ${error.message}`),
+      ),
+      Effect.map((completion) => completion.object),
+    );
 
   const completeImplement = Effect.fn("Executor.completeImplement")(function* (
     workspace: RegisteredWorkspace,
@@ -622,27 +764,25 @@ export const make = Effect.gen(function* () {
   const prepareImplement = Effect.fn("Executor.prepareImplement")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
     prompt: string,
   ) {
     const worktree = yield* worktrees.ensure(workspace, item);
-    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null, item.stage);
+    return { checkoutPath: worktree.path, prompt, session: null } satisfies PreparedRun;
   });
 
-  const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+  const triageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+    const resolved = planStage.stage;
     const fullPrompt = buildTriagePrompt(resolved, item);
     return {
       kind: "triage",
       resolved,
+      planStage,
       branch: null,
-      prepare: harnessRequest(
-        workspace,
-        resolved,
-        workspace.config.checkoutPath,
-        fullPrompt,
-        null,
-        item.stage,
-      ),
+      prepare: Effect.succeed({
+        checkoutPath: workspace.config.checkoutPath,
+        prompt: fullPrompt,
+        session: null,
+      }),
       complete: (record: RunRecord, acc: TriageAccumulator) => completeTriage(workspace, item, record, acc),
       fullPrompt,
       resume: false,
@@ -650,14 +790,16 @@ export const make = Effect.gen(function* () {
     } satisfies StageOps;
   };
 
-  const implementOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+  const implementOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+    const resolved = planStage.stage;
     const branch = branchName(item);
     const fullPrompt = buildImplementPrompt(resolved, item);
     return {
       kind: "text",
       resolved,
+      planStage,
       branch,
-      prepare: prepareImplement(workspace, item, resolved, fullPrompt),
+      prepare: prepareImplement(workspace, item, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeImplement(workspace, item, runId, acc),
       fullPrompt,
       resume: false,
@@ -711,7 +853,13 @@ export const make = Effect.gen(function* () {
   });
 
   const decodeFollowUpResult = (acc: RunAccumulator) =>
-    decodeStageResult("follow-up", acc).pipe(Effect.map((result) => result as FollowUpStageResult));
+    expectSingleStructuredResult("follow-up", acc).pipe(
+      Effect.flatMap(Schema.decodeUnknownEffect(FollowUpStageResultCompletion)),
+      Effect.mapError((error) =>
+        structuredResultError(`invalid structured follow-up result: ${error.message}`),
+      ),
+      Effect.map((completion) => completion.object),
+    );
 
   const completeFollowUp = Effect.fn("Executor.completeFollowUp")(function* (
     workspace: RegisteredWorkspace,
@@ -735,7 +883,6 @@ export const make = Effect.gen(function* () {
   const prepareFollowUp = Effect.fn("Executor.prepareFollowUp")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
     branch: string,
     context: FollowUpContext,
     prompt: string,
@@ -743,37 +890,31 @@ export const make = Effect.gen(function* () {
     const worktree = yield* worktrees.ensure(workspace, item, { branch });
     const last = yield* latestResumableBranchRun(workspace, branch);
     const session = last?.session ? yield* ledger.getSession(last.session) : null;
-    const now = yield* Clock.currentTimeMillis;
-    const decision = decideResume({
-      sessionKind: session?.kind ?? null,
-      handle: sessionHandle(session),
-      lastRunStartedAtMillis: last?.startedAtMillis ?? null,
-      lastRunTotalTokens: meteredTotalTokens(last?.usage),
-      now,
-      worktreeRecreated: worktree.created,
-      fresh: context.fresh,
-      maxAgeMillis: resolved.resumeMaxAgeMillis,
-      maxTokens: resolved.resumeMaxTokens,
-    });
-    return yield* harnessRequest(
-      workspace,
-      resolved,
-      worktree.path,
+    return {
+      checkoutPath: worktree.path,
       prompt,
-      decision.kind === "resume" && session?.harness === resolved.harness ? (last?.session ?? null) : null,
-      item.stage,
-    );
+      session: null,
+      resumeCandidate: {
+        session,
+        lastRunStartedAtMillis: last?.startedAtMillis ?? null,
+        lastRunTotalTokens: meteredTotalTokens(last?.usage),
+        worktreeRecreated: worktree.created,
+        fresh: context.fresh,
+      },
+    } satisfies PreparedRun;
   });
 
-  const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
+  const followUpOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+    const resolved = planStage.stage;
     const branch = item.followUpBranch ?? branchName(item);
     const context = item.followUp ?? defaultFollowUp;
     const fullPrompt = buildFollowUpPrompt(resolved, item, workspace.config.linearHistory);
     return {
       kind: "text",
       resolved,
+      planStage,
       branch,
-      prepare: prepareFollowUp(workspace, item, resolved, branch, context, fullPrompt),
+      prepare: prepareFollowUp(workspace, item, branch, context, fullPrompt),
       complete: (runId: RunId, acc: RunAccumulator) => completeFollowUp(workspace, item, runId, acc, context),
       fullPrompt,
       resume: false,
@@ -802,80 +943,77 @@ export const make = Effect.gen(function* () {
   const resumePrepare = Effect.fn("Executor.resumePrepare")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
     session: SessionId,
   ) {
     if (item.stage === "triage") {
       const path = workspace.config.checkoutPath;
-      return yield* harnessRequest(
-        workspace,
-        resolved,
-        path,
-        buildContinuationNudge(path),
-        session,
-        item.stage,
-      );
+      return { checkoutPath: path, prompt: buildContinuationNudge(path), session } satisfies PreparedRun;
     }
     const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    return yield* harnessRequest(
-      workspace,
-      resolved,
-      worktree.path,
-      buildContinuationNudge(worktree.path),
+    return {
+      checkoutPath: worktree.path,
+      prompt: buildContinuationNudge(worktree.path),
       session,
-      item.stage,
-    );
+    } satisfies PreparedRun;
   });
 
   const freshRecoveryPrepare = Effect.fn("Executor.freshRecoveryPrepare")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
-    resolved: ResolvedStage,
     prompt: string,
   ) {
     if (item.stage === "triage") {
-      return yield* harnessRequest(
-        workspace,
-        resolved,
-        workspace.config.checkoutPath,
-        prompt,
-        null,
-        item.stage,
-      );
+      return { checkoutPath: workspace.config.checkoutPath, prompt, session: null } satisfies PreparedRun;
     }
     const worktree = yield* worktrees.ensure(workspace, item, resumeWorktreeOptions(item));
-    return yield* harnessRequest(workspace, resolved, worktree.path, prompt, null, item.stage);
+    return { checkoutPath: worktree.path, prompt, session: null } satisfies PreparedRun;
   });
 
-  const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
-    if (item.stage === "implement") return implementOps(workspace, item, resolved);
-    if (item.stage === "follow-up") return followUpOps(workspace, item, resolved);
-    return triageOps(workspace, item, resolved);
+  const stageOps = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+    if (item.stage === "implement") return implementOps(workspace, item, planStage);
+    if (item.stage === "follow-up") return followUpOps(workspace, item, planStage);
+    return triageOps(workspace, item, planStage);
   };
 
-  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, resolved: ResolvedStage) => {
-    const ops = stageOps(workspace, item, resolved);
+  const opsFor = (workspace: RegisteredWorkspace, item: EligibleWork, planStage: ResolvedOperation) => {
+    const ops = stageOps(workspace, item, planStage);
     const session = item.resume?.session;
     if (!session) return ops;
     return {
       ...ops,
-      prepare: resumePrepare(workspace, item, resolved, session),
+      prepare: resumePrepare(workspace, item, session),
       resume: true,
     } satisfies StageOps;
   };
 
-  const resolveStageOps = (workspace: RegisteredWorkspace, item: EligibleWork) => {
-    const resolved = resolveStage(workspace.config, item.stage);
-    if (!resolved?.enabled) return null;
+  const resolvePlanStage = Effect.fn("Executor.resolvePlanStage")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const picture = controlStore.health === "available" ? yield* controlStore.picture : null;
+    return resolveRunPlanStage(
+      workspace.config,
+      item.stage,
+      picture?.operationSettings ?? [],
+      picture?.contributionSettings ?? [],
+    );
+  });
+
+  const resolveStageOps = Effect.fn("Executor.resolveStageOps")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const resolved = yield* resolvePlanStage(workspace, item);
+    if (!resolved?.stage.enabled) return null;
     return opsFor(workspace, item, resolved);
-  };
+  });
 
   const freshRecoveryOps = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
-    const fresh = stageOps(workspace, item, ops.resolved);
+    const fresh = stageOps(workspace, item, ops.planStage);
     if (!item.resume) return fresh;
     return {
       ...fresh,
-      prepare: freshRecoveryPrepare(workspace, item, ops.resolved, fresh.fullPrompt),
+      prepare: freshRecoveryPrepare(workspace, item, fresh.fullPrompt),
     } satisfies StageOps;
   };
 
@@ -909,11 +1047,36 @@ export const make = Effect.gen(function* () {
     return yield* settle(foldOutcome(record, ops, request), (acc) => ops.complete(runId, acc));
   });
 
+  const acceptPlannedRun = Effect.fn("Executor.acceptPlannedRun")(function* (
+    runId: RunId,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    startedAtMillis: number,
+    planned: Effect.Success<ReturnType<typeof planSession>>,
+  ) {
+    const record: RunRecord = {
+      id: runId,
+      workspace: workspace.config.name,
+      workItem: item.id,
+      stage: item.stage,
+      harness: planned.selectedOps.resolved.harness,
+      branch: planned.selectedOps.branch,
+      session: planned.session,
+      usage: null,
+      status: "running",
+      startedAtMillis,
+      endedAtMillis: null,
+    };
+    yield* ledger.acceptRun(record, planned.plan);
+    return { ...planned, record };
+  });
+
   const runClaimed = Effect.fn("Executor.runClaimed")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     ops: StageOps,
     startedAtMillis: number,
+    observation: RunPlanObservation,
   ) {
     const runId = yield* nextRunId(startedAtMillis);
     const correlation = {
@@ -923,58 +1086,47 @@ export const make = Effect.gen(function* () {
       runId,
     };
     return yield* Effect.gen(function* () {
-      const previous = yield* priorSession(workspace, item, ops);
-      const selectedOps = previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-      const record: RunRecord = {
-        id: runId,
-        workspace: workspace.config.name,
-        workItem: item.id,
-        stage: item.stage,
-        harness: selectedOps.resolved.harness,
-        branch: selectedOps.branch,
-        session: previous,
-        usage: null,
-        status: "running",
-        startedAtMillis,
-        endedAtMillis: null,
-      };
-      yield* ledger.insertRun(record);
-      yield* Effect.withFiber((self) => runControl.register(runId, self, workspace));
-      const persistSession = (session: SessionId) => {
-        const prepared = withSession(record, session);
-        return prepared === record
-          ? Effect.succeed(prepared)
-          : ledger.setRunSession(runId, session).pipe(Effect.map(() => prepared));
-      };
-      return yield* planSession(workspace, selectedOps, startedAtMillis, previous).pipe(
-        Effect.matchEffect({
-          onFailure: (error) =>
-            (previous ? Effect.succeed(previous) : mintSession(workspace, selectedOps, startedAtMillis)).pipe(
-              Effect.flatMap(persistSession),
-              Effect.flatMap((prepared) =>
-                handleOf(ledger, prepared.session).pipe(
-                  Effect.flatMap((handle) =>
-                    applyFailure(
-                      workspace,
-                      item,
-                      runId,
-                      retryableOf(error),
-                      prepareFailureReason(error),
-                      handle,
-                    ),
-                  ),
-                ),
-              ),
+      const previous = yield* candidateSession(workspace, item, ops.branch);
+      const selectedOps: StageOps =
+        previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+      return yield* selectedOps.prepare.pipe(
+        Effect.flatMap((prepared) =>
+          controlStore.withWrite(
+            planSession(
+              runId,
+              workspace,
+              item,
+              selectedOps,
+              prepared,
+              startedAtMillis,
+              previous,
+              observation,
+            ).pipe(
+              Effect.flatMap((planned) => acceptPlannedRun(runId, workspace, item, startedAtMillis, planned)),
             ),
-          onSuccess: ({ request, session }) =>
-            persistSession(session).pipe(
-              Effect.flatMap((prepared) =>
-                settleOutcome(workspace, item, selectedOps, prepared, runId, request),
+          ),
+        ),
+        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+        Effect.matchEffect({
+          onFailure: (error) => {
+            if (error._tag === "PlanDeclined") return Effect.void;
+            return handleOf(ledger, previous).pipe(
+              Effect.flatMap((handle) =>
+                reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
               ),
+            );
+          },
+          onSuccess: ({ request, selectedOps: acceptedOps, record }) =>
+            Effect.withFiber((self) => runControl.register(runId, self, workspace)).pipe(
+              Effect.andThen(settleOutcome(workspace, item, acceptedOps, record, runId, request)),
             ),
         }),
       );
-    }).pipe(Effect.annotateLogs(correlation), Effect.annotateSpans(correlation));
+    }).pipe(
+      Effect.ensuring(cleanupRunContext(runId)),
+      Effect.annotateLogs(correlation),
+      Effect.annotateSpans(correlation),
+    );
   });
 
   const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (
@@ -982,29 +1134,36 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     ops: StageOps,
     startedAtMillis: number,
+    observation: RunPlanObservation,
   ) {
     if (item.stage === "follow-up" && item.followUp?.stalled) {
       return yield* handoffStalled(workspace, item);
     }
-    yield* runClaimed(workspace, item, ops, startedAtMillis);
+    yield* runClaimed(workspace, item, ops, startedAtMillis, observation);
   });
+
+  const decline = (workspace: RegisteredWorkspace, item: EligibleWork) =>
+    item.recovery || item.resume
+      ? releaseClaim(workspace, item.id).pipe(Effect.map(() => false))
+      : Effect.succeed(false);
 
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
+    observation: RunPlanObservation,
   ) {
-    const stageOps = resolveStageOps(workspace, item);
-    if (!stageOps) return false;
+    const stageOps = yield* resolveStageOps(workspace, item);
+    if (!stageOps) return yield* decline(workspace, item);
     const runnable = yield* harness
-      .preflight(stageOps.resolved.harness, operationPolicyProfile(item.stage))
+      .preflight(stageOps.resolved.harness, stageOps.planStage.profile)
       .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
-    if (!runnable) return false;
+    if (!runnable) return yield* decline(workspace, item);
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {
       return false;
     }
-    yield* runOrHandoff(workspace, item, stageOps, startedAtMillis).pipe(
+    yield* runOrHandoff(workspace, item, stageOps, startedAtMillis, observation).pipe(
       Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
     );
     return true;

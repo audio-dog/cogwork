@@ -15,6 +15,7 @@ export {
   GrepArgs,
   makeOwnedToolSet,
   type OwnedToolSet,
+  ownedToolNames,
   ReadArgs,
   readFile,
   runBash,

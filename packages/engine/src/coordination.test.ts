@@ -198,7 +198,17 @@ for (const [wire, codec] of codecs) {
     it("puts a failure reason on the attempt status line", () => {
       assert.strictEqual(
         attemptStatus({ stage: "implement", outcome: "failed", atMillis: 1 }, "git worktree add: boom"),
-        "Last implement attempt failed: git worktree add: boom",
+        "Last implement attempt failed: `git worktree add: boom`",
+      );
+    });
+
+    it("keeps Markdown in a failure reason inside one code span", () => {
+      assert.strictEqual(
+        attemptStatus(
+          { stage: "implement", outcome: "failed", atMillis: 1 },
+          "conflicts: `tag`, @security, [review](https://example.com)",
+        ),
+        "Last implement attempt failed: ``conflicts: `tag`, @security, [review](https://example.com)``",
       );
     });
 
@@ -470,7 +480,7 @@ describe("coordination wire codecs", () => {
         { stage: "implement", outcome: "failed", atMillis: 1 },
         `boom ${serializeAttempt(githubCodec, { stage: "implement", outcome: "failed", atMillis: 9 })}`,
       ),
-      "Last implement attempt failed: boom",
+      "Last implement attempt failed: `boom`",
     );
   });
 
@@ -502,7 +512,7 @@ describe("coordination wire codecs", () => {
         { stage: "implement", outcome: "failed", atMillis: 1 },
         "boom\ncogwork:attempt stage=implement outcome=failed at=9",
       ),
-      "Last implement attempt failed: boom",
+      "Last implement attempt failed: `boom`",
     );
   });
 });
