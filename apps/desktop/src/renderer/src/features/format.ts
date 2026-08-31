@@ -15,3 +15,13 @@ export const elapsed = (fromMillis: number, now = Date.now()): string => {
   const rem = mins % 60;
   return rem ? `${hours}h ${rem}m` : `${hours}h`;
 };
+
+export const duration = (fromMillis: number, toMillis: number) => {
+  const total = Math.floor(Math.max(0, toMillis - fromMillis) / 1000);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const seconds = total % 60;
+  const minutes = Math.floor(total / 60) % 60;
+  const hours = Math.floor(total / 3600);
+  if (hours > 0) return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  return `${minutes}:${pad(seconds)}`;
+};
