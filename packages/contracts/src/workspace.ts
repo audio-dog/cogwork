@@ -1,12 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import {
-  HarnessName,
-  IssueTrackerType,
-  SourceControlType,
-  TrimmedNonEmptyString,
-  WorkspaceId,
-} from "./base-schemas";
+import { IssueTrackerType, SourceControlType, TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
 import { ConnectionBindingId } from "./connection";
 import { McpSkill } from "./mcp-skill";
 
@@ -61,18 +55,9 @@ export const SourceControlConfig = Schema.Struct({
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
 
-export const HarnessPreferences = Schema.Struct({
-  preferred: HarnessName,
-});
-export type HarnessPreferences = typeof HarnessPreferences.Type;
-
 export const PlaybookStageConfig = Schema.Struct({
-  enabled: Schema.optional(Schema.Boolean),
   prompt: Schema.optional(TrimmedNonEmptyString),
   skill: Schema.optional(TrimmedNonEmptyString),
-  harness: Schema.optional(HarnessName),
-  model: Schema.optional(TrimmedNonEmptyString),
-  effort: Schema.optional(TrimmedNonEmptyString),
   resumeMaxAgeMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
   resumeMaxTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
 });
@@ -114,7 +99,6 @@ export const WorkspaceBindingWorktreeConfig = Schema.Struct({
 export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConfig.Type;
 
 export const WorkspaceInput = Schema.Struct({
-  harness: HarnessPreferences,
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorkspaceInputWorktreeConfig),
@@ -154,7 +138,6 @@ export const WorkspaceConfig = Schema.Struct({
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
-  harness: HarnessPreferences,
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),
