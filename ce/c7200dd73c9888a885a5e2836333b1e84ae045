@@ -1,0 +1,19 @@
+apps/desktop/CONTEXT.md
+  s_a153a0b5417fd5::t_8445200c059526 178-184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "cec7200dd73c9888a885a5e2836333b1e84ae045",
+  "prompts": {},
+  "sessions": {
+    "s_a153a0b5417fd5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d165e350-952d-4af6-8faa-b60d6f44b711",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
