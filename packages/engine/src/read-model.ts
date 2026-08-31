@@ -41,6 +41,7 @@ export const workspaceInfoOf = (
   harness: workspace.config.harness.preferred,
   poll: state?.poll ?? pendingPoll,
   contributions: workspace.contributions,
+  availability: state?.availability ?? [],
   eligible: (state?.eligible ?? []).map(actionableOf),
   claimed: state?.claimed ?? [],
   blocked: state?.blocked ?? [],
