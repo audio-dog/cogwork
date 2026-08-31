@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "provenance": "cogwork-0.0.1",
   "authRecipe": null,
-  "requiredConnections": ["github"],
+  "requiredConnections": [],
   "contributions": [
     {
       "kind": "mcp-server",

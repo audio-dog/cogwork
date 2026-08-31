@@ -35,6 +35,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
+import { ConnectionStore } from "./connection";
 import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
@@ -243,7 +244,7 @@ interface PluginMcpContribution {
 const availablePluginMcp = (contribution: PluginContribution) => {
   if (contribution.load._tag !== "Loaded") return [];
   const server = contribution.load.mcpServer;
-  if (!server?.credentialAvailable) return [];
+  if (!server) return [];
   return [{ id: contribution.id, server }] satisfies ReadonlyArray<PluginMcpContribution>;
 };
 
@@ -255,6 +256,7 @@ export const make = Effect.gen(function* () {
   const worktrees = yield* WorktreeManager;
   const assembler = yield* McpSkillAssembler;
   const plugins = yield* PluginManager;
+  const connections = yield* ConnectionStore;
   const runControl = yield* RunControl;
   const sessionStore = yield* SessionStore;
   const sourceControl = yield* SourceControlProvider;
@@ -308,6 +310,23 @@ export const make = Effect.gen(function* () {
       ({ id, server }) =>
         Effect.gen(function* () {
           const { endpoint, secretEnv } = server;
+          if (!server.credentialAvailable) {
+            return yield* new CredentialError({
+              account: id,
+              message: `${id} needs a ready Connection`,
+            });
+          }
+          const connectionId = server.connectionId;
+          if (connectionId) {
+            const credential = yield* connections
+              .bearer(connectionId)
+              .pipe(
+                Effect.mapError(
+                  (error) => new CredentialError({ account: connectionId, message: error.message }),
+                ),
+              );
+            return { identity: id, name: id, endpoint, bearer: credential.token };
+          }
           if (!secretEnv) return { identity: id, name: id, endpoint, bearer: null };
           const bearer = yield* Config.redacted(secretEnv).pipe(
             Effect.mapError(
@@ -1008,6 +1027,29 @@ export const make = Effect.gen(function* () {
     return opsFor(workspace, item, resolved);
   });
 
+  const preflightRunPlan = Effect.fn("Executor.preflightRunPlan")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    if (item.stage === "follow-up" && item.followUp?.stalled) return true;
+    return yield* controlStore
+      .withWrite(
+        Effect.gen(function* () {
+          const planStage = yield* resolvePlanStage(workspace, item);
+          if (!planStage?.stage.enabled) return false;
+          yield* harnessRequest(workspace, planStage, workspace.config.checkoutPath, item.title, null);
+          return true;
+        }),
+      )
+      .pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.logWarning("run plan unavailable", { error }).pipe(Effect.map(() => false)),
+          onSuccess: () => Effect.succeed(true),
+        }),
+      );
+  });
+
   const freshRecoveryOps = (workspace: RegisteredWorkspace, item: EligibleWork, ops: StageOps) => {
     const fresh = stageOps(workspace, item, ops.planStage);
     if (!item.resume) return fresh;
@@ -1158,6 +1200,7 @@ export const make = Effect.gen(function* () {
       .preflight(stageOps.resolved.harness, stageOps.planStage.profile)
       .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
     if (!runnable) return yield* decline(workspace, item);
+    if (!(yield* preflightRunPlan(workspace, item))) return yield* decline(workspace, item);
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const claimed = yield* tryClaim(workspace, item, startedAtMillis);
     if (!claimed) {

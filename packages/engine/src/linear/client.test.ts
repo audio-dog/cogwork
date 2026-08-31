@@ -112,6 +112,8 @@ const stubCredentials = (token: string | null, source: CredentialSource, invalid
       Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
     persistProviderKey: (key) =>
       Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
+    configureConnection: () => Effect.void,
+    removeConnection: () => Effect.void,
   });
 
 const withToken = (
@@ -248,6 +250,15 @@ describe("linear client", () => {
       yield* client.observeIssues(ref, null);
       assert.strictEqual(authorizationOf(fetchStub), "test-key");
     }).pipe(withToken("test-key", "env")),
+  );
+
+  it.effect("sends a stored API key as the bare Authorization value", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { teams: { nodes: [teamBundle] } } } }));
+      const client = yield* LinearClient;
+      yield* client.observeIssues(ref, null);
+      assert.strictEqual(authorizationOf(fetchStub), "stored-key");
+    }).pipe(withToken("stored-key", "stored-key")),
   );
 
   it.effect("sends a stored OAuth token as a Bearer credential", () =>

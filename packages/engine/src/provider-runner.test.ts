@@ -81,6 +81,8 @@ const credentialStore = (providerKey: CredentialStoreService["providerKey"]): Cr
   invalidate: () => Effect.void,
   providerKey,
   persistProviderKey: unexpected,
+  configureConnection: unexpected,
+  removeConnection: unexpected,
 });
 
 const credentialLayer = (providerKey: CredentialStoreService["providerKey"]) =>

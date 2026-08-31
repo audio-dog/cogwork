@@ -1,6 +1,7 @@
 import type {
   BlockedItem,
   ClaimedItem,
+  ConnectionId,
   NeedsHumanItem,
   PollPauseReason,
   PollState,
@@ -15,8 +16,12 @@ import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import { type Classification, classify, type EligibleWork } from "./classify";
+import { ConnectionStore } from "./connection";
+import { ControlStore } from "./control-store";
+import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
@@ -111,10 +116,23 @@ const withoutScope = (cooldowns: Map<string, Cooldown>, scope: string) => {
   return next;
 };
 
+const connectionIdsOf = (workspace: RegisteredWorkspace) => [
+  ...new Set(
+    [workspace.config.issueTracker.connectionId, workspace.config.sourceControl?.connectionId].filter(
+      (connectionId): connectionId is ConnectionId =>
+        connectionId !== undefined && connectionId !== "unbound",
+    ),
+  ),
+];
+
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
   const issueTracker = yield* IssueTracker;
   const provider = yield* SourceControlProvider;
+  const connections = yield* ConnectionStore;
+  const controlStore = yield* ControlStore;
+  const plugins = yield* PluginManager;
+  const bus = yield* DaemonEventBus;
   const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
   const pendingReceipt = yield* Ref.make<Deferred.Deferred<ReconcileReceipt> | null>(null);
@@ -179,6 +197,18 @@ export const make = Effect.gen(function* () {
     if (error.reason === "rate-limited") {
       return yield* pauseForRateLimit(workspace, scope, error);
     }
+    if (error.reason === "auth") {
+      yield* (error.connectionId ? connections.revoke(error.connectionId) : Effect.void).pipe(Effect.ignore);
+      yield* Effect.gen(function* () {
+        const picture = yield* controlStore.picture;
+        yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: picture });
+      }).pipe(Effect.ignore);
+      yield* Effect.gen(function* () {
+        const pluginOverview = yield* plugins.overview;
+        const overview = yield* connections.overview(pluginOverview);
+        yield* bus.publish({ _tag: "ConnectionsChanged", connections: overview, danglingWorkspaces: [] });
+      }).pipe(Effect.ignore);
+    }
     yield* Effect.logWarning("work source polling paused", {
       workspace: workspace.config.name,
       reason: error.reason,
@@ -190,7 +220,7 @@ export const make = Effect.gen(function* () {
   const clearCooldown = (scope: string | null) =>
     scope === null ? Effect.void : Ref.update(cooldowns, (current) => withoutScope(current, scope));
 
-  const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
+  const pollReadyWorkspace = Effect.fn("ReconcileWorker.pollReadyWorkspace")(function* (
     workspace: RegisteredWorkspace,
   ) {
     const scope = issueTracker.rateLimitScope(workspace);
@@ -208,6 +238,28 @@ export const make = Effect.gen(function* () {
         okState(workspace, items, classify(items, workspace.config.issueTracker.assigneeAllowlist)),
       ),
       Effect.catchTag("IssueTrackerError", (error) => pauseFor(workspace, scope, error)),
+    );
+  });
+
+  const pollWorkspace = Effect.fn("ReconcileWorker.pollWorkspace")(function* (
+    workspace: RegisteredWorkspace,
+  ) {
+    return yield* Effect.forEach(
+      connectionIdsOf(workspace),
+      (connectionId) => connections.requireReady(connectionId),
+      { discard: true },
+    ).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.succeed(
+            pausedState(workspace, {
+              reason: "auth",
+              message: error.message,
+              retryAtMillis: null,
+            }),
+          ),
+        onSuccess: () => pollReadyWorkspace(workspace),
+      }),
     );
   });
 

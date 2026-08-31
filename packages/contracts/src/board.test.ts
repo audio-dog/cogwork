@@ -8,6 +8,7 @@ import { LocalContribution } from "./contribution";
 import { ControlStore, SchedulerStats } from "./daemon";
 import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
 import { RunSummary } from "./run";
+import { defaultControlStore } from "./scheduler-defaults";
 
 const workspace = Schema.decodeSync(WorkspaceId);
 const classifiedItem = Schema.decodeSync(ClassifiedItem);
@@ -236,6 +237,7 @@ describe("applyDaemonEvent", () => {
         revision: 0,
       },
       operationSettings: [],
+      connections: [],
       pluginInstalls: [],
       contributionSettings: [],
     });
@@ -254,6 +256,7 @@ describe("applyDaemonEvent", () => {
           value: "anthropic/claude-sonnet-4-5",
         },
       ],
+      connections: [],
       pluginInstalls: [],
       contributionSettings: [],
     });
@@ -264,6 +267,49 @@ describe("applyDaemonEvent", () => {
     ]);
 
     assert.deepStrictEqual(board.controlStore, next);
+  });
+
+  it("leaves Connection state to Connection events when the Control store changes", () => {
+    const connected = fold([
+      event({
+        _tag: "ConnectionsChanged",
+        connections: {
+          connections: [
+            {
+              system: "linear",
+              connection: {
+                id: "linear/acme",
+                system: "linear",
+                account: "acme",
+                status: "established",
+              },
+              readiness: { _tag: "Ready" },
+              pluginId: "linear",
+            },
+          ],
+        },
+        danglingWorkspaces: [],
+      }),
+    ]);
+    const revoked = applyDaemonEvent(
+      connected,
+      event({
+        _tag: "ControlStoreChanged",
+        controlStore: controlStore({
+          ...defaultControlStore,
+          connections: [
+            {
+              id: "linear/acme",
+              system: "linear",
+              account: "acme",
+              status: "revoked",
+            },
+          ],
+        }),
+      }),
+    );
+
+    assert.deepStrictEqual(revoked.connections, connected.connections);
   });
 
   it("replaces Plugin notices with the latest Plugin event", () => {

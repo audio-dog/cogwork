@@ -16,6 +16,7 @@ import {
   statusCommand,
   watchCommand,
 } from "./commands";
+import { connectionCommand } from "./connection-commands";
 import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
 import { pluginCommand } from "./plugin-commands";
@@ -38,6 +39,7 @@ const cli = Command.make("cogwork").pipe(
     loginCommand,
     modelsCommand,
     pluginCommand,
+    connectionCommand,
   ]),
 );
 

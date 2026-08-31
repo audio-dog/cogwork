@@ -29,6 +29,20 @@ export const daemonLimits = sqliteTable(
   ],
 );
 
+export const connections = sqliteTable(
+  "connections",
+  {
+    id: text("id").primaryKey(),
+    system: text("system").notNull(),
+    account: text("account").notNull(),
+    status: text("status").notNull(),
+  },
+  (table) => [
+    check("connections_system", sql`${table.system} IN ('github', 'linear')`),
+    check("connections_status", sql`${table.status} IN ('established', 'revoked')`),
+  ],
+);
+
 export const contributionSettings = sqliteTable(
   "contribution_settings",
   {

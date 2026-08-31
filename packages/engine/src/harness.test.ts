@@ -25,6 +25,8 @@ const harnessServices = {
     invalidate: () => Effect.die("unexpected credential invalidation"),
     providerKey: () => Effect.die("unexpected provider key lookup"),
     persistProviderKey: () => Effect.die("unexpected provider key persistence"),
+    configureConnection: () => Effect.die("unexpected Connection configuration"),
+    removeConnection: () => Effect.die("unexpected Connection removal"),
   },
   fileSystem: FileSystem.makeNoop({}),
 };

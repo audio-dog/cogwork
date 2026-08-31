@@ -37,6 +37,7 @@ const controlStore = {
     dailyBudget: 50,
     revision: 0,
   },
+  connections: [],
   contributionSettings: [
     {
       contribution: { id: "local:repo/mcp/tools", kind: "mcp-server" },
@@ -56,6 +57,8 @@ const board: Board = {
   controlStore,
   plugins: null,
   pluginNotices: [],
+  connections: null,
+  connectionNotices: [],
 };
 
 describe("configurationPicture", () => {

@@ -363,7 +363,7 @@ const requireSuccess = (operation: string, payload: { readonly success: boolean 
 // A Linear API key authenticates as itself; an OAuth token is a bearer credential and has to reach
 // the SDK as `accessToken` or it is sent without the `Bearer` prefix.
 const sdkAuth = (credential: Credential) =>
-  credential.source === "env"
+  credential.source === "env" || credential.source === "stored-key"
     ? { apiKey: Redacted.value(credential.token) }
     : { accessToken: Redacted.value(credential.token) };
 
@@ -470,12 +470,20 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       : {};
     const filter = issuesFilter(assigneeIds);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
-    const issues = yield* Stream.paginate(null as string | null, (after) =>
-      Effect.map(loadPage(after), (team: typeof IssuesTeamNode.Type) => {
-        const page = team.issues.pageInfo;
-        const next = page.hasNextPage ? Option.fromNullOr(page.endCursor) : Option.none<string>();
-        return [team.issues.nodes, next] as const;
-      }),
+    const issues = yield* Stream.paginate<string | null, typeof IssueNode.Type, IssueTrackerError>(
+      null,
+      (after) =>
+        Effect.gen(function* () {
+          const team: typeof IssuesTeamNode.Type = yield* loadPage(after);
+          const page = team.issues.pageInfo;
+          const next: Option.Option<string> = page.hasNextPage
+            ? Option.fromNullOr(page.endCursor)
+            : Option.none();
+          return [team.issues.nodes, next] satisfies readonly [
+            ReadonlyArray<typeof IssueNode.Type>,
+            Option.Option<string>,
+          ];
+        }),
     ).pipe(Stream.runCollect);
     return issues.map(toObservedIssue);
   });

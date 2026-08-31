@@ -1,4 +1,4 @@
-import { DeclaredVersion, localOwnerId, WorkspaceId } from "@cogwork/contracts";
+import { Connection, DeclaredVersion, localOwnerId, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -9,6 +9,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import { ConnectionStore } from "./connection";
 import { bootControlStoreLayer, ControlStore, controlStoreClientLayer } from "./control-store";
 import { PluginManager, pluginManagerLayer } from "./plugin";
 
@@ -31,6 +32,36 @@ const catalogDocument = JSON.stringify({
 });
 
 const workspaceId = Schema.decodeSync(WorkspaceId)("workspace-1");
+const linearConnection = Schema.decodeSync(Connection)({
+  id: "linear/acme",
+  system: "linear",
+  account: "acme",
+  status: "established",
+});
+const connectionStoreLayer = Layer.succeed(ConnectionStore, {
+  overview: () => Effect.succeed({ connections: [] }),
+  find: (connectionId) => Effect.succeed(connectionId === linearConnection.id ? linearConnection : null),
+  findSystem: (system) => Effect.succeed(system === "linear" ? linearConnection : null),
+  bearer: () => Effect.die("unexpected credential read"),
+  readiness: () => Effect.succeed({ _tag: "Ready" }),
+  requireReady: () => Effect.void,
+  requireSystemReady: () => Effect.void,
+  establish: () => Effect.succeed(linearConnection),
+  revoke: () => Effect.void,
+  remove: () => Effect.void,
+});
+const unavailableConnectionStoreLayer = Layer.succeed(ConnectionStore, {
+  overview: () => Effect.succeed({ connections: [] }),
+  find: () => Effect.succeed(null),
+  findSystem: () => Effect.succeed(null),
+  bearer: () => Effect.die("unexpected credential read"),
+  readiness: () => Effect.succeed({ _tag: "NotReady", reason: "Not connected" }),
+  requireReady: () => Effect.die("unexpected Connection requirement"),
+  requireSystemReady: () => Effect.die("unexpected Connection requirement"),
+  establish: () => Effect.die("unexpected Connection establishment"),
+  revoke: () => Effect.void,
+  remove: () => Effect.void,
+});
 const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { LINEAR_API_KEY: "test-key" } }));
 
 const manifestDocument = (version: string) =>
@@ -56,7 +87,7 @@ const manifestDocument = (version: string) =>
     ],
   });
 
-function fixture() {
+function fixture(connections: typeof connectionStoreLayer = connectionStoreLayer) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -76,7 +107,10 @@ function fixture() {
       Layer.provideMerge(controlStoreClientLayer(storePath)),
     );
     const managerLayer = Layer.merge(
-      pluginManagerLayer({ catalogPath, provisionRoot }).pipe(Layer.provideMerge(storeLayer)),
+      pluginManagerLayer({ catalogPath, provisionRoot }).pipe(
+        Layer.provide(connections),
+        Layer.provideMerge(storeLayer),
+      ),
       configLayer,
     );
     return { root, catalogPath, bundlePath, storePath, provisionRoot, storeLayer, managerLayer };
@@ -103,6 +137,13 @@ layer(NodeServices.layer)((it) => {
           DeclaredVersion.make({ source: "plugin:linear", version: "1.0.0" }),
         );
         assert.deepStrictEqual(second.overview, first.overview);
+        const load = first.overview.plugins[0]?.contributions.find(
+          (contribution) => contribution.kind === "mcp-server",
+        )?.load;
+        if (load?._tag !== "Loaded") return assert.fail("expected loaded MCP server");
+        const mcpServer = load.mcpServer;
+        assert.strictEqual(mcpServer?.connectionId, linearConnection.id);
+        assert.isTrue(mcpServer?.credentialAvailable);
         assert.strictEqual(picture.pluginInstalls.length, 1);
         assert.deepStrictEqual(picture.contributionSettings, [
           {
@@ -298,6 +339,45 @@ layer(NodeServices.layer)((it) => {
         assert.isTrue(reclaimed[0]?.startsWith("linear@1.0.0--"));
       }).pipe(Effect.provide(test.managerLayer));
     }),
+  );
+
+  it.effect("does not require a Connection for an uninstalled Plugin", () =>
+    Effect.gen(function* () {
+      const test = yield* fixture(unavailableConnectionStoreLayer);
+      const contributions = yield* Effect.flatMap(PluginManager, (plugins) =>
+        plugins.contributions(workspaceId),
+      ).pipe(Effect.provide(test.managerLayer));
+
+      assert.deepStrictEqual(contributions, []);
+    }),
+  );
+
+  it.effect("keeps disconnected Plugin contributions available for Run Plan admission", () =>
+    fixture(unavailableConnectionStoreLayer).pipe(
+      Effect.flatMap((test) =>
+        Effect.gen(function* () {
+          const plugins = yield* PluginManager;
+          yield* plugins.install("linear", localOwnerId);
+          const store = yield* ControlStore;
+          if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
+          yield* store.updateContributionSetting({
+            _tag: "Set",
+            row: {
+              contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
+              scope: { _tag: "SettingsProfile" },
+              enabled: false,
+            },
+          });
+          return yield* plugins.contributions(workspaceId);
+        }).pipe(Effect.provide(test.managerLayer)),
+      ),
+      Effect.map((contributions) =>
+        assert.deepStrictEqual(
+          contributions.map((contribution) => contribution.kind),
+          ["mcp-server", "rules"],
+        ),
+      ),
+    ),
   );
 
   it.effect("keeps membership retryable when file reclamation fails", () =>

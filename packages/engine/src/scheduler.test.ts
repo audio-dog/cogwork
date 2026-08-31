@@ -98,6 +98,7 @@ describe("Scheduler.configFromControlStore", () => {
         revision: 2,
       },
       operationSettings: [],
+      connections: [],
       pluginInstalls: [],
       contributionSettings: [],
     });

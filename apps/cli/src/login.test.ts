@@ -1,6 +1,7 @@
 import { CredentialStore } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -35,10 +36,16 @@ const graphqlBody = (init: RequestInit | undefined) => {
   return parsed.query ?? "";
 };
 
+const requestUrl = (input: string | URL | Request) => {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+};
+
 // Routes the two Linear endpoints the flow touches to canned responses. The loopback callback is
 // driven separately by the fake browser opener, which hits the real server directly.
 const routedFetch: typeof globalThis.fetch = (input, init) => {
-  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  const url = requestUrl(input);
   if (url.includes("/oauth/token")) return Promise.resolve(jsonResponse(tokenBody));
   const document = graphqlBody(init);
   const data = document.includes("query viewer")
@@ -58,6 +65,42 @@ const fakeBrowser = Layer.succeed(BrowserOpener, {
     }),
 });
 
+class LoginCredentialFile extends Context.Service<LoginCredentialFile, string>()(
+  "@cogwork/cli/login.test/LoginCredentialFile",
+) {}
+
+const withLoginTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        Layer.effect(
+          CredentialStore.CredentialStore,
+          Effect.gen(function* () {
+            const filePath = yield* LoginCredentialFile;
+            const stored = yield* makeFileStore(filePath);
+            return CredentialStore.make({ stored });
+          }),
+        ),
+        fakeBrowser,
+        FetchHttpClient.layer,
+      ).pipe(
+        Layer.provideMerge(
+          Layer.effect(
+            LoginCredentialFile,
+            Effect.gen(function* () {
+              const fs = yield* FileSystem.FileSystem;
+              const path = yield* Path.Path;
+              const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-login-" });
+              return path.join(dir, "credentials.json");
+            }),
+          ),
+        ),
+        Layer.provideMerge(NodeServices.layer),
+      ),
+    ),
+    Effect.provideService(FetchHttpClient.Fetch, routedFetch),
+  );
+
 describe("login linear", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -66,27 +109,8 @@ describe("login linear", () => {
   it.live("catches the loopback redirect, exchanges the code, and stores the discovered identity", () =>
     Effect.gen(function* () {
       vi.stubGlobal("fetch", vi.fn(routedFetch));
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-login-" });
-      const filePath = path.join(dir, "credentials.json");
-
-      const result = yield* loginLinear(config).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            Layer.effect(
-              CredentialStore.CredentialStore,
-              Effect.gen(function* () {
-                const stored = yield* makeFileStore(filePath);
-                return CredentialStore.make({ stored });
-              }),
-            ),
-            fakeBrowser,
-            FetchHttpClient.layer,
-          ),
-        ),
-        Effect.provideService(FetchHttpClient.Fetch, routedFetch),
-      );
+      const filePath = yield* LoginCredentialFile;
+      const result = yield* loginLinear(config);
 
       assert.deepStrictEqual(result, { organization: "acme", actorUserId: "bot-user" });
 
@@ -97,7 +121,20 @@ describe("login linear", () => {
       assert.strictEqual(stored[0]?.actorUserId, "bot-user");
       assert.strictEqual(stored[0] && Redacted.value(stored[0].token.accessToken), "linear-access-token");
       assert.deepStrictEqual(stored[0]?.token.scopes, ["read", "write"]);
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+    }).pipe(withLoginTest),
+  );
+
+  it.live("does not store a login for a different established organization", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const filePath = yield* LoginCredentialFile;
+      const switchedConfig = { ...config, expectedOrganization: "other" };
+
+      const error = yield* Effect.flip(loginLinear(switchedConfig));
+
+      assert.include(error.message, "other");
+      assert.deepStrictEqual(yield* (yield* makeFileStore(filePath)).load, []);
+    }).pipe(withLoginTest),
   );
 });
 

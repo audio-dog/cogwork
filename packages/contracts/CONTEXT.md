@@ -282,7 +282,7 @@ _Avoid_: Retry (the control plane's own automatic re-attempt of a *retryable* fa
 ### Credentials
 
 **Credential store**:
-The daemon's durable, secret store of credentials for the external systems a workspace binds — an OAuth token pair (access + refresh) or a client-credentials token — keyed by the system's account (a Linear organization). A seam: the backing layer is a `0600` file today, an OS keychain on desktop, a per-user database row on a hosted server. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo. Only the Linear issue tracker resolves through it today; GitHub still reads its token from the environment. It holds the secret half of a **Connection**, whose non-secret record lives in the Control store.
+The daemon's durable secret store for Connection credentials: stored API keys, environment-variable references, and OAuth token pairs keyed by system and account. A seam: the backing layer is a `0600` file today, an OS keychain on desktop, a per-user database row on a hosted server. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo. Both Linear and GitHub resolve through it. It holds the secret half of a **Connection**, whose non-secret record lives in the Control store.
 _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id` lives in config, not here), keychain (only one possible backing layer).
 
 ### Runs

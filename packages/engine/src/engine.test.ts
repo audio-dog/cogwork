@@ -1,4 +1,8 @@
 import {
+  Connection,
+  type ConnectionId,
+  type ConnectionReadiness,
+  connectionIdOf,
   DaemonRpcs,
   defaultControlStore,
   WorkItemId,
@@ -17,14 +21,17 @@ import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
+import { ConnectionStore, connectionOverview } from "./connection";
 import { ControlStore } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as EventPublisher from "./event-publisher";
 import type { TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
+import { observeWorkspace } from "./observe";
 import { PluginManager } from "./plugin";
 import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
@@ -37,6 +44,16 @@ import { type PrSignals, SourceControlProvider } from "./source-control";
 import { WorktreeManager } from "./worktree";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
+const pluginManagerLayer = Layer.succeed(PluginManager, {
+  overview: Effect.succeed({ plugins: [] }),
+  install: () => Effect.die(new Error("unexpected Plugin install")),
+  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+  contributions: () => Effect.succeed([]),
+});
+const reconcileLayer = Reconcile.layer.pipe(
+  Layer.provide(DaemonEventBus.layer),
+  Layer.provide(pluginManagerLayer),
+);
 
 const registeredWorkspace: Registry.RegisteredWorkspace = {
   source: "control-store:example",
@@ -114,6 +131,77 @@ class LogMessages extends Context.Service<LogMessages, MutableRef.MutableRef<Rea
   ]).pipe(Layer.provideMerge(LogMessages.layer));
 }
 
+describe("workspace observation", () => {
+  const workspace: Registry.RegisteredWorkspace = {
+    ...registeredWorkspace,
+    config: Schema.decodeSync(WorkspaceConfig)({
+      name: "example",
+      checkoutPath: "/repos/example",
+      issueTracker: {
+        type: "linear",
+        connectionId: "linear/acme",
+        teams: ["ENG"],
+      },
+      sourceControl: {
+        type: "github",
+        connectionId: "github/acme",
+        repo: "acme/example",
+      },
+      harness: { preferred: "cursor" },
+    }),
+  };
+  const githubWorkspace: Registry.RegisteredWorkspace = {
+    ...workspace,
+    config: Schema.decodeSync(WorkspaceConfig)({
+      name: "github-example",
+      checkoutPath: "/repos/github-example",
+      issueTracker: {
+        type: "github",
+        connectionId: "github/acme",
+        repo: "acme/example",
+      },
+      harness: { preferred: "cursor" },
+    }),
+  };
+  const auth = new IssueTracker.IssueTrackerError({ reason: "auth", message: "unauthorized" });
+
+  it.effect("identifies the tracker Connection when tracker observation fails", () =>
+    Effect.gen(function* () {
+      const observe = observeWorkspace(stub({ observe: () => Effect.fail(auth) }), {
+        observe: () => Effect.succeed(new Map()),
+        comment: () => Effect.void,
+      });
+      const error = yield* Effect.flip(observe(workspace));
+
+      assert.strictEqual(error.connectionId, workspace.config.issueTracker.connectionId);
+    }),
+  );
+
+  it.effect("identifies the source-control Connection when provider observation fails", () =>
+    Effect.gen(function* () {
+      const observe = observeWorkspace(stub({}), {
+        observe: () => Effect.fail(auth),
+        comment: () => Effect.void,
+      });
+      const error = yield* Effect.flip(observe(workspace));
+
+      assert.strictEqual(error.connectionId, workspace.config.sourceControl?.connectionId);
+    }),
+  );
+
+  it.effect("uses the GitHub tracker Connection for fallback source-control failures", () =>
+    Effect.gen(function* () {
+      const observe = observeWorkspace(stub({}), {
+        observe: () => Effect.fail(auth),
+        comment: () => Effect.void,
+      });
+      const error = yield* Effect.flip(observe(githubWorkspace));
+
+      assert.strictEqual(error.connectionId, githubWorkspace.config.issueTracker.connectionId);
+    }),
+  );
+});
+
 const defectOnceThenObserve = sources(
   Layer.effect(
     IssueTracker.IssueTracker,
@@ -133,15 +221,15 @@ const defectOnceThenObserve = sources(
 describe("reconcile worker", () => {
   const registryLayer = Layer.succeed(Registry.WorkspaceRegistry, Registry.readOnlyRegistry(sampleRegistry));
 
-  const workerLayer = Reconcile.layer.pipe(
+  const workerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, sources(IssueTracker.emptyLayer))),
   );
-  const defectiveWorkerLayer = Reconcile.layer.pipe(
+  const defectiveWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, defectOnceThenObserve)),
     Layer.provideMerge(ReconcileObserveCount.layer),
     Layer.provideMerge(LogMessages.captureLayer),
   );
-  const neverWorkerLayer = Reconcile.layer.pipe(
+  const neverWorkerLayer = reconcileLayer.pipe(
     Layer.provide(
       Layer.mergeAll(
         registryLayer,
@@ -214,7 +302,7 @@ describe("reconcile worker", () => {
           }),
         ),
       );
-      const layer = Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
+      const layer = reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
 
       yield* Effect.gen(function* () {
         const worker = yield* Reconcile.ReconcileWorker;
@@ -253,7 +341,7 @@ describe("reconcile worker", () => {
     openBlockers: 0,
     proposal: null,
   };
-  const workerWithWork = Reconcile.layer.pipe(
+  const workerWithWork = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([eligibleItem]))),
   );
 
@@ -308,7 +396,7 @@ describe("reconcile worker", () => {
     headRef: "aud-2-in-review",
     followable: true,
   };
-  const workerWithInReview = Reconcile.layer.pipe(
+  const workerWithInReview = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem], [[id("AUD-2"), inReviewPr]]))),
   );
 
@@ -341,9 +429,22 @@ describe("reconcile worker", () => {
       }),
     ),
   );
-  const workerWithAuthFailure = Reconcile.layer.pipe(
+  const workerWithAuthFailure = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, authFailingSource)),
   );
+  const connectedGithubWorkspace: Registry.RegisteredWorkspace = {
+    ...registeredWorkspace,
+    config: Schema.decodeSync(WorkspaceConfig)({
+      name: "example",
+      checkoutPath: "/repos/example",
+      issueTracker: {
+        type: "github",
+        connectionId: "github/acme",
+        repo: "acme/example",
+      },
+      harness: { preferred: "cursor" },
+    }),
+  };
 
   it.effect("pauses a workspace on auth failure instead of failing the tick", () =>
     Effect.gen(function* () {
@@ -360,6 +461,98 @@ describe("reconcile worker", () => {
         { reason: "auth", retryAtMillis: null },
       );
     }).pipe(Effect.provide(workerWithAuthFailure), Effect.scoped),
+  );
+
+  it.effect("revokes the configured Connection when an auth failure omits its identity", () =>
+    Effect.gen(function* () {
+      const revoked = yield* Ref.make<ReadonlyArray<ConnectionId>>([]);
+      const registry = Layer.succeed(
+        Registry.WorkspaceRegistry,
+        Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
+      );
+      const connectionStore = Layer.succeed(ConnectionStore, {
+        overview: () => Effect.succeed({ connections: [] }),
+        find: () => Effect.succeed(null),
+        findSystem: () => Effect.succeed(null),
+        bearer: () => Effect.die("unexpected Connection bearer"),
+        readiness: () => Effect.succeed({ _tag: "Ready" } satisfies ConnectionReadiness),
+        requireReady: () => Effect.void,
+        requireSystemReady: () => Effect.void,
+        establish: () => Effect.die("unexpected Connection establish"),
+        revoke: (connectionId) => Ref.update(revoked, (connections) => [...connections, connectionId]),
+        remove: () => Effect.die("unexpected Connection remove"),
+      });
+      const layer = reconcileLayer.pipe(
+        Layer.provide(Layer.mergeAll(registry, authFailingSource, connectionStore)),
+      );
+
+      yield* Effect.gen(function* () {
+        const worker = yield* Reconcile.ReconcileWorker;
+        yield* worker.submit();
+      }).pipe(Effect.provide(layer), Effect.scoped);
+
+      assert.deepStrictEqual(yield* Ref.get(revoked), [connectionIdOf("github", "acme")]);
+    }),
+  );
+
+  it.effect("publishes revoked Connection readiness after an auth failure", () =>
+    Effect.gen(function* () {
+      const revoked = yield* Ref.make(false);
+      const connectionStore = Layer.succeed(ConnectionStore, {
+        overview: (plugins) =>
+          Ref.get(revoked).pipe(
+            Effect.map((isRevoked) => {
+              const connection = Connection.make({
+                id: connectionIdOf("github", "acme"),
+                system: "github",
+                account: "acme",
+                status: isRevoked ? "revoked" : "established",
+              });
+              const readiness = isRevoked
+                ? ({ _tag: "NotReady", reason: "Connection needs re-connect" } satisfies ConnectionReadiness)
+                : ({ _tag: "Ready" } satisfies ConnectionReadiness);
+              return connectionOverview([connection], plugins, new Map([[connection.id, readiness]]));
+            }),
+          ),
+        find: () => Effect.succeed(null),
+        findSystem: () => Effect.succeed(null),
+        bearer: () => Effect.die("unexpected Connection bearer"),
+        readiness: () => Effect.succeed({ _tag: "Ready" } satisfies ConnectionReadiness),
+        requireReady: () => Effect.void,
+        requireSystemReady: () => Effect.void,
+        establish: () => Effect.die("unexpected Connection establish"),
+        revoke: () => Ref.set(revoked, true),
+        remove: () => Effect.die("unexpected Connection remove"),
+      });
+      const registry = Layer.succeed(
+        Registry.WorkspaceRegistry,
+        Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
+      );
+      const layer = Reconcile.layer.pipe(
+        Layer.provideMerge(DaemonEventBus.layer),
+        Layer.provide(pluginManagerLayer),
+        Layer.provide(Layer.mergeAll(registry, authFailingSource, connectionStore)),
+      );
+
+      const events = yield* Effect.gen(function* () {
+        const bus = yield* DaemonEventBus.DaemonEventBus;
+        const subscription = yield* bus.subscribe();
+        const published = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.filter((event) => event._tag === "ConnectionsChanged"),
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.forkChild,
+        );
+        yield* (yield* Reconcile.ReconcileWorker).submit();
+        return yield* Fiber.join(published);
+      }).pipe(Effect.provide(layer), Effect.scoped);
+
+      const event = events[0];
+      if (event?._tag !== "ConnectionsChanged") return assert.fail("expected ConnectionsChanged");
+      const github = event.connections.connections.find((connection) => connection.system === "github");
+      assert.strictEqual(github?.connection?.status, "revoked");
+      assert.strictEqual(github?.readiness._tag, "NotReady");
+    }),
   );
 
   const rateLimitedSource = (observes: Ref.Ref<number>, retryAfterMillis: number | undefined) =>
@@ -385,7 +578,7 @@ describe("reconcile worker", () => {
     );
 
   const rateLimitedWorker = (observes: Ref.Ref<number>, retryAfterMillis?: number) =>
-    Reconcile.layer.pipe(
+    reconcileLayer.pipe(
       Layer.provide(Layer.mergeAll(registryLayer, rateLimitedSource(observes, retryAfterMillis))),
     );
 
@@ -480,7 +673,7 @@ describe("reconcile worker", () => {
         );
       }).pipe(
         Effect.provide(
-          Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, scopelessSource(observes)))),
+          reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, scopelessSource(observes)))),
         ),
         Effect.scoped,
       );
@@ -495,19 +688,15 @@ const availableControlStore = Layer.succeed(ControlStore, {
   seed: defaultControlStore,
   picture: Effect.succeed(defaultControlStore),
   setDaemonLimit: () => Effect.succeed(defaultControlStore),
+  establishConnection: () => Effect.succeed(defaultControlStore),
+  revokeConnection: () => Effect.succeed(defaultControlStore),
+  removeConnection: () => Effect.succeed(defaultControlStore),
   updateOperationSetting: () => Effect.succeed(defaultControlStore),
   installPlugin: () => Effect.succeed(defaultControlStore),
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
 });
-const pluginManagerLayer = Layer.succeed(PluginManager, {
-  overview: Effect.succeed({ plugins: [] }),
-  install: () => Effect.die(new Error("unexpected Plugin install")),
-  uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
-  contributions: () => Effect.succeed([]),
-});
-
 const schedulerStubService = {
   tick: () => Effect.succeed(0),
   awaitIdle: Effect.void,
@@ -584,10 +773,10 @@ describe("daemon heartbeats", () => {
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
   });
-  const emptyWorkerLayer = Reconcile.layer.pipe(
+  const emptyWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registeredSample, sources(IssueTracker.emptyLayer))),
   );
-  const defectiveWorkerLayer = Reconcile.layer.pipe(
+  const defectiveWorkerLayer = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registeredSample, defectOnceThenObserve)),
     Layer.provideMerge(ReconcileObserveCount.layer),
   );
@@ -663,6 +852,7 @@ describe("daemon heartbeats", () => {
           }),
         publishControlStore: (controlStore) => Effect.succeed(controlStore),
         publishPlugins: (plugins) => Effect.succeed(plugins),
+        publishConnections: (connections) => Effect.succeed(connections),
       });
       const layer = publisherLayer.pipe(
         Layer.provideMerge(
@@ -728,7 +918,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(EventPublisher.layer),
-      Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
+      Layer.provideMerge(reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, sourceLayer)))),
       Layer.provideMerge(registryLayer),
       Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub),
