@@ -87,7 +87,15 @@ interface RequestOverrides {
 }
 
 const testMcpIdentity = (name: string, index: number) =>
-  `cogwork_mcp_${Array.from(name, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}_${index}`;
+  `test__${name.toLowerCase().replace(/[^a-z0-9_]+/g, "_")}__${index}`;
+
+const testMcpEnvName = (name: string) =>
+  `COGWORK_MCP_${Buffer.from(name).toString("hex").toUpperCase()}_BEARER`;
+
+const testMcpProjection = (name: string, index: number) => {
+  const projectedName = testMcpIdentity(name, index);
+  return { projectedName, envName: testMcpEnvName(projectedName) };
+};
 
 const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest => {
   const stage = overrides.stage ?? "implement";
@@ -249,6 +257,13 @@ const linkedWorktree = (handle: SandboxHandle) =>
   });
 
 describe("codexRunner", () => {
+  it("encodes projected MCP names into exact environment keys", () => {
+    assert.strictEqual(
+      testMcpEnvName("test__linear__0"),
+      "COGWORK_MCP_746573745F5F6C696E6561725F5F30_BEARER",
+    );
+  });
+
   it("declares an opaque Codex-owned session", () => {
     assert.strictEqual(codexRunner({ name }).sessionKind, "opaque-handle");
   });
@@ -351,16 +366,16 @@ describe("codexRunner", () => {
 
       const config = adapterCalls[0]?.[1];
       if (!config) return assert.fail("adapter was not created");
+      const { projectedName, envName } = testMcpProjection("linear", 0);
       assert.deepStrictEqual(config.config, {
-        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_0.url": '"https://mcp.linear.app/mcp/readonly"',
-        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_0.bearer_token_env_var":
-          '"COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER"',
+        [`mcp_servers.${projectedName}.url`]: '"https://mcp.linear.app/mcp/readonly"',
+        [`mcp_servers.${projectedName}.bearer_token_env_var`]: `"${envName}"`,
       });
       assert.deepStrictEqual(config.env, {
         ...codexChildEnvironment(),
-        COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER: "mcp-secret",
+        [envName]: "mcp-secret",
       });
-      assert.strictEqual(config.env?.COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER, "mcp-secret");
+      assert.strictEqual(config.env?.[envName], "mcp-secret");
       const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
       assert.notInclude(serialized, "mcp-secret");
     }),
@@ -395,15 +410,16 @@ describe("codexRunner", () => {
 
       const config = adapterCalls[0]?.[1];
       if (!config) return assert.fail("adapter was not created");
+      const { projectedName: publicName } = testMcpProjection("linear.api", 0);
+      const { projectedName: privateName, envName: privateEnvName } = testMcpProjection("linear-api", 1);
       assert.deepStrictEqual(config.config, {
-        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_2e_61_70_69_0.url": '"https://mcp.example.com/public"',
-        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_2d_61_70_69_1.url": '"https://mcp.example.com/private"',
-        "mcp_servers.cogwork_mcp_6c_69_6e_65_61_72_2d_61_70_69_1.bearer_token_env_var":
-          '"COGWORK_MCP_6C_69_6E_65_61_72_2D_61_70_69_1_BEARER"',
+        [`mcp_servers.${publicName}.url`]: '"https://mcp.example.com/public"',
+        [`mcp_servers.${privateName}.url`]: '"https://mcp.example.com/private"',
+        [`mcp_servers.${privateName}.bearer_token_env_var`]: `"${privateEnvName}"`,
       });
       assert.deepStrictEqual(config.env, {
         ...codexChildEnvironment(),
-        COGWORK_MCP_6C_69_6E_65_61_72_2D_61_70_69_1_BEARER: "rotated-secret",
+        [privateEnvName]: "rotated-secret",
       });
       const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
       assert.notInclude(serialized, "rotated-secret");
@@ -431,8 +447,9 @@ describe("codexRunner", () => {
       const firstConfig = adapterCalls[0]?.[1];
       const rotatedConfig = adapterCalls[1]?.[1];
       if (!firstConfig || !rotatedConfig) return assert.fail("adapter was not created for both runs");
-      assert.strictEqual(firstConfig.env?.COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER, "first-secret");
-      assert.strictEqual(rotatedConfig.env?.COGWORK_MCP_6C_69_6E_65_61_72_0_BEARER, "rotated-secret");
+      const { envName } = testMcpProjection("linear", 0);
+      assert.strictEqual(firstConfig.env?.[envName], "first-secret");
+      assert.strictEqual(rotatedConfig.env?.[envName], "rotated-secret");
     }),
   );
 
