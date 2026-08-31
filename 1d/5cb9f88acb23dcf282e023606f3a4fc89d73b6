@@ -1,0 +1,35 @@
+packages/engine/src/classify.test.ts
+  s_edbf1ac71fb3fd::t_23b0faa5b81cd2 1,52,54,56,60,62-63
+  s_edbf1ac71fb3fd::t_5bd8e33ea184be 51,53,55,57-59,61,64-74
+  s_edbf1ac71fb3fd::t_24ce82f5790620 75-76
+packages/engine/src/classify.ts
+  s_edbf1ac71fb3fd::t_e35d71e823447e 105-106,108,112-114
+  s_edbf1ac71fb3fd::t_11d09c37d624dd 47-48,53,55
+  s_edbf1ac71fb3fd::t_a653a7b60463ac 120
+  s_edbf1ac71fb3fd::t_23b0faa5b81cd2 124,130,133,139,142-148,151,158
+  s_edbf1ac71fb3fd::t_799472064e303f 10,100-104,189-193
+  s_edbf1ac71fb3fd::t_c08a7d3097ae3c 18,50-52,54,56-58,107,109-110,116-117,121-123,127,131-132,136,140-141,149-150,154,159-160,194-211,219-226,230,235-238,240-243
+  s_edbf1ac71fb3fd::t_83208bfd9374ae 49
+  s_edbf1ac71fb3fd::t_cc9ff7403b425d 125-126
+  s_edbf1ac71fb3fd::t_2a8bd3d5f8797e 128-129
+  s_edbf1ac71fb3fd::t_63c3522a926392 134-135
+  s_edbf1ac71fb3fd::t_c4023af393cff1 137-138
+  s_edbf1ac71fb3fd::t_1cccf2dc56f6b5 152-153
+  s_edbf1ac71fb3fd::t_95368b716be519 155-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1d5cb9f88acb23dcf282e023606f3a4fc89d73b6",
+  "prompts": {},
+  "sessions": {
+    "s_edbf1ac71fb3fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a058e8-a122-7900-aa4d-3dc1425c7a82",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
