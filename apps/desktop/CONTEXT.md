@@ -175,6 +175,13 @@ stream with reasoning / tool calls / diffs folded to one-line rows, over a reloc
 line. The item tab is focal on it while a run is live.
 _Avoid_: Raw activity (that's the Activity tab), firehose, chat log.
 
+**Step**:
+One unit of agent work inside a **run transcript** — a shell command, a file edit, or a recorded
+thought — drawn as a single row of verb, target and outcome. Consecutive steps fold into one group so
+a long tool chain never buries the notes either side of it. A step is what the agent *did*; a **note**
+is what it *said* (the stage result's summary, which this harness emits in place of prose).
+_Avoid_: Tool call (only some steps are tool calls), activity (that's the daemon event stream), event.
+
 ## Cross-context edges
 
 - **desktop → cli.** In development the supervisor spawns the CLI `daemon` command as the engine
