@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_a153a0b5417fd5::t_5d3d3ce7c2ce6c 1
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_a153a0b5417fd5::t_3ba1983a17edfe 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0e552eafef4cf85119893ffa2e0bf8bab2c6880b",
+  "prompts": {},
+  "sessions": {
+    "s_a153a0b5417fd5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d165e350-952d-4af6-8faa-b60d6f44b711",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
