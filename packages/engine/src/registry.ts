@@ -17,6 +17,7 @@ import * as Layer from "effect/Layer";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { scanAuthoringTrees } from "./authoring-tree";
@@ -120,6 +121,10 @@ interface WorkspaceBindingRow {
 }
 
 const workspaceInputName = "workspace.json";
+const emptyWorkspaceInputJson = "{}";
+
+// EISDIR, ENOTDIR, and ELOOP also decode to BadResource, so only NotFound means the file is absent.
+const isMissingWorkspaceInput = (error: PlatformError.PlatformError) => error.reason._tag === "NotFound";
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
 const decodeWorkspaceIdOption = Schema.decodeUnknownOption(WorkspaceId);
 const decodeIssueTracker = Schema.decodeUnknownEffect(Schema.fromJsonString(IssueTrackerConfig));
@@ -211,6 +216,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   const path = yield* Path.Path;
   const inputPath = workspaceInputPath(path, row.checkoutPath);
   const input = yield* fs.readFileString(inputPath).pipe(
+    Effect.catchIf(isMissingWorkspaceInput, () => Effect.succeed(emptyWorkspaceInputJson)),
     Effect.flatMap(decodeWorkspaceInput),
     Effect.mapError((error) =>
       registrationError(`Cannot load Workspace input ${inputPath}: ${messageOf(error)}`),
@@ -232,7 +238,6 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
     checkoutPath: row.checkoutPath,
     issueTracker,
     sourceControl,
-    harness: input.harness,
     mcpSkills: input.mcpSkills,
     playbook: input.playbook,
     worktrees: mergedWorktrees(row, input),
