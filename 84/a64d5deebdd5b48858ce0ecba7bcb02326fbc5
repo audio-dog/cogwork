@@ -1,0 +1,19 @@
+packages/ui/src/components/scroll-area.tsx
+  s_a153a0b5417fd5::t_68a482ad92be9b 7-29,32-33,35-36,60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "84a64d5deebdd5b48858ce0ecba7bcb02326fbc5",
+  "prompts": {},
+  "sessions": {
+    "s_a153a0b5417fd5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d165e350-952d-4af6-8faa-b60d6f44b711",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
