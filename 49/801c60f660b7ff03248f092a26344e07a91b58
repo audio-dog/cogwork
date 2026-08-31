@@ -1,0 +1,36 @@
+packages/engine/src/recovery.ts
+  s_edbf1ac71fb3fd::t_80954082565573 24,40,183-185,187-189,191-204,211-217
+  s_edbf1ac71fb3fd::t_b558ff9cb07602 190
+  s_edbf1ac71fb3fd::t_7268d2a7c42142 2,186
+  s_edbf1ac71fb3fd::t_932b25ba077ac9 15
+packages/engine/src/recovery.test.ts
+  s_edbf1ac71fb3fd::t_4d455c81283d93 625-658
+  s_edbf1ac71fb3fd::t_11e1302bef6d13 5,610-611
+  s_edbf1ac71fb3fd::t_80954082565573 237,247-249,251-252
+  s_edbf1ac71fb3fd::t_fd46bc9544a57a 290-312,316,612-624
+  s_edbf1ac71fb3fd::t_66948840a847ad 3,716,719-721,743,746-748
+  s_edbf1ac71fb3fd::t_ce2a386b0a0b5c 167
+  s_edbf1ac71fb3fd::t_70e4a5c794c180 240-241,254-257,260
+  s_edbf1ac71fb3fd::t_c421fc5c1adadf 176,183
+  s_edbf1ac71fb3fd::t_2bd3a3c38e5b4e 250
+  s_edbf1ac71fb3fd::t_897d357556fb3e 313-315
+  s_edbf1ac71fb3fd::t_9972482a9d377f 317
+  s_edbf1ac71fb3fd::t_362cc00f6a4b8e 659-660
+  s_edbf1ac71fb3fd::t_2dedacb1e526fa 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "49801c60f660b7ff03248f092a26344e07a91b58",
+  "prompts": {},
+  "sessions": {
+    "s_edbf1ac71fb3fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a058e8-a122-7900-aa4d-3dc1425c7a82",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
