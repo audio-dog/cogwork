@@ -122,4 +122,5 @@ Use `it.live` only when the test genuinely needs the real clock or console.
 - `.repos/effect/ai-docs/src/09_testing/20_layer-tests.ts`: the probe-as-service pattern (`TodoRepoTestRef`) and layer-group lifetime notes.
 - `.agents/skills/effect-ts/references/guide-testing.md`.
 - `packages/engine/src/run-ledger.test.ts` and `packages/engine/src/run-recorder.test.ts`: existing `it.layer` usage in the repo.
-- `packages/engine/src/executor.test.ts` and `packages/engine/src/scheduler.test.ts`: the sandwich shape and hand-rolled probes this pattern replaces.
+- `packages/engine/src/executor.test.ts` and `packages/engine/src/scheduler.test.ts`: migrated exemplars — probe services composed with `Layer.provideMerge`, flat per-test provides, and `awaitIdle`.
+- `packages/engine/src/recovery.test.ts` and `packages/engine/src/event-publisher.test.ts`: the sandwich shape and hand-rolled probes this pattern replaces.
