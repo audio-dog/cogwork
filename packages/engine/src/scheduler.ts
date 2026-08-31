@@ -225,7 +225,7 @@ export const make = (config: SchedulerConfig) =>
             Effect.logWarning("scheduled job crashed", {
               workspace: candidate.workspace.config.name,
               item: candidate.work.id,
-              cause,
+              cause: Cause.pretty(cause),
             }),
         ),
         Effect.ensuring(Ref.update(stateRef, (state) => release(state, candidate))),

@@ -94,14 +94,16 @@ export class ContextAssembler extends Context.Service<ContextAssembler, ContextA
 export const make = (config: ContextAssemblerConfig, fs: ContextFsService): ContextAssemblerService => {
   const runPath = (runId: RunId) => joinPath(joinPath(config.homeDir, "run-plans"), runPathSegment(runId));
 
-  const nonEmpty = (content: string | null) =>
-    content !== null && content.trim().length > 0 ? content : null;
+  const trimmedContent = (content: string | null) => {
+    const trimmed = content?.trim() ?? "";
+    return trimmed.length > 0 ? trimmed : null;
+  };
 
   const readLayer = Effect.fn("ContextAssembler.readLayer")(function* (
     kind: InstructionLayerKind,
     source: string,
   ) {
-    const content = nonEmpty(yield* fs.readFile(source));
+    const content = trimmedContent(yield* fs.readFile(source));
     return content === null ? null : ({ kind, source, content } satisfies InstructionLayer);
   });
 
@@ -173,9 +175,10 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
         .filter((name) => name !== "INSTRUCTIONS.md")
         .sort();
       const resources = yield* Effect.forEach(names, (name) =>
-        Effect.map(fs.readFile(joinPath(packageDir, name)), (content) =>
-          content === null ? [] : [{ source: joinPath(packageDir, name), content }],
-        ),
+        Effect.map(fs.readFile(joinPath(packageDir, name)), (content) => {
+          const trimmed = trimmedContent(content);
+          return trimmed === null ? [] : [{ source: joinPath(packageDir, name), content: trimmed }];
+        }),
       );
       return resources.flat();
     },

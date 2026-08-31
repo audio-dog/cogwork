@@ -1,4 +1,4 @@
-import { type FileContribution, RunId } from "@cogwork/contracts";
+import { type FileContribution, RunId, RunPlanInstruction, RunPlanResource } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -323,6 +323,43 @@ describe("ContextAssembler.assemble", () => {
           content: "example body",
         },
       ]);
+    }),
+  );
+
+  it.effect("trims file content so every layer and resource satisfies the Run Plan contract", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const assembler = make(
+        config,
+        stubFs(
+          {
+            "/home/.agents/rules/global.md": "global rules\n",
+            "/repos/app/AGENTS.md": "repo root rules\n\n",
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "implement instructions body\n",
+            "/engine/operating-instructions/implement-agent/GUIDE.md": "guide body\n",
+            "/engine/operating-instructions/implement-agent/BLANK.md": "\n  \n",
+          },
+          copies,
+        ),
+      );
+
+      const assembled = yield* assembler.assemble(request);
+
+      assert.deepStrictEqual(
+        assembled.layers.map(({ content }) => content),
+        ["global rules", "repo root rules", "implement instructions body"],
+      );
+      assert.deepStrictEqual(assembled.operatingInstructionResources, [
+        { source: `${assembled.operatingInstructionsPath}/GUIDE.md`, content: "guide body" },
+      ]);
+      assert.deepStrictEqual(
+        assembled.layers.map((layer) => RunPlanInstruction.make({ ...layer }).content),
+        ["global rules", "repo root rules", "implement instructions body"],
+      );
+      assert.deepStrictEqual(
+        assembled.operatingInstructionResources.map((resource) => RunPlanResource.make(resource).content),
+        ["guide body"],
+      );
     }),
   );
 
