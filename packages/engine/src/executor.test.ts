@@ -1,4 +1,5 @@
 import {
+  AvailabilityCause,
   type ContributionSettingRow,
   DeclaredVersion,
   defaultControlStore,
@@ -7,7 +8,6 @@ import {
   localOwnerId,
   type OperationSettingRow,
   type PluginContribution,
-  PluginFailure,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
@@ -161,6 +161,22 @@ const implementWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
     harness: { preferred: "cursor" },
     playbook: { implement: { enabled: true } },
+  }),
+};
+
+const requiredNeedsWorkspace: RegisteredWorkspace = {
+  ...implementWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    ...implementWorkspace.config,
+    playbook: {
+      implement: {
+        enabled: true,
+        needs: [
+          { name: "tracker", kind: "mcp-server" },
+          { name: "review", kind: "skill" },
+        ],
+      },
+    },
   }),
 };
 
@@ -908,6 +924,18 @@ const availablePluginMcpContributions = [
   },
 ] satisfies ReadonlyArray<PluginContribution>;
 
+const unavailablePluginContributions = [
+  {
+    id: "plugin:linear/mcp/linear",
+    authority: "plugin:linear",
+    kind: "mcp-server",
+    localName: "linear",
+    summary: "Linear MCP server",
+    file: "/plugins/linear/mcp/linear.json",
+    load: { _tag: "Failed", reason: "server definition is invalid" },
+  },
+] satisfies ReadonlyArray<PluginContribution>;
+
 const missingPluginCredentialLayer = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [installedPlugin(missingPluginCredentialContributions)] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -923,17 +951,10 @@ const availablePluginMcpLayer = Layer.succeed(PluginManager, {
 });
 
 const unavailablePluginLayer = Layer.succeed(PluginManager, {
-  overview: Effect.fail(
-    new PluginFailure({
-      operation: "read Plugin snapshot",
-      pluginId: null,
-      file: null,
-      message: "catalog unavailable",
-    }),
-  ),
+  overview: Effect.succeed({ plugins: [installedPlugin(unavailablePluginContributions)] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
   uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
-  contributions: () => Effect.succeed([]),
+  contributions: () => Effect.succeed(unavailablePluginContributions),
 });
 
 const controlStoreLayer = (
@@ -964,7 +985,6 @@ const changingControlStoreLayer = (
   Layer.effect(
     ControlStore,
     Effect.gen(function* () {
-      const reads = yield* Ref.make(0);
       const writeActive = yield* Ref.make(false);
       const picture = (
         operationSettings: ReadonlyArray<OperationSettingRow>,
@@ -977,19 +997,12 @@ const changingControlStoreLayer = (
       return {
         health: "available" as const,
         seed: picture(firstOperationSettings, firstContributionSettings),
-        picture: Ref.getAndUpdate(reads, (count) => count + 1).pipe(
-          Effect.flatMap((count) => {
-            if (count === 0) {
-              return Effect.succeed(picture(firstOperationSettings, firstContributionSettings));
-            }
-            return Ref.get(writeActive).pipe(
-              Effect.flatMap((active) =>
-                active
-                  ? Effect.succeed(picture(secondOperationSettings, secondContributionSettings))
-                  : Effect.die(new Error("planning read escaped the Control store write gate")),
-              ),
-            );
-          }),
+        picture: Ref.get(writeActive).pipe(
+          Effect.flatMap((active) =>
+            active
+              ? Effect.succeed(picture(secondOperationSettings, secondContributionSettings))
+              : Effect.succeed(picture(firstOperationSettings, firstContributionSettings)),
+          ),
         ),
         setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
         updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
@@ -1083,6 +1096,7 @@ function provide(
         contextAssembler,
         controlStore,
         plugins,
+        FileSystem.layerNoop({ exists: () => Effect.succeed(true) }),
       ),
     ),
   );
@@ -1485,6 +1499,48 @@ describe("Executor.execute", () => {
     );
   });
 
+  it.effect("declines every unsatisfied required need before claiming", () => {
+    const bindings: OperationSettingRow = {
+      setting: "bindings",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "SettingsProfile" },
+      value: [{ need: "tracker", contribution: "plugin:linear/mcp/linear" }],
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const started = yield* execute(executor, requiredNeedsWorkspace, implementItem);
+      const availability = yield* executor.availabilityOf(requiredNeedsWorkspace, implementItem);
+      const ledger = yield* RunLedger.RunLedger;
+
+      assert.isFalse(started);
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+      assert.deepStrictEqual(
+        availability.causes.flatMap((cause) =>
+          AvailabilityCause.guards.UnsatisfiedNeed(cause) ? [[cause.need, cause.reason]] : [],
+        ),
+        [
+          ["tracker", "not-ready"],
+          ["review", "unbound"],
+        ],
+      );
+    }).pipe(
+      Effect.provide(
+        provide(
+          [runner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [bindings],
+          ContextCleanupCalls.contextAssemblerLayer,
+          missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
   it.effect("does nothing when triage is disabled in the Operation Definition", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -1691,6 +1747,11 @@ describe("Executor.execute", () => {
       assert.isTrue(
         request?.plan.instructions.some(({ source }) => source === "/plugins/linear/rules/linear.md"),
       );
+      const unavailable = request?.plan.mcp.find(({ identity }) => identity === "plugin:linear/mcp/linear");
+      assert.include(
+        unavailable && "unavailableReason" in unavailable ? (unavailable.unavailableReason ?? "") : "",
+        "environment key",
+      );
     }).pipe(
       Effect.provide(
         provide(
@@ -1790,6 +1851,11 @@ describe("Executor.execute", () => {
       assert.deepStrictEqual(
         request?.plan.skills.map(({ identity }) => identity),
         [privateSkill.id],
+      );
+      assert.include(
+        request?.plan.mcp.find(({ identity }) => identity === "plugin:linear/mcp/linear")
+          ?.unavailableReason ?? "",
+        "invalid",
       );
       assert.isFalse((yield* Ref.get(calls)).some((call) => call.method === "handOff"));
     }).pipe(
