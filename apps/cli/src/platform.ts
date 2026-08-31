@@ -26,20 +26,28 @@ const captureWith = (spawner: ChildProcessSpawner["Service"]) => (command: Child
     ),
   );
 
-const parseWorktrees = (stdout: string) =>
-  stdout
-    .split("\0\0")
-    .filter(Boolean)
-    .flatMap((block) => {
-      const fields = block.split("\0");
-      if (fields.some((field) => field === "prunable" || field.startsWith("prunable "))) return [];
-      const field = (prefix: string) =>
-        fields.find((value) => value.startsWith(prefix))?.slice(prefix.length) ?? null;
-      const worktreePath = field("worktree ");
-      if (!worktreePath) return [];
-      const branchRef = field("branch ");
-      return [{ path: worktreePath, branch: branchRef ? branchRef.replace("refs/heads/", "") : null }];
-    });
+const parseWorktreeBlock = (block: string) => {
+  const fields = block.split("\0");
+  const field = (prefix: string) =>
+    fields.find((value) => value.startsWith(prefix))?.slice(prefix.length) ?? null;
+  const path = field("worktree ");
+  const branchRef = field("branch ");
+  return {
+    entry: path ? { path, branch: branchRef ? branchRef.replace("refs/heads/", "") : null } : null,
+    prunable: fields.some((value) => value === "prunable" || value.startsWith("prunable ")),
+  };
+};
+
+const parseWorktrees = (stdout: string) => {
+  const parsed = stdout.split("\0\0").filter(Boolean).map(parseWorktreeBlock);
+  return {
+    entries: parsed.flatMap(({ entry, prunable }) => {
+      if (!entry || prunable) return [];
+      return [entry];
+    }),
+    hasPrunable: parsed.some(({ prunable }) => prunable),
+  };
+};
 
 const countAt = (parts: ReadonlyArray<string>, index: number) => {
   const value = Number(parts[index]);
@@ -146,7 +154,13 @@ export const gitLayer = Layer.effect(
         );
       },
       listWorktrees: (repoPath) =>
-        runGit(repoPath, ["worktree", "list", "--porcelain", "-z"]).pipe(Effect.map(parseWorktrees)),
+        runGit(repoPath, ["worktree", "list", "--porcelain", "-z"]).pipe(
+          Effect.map(parseWorktrees),
+          Effect.tap(({ hasPrunable }) =>
+            hasPrunable ? runGit(repoPath, ["worktree", "prune"]) : Effect.void,
+          ),
+          Effect.map(({ entries }) => entries),
+        ),
       fastForward: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
       divergence: (worktreePath, remote, branch) => {

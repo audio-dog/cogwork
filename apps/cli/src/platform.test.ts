@@ -301,6 +301,28 @@ const operationFixtures: ReadonlyArray<{
 
 describe("gitLayer against a real repository", () => {
   layer(testLayer)((it) => {
+    it.effect("clears a prunable registration so its worktree can be recreated", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const git = yield* Git.Git;
+        const { checkout, worktree, branch } = yield* fixture("277-prunable-recreation");
+
+        yield* fs.rename(worktree, `${worktree}-removed`);
+        const entries = yield* git.listWorktrees(checkout);
+        assert.deepStrictEqual(
+          entries.map((entry) => entry.branch),
+          ["main"],
+        );
+
+        yield* git.addWorktree({
+          repoPath: checkout,
+          worktreePath: worktree,
+          branch,
+          startPoint: "origin/main",
+        });
+      }).pipe(Effect.scoped),
+    );
+
     it.effect.each(operationFixtures)(
       "reports a $operation in progress and its unmerged paths",
       ({ operation, head, command }) =>
