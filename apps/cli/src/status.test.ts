@@ -6,14 +6,13 @@ import { formatOfflineStatus, formatStatus, formatStatusWithStore } from "./stat
 
 const workItemId = Schema.decodeSync(WorkItemId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
-const harnessName = Schema.decodeSync(HarnessName);
+const _harnessName = Schema.decodeSync(HarnessName);
 const issueTrackerType = Schema.decodeSync(IssueTrackerType);
 
 const workspace = (over: Partial<WorkspaceInfo> = {}): WorkspaceInfo => ({
   name: workspaceId("cogwork"),
   checkoutPath: "/tmp/cogwork",
   issueTracker: issueTrackerType("github"),
-  harness: harnessName("cursor"),
   poll: { status: "ok" },
   eligible: [],
   claimed: [],
@@ -157,7 +156,7 @@ describe("formatStatus", () => {
 
   it("omits the needs-human section when nothing is waiting on a human", () => {
     const output = formatStatus(status());
-    assert.include(output, "  - cogwork [github/cursor] /tmp/cogwork");
+    assert.include(output, "  - cogwork [github] /tmp/cogwork");
     assert.notInclude(output, "needs-human");
   });
 
@@ -165,7 +164,7 @@ describe("formatStatus", () => {
     const name = workspaceId("0198f16a-21d7-7000-8000-000000000001");
     const output = formatStatus(status({ workspaces: [workspace({ name, displayName: "Cogwork" })] }));
 
-    assert.include(output, `  - Cogwork (${name}) [github/cursor] /tmp/cogwork`);
+    assert.include(output, `  - Cogwork (${name}) [github] /tmp/cogwork`);
   });
 
   it("renders eligible and claimed sections alongside the workspace header", () => {

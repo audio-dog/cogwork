@@ -65,7 +65,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     ),
   );
   return [
-    `  - ${workspaceLabel(workspace)} [${workspace.issueTracker}/${workspace.harness}] ${workspace.checkoutPath}`,
+    `  - ${workspaceLabel(workspace)} [${workspace.issueTracker}] ${workspace.checkoutPath}`,
     ...poll,
     ...eligible,
     ...claimed,

@@ -34,7 +34,6 @@ describe("formatRebindResult", () => {
           displayName: "Cogwork",
           checkoutPath: "/repos/moved",
           issueTracker: "github",
-          harness: "codex",
           poll: { status: "pending" },
           contributions: [],
         }),
