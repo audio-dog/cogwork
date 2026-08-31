@@ -1,0 +1,26 @@
+docs/agent-patterns/effect-process-edges.md
+  s_10d54901fda76b::t_eed58025cb1231 59,65,67,69-73,77
+  s_10d54901fda76b::t_e5ad23082b6570 156-157
+  s_10d54901fda76b::t_1335ee317e4bf8 129
+  s_10d54901fda76b::t_1e6684b97fed01 88
+docs/agent-patterns/effect-schema-unions.md
+  s_10d54901fda76b::t_d4ce9b00390ada 60
+  s_10d54901fda76b::t_58ccba8e348409 108
+  s_10d54901fda76b::t_36f8a2d2102a72 75-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4c7abdf159ec85623f552d282df71281e3cb2079",
+  "prompts": {},
+  "sessions": {
+    "s_10d54901fda76b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49d22256-a80a-4e3f-9f46-e991b6f39bee",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
