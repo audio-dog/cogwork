@@ -344,6 +344,33 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     return granted ?? (yield* envCredential(account));
   });
 
+  const validateStoredConnection = Effect.fn("CredentialStore.validateStoredConnection")(function* (
+    connectionId: ConnectionId,
+  ) {
+    const system = connectionSystemOf(connectionId);
+    if (!system) {
+      return yield* new CredentialError({
+        account: connectionId,
+        message: `invalid Connection id: ${connectionId}`,
+      });
+    }
+    const account = connectionAccountOf(connectionId);
+    const credential = yield* resolveStored({
+      connectionId,
+      key: connectionId,
+      issueTracker: system,
+      organization: account === "default" ? null : account,
+      tokenEnv: system === "github" ? "GITHUB_TOKEN" : "LINEAR_API_KEY",
+      clientCredentials: null,
+      oauthClientId: null,
+    });
+    if (credential) return;
+    return yield* new CredentialError({
+      account: connectionId,
+      message: `no saved browser login for ${connectionId}`,
+    });
+  });
+
   const loadProviderKeys = sources.stored.loadProviderKeys ?? Effect.succeed([]);
 
   const configureConnection = Effect.fn("CredentialStore.configureConnection")(function* (
@@ -359,6 +386,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
         });
       }
     }
+    if (source._tag === "Stored") yield* validateStoredConnection(connectionId);
     const save = sources.stored.saveConnectionCredential;
     if (!save) {
       return yield* new CredentialError({

@@ -181,6 +181,38 @@ describe("CredentialStore (Connections)", () => {
     }),
   );
 
+  it.effect("keeps the previous source when replacement browser validation fails", () =>
+    Effect.gen(function* () {
+      const entries = yield* Ref.make<ReadonlyArray<import("./credential-store").StoredConnectionCredential>>(
+        [{ _tag: "ApiKey", connectionId: connectionId("linear/acme"), key: Redacted.make("working-key") }],
+      );
+      const store = make({
+        stored: {
+          load: Effect.succeed([]),
+          save: () => Effect.void,
+          loadConnectionCredentials: Ref.get(entries),
+          saveConnectionCredential: (entry) =>
+            Ref.update(entries, (current) => [
+              ...current.filter((candidate) => candidate.connectionId !== entry.connectionId),
+              entry,
+            ]),
+        },
+      });
+      const error = yield* Effect.flip(
+        store.configureConnection(connectionId("linear/acme"), { _tag: "Stored" }),
+      );
+      const credential = yield* store.bearerToken({
+        ...account,
+        key: "linear/acme",
+        organization: "acme",
+        connectionId: connectionId("linear/acme"),
+      });
+
+      assert.include(error.message, "no saved browser login");
+      assert.strictEqual(Redacted.value(credential.token), "working-key");
+    }),
+  );
+
   it.effect("does not fall through to the default environment for a missing saved grant", () =>
     Effect.gen(function* () {
       const store = make({
