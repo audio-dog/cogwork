@@ -47,6 +47,7 @@ export interface WorkspaceReconcileState {
 
 export interface ReconcileSnapshot {
   readonly generation: number;
+  readonly observedAtMillis: number;
   readonly workspaces: ReadonlyArray<WorkspaceReconcileState>;
 }
 
@@ -135,7 +136,11 @@ export const make = Effect.gen(function* () {
   const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
   const pendingReceipt = yield* Ref.make<Deferred.Deferred<ReconcileReceipt> | null>(null);
-  const snapshotRef = yield* Ref.make<ReconcileSnapshot>({ generation: 0, workspaces: [] });
+  const snapshotRef = yield* Ref.make<ReconcileSnapshot>({
+    generation: 0,
+    observedAtMillis: 0,
+    workspaces: [],
+  });
   const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
 
   const heldCooldown = Effect.fn("ReconcileWorker.heldCooldown")(function* (scope: string | null) {
@@ -263,8 +268,10 @@ export const make = Effect.gen(function* () {
     const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
       concurrency: 4,
     });
+    const observedAtMillis = yield* Clock.currentTimeMillis;
     yield* Ref.update(snapshotRef, (previous) => ({
       generation: previous.generation + 1,
+      observedAtMillis,
       workspaces: states,
     }));
     return {

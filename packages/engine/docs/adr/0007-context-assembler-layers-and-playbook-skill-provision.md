@@ -34,6 +34,10 @@ The amendment above also claimed a Rule can never "weaken Operating Instructions
 
 The same ADR narrows this ADR's ambient-instruction rule in the other direction. `AGENTS.md` is no longer the only thing read from a repository: `<repo>/.agents/` is the Workspace input's **Authoring tree**, scanned on registration, and `register` is the trust act that admits it.
 
+## Amendment: Operating Instructions use their own package contract
+
+The first-party packages now live in `packages/engine/operating-instructions/`. Each package has an `INSTRUCTIONS.md` entry point and can carry supporting resources. The Context assembler copies that package to the Run's host-side resource path, records every readable resource in the Run Plan, and supplies the entry point as the highest-precedence instruction layer. References above to `packages/engine/skills/`, `SKILL.md`, playbook skills, and skill provision describe the retired representation and do not direct current implementation. Real Skills remain contributions and keep the `SKILL.md` contract.
+
 ## Considered Options
 
 - **Flatten everything into one prompt string in the engine** — rejected: blocks mid-run compaction and muddies the ADR 0005 assemble/render split.

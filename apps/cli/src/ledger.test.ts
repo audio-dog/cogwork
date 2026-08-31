@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   HarnessName,
   RunId,
+  RunPlan,
   type RunRecord,
   type Session,
   SessionId,
@@ -9,8 +10,9 @@ import {
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
-import { bootControlStoreLayer, controlStoreClientLayer, RunLedger } from "@cogwork/engine";
+import { bootControlStoreLayer, RunLedger } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { assert, describe, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -27,7 +29,9 @@ class TestStorePath extends Context.Service<TestStorePath, string>()(
 const bootedLedgerLayer = (storePath: string) =>
   ledgerLayer.pipe(
     Layer.provideMerge(
-      bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath))),
+      bootControlStoreLayer(storePath).pipe(
+        Layer.provideMerge(SqliteClient.layer({ filename: storePath, busyTimeout: "25 millis" })),
+      ),
     ),
   );
 
@@ -81,6 +85,50 @@ const foldSession = Schema.decodeSync(SessionId)("sess-fold");
 const ownedSession = Schema.decodeSync(SessionId)("sess-owned");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
+const runPlan = (id: string, message = "Triage #7") =>
+  Schema.decodeSync(RunPlan)({
+    id: runId(id),
+    operation: "triage",
+    harness: { name: harness, model: null, effort: null, profile: "read-only" },
+    instructions: [],
+    operatingInstructions: {
+      name: "triage-agent",
+      path: "/operating-instructions/triage-agent",
+      resources: [],
+    },
+    tools: [],
+    skills: [],
+    mcp: [],
+    subagents: [],
+    commands: [],
+    hooks: [],
+    middleware: [],
+    structuredOutput: null,
+    connections: [],
+    messages: [{ role: "user", content: message }],
+    workContext: {
+      reference: { workItem, url: "https://example.test/issues/7" },
+      facts: {
+        roles: ["needs-triage"],
+        assignees: [],
+        openBlockers: 0,
+        claim: null,
+        priority: "medium",
+        pr: null,
+      },
+      observation: { generation: 3, observedAtMillis: 1000 },
+    },
+    sandbox: { workspace: "/repo", policy: "read-only" },
+    persistence: { sessionKind: "opaque-handle" },
+    provenance: {
+      resolution: [],
+      stamps: [],
+      projectedNames: [],
+      projection: [],
+      observation: { generation: 3, observedAtMillis: 1000 },
+    },
+  });
+
 const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecord> = {}): RunRecord => ({
   id: runId(id),
   workspace,
@@ -116,6 +164,39 @@ describe("sqlite RunLedger", () => {
       return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
+    it.effect("persists one immutable Plan when accepting a Run", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const accepted = runPlan("accepted");
+        yield* ledger.acceptRun(record("accepted", 1000), accepted);
+
+        assert.deepStrictEqual(yield* ledger.getRunPlan(accepted.id), accepted);
+        const error = yield* Effect.flip(
+          ledger.acceptRun(record("accepted", 2000), runPlan("accepted", "Changed")),
+        );
+        assert.strictEqual(error._tag, "RunLedgerError");
+        assert.isFalse(error.retryable);
+        assert.deepStrictEqual(yield* ledger.getRunPlan(accepted.id), accepted);
+      }),
+    );
+
+    it.effect("marks store write failures retryable", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const storePath = yield* TestStorePath;
+        const sqlite = yield* Effect.acquireRelease(
+          Effect.sync(() => new DatabaseSync(storePath)),
+          (database) => Effect.sync(() => database.close()),
+        );
+        yield* Effect.sync(() => sqlite.exec("BEGIN EXCLUSIVE"));
+
+        const error = yield* Effect.flip(ledger.acceptRun(record("locked", 1000), runPlan("locked")));
+
+        assert.strictEqual(error._tag, "RunLedgerError");
+        assert.isTrue(error.retryable);
+      }),
+    );
+
     it.effect("persists a run, its events, and reports a summary with event count", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;

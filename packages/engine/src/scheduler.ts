@@ -1,4 +1,10 @@
-import type { ControlStore, DaemonLimitUpdate, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import type {
+  ControlStore,
+  DaemonLimitUpdate,
+  RunPlanObservation,
+  WorkItemId,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import { byStageThenPriority as byStageThenPriorityOf } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -9,7 +15,6 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import type { EligibleWork } from "./classify";
 import { Executor } from "./executor";
-import { runnable } from "./playbook";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
@@ -82,6 +87,7 @@ export interface Candidate {
   readonly work: EligibleWork;
   readonly workspaceLimit: number;
   readonly keys: ReadonlyArray<string>;
+  readonly observation: RunPlanObservation;
 }
 
 const byStageThenPriority = (a: Candidate, b: Candidate) => byStageThenPriorityOf(a.work, b.work);
@@ -177,21 +183,25 @@ const candidateOf = (
   workspace: RegisteredWorkspace,
   work: EligibleWork,
   config: SchedulerConfig,
+  observation: RunPlanObservation,
 ): Candidate => ({
   workspace,
   work,
   workspaceLimit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
   keys: keysFor(workspace, work),
+  observation,
 });
 
 const candidatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot, config: SchedulerConfig) => {
   const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
+  const observation = {
+    generation: snapshot.generation,
+    observedAtMillis: snapshot.observedAtMillis,
+  };
   return snapshot.workspaces.flatMap((state): ReadonlyArray<Candidate> => {
     const workspace = state.poll.status === "ok" ? byName.get(state.name) : undefined;
     if (!workspace) return [];
-    return state.eligible
-      .filter((work) => runnable(workspace.config, work.stage))
-      .map((work) => candidateOf(workspace, work, config));
+    return state.eligible.map((work) => candidateOf(workspace, work, config, observation));
   });
 };
 
@@ -207,7 +217,7 @@ export const make = (config: SchedulerConfig) =>
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
     const runJob = (candidate: Candidate) =>
-      executor.execute(candidate.workspace, candidate.work).pipe(
+      executor.execute(candidate.workspace, candidate.work, candidate.observation).pipe(
         Effect.flatMap((started) => (started ? Effect.void : Ref.update(stateRef, refundBudget))),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
@@ -215,7 +225,7 @@ export const make = (config: SchedulerConfig) =>
             Effect.logWarning("scheduled job crashed", {
               workspace: candidate.workspace.config.name,
               item: candidate.work.id,
-              cause,
+              cause: Cause.pretty(cause),
             }),
         ),
         Effect.ensuring(Ref.update(stateRef, (state) => release(state, candidate))),
@@ -270,9 +280,10 @@ export const make = (config: SchedulerConfig) =>
     const admit = Effect.fn("Scheduler.admit")(function* (
       workspace: RegisteredWorkspace,
       work: EligibleWork,
+      observation: RunPlanObservation,
     ) {
       const config = yield* Ref.get(configRef);
-      const candidate = candidateOf(workspace, work, config);
+      const candidate = candidateOf(workspace, work, config, observation);
       yield* Ref.update(stateRef, (state) => reserve(state, candidate));
       yield* FiberSet.run(jobs, runJob(candidate));
     });

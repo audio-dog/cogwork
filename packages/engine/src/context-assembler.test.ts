@@ -1,6 +1,8 @@
+import { type FileContribution, RunId, RunPlanInstruction, RunPlanResource } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import { type AssembleRequest, make, repoDirsFrom } from "./context-assembler";
 import type { ContextFsService } from "./context-fs";
 
@@ -9,28 +11,47 @@ interface CopyCall {
   readonly dest: string;
 }
 
-const config = { homeDir: "/home/.cogwork", userAgentsDir: "/home/.agents", skillsDir: "/engine/skills" };
+const config = {
+  homeDir: "/home/.cogwork",
+  userAgentsDir: "/home/.agents",
+  operatingInstructionsDir: "/engine/operating-instructions",
+};
 
 const request: AssembleRequest = {
+  runId: Schema.decodeSync(RunId)("run-context-test"),
   cwd: "/repos/app/packages/web",
   projectRoot: "/repos/app",
-  skill: "implement-agent",
+  operatingInstructions: "implement-agent",
   contributions: [],
 };
 
 const stubFs = (
   files: Record<string, string>,
   copies: Ref.Ref<ReadonlyArray<CopyCall>>,
+  removals?: Ref.Ref<ReadonlyArray<string>>,
 ): ContextFsService => ({
-  readFile: (target) => Effect.succeed(files[target] ?? null),
-  readDirectory: (target) =>
-    Effect.succeed(
-      Object.keys(files)
-        .filter((file) => file.startsWith(`${target}/`))
-        .map((file) => file.slice(target.length + 1))
-        .filter((name) => !name.includes("/")),
+  readFile: (target) =>
+    Ref.get(copies).pipe(
+      Effect.map((calls) => {
+        const copy = calls.findLast(({ dest }) => target === dest || target.startsWith(`${dest}/`));
+        const resolved = copy ? `${copy.source}${target.slice(copy.dest.length)}` : target;
+        return files[resolved] ?? null;
+      }),
+    ),
+  readDirectory: (target, options) =>
+    Ref.get(copies).pipe(
+      Effect.map((calls) => {
+        const copy = calls.findLast(({ dest }) => target === dest || target.startsWith(`${dest}/`));
+        const resolved = copy ? `${copy.source}${target.slice(copy.dest.length)}` : target;
+        return Object.keys(files)
+          .filter((file) => file.startsWith(`${resolved}/`))
+          .map((file) => file.slice(resolved.length + 1))
+          .filter((name) => options?.recursive || !name.includes("/"));
+      }),
     ),
   copyDirectory: (source, dest) => Ref.update(copies, (xs) => [...xs, { source, dest }]),
+  removeDirectory: (target) =>
+    removals ? Ref.update(removals, (targets) => [...targets, target]) : Effect.void,
 });
 
 describe("repoDirsFrom", () => {
@@ -71,7 +92,7 @@ describe("ContextAssembler.assemble", () => {
             "/home/.agents/rules/nested/ignored.md": "nested Rule",
             "/repos/app/AGENTS.md": "repo root rules",
             "/repos/app/packages/web/AGENTS.md": "web package rules",
-            "/engine/skills/implement-agent/SKILL.md": "implement skill body",
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "implement instructions body",
           },
           copies,
         ),
@@ -87,16 +108,17 @@ describe("ContextAssembler.assemble", () => {
           { kind: "repo", source: "/repos/app/AGENTS.md", content: "repo root rules" },
           { kind: "repo", source: "/repos/app/packages/web/AGENTS.md", content: "web package rules" },
           {
-            kind: "playbook",
-            source: "/engine/skills/implement-agent/SKILL.md",
-            content: "implement skill body",
+            kind: "operating-instructions",
+            source:
+              "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent/INSTRUCTIONS.md",
+            content: "implement instructions body",
           },
         ],
       );
     }),
   );
 
-  it.effect("places repository, private, and Plugin Rules before the playbook", () =>
+  it.effect("places repository, private, and Plugin Rules before Operating Instructions", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const repoRule = "/repos/app/.agents/rules/style.md";
@@ -111,7 +133,7 @@ describe("ContextAssembler.assemble", () => {
             [repoRule]: "repo rules",
             [privateRule]: "private rules",
             [pluginRule]: "plugin rules",
-            "/engine/skills/implement-agent/SKILL.md": "implement skill body",
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "implement instructions body",
           },
           copies,
         ),
@@ -152,9 +174,44 @@ describe("ContextAssembler.assemble", () => {
           "repo rules",
           "private rules",
           "plugin rules",
-          "implement skill body",
+          "implement instructions body",
         ],
       );
+    }),
+  );
+
+  it.effect("reads each Rules contribution once", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const reads = yield* Ref.make(0);
+      const rule = "/repos/app/.agents/rules/style.md";
+      const base = stubFs(
+        { "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "operating-instructions" },
+        copies,
+      );
+      const assembler = make(config, {
+        ...base,
+        readFile: (target) =>
+          target === rule
+            ? Ref.update(reads, (count) => count + 1).pipe(Effect.map(() => "rule content"))
+            : base.readFile(target),
+      });
+
+      const assembled = yield* assembler.assemble({
+        ...request,
+        contributions: [
+          {
+            id: "local:repo/rules/style",
+            authority: "local:repo",
+            kind: "rules",
+            localName: "style",
+            file: rule,
+          },
+        ],
+      });
+
+      assert.strictEqual(yield* Ref.get(reads), 1);
+      assert.deepStrictEqual(assembled.sources, []);
     }),
   );
 
@@ -166,7 +223,7 @@ describe("ContextAssembler.assemble", () => {
         stubFs(
           {
             "/repos/app/packages/web/AGENTS.md": "web package rules",
-            "/engine/skills/implement-agent/SKILL.md": "implement skill body",
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "implement instructions body",
           },
           copies,
         ),
@@ -176,7 +233,7 @@ describe("ContextAssembler.assemble", () => {
 
       assert.deepStrictEqual(
         assembled.layers.map((layer) => layer.kind),
-        ["repo", "playbook"],
+        ["repo", "operating-instructions"],
       );
     }),
   );
@@ -189,7 +246,7 @@ describe("ContextAssembler.assemble", () => {
         stubFs(
           {
             "/repos/app/AGENTS.md": "   \n\t  ",
-            "/engine/skills/implement-agent/SKILL.md": "implement skill body",
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "implement instructions body",
           },
           copies,
         ),
@@ -199,32 +256,128 @@ describe("ContextAssembler.assemble", () => {
 
       assert.deepStrictEqual(
         assembled.layers.map((layer) => layer.kind),
-        ["playbook"],
+        ["operating-instructions"],
       );
     }),
   );
 
-  it.effect("provisions the skill directory host-side and keeps the worktree clean", () =>
+  it.effect("fails when an admitted contribution has no readable source", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const assembler = make(
         config,
-        stubFs({ "/engine/skills/implement-agent/SKILL.md": "implement skill body" }, copies),
+        stubFs({ "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "instructions" }, copies),
+      );
+      const contribution = {
+        id: "local:private/skill/missing",
+        authority: "local:private",
+        kind: "skill",
+        localName: "missing",
+        file: "/home/.cogwork/workspaces/ws/skills/missing/SKILL.md",
+      } satisfies FileContribution;
+
+      const error = yield* Effect.flip(assembler.assemble({ ...request, contributions: [contribution] }));
+
+      assert.strictEqual(error._tag === "ContextAssemblerError" ? error.source : null, contribution.file);
+      assert.include(error.message, contribution.id);
+    }),
+  );
+
+  it.effect("provisions Operating Instructions host-side and keeps the worktree clean", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const assembler = make(
+        config,
+        stubFs(
+          {
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "implement instructions body",
+            "/engine/operating-instructions/implement-agent/GUIDE.md": "guide body",
+            "/engine/operating-instructions/implement-agent/examples/example.md": "example body",
+          },
+          copies,
+        ),
       );
 
       const assembled = yield* assembler.assemble(request);
 
-      assert.strictEqual(assembled.skillPath, "/home/.cogwork/skills/implement-agent");
+      assert.strictEqual(
+        assembled.operatingInstructionsPath,
+        "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent",
+      );
       assert.deepStrictEqual(yield* Ref.get(copies), [
-        { source: "/engine/skills/implement-agent", dest: "/home/.cogwork/skills/implement-agent" },
+        {
+          source: "/engine/operating-instructions/implement-agent",
+          dest: "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74/operating-instructions/implement-agent",
+        },
       ]);
-      assert.isTrue(assembled.skillPath.startsWith(config.homeDir));
-      assert.isFalse(assembled.skillPath.startsWith(request.projectRoot));
-      assert.isFalse(assembled.skillPath.startsWith(request.cwd));
+      assert.isTrue(assembled.operatingInstructionsPath.startsWith(config.homeDir));
+      assert.isFalse(assembled.operatingInstructionsPath.startsWith(request.projectRoot));
+      assert.isFalse(assembled.operatingInstructionsPath.startsWith(request.cwd));
+      assert.deepStrictEqual(assembled.operatingInstructionResources, [
+        {
+          source: `${assembled.operatingInstructionsPath}/GUIDE.md`,
+          content: "guide body",
+        },
+        {
+          source: `${assembled.operatingInstructionsPath}/examples/example.md`,
+          content: "example body",
+        },
+      ]);
     }),
   );
 
-  it.effect("fails when the playbook skill has no readable SKILL.md", () =>
+  it.effect("trims file content so every layer and resource satisfies the Run Plan contract", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const assembler = make(
+        config,
+        stubFs(
+          {
+            "/home/.agents/rules/global.md": "global rules\n",
+            "/repos/app/AGENTS.md": "repo root rules\n\n",
+            "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "implement instructions body\n",
+            "/engine/operating-instructions/implement-agent/GUIDE.md": "guide body\n",
+            "/engine/operating-instructions/implement-agent/BLANK.md": "\n  \n",
+          },
+          copies,
+        ),
+      );
+
+      const assembled = yield* assembler.assemble(request);
+
+      assert.deepStrictEqual(
+        assembled.layers.map(({ content }) => content),
+        ["global rules", "repo root rules", "implement instructions body"],
+      );
+      assert.deepStrictEqual(assembled.operatingInstructionResources, [
+        { source: `${assembled.operatingInstructionsPath}/GUIDE.md`, content: "guide body" },
+      ]);
+      assert.deepStrictEqual(
+        assembled.layers.map((layer) => RunPlanInstruction.make({ ...layer }).content),
+        ["global rules", "repo root rules", "implement instructions body"],
+      );
+      assert.deepStrictEqual(
+        assembled.operatingInstructionResources.map((resource) => RunPlanResource.make(resource).content),
+        ["guide body"],
+      );
+    }),
+  );
+
+  it.effect("removes the isolated run directory during cleanup", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const removals = yield* Ref.make<ReadonlyArray<string>>([]);
+      const assembler = make(config, stubFs({}, copies, removals));
+
+      yield* assembler.cleanup(request.runId);
+
+      assert.deepStrictEqual(yield* Ref.get(removals), [
+        "/home/.cogwork/run-plans/run-72-75-6e-2d-63-6f-6e-74-65-78-74-2d-74-65-73-74",
+      ]);
+    }),
+  );
+
+  it.effect("fails when Operating Instructions have no readable INSTRUCTIONS.md", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const assembler = make(config, stubFs({ "/repos/app/AGENTS.md": "repo root rules" }, copies));
@@ -233,27 +386,39 @@ describe("ContextAssembler.assemble", () => {
 
       assert.strictEqual(error._tag, "ContextAssemblerError");
       assert.include(error.message, "implement-agent");
-    }),
-  );
-
-  it.effect("does not provision when the playbook skill is missing", () =>
-    Effect.gen(function* () {
-      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
-      const assembler = make(config, stubFs({}, copies));
-
-      yield* Effect.flip(assembler.assemble(request));
-
       assert.deepStrictEqual(yield* Ref.get(copies), []);
     }),
   );
 
-  it.effect("rejects a skill name that would escape the skills base, without touching the filesystem", () =>
+  it.effect("fails when the isolated Operating Instructions copy has no INSTRUCTIONS.md", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
-      const files = { "/engine/skills/../../etc/SKILL.md": "somebody else's file" };
+      const base = stubFs(
+        { "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md": "operating-instructions" },
+        copies,
+      );
+      const assembler = make(config, {
+        ...base,
+        readFile: (target) =>
+          target.startsWith(`${config.homeDir}/run-plans/`) ? Effect.succeed(null) : base.readFile(target),
+      });
+
+      const error = yield* Effect.flip(assembler.assemble(request));
+
+      assert.strictEqual(error._tag, "ContextAssemblerError");
+      assert.lengthOf(yield* Ref.get(copies), 1);
+    }),
+  );
+
+  it.effect("rejects an Operating Instructions name that would escape its base", () =>
+    Effect.gen(function* () {
+      const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
+      const files = { "/engine/operating-instructions/../../etc/INSTRUCTIONS.md": "somebody else's file" };
       const assembler = make(config, stubFs(files, copies));
 
-      const error = yield* Effect.flip(assembler.assemble({ ...request, skill: "../../etc" }));
+      const error = yield* Effect.flip(
+        assembler.assemble({ ...request, operatingInstructions: "../../etc" }),
+      );
 
       assert.strictEqual(error._tag, "ContextAssemblerError");
       assert.include(error.message, "single path segment");
@@ -261,12 +426,14 @@ describe("ContextAssembler.assemble", () => {
     }),
   );
 
-  it.effect("rejects a skill name containing a path separator", () =>
+  it.effect("rejects an Operating Instructions name containing a path separator", () =>
     Effect.gen(function* () {
       const copies = yield* Ref.make<ReadonlyArray<CopyCall>>([]);
       const assembler = make(config, stubFs({}, copies));
 
-      const error = yield* Effect.flip(assembler.assemble({ ...request, skill: "nested/skill" }));
+      const error = yield* Effect.flip(
+        assembler.assemble({ ...request, operatingInstructions: "nested/package" }),
+      );
 
       assert.strictEqual(error._tag, "ContextAssemblerError");
       assert.deepStrictEqual(yield* Ref.get(copies), []);

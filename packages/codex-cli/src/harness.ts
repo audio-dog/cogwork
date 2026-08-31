@@ -1,6 +1,12 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ContextAssembler, Harness, HarnessBridge, SessionStore } from "@cogwork/engine";
-import { type ChatMiddleware, chat, type ModelMessage, type StreamChunk } from "@tanstack/ai";
+import { Harness, HarnessBridge, SessionStore } from "@cogwork/engine";
+import {
+  type ChatMiddleware,
+  chat,
+  type JSONSchema,
+  type ModelMessage,
+  type StreamChunk,
+} from "@tanstack/ai";
 import {
   type CodexModel,
   type CodexTextAdapter,
@@ -35,7 +41,7 @@ export interface CodexRunChatOptions {
   readonly middleware: ReadonlyArray<ChatMiddleware>;
   readonly abortController: AbortController;
   readonly modelOptions: CodexTextProviderOptions;
-  readonly outputSchema?: Harness.StageResultSchema;
+  readonly outputSchema?: JSONSchema;
 }
 
 export type CodexRunChat = (options: CodexRunChatOptions) => AsyncIterable<StreamChunk>;
@@ -65,9 +71,12 @@ export const codexRuntimeConfig = (
   modelReasoningEffort: effort,
 });
 
-export const renderContext = (assembled: ContextAssembler.AssembledContext) => [
+export const renderContext = (assembled: {
+  readonly layers: ReadonlyArray<{ readonly content: string }>;
+  readonly operatingInstructionsPath: string;
+}) => [
   ...assembled.layers.map((layer) => layer.content),
-  `Mandatory playbook resources: ${assembled.skillPath}`,
+  `Mandatory Operating Instructions: ${assembled.operatingInstructionsPath}`,
 ];
 
 export const codexModelOptions = (handle: string | null, effort: CodexEffort): CodexTextProviderOptions => ({
@@ -145,9 +154,6 @@ export const codexChildEnvironment = (environment: NodeJS.ProcessEnv = process.e
     }),
   );
 
-const mcpServerIdentity = (name: string, index: number) =>
-  `cogwork_mcp_${Array.from(name, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}_${index}`;
-
 const mcpEnvName = (identity: string) => `${identity.toUpperCase()}_BEARER`;
 
 const mcpBearerEntries = (prefix: string, envName: string, bearer: Harness.ResolvedMcpSkill["bearer"]) => {
@@ -161,8 +167,8 @@ const mcpBearerEntries = (prefix: string, envName: string, bearer: Harness.Resol
   };
 };
 
-const mcpEntries = (skill: Harness.ResolvedMcpSkill, index: number) => {
-  const identity = mcpServerIdentity(skill.name, index);
+const mcpEntries = (skill: Harness.ResolvedMcpSkill) => {
+  const identity = skill.name;
   const prefix = `mcp_servers.${identity}`;
   const envName = mcpEnvName(identity);
   const bearer = mcpBearerEntries(prefix, envName, skill.bearer);
@@ -207,6 +213,18 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
   return {
     name: options.name,
     sessionKind: "opaque-handle",
+    projectedMembers: [
+      "Harness Adapter",
+      "Instructions",
+      "Messages",
+      "MCP",
+      "Middleware",
+      "Sandbox",
+      "Structured Output",
+      "Persistence",
+      "Connections",
+    ],
+    planMiddleware: ["sandbox"],
     execution: {
       nonInteractive: true,
       worktreeConfined: true,
@@ -215,29 +233,31 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {
-          const effort = yield* resolveEffort(request.effort, "high");
-          const assembler = yield* ContextAssembler.ContextAssembler;
-          const assembled = yield* assembler
-            .assemble({
-              cwd: request.checkoutPath,
-              projectRoot: request.checkoutPath,
-              skill: request.skill,
-              contributions: request.contributions,
-            })
-            .pipe(Effect.mapError((error) => launchError(error.message)));
+          const plan = request.plan;
+          const effort = yield* resolveEffort(plan.harness.effort, "high");
+          const assembled = {
+            layers: plan.instructions,
+            operatingInstructionsPath: plan.operatingInstructions.path,
+          };
           const store = yield* SessionStore.SessionStore;
           const handle = request.session ? yield* store.resumeHandle(request.session) : null;
-          const model = request.model ?? "gpt-5.6-sol";
-          const gitDirectory = yield* resolveGitMetadataDirectory(request.checkoutPath);
+          const model = plan.harness.model ?? "gpt-5.6-sol";
+          const gitDirectory = yield* resolveGitMetadataDirectory(plan.sandbox.workspace);
           const adapter = makeAdapter(
             model,
-            adapterConfig(effort, request.profile, options.codexExecutable, request.mcpSkills, gitDirectory),
+            adapterConfig(
+              effort,
+              plan.harness.profile,
+              options.codexExecutable,
+              Harness.resolvedMcpSkills(request),
+              gitDirectory,
+            ),
           );
           const sandbox = defineSandbox({
             id: `cogwork-${options.name}`,
             fileEvents: false,
             provider: localProcessSandbox({
-              dir: request.checkoutPath,
+              dir: plan.sandbox.workspace,
               scrubEnv: ["GITHUB_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"],
             }),
             workspace: defineWorkspace({ source: { type: "none" } }),
@@ -245,12 +265,12 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
           const abortController = new AbortController();
           const stream = runChat({
             adapter,
-            messages: [{ role: "user", content: request.prompt }],
+            messages: plan.messages.map(({ role, content }) => ({ role, content })),
             systemPrompts: renderContext(assembled),
-            middleware: [withSandbox(sandbox)],
+            middleware: plan.middleware.includes("sandbox") ? [withSandbox(sandbox)] : [],
             abortController,
             modelOptions: codexModelOptions(handle, effort),
-            outputSchema: Harness.stageResultSchema(request.stage),
+            outputSchema: plan.structuredOutput ?? undefined,
           });
           return HarnessBridge.bridgeChat(stream).pipe(
             Stream.mapError(classifyTurnError),

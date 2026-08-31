@@ -4,7 +4,10 @@ import {
   FollowUpStageResult,
   HarnessName,
   ImplementStageResult,
+  type LifecycleStage,
+  RunPlan,
   SessionId,
+  stageResultJsonSchema,
   TriageStageResult,
 } from "@cogwork/contracts";
 import { type ContextAssembler, type CredentialStore, Harness, type SessionStore } from "@cogwork/engine";
@@ -38,9 +41,15 @@ const assembled: ContextAssembler.AssembledContext = {
   layers: [
     { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
     { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },
-    { kind: "playbook", source: "/skills/implement/SKILL.md", content: "playbook rules" },
+    {
+      kind: "operating-instructions",
+      source: "/operating-instructions/implement/INSTRUCTIONS.md",
+      content: "Operating Instructions rules",
+    },
   ],
-  skillPath: "/home/skills/implement",
+  operatingInstructionsPath: "/home/operating-instructions/implement",
+  operatingInstructionResources: [],
+  sources: [],
 };
 
 const persistence = memoryPersistence();
@@ -53,6 +62,7 @@ const sessionStore: SessionStore.SessionStoreService = {
 
 const contextAssembler: ContextAssembler.ContextAssemblerService = {
   assemble: () => Effect.succeed(assembled),
+  cleanup: () => Effect.void,
 };
 
 const unexpected = () => Effect.die(new Error("unexpected credential-store access"));
@@ -69,20 +79,75 @@ const credentialStore: CredentialStore.CredentialStoreService = {
 
 const fileSystem = FileSystem.makeNoop({});
 
-const makeRequest = (overrides: Partial<Harness.HarnessRequest> = {}): Harness.HarnessRequest => ({
-  harness: name,
-  stage: "implement",
-  skill: "implement-agent",
-  checkoutPath: "/repo",
-  session,
-  prompt: "implement the issue",
-  model: "gpt-5.6-sol",
-  effort: "high",
-  mcpSkills: [],
-  contributions: [],
-  ...overrides,
-  profile: overrides.profile ?? "full",
-});
+interface RequestOverrides {
+  readonly checkoutPath?: string;
+  readonly session?: Harness.HarnessRequest["session"];
+  readonly stage?: LifecycleStage;
+  readonly skill?: string;
+  readonly prompt?: string;
+  readonly mcpSkills?: ReadonlyArray<Harness.ResolvedMcpSkill>;
+}
+
+const testMcpIdentity = (name: string, index: number) =>
+  `cogwork_mcp_${Array.from(name, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}_${index}`;
+
+const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest => {
+  const stage = overrides.stage ?? "implement";
+  const profile = stage === "triage" || stage === "verify" ? "read-only" : "full";
+  const skill = overrides.skill ?? "implement-agent";
+  const mcpSkills = overrides.mcpSkills ?? [];
+  const structuredOutput =
+    stageResultJsonSchema(stage)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
+  const mcp = mcpSkills.map((server, index) => ({
+    identity: `test/mcp/${index}`,
+    name: server.name,
+    projectedName: testMcpIdentity(server.name, index),
+    endpoint: server.endpoint,
+    authenticated: server.bearer !== null,
+  }));
+  return {
+    plan: Schema.decodeSync(RunPlan)({
+      id: "run-codex-test",
+      operation: stage,
+      harness: { name, model: "gpt-5.6-sol", effort: "high", profile },
+      instructions: assembled.layers.map((layer) => ({
+        ...layer,
+        kind: layer.kind === "operating-instructions" ? "operating-instructions" : layer.kind,
+      })),
+      operatingInstructions: { name: skill, path: assembled.operatingInstructionsPath, resources: [] },
+      tools: [],
+      skills: [],
+      mcp,
+      subagents: [],
+      commands: [],
+      hooks: [],
+      middleware: ["sandbox"],
+      structuredOutput,
+      connections: [],
+      messages: [{ role: "user", content: overrides.prompt ?? "implement the issue" }],
+      workContext: {
+        reference: { workItem: "#1", url: null },
+        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+      sandbox: { workspace: overrides.checkoutPath ?? "/repo", policy: profile },
+      persistence: { sessionKind: "opaque-handle" },
+      provenance: {
+        resolution: [],
+        stamps: [],
+        projectedNames: mcp.map(({ identity, projectedName: name }) => ({ identity, name })),
+        projection: [],
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+    }),
+    session: overrides.session === undefined ? session : overrides.session,
+    mcpCredentials: new Map(
+      mcpSkills.flatMap((server, index) =>
+        server.bearer ? ([[`test/mcp/${index}`, server.bearer]] as const) : [],
+      ),
+    ),
+  };
+};
 
 const testRunner = (options: Omit<CodexRunnerOptions, "name">) =>
   codexRunner({
@@ -447,8 +512,11 @@ describe("codexRunner", () => {
       assert.notInclude(capture.args, "resume");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
-      assert.include(capture.prompt, "playbook rules");
-      assert.include(capture.prompt, "Mandatory playbook resources: /home/skills/implement");
+      assert.include(capture.prompt, "Operating Instructions rules");
+      assert.include(
+        capture.prompt,
+        "Mandatory Operating Instructions: /home/operating-instructions/implement",
+      );
       assert.include(capture.prompt, "implement the issue");
       assert.strictEqual(capture.cwd?.split("/").at(-1), handle.id.split("/").at(-1));
       assert.isTrue(
@@ -652,8 +720,11 @@ describe("codexRunner", () => {
       assert.notInclude(capture.args, "danger-full-access");
       assert.include(capture.prompt, "global rules");
       assert.include(capture.prompt, "repo rules");
-      assert.include(capture.prompt, "playbook rules");
-      assert.include(capture.prompt, "Mandatory playbook resources: /home/skills/implement");
+      assert.include(capture.prompt, "Operating Instructions rules");
+      assert.include(
+        capture.prompt,
+        "Mandatory Operating Instructions: /home/operating-instructions/implement",
+      );
       assert.include(capture.prompt, "current run prompt");
       assert.notInclude(capture.prompt, "first run prompt");
     }),
@@ -720,12 +791,12 @@ describe("codexChildEnvironment", () => {
 });
 
 describe("renderContext", () => {
-  it("keeps every instruction layer ordered and exposes the provisioned playbook path", () => {
+  it("keeps every instruction layer ordered and exposes the provisioned instruction path", () => {
     assert.deepStrictEqual(renderContext(assembled), [
       "global rules",
       "repo rules",
-      "playbook rules",
-      "Mandatory playbook resources: /home/skills/implement",
+      "Operating Instructions rules",
+      "Mandatory Operating Instructions: /home/operating-instructions/implement",
     ]);
   });
 });

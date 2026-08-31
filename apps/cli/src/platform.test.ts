@@ -55,7 +55,9 @@ const shell = Effect.fn("test.shell")(function* (cwd: string, script: string) {
 });
 
 describe("subprocess deadlines", () => {
-  layer(gitLayer.pipe(Layer.provide(hangingSpawnerLayer)))((it) => {
+  layer(
+    gitLayer.pipe(Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer))),
+  )((it) => {
     it.effect("converts a git deadline into GitError", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
@@ -114,7 +116,13 @@ describe("subprocess deadlines", () => {
         }),
       );
       const interruptedGitLayer = gitLayer.pipe(
-        Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner)),
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+            FileSystem.layerNoop({}),
+            Path.layer,
+          ),
+        ),
       );
       const fiber = yield* Effect.forkChild(
         Effect.gen(function* () {
@@ -157,7 +165,90 @@ const fixture = Effect.fn("test.fixture")(function* (branch: string) {
   return { checkout, worktree: path.join(root, "wt"), peer, branch };
 });
 
+const conflictedFixture = Effect.fn("test.conflictedFixture")(function* (branch: string) {
+  const state = yield* fixture(branch);
+  yield* shell(
+    state.worktree,
+    "echo base > shared.txt && git add -A && git commit -qm shared && git push -q origin HEAD",
+  );
+  yield* shell(
+    state.peer,
+    `git fetch -q origin && git checkout -q -B ${branch} origin/${branch} && echo theirs > shared.txt && git add -A && git commit -qm theirs && git push -q origin HEAD`,
+  );
+  yield* shell(
+    state.worktree,
+    "echo ours > shared.txt && git add -A && git commit -qm ours && git fetch -q origin",
+  );
+  return state;
+});
+
+const operationFixtures: ReadonlyArray<{
+  readonly operation: Git.GitOperation;
+  readonly head: string;
+  readonly command: (branch: string) => string;
+}> = [
+  { operation: "merge", head: "MERGE_HEAD", command: (branch) => `git merge origin/${branch}` },
+  { operation: "rebase", head: "REBASE_HEAD", command: (branch) => `git rebase origin/${branch}` },
+  {
+    operation: "cherry-pick",
+    head: "CHERRY_PICK_HEAD",
+    command: (branch) => `git cherry-pick origin/${branch}`,
+  },
+];
+
 describe("gitLayer against a real repository", () => {
+  layer(testLayer)((it) => {
+    it.effect.each(operationFixtures)(
+      "reports a $operation in progress and its unmerged paths",
+      ({ operation, head, command }) =>
+        Effect.gen(function* () {
+          const git = yield* Git.Git;
+          const { worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
+
+          yield* shell(
+            worktree,
+            `${command(branch)} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path ${head})"`,
+          );
+
+          assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
+            operation,
+            unmergedPaths: ["shared.txt"],
+          });
+        }).pipe(Effect.scoped),
+    );
+
+    it.effect("reports a paused rebase without REBASE_HEAD", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { worktree } = yield* fixture("84-paused-rebase-probe");
+
+        yield* shell(
+          worktree,
+          `GIT_SEQUENCE_EDITOR=true git rebase -i --exec false HEAD~1 >/dev/null 2>&1 || { test -d "$(git rev-parse --git-path rebase-merge)" && test ! -f "$(git rev-parse --git-path REBASE_HEAD)"; }`,
+        );
+
+        assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
+          operation: "rebase",
+          unmergedPaths: [],
+        });
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("does not report git am as a rebase", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { worktree } = yield* fixture("84-git-am-probe");
+
+        yield* shell(
+          worktree,
+          `echo base > shared.txt && git add -A && git commit -qm shared && echo theirs > shared.txt && git commit -qam theirs && git format-patch -1 --stdout > ../theirs.patch && git reset --hard -q HEAD~1 && echo ours > shared.txt && git commit -qam ours && git am ../theirs.patch >/dev/null 2>&1 || test -f "$(git rev-parse --git-path rebase-apply/applying)"`,
+        );
+
+        assert.isNull(yield* git.operationInProgress(worktree));
+      }).pipe(Effect.scoped),
+    );
+  });
+
   it.effect("stops reporting a branch that was deleted on the remote", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;
@@ -280,6 +371,9 @@ describe("contextFsLayer against a real filesystem", () => {
       assert.strictEqual(yield* fs.readFileString(path.join(dest, "SKILL.md")), "skill body");
       assert.strictEqual(yield* fs.readFileString(path.join(dest, "reference", "notes.md")), "sibling notes");
       assert.isFalse(yield* fs.exists(path.join(dest, "stale.md")));
+
+      yield* context.removeDirectory(dest);
+      assert.isFalse(yield* fs.exists(dest));
     }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 });

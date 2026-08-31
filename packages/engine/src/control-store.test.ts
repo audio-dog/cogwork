@@ -124,6 +124,7 @@ layer(NodeServices.layer)((it) => {
           { name: "operation_settings" },
           { name: "plugin_installs" },
           { name: "run_events" },
+          { name: "run_plans" },
           { name: "runs" },
           { name: "sessions" },
           { name: "workspaces" },

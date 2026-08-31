@@ -25,6 +25,13 @@ export interface BranchDivergence {
   readonly behind: number;
 }
 
+export type GitOperation = "merge" | "rebase" | "cherry-pick";
+
+export interface GitOperationInProgress {
+  readonly operation: GitOperation;
+  readonly unmergedPaths: ReadonlyArray<string>;
+}
+
 const unavailable = Effect.fn("Git.unavailable")(function* (command: string) {
   return yield* new GitError({ command, message: "git adapter not provided" });
 });
@@ -32,6 +39,8 @@ const unavailable = Effect.fn("Git.unavailable")(function* (command: string) {
 const noWorktrees: ReadonlyArray<WorktreeEntry> = [];
 
 const noDivergence: BranchDivergence = { ahead: 0, behind: 0 };
+
+const noOperation = (): GitOperationInProgress | null => null;
 
 const makeUnavailable = () => ({
   fetch: (_repoPath: string, remote: string) => Effect.asVoid(unavailable(`fetch ${remote}`)),
@@ -45,6 +54,8 @@ const makeUnavailable = () => ({
     Effect.asVoid(unavailable(`merge ${remote}/${branch}`)),
   divergence: (_worktreePath: string, remote: string, branch: string) =>
     Effect.map(unavailable(`rev-list ${remote}/${branch}...HEAD`), () => noDivergence),
+  operationInProgress: (worktreePath: string) =>
+    Effect.map(unavailable(`rev-parse --git-path MERGE_HEAD (${worktreePath})`), noOperation),
   rebase: (_worktreePath: string, remote: string, branch: string) =>
     Effect.asVoid(unavailable(`rebase ${remote}/${branch}`)),
   remoteUrl: (_repoPath: string, remote: string) =>

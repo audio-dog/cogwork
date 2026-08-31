@@ -262,7 +262,7 @@ An item is *blocked* when its issue tracker reports one or more open **blockers*
 _Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those are needs-human — a person clears them); stuck / exhausted / stalled (failure outcomes, not dependencies).
 
 **Needs-human reason**:
-Why triage parked an item for a person: `needs-info` (waiting on the reporter) or `ready-for-human` (needs a human implementer). A needs-human item is neither eligible, claimed, nor blocked; a person clears it by changing the role.
+Why triage parked an item for a person: `needs-info` (waiting on the reporter) or `ready-for-human` (needs a human implementer). A needs-human item is neither eligible, claimed, nor blocked. Where a role parks it, a person clears it by changing the role; where a **failure counter** parks it — exhaustion, stall, or crash loop — changing the role is not enough, and the person **hands the item back**.
 _Avoid_: Block reason (blocking now means open dependencies), error, failure.
 
 ### Coordination
@@ -275,6 +275,10 @@ _Avoid_: Lock, lease, reservation
 A coordination record of one finished operation attempt on an item: its operation, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the issue tracker.
 _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
 
+**Handback record**:
+A coordination record of a person returning a parked item to the control plane: `by` and `atMillis`. Persisted on the issue tracker. The three failure counters — exhaustion, stall, and crash loop — count only what happened after the newest handback, so a handback discounts an item's failure history without erasing it. The inverse of a hand-off: the control plane hands an item off to a person when it gives up, and a person hands it back. A second handback moves the line forward.
+_Avoid_: Retry (the control plane's own automatic re-attempt of a *retryable* failure — a handback is a person acting, not the engine), reset, unpark, pardon
+
 ### Credentials
 
 **Credential store**:
@@ -284,7 +288,7 @@ _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id`
 ### Runs
 
 **Run plan**:
-The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Tools, Skills, MCP, Subagents, Commands, Hooks, Middleware, Sandbox (Workspace and Policy), Structured Output, Persistence, Connections, and Provenance.
+The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Messages, Work Context, Tools, Skills, MCP, Subagents, Commands, Hooks, Middleware, Sandbox (Workspace and Policy), Structured Output, Persistence, Connections, and Provenance. Messages contain the resolved user turn. Instructions stay separate. Work Context freezes the admitting snapshot's coordination facts and keeps the work-item reference for live prose reads.
 Run Plan members are **not** the same list as contribution kinds. Rules is a kind but not a member — it resolves into Instructions. Tools, Connections, and Middleware are members but never contributions.
 Every plan carries a mandatory **provenance stamp**: a Plugin item's declared version where it has one, a content revision where it does not. No contribution carries its own version — no platform in the field versions the capabilities inside a bundle. The plan is accepted before dispatch and never changed by runtime observations.
 _Avoid_: Run manifest, resolved stage, harness request, operation settings
@@ -294,7 +298,7 @@ One execution of one run plan by one harness, captured with its events, outcome,
 _Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
-The daemon's local store of runs and their events — in-memory, or a region of the Control store on disk. Holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because the issue tracker stays authoritative for coordination.
+The daemon's local store of runs, their immutable Run Plans, and their events — in-memory, or a region of the Control store on disk. A Run and its Plan are accepted together before dispatch, keyed by Run ID. It also holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because the issue tracker stays authoritative for coordination.
 _Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it). Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
 
 **Run event**:

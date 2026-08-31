@@ -1,4 +1,4 @@
-import { Connection, localOwnerId, WorkspaceId } from "@cogwork/contracts";
+import { Connection, DeclaredVersion, localOwnerId, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -132,7 +132,18 @@ layer(NodeServices.layer)((it) => {
         const picture = yield* store.picture;
 
         assert.strictEqual(first.overview.plugins[0]?.record?.resolvedIdentity, "linear@1.0.0");
+        assert.deepStrictEqual(
+          first.overview.plugins[0]?.provenanceStamp,
+          DeclaredVersion.make({ source: "plugin:linear", version: "1.0.0" }),
+        );
         assert.deepStrictEqual(second.overview, first.overview);
+        const load = first.overview.plugins[0]?.contributions.find(
+          (contribution) => contribution.kind === "mcp-server",
+        )?.load;
+        if (load?._tag !== "Loaded") return assert.fail("expected loaded MCP server");
+        const mcpServer = load.mcpServer;
+        assert.strictEqual(mcpServer?.connectionId, linearConnection.id);
+        assert.isTrue(mcpServer?.credentialAvailable);
         assert.strictEqual(picture.pluginInstalls.length, 1);
         assert.deepStrictEqual(picture.contributionSettings, [
           {
@@ -314,7 +325,7 @@ layer(NodeServices.layer)((it) => {
 
         assert.deepStrictEqual(
           contributions.map((contribution) => contribution.kind),
-          ["rules"],
+          ["mcp-server", "rules"],
         );
         assert.deepStrictEqual(picture.pluginInstalls, []);
         assert.deepStrictEqual(picture.contributionSettings, []);
@@ -341,7 +352,7 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("keeps file contributions when a disconnected MCP server is off", () =>
+  it.effect("keeps disconnected Plugin contributions available for Run Plan admission", () =>
     fixture(unavailableConnectionStoreLayer).pipe(
       Effect.flatMap((test) =>
         Effect.gen(function* () {
@@ -363,7 +374,7 @@ layer(NodeServices.layer)((it) => {
       Effect.map((contributions) =>
         assert.deepStrictEqual(
           contributions.map((contribution) => contribution.kind),
-          ["rules"],
+          ["mcp-server", "rules"],
         ),
       ),
     ),

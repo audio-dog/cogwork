@@ -2,7 +2,8 @@ import {
   type ConnectionReadiness,
   ConnectionSystem,
   type ConnectionSystem as ConnectionSystemType,
-  defaultContributionEnabled,
+  ContentRevision,
+  DeclaredVersion,
   type PluginContribution,
   PluginFailure,
   type PluginInstall,
@@ -106,6 +107,11 @@ const hasBareEnvironmentInterpolation = (value: unknown): boolean => {
 
 const resolvedIdentity = (manifest: PluginManifest) =>
   `${manifest.pluginId}@${manifest.version ?? manifest.provenance}`;
+
+const provenanceStamp = (manifest: PluginManifest) =>
+  manifest.version
+    ? DeclaredVersion.make({ source: `plugin:${manifest.pluginId}`, version: manifest.version })
+    : ContentRevision.make({ source: `plugin:${manifest.pluginId}`, revision: manifest.provenance });
 
 const uniqueContributionIds = (manifest: PluginManifest) => {
   const ids = manifest.contributions.map((entry) =>
@@ -308,6 +314,7 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
         summary: entry.summary,
         record,
         resolvedIdentity: record?.resolvedIdentity ?? null,
+        provenanceStamp: null,
         requiredConnections: [],
         contributions: [],
         manifestFailure: result.failure.message,
@@ -320,6 +327,7 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
       summary: entry.summary,
       record,
       resolvedIdentity: resolvedIdentity(manifest),
+      provenanceStamp: provenanceStamp(manifest),
       requiredConnections: manifest.requiredConnections,
       contributions: record ? yield* contributionsOf(manifest, source) : [],
       manifestFailure: null,
@@ -527,23 +535,9 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     overview: overview(),
     install,
     uninstall,
-    contributions: (workspace) =>
-      Effect.all([overview(), store.picture]).pipe(
-        Effect.map(([overview, controlStore]) => {
-          const contributions = installedContributionsOf(overview.plugins);
-          return contributions.filter((contribution) => {
-            if (contribution.kind !== "mcp-server") return true;
-            const rows = controlStore.contributionSettings.filter(
-              (setting) => setting.contribution.id === contribution.id,
-            );
-            const overlay = rows.find(
-              (setting) =>
-                setting.scope._tag === "PrivateWorkspaceOverlay" && setting.scope.workspace === workspace,
-            );
-            const profile = rows.find((setting) => setting.scope._tag === "SettingsProfile");
-            return (overlay ?? profile)?.enabled ?? defaultContributionEnabled(contribution.authority);
-          });
-        }),
+    contributions: () =>
+      overview().pipe(
+        Effect.map((overview) => installedContributionsOf(overview.plugins)),
         Effect.mapError((error) => failure("read Plugin contributions", null, null, error)),
       ),
   } satisfies PluginManagerService;
