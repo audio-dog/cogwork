@@ -107,6 +107,17 @@ export const Reclassify = Rpc.make("Reclassify", {
   error: Schema.Union([WorkItemNotFound, IssueTrackerError]),
 });
 
+export const HandBack = Rpc.make("HandBack", {
+  payload: {
+    workspace: WorkspaceId,
+    workItem: WorkItemId,
+    role: TriageRole,
+    note: Schema.optional(TrimmedNonEmptyString),
+  },
+  success: Schema.NullOr(ClassifiedItem),
+  error: Schema.Union([WorkItemNotFound, IssueTrackerError]),
+});
+
 export const SetScheduling = Rpc.make("SetScheduling", {
   payload: { desired: SchedulingState },
   success: SchedulerStats,
@@ -162,6 +173,7 @@ export const RebindWorkspace = Rpc.make("RebindWorkspace", {
 
 export const DaemonCommands = RpcGroup.make(
   CancelRun,
+  HandBack,
   Reclassify,
   SetScheduling,
   SetDaemonLimit,

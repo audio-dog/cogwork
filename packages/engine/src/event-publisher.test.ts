@@ -188,6 +188,7 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
   followedUp: () => Effect.void,
   attemptFailed: () => Effect.void,
   handOff: () => Effect.void,
+  handBack: () => Effect.void,
   stalled: () => Effect.void,
   reclassify: () => Effect.void,
 });
@@ -237,6 +238,7 @@ const eligibleItem = (title: string): TrackerItem => ({
   claim: null,
   claimedByUs: false,
   attempts: [],
+  handback: null,
   owned: false,
   followUp: null,
   openBlockers: 0,

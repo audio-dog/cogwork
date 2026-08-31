@@ -28,6 +28,7 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import {
   cancelRun,
   deregisterWorkspace,
+  handBack,
   installPlugin,
   rebindWorkspace,
   reclassify,
@@ -243,6 +244,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   WatchActivity: (payload) => Stream.unwrap(watchActivity(payload.id)),
   WatchEvents: () => Stream.unwrap(watchEvents()),
   CancelRun: cancelRun,
+  HandBack: handBack,
   Reclassify: reclassify,
   SetScheduling: setScheduling,
   SetDaemonLimit: setDaemonLimit,

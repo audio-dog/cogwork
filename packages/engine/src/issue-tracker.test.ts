@@ -31,6 +31,7 @@ const stub = (over: Partial<IssueTrackerService>): IssueTrackerService =>
     followedUp: () => Effect.void,
     attemptFailed: () => Effect.void,
     handOff: () => Effect.void,
+    handBack: () => Effect.void,
     stalled: () => Effect.void,
     reclassify: () => Effect.void,
     ...over,
