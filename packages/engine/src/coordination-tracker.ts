@@ -14,6 +14,7 @@ import type {
   AttemptFailedOutcome,
   ClaimRequest,
   FollowedUpOutcome,
+  HandBackOutcome,
   HandOffOutcome,
   ImplementedOutcome,
   IssueTrackerError,
@@ -78,6 +79,7 @@ const buildItem = <CommentId>(codec: WireCodec, item: ListedItem<CommentId>): Tr
     claim,
     claimedByUs: claim?.by === item.claimIdentity,
     attempts: Coordination.parseAttempts(codec, body),
+    handback: Coordination.parseHandback(codec, body),
     owned: ledger !== undefined,
     followUp: Coordination.parseFollowUp(codec, body),
     openBlockers: item.openBlockers,
@@ -194,6 +196,18 @@ export const makeCoordinationTracker = <Ref, CommentId>(
       const cleared = handoffRoleFor(outcome.stage);
       yield* applyRoles(ref, { remove: cleared ? [cleared] : [], add: ["ready-for-human"] });
       if (outcome.note !== undefined) yield* writeNote(ref, outcome.note);
+    }),
+    handBack: Effect.fn("coordinationTracker.handBack")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      outcome: HandBackOutcome,
+    ) {
+      const ref = yield* host.resolve(workspace, id);
+      yield* Coordination.upsertCoordination(codec, host.comments(ref), {
+        status: Coordination.handbackStatus(outcome.record, outcome.note),
+        marker: Coordination.serializeHandback(codec, outcome.record),
+      });
+      yield* applyRoles(ref, outcome.changes);
     }),
     stalled: Effect.fn("coordinationTracker.stalled")(function* (
       workspace: WorkspaceIssueTrackerBinding,

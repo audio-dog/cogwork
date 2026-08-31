@@ -66,6 +66,28 @@ const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workIt
     .find((state) => state.name === workspace)
     ?.observed.find((item) => item.id === workItem) ?? null;
 
+const resolveObserved = Effect.fn("Daemon.resolveObserved")(function* (
+  workspaceId: WorkspaceId,
+  workItem: WorkItemId,
+) {
+  const registry = yield* WorkspaceRegistry;
+  const workspace = workspaceById(registry, workspaceId);
+  if (workspace === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
+  const snapshot = yield* (yield* ReconcileWorker).snapshot;
+  const observed = observedFor(snapshot, workspaceId, workItem);
+  if (observed === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
+  return { workspace, observed };
+});
+
+const publishChangedItem = Effect.fn("Daemon.publishChangedItem")(function* (
+  workspace: WorkspaceId,
+  item: ClassifiedItem | null,
+) {
+  if (item === null) return;
+  const bus = yield* DaemonEventBus;
+  yield* bus.publish({ _tag: "ItemChanged", workspace, item });
+});
+
 const parkedNeedsHuman = (id: WorkItemId, title: string): ClassifiedItem => ({
   _tag: "NeedsHuman",
   id,
@@ -137,17 +159,7 @@ export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
   readonly role: TriageRole;
   readonly note?: string;
 }) {
-  const registry = yield* WorkspaceRegistry;
-  const workspace = workspaceById(registry, payload.workspace);
-  if (workspace === null) {
-    return yield* new WorkItemNotFound({ workspace: payload.workspace, workItem: payload.workItem });
-  }
-
-  const snapshot = yield* (yield* ReconcileWorker).snapshot;
-  const observed = observedFor(snapshot, payload.workspace, payload.workItem);
-  if (observed === null) {
-    return yield* new WorkItemNotFound({ workspace: payload.workspace, workItem: payload.workItem });
-  }
+  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
 
   const issueTracker = yield* IssueTracker;
   const remove = observed.roles.filter((role) => role !== payload.role);
@@ -158,10 +170,35 @@ export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
   });
 
   const item = classifiedItemWithPr({ ...observed, roles: [payload.role] });
-  if (item !== null) {
-    const bus = yield* DaemonEventBus;
-    yield* bus.publish({ _tag: "ItemChanged", workspace: payload.workspace, item });
-  }
+  yield* publishChangedItem(payload.workspace, item);
+  return item;
+});
+
+export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
+  readonly workspace: WorkspaceId;
+  readonly workItem: WorkItemId;
+  readonly role: TriageRole;
+  readonly note?: string;
+}) {
+  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
+  const principal = yield* Principal;
+  const record = { by: principal.id, atMillis: yield* Clock.currentTimeMillis };
+  const remove = observed.roles.filter((role) => role !== payload.role);
+  const add = observed.roles.includes(payload.role) ? [] : [payload.role];
+  const issueTracker = yield* IssueTracker;
+  yield* issueTracker.handBack(workspace, payload.workItem, {
+    record,
+    changes: { remove, add },
+    note: payload.note,
+  });
+
+  const item = classifiedItemWithPr({
+    ...observed,
+    roles: [payload.role],
+    attempts: [],
+    handback: record,
+  });
+  yield* publishChangedItem(payload.workspace, item);
   return item;
 });
 
