@@ -1,11 +1,11 @@
-import type { FileContribution } from "@cogwork/contracts";
+import type { FileContribution, RunId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { ContextFs, type ContextFsError, type ContextFsService } from "./context-fs";
 
-export type InstructionLayerKind = "rules" | "repo" | "playbook";
+export type InstructionLayerKind = "rules" | "repo" | "operating-instructions";
 
 export interface InstructionLayer {
   readonly kind: InstructionLayerKind;
@@ -15,26 +15,32 @@ export interface InstructionLayer {
 
 export interface AssembledContext {
   readonly layers: ReadonlyArray<InstructionLayer>;
-  readonly skillPath: string;
+  readonly operatingInstructionsPath: string;
+  readonly operatingInstructionResources: ReadonlyArray<{
+    readonly source: string;
+    readonly content: string;
+  }>;
+  readonly sources: ReadonlyArray<{ readonly source: string; readonly content: string }>;
 }
 
 export interface AssembleRequest {
+  readonly runId: RunId;
   readonly cwd: string;
   readonly projectRoot: string;
-  readonly skill: string;
+  readonly operatingInstructions: string;
   readonly contributions: ReadonlyArray<FileContribution>;
 }
 
 export interface ContextAssemblerConfig {
   readonly homeDir: string;
   readonly userAgentsDir: string;
-  readonly skillsDir: string;
+  readonly operatingInstructionsDir: string;
 }
 
 export class ContextAssemblerError extends Schema.TaggedError<ContextAssemblerError>()(
   "ContextAssemblerError",
   {
-    skill: Schema.String,
+    source: Schema.String,
     message: Schema.String,
   },
 ) {}
@@ -62,11 +68,14 @@ export const repoDirsFrom = (cwd: string, projectRoot: string) => {
   return within ? climb(from, root) : [from];
 };
 
-// A skill name becomes a directory segment on both the source and the destination of a recursive
-// copy-and-delete, so anything but a single safe segment could escape the skills base.
-const safeSkillSegment = /^[A-Za-z0-9._-]+$/;
+// The package name becomes a directory segment on both sides of recursive copy-and-delete.
+const safePathSegment = /^[A-Za-z0-9._-]+$/;
 
-const isSafeSkill = (skill: string) => skill !== "." && skill !== ".." && safeSkillSegment.test(skill);
+const isSafePathSegment = (segment: string) =>
+  segment !== "." && segment !== ".." && safePathSegment.test(segment);
+
+const runPathSegment = (runId: RunId) =>
+  `run-${Array.from(runId, (character) => character.codePointAt(0)?.toString(16) ?? "").join("-")}`;
 
 const presentLayers = (layers: ReadonlyArray<InstructionLayer | null>) =>
   layers.filter((layer): layer is InstructionLayer => layer !== null);
@@ -75,6 +84,7 @@ export interface ContextAssemblerService {
   readonly assemble: (
     request: AssembleRequest,
   ) => Effect.Effect<AssembledContext, ContextFsError | ContextAssemblerError>;
+  readonly cleanup: (runId: RunId) => Effect.Effect<void, ContextFsError>;
 }
 
 export class ContextAssembler extends Context.Service<ContextAssembler, ContextAssemblerService>()(
@@ -82,6 +92,8 @@ export class ContextAssembler extends Context.Service<ContextAssembler, ContextA
 ) {}
 
 export const make = (config: ContextAssemblerConfig, fs: ContextFsService): ContextAssemblerService => {
+  const runPath = (runId: RunId) => joinPath(joinPath(config.homeDir, "run-plans"), runPathSegment(runId));
+
   const nonEmpty = (content: string | null) =>
     content !== null && content.trim().length > 0 ? content : null;
 
@@ -114,39 +126,86 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
     const rules = contributions
       .filter((contribution) => contribution.authority === authority && contribution.kind === "rules")
       .sort((left, right) => left.id.localeCompare(right.id));
-    return yield* Effect.forEach(rules, (rule) => readLayer("rules", rule.file)).pipe(
-      Effect.map(presentLayers),
+    return yield* Effect.forEach(rules, (rule) =>
+      Effect.gen(function* () {
+        const layer = yield* readLayer("rules", rule.file);
+        if (layer !== null) return layer;
+        return yield* new ContextAssemblerError({
+          source: rule.file,
+          message: `Contribution ${rule.id} has no readable source at ${rule.file}`,
+        });
+      }),
     );
   });
 
-  const playbookLayer = Effect.fn("ContextAssembler.playbookLayer")(function* (
-    skill: string,
-    skillDir: string,
+  const contributionSources = Effect.fn("ContextAssembler.contributionSources")(function* (
+    contributions: ReadonlyArray<FileContribution>,
   ) {
-    const layer = yield* readLayer("playbook", joinPath(skillDir, "SKILL.md"));
+    return yield* Effect.forEach(
+      contributions.filter((contribution) => contribution.kind !== "rules"),
+      (contribution) =>
+        Effect.gen(function* () {
+          const content = yield* fs.readFile(contribution.file);
+          if (content !== null) return { source: contribution.file, content };
+          return yield* new ContextAssemblerError({
+            source: contribution.file,
+            message: `Contribution ${contribution.id} has no readable source at ${contribution.file}`,
+          });
+        }),
+    );
+  });
+
+  const operatingInstructionsLayer = Effect.fn("ContextAssembler.operatingInstructionsLayer")(function* (
+    name: string,
+    packageDir: string,
+  ) {
+    const layer = yield* readLayer("operating-instructions", joinPath(packageDir, "INSTRUCTIONS.md"));
     if (layer !== null) return layer;
     return yield* new ContextAssemblerError({
-      skill,
-      message: `playbook skill "${skill}" has no readable SKILL.md at ${skillDir}`,
+      source: name,
+      message: `Operating Instructions "${name}" have no readable INSTRUCTIONS.md at ${packageDir}`,
     });
   });
 
+  const operatingInstructionResources = Effect.fn("ContextAssembler.operatingInstructionResources")(
+    function* (packageDir: string) {
+      const names = (yield* fs.readDirectory(packageDir, { recursive: true }))
+        .filter((name) => name !== "INSTRUCTIONS.md")
+        .sort();
+      const resources = yield* Effect.forEach(names, (name) =>
+        Effect.map(fs.readFile(joinPath(packageDir, name)), (content) =>
+          content === null ? [] : [{ source: joinPath(packageDir, name), content }],
+        ),
+      );
+      return resources.flat();
+    },
+  );
+
   return {
     assemble: Effect.fn("ContextAssembler.assemble")(function* (request: AssembleRequest) {
-      if (!isSafeSkill(request.skill)) {
+      if (!isSafePathSegment(request.operatingInstructions)) {
         return yield* new ContextAssemblerError({
-          skill: request.skill,
-          message: `playbook skill name "${request.skill}" is not a single path segment`,
+          source: request.operatingInstructions,
+          message: `Operating Instructions name "${request.operatingInstructions}" is not a single path segment`,
         });
       }
-      const skillDir = joinPath(config.skillsDir, request.skill);
-      const skillPath = joinPath(joinPath(config.homeDir, "skills"), request.skill);
-      const playbook = yield* playbookLayer(request.skill, skillDir);
-      yield* fs.copyDirectory(skillDir, skillPath);
+      const packageDir = joinPath(config.operatingInstructionsDir, request.operatingInstructions);
+      const operatingInstructionsPath = joinPath(
+        runPath(request.runId),
+        `operating-instructions/${request.operatingInstructions}`,
+      );
+      yield* operatingInstructionsLayer(request.operatingInstructions, packageDir);
+      yield* fs.copyDirectory(packageDir, operatingInstructionsPath);
+      const operatingInstructions = yield* operatingInstructionsLayer(
+        request.operatingInstructions,
+        operatingInstructionsPath,
+      );
+      const resources = yield* operatingInstructionResources(operatingInstructionsPath);
       const rules = yield* userRules();
       const repo = yield* repoLayers(request);
       const repoRules = yield* contributionRules(request.contributions, "local:repo");
       const privateRules = yield* contributionRules(request.contributions, "local:private");
+      const sources = yield* contributionSources(request.contributions);
       const pluginAuthorities = [
         ...new Set(
           request.contributions.flatMap((contribution) =>
@@ -157,9 +216,22 @@ export const make = (config: ContextAssemblerConfig, fs: ContextFsService): Cont
       const pluginRules = yield* Effect.forEach(pluginAuthorities, (authority) =>
         contributionRules(request.contributions, authority),
       ).pipe(Effect.map((groups) => groups.flat()));
-      const layers = [...rules, ...repo, ...repoRules, ...privateRules, ...pluginRules, playbook];
-      return { layers, skillPath } satisfies AssembledContext;
+      const layers = [
+        ...rules,
+        ...repo,
+        ...repoRules,
+        ...privateRules,
+        ...pluginRules,
+        operatingInstructions,
+      ];
+      return {
+        layers,
+        operatingInstructionsPath,
+        operatingInstructionResources: resources,
+        sources,
+      } satisfies AssembledContext;
     }),
+    cleanup: (runId) => fs.removeDirectory(runPath(runId)),
   };
 };
 

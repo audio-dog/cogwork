@@ -105,6 +105,10 @@ export const runs = sqliteTable(
   },
   (table) => [index("runs_started_at").on(desc(table.startedAt))],
 );
+export const runPlans = sqliteTable("run_plans", {
+  runId: text("run_id").primaryKey(),
+  plan: text("plan").notNull(),
+});
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(),
   workspace: text("workspace").notNull(),

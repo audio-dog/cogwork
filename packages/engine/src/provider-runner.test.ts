@@ -1,4 +1,4 @@
-import { agUiTextDelta, HarnessName, SessionId } from "@cogwork/contracts";
+import { agUiTextDelta, HarnessName, RunPlan, SessionId, stageResultJsonSchema } from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
@@ -10,12 +10,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import {
-  ContextAssembler,
-  ContextAssemblerError,
-  type ContextAssemblerService,
-  type InstructionLayer,
-} from "./context-assembler";
+import { ContextAssembler, type ContextAssemblerService, type InstructionLayer } from "./context-assembler";
 import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 import type { HarnessRequest } from "./harness";
 import { makeInterruptStore } from "./interrupt-store";
@@ -23,10 +18,10 @@ import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } f
 import {
   defaultLoopBudget,
   defaultRunBudget,
+  providerInstructionContext,
   providerRunner,
   type RunChat,
   type RunChatOptions,
-  resolveContextLayers,
 } from "./provider-runner";
 import { SessionStore, type SessionStoreService } from "./session-store";
 
@@ -35,12 +30,10 @@ const harnessName = Schema.decodeSync(HarnessName)("provider");
 const sessionId = Schema.decodeSync(SessionId)("sess-resume-1");
 
 const sampleLayer: InstructionLayer = {
-  kind: "playbook",
-  source: "/skills/implement-agent/SKILL.md",
+  kind: "operating-instructions",
+  source: "/operating-instructions/implement-agent/INSTRUCTIONS.md",
   content: "Follow the implement playbook.",
 };
-
-const reqStub = { cwd: "/repo", projectRoot: "/repo", skill: "implement-agent", contributions: [] };
 
 const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => {
   const iterator = items[Symbol.iterator]();
@@ -121,26 +114,71 @@ const sessionLayer = (thread: ReadonlyArray<ModelMessage>) =>
   Layer.succeed(SessionStore, sessionStore(thread));
 
 const contextService = (layers: ReadonlyArray<InstructionLayer>): ContextAssemblerService => ({
-  assemble: () => Effect.succeed({ layers, skillPath: "/skills/implement-agent" }),
+  assemble: () =>
+    Effect.succeed({
+      layers,
+      operatingInstructionsPath: "/operating-instructions/implement-agent",
+      operatingInstructionResources: [],
+      sources: [],
+    }),
+  cleanup: () => Effect.void,
 });
 
 const contextLayer = (layers: ReadonlyArray<InstructionLayer>) =>
   Layer.succeed(ContextAssembler, contextService(layers));
 
-const request = (overrides: Partial<HarnessRequest>): HarnessRequest => ({
-  harness: harnessName,
-  stage: "implement",
-  skill: "implement-agent",
-  checkoutPath: "/tmp/does-not-matter",
-  session: null,
-  prompt: "do the thing",
-  model: "openai/gpt-4o",
-  effort: null,
-  mcpSkills: [],
-  contributions: [],
-  ...overrides,
-  profile: overrides.profile ?? "full",
-});
+interface RequestOverrides {
+  readonly checkoutPath?: string;
+  readonly session?: HarnessRequest["session"];
+  readonly stage?: "triage" | "implement";
+  readonly model?: string;
+}
+
+const request = (overrides: RequestOverrides): HarnessRequest => {
+  const stage = overrides.stage ?? "implement";
+  const profile = stage === "triage" ? "read-only" : "full";
+  const structuredOutput =
+    stageResultJsonSchema(stage)?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? null;
+  return {
+    plan: Schema.decodeSync(RunPlan)({
+      id: "run-provider-test",
+      operation: stage,
+      harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", effort: null, profile },
+      instructions: [{ ...sampleLayer, kind: "repo" }],
+      operatingInstructions: {
+        name: "implement-agent",
+        path: "/operating-instructions/implement-agent",
+        resources: [{ source: "/operating-instructions/implement-agent/GUIDE.md", content: "guide" }],
+      },
+      tools: ["read", "write", "edit", "bash", "glob", "grep", "webfetch"],
+      skills: [],
+      mcp: [],
+      subagents: [],
+      commands: [],
+      hooks: [],
+      middleware: ["persistence", "instruction-context"],
+      structuredOutput,
+      connections: [],
+      messages: [{ role: "user", content: "do the thing" }],
+      workContext: {
+        reference: { workItem: "#1", url: null },
+        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+      sandbox: { workspace: overrides.checkoutPath ?? "/tmp/does-not-matter", policy: profile },
+      persistence: { sessionKind: "owned-transcript" },
+      provenance: {
+        resolution: [],
+        stamps: [],
+        projectedNames: [],
+        projection: [],
+        observation: { generation: 1, observedAtMillis: 1 },
+      },
+    }),
+    session: overrides.session ?? null,
+    mcpCredentials: new Map(),
+  };
+};
 
 const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
   const handle = yield* Effect.acquireRelease(
@@ -151,6 +189,13 @@ const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
 });
 
 describe("providerRunner", () => {
+  it("projects Operating Instructions resources into provider context", () => {
+    assert.deepStrictEqual(
+      providerInstructionContext(request({}).plan).map(({ content }) => content),
+      [sampleLayer.content, "guide"],
+    );
+  });
+
   it("declares the owned-transcript session kind", () => {
     assert.strictEqual(providerRunner({ name: harnessName }).sessionKind, "owned-transcript");
   });
@@ -316,23 +361,4 @@ describe("defaultRunBudget", () => {
     assert.strictEqual(defaultRunBudget("implement"), "2 hours");
     assert.strictEqual(defaultRunBudget("follow-up"), "2 hours");
   });
-});
-
-describe("resolveContextLayers", () => {
-  it.effect("returns the assembled layers on success", () =>
-    Effect.gen(function* () {
-      const layers = yield* resolveContextLayers(contextService([sampleLayer]), reqStub, []);
-      assert.deepStrictEqual([...layers], [sampleLayer]);
-    }),
-  );
-
-  it.effect("falls back to the run-start layers when assembly fails", () =>
-    Effect.gen(function* () {
-      const failing: ContextAssemblerService = {
-        assemble: () => Effect.fail(new ContextAssemblerError({ skill: "implement-agent", message: "boom" })),
-      };
-      const layers = yield* resolveContextLayers(failing, reqStub, [sampleLayer]);
-      assert.deepStrictEqual([...layers], [sampleLayer]);
-    }),
-  );
 });

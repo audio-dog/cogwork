@@ -9,6 +9,8 @@ import type {
   NeedsHumanReason,
   Priority,
   PrSummary,
+  RunPlanWorkContextFacts,
+  RunPlanWorkContextReference,
   SessionId,
 } from "@cogwork/contracts";
 import { byStageThenPriority } from "@cogwork/contracts";
@@ -25,7 +27,12 @@ export interface EligibleWork extends ActionableItem {
   readonly priorFailures: number;
   readonly followUp?: FollowUpContext;
   readonly resume?: ResumeContext;
+  readonly recovery?: ResumeContext["reason"];
   readonly followUpBranch?: string;
+  readonly workContext: {
+    readonly reference: RunPlanWorkContextReference;
+    readonly facts: RunPlanWorkContextFacts;
+  };
 }
 
 export interface Classification {
@@ -156,6 +163,17 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
     ...(followUp ? { followUp } : {}),
     ...(stage === "follow-up" && item.pr?.followable !== false ? { followUpBranch: item.pr?.headRef } : {}),
     ...prFields(item),
+    workContext: {
+      reference: { workItem: item.id, url: item.url },
+      facts: {
+        roles: item.roles,
+        assignees: item.assignees,
+        openBlockers: item.openBlockers,
+        claim: item.claim,
+        priority: item.priority,
+        pr: item.pr ? prSummaryOf(item.pr) : null,
+      },
+    },
   };
 };
 

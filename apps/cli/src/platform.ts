@@ -238,9 +238,9 @@ export const contextFsLayer = Layer.effect(
     const fail = (operation: string) => (cause: unknown) =>
       new ContextFs.ContextFsError({ operation, message: describe(cause) });
 
-    const readDirectory = (target: string) =>
+    const readDirectory = (target: string, options?: { readonly recursive?: boolean }) =>
       fs
-        .readDirectory(target)
+        .readDirectory(target, options)
         .pipe(
           Effect.catch((error) =>
             error.reason._tag === "NotFound"
@@ -260,6 +260,8 @@ export const contextFsLayer = Layer.effect(
             Effect.andThen(fs.copy(source, dest, { overwrite: true })),
             Effect.mapError(fail(`copy ${source} to ${dest}`)),
           ),
+      removeDirectory: (target) =>
+        fs.remove(target, { recursive: true, force: true }).pipe(Effect.mapError(fail(`remove ${target}`))),
     } satisfies ContextFs.ContextFsService;
   }),
 );
