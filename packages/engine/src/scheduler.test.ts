@@ -1,4 +1,5 @@
 import {
+  DaemonEvent,
   HarnessName,
   type LifecycleStage,
   type Priority,
@@ -313,6 +314,7 @@ const snapshotOf = (entries: ReadonlyArray<SnapshotEntry>): Reconcile.ReconcileS
     blocked: [],
     needsHuman: [],
     observed: [],
+    availability: [],
   })),
 });
 
@@ -346,6 +348,7 @@ const workerLayer = Layer.effect(
   Effect.map(SchedulerProbe, (probe) => ({
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
     snapshot: Ref.get(probe.snapshots),
+    invalidateAvailability: () => Effect.void,
   })),
 );
 
@@ -366,6 +369,9 @@ const executorStubLayer = (execute: ExecuteStub) =>
       const probe = yield* SchedulerProbe;
       const ledger = yield* RunLedger.RunLedger;
       return {
+        availabilityOf: (_workspace, item) =>
+          Effect.succeed({ operation: item.stage, available: true, causes: [] }),
+        refreshAvailability: () => Effect.succeed([]),
         execute: (workspace, item) => execute(probe, ledger, workspace, item),
       };
     }),
@@ -765,11 +771,13 @@ describe("Scheduler.drain", () => {
       yield* Fiber.join(drain);
 
       const events = yield* Stream.fromSubscription(subscription).pipe(
-        Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "interrupted"),
+        Stream.takeUntil(
+          (event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "interrupted",
+        ),
         Stream.runCollect,
       );
       const changed = [...events].flatMap((event) =>
-        event._tag === "RunChanged" && event.run.status === "interrupted" ? [event.run] : [],
+        DaemonEvent.guards.RunChanged(event) && event.run.status === "interrupted" ? [event.run] : [],
       );
       assert.deepStrictEqual(
         changed.map((run) => run.status),
