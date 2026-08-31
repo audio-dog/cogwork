@@ -182,9 +182,6 @@ export const layer = Layer.effect(
         account: input.account,
         status: "established",
       });
-      yield* credentials
-        .bearerToken(credentialAccountFor(connection))
-        .pipe(Effect.tapError(() => credentials.removeConnection(id)));
       yield* controlStore
         .establishConnection(connection)
         .pipe(Effect.mapError((error) => unavailable("establish Connection", id, error.message)));

@@ -13,7 +13,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import { ConnectionStore, connectionOverview, layer, requiringPluginId } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
-import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
+import { CredentialStore, type CredentialStoreService } from "./credential-store";
 
 const github = Connection.make({
   id: connectionIdOf("github", "default"),
@@ -82,19 +82,17 @@ describe("Connection overview", () => {
 });
 
 describe("Connection establishment", () => {
-  it.effect("removes a saved credential when validation fails", () =>
+  it.effect("does not revalidate or remove a configured credential", () =>
     Effect.gen(function* () {
       const connections = yield* ConnectionStore;
-      const error = yield* Effect.flip(
-        connections.establish({
-          system: "linear",
-          account: "acme",
-          source: { _tag: "ApiKey", key: Redacted.make("invalid") },
-        }),
-      );
+      const connection = yield* connections.establish({
+        system: "linear",
+        account: "acme",
+        source: { _tag: "ApiKey", key: Redacted.make("valid") },
+      });
 
-      assert.strictEqual(error.message, "invalid key");
-      assert.deepStrictEqual(yield* Ref.get(yield* RemovedConnections), [connectionIdOf("linear", "acme")]);
+      assert.strictEqual(connection.id, connectionIdOf("linear", "acme"));
+      assert.deepStrictEqual(yield* Ref.get(yield* RemovedConnections), []);
     }).pipe(
       Effect.provide(
         layer.pipe(
@@ -105,8 +103,7 @@ describe("Connection establishment", () => {
               Effect.gen(function* () {
                 const removed = yield* RemovedConnections;
                 return {
-                  bearerToken: (account) =>
-                    Effect.fail(new CredentialError({ account: account.key, message: "invalid key" })),
+                  bearerToken: () => Effect.die("unexpected credential read"),
                   persist: () => Effect.die("unexpected credential persist"),
                   invalidate: () => Effect.void,
                   providerKey: () => Effect.die("unexpected provider key"),
