@@ -1,0 +1,129 @@
+apps/cli/src/ledger.test.ts
+  s_c5b4e91bde59ec::t_e70aa6949542a1 5,13,15,32-34,88-131,167-199
+apps/cli/src/ledger.ts
+  s_c5b4e91bde59ec::t_15e02df41d9a54 1,5,13,20,22,41-52,147-150,162,183-196,232-258,260
+apps/cli/src/platform.test.ts
+  s_c5b4e91bde59ec::t_261f14ea8168ee 374-376
+apps/cli/src/platform.ts
+  s_c5b4e91bde59ec::t_42a38f506223f0 241,243,263-264
+apps/cli/src/rpc.ts
+  s_c5b4e91bde59ec::t_20bfd491b1421a 83,85,94
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_c5b4e91bde59ec::t_1ab291f248769b 120-121
+docs/agent-patterns/effect-observability.md
+  s_c5b4e91bde59ec::t_8f8f6453bac059 1-135
+docs/agent-patterns/effect-process-edges.md
+  s_c5b4e91bde59ec::t_07f007ea058787 1-170
+docs/agent-patterns/effect-schema-unions.md
+  s_c5b4e91bde59ec::t_6e37b1a033e131 1-153
+docs/agent-patterns/effect-test-layers.md
+  s_c5b4e91bde59ec::t_c9f60ef6aaa29d 125-126
+docs/agent-patterns/effect-time-bounds.md
+  s_c5b4e91bde59ec::t_9fad3479be10ff 29,51-52,56-57,59-63,70-71,122-123
+packages/codex-cli/src/harness.test.ts
+  s_c5b4e91bde59ec::t_c047ed6dd14bfa 7-8,10,44-48,50-52,65,80-148,513-517,721-725,792,796-797
+packages/codex-cli/src/harness.ts
+  s_c5b4e91bde59ec::t_60713ea4b4342a 2-9,44,74-77,79,170-171,216-227,236-241,244-245,248-254,260,268,270,273
+packages/contracts/CONTEXT.md
+  s_c5b4e91bde59ec::t_eb433fb1359947 265,278-281,291,301
+packages/contracts/src/index.ts
+  s_c5b4e91bde59ec::t_83de5c18b8e1e0 12,15
+packages/contracts/src/plugin.ts
+  s_c5b4e91bde59ec::t_f650c098085dea 5,52
+packages/contracts/src/provenance.ts
+  s_c5b4e91bde59ec::t_681df53c6e9df2 1-15
+packages/contracts/src/run-plan.ts
+  s_c5b4e91bde59ec::t_2a87670cb7272d 1-192
+packages/cursor-acp/src/harness.test.ts
+  s_c5b4e91bde59ec::t_15d8e4cabfae7f 2,41,54-91,93
+packages/cursor-acp/src/harness.ts
+  s_c5b4e91bde59ec::t_84dd0d456a7dd6 4-11,57,243-253,262,265,275,279,286-287,291-292,294-295,297-298
+packages/engine/CONTEXT.md
+  s_c5b4e91bde59ec::t_c28b0d5da80888 61,73,181
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_c5b4e91bde59ec::t_cfcce7f83af09a 37-40
+packages/engine/docs/adr/0011-coordination-records-are-append-only.md
+  s_c5b4e91bde59ec::t_3a2bc9c71755e5 1-29
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_c5b4e91bde59ec::t_a224f08efc2852 3,8,88
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_c5b4e91bde59ec::t_a1708ce1579a48 3,8,10,12,21,25,30,40,83,85,108,110
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_c5b4e91bde59ec::t_5419f17762f918 3,8,10,12,16,18-19,23,27,44,48,59,79
+packages/engine/operating-instructions/triage-agent/OUT-OF-SCOPE.md
+  s_c5b4e91bde59ec::t_983429874b663b 6,104
+packages/engine/src/classify.ts
+  s_c5b4e91bde59ec::t_fec2de1758bdc7 12-13,30,32-35,166-176
+packages/engine/src/context-assembler.test.ts
+  s_c5b4e91bde59ec::t_0d53a0405508b3 1,5,14-18,21,24,31,33-50,53-54,95,111-114,121,136,177,183-217,226,236,249,259-269,271-282,286,291-298,303-306,308-324,329-343,352,356,359-367,369,371-372,376,379,382-384,392,397-399
+packages/engine/src/context-assembler.ts
+  s_c5b4e91bde59ec::t_b00fd542f6026f 1,8,18-23,27,30,37,43,71-72,74-78,87,95-96,129-154,158-160,162,165-166,170-183,186,188-189,192-203,208,219-232,234
+packages/engine/src/context-fs.ts
+  s_c5b4e91bde59ec::t_aafbecbb0a4d75 16-19,22
+packages/engine/src/control-store-create.gen.ts
+  s_c5b4e91bde59ec::t_6393e455953529 9
+packages/engine/src/control-store-schema.ts
+  s_c5b4e91bde59ec::t_2badcc41a6e1b3 108-111
+packages/engine/src/control-store.test.ts
+  s_c5b4e91bde59ec::t_7f5e0db7cf4bf1 86
+packages/engine/src/daemon-composition.test.ts
+  s_c5b4e91bde59ec::t_75b740a3bbd171 38-39,45-52
+packages/engine/src/daemon.ts
+  s_c5b4e91bde59ec::t_be95d5522b0339 322
+packages/engine/src/executor.test.ts
+  s_c5b4e91bde59ec::t_6dd332e20a49b1 2-3,7-9,19,33,39,52,75-86,88-90,132,163,209-273,293,375,569-570,585-586,601-602,616-617,733-745,776-777,787-788,866-929,931,934,937-938,941,945-952,955,958-1026,1040-1060,1066-1067,1069-1076,1079,1084,1098,1102,1114,1116,1136-1147,1156,1163,1186,1206,1232,1250,1273,1292-1293,1300,1317,1334,1352,1367,1376-1484,1494,1507,1511,1519-1546,1552,1555-1569,1597,1620-1660,1664,1676,1689,1692-1698,1706,1709,1711,1720-1721,1728-1735,1737-1739,1741-1763,1765,1769,1772-1774,1776-1777,1785-1794,1805,1808-1812,1821-1822,1833,1836-1837,1855,1879,1883,1894,1898,1901,1905-1906,1911-1912,1915-1916,1929,1941-1942,1959,1964,1976-1978,1982,1988-1992,2008-2009,2014,2042,2047,2049-2052,2073,2076,2078-2079,2112,2119,2144,2151,2170,2177,2190,2210,2223,2232,2244-2273,2278,2285,2289-2317,2326-2328,2334,2354-2355,2361-2362,2371,2391,2408,2411-2412,2436,2439,2451,2464,2481,2493,2519,2536,2548,2568,2583,2598-2599,2623,2626,2637-2638,2643,2671-2672,2679-2683,2691-2692,2713-2714,2734,2759,2772,2780,2785,2794,2796-2797
+packages/engine/src/executor.ts
+  s_c5b4e91bde59ec::t_8f287f8c3745eb 1-14,19-20,24,38-39,59-66,79,85-91,99-128,153,155,224,228,236,262,266-274,277,282-285,287,289-291,299-307,311,321,324-327,329-330,334-339,381-402,405,407,409,412,414-448,450-482,530,540,603,636,640-651,677-678,680,682-685,688-689,692-696,738-744,770,773-774,779,781-785,793-794,800,802,856-862,893-894,896-904,907-908,915,917,950,953-955,957,966,969,972-975,978-979,984,989-1007,1009,1012,1016,1050-1073,1079,1089-1105,1107-1115,1117-1121,1125-1129,1137,1142,1145-1149,1153,1155-1156,1158,1160,1166
+packages/engine/src/harness.test.ts
+  s_c5b4e91bde59ec::t_d33044a1abfa7e 1,20,160-161,170-211,213
+packages/engine/src/harness.ts
+  s_c5b4e91bde59ec::t_350ad20b82f902 4-6,16,33,35,38-50,75-76,87-88,141-143,151-152
+packages/engine/src/plugin.test.ts
+  s_c5b4e91bde59ec::t_3165442adf6160 1,101-104,287
+packages/engine/src/plugin.ts
+  s_c5b4e91bde59ec::t_ddaee90ee97e29 2-3,108-112,292,305,482-486
+packages/engine/src/provider-runner.test.ts
+  s_c5b4e91bde59ec::t_e256e7ec7aa612 1,13,21,33-34,117-124,130-181,192-198
+packages/engine/src/provider-runner.ts
+  s_c5b4e91bde59ec::t_45c194457182bc 1,7,21,42,82,84-86,89-103,112-122,124,127-128,141,144,151-161,167-169,172
+packages/engine/src/read-model.test.ts
+  s_c5b4e91bde59ec::t_6bb915458a0f24 53-56,65-68
+packages/engine/src/reconcile.ts
+  s_c5b4e91bde59ec::t_187519242a9e87 45,121-125,219,222
+packages/engine/src/recovery.test.ts
+  s_c5b4e91bde59ec::t_c8f8bd700fe7fc 154,670-674,696-700
+packages/engine/src/recovery.ts
+  s_c5b4e91bde59ec::t_f425a9e2c6ab15 1-7,131,134-136,143,168,174,182,187,190,198,201,232,240,257-260,266
+packages/engine/src/run-ledger.test.ts
+  s_c5b4e91bde59ec::t_98c2df73c123d1 4,29-72,98-119
+packages/engine/src/run-ledger.ts
+  s_c5b4e91bde59ec::t_11904b358944bf 4,11-16,21,23,31-52,69-70,109-113,117-120,169,174-188,190-197,312-313
+packages/engine/src/run-plan.test.ts
+  s_c5b4e91bde59ec::t_0f266452427997 1-372
+packages/engine/src/run-plan.ts
+  s_c5b4e91bde59ec::t_9e620af216983e 1-669
+packages/engine/src/scheduler.test.ts
+  s_c5b4e91bde59ec::t_336eb781bd68de 59-62,74,307
+packages/engine/src/scheduler.ts
+  s_c5b4e91bde59ec::t_e6f9349c75ae4b 1-7,90,186,192,197-200,204,220,283,286
+packages/engine/src/tools/index.ts
+  s_c5b4e91bde59ec::t_7564a19d3a6ea1 18
+packages/engine/src/tools/owned-tools.ts
+  s_c5b4e91bde59ec::t_daa240861b35f1 280-281
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "737958054502fec2579887f45f73bffa64745a38",
+  "prompts": {},
+  "sessions": {
+    "s_c5b4e91bde59ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9ef1487a-9dd7-4d25-a28e-14298322e440",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
