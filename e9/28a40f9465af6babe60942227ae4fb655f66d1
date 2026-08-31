@@ -1,0 +1,23 @@
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_10d54901fda76b::t_53abe1420ac398 120-121
+docs/agent-patterns/effect-test-layers.md
+  s_10d54901fda76b::t_f8eae379fd7632 125-126
+docs/agent-patterns/effect-time-bounds.md
+  s_10d54901fda76b::t_d60f2ca0d61068 29,51-52,56-57,59-63,70-71,122-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e928a40f9465af6babe60942227ae4fb655f66d1",
+  "prompts": {},
+  "sessions": {
+    "s_10d54901fda76b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49d22256-a80a-4e3f-9f46-e991b6f39bee",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
