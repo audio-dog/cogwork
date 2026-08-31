@@ -25,7 +25,6 @@ const workspace: RegisteredWorkspace = {
     name: "a",
     checkoutPath: "/repos/a",
     issueTracker: { type: "github", repo: "owner/a" },
-    harness: { preferred: "cursor" },
   }),
 };
 

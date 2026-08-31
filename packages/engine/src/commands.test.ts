@@ -89,7 +89,6 @@ const registered: Registry.RegisteredWorkspace = {
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -387,7 +386,6 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
         checkoutPath: registration.checkoutPath,
         issueTracker: registration.issueTracker,
         sourceControl: registration.sourceControl,
-        harness: { preferred: harness("codex") },
         linearHistory: registration.linearHistory,
       },
       workspaceLimit: registration.concurrency,

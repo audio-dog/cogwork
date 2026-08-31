@@ -62,7 +62,6 @@ const registeredWorkspace: Registry.RegisteredWorkspace = {
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
-    harness: { preferred: "cursor" },
   }),
   workspaceLimit: 1001,
 };

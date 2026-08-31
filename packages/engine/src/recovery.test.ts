@@ -40,8 +40,6 @@ const wsA: RegisteredWorkspace = {
     name: "a",
     checkoutPath: "/repos/a",
     issueTracker: { type: "github", repo: "owner/a", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
-    playbook: { triage: { enabled: true } },
   }),
 };
 
