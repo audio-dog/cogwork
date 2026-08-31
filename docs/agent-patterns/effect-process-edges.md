@@ -56,22 +56,25 @@ This shape is for processes with no runtime yet. Inside an already-running Effec
 
 ## Convert callbacks once, at the edge
 
-`Effect.callback` is the one-shot form (v4 renamed `Effect.async`; `resume` takes an Effect, and the register function receives an `AbortSignal` wired to interruption plus an optional cleanup effect):
+`Effect.callback` is the one-shot form (v4 renamed `Effect.async`; `resume` takes an Effect, and the register function may return a cleanup effect that runs if the fiber is interrupted):
 
 ```ts
 const isDaemonListening = (socketPath: string) =>
   Effect.callback<boolean>((resume) => {
     const socket = net.connect({ path: socketPath });
-    socket.once("connect", () => resume(Effect.succeed(true)));
-    socket.once("error", () => resume(Effect.succeed(false)));
-    return Effect.sync(() => {
-      socket.removeAllListeners();
+    socket.once("connect", () => {
       socket.destroy();
+      resume(Effect.succeed(true));
     });
+    socket.once("error", () => {
+      socket.destroy();
+      resume(Effect.succeed(false));
+    });
+    return Effect.sync(() => socket.destroy());
   }).pipe(Effect.timeout("500 millis"), Effect.orElseSucceed(() => false));
 ```
 
-This replaces the hand-rolled `settle` latch in `socket-probe.ts` — the cleanup effect runs exactly once, on any exit, including interruption. The recursive poll around it (`wait-for-socket.ts`, three `signal.aborted` checks and a self-call) becomes a schedule:
+Each resume path closes its own socket; the returned cleanup covers only interruption — here, the path where `Effect.timeout` wins, which `socket-probe.ts` hand-threads through `socket.setTimeout`. The recursive poll around it (`wait-for-socket.ts`, `signal.aborted` checks and a self-call) becomes a schedule:
 
 ```ts
 const waitForDaemonListening = (socketPath: string) =>
@@ -82,7 +85,7 @@ const waitForDaemonListening = (socketPath: string) =>
 
 with the caller's deadline as an ordinary `Effect.timeout` instead of a threaded `AbortSignal`.
 
-An event emitter becomes a stream through `Stream.callback`, which hands the adapter a `Queue` and a `Scope`; subscribe/unsubscribe live in one `acquireRelease`:
+An event emitter becomes a stream through `Stream.callback`, which hands the adapter a `Queue` and runs the registration effect with a `Scope` in context; subscribe/unsubscribe live in one `acquireRelease`:
 
 ```ts
 Stream.callback<EngineStatus>((queue) =>
@@ -123,7 +126,7 @@ const child = yield* Effect.acquireRelease(spawnEngine(command), (proc) => {
 
 The exit event becomes awaitable by completing a `Deferred` from `child.once("exit", ...)` at spawn time. Release never fails and never hangs; closing the owning scope (the `ManagedRuntime`'s, on `will-quit`) is the whole shutdown story.
 
-Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/unstable/process` — v4's rename of `Command`; `effect/unstable/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs the engine child through `ChildProcessSpawner`; the desktop supervisor is the only shipping raw `spawn` in the repo.
+Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/unstable/process` — v4's rename of `Command`; `effect/unstable/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs its subprocesses through `ChildProcessSpawner`; the desktop supervisor is the only shipping raw `spawn` in the repo.
 
 ## Status is a SubscriptionRef, restarts are a Schedule
 
@@ -150,8 +153,8 @@ The same edge discipline applies inside harness adapters: cursor-acp's manual `r
 ## Sources
 
 - `.repos/effect/packages/effect/src/ManagedRuntime.ts`: `make` (optional shared `memoMap`), `dispose` closes the root scope and poisons further use.
-- `.repos/effect/packages/effect/src/Effect.ts`: `callback` — `resume` takes an Effect, the register gets an `AbortSignal` and may return a cleanup effect.
-- `.repos/effect/packages/effect/src/Stream.ts`: `callback` hands the adapter a `Queue` and a `Scope`; `fromReadableStream`, `fromAsyncIterable`.
+- `.repos/effect/packages/effect/src/Effect.ts`: `callback` — `resume` takes an Effect, and the register may return a cleanup effect that runs on interruption.
+- `.repos/effect/packages/effect/src/Stream.ts`: `callback` hands the adapter a `Queue` and scopes its registration effect; `fromReadableStream`, `fromAsyncIterable`.
 - `.repos/effect/packages/platform/node-shared/src/NodeStream.ts` and `NodeSocket.ts` (import from `@effect/platform-node`): `fromReadable`; `makeNet` with `openTimeout` and a scope-finalized teardown.
 - `.repos/effect/packages/effect/src/unstable/process/ChildProcess.ts` and `ChildProcessSpawner.ts`: the v4 subprocess API.
 - `.repos/effect/ai-docs/src/01_effect/06_running/10_run-main.ts` and `20_layer-launch.ts`: the two entrypoint shapes.
