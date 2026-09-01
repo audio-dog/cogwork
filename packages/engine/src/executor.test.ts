@@ -2963,7 +2963,7 @@ describe("Executor.execute", () => {
     );
   });
 
-  it.effect("keeps an opaque resume handle when prepare hands a run off", () => {
+  it.effect("uses the stored session attach capability when switched prepare fails", () => {
     const worktree = failSecondPrepareWorktree(
       new WorktreeDivergedError({
         remote: "origin",
@@ -2976,6 +2976,7 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
+      yield* selectHarness(runnableCodexStages);
       yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
@@ -2984,8 +2985,25 @@ describe("Executor.execute", () => {
       const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
       assert.strictEqual(runs.length, 1);
       assert.strictEqual(runs[0]?.session, succeeded?.session);
-      assert.include(handOff?.note ?? "", "codex resume 'sess-42'");
-    }).pipe(Effect.provide(provide([runner(implementEvents)], worktree)));
+      assert.notInclude(handOff?.note ?? "", "codex resume");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [
+            capturingRunner(implementEvents, Stream.empty, "opaque-handle", cursor, false),
+            capturingRunner(implementEvents, Stream.empty, "opaque-handle", codex, "codex-cli"),
+          ],
+          worktree,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          SelectedHarness.controlStoreLayer,
+        ),
+      ),
+    );
   });
 
   it.effect("hands a self-reported stuck implement run to a human without retrying", () => {

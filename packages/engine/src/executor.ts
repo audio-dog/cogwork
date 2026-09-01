@@ -1597,19 +1597,21 @@ export const make = Effect.gen(function* () {
             Effect.flatMap((prepared) => prepareAcceptedRun(previous, prepared)),
             Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
             Effect.matchEffect({
-              onFailure: (error) =>
-                handleOf(ledger, previous).pipe(
-                  Effect.flatMap((handle) =>
+              onFailure: (error) => {
+                const storedSession = previous ? ledger.getSession(previous) : Effect.succeed(null);
+                return storedSession.pipe(
+                  Effect.flatMap((session) =>
                     reportFailure(
                       workspace,
                       item,
                       retryableOf(error),
                       prepareFailureReason(error),
-                      selectedOps.resolved.harness,
-                      handle,
+                      session?.harness ?? selectedOps.resolved.harness,
+                      sessionHandle(session),
                     ),
                   ),
-                ),
+                );
+              },
               onSuccess: (accepted) => {
                 if (!accepted) return Effect.void;
                 const { request, selectedOps: acceptedOps, record } = accepted;
