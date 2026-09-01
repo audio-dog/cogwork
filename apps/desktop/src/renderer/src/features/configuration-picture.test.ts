@@ -10,7 +10,6 @@ const registeredWorkspace = Schema.decodeSync(WorkspaceState)({
   displayName: "Example",
   checkoutPath: "/repos/example",
   issueTracker: "github",
-  harness: "codex",
   poll: { status: "ok" },
   contributions: [
     {
@@ -130,7 +129,6 @@ describe("configurationPicture", () => {
         displayName: name,
         checkoutPath,
         issueTracker: "github",
-        harness: "codex",
         poll: { status: "ok" },
         contributions: [userServer, userSkill, { ...sharedRepoServer, file: `${checkoutPath}/tools.json` }],
       });
@@ -198,7 +196,6 @@ describe("configurationPicture", () => {
         displayName: name,
         checkoutPath: `/repos/${name}`,
         issueTracker: "github",
-        harness: "codex",
         poll: { status: "ok" },
         contributions: [userServer],
       });
@@ -254,7 +251,6 @@ describe("configurationPicture", () => {
       displayName: "Example",
       checkoutPath: "/repos/example",
       issueTracker: "github",
-      harness: "codex",
       poll: { status: "ok" },
       contributions: [userServer],
     });

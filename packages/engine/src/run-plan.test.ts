@@ -1,6 +1,8 @@
 import {
+  AvailabilityCause,
   type ContributionSettingRow,
   type FileContribution,
+  type OperationSettingRow,
   operationSettingNames,
   RunId,
   type SettingResolutionCase,
@@ -16,6 +18,7 @@ import { resolvedMcpSkills } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
 import {
   assembleRunPlan,
+  availabilityCauses,
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
   projectedContributionName,
@@ -64,6 +67,95 @@ describe("engine setting resolution", () => {
   }
 });
 
+describe("Operation availability", () => {
+  it("reports every unsatisfied declared need", () => {
+    const causes = availabilityCauses({
+      needs: [
+        { name: "review", kind: "skill" },
+        { name: "tracker", kind: "mcp-server" },
+        { name: "release", kind: "command" },
+      ],
+      bindings: [
+        { need: "review", contribution: "local:repo/skill/review" },
+        { need: "tracker", contribution: "plugin:linear/mcp/linear" },
+      ],
+      contributions: [
+        {
+          id: "local:repo/skill/review",
+          kind: "skill",
+          enabled: false,
+          ready: true,
+          reason: null,
+        },
+        {
+          id: "plugin:linear/mcp/linear",
+          kind: "mcp-server",
+          enabled: true,
+          ready: false,
+          reason: "credential unavailable",
+        },
+      ],
+      projectedMembers: ["Skills", "MCP", "Commands"],
+    });
+
+    assert.deepStrictEqual(
+      causes.flatMap((cause) =>
+        AvailabilityCause.guards.UnsatisfiedNeed(cause)
+          ? [{ _tag: cause._tag, need: cause.need, reason: cause.reason }]
+          : [],
+      ),
+      [
+        { _tag: "UnsatisfiedNeed", need: "review", reason: "off" },
+        { _tag: "UnsatisfiedNeed", need: "tracker", reason: "not-ready" },
+        { _tag: "UnsatisfiedNeed", need: "release", reason: "unbound" },
+      ],
+    );
+  });
+
+  it("rejects a required contribution the selected Harness cannot project", () => {
+    const causes = availabilityCauses({
+      needs: [{ name: "review", kind: "skill" }],
+      bindings: [{ need: "review", contribution: "local:private/skill/review" }],
+      contributions: [
+        {
+          id: "local:private/skill/review",
+          kind: "skill",
+          enabled: true,
+          ready: true,
+          reason: null,
+        },
+      ],
+      projectedMembers: ["MCP"],
+    });
+
+    const cause = causes[0];
+    assert.isTrue(cause && AvailabilityCause.guards.UnsatisfiedNeed(cause));
+    if (!cause || !AvailabilityCause.guards.UnsatisfiedNeed(cause)) return;
+    assert.strictEqual(cause.reason, "not-ready");
+    assert.include(cause.message, "does not project Skills");
+  });
+
+  it("accepts ready Hook and Connection bindings when their sources are available", () => {
+    const causes = availabilityCauses({
+      needs: [
+        { name: "notify", kind: "hook" },
+        { name: "tracker", kind: "connection" },
+      ],
+      bindings: [
+        { need: "notify", contribution: "engine/hook/notify" },
+        { need: "tracker", contribution: "linear/acme" },
+      ],
+      contributions: [
+        { id: "engine/hook/notify", kind: "hook", enabled: true, ready: true, reason: null },
+        { id: "linear/acme", kind: "connection", enabled: true, ready: true, reason: null },
+      ],
+      projectedMembers: ["Hooks", "Connections"],
+    });
+
+    assert.deepStrictEqual(causes, []);
+  });
+});
+
 const workspace: RegisteredWorkspace = {
   source: "control-store:workspace",
   contributions: [
@@ -100,8 +192,6 @@ const workspace: RegisteredWorkspace = {
     name: "workspace",
     checkoutPath: "/repo",
     issueTracker: { type: "github", repo: "owner/repo" },
-    harness: { preferred: "codex" },
-    playbook: { implement: { enabled: true, model: "definition-model" } },
   }),
 };
 
@@ -109,7 +199,6 @@ const otherWorkspace = Schema.decodeSync(WorkspaceConfig)({
   name: "other-workspace",
   checkoutPath: "/other",
   issueTracker: { type: "github", repo: "owner/other" },
-  harness: { preferred: "codex" },
 }).name;
 
 const item: EligibleWork = {
@@ -163,6 +252,65 @@ const context: AssembledContext = {
   ],
 };
 
+const bareConfig = Schema.decodeSync(WorkspaceConfig)({
+  name: "bare-workspace",
+  checkoutPath: "/bare",
+  issueTracker: { type: "github", repo: "owner/bare" },
+});
+
+const profileDefault = { level: { _tag: "Default" }, scope: { _tag: "SettingsProfile" } } as const;
+
+const stageEnabled: OperationSettingRow = { ...profileDefault, setting: "enabled", value: true };
+const codexHarness: OperationSettingRow = { ...profileDefault, setting: "harness", value: "codex" };
+const hostHarness: OperationSettingRow = {
+  level: { _tag: "Default" },
+  scope: { _tag: "RuntimeHost" },
+  setting: "harness",
+  value: "cursor",
+};
+const solModel: OperationSettingRow = { ...profileDefault, setting: "model", value: "gpt-5.6-sol" };
+const highEffort: OperationSettingRow = { ...profileDefault, setting: "effort", value: "high" };
+
+describe("stage settings come from Operation settings", () => {
+  it("enables a stage from an Operation setting rather than the Workspace input", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled, codexHarness]);
+
+    assert.isNotNull(resolved);
+    assert.strictEqual(resolved?.stage.enabled, true);
+    assert.strictEqual(resolved?.stage.harness, "codex");
+  });
+
+  it("leaves a stage disabled when no Operation setting enables it", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [codexHarness]);
+
+    assert.strictEqual(resolved?.stage.enabled, false);
+  });
+
+  it("resolves no stage when no harness is configured anywhere", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled]);
+
+    assert.isNull(resolved);
+  });
+
+  it("takes the harness from the Runtime host scope", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [stageEnabled, hostHarness]);
+
+    assert.strictEqual(resolved?.stage.harness, "cursor");
+  });
+
+  it("carries model and effort from Operation settings", () => {
+    const resolved = resolveRunPlanStage(bareConfig, "implement", [
+      stageEnabled,
+      codexHarness,
+      solModel,
+      highEffort,
+    ]);
+
+    assert.strictEqual(resolved?.stage.model, "gpt-5.6-sol");
+    assert.strictEqual(resolved?.stage.effort, "high");
+  });
+});
+
 describe("Run Plan assembly", () => {
   it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
     const runId = Schema.decodeSync(RunId)("run-qualified-mcp");
@@ -185,7 +333,7 @@ describe("Run Plan assembly", () => {
     const resolved = resolveRunPlanStage(
       workspace.config,
       "implement",
-      [],
+      [codexHarness],
       [
         {
           contribution: { id: "local:repo/mcp/linear", kind: "mcp-server" },
@@ -242,6 +390,7 @@ describe("Run Plan assembly", () => {
       file: "/plugins/linear/mcp/linear.json",
     } satisfies FileContribution;
     const resolved = resolveRunPlanStage(workspace.config, "implement", [
+      codexHarness,
       {
         setting: "bindings",
         level: { _tag: "Operation", workflow: "coding", operation: "implement" },
@@ -294,6 +443,7 @@ describe("Run Plan assembly", () => {
       workspace.config,
       "implement",
       [
+        codexHarness,
         {
           setting: "model",
           level: { _tag: "Default" },
@@ -471,7 +621,7 @@ describe("Run Plan assembly", () => {
         enabled: false,
       },
     ];
-    const resolved = resolveRunPlanStage(workspace.config, "implement", [], contributionSettings);
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness], contributionSettings);
     assert.isNotNull(resolved);
     if (!resolved) return;
 

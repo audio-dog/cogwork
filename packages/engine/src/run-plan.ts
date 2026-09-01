@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
 import type {
+  AvailabilityCause,
   ContributionEnabledRow,
   ContributionSettingRow,
   ContributionUnionRow,
   FileContribution,
   OperationBinding,
+  OperationNeed,
+  OperationNeedKind,
   OperationSettingContext,
   OperationSettingName,
   OperationSettingRow,
@@ -14,8 +17,10 @@ import type {
 } from "@cogwork/contracts";
 import {
   ContentRevision,
+  ContributionSettingScope,
   HarnessName,
   type LifecycleStage,
+  OperationBinding as OperationBindingSchema,
   operationSettingNames,
   type ProvenanceStamp,
   type RunId,
@@ -44,13 +49,15 @@ import {
   RunPlanWorkContextFacts,
   RunPlanWorkContextReference,
   type SessionKind,
+  SettingLevel as SettingLevelSchema,
+  SettingScope as SettingScopeSchema,
   stageResultJsonSchema,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
 import { operationPolicyProfile } from "./operation-policy";
-import { type ResolvedStage, resolveStage } from "./playbook";
+import { type OperationDefinition, resolveStage } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { ownedToolNames } from "./tools";
 
@@ -63,17 +70,21 @@ export const engineSettingScopeDirection = [
 
 const scopeRank = (scope: SettingScope) => engineSettingScopeDirection.indexOf(scope._tag);
 
-const levelRank = (level: SettingLevel, context: OperationSettingContext) => {
-  if (level._tag === "Default") return 0;
-  if (level.workflow !== context.workflow) return -1;
-  if (level._tag === "Workflow") return 1;
-  return level.operation === context.operation ? 2 : -1;
-};
+const levelRank = (level: SettingLevel, context: OperationSettingContext) =>
+  SettingLevelSchema.match(level, {
+    Default: () => 0,
+    Workflow: ({ workflow }) => (workflow === context.workflow ? 1 : -1),
+    Operation: ({ workflow, operation }) =>
+      workflow === context.workflow && operation === context.operation ? 2 : -1,
+  });
 
-const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSettingContext) => {
-  if (scope._tag !== "PrivateWorkspaceOverlay") return true;
-  return context.workspace !== null && scope.workspace === context.workspace;
-};
+const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSettingContext) =>
+  SettingScopeSchema.match(scope, {
+    SettingsProfile: () => true,
+    RuntimeHost: () => true,
+    WorkspaceInput: () => true,
+    PrivateWorkspaceOverlay: ({ workspace }) => context.workspace !== null && workspace === context.workspace,
+  });
 
 const uniqueBindings = (bindings: readonly OperationBinding[]) =>
   bindings.filter(
@@ -82,6 +93,87 @@ const uniqueBindings = (bindings: readonly OperationBinding[]) =>
         (candidate) => candidate.need === binding.need && candidate.contribution === binding.contribution,
       ) === index,
   );
+
+export interface AvailabilityContribution {
+  readonly id: string;
+  readonly kind: OperationNeedKind | "rules";
+  readonly enabled: boolean;
+  readonly ready: boolean;
+  readonly reason: string | null;
+}
+
+export interface AvailabilityInput {
+  readonly needs: ReadonlyArray<OperationNeed>;
+  readonly bindings: ReadonlyArray<OperationBinding>;
+  readonly contributions: ReadonlyArray<AvailabilityContribution>;
+  readonly projectedMembers: ReadonlyArray<RunPlanMemberType>;
+}
+
+const memberForNeed = (kind: OperationNeedKind) => {
+  if (kind === "mcp-server") return "MCP";
+  if (kind === "skill") return "Skills";
+  if (kind === "subagent") return "Subagents";
+  if (kind === "command") return "Commands";
+  if (kind === "hook") return "Hooks";
+  return "Connections";
+};
+
+const unsatisfiedNeed = (
+  need: OperationNeed,
+  reason: Extract<AvailabilityCause, { readonly _tag: "UnsatisfiedNeed" }>["reason"],
+  contribution: string | null,
+  message: string,
+) =>
+  ({
+    _tag: "UnsatisfiedNeed",
+    need: need.name,
+    kind: need.kind,
+    reason,
+    contribution,
+    message,
+  }) satisfies AvailabilityCause;
+
+const contributionCause = (
+  need: OperationNeed,
+  contribution: AvailabilityContribution,
+  projectedMembers: ReadonlyArray<RunPlanMemberType>,
+) => {
+  if (!contribution.enabled) {
+    return unsatisfiedNeed(need, "off", contribution.id, `${contribution.id} is off`);
+  }
+  if (!contribution.ready) {
+    return unsatisfiedNeed(
+      need,
+      "not-ready",
+      contribution.id,
+      contribution.reason ?? `${contribution.id} is not ready`,
+    );
+  }
+  const member = memberForNeed(need.kind);
+  if (!projectedMembers.includes(member)) {
+    return unsatisfiedNeed(need, "not-ready", contribution.id, `selected Harness does not project ${member}`);
+  }
+  return null;
+};
+
+const causesForNeed = (input: AvailabilityInput, need: OperationNeed) => {
+  const bindings = input.bindings.filter((binding) => binding.need === need.name);
+  if (bindings.length === 0) {
+    return [unsatisfiedNeed(need, "unbound", null, `${need.name} is unbound`)];
+  }
+  const contributions = new Map(input.contributions.map((contribution) => [contribution.id, contribution]));
+  const causes = bindings.map(({ contribution: id }) => {
+    const contribution = contributions.get(id);
+    if (!contribution || contribution.kind !== need.kind) {
+      return unsatisfiedNeed(need, "unavailable", id, `${id} is not available as ${need.kind}`);
+    }
+    return contributionCause(need, contribution, input.projectedMembers);
+  });
+  return causes.some((cause) => cause === null) ? [] : causes.filter((cause) => cause !== null);
+};
+
+export const availabilityCauses = (input: AvailabilityInput) =>
+  input.needs.flatMap((need) => causesForNeed(input, need));
 
 export const engineAdmissibleSettingScope = (
   family: "contribution" | "operation",
@@ -206,13 +298,19 @@ const booleanValue = (value: unknown, fallback: boolean) => (typeof value === "b
 
 const isHarnessName = Schema.is(HarnessName);
 
-const harnessValue = (value: unknown, fallback: ResolvedStage["harness"]) =>
-  isHarnessName(value) ? value : fallback;
+const harnessValue = (value: unknown) => (isHarnessName(value) ? value : null);
 
 const isPolicyProfile = Schema.is(RunPlanPolicyProfile);
 
 const policyProfileValue = (value: unknown, fallback: RunPlanPolicyProfile) =>
   isPolicyProfile(value) ? value : fallback;
+
+export interface ResolvedStage extends OperationDefinition {
+  readonly enabled: boolean;
+  readonly harness: HarnessName;
+  readonly model: string | null;
+  readonly effort: string | null;
+}
 
 export interface ResolvedOperation {
   readonly stage: ResolvedStage;
@@ -220,6 +318,13 @@ export interface ResolvedOperation {
   readonly settings: ReadonlyMap<OperationSettingName, ReturnType<typeof resolveEngineOperationSetting>>;
   readonly contributionSettings: ReadonlyArray<ContributionSettingRow>;
 }
+
+const isOperationBindings = Schema.is(Schema.Array(OperationBindingSchema));
+
+export const operationBindingsOf = (resolved: ResolvedOperation) => {
+  const value = resolved.settings.get("bindings")?.value;
+  return isOperationBindings(value) ? value : [];
+};
 
 export const resolveRunPlanStage = (
   config: WorkspaceConfig,
@@ -236,13 +341,15 @@ export const resolveRunPlanStage = (
     ),
   );
   const settingValueOf = (setting: OperationSettingName) => settings.get(setting)?.value;
+  const harness = harnessValue(settingValueOf("harness"));
+  if (!harness) return null;
   return {
     stage: {
       ...base,
-      enabled: booleanValue(settingValueOf("enabled"), base.enabled),
-      harness: harnessValue(settingValueOf("harness"), base.harness),
-      model: stringValue(settingValueOf("model"), base.model),
-      effort: stringValue(settingValueOf("effort"), base.effort),
+      enabled: booleanValue(settingValueOf("enabled"), false),
+      harness,
+      model: stringValue(settingValueOf("model"), null),
+      effort: stringValue(settingValueOf("effort"), null),
     },
     profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
     settings,
@@ -250,17 +357,20 @@ export const resolveRunPlanStage = (
   };
 };
 
-const scopeName = (scope: OperationSettingRow["scope"]) => {
-  if (scope._tag === "SettingsProfile") return "Settings profile";
-  if (scope._tag === "RuntimeHost") return "Runtime host";
-  return `Private workspace overlay ${scope.workspace}`;
-};
+const scopeName = (scope: OperationSettingRow["scope"]) =>
+  SettingScopeSchema.match(scope, {
+    SettingsProfile: () => "Settings profile",
+    RuntimeHost: () => "Runtime host",
+    WorkspaceInput: ({ workspace }) => `Workspace input ${workspace}`,
+    PrivateWorkspaceOverlay: ({ workspace }) => `Private workspace overlay ${workspace}`,
+  });
 
-const levelName = (level: OperationSettingRow["level"]) => {
-  if (level._tag === "Default") return "Default";
-  if (level._tag === "Workflow") return `Workflow ${level.workflow}`;
-  return `Operation ${level.workflow}/${level.operation}`;
-};
+const levelName = (level: OperationSettingRow["level"]) =>
+  SettingLevelSchema.match(level, {
+    Default: () => "Default",
+    Workflow: ({ workflow }) => `Workflow ${workflow}`,
+    Operation: ({ workflow, operation }) => `Operation ${workflow}/${operation}`,
+  });
 
 const snapshotValue = <A>(value: A) => structuredClone(value);
 
@@ -358,7 +468,11 @@ export const projectedContributionName = (identity: string) => {
   return `${authority}__${localName}__${identityHash}`;
 };
 
-const contributionMembers = (contributions: ReadonlyArray<FileContribution>, kind: string) =>
+const contributionMembers = (
+  contributions: ReadonlyArray<FileContribution>,
+  kind: string,
+  unavailableReasons: ReadonlyMap<string, string> = new Map(),
+) =>
   contributions
     .filter((contribution) => contribution.kind === kind)
     .map((contribution) =>
@@ -366,10 +480,13 @@ const contributionMembers = (contributions: ReadonlyArray<FileContribution>, kin
         identity: contribution.id,
         name: projectedContributionName(contribution.id),
         source: contribution.file,
+        ...(unavailableReasons.get(contribution.id)
+          ? { unavailableReason: unavailableReasons.get(contribution.id) }
+          : {}),
       }),
     );
 
-const contributionRows = (
+export const applicableContributionSettings = (
   settings: ReadonlyArray<ContributionSettingRow>,
   contribution: FileContribution,
   workspace: WorkspaceConfig["name"] | null,
@@ -377,7 +494,8 @@ const contributionRows = (
   settings.filter(
     (setting) =>
       setting.contribution.id === contribution.id &&
-      (setting.scope._tag === "SettingsProfile" || setting.scope.workspace === workspace),
+      (ContributionSettingScope.guards.SettingsProfile(setting.scope) ||
+        setting.scope.workspace === workspace),
   );
 
 const droppedContributionSettings = (
@@ -389,7 +507,7 @@ const droppedContributionSettings = (
     .filter(
       (setting) =>
         setting.contribution.id === contribution.id &&
-        setting.scope._tag === "PrivateWorkspaceOverlay" &&
+        ContributionSettingScope.guards.PrivateWorkspaceOverlay(setting.scope) &&
         setting.scope.workspace !== workspace,
     )
     .map((setting) =>
@@ -405,7 +523,7 @@ const contributionGate = (
   workspace: WorkspaceConfig["name"] | null,
 ) =>
   resolveEngineContributionEnabled(
-    contributionRows(settings, contribution, workspace),
+    applicableContributionSettings(settings, contribution, workspace),
     contribution.authority,
   );
 
@@ -557,6 +675,7 @@ const mcpServers = (servers: ReadonlyArray<RunPlanMcpServerInput>) =>
       projectedName: projectedContributionName(identity),
       endpoint: server.endpoint,
       authenticated: server.authenticated,
+      unavailableReason: server.unavailableReason ?? null,
     });
   });
 
@@ -573,6 +692,7 @@ export interface RunPlanMcpServerInput {
   readonly name: string;
   readonly endpoint: string;
   readonly authenticated: boolean;
+  readonly unavailableReason?: string | null;
 }
 
 export interface AssembleRunPlanInput {
@@ -590,6 +710,7 @@ export interface AssembleRunPlanInput {
   readonly contributions: ReadonlyArray<FileContribution>;
   readonly mcpServers: ReadonlyArray<RunPlanMcpServerInput>;
   readonly provenanceStamps: ReadonlyArray<ProvenanceStamp>;
+  readonly unavailableContributionReasons?: ReadonlyMap<string, string>;
 }
 
 export const assembleRunPlan = (input: AssembleRunPlanInput) => {
@@ -605,9 +726,11 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
   const resolvedMcpIdentities = new Set(
     admittedServers.flatMap(({ identity }) => (identity === null ? [] : [identity])),
   );
-  const unresolvedMcp = contributionMembers(admitted, "mcp-server").filter(
-    ({ identity }) => !resolvedMcpIdentities.has(identity),
-  );
+  const unresolvedMcp = contributionMembers(
+    admitted,
+    "mcp-server",
+    input.unavailableContributionReasons,
+  ).filter(({ identity }) => !resolvedMcpIdentities.has(identity));
   const skills = contributionMembers(admitted, "skill");
   const subagents = contributionMembers(admitted, "subagent");
   const commands = contributionMembers(admitted, "command");
@@ -630,6 +753,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     contentStamp(`${input.item.stage} Operation Definition`, {
       operation: input.item.stage,
       operatingInstructions: input.resolved.stage.skill,
+      needs: input.resolved.stage.needs,
     }),
     contentStamp("Engine Harness Adapter", {
       name: input.resolved.stage.harness,

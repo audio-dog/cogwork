@@ -73,7 +73,6 @@ const connectedWorkspace: RegisteredWorkspace = {
       repo: "owner/repo",
       connectionId: connectionIdOf("github", "acme"),
     },
-    harness: { preferred: "cursor" },
   }),
 };
 

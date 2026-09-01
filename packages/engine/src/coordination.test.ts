@@ -1,4 +1,4 @@
-import type { AttemptRecord, Claim } from "@cogwork/contracts";
+import type { AttemptRecord, Claim, HandbackRecord } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -19,12 +19,14 @@ import {
   parseAttempts,
   parseClaim,
   parseFollowUp,
+  parseHandback,
   postNote,
   selectLedger,
   selectTriageProposal,
   serializeAttempt,
   serializeClaim,
   serializeFollowUp,
+  serializeHandback,
   upsertCoordination,
   type WireCodec,
 } from "./coordination";
@@ -115,6 +117,17 @@ for (const [wire, codec] of codecs) {
         detail: null,
       });
       assert.deepStrictEqual(parseAttempts(codec, body), attempts);
+    });
+
+    it("round-trips handback records and keeps the most recent one", () => {
+      const older: HandbackRecord = { by: "local-owner", atMillis: 2 };
+      const newer: HandbackRecord = { by: "local-owner", atMillis: 5 };
+      const body = formatCoordinationBody(codec, {
+        status: defaultStatus,
+        markers: [serializeHandback(codec, older), serializeHandback(codec, newer)],
+        detail: null,
+      });
+      assert.deepStrictEqual(parseHandback(codec, body), newer);
     });
 
     it("parses claim and attempts from a single consolidated body", () => {

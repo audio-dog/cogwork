@@ -1,4 +1,4 @@
-import { type Claim, WorkItemId } from "@cogwork/contracts";
+import { type Claim, type LifecycleStage, type OperationAvailability, WorkItemId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { classify } from "./classify";
@@ -17,6 +17,7 @@ const item = (over: Omit<Partial<ObservedItem>, "id"> & { readonly id: string })
   claim: over.claim ?? null,
   claimedByUs: over.claimedByUs ?? false,
   attempts: over.attempts ?? [],
+  handback: over.handback ?? null,
   pr: over.pr ?? null,
   openBlockers: over.openBlockers ?? 0,
   proposal: over.proposal ?? null,
@@ -35,9 +36,31 @@ const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"
   waitingSinceMillis: 0,
   headRef: "1-test",
   followable: true,
+  draft: false,
   followUp: null,
   ...over,
 });
+
+const unavailable = (stage: LifecycleStage) =>
+  new Map<LifecycleStage, OperationAvailability>([
+    [
+      stage,
+      {
+        operation: stage,
+        available: false,
+        causes: [
+          {
+            _tag: "UnsatisfiedNeed",
+            need: "review",
+            kind: "skill",
+            reason: "unbound",
+            contribution: null,
+            message: "review is unbound",
+          },
+        ],
+      },
+    ],
+  ]);
 
 describe("classify", () => {
   it("routes ready-for-agent with no PR to implement", () => {
@@ -46,6 +69,62 @@ describe("classify", () => {
       eligible.map((e) => e.stage),
       ["implement"],
     );
+  });
+
+  it("holds an unavailable Operation out of eligible work", () => {
+    const result = classify(
+      [item({ id: "1", roles: ["ready-for-agent"] })],
+      undefined,
+      unavailable("implement"),
+    );
+
+    assert.deepStrictEqual(result.eligible, []);
+  });
+
+  it("keeps a stalled follow-up eligible when its Operation is unavailable", () => {
+    const result = classify(
+      [
+        item({
+          id: "1",
+          pr: pr("pending", {
+            checks: "failing",
+            followUp: {
+              checks: "failing",
+              humanCommentAtMillis: 0,
+              noProgress: followUpNoProgressLimit - 1,
+              baseDivergence: "none",
+              botTriggerAtMillis: 0,
+            },
+          }),
+        }),
+      ],
+      undefined,
+      unavailable("follow-up"),
+    );
+
+    assert.strictEqual(result.eligible[0]?.stage, "follow-up");
+    assert.isTrue(result.eligible[0]?.followUp?.stalled);
+  });
+
+  it("reports blocked work even when its Operation is unavailable", () => {
+    const result = classify(
+      [item({ id: "1", roles: ["ready-for-agent"], openBlockers: 1 })],
+      undefined,
+      unavailable("implement"),
+    );
+
+    assert.strictEqual(result.blocked[0]?.openBlockers, 1);
+  });
+
+  it("hands exhausted work to a human even when its Operation is unavailable", () => {
+    const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const result = classify(
+      [item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] })],
+      undefined,
+      unavailable("triage"),
+    );
+
+    assert.strictEqual(result.needsHuman[0]?.reason, "ready-for-human");
   });
 
   it("routes needs-triage with no PR to triage", () => {
@@ -68,6 +147,14 @@ describe("classify", () => {
       item({ id: "1", roles: ["ready-for-agent"], pr: pr("pending") }),
     ]);
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
+  });
+
+  it("holds draft PRs out of follow-up and verify", () => {
+    const { eligible } = classify([
+      item({ id: "1", pr: pr("changes-requested", { checks: "failing", draft: true }) }),
+      item({ id: "2", pr: pr("ready", { draft: true }) }),
+    ]);
+    assert.isEmpty(eligible);
   });
 
   it("excludes claimed items from eligible and reports them as claimed", () => {
@@ -397,9 +484,9 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.stage, "implement");
   });
 
-  it("drops an allowlisted workspace's unassigned item", () => {
+  it("drops an allowlisted workspace's unassigned item with a follow-up trigger", () => {
     const { eligible, claimed, needsHuman } = classify(
-      [item({ id: "1", roles: ["ready-for-agent"], assignees: [] })],
+      [item({ id: "1", roles: ["ready-for-agent"], assignees: [], pr: pr("changes-requested") })],
       ["me"],
     );
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);

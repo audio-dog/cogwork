@@ -17,13 +17,13 @@ import * as Layer from "effect/Layer";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import type * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { scanAuthoringTrees } from "./authoring-tree";
+import { type ScanAuthoringTreesRequest, scanAuthoringTrees } from "./authoring-tree";
 import {
   bootControlStoreLayer,
   ControlStore,
-  type ControlStoreService,
   controlStoreClientLayer,
   readOnlyControlStoreClientLayer,
 } from "./control-store";
@@ -41,6 +41,19 @@ export type { RegisteredWorkspace, RegisteredWorkspaceFailure, RegistryState, Wo
 interface AuthoringRoots {
   readonly cogworkHome: string;
   readonly userAgentsDir?: string;
+}
+
+type AuthoringTreeScanner = (
+  request: ScanAuthoringTreesRequest,
+) => Effect.Effect<
+  Effect.Success<ReturnType<typeof scanAuthoringTrees>>,
+  Effect.Error<ReturnType<typeof scanAuthoringTrees>>
+>;
+
+interface WorkspaceLoadingServices {
+  readonly fileSystem: FileSystem.FileSystem;
+  readonly path: Path.Path;
+  readonly scanAuthoringTrees: AuthoringTreeScanner;
 }
 
 export interface WorkspaceRegistryService extends RegistryState {
@@ -120,6 +133,10 @@ interface WorkspaceBindingRow {
 }
 
 const workspaceInputName = "workspace.json";
+const emptyWorkspaceInputJson = "{}";
+
+// EISDIR, ENOTDIR, and ELOOP also decode to BadResource, so only NotFound means the file is absent.
+const isMissingWorkspaceInput = (error: PlatformError.PlatformError) => error.reason._tag === "NotFound";
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
 const decodeWorkspaceIdOption = Schema.decodeUnknownOption(WorkspaceId);
 const decodeIssueTracker = Schema.decodeUnknownEffect(Schema.fromJsonString(IssueTrackerConfig));
@@ -204,13 +221,13 @@ const mergedWorktrees = (row: WorkspaceRow, input: WorkspaceInput) => {
 };
 
 const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
+  services: WorkspaceLoadingServices,
   row: WorkspaceRow,
   authoringRoots: AuthoringRoots,
 ) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const inputPath = workspaceInputPath(path, row.checkoutPath);
-  const input = yield* fs.readFileString(inputPath).pipe(
+  const inputPath = workspaceInputPath(services.path, row.checkoutPath);
+  const input = yield* services.fileSystem.readFileString(inputPath).pipe(
+    Effect.catchIf(isMissingWorkspaceInput, () => Effect.succeed(emptyWorkspaceInputJson)),
     Effect.flatMap(decodeWorkspaceInput),
     Effect.mapError((error) =>
       registrationError(`Cannot load Workspace input ${inputPath}: ${messageOf(error)}`),
@@ -232,17 +249,18 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
     checkoutPath: row.checkoutPath,
     issueTracker,
     sourceControl,
-    harness: input.harness,
     mcpSkills: input.mcpSkills,
     playbook: input.playbook,
     worktrees: mergedWorktrees(row, input),
     linearHistory: row.linearHistory === 1,
   }).pipe(Effect.mapError((error) => registrationError(error)));
-  const contributions = yield* scanAuthoringTrees({
-    workspace: name,
-    repoRoot: row.checkoutPath,
-    ...authoringRoots,
-  }).pipe(Effect.mapError(registrationError));
+  const contributions = yield* services
+    .scanAuthoringTrees({
+      workspace: name,
+      repoRoot: row.checkoutPath,
+      ...authoringRoots,
+    })
+    .pipe(Effect.mapError(registrationError));
   return {
     source: `control-store:${row.id}`,
     config,
@@ -251,8 +269,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   } satisfies RegisteredWorkspace;
 });
 
-const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* () {
-  const sql = yield* SqlClient.SqlClient;
+const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* (sql: SqlClient.SqlClient) {
   return yield* sql<WorkspaceRow>`SELECT
     id,
     name,
@@ -271,9 +288,9 @@ const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* () {
 });
 
 const selectWorkspaceBinding = Effect.fn("WorkspaceRegistry.selectWorkspaceBinding")(function* (
+  sql: SqlClient.SqlClient,
   checkoutPath: string,
 ) {
-  const sql = yield* SqlClient.SqlClient;
   const [row] = yield* sql<WorkspaceBindingRow>`SELECT id
     FROM workspaces
     WHERE checkout_path = ${checkoutPath}
@@ -282,9 +299,9 @@ const selectWorkspaceBinding = Effect.fn("WorkspaceRegistry.selectWorkspaceBindi
 });
 
 const selectWorkspaceRow = Effect.fn("WorkspaceRegistry.selectWorkspaceRow")(function* (
+  sql: SqlClient.SqlClient,
   workspace: WorkspaceId,
 ) {
-  const sql = yield* SqlClient.SqlClient;
   const [row] = yield* sql<WorkspaceRow>`SELECT
     id,
     name,
@@ -305,20 +322,21 @@ const selectWorkspaceRow = Effect.fn("WorkspaceRegistry.selectWorkspaceRow")(fun
 });
 
 const updateCheckoutPath = Effect.fn("WorkspaceRegistry.updateCheckoutPath")(function* (
+  sql: SqlClient.SqlClient,
   workspace: WorkspaceId,
   checkoutPath: string,
 ) {
-  const sql = yield* SqlClient.SqlClient;
   yield* sql`UPDATE workspaces
     SET checkout_path = ${checkoutPath}
     WHERE id = ${workspace}`;
 });
 
 const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChange")(function* (
+  services: WorkspaceLoadingServices,
   row: WorkspaceRow,
   authoringRoots: AuthoringRoots,
 ) {
-  return yield* loadWorkspace(row, authoringRoots).pipe(
+  return yield* loadWorkspace(services, row, authoringRoots).pipe(
     Effect.map((workspace) => ({ _tag: "Registered" as const, workspace })),
     Effect.catchTag("WorkspaceRegistrationError", (error) =>
       Effect.succeed({ _tag: "Failed" as const, failure: workspaceFailure(row, error.message) }),
@@ -327,10 +345,14 @@ const loadRegistrationChange = Effect.fn("WorkspaceRegistry.loadRegistrationChan
 });
 
 const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(function* (
+  sql: SqlClient.SqlClient,
+  services: WorkspaceLoadingServices,
   authoringRoots: AuthoringRoots,
 ) {
-  const rows = yield* selectRows();
-  const outcomes = yield* Effect.forEach(rows, (row) => Effect.result(loadWorkspace(row, authoringRoots)));
+  const rows = yield* selectRows(sql);
+  const outcomes = yield* Effect.forEach(rows, (row) =>
+    Effect.result(loadWorkspace(services, row, authoringRoots)),
+  );
   const workspaces = outcomes.flatMap((outcome) => (outcome._tag === "Success" ? [outcome.success] : []));
   const failures = outcomes.flatMap((outcome, index) => {
     if (outcome._tag === "Success") return [];
@@ -341,19 +363,11 @@ const loadAvailableState = Effect.fn("WorkspaceRegistry.loadAvailableState")(fun
   return { workspaces, failures } satisfies RegistryState;
 });
 
-const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* (
-  store: ControlStoreService,
-  authoringRoots: AuthoringRoots,
-) {
-  if (store.health === "unavailable") return emptyRegistry;
-  return yield* loadAvailableState(authoringRoots);
-});
-
 const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function* (
+  sql: SqlClient.SqlClient,
   id: WorkspaceId,
   registration: WorkspaceRegistration,
 ) {
-  const sql = yield* SqlClient.SqlClient;
   const worktrees = registration.worktrees;
   const [row] = yield* sql<WorkspaceRow>`INSERT INTO workspaces (
     id, name, checkout_path, git_remote, issue_tracker, source_control, linear_history,
@@ -409,13 +423,27 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
   Layer.effectContext(
     Effect.gen(function* () {
       const crypto = yield* Crypto.Crypto;
+      const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+      const sql = yield* SqlClient.SqlClient;
       const store = yield* ControlStore;
       const cogworkHome = path.dirname(controlStorePath);
       const authoringRoots = { cogworkHome, userAgentsDir };
       const privateWorkspaceRoot = path.join(cogworkHome, "workspaces");
-      const dependencies = yield* Effect.context<FileSystem.FileSystem | Path.Path | SqlClient.SqlClient>();
-      const initial = yield* loadState(store, authoringRoots);
+      const loadingServices = {
+        fileSystem: fs,
+        path,
+        scanAuthoringTrees: (request: ScanAuthoringTreesRequest) =>
+          scanAuthoringTrees(request).pipe(
+            Effect.provideService(FileSystem.FileSystem, fs),
+            Effect.provideService(Path.Path, path),
+          ),
+      } satisfies WorkspaceLoadingServices;
+      const loadState = Effect.fn("WorkspaceRegistry.loadState")(function* () {
+        if (store.health === "unavailable") return emptyRegistry;
+        return yield* loadAvailableState(sql, loadingServices, authoringRoots);
+      });
+      const initial = yield* loadState();
       const cell = MutableRef.make(initial);
       const revision = MutableRef.make(0);
       const commitChange = (change: WorkspaceRegistrationChange) => {
@@ -443,8 +471,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         },
         refresh: Effect.sync(() => MutableRef.get(revision)).pipe(
           Effect.flatMap((startedAt) =>
-            loadState(store, authoringRoots).pipe(
-              Effect.provide(dependencies),
+            loadState().pipe(
               Effect.mapError((error) => registrationError(error)),
               Effect.map((state) => commitRefresh(startedAt, state)),
             ),
@@ -464,8 +491,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
               ...registration,
               checkoutPath: path.resolve(registration.checkoutPath),
             };
-            const existing = yield* selectWorkspaceBinding(normalizedRegistration.checkoutPath).pipe(
-              Effect.provide(dependencies),
+            const existing = yield* selectWorkspaceBinding(sql, normalizedRegistration.checkoutPath).pipe(
               Effect.mapError((error) => registrationError(error)),
             );
             if (existing) {
@@ -477,13 +503,10 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
               Effect.flatMap(decodeWorkspaceId),
               Effect.mapError((error) => registrationError(error)),
             );
-            const row = yield* insertWorkspace(id, normalizedRegistration).pipe(
-              Effect.provide(dependencies),
+            const row = yield* insertWorkspace(sql, id, normalizedRegistration).pipe(
               Effect.mapError((error) => registrationError(error)),
             );
-            const change = yield* loadRegistrationChange(row, authoringRoots).pipe(
-              Effect.provide(dependencies),
-            );
+            const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
             return commitChange(change);
           }),
         );
@@ -506,24 +529,24 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         }
         return yield* store.withWrite(
           Effect.gen(function* () {
-            const sql = yield* SqlClient.SqlClient;
             const normalizedPath = path.resolve(checkoutPath);
-            const current = yield* selectWorkspaceRow(workspace);
+            const current = yield* selectWorkspaceRow(sql, workspace);
             if (!current) return yield* new WorkspaceNotFound({ workspace });
-            const existing = yield* selectWorkspaceBinding(normalizedPath);
+            const existing = yield* selectWorkspaceBinding(sql, normalizedPath);
             if (existing && existing.id !== workspace) {
               return yield* new WorkspaceManagementError({
                 operation: "re-bind workspace",
                 message: `Workspace checkout path is already registered as ${existing.id}`,
               });
             }
-            yield* sql.withTransaction(updateCheckoutPath(workspace, normalizedPath));
+            yield* sql.withTransaction(updateCheckoutPath(sql, workspace, normalizedPath));
             const change = yield* loadRegistrationChange(
+              loadingServices,
               { ...current, checkoutPath: normalizedPath },
               authoringRoots,
             );
             return commitChange(change);
-          }).pipe(Effect.provide(dependencies), Effect.mapError(managementError("re-bind workspace"))),
+          }).pipe(Effect.mapError(managementError("re-bind workspace"))),
         );
       });
       const deregister = Effect.fn("WorkspaceManagement.deregister")(function* (workspace: WorkspaceId) {
@@ -535,9 +558,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         }
         return yield* store.withWrite(
           Effect.gen(function* () {
-            const fs = yield* FileSystem.FileSystem;
-            const sql = yield* SqlClient.SqlClient;
-            const row = yield* selectWorkspaceRow(workspace);
+            const row = yield* selectWorkspaceRow(sql, workspace);
             if (!row) return yield* new WorkspaceNotFound({ workspace });
             yield* sql.withTransaction(
               Effect.gen(function* () {
@@ -555,7 +576,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
               }),
             );
             return commitRemoval(workspace);
-          }).pipe(Effect.provide(dependencies), Effect.mapError(managementError("deregister workspace"))),
+          }).pipe(Effect.mapError(managementError("deregister workspace"))),
         );
       });
       return Context.make(WorkspaceRegistry, registry).pipe(
@@ -574,7 +595,20 @@ export const readOnlyLayerAt = (storePath: string) =>
   Layer.effect(
     WorkspaceRegistry,
     Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      return readOnlyRegistry(yield* loadAvailableState({ cogworkHome: path.dirname(storePath) }));
+      const sql = yield* SqlClient.SqlClient;
+      const loadingServices = {
+        fileSystem: fs,
+        path,
+        scanAuthoringTrees: (request: ScanAuthoringTreesRequest) =>
+          scanAuthoringTrees(request).pipe(
+            Effect.provideService(FileSystem.FileSystem, fs),
+            Effect.provideService(Path.Path, path),
+          ),
+      } satisfies WorkspaceLoadingServices;
+      return readOnlyRegistry(
+        yield* loadAvailableState(sql, loadingServices, { cogworkHome: path.dirname(storePath) }),
+      );
     }).pipe(Effect.mapError(registrationError)),
   ).pipe(Layer.provide(readOnlyControlStoreClientLayer(storePath)));

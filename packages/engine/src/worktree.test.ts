@@ -26,7 +26,6 @@ const workspaceWith = (worktrees?: Worktree.WorktreeSettings) => ({
     name: "demo",
     checkoutPath: "/repo",
     issueTracker: { type: "github" },
-    harness: { preferred: "cursor" },
     worktrees,
   }),
 });

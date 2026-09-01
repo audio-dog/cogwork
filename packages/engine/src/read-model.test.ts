@@ -110,6 +110,22 @@ const state: WorkspaceReconcileState = {
   blocked: [blockedWithPr, blockedNoPr],
   needsHuman: [needsHumanWithPr, needsHumanNoPr],
   observed: [],
+  availability: [
+    {
+      operation: "implement",
+      available: false,
+      causes: [
+        {
+          _tag: "UnsatisfiedNeed",
+          need: "review",
+          kind: "skill",
+          reason: "unbound",
+          contribution: null,
+          message: "review is unbound",
+        },
+      ],
+    },
+  ],
 };
 
 const workspace: RegisteredWorkspace = {
@@ -119,8 +135,6 @@ const workspace: RegisteredWorkspace = {
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github", repo: "owner/example", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
-    playbook: { triage: { enabled: true } },
   }),
 };
 
@@ -158,6 +172,12 @@ describe("classifiedItemsOf", () => {
 });
 
 describe("workspaceInfoOf", () => {
+  it("projects current Operation availability", () => {
+    const info = workspaceInfoOf(workspace, state);
+
+    assert.deepStrictEqual(info.availability, state.availability);
+  });
+
   it("projects the same four buckets and PR summaries as the event stream", () => {
     const info = workspaceInfoOf(workspace, state);
 

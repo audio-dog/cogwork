@@ -1,4 +1,5 @@
 import {
+  ClassifiedItem,
   Connection,
   type ConnectionEstablishment,
   type ContributionSettingUpdate,
@@ -37,13 +38,14 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
-import type { HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
+import type { HandBackOutcome, HandOffOutcome, ReclassifyOutcome, TrackerItem } from "./issue-tracker";
 import * as IssueTracker from "./issue-tracker";
 import { PluginManager } from "./plugin";
 import * as Reconcile from "./reconcile";
@@ -89,7 +91,6 @@ const registered: Registry.RegisteredWorkspace = {
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -146,12 +147,13 @@ const schedulerStub = () =>
   );
 
 interface TrackerCalls {
+  readonly handBack: ReadonlyArray<{ readonly workItem: WorkItemId; readonly outcome: HandBackOutcome }>;
   readonly reclassify: ReadonlyArray<{ readonly workItem: WorkItemId; readonly outcome: ReclassifyOutcome }>;
   readonly handOff: ReadonlyArray<{ readonly workItem: WorkItemId; readonly outcome: HandOffOutcome }>;
   readonly released: ReadonlyArray<WorkItemId>;
 }
 
-const emptyCalls: TrackerCalls = { reclassify: [], handOff: [], released: [] };
+const emptyCalls: TrackerCalls = { handBack: [], reclassify: [], handOff: [], released: [] };
 
 const providerStub = Layer.succeed(SourceControlProvider, {
   observe: () => Effect.succeed(new Map<WorkItemId, PrSignals>()),
@@ -173,6 +175,7 @@ const trackerLayer = (
       followedUp: () => Effect.void,
       attemptFailed: () => Effect.void,
       handOff: () => Effect.void,
+      handBack: () => Effect.void,
       stalled: () => Effect.void,
       reclassify: () => Effect.void,
       ...service,
@@ -187,6 +190,8 @@ const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<Trac
       Ref.update(calls, (c) => ({ ...c, reclassify: [...c.reclassify, { workItem, outcome }] })),
     handOff: (_workspace, workItem, outcome) =>
       Ref.update(calls, (c) => ({ ...c, handOff: [...c.handOff, { workItem, outcome }] })),
+    handBack: (_workspace, workItem, outcome) =>
+      Ref.update(calls, (c) => ({ ...c, handBack: [...c.handBack, { workItem, outcome }] })),
     release: (_workspace, workItem) =>
       Ref.update(calls, (c) => ({ ...c, released: [...c.released, workItem] })),
   });
@@ -387,7 +392,6 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
         checkoutPath: registration.checkoutPath,
         issueTracker: registration.issueTracker,
         sourceControl: registration.sourceControl,
-        harness: { preferred: harness("codex") },
         linearHistory: registration.linearHistory,
       },
       workspaceLimit: registration.concurrency,
@@ -458,7 +462,7 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   claim: null,
   claimedByUs: true,
   attempts: [],
-  owned: false,
+  handback: null,
   followUp: null,
   openBlockers: 0,
   proposal: null,
@@ -579,7 +583,7 @@ describe("Reclassify", () => {
         note: "picking this up",
       });
 
-      assert.strictEqual(result?._tag, "Eligible");
+      assert.isTrue(result !== null && ClassifiedItem.guards.Eligible(result));
       const recorded = yield* Ref.get(calls);
       assert.deepStrictEqual(recorded.reclassify, [
         {
@@ -660,6 +664,64 @@ describe("Reclassify", () => {
       ),
       Effect.scoped,
     ),
+  );
+});
+
+describe("HandBack", () => {
+  it.effect("clears failure history, applies one role, and returns the eligible item", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    const item = trackerItem({
+      id: id("AUD-5"),
+      roles: ["ready-for-human"],
+      claimedByUs: false,
+      claimLabeled: false,
+      attempts: [
+        { stage: "implement", outcome: "failed", atMillis: 1 },
+        { stage: "implement", outcome: "failed", atMillis: 2 },
+        { stage: "implement", outcome: "failed", atMillis: 3 },
+      ],
+    });
+    return Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      yield* TestClock.adjust("4 millis");
+
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const result = yield* client.HandBack({
+        workspace: wsid("example"),
+        workItem: id("AUD-5"),
+        role: "ready-for-agent",
+        note: "worktree setup repaired",
+      });
+
+      assert.strictEqual(result?._tag, "Eligible");
+      assert.deepStrictEqual((yield* Ref.get(calls)).handBack, [
+        {
+          workItem: id("AUD-5"),
+          outcome: {
+            record: { by: localOwnerId, atMillis: 4 },
+            changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+            note: "worktree setup repaired",
+          },
+        },
+      ]);
+    }).pipe(Effect.provide(daemonLayer(recordingTracker([item], calls))), Effect.scoped);
+  });
+
+  it.effect("fails with WorkItemNotFound for an unknown item", () =>
+    Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const error = yield* Effect.flip(
+        client.HandBack({
+          workspace: wsid("example"),
+          workItem: id("MISSING"),
+          role: "ready-for-agent",
+        }),
+      );
+      assert.strictEqual(error._tag, "WorkItemNotFound");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 });
 
@@ -1147,7 +1209,6 @@ describe("Connection mutations", () => {
         connectionId: github,
         repo: "acme/repo",
       },
-      harness: { preferred: "cursor" },
     });
     const registries = Layer.mergeAll(
       Layer.succeed(
