@@ -1,0 +1,22 @@
+apps/desktop/engine.vite.config.mts
+  s_5cf84fa7f14674::t_d4f1293c5672f0 12,15-17,51
+apps/desktop/engine.vite.config.test.ts
+  s_5cf84fa7f14674::t_8a71eef9dad27f 1-2,4-13
+  s_5cf84fa7f14674::t_954ced430f4049 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9b79fb4e18f2fe8b5df2755caa57417941ba2d9c",
+  "prompts": {},
+  "sessions": {
+    "s_5cf84fa7f14674": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e8f-e6d5-7001-84b2-e8275f6fc77d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
