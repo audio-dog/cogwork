@@ -3,6 +3,7 @@ import type {
   ClaimedItem,
   ConnectionId,
   NeedsHumanItem,
+  OperationAvailability,
   PollPauseReason,
   PollState,
   WorkspaceId,
@@ -16,10 +17,13 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
+import { Availability } from "./availability";
 import { type Classification, classify, type EligibleWork } from "./classify";
 import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
+import { Executor } from "./executor";
+
 import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
@@ -43,6 +47,7 @@ export interface WorkspaceReconcileState {
   readonly blocked: ReadonlyArray<BlockedItem>;
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
   readonly observed: ReadonlyArray<ObservedItem>;
+  readonly availability: ReadonlyArray<OperationAvailability>;
 }
 
 export interface ReconcileSnapshot {
@@ -66,6 +71,7 @@ const okState = (
   workspace: RegisteredWorkspace,
   observed: ReadonlyArray<ObservedItem>,
   classified: Classification,
+  availability: ReadonlyArray<OperationAvailability>,
 ): WorkspaceReconcileState => ({
   name: workspace.config.name,
   poll: { status: "ok" },
@@ -74,6 +80,7 @@ const okState = (
   blocked: classified.blocked,
   needsHuman: classified.needsHuman,
   observed,
+  availability,
 });
 
 interface Pause {
@@ -90,6 +97,7 @@ const pausedState = (workspace: RegisteredWorkspace, pause: Pause): WorkspaceRec
   blocked: [],
   needsHuman: [],
   observed: [],
+  availability: [],
 });
 
 interface Cooldown {
@@ -127,13 +135,29 @@ const connectionIdsOf = (workspace: RegisteredWorkspace) => [
   ),
 ];
 
-export const make = Effect.gen(function* () {
+const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
+  refreshAvailability?: (
+    workspace: RegisteredWorkspace,
+  ) => Effect.Effect<ReadonlyArray<OperationAvailability>, E, never>,
+) {
   const registry = yield* WorkspaceRegistry;
   const issueTracker = yield* IssueTracker;
   const provider = yield* SourceControlProvider;
   const connections = yield* ConnectionStore;
   const controlStore = yield* ControlStore;
   const bus = yield* DaemonEventBus;
+  const availability = yield* Availability;
+  const refresh = refreshAvailability ?? availability.current;
+  const refreshedAvailability = Effect.fn("ReconcileWorker.refreshAvailability")(
+    (workspace: RegisteredWorkspace) =>
+      refresh(workspace).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("Operation availability refresh failed", { error }).pipe(
+            Effect.andThen(availability.current(workspace)),
+          ),
+        ),
+      ),
+  );
   const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
   const pendingReceipt = yield* Ref.make<ReconcileReceiptDeferred | null>(null);
@@ -234,8 +258,21 @@ export const make = Effect.gen(function* () {
     }
     return yield* observe(workspace).pipe(
       Effect.tap(() => clearCooldown(scope)),
-      Effect.map((items) =>
-        okState(workspace, items, classify(items, workspace.config.issueTracker.assigneeAllowlist)),
+      Effect.flatMap((items) =>
+        refreshedAvailability(workspace).pipe(
+          Effect.map((current) =>
+            okState(
+              workspace,
+              items,
+              classify(
+                items,
+                workspace.config.issueTracker.assigneeAllowlist,
+                new Map(current.map((entry) => [entry.operation, entry])),
+              ),
+              current,
+            ),
+          ),
+        ),
       ),
       Effect.catchTag("IssueTrackerError", (error) => pauseFor(workspace, scope, error)),
     );
@@ -335,16 +372,39 @@ export const make = Effect.gen(function* () {
     return selection.receipt;
   });
 
+  const receiptAfterCurrent = Effect.fn("ReconcileWorker.receiptAfterCurrent")(function* () {
+    const receipt = yield* Deferred.make<ReconcileReceipt, WorkspaceRegistrationError>();
+    yield* Queue.offer(queue, { receipt });
+    return receipt;
+  });
+
   const submit = Effect.fn("ReconcileWorker.submit")(function* () {
     const receipt = yield* Effect.uninterruptible(receiptForSubmit());
     return yield* awaitReceipt(receipt);
   });
 
-  return { submit, snapshot: Ref.get(snapshotRef) } as const;
+  const submitAfterCurrent = Effect.fn("ReconcileWorker.submitAfterCurrent")(function* () {
+    const receipt = yield* Effect.uninterruptible(receiptAfterCurrent());
+    return yield* awaitReceipt(receipt);
+  });
+
+  return {
+    submit,
+    submitAfterCurrent,
+    snapshot: Ref.get(snapshotRef),
+    invalidateAvailability: availability.invalidate,
+  };
+});
+
+export const make = makeWithRefresh();
+
+export const makeRefreshing = Effect.gen(function* () {
+  const executor = yield* Executor;
+  return yield* makeWithRefresh(executor.refreshAvailability);
 });
 
 export class ReconcileWorker extends Context.Service<ReconcileWorker, Effect.Success<typeof make>>()(
   "@cogwork/engine/reconcile/ReconcileWorker",
 ) {}
 
-export const layer = Layer.effect(ReconcileWorker, make);
+export const layer = Layer.effect(ReconcileWorker, make).pipe(Layer.provide(Availability.layer));

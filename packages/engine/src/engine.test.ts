@@ -371,6 +371,39 @@ describe("reconcile worker", () => {
     }),
   );
 
+  it.effect("runs a post-current submission after an in-flight reconcile", () => {
+    const firstStarted = Latch.makeUnsafe(false);
+    const releaseFirst = Latch.makeUnsafe(false);
+    const observes = Ref.makeUnsafe(0);
+    const source = sources(
+      Layer.succeed(
+        IssueTracker.IssueTracker,
+        stub({
+          observe: Effect.fn(function* () {
+            const count = yield* Ref.getAndUpdate(observes, (current) => current + 1);
+            if (count > 0) return [];
+            yield* firstStarted.open;
+            yield* releaseFirst.await;
+            return [];
+          }),
+        }),
+      ),
+    );
+    const layer = reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
+
+    return Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const current = yield* Effect.forkChild(worker.submit());
+      yield* firstStarted.await;
+      const next = yield* Effect.forkChild(worker.submitAfterCurrent());
+      yield* releaseFirst.open;
+      yield* Fiber.join(current);
+      yield* Fiber.join(next);
+
+      assert.strictEqual(yield* Ref.get(observes), 2);
+    }).pipe(Effect.provide(layer), Effect.scoped);
+  });
+
   const eligibleItem: TrackerItem = {
     id: id("AUD-1"),
     title: "first ticket",
@@ -383,7 +416,6 @@ describe("reconcile worker", () => {
     claimedByUs: false,
     attempts: [],
     handback: null,
-    owned: false,
     followUp: null,
     openBlockers: 0,
     proposal: null,
@@ -426,7 +458,6 @@ describe("reconcile worker", () => {
     claimedByUs: false,
     attempts: [],
     handback: null,
-    owned: true,
     followUp: null,
     openBlockers: 0,
     proposal: null,
@@ -443,6 +474,7 @@ describe("reconcile worker", () => {
     waitingSinceMillis: 1_700_000_000_000,
     headRef: "aud-2-in-review",
     followable: true,
+    draft: false,
   };
   const workerWithInReview = reconcileLayer.pipe(
     Layer.provide(Layer.mergeAll(registryLayer, observing([inReviewItem], [[id("AUD-2"), inReviewPr]]))),
@@ -1016,7 +1048,6 @@ describe("daemon status over rpc", () => {
     claimedByUs: false,
     attempts: [],
     handback: null,
-    owned: false,
     followUp: null,
     openBlockers: 0,
     proposal: "Which auth provider should this target — Clerk or Auth0?",
@@ -1054,7 +1085,6 @@ describe("daemon status over rpc", () => {
     claimedByUs: false,
     attempts: [],
     handback: null,
-    owned: false,
     followUp: null,
     openBlockers: 2,
     proposal: null,
@@ -1079,7 +1109,7 @@ describe("daemon status over rpc", () => {
     }).pipe(Effect.provide(daemonLayer(observing([blockedItem]))), Effect.scoped),
   );
 
-  const inReviewOwnedItem: TrackerItem = {
+  const inReviewItem: TrackerItem = {
     id: id("AUD-9"),
     title: "pr in review",
     url: "https://linear.app/acme/issue/AUD-9",
@@ -1091,7 +1121,6 @@ describe("daemon status over rpc", () => {
     claimedByUs: false,
     attempts: [],
     handback: null,
-    owned: true,
     followUp: null,
     openBlockers: 0,
     proposal: null,
@@ -1108,6 +1137,7 @@ describe("daemon status over rpc", () => {
     waitingSinceMillis: 1_786_000_000_000,
     headRef: "aud-9-pr-in-review",
     followable: true,
+    draft: false,
   };
 
   it.effect("carries a PR summary on every classified item that has a linked pull request", () =>
@@ -1126,10 +1156,7 @@ describe("daemon status over rpc", () => {
         baseDivergence: "none",
         waitingSinceMillis: 1_786_000_000_000,
       });
-    }).pipe(
-      Effect.provide(daemonLayer(observing([inReviewOwnedItem], [[id("AUD-9"), readyPr]]))),
-      Effect.scoped,
-    ),
+    }).pipe(Effect.provide(daemonLayer(observing([inReviewItem], [[id("AUD-9"), readyPr]]))), Effect.scoped),
   );
 
   it.effect("leaves an item without a pull request free of a PR summary", () =>

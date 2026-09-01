@@ -38,7 +38,7 @@ export interface HarnessRequest {
 
 export const resolvedMcpSkills = (request: HarnessRequest): ReadonlyArray<ResolvedMcpSkill> =>
   request.plan.mcp.flatMap((server) =>
-    "endpoint" in server
+    "endpoint" in server && server.unavailableReason === null
       ? [
           {
             name: server.projectedName,
@@ -69,7 +69,7 @@ export type HarnessRunnerEnv =
   | HttpClient.HttpClient;
 
 export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessError", {
-  reason: Schema.Literals(["unknown-harness", "launch", "turn"]),
+  reason: Schema.Literals(["unknown-harness", "missing-harness", "credential", "policy", "launch", "turn"]),
   retryable: Schema.Boolean,
   message: Schema.String,
 }) {}
@@ -80,6 +80,7 @@ export interface HarnessRunner {
   readonly execution: HarnessExecution;
   readonly projectedMembers: ReadonlyArray<RunPlanMember>;
   readonly planMiddleware: ReadonlyArray<RunPlanMiddlewareName>;
+  readonly preflight?: (model: string | null) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
 }
 
@@ -87,7 +88,8 @@ export interface HarnessService {
   readonly preflight: (
     harness: HarnessName,
     profile: OperationPolicyProfile,
-  ) => Effect.Effect<void, HarnessError>;
+    model: string | null,
+  ) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
   readonly projectedMembers: (harness: HarnessName) => ReadonlyArray<RunPlanMember>;
@@ -112,7 +114,7 @@ const unsupportedPosture = (runner: HarnessRunner, profile: OperationPolicyProfi
 
 const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolicyProfile, posture: string) =>
   new HarnessError({
-    reason: "launch",
+    reason: "policy",
     retryable: false,
     message: `harness runner ${runner.name} cannot enforce ${posture} for the ${profile} profile`,
   });
@@ -131,8 +133,16 @@ const preflightRunner = (
 
 export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
+  const preflight = Effect.fn("Harness.preflight")(function* (
+    harness: HarnessName,
+    profile: OperationPolicyProfile,
+    model: string | null,
+  ) {
+    const runner = yield* preflightRunner(registry, harness, profile);
+    yield* runner.preflight?.(model) ?? Effect.void;
+  });
   return {
-    preflight: (harness, profile) => preflightRunner(registry, harness, profile).pipe(Effect.asVoid),
+    preflight,
     run: (request) =>
       Stream.fromEffect(
         preflightRunner(registry, request.plan.harness.name, request.plan.harness.profile),

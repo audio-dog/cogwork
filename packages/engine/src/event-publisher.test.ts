@@ -268,7 +268,6 @@ const eligibleItem = (title: string): TrackerItem => ({
   claimedByUs: false,
   attempts: [],
   handback: null,
-  owned: false,
   followUp: null,
   openBlockers: 0,
   proposal: null,

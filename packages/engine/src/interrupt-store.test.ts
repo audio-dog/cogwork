@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { makeInterruptStore } from "./interrupt-store";
+import { TestClock } from "effect/testing";
+import { InterruptStore, layer } from "./interrupt-store";
 
 const record = (
   interruptId: string,
@@ -14,71 +15,72 @@ const record = (
   payload: {},
 });
 
-describe("makeInterruptStore", () => {
+describe("InterruptStore", () => {
   it.effect("creates a pending interrupt and lists it for its thread and run", () =>
     Effect.gen(function* () {
-      const store = makeInterruptStore();
-      yield* Effect.promise(() => store.create(record("i1", 10)));
+      const store = yield* InterruptStore;
+      yield* store.create(record("i1", 10));
 
-      const stored = yield* Effect.promise(() => store.get("i1"));
+      const stored = yield* store.get("i1");
       assert.strictEqual(stored?.status, "pending");
       assert.deepStrictEqual(
-        (yield* Effect.promise(() => store.listPending("thread-1"))).map((r) => r.interruptId),
+        (yield* store.listPending("thread-1")).map((r) => r.interruptId),
         ["i1"],
       );
       assert.deepStrictEqual(
-        (yield* Effect.promise(() => store.listPendingByRun("run-1"))).map((r) => r.interruptId),
+        (yield* store.listPendingByRun("run-1")).map((r) => r.interruptId),
         ["i1"],
       );
-    }),
+    }).pipe(Effect.provide(layer)),
   );
 
   it.effect("orders a thread's interrupts by requestedAt ascending", () =>
     Effect.gen(function* () {
-      const store = makeInterruptStore();
-      yield* Effect.promise(() => store.create(record("late", 30)));
-      yield* Effect.promise(() => store.create(record("early", 10)));
-      yield* Effect.promise(() => store.create(record("mid", 20)));
+      const store = yield* InterruptStore;
+      yield* store.create(record("late", 30));
+      yield* store.create(record("early", 10));
+      yield* store.create(record("mid", 20));
 
       assert.deepStrictEqual(
-        (yield* Effect.promise(() => store.list("thread-1"))).map((r) => r.interruptId),
+        (yield* store.list("thread-1")).map((r) => r.interruptId),
         ["early", "mid", "late"],
       );
-    }),
+    }).pipe(Effect.provide(layer)),
   );
 
   it.effect("resolves an interrupt, dropping it from the pending list", () =>
     Effect.gen(function* () {
-      const store = makeInterruptStore();
-      yield* Effect.promise(() => store.create(record("i1", 10)));
-      yield* Effect.promise(() => store.resolve("i1", { approved: true }));
+      const store = yield* InterruptStore;
+      yield* store.create(record("i1", 10));
+      yield* TestClock.setTime(1234);
+      yield* store.resolve("i1", { approved: true });
 
-      const stored = yield* Effect.promise(() => store.get("i1"));
+      const stored = yield* store.get("i1");
       assert.strictEqual(stored?.status, "resolved");
       assert.deepStrictEqual(stored?.response, { approved: true });
-      assert.isNumber(stored?.resolvedAt);
-      assert.lengthOf(yield* Effect.promise(() => store.listPending("thread-1")), 0);
-    }),
+      assert.strictEqual(stored?.resolvedAt, 1234);
+      assert.lengthOf(yield* store.listPending("thread-1"), 0);
+    }).pipe(Effect.provide(layer)),
   );
 
   it.effect("cancels an interrupt", () =>
     Effect.gen(function* () {
-      const store = makeInterruptStore();
-      yield* Effect.promise(() => store.create(record("i1", 10)));
-      yield* Effect.promise(() => store.cancel("i1"));
+      const store = yield* InterruptStore;
+      yield* store.create(record("i1", 10));
+      yield* store.cancel("i1");
 
-      assert.strictEqual((yield* Effect.promise(() => store.get("i1")))?.status, "cancelled");
-    }),
+      assert.strictEqual((yield* store.get("i1"))?.status, "cancelled");
+    }).pipe(Effect.provide(layer)),
   );
 
   it.effect("never clobbers a resolved interrupt back to pending on a duplicate create", () =>
     Effect.gen(function* () {
-      const store = makeInterruptStore();
-      yield* Effect.promise(() => store.create(record("i1", 10)));
-      yield* Effect.promise(() => store.resolve("i1"));
-      yield* Effect.promise(() => store.create(record("i1", 10)));
+      const store = yield* InterruptStore;
+      yield* store.create(record("i1", 10));
+      yield* store.resolve("i1");
+      yield* store.create(record("i1", 10));
 
-      assert.strictEqual((yield* Effect.promise(() => store.get("i1")))?.status, "resolved");
-    }),
+      assert.strictEqual((yield* store.get("i1"))?.status, "resolved");
+    }).pipe(Effect.provide(layer)),
   );
 });

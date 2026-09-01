@@ -229,6 +229,7 @@ describe("Harness", () => {
           const error = yield* harness.run(request).pipe(Stream.runDrain, Effect.flip);
 
           assert.match(error.message, new RegExp(`unsupported.*${posture.expected}`));
+          assert.strictEqual(error.reason, "policy");
         }
       }),
     );
