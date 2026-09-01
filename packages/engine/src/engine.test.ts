@@ -40,10 +40,9 @@ import * as Reconcile from "./reconcile";
 import * as Recovery from "./recovery";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
-import * as RunLedger from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
+import { engineTestLayer } from "./testing/engine-test-layer";
 import { WorktreeManager } from "./worktree";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -989,8 +988,7 @@ describe("daemon heartbeats", () => {
 describe("daemon status over rpc", () => {
   const registryLayer = registeredSample;
   const schedulerStub = Layer.succeed(Scheduler.Scheduler, schedulerStubService);
-  const runLedger = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
-  const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger));
+  const engineServices = engineTestLayer();
   const daemonLayer = (sourceLayer: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider>) =>
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -1002,8 +1000,7 @@ describe("daemon status over rpc", () => {
       Layer.provideMerge(schedulerStub),
       Layer.provideMerge(availableControlStore),
       Layer.provideMerge(pluginManagerLayer),
-      Layer.provideMerge(runRecorder),
-      Layer.provideMerge(runLedger),
+      Layer.provideMerge(engineServices),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(sourceLayer),
     );

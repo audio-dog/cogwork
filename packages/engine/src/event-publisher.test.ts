@@ -48,12 +48,11 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { SourceControlProvider } from "./source-control";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
-const runLedgerTestLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
-const runRecorderTestLayer = runRecorderLayer.pipe(Layer.provide(runLedgerTestLayer));
+const engineServices = engineTestLayer();
 const controlStoreService = {
   health: "available",
   seed: defaultControlStore,
@@ -535,8 +534,7 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(workspaces),
       Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
-      Layer.provideMerge(runRecorderTestLayer),
-      Layer.provideMerge(runLedgerTestLayer),
+      Layer.provideMerge(engineServices),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(store),
       Layer.provideMerge(plugins),
@@ -773,8 +771,7 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(failingRegistryLayer),
       Layer.provideMerge(Registry.managementReadOnlyLayer),
       Layer.provideMerge(schedulerStub(statsRef)),
-      Layer.provideMerge(runRecorderTestLayer),
-      Layer.provideMerge(runLedgerTestLayer),
+      Layer.provideMerge(engineServices),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(controlStoreLayer),
       Layer.provideMerge(pluginManagerLayer),

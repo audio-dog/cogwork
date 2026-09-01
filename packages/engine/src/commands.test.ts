@@ -53,9 +53,9 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
@@ -197,8 +197,7 @@ const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<Trac
       Ref.update(calls, (c) => ({ ...c, released: [...c.released, workItem] })),
   });
 
-const runLedgerLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
-const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedgerLayer));
+const engineServices = engineTestLayer();
 const pluginManagerLayer = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -364,8 +363,7 @@ const daemonLayer = (
     Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source)))),
     Layer.provideMerge(registries),
     Layer.provideMerge(scheduler),
-    Layer.provideMerge(runRecorder),
-    Layer.provideMerge(runLedgerLayer),
+    Layer.provideMerge(engineServices),
     Layer.provideMerge(runControl),
     Layer.provideMerge(controlStore),
     Layer.provideMerge(connections),
