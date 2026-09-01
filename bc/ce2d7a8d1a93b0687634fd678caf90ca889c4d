@@ -1,0 +1,24 @@
+apps/cli/src/login.test.ts
+  s_e58acf5c13358a::t_d9d361fe46240f 7,12-14,16,19,78-81,93,148-150,157,159-163,169-212
+  s_e58acf5c13358a::t_7a7f1fb1636ef0 151
+  s_e58acf5c13358a::t_70a71866f00656 5,152-153,158
+  s_e58acf5c13358a::t_adfd5d3f0e6594 154-156,164-168
+apps/cli/src/login.ts
+  s_e58acf5c13358a::t_11d4577d981630 20-22,60-67,111-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "bcce2d7a8d1a93b0687634fd678caf90ca889c4d",
+  "prompts": {},
+  "sessions": {
+    "s_e58acf5c13358a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ad9-ecd4-7e53-a68c-f0586af4bc40",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
