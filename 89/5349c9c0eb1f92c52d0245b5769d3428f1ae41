@@ -1,0 +1,21 @@
+docs/adr/0021-the-performance-sensor-files-its-own-tickets.md
+  s_4ae61d8d70e02e::t_89f2370670ac4a 52-53
+  s_4ae61d8d70e02e::t_a0d4a98de75b57 1-10,15-51,54-105
+  s_4ae61d8d70e02e::t_6bcc7bc3992f2c 11-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "895349c9c0eb1f92c52d0245b5769d3428f1ae41",
+  "prompts": {},
+  "sessions": {
+    "s_4ae61d8d70e02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb42e325-567c-4173-8033-8e65733e9986",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
