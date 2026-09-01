@@ -1,0 +1,38 @@
+packages/engine/src/classify.test.ts
+  s_5609bcd3867bea::t_fd8beac0f4ea6b 401,403
+packages/engine/src/github/provider.ts
+  s_5609bcd3867bea::t_7b34c83b58f0f3 1,7,168-169,178,186,195,205,222,224,227,245,263,266-267
+packages/engine/src/github/github.test.ts
+  s_5609bcd3867bea::t_45a643397ccef0 362
+  s_5609bcd3867bea::t_3390cbc0b6a969 33,364,660-661,670,676
+  s_5609bcd3867bea::t_1c11661d2b0df8 361
+  s_5609bcd3867bea::t_fd8beac0f4ea6b 343-360,363,365-375
+  s_5609bcd3867bea::t_bbcbba68dda0a7 1289
+  s_5609bcd3867bea::t_dcf9f7fc492718 646,649-652,655,721-729,765-773
+  s_5609bcd3867bea::t_2588cbe79b8f80 376,694-720,730-764,774-789
+  s_b9380e20b80941::t_f3b3f232772c38 377,790
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "26a70e0a556e2c296b5c57e5645e6f521e578c43",
+  "prompts": {},
+  "sessions": {
+    "s_5609bcd3867bea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05aa2-b042-7331-8e8c-55191c7eb9f5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b9380e20b80941": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e3f3b1c-9955-4b3c-b685-3da0d2c95c1c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
