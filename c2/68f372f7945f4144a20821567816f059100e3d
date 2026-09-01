@@ -1,0 +1,36 @@
+apps/cli/src/telemetry.test.ts
+  s_6394507e8d162d::t_362c28478994c2 172
+  s_6394507e8d162d::t_9afbbf58d331f2 233-237,239-243
+  s_6394507e8d162d::t_d402110e213a29 163,186,207,222
+  s_6394507e8d162d::t_3d25528beea7b8 71,74,95-99,112-113
+  s_6394507e8d162d::t_58fa4c8a1ed694 54
+  s_6394507e8d162d::t_d02d8ad1a2429b 1,4,8,11,28-53,55-58,115-116,161-162,164-171,173-185,187-206,208-221,223,225-232,238,246-248
+  s_6394507e8d162d::t_cad28052a14c85 224
+  s_6394507e8d162d::t_f051a2dd16727a 60-62,245
+  s_6394507e8d162d::t_10bf531f0bf0ee 117-156
+  s_9cc984277b4185::t_b36aec5d071d78 114,244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c268f372f7945f4144a20821567816f059100e3d",
+  "prompts": {},
+  "sessions": {
+    "s_6394507e8d162d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eed-5dca-7be2-9220-ab2576f5bc8c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9cc984277b4185": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05efb-b0e5-7a21-a26b-c067b2bc835c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
