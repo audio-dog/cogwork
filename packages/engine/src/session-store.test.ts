@@ -63,6 +63,20 @@ describe("foldThread", () => {
     assert.deepStrictEqual(foldThread(events), [{ role: "tool", content: "a.ts", toolName: "read" }]);
   });
 
+  it("keeps the tool name when a later tool event arrives first", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "TOOL_CALL_ARGS", toolCallId: "t1", toolCallName: "read", args: "a.ts" },
+      { type: "TOOL_CALL_END", toolCallId: "t2", toolCallName: "write", args: "b.ts" },
+      { type: "TOOL_CALL_RESULT", toolCallId: "t3", toolCallName: "shell" },
+    ];
+
+    assert.deepStrictEqual(foldThread(events), [
+      { role: "tool", content: "a.ts", toolName: "read" },
+      { role: "tool", content: "b.ts", toolName: "write" },
+      { role: "tool", content: "", toolName: "shell" },
+    ]);
+  });
+
   it("folds a forward-compatible tool call event", () => {
     const events: ReadonlyArray<AgUiEvent> = [
       {

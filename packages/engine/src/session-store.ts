@@ -109,9 +109,11 @@ const foldEvent = (state: FoldState, event: AgUiEvent): FoldState =>
       TEXT_MESSAGE_CONTENT: ({ delta }) => (delta ? { ...state, text: state.text + delta } : state),
       TOOL_CALL_START: ({ toolCallId, args, toolCallName }) =>
         appendTool(state, toolCallId, args, toolCallName),
-      TOOL_CALL_ARGS: ({ toolCallId, args }) => appendTool(state, toolCallId, args),
-      TOOL_CALL_END: ({ toolCallId, args }) => appendTool(state, toolCallId, args),
-      TOOL_CALL_RESULT: ({ toolCallId }) => appendTool(state, toolCallId),
+      TOOL_CALL_ARGS: ({ toolCallId, args, toolCallName }) =>
+        appendTool(state, toolCallId, args, toolCallName),
+      TOOL_CALL_END: ({ toolCallId, args, toolCallName }) =>
+        appendTool(state, toolCallId, args, toolCallName),
+      TOOL_CALL_RESULT: ({ toolCallId, toolCallName }) => appendTool(state, toolCallId, "", toolCallName),
       CUSTOM: ({ name, value }) =>
         name === "structured-output.complete" && isStructuredOutputCompleteValue(value)
           ? appendStructuredOutput(state, value.raw)
