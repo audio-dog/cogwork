@@ -72,8 +72,8 @@ token columns → `cogwork runs`) records nothing. The counts **do** exist in th
 "cacheReadTokens":…,"cacheWriteTokens":…}`), but the harness is deliberately built on ACP
 (ADR-0004) and swapping modes to harvest usage isn't worth losing ACP session/resume + telemetry.
 
-**Resolution (issue #2): a documented best-guess estimate at the harness seam.** `withEstimatedUsage`
-in `harness.ts` attaches an `estimated`-flagged `usage` (`chars/4` over the prompt + streamed
+**Resolution (issue #2): a documented best-guess estimate at the harness seam.** The Cursor
+descriptor's usage estimator attaches an `estimated`-flagged `usage` (`chars/4` over the prompt + streamed
 assistant/reasoning text) whenever the real `RUN_FINISHED` carries none. The flag is honest end to
 end (`tokens=~N` in the CLI, a tooltip in the desktop drill-in) so it is never read as metered cost;
 it undercounts the hidden system prompt / tools / resumed context. Prior art for a Cursor CLI
