@@ -7,10 +7,11 @@ import test from "node:test";
 
 import { eligibleFiles, pathsFromPayload } from "./format-edited-files.mjs";
 
-const runHook = (checkout, payload) =>
+const runHook = (checkout, payload, env = process.env) =>
   spawnSync(process.execPath, [join(checkout, "scripts/format-edited-files.mjs")], {
     cwd: checkout,
     encoding: "utf8",
+    env,
     input: JSON.stringify(payload),
   });
 
@@ -129,6 +130,27 @@ test("does not change an unsupported edited file", async (context) => {
   const result = runHook(checkout, { hook_event_name: "afterFileEdit", file_path: file });
 
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(await readFile(file, "utf8"), contents);
+});
+
+test("does not change an edited file when Biome fails", async (context) => {
+  const checkout = process.cwd();
+  const directory = await mkdtemp(join(checkout, "format-edited-files-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const executableDirectory = join(directory, "bin");
+  const file = join(directory, "edited.ts");
+  const contents = "export const value = true;\n";
+  await mkdir(executableDirectory);
+  await writeFile(join(executableDirectory, "pnpm"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  await writeFile(file, contents);
+
+  const result = runHook(
+    checkout,
+    { hook_event_name: "afterFileEdit", file_path: file },
+    { ...process.env, PATH: executableDirectory },
+  );
+
+  assert.equal(result.status, 1);
   assert.equal(await readFile(file, "utf8"), contents);
 });
 
