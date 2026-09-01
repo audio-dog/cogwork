@@ -13,7 +13,6 @@ import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
-import * as Stream from "effect/Stream";
 import * as Tracer from "effect/Tracer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
@@ -339,18 +338,15 @@ function makeLocalTracer(options: LocalTelemetryOptions) {
     const metricContext = yield* Effect.context<never>();
     const queue = yield* Queue.dropping<SpanRow>(spanBufferCapacity);
     yield* Effect.addFinalizer(() =>
-      Queue.takeAll(queue).pipe(
+      Queue.clear(queue).pipe(
         Effect.flatMap(store.writeSpans),
         Effect.andThen(store.captureMetrics()),
         Effect.andThen(store.prune()),
       ),
     );
-    yield* Stream.fromQueue(queue).pipe(
-      Stream.groupedWithin(spanBatchSize, "1 second"),
-      Stream.runForEach(store.writeSpans),
-      logWriteFailure("span worker"),
-      Effect.forkScoped,
-    );
+    yield* Effect.uninterruptibleMask((restore) =>
+      restore(Queue.takeBetween(queue, 1, spanBatchSize)).pipe(Effect.flatMap(store.writeSpans)),
+    ).pipe(Effect.forever, logWriteFailure("span worker"), Effect.forkScoped);
     yield* store
       .captureMetrics()
       .pipe(
@@ -369,5 +365,21 @@ function makeLocalTracer(options: LocalTelemetryOptions) {
   });
 }
 
+const fallbackTracerLayer = (cause: Cause.Cause<unknown>) =>
+  Layer.effect(
+    Tracer.Tracer,
+    Cause.hasInterruptsOnly(cause)
+      ? Effect.interrupt
+      : Effect.gen(function* () {
+          yield* Effect.logWarning("local telemetry initialization failed", {
+            cause: Cause.pretty(cause),
+          });
+          return yield* Tracer.Tracer;
+        }),
+  );
+
 export const localTelemetryLayer = (options: LocalTelemetryOptions) =>
-  Layer.effect(Tracer.Tracer, makeLocalTracer(options)).pipe(Layer.provide(clientLayer(options.storePath)));
+  Layer.effect(Tracer.Tracer, makeLocalTracer(options)).pipe(
+    Layer.provide(clientLayer(options.storePath)),
+    Layer.catchCause(fallbackTracerLayer),
+  );

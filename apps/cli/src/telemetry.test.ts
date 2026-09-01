@@ -172,6 +172,24 @@ describe("local telemetry", () => {
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
+  it.live("flushes a dequeued partial span batch during shutdown", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+
+      yield* Effect.succeed("done").pipe(
+        Effect.withSpan("Telemetry.shutdownFlush"),
+        Effect.andThen(Effect.sleep("100 millis")),
+        Effect.provide(localLayer(storePath)),
+        Effect.scoped,
+      );
+
+      assert.deepEqual(
+        yield* query(storePath, "SELECT name FROM spans WHERE name = 'Telemetry.shutdownFlush'"),
+        [{ name: "Telemetry.shutdownFlush" }],
+      );
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
   it.live("does not create or write the local store when disabled", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -184,6 +202,24 @@ describe("local telemetry", () => {
       );
 
       assert.isFalse(yield* fs.exists(storePath));
+    }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
+  );
+
+  it.live("keeps telemetry available when the local store cannot initialize", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-telemetry-blocked-" });
+      const blockedDirectory = path.join(dir, "blocked");
+      yield* fs.writeFileString(blockedDirectory, "not a directory");
+
+      const result = yield* Effect.succeed("started").pipe(
+        Effect.withSpan("Telemetry.unavailableStore"),
+        Effect.provide(localLayer(path.join(blockedDirectory, "telemetry.db"))),
+        Effect.scoped,
+      );
+
+      assert.strictEqual(result, "started");
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
