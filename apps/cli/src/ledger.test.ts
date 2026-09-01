@@ -279,11 +279,14 @@ describe("sqlite RunLedger", () => {
           logs.push({ message, annotations: { ...fiber.getRef(References.CurrentLogAnnotations) } });
         });
 
-        yield* Effect.gen(function* () {
-          assert.isNull(yield* ledger.getRun(run));
-          assert.isNull(yield* ledger.getRunPlan(plan));
-          assert.isNull(yield* ledger.sessionForBranch(workspace, "corrupt-session-branch"));
-        }).pipe(Effect.withLogger(logger));
+        const [storedRun, storedPlan, storedSession] = yield* Effect.all([
+          ledger.getRun(run),
+          ledger.getRunPlan(plan),
+          ledger.sessionForBranch(workspace, "corrupt-session-branch"),
+        ]).pipe(Effect.withLogger(logger));
+        assert.isNull(storedRun);
+        assert.isNull(storedPlan);
+        assert.isNull(storedSession);
 
         const warnings = logs
           .filter(({ message }) => String(message).includes("stored row decode failed"))
