@@ -38,6 +38,10 @@ The same ADR narrows this ADR's ambient-instruction rule in the other direction.
 
 The first-party packages now live in `packages/engine/operating-instructions/`. Each package has an `INSTRUCTIONS.md` entry point and can carry supporting resources. The Context assembler copies that package to the Run's host-side resource path, records every readable resource in the Run Plan, and supplies the entry point as the highest-precedence instruction layer. References above to `packages/engine/skills/`, `SKILL.md`, playbook skills, and skill provision describe the retired representation and do not direct current implementation. Real Skills remain contributions and keep the `SKILL.md` contract.
 
+## Amendment: a Workspace may supply the package
+
+ADR [0019](../../../../docs/adr/0019-per-workspace-operating-instructions-overrides.md) narrows the package-source claim above. `packages/engine/operating-instructions/` remains the default source, and a Workspace may replace a package whole from its private overlay tree at `~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`. The Context assembler resolves the source by presence — override directory first, engine package otherwise — and an override that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Everything downstream of source resolution (copy to the Run's host-side resource path, resource recording, entry point as the highest-precedence layer) is unchanged, so the assembler must now know which Workspace a Run belongs to.
+
 ## Considered Options
 
 - **Flatten everything into one prompt string in the engine** — rejected: blocks mid-run compaction and muddies the ADR 0005 assemble/render split.

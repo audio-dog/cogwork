@@ -10,6 +10,7 @@ import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
@@ -37,6 +38,8 @@ vi.mock("drizzle-kit/payload/sqlite", () =>
 
 const storeLayerAt = (storePath: string) =>
   bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath)));
+
+const interruptionGate = Latch.makeUnsafe();
 
 const storeAt = (storePath: string) =>
   Effect.map(ControlStore, (store) =>
@@ -233,11 +236,14 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
       yield* withStore(storePath, (store) =>
-        Effect.gen(function* () {
-          yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
-          yield* store.setDaemonLimit({ key: "per-workspace-concurrency", value: 3, expectedRevision: 1 });
-          yield* store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 2 });
-        }),
+        Effect.all(
+          [
+            store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 }),
+            store.setDaemonLimit({ key: "per-workspace-concurrency", value: 3, expectedRevision: 1 }),
+            store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 2 }),
+          ],
+          { discard: true },
+        ),
       );
       const seed = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
 
@@ -254,26 +260,29 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
       yield* withStore(storePath, (store) =>
-        Effect.gen(function* () {
-          yield* store.updateOperationSetting({
-            _tag: "Set",
-            row: {
-              setting: "model",
-              level: { _tag: "Default" },
-              scope: { _tag: "PrivateWorkspaceOverlay", workspace },
-              value: "overlay-default",
-            },
-          });
-          yield* store.updateOperationSetting({
-            _tag: "Set",
-            row: {
-              setting: "model",
-              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-              scope: { _tag: "SettingsProfile" },
-              value: "profile-operation",
-            },
-          });
-        }),
+        Effect.all(
+          [
+            store.updateOperationSetting({
+              _tag: "Set",
+              row: {
+                setting: "model",
+                level: { _tag: "Default" },
+                scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+                value: "overlay-default",
+              },
+            }),
+            store.updateOperationSetting({
+              _tag: "Set",
+              row: {
+                setting: "model",
+                level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+                scope: { _tag: "SettingsProfile" },
+                value: "profile-operation",
+              },
+            }),
+          ],
+          { discard: true },
+        ),
       );
 
       const reloaded = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
@@ -375,12 +384,13 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
       const stale = yield* withStore(storePath, (store) =>
-        Effect.gen(function* () {
-          yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
-          return yield* Effect.flip(
-            store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 0 }),
-          );
-        }),
+        store
+          .setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 })
+          .pipe(
+            Effect.andThen(
+              Effect.flip(store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 0 })),
+            ),
+          ),
       );
 
       assert.strictEqual(stale._tag, "StaleControlStoreWrite");
@@ -485,7 +495,7 @@ layer(NodeServices.layer)((it) => {
   it.effect("propagates interruption during boot instead of reporting unavailable", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      const fiber = yield* Effect.forkChild(Effect.andThen(Effect.never, storeAt(storePath)));
+      const fiber = yield* Effect.forkChild(Effect.andThen(interruptionGate.await, storeAt(storePath)));
       yield* Effect.yieldNow;
       yield* Fiber.interrupt(fiber);
       assert.strictEqual((yield* Fiber.await(fiber))._tag, "Failure");

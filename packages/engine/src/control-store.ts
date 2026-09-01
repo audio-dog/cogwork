@@ -28,6 +28,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
@@ -104,7 +105,7 @@ type ControlStoreSchemaStatements = Effect.Effect<
   SqlClient.SqlClient
 >;
 
-const maximumRunEventAgeMillis = 1000 * 60 * 60 * 24 * 30;
+const maximumRunEventAge = Duration.days(30);
 const additiveSchemaStatementPatterns = [
   /^CREATE\s+TABLE\s+/i,
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+/i,
@@ -628,7 +629,7 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
 const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
-  yield* sql`DELETE FROM run_events WHERE at < ${now - maximumRunEventAgeMillis}`;
+  yield* sql`DELETE FROM run_events WHERE at < ${now - Duration.toMillis(maximumRunEventAge)}`;
 });
 
 const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* () {

@@ -5,6 +5,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
@@ -17,6 +18,7 @@ import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawne
 import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
 
 const testLayer = gitLayer.pipe(Layer.provideMerge(NodeServices.layer));
+const interruptionGate = Latch.makeUnsafe();
 
 const isolated = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null" };
 
@@ -54,7 +56,9 @@ const exitedProcess = (exitCode: number, stdout = "", stderr = "") =>
 
 const hangingSpawnerLayer = Layer.succeed(
   ChildProcessSpawner.ChildProcessSpawner,
-  ChildProcessSpawner.make(() => Effect.succeed(processHandle(Effect.never))),
+  ChildProcessSpawner.make(() =>
+    Effect.succeed(processHandle(Effect.map(interruptionGate.await, () => ChildProcessSpawner.ExitCode(0)))),
+  ),
 );
 
 const platformDependenciesWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
@@ -72,6 +76,17 @@ class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<str
 ) {
   static readonly layer = Layer.effect(GitCommands, Ref.make<ReadonlyArray<string>>([]));
 }
+
+const recordedSpawnerLayer = (handleFor: (command: string) => ChildProcessSpawner.ChildProcessHandle) =>
+  Layer.effect(
+    ChildProcessSpawner.ChildProcessSpawner,
+    Effect.map(GitCommands, (commands) =>
+      ChildProcessSpawner.make((command) => {
+        const text = commandText(command);
+        return Ref.update(commands, (current) => [...current, text]).pipe(Effect.map(() => handleFor(text)));
+      }),
+    ),
+  ).pipe(Layer.provideMerge(GitCommands.layer));
 
 const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
   Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer)),
@@ -188,21 +203,21 @@ describe("subprocess deadlines", () => {
     Effect.gen(function* () {
       const commands = yield* Ref.make<ReadonlyArray<string>>([]);
       const spawner = ChildProcessSpawner.make((command) =>
-        Effect.gen(function* () {
-          const text = commandText(command);
-          yield* Ref.update(commands, (current) => [...current, text]);
-          const exitCode = yield* text.endsWith(" --abort")
-            ? Effect.succeed(ChildProcessSpawner.ExitCode(0))
-            : Effect.sleep("1 hour").pipe(Effect.map(() => ChildProcessSpawner.ExitCode(0)));
-          return processHandle(Effect.succeed(exitCode));
-        }),
+        Ref.update(commands, (current) => [...current, commandText(command)]).pipe(
+          Effect.andThen(
+            commandText(command).endsWith(" --abort")
+              ? Effect.succeed(ChildProcessSpawner.ExitCode(0))
+              : Effect.sleep("1 hour").pipe(Effect.map(() => ChildProcessSpawner.ExitCode(0))),
+          ),
+          Effect.map((exitCode) => processHandle(Effect.succeed(exitCode))),
+        ),
       );
       const interruptedGitLayer = gitLayerWithSpawner(spawner);
       const fiber = yield* Effect.forkChild(
-        Effect.gen(function* () {
-          const git = yield* Git.Git;
-          yield* git.rebase("/repo", "origin", "main");
-        }).pipe(Effect.provide(interruptedGitLayer)),
+        Git.Git.pipe(
+          Effect.flatMap((git) => git.rebase("/repo", "origin", "main")),
+          Effect.provide(interruptedGitLayer),
+        ),
       );
 
       yield* TestClock.adjust("1 minute");
@@ -380,33 +395,20 @@ describe("worktree porcelain", () => {
         gitLayer.pipe(
           Layer.provideMerge(
             Layer.mergeAll(
-              Layer.effect(
-                ChildProcessSpawner.ChildProcessSpawner,
-                Effect.gen(function* () {
-                  const commands = yield* GitCommands;
-                  return ChildProcessSpawner.make((command) =>
-                    Effect.gen(function* () {
-                      const text = commandText(command);
-                      yield* Ref.update(commands, (current) => [...current, text]);
-                      const isPrune = text === "git worktree prune";
-                      const stdout = isPrune
-                        ? Stream.empty
-                        : Stream.make(
-                            new TextEncoder().encode(
-                              [
-                                "worktree /repo\0branch refs/heads/main",
-                                "worktree /repo.worktrees/277-stale\0branch refs/heads/277-stale\0prunable stale",
-                              ].join("\0\0"),
-                            ),
-                          );
-                      return processHandle(
-                        Effect.succeed(ChildProcessSpawner.ExitCode(isPrune ? 1 : 0)),
-                        stdout,
-                      );
-                    }),
-                  );
-                }),
-              ).pipe(Layer.provideMerge(GitCommands.layer)),
+              recordedSpawnerLayer((text) => {
+                const isPrune = text === "git worktree prune";
+                const stdout = isPrune
+                  ? Stream.empty
+                  : Stream.make(
+                      new TextEncoder().encode(
+                        [
+                          "worktree /repo\0branch refs/heads/main",
+                          "worktree /repo.worktrees/277-stale\0branch refs/heads/277-stale\0prunable stale",
+                        ].join("\0\0"),
+                      ),
+                    );
+                return processHandle(Effect.succeed(ChildProcessSpawner.ExitCode(isPrune ? 1 : 0)), stdout);
+              }),
               FileSystem.layerNoop({}),
               Path.layer,
             ),
@@ -433,20 +435,10 @@ describe("worktree removal", () => {
         gitLayer.pipe(
           Layer.provideMerge(
             Layer.mergeAll(
-              Layer.effect(
-                ChildProcessSpawner.ChildProcessSpawner,
-                Effect.gen(function* () {
-                  const commands = yield* GitCommands;
-                  return ChildProcessSpawner.make((command) =>
-                    Effect.gen(function* () {
-                      const text = commandText(command);
-                      yield* Ref.update(commands, (current) => [...current, text]);
-                      const exitCode = text.includes(" worktree remove ") ? 1 : 0;
-                      return processHandle(Effect.succeed(ChildProcessSpawner.ExitCode(exitCode)));
-                    }),
-                  );
-                }),
-              ).pipe(Layer.provideMerge(GitCommands.layer)),
+              recordedSpawnerLayer((text) => {
+                const exitCode = text.includes(" worktree remove ") ? 1 : 0;
+                return processHandle(Effect.succeed(ChildProcessSpawner.ExitCode(exitCode)));
+              }),
               FileSystem.layerNoop({}),
               Path.layer,
             ),

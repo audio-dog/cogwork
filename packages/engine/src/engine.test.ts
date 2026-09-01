@@ -48,6 +48,7 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 import { WorktreeManager } from "./worktree";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
+const interruptionGate = Latch.makeUnsafe();
 const pluginManagerLayer = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -251,7 +252,7 @@ const defectOnceThenObserve = sources(
     Effect.gen(function* () {
       const observes = yield* ReconcileObserveCount;
       return stub({
-        observe: Effect.fn(function* () {
+        observe: Effect.fn("test.observe")(function* () {
           const count = yield* Ref.getAndUpdate(observes, (current) => current + 1);
           if (count === 0) return yield* Effect.die("reconcile defect");
           return [];
@@ -272,15 +273,24 @@ describe("reconcile worker", () => {
     Layer.provideMerge(ReconcileObserveCount.layer),
     Layer.provideMerge(LogMessages.captureLayer),
   );
-  const neverWorkerLayer = reconcileLayer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        registryLayer,
-        sources(Layer.succeed(IssueTracker.IssueTracker, stub({ observe: () => Effect.never }))),
+  const neverWorkerLayer = () =>
+    reconcileLayer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          registryLayer,
+          sources(
+            Layer.succeed(
+              IssueTracker.IssueTracker,
+              stub({
+                observe: () =>
+                  interruptionGate.await.pipe(Effect.flatMap(() => Effect.die("interruption gate opened"))),
+              }),
+            ),
+          ),
+        ),
       ),
-    ),
-    Layer.provideMerge(LogMessages.captureLayer),
-  );
+      Layer.provideMerge(LogMessages.captureLayer),
+    );
   const coordinatedSource = (
     observe: (probe: ReconcileCoordinationProbeService) => IssueTracker.IssueTrackerService["observe"],
   ) =>
@@ -291,7 +301,7 @@ describe("reconcile worker", () => {
       ),
     );
   const coalescingSource = coordinatedSource((probe) =>
-    Effect.fn(function* () {
+    Effect.fn("test.coalescingSource")(function* () {
       const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
       if (count > 0) yield* Deferred.succeed(probe.secondStarted, undefined);
       yield* probe.release.await;
@@ -299,7 +309,7 @@ describe("reconcile worker", () => {
     }),
   );
   const postCurrentSource = coordinatedSource((probe) =>
-    Effect.fn(function* () {
+    Effect.fn("test.postCurrentSource")(function* () {
       const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
       if (count > 0) return [];
       yield* probe.firstStarted.open;
@@ -347,7 +357,11 @@ describe("reconcile worker", () => {
       const refreshStarted = yield* Deferred.make<void>();
       const drainingRegistry = Layer.succeed(Registry.WorkspaceRegistry, {
         ...Registry.readOnlyRegistry(sampleRegistry),
-        refresh: Deferred.succeed(refreshStarted, undefined).pipe(Effect.andThen(Effect.never)),
+        refresh: Deferred.succeed(refreshStarted, undefined).pipe(
+          Effect.andThen(
+            interruptionGate.await.pipe(Effect.flatMap(() => Effect.die("interruption gate opened"))),
+          ),
+        ),
       });
       const workerScope = yield* Scope.make();
       const context = yield* reconcileLayer.pipe(
@@ -402,7 +416,7 @@ describe("reconcile worker", () => {
       const error = yield* Fiber.join(fiber);
       assert.isTrue(Cause.isTimeoutError(error));
       assert.isTrue(MutableRef.get(messages).some((line) => line.includes("reconcile submission timed out")));
-    }).pipe(Effect.provide(neverWorkerLayer), Effect.scoped),
+    }).pipe(Effect.provide(neverWorkerLayer()), Effect.scoped),
   );
 
   it.effect("coalesces submissions while a timed-out reconcile is still running", () =>
@@ -737,17 +751,16 @@ describe("reconcile worker", () => {
           IssueTracker.IssueTracker,
           stub({
             rateLimitScope: () => "linear:LINEAR_API_KEY",
-            observe: () =>
-              Effect.gen(function* () {
-                const count = yield* Ref.updateAndGet(observes, (current) => current + 1);
-                if (count === 2) yield* observationGate.open;
-                yield* observationGate.await;
-                return yield* new IssueTracker.IssueTrackerError({
-                  reason: "rate-limited",
-                  message: "Linear rate limit exceeded",
-                  retryAfterMillis: 30_000,
-                });
-              }),
+            observe: Effect.fn("test.rateLimitedObserve")(function* () {
+              const count = yield* Ref.updateAndGet(observes, (current) => current + 1);
+              if (count === 2) yield* observationGate.open;
+              yield* observationGate.await;
+              return yield* new IssueTracker.IssueTrackerError({
+                reason: "rate-limited",
+                message: "Linear rate limit exceeded",
+                retryAfterMillis: 30_000,
+              });
+            }),
           }),
         ),
       );
@@ -756,9 +769,8 @@ describe("reconcile worker", () => {
       const hitMetric = Metric.withAttributes(rateLimitHits, { scope: "linear:LINEAR_API_KEY" });
       const hitsBefore = (yield* Metric.value(hitMetric)).count;
 
-      yield* Effect.gen(function* () {
-        yield* (yield* Reconcile.ReconcileWorker).submit();
-      }).pipe(
+      yield* Reconcile.ReconcileWorker.pipe(
+        Effect.flatMap((worker) => worker.submit()),
         Effect.provide(layer),
         Effect.scoped,
         Effect.withLogger(
@@ -803,6 +815,12 @@ describe("reconcile worker", () => {
       yield* TestClock.adjust("2 seconds");
       yield* worker.submit();
       assert.strictEqual(yield* Ref.get(observes), 2);
+      yield* TestClock.adjust("119 seconds");
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 2);
+      yield* TestClock.adjust("2 seconds");
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 3);
     }).pipe(Effect.provide(rateLimitedWorker()), Effect.scoped),
   );
 
