@@ -120,7 +120,7 @@ Dispositions:
 
 | Source | Disposition |
 |---|---|
-| `*.workspace.ts` and their loader | **Retired.** Fields route per ADR 0016's acts; `issueTracker`, `sourceControl`, `linearHistory` and the machine half of `worktrees` become columns on the workspace record, off the Scope axis. `worktrees.setup` and `linkPaths` move to the Workspace input, per engine ADR 0005. |
+| `*.workspace.ts` and their loader | **Retired.** Fields route per ADR 0016's acts; `issueTracker`, `sourceControl`, `linearHistory`, `mcpSkills`, and all of `worktrees` become columns on the workspace record, off the Scope axis. The Workspace input has no settings file; [#332](https://github.com/colonylabs/cogwork/issues/332) amends the earlier split. |
 | Engine Operating Instructions | **Kept as is.** Engine Authority, shipped with the binary, not a contribution and not in any tree. |
 | `~/.agents/skills` | **Becomes the Settings profile tree.** Referenced where it lies, never copied. |
 | Repository `.agents` inputs | **Becomes the Workspace input tree.** |

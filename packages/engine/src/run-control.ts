@@ -1,40 +1,95 @@
 import type { RunId } from "@cogwork/contracts";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import type * as Fiber from "effect/Fiber";
+import * as Fiber from "effect/Fiber";
 import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
+import * as MutableHashMap from "effect/MutableHashMap";
 import * as Option from "effect/Option";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
-const WorkspaceBinding = Context.Reference<Option.Option<WorkspaceIssueTrackerBinding>>(
-  "@cogwork/engine/run-control/WorkspaceBinding",
-  { defaultValue: Option.none },
-);
+interface Registration {
+  readonly fiber: Fiber.Fiber<unknown, unknown>;
+  readonly manualCancellation: Deferred.Deferred<void>;
+  readonly workspace: WorkspaceIssueTrackerBinding | undefined;
+}
+
+export type RunCancellation = Data.TaggedEnum<{
+  NotFound: { readonly run?: never };
+  Interrupting: {
+    readonly workspace: Option.Option<WorkspaceIssueTrackerBinding>;
+    readonly awaitTermination: Effect.Effect<void>;
+  };
+}>;
+
+export const RunCancellation = Data.taggedEnum<RunCancellation>();
 
 export const make = Effect.gen(function* () {
   const fibers = yield* FiberMap.make<RunId>();
+  const registrations = MutableHashMap.empty<RunId, Registration>();
 
-  const register = (
-    runId: RunId,
-    fiber: Fiber.Fiber<unknown, unknown>,
-    workspace?: WorkspaceIssueTrackerBinding,
-  ) =>
-    Effect.sync(() => {
-      if (!workspace) return;
-      fiber.setContext(Context.add(fiber.context, WorkspaceBinding, Option.some(workspace)));
-    }).pipe(Effect.andThen(FiberMap.set(fibers, runId, fiber)));
+  const forget = (runId: RunId, fiber: Fiber.Fiber<unknown, unknown>) => {
+    const current = MutableHashMap.get(registrations, runId);
+    if (Option.isSome(current) && current.value.fiber === fiber) {
+      MutableHashMap.remove(registrations, runId);
+    }
+  };
 
-  const workspaceFor = (runId: RunId) =>
-    FiberMap.get(fibers, runId).pipe(Effect.map(Option.flatMap((fiber) => fiber.getRef(WorkspaceBinding))));
-
-  const cancel = Effect.fn("RunControl.cancel")(function* (runId: RunId) {
-    const found = yield* FiberMap.has(fibers, runId);
-    yield* FiberMap.remove(fibers, runId);
-    return found;
-  });
-
-  return { register, workspaceFor, cancel } as const;
+  return {
+    run: <A, E, R, R2 = never>(
+      runId: RunId,
+      workspace: WorkspaceIssueTrackerBinding | undefined,
+      effect: Effect.Effect<A, E, R>,
+      onCancel: Effect.Effect<void, never, R2> = Effect.void,
+    ) =>
+      Effect.uninterruptibleMask((restore) =>
+        Effect.gen(function* () {
+          const ready = yield* Deferred.make<void>();
+          const manualCancellation = yield* Deferred.make<void>();
+          const fiber = yield* FiberMap.run(
+            fibers,
+            runId,
+            restore(Deferred.await(ready).pipe(Effect.andThen(effect))).pipe(
+              Effect.onInterrupt(() =>
+                Effect.suspend(() => (Deferred.isDoneUnsafe(manualCancellation) ? onCancel : Effect.void)),
+              ),
+            ),
+          );
+          yield* Effect.sync(() => {
+            const current = FiberMap.getUnsafe(fibers, runId);
+            if (Option.isSome(current) && current.value === fiber) {
+              MutableHashMap.set(registrations, runId, { fiber, manualCancellation, workspace });
+              fiber.addObserver(() => forget(runId, fiber));
+            }
+          });
+          yield* Deferred.succeed(ready, undefined);
+          return yield* restore(Fiber.join(fiber)).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
+        }),
+      ),
+    cancel: Effect.fn("RunControl.cancel")((runId: RunId) =>
+      Effect.sync(() => {
+        const current = FiberMap.getUnsafe(fibers, runId);
+        if (Option.isNone(current)) return RunCancellation.NotFound({});
+        const fiber = current.value;
+        const registration = MutableHashMap.get(registrations, runId).pipe(
+          Option.filter((candidate) => candidate.fiber === fiber),
+        );
+        const workspace = registration.pipe(
+          Option.flatMap((registration) => Option.fromNullishOr(registration.workspace)),
+        );
+        if (Option.isSome(registration)) {
+          Deferred.doneUnsafe(registration.value.manualCancellation, Effect.void);
+        }
+        fiber.interruptUnsafe(Fiber.getCurrent()?.id);
+        return RunCancellation.Interrupting({
+          workspace,
+          awaitTermination: Fiber.await(fiber).pipe(Effect.asVoid),
+        });
+      }),
+    ),
+  };
 });
 
 export type RunControlService = Effect.Success<typeof make>;

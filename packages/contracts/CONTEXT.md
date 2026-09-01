@@ -57,7 +57,7 @@ The execution environment that binds portable configuration to machine-specific 
 _Avoid_: Device, machine config, workspace
 
 **Workspace input**:
-Versioned configuration and agent context read from `.agents/workspace.json` and the Authoring tree committed to a registered workspace's repository. Worktree setup commands and linked paths live here.
+The committed contribution Scope represented solely by a registered repository's `.agents/` Authoring tree. It has no settings file. Workspace bindings, including worktree setup, linked paths, and MCP skills, live in the Control store and enter through `register`.
 _Avoid_: Repo settings, private workspace overlay
 
 **Private workspace overlay**:
@@ -127,7 +127,7 @@ _Avoid_: Integration, connector, Customize, Plugins, setup wizard, *paired insta
 
 **Workspaces**:
 The surface that owns what the daemon operates over and under on this machine: register and deregister a **Workspace**, re-bind its checkout path, set the daemon's runtime limits, and restore the **Control store**'s pre-migration copy. Named for its dominant subject; the limits and restore live here because none of its five acts touches a Scope-held setting — the workspace record's columns, the limits, and the store are machine facts (ADR 0016).
-**Register is the trust act.** Registering admits the repository's Workspace input and its Authoring tree — see **Scope** and ADR 0018. There is no settings file behind this surface: `*.workspace.ts` and its loader are retired, and `register` writes the workspace record instead.
+**Register is the trust act.** Registering admits the repository's Workspace input Authoring tree — see **Scope** and ADR 0018. There is no repository settings file behind this surface: `register` writes the workspace record instead.
 _Avoid_: Settings (already on Customize's _Avoid_ line), Engine (the machinery being managed, not a pane), Daemon, Workspace (the singular is the registered repo, not the surface), machine config
 
 **Contribution kind**:
@@ -338,6 +338,18 @@ _Avoid_: Model, provider, target (that word belongs to sync)
 **Harness-owned authentication**:
 The credentials an external CLI harness owns and resolves from its host installation, such as a Codex CLI `codex login`. Cogwork selects and launches the harness but does not copy, store, refresh, or fall back from those credentials.
 _Avoid_: Provider key, Cogwork login, harness fallback
+
+**Harness option catalog**:
+The controlled model and option choices one Harness currently offers on one Runtime host, stamped with the runtime metadata, native discovery, or versioned Cogwork fallback that produced them. An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
+_Avoid_: Model catalog, settings, arbitrary option
+
+**Harness readiness**:
+An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
+_Avoid_: Health check, launch guarantee, availability fallback
+
+**Harness preflight**:
+The authoritative per-Run check that one registered Harness can execute the accepted Run Plan with its selected catalog values, authentication binding, policy, Workspace projection, required MCP servers, and Sandbox provider. It validates the Plan as frozen and never re-resolves settings.
+_Avoid_: Readiness, Run Plan resolution, fallback
 
 **Harness execution boundary**:
 The sandbox, approval mode, and native tools an external CLI harness enforces inside its agent loop. Cogwork chooses that boundary when it launches the harness, but its owned-tool policy cannot intercept native shell or file operations inside Cursor or Codex. An unattended harness must use a non-interactive approval mode and remain bounded to its worktree; full host access is not an unattended default.

@@ -1,5 +1,5 @@
 import type { RunId, SessionId } from "@cogwork/contracts";
-import { AgUiEvent, agUiDisplayName, agUiSessionId, type RunRecord } from "@cogwork/contracts";
+import { AgUiEvent, agUiIsSessionHandleEvent, type RunRecord } from "@cogwork/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -8,7 +8,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { activityOf, DaemonEventBus } from "./daemon-event-bus";
-import { RunLedger } from "./run-ledger";
+import { RunLedger, RunLedgerError } from "./run-ledger";
 
 // The harness hands back a session handle as untrusted output, and it is later echoed verbatim into a
 // fenced shell block in the human handoff comment. Whitespace or a backtick would break out of that
@@ -20,6 +20,22 @@ const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : n
 // ever agree.
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
+
+const optionalString = (value: unknown) => (typeof value === "string" ? value : null);
+
+const sessionHandle = (event: AgUiEvent) => (agUiIsSessionHandleEvent(event) ? event.value.sessionId : null);
+
+const displayName = (event: AgUiEvent) =>
+  AgUiEvent.matchOrElse(
+    event,
+    {
+      TOOL_CALL_START: ({ toolCallName }) => toolCallName ?? null,
+      CUSTOM: ({ name }) => name ?? null,
+      STEP_STARTED: ({ stepName }) => stepName ?? null,
+      STEP_FINISHED: ({ stepName }) => stepName ?? null,
+    },
+    () => optionalString(event.toolCallName) ?? optionalString(event.name) ?? optionalString(event.stepName),
+  );
 
 interface RunTrack {
   readonly seq: number;
@@ -43,23 +59,32 @@ export const make = Effect.gen(function* () {
     track: RunTrack,
     event: AgUiEvent,
   ) {
-    const handle = cleanHandle(agUiSessionId(event));
+    const handle = cleanHandle(sessionHandle(event));
     if (handle === null || handle === track.handle || run.session === null) return track.handle;
     yield* ledger.recordSessionHandle(run.session, handle);
     return handle;
   });
 
   const record = Effect.fn("RunRecorder.record")(function* (run: RunRecord, event: AgUiEvent) {
+    const data = yield* encodeJson(event).pipe(
+      Effect.mapError((error) =>
+        RunLedgerError.make({
+          operation: "encode run event",
+          message: String(error),
+          retryable: false,
+        }),
+      ),
+      Effect.tapError((error) => Effect.logError("run event encoding failed", { type: event.type, error })),
+    );
     const atMillis = yield* Clock.currentTimeMillis;
     const previous = yield* trackOf(run.id);
     const seq = previous.seq;
     const handle = yield* captureHandle(run, previous, event);
     yield* putTrack(run.id, { seq: seq + 1, handle });
-    const data = yield* encodeJson(event).pipe(Effect.orElseSucceed(() => "{}"));
     yield* ledger.appendEvent(run.id, {
       seq,
       type: event.type,
-      name: agUiDisplayName(event),
+      name: displayName(event),
       data,
       atMillis,
     });

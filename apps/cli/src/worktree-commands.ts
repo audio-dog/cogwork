@@ -30,7 +30,7 @@ const titleFlag = Flag.string("title").pipe(Flag.withDescription("Work item titl
 const branchFlag = Flag.string("branch").pipe(Flag.withDescription("Worktree branch name"));
 
 const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (name: string) {
-  const registry = yield* Registry.WorkspaceRegistry;
+  const registry = yield* (yield* Registry.WorkspaceRegistry).state;
   const workspace = Registry.findWorkspace(registry, name);
   if (!workspace) return yield* new WorkspaceNotFound({ detail: `workspace "${name}" not found` });
   return workspace;

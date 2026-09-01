@@ -10,17 +10,19 @@ import {
   stageResultJsonSchema,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { ContextAssembler, type ContextAssemblerService } from "./context-assembler";
-import { CredentialStore, type CredentialStoreService } from "./credential-store";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
+import type { ContextAssembler } from "./context-assembler";
+import type { CredentialStore } from "./credential-store";
 import type { ResolvedMcpSkill } from "./mcp-skill";
 import type { OperationPolicyProfile } from "./operation-policy";
-import { SessionStore, type SessionStoreService } from "./session-store";
+import type { SessionStore } from "./session-store";
 
 export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
@@ -54,50 +56,206 @@ export interface HarnessExecution {
   readonly profiles: ReadonlyArray<OperationPolicyProfile>;
 }
 
+export interface HarnessCatalogChoice {
+  readonly value: string;
+  readonly label: string;
+}
+
+export interface HarnessCatalogOptions {
+  readonly models: ReadonlyArray<HarnessCatalogChoice>;
+  readonly efforts?: ReadonlyArray<HarnessCatalogChoice>;
+}
+
+export type HarnessCatalogProvenance =
+  | { readonly source: "tanstack-runtime"; readonly packageVersion: string }
+  | {
+      readonly source: "native-discovery";
+      readonly runtimeHost: string;
+      readonly harnessVersion: string;
+    }
+  | { readonly source: "cogwork-fallback"; readonly fallbackVersion: string };
+
+export interface HarnessOptionCatalog extends HarnessCatalogOptions {
+  readonly provenance: HarnessCatalogProvenance;
+}
+
+export interface HarnessCatalogSource {
+  readonly catalog: Effect.Effect<HarnessOptionCatalog | null, HarnessError, HarnessRunnerEnv>;
+}
+
+export interface HarnessCatalogSources {
+  readonly runtime?: HarnessCatalogSource;
+  readonly native?: HarnessCatalogSource;
+  readonly fallback: HarnessCatalogSource;
+}
+
+export type HarnessAuthenticationMode = "host" | "byok";
+
+export interface HarnessAuthenticationBinding {
+  readonly mode: HarnessAuthenticationMode;
+  readonly reference: string;
+}
+
+export interface HarnessCapabilityProfile {
+  readonly authenticationModes: ReadonlyArray<HarnessAuthenticationMode>;
+  readonly session: {
+    readonly affinity: "runtime-host" | "sandbox-lineage" | "portable";
+    readonly fork: boolean;
+  };
+  readonly policyFidelity: "exact" | "profile-only" | "none";
+  readonly fileEventFidelity: "native" | "sandbox" | "none";
+  readonly usageQuality: "metered" | "estimated" | "none";
+  readonly readinessDiagnostics: boolean;
+  readonly journal: boolean;
+  readonly takeover: boolean;
+}
+
+export interface HarnessReadiness {
+  readonly operational: {
+    readonly status: "ready" | "unavailable" | "unknown";
+    readonly retryable: boolean;
+    readonly diagnostic: string;
+  };
+  readonly installation: {
+    readonly status: "installed" | "missing" | "unknown";
+    readonly version: string | null;
+  };
+  readonly compatibility: {
+    readonly status: "compatible" | "incompatible" | "unknown";
+    readonly requirement: string | null;
+  };
+  readonly authentication: {
+    readonly mode: HarnessAuthenticationMode;
+    readonly status: "available" | "unavailable" | "unknown";
+    readonly diagnostic: string;
+  };
+  readonly diagnostics: ReadonlyArray<string>;
+}
+
+export interface HarnessSelection {
+  readonly name: HarnessName;
+  readonly model: string | null;
+  readonly effort: string | null;
+  readonly profile: OperationPolicyProfile;
+}
+
+export type HarnessPreflightInput = Data.TaggedEnum<{
+  Static: { readonly selection: HarnessSelection };
+  Launch: { readonly request: HarnessRequest };
+}>;
+
+export const HarnessPreflightInput = Data.taggedEnum<HarnessPreflightInput>();
+
+export const staticCatalogSource = (
+  options: HarnessCatalogOptions,
+  provenance: HarnessCatalogProvenance,
+) => ({ catalog: Effect.succeed({ ...options, provenance }) });
+
+export const selectionOfPreflightInput = HarnessPreflightInput.$match({
+  Static: ({ selection }) => selection,
+  Launch: ({ request }) => request.plan.harness,
+});
+
 export const fullHarnessExecution: HarnessExecution = {
   nonInteractive: true,
   worktreeConfined: true,
   profiles: ["read-only", "full"],
 };
 
-export type HarnessRunnerEnv = SessionStore | ContextAssembler | CredentialStore | FileSystem.FileSystem;
+export type HarnessRunnerEnv =
+  | SessionStore
+  | ContextAssembler
+  | CredentialStore
+  | FileSystem.FileSystem
+  | HttpClient.HttpClient;
 
 export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessError", {
-  reason: Schema.Literals(["unknown-harness", "missing-harness", "credential", "policy", "launch", "turn"]),
+  reason: Schema.Literals([
+    "unknown-harness",
+    "missing-harness",
+    "incompatible-harness",
+    "credential",
+    "stale-selection",
+    "policy",
+    "workspace",
+    "sandbox",
+    "launch",
+    "turn",
+  ]),
   retryable: Schema.Boolean,
   message: Schema.String,
 }) {}
+
+export const validateCheckoutDirectory = Effect.fn("Harness.validateCheckoutDirectory")(function* (
+  harness: HarnessName,
+  checkoutPath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const info = yield* fs.stat(checkoutPath).pipe(
+    Effect.mapError(
+      () =>
+        new HarnessError({
+          reason: "workspace",
+          retryable: false,
+          message: `harness runner ${harness} cannot access checkout directory ${checkoutPath}`,
+        }),
+    ),
+  );
+  if (info.type !== "Directory") {
+    return yield* new HarnessError({
+      reason: "workspace",
+      retryable: false,
+      message: `harness runner ${harness} checkout path is not a directory: ${checkoutPath}`,
+    });
+  }
+  yield* fs.access(checkoutPath, { readable: true }).pipe(
+    Effect.mapError(
+      () =>
+        new HarnessError({
+          reason: "workspace",
+          retryable: false,
+          message: `harness runner ${harness} cannot read checkout directory ${checkoutPath}`,
+        }),
+    ),
+  );
+});
 
 export interface HarnessRunner {
   readonly name: HarnessName;
   readonly sessionKind: SessionKind;
   readonly execution: HarnessExecution;
+  readonly capabilities: HarnessCapabilityProfile;
+  readonly authentication: HarnessAuthenticationBinding;
+  readonly catalogSources: HarnessCatalogSources;
   readonly projectedMembers: ReadonlyArray<RunPlanMember>;
   readonly planMiddleware: ReadonlyArray<RunPlanMiddlewareName>;
-  readonly preflight?: (model: string | null) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
+  readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
+  readonly preflight: (input: HarnessPreflightInput) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
 }
 
 export interface HarnessService {
+  readonly catalog: (
+    harness: HarnessName,
+  ) => Effect.Effect<HarnessOptionCatalog, HarnessError, HarnessRunnerEnv>;
   readonly preflight: (
     harness: HarnessName,
     profile: OperationPolicyProfile,
     model: string | null,
-  ) => Effect.Effect<void, HarnessError>;
-  readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
+    effort?: string | null,
+  ) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
+  readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
+  readonly capabilities: (harness: HarnessName) => HarnessCapabilityProfile | null;
+  readonly readiness: (
+    harness: HarnessName,
+  ) => Effect.Effect<HarnessReadiness, HarnessError, HarnessRunnerEnv>;
   readonly projectedMembers: (harness: HarnessName) => ReadonlyArray<RunPlanMember>;
   readonly planMiddleware: (harness: HarnessName) => ReadonlyArray<RunPlanMiddlewareName>;
 }
 
+/** @effect-expect-leaking ContextAssembler | CredentialStore | FileSystem | HttpClient | SessionStore */
 export class Harness extends Context.Service<Harness, HarnessService>()("@cogwork/engine/harness") {}
-
-export interface HarnessRunnerServices {
-  readonly sessionStore: SessionStoreService;
-  readonly contextAssembler: ContextAssemblerService;
-  readonly credentialStore: CredentialStoreService;
-  readonly fileSystem: FileSystem.FileSystem;
-}
 
 const unknownHarness = (harness: HarnessName) =>
   new HarnessError({
@@ -105,6 +263,31 @@ const unknownHarness = (harness: HarnessName) =>
     retryable: false,
     message: `no harness runner registered for ${harness}`,
   });
+
+const unavailableCatalog = (harness: HarnessName) =>
+  new HarnessError({
+    reason: "missing-harness",
+    retryable: false,
+    message: `no option catalog is available for harness runner ${harness}`,
+  });
+
+const hasCatalogOptions = (options: HarnessCatalogOptions | null): options is HarnessCatalogOptions =>
+  options !== null && options.models.length > 0;
+
+const catalogFrom = Effect.fn("Harness.catalogFrom")(function* (source: HarnessCatalogSource | undefined) {
+  if (!source) return null;
+  return yield* Effect.map(source.catalog, (catalog) => (hasCatalogOptions(catalog) ? catalog : null));
+});
+
+const resolveCatalog = Effect.fn("Harness.resolveCatalog")(function* (runner: HarnessRunner) {
+  const runtimeCatalog = yield* catalogFrom(runner.catalogSources.runtime);
+  if (runtimeCatalog) return runtimeCatalog;
+  const nativeCatalog = yield* catalogFrom(runner.catalogSources.native);
+  if (nativeCatalog) return nativeCatalog;
+  const fallbackCatalog = yield* catalogFrom(runner.catalogSources.fallback);
+  if (fallbackCatalog) return fallbackCatalog;
+  return yield* unavailableCatalog(runner.name);
+});
 
 const unsupportedPosture = (runner: HarnessRunner, profile: OperationPolicyProfile) => {
   if (!runner.execution.nonInteractive) return "a non-interactive turn";
@@ -120,65 +303,153 @@ const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolic
     message: `harness runner ${runner.name} cannot enforce ${posture} for the ${profile} profile`,
   });
 
-const preflightRunner = (
-  registry: ReadonlyMap<HarnessName, HarnessRunner>,
-  harness: HarnessName,
-  profile: OperationPolicyProfile,
+type HarnessSelectionOption = "model" | "effort";
+
+const staleSelection = (runner: HarnessRunner, option: HarnessSelectionOption, value: string) =>
+  new HarnessError({
+    reason: "stale-selection",
+    retryable: false,
+    message: `harness runner ${runner.name} no longer offers ${option} ${value} on this Runtime Host`,
+  });
+
+const catalogHas = (choices: ReadonlyArray<HarnessCatalogChoice> | undefined, value: string) =>
+  choices?.some((choice) => choice.value === value) ?? false;
+
+const validateSelectionValue = (
+  runner: HarnessRunner,
+  option: "model" | "effort",
+  choices: ReadonlyArray<HarnessCatalogChoice> | undefined,
+  value: string | null,
 ) => {
-  const runner = registry.get(harness);
-  if (!runner) return Effect.fail(unknownHarness(harness));
-  const posture = unsupportedPosture(runner, profile);
-  if (posture) return Effect.fail(unsupportedRunnerPosture(runner, profile, posture));
-  return Effect.succeed(runner);
+  if (!value || catalogHas(choices, value)) return Effect.void;
+  return Effect.fail(staleSelection(runner, option, value));
 };
 
-export const make = (
-  runners: ReadonlyArray<HarnessRunner>,
-  services: HarnessRunnerServices,
-): HarnessService => {
+const validateSelection = (
+  runner: HarnessRunner,
+  catalog: HarnessOptionCatalog,
+  selection: HarnessSelection,
+) =>
+  validateSelectionValue(runner, "model", catalog.models, selection.model).pipe(
+    Effect.andThen(validateSelectionValue(runner, "effort", catalog.efforts, selection.effort)),
+  );
+
+const validateAuthenticationMode = (runner: HarnessRunner) => {
+  if (!runner.capabilities.authenticationModes.includes(runner.authentication.mode)) {
+    return Effect.fail(
+      new HarnessError({
+        reason: "credential",
+        retryable: false,
+        message: `harness runner ${runner.name} does not support the selected ${runner.authentication.mode} authentication binding`,
+      }),
+    );
+  }
+  return Effect.void;
+};
+
+const readinessFailure = (runner: HarnessRunner, readiness: HarnessReadiness) => {
+  if (readiness.installation.status === "missing") {
+    return new HarnessError({
+      reason: "missing-harness",
+      retryable: false,
+      message: readiness.diagnostics[0] ?? `${runner.name} is not installed on this Runtime Host`,
+    });
+  }
+  if (readiness.compatibility.status === "incompatible") {
+    return new HarnessError({
+      reason: "incompatible-harness",
+      retryable: false,
+      message: readiness.diagnostics[0] ?? `${runner.name} is incompatible with this Cogwork version`,
+    });
+  }
+  if (readiness.authentication.mode !== runner.authentication.mode) {
+    return new HarnessError({
+      reason: "credential",
+      retryable: false,
+      message: `harness runner ${runner.name} did not report readiness for its selected ${runner.authentication.mode} authentication binding`,
+    });
+  }
+  if (readiness.authentication.status === "unavailable") {
+    return new HarnessError({
+      reason: "credential",
+      retryable: false,
+      message: readiness.authentication.diagnostic,
+    });
+  }
+  if (readiness.operational.status !== "unavailable") return null;
+  return new HarnessError({
+    reason: "launch",
+    retryable: readiness.operational.retryable,
+    message: readiness.operational.diagnostic,
+  });
+};
+
+const validateReadiness = (runner: HarnessRunner, readiness: HarnessReadiness) => {
+  const failure = readinessFailure(runner, readiness);
+  return failure ? Effect.fail(failure) : Effect.void;
+};
+
+const runnerFor = Effect.fn("Harness.runnerFor")(function* (
+  registry: ReadonlyMap<HarnessName, HarnessRunner>,
+  harness: HarnessName,
+) {
+  const runner = registry.get(harness);
+  if (!runner) return yield* unknownHarness(harness);
+  return runner;
+});
+
+const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
+  registry: ReadonlyMap<HarnessName, HarnessRunner>,
+  input: HarnessPreflightInput,
+) {
+  const selection = selectionOfPreflightInput(input);
+  const runner = yield* runnerFor(registry, selection.name);
+  const posture = unsupportedPosture(runner, selection.profile);
+  if (posture) return yield* unsupportedRunnerPosture(runner, selection.profile, posture);
+  const catalog = yield* resolveCatalog(runner);
+  yield* validateSelection(runner, catalog, selection);
+  yield* validateAuthenticationMode(runner);
+  yield* validateReadiness(runner, yield* runner.readiness());
+  yield* runner.preflight(input);
+  return runner;
+});
+
+export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
   const preflight = Effect.fn("Harness.preflight")(function* (
     harness: HarnessName,
     profile: OperationPolicyProfile,
     model: string | null,
+    effort: string | null = null,
   ) {
-    const runner = yield* preflightRunner(registry, harness, profile);
-    yield* runner.preflight?.(model) ?? Effect.void;
+    yield* preflightRunner(
+      registry,
+      HarnessPreflightInput.Static({
+        selection: { name: harness, profile, model, effort },
+      }),
+    );
+  });
+  const catalog = Effect.fn("Harness.catalog")(function* (harness: HarnessName) {
+    return yield* resolveCatalog(yield* runnerFor(registry, harness));
+  });
+  const readiness = Effect.fn("Harness.readiness")(function* (harness: HarnessName) {
+    return yield* (yield* runnerFor(registry, harness)).readiness();
   });
   return {
-    preflight: (harness, profile, model) =>
-      preflight(harness, profile, model).pipe(
-        Effect.provideService(SessionStore, services.sessionStore),
-        Effect.provideService(ContextAssembler, services.contextAssembler),
-        Effect.provideService(CredentialStore, services.credentialStore),
-        Effect.provideService(FileSystem.FileSystem, services.fileSystem),
-      ),
+    catalog,
+    preflight,
     run: (request) =>
       Stream.fromEffect(
-        preflightRunner(registry, request.plan.harness.name, request.plan.harness.profile),
-      ).pipe(
-        Stream.flatMap((runner) => runner.run(request)),
-        Stream.provideService(SessionStore, services.sessionStore),
-        Stream.provideService(ContextAssembler, services.contextAssembler),
-        Stream.provideService(CredentialStore, services.credentialStore),
-        Stream.provideService(FileSystem.FileSystem, services.fileSystem),
-      ),
+        preflightRunner(registry, HarnessPreflightInput.Launch({ request })).pipe(
+          Effect.withSpan("Harness.run"),
+        ),
+      ).pipe(Stream.flatMap((runner) => runner.run(request))),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
+    capabilities: (harness) => registry.get(harness)?.capabilities ?? null,
+    readiness,
     projectedMembers: (harness) => registry.get(harness)?.projectedMembers ?? [],
     planMiddleware: (harness) => registry.get(harness)?.planMiddleware ?? [],
   };
 };
 
-export const layer = (runners: ReadonlyArray<HarnessRunner>) =>
-  Layer.effect(
-    Harness,
-    Effect.map(
-      Effect.all({
-        sessionStore: SessionStore,
-        contextAssembler: ContextAssembler,
-        credentialStore: CredentialStore,
-        fileSystem: FileSystem.FileSystem,
-      }),
-      (services) => make(runners, services),
-    ),
-  );
+export const layer = (runners: ReadonlyArray<HarnessRunner>) => Layer.succeed(Harness, make(runners));

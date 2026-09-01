@@ -1,4 +1,4 @@
-import { DaemonRpcs, WorkspaceId, WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
+import { WorkspaceId, WorkspaceRegistration, type WorkspaceState } from "@cogwork/contracts";
 import { Git } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -7,10 +7,9 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { defaultSocketPath } from "./paths";
 import { gitLayer } from "./platform";
-import { clientLayer } from "./rpc";
+import { clientLayer, makeDaemonClient } from "./rpc";
 
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
@@ -18,7 +17,7 @@ const socketFlag = Flag.string("socket").pipe(
 );
 
 const inputFlag = Flag.string("input").pipe(Flag.withDescription("One-time JSON registration input"));
-const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("WorkspaceId to manage"));
+export const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("WorkspaceId to manage"));
 const checkoutFlag = Flag.string("checkout").pipe(Flag.withDescription("New absolute checkout path"));
 
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceRegistration));
@@ -53,7 +52,7 @@ const runRegister = Effect.fn("workspace.register")(function* (options: {
   readonly input: string;
 }) {
   const registration = yield* readRegistration(options.input).pipe(Effect.flatMap(captureRemote));
-  const client = yield* RpcClient.make(DaemonRpcs);
+  const client = yield* makeDaemonClient();
   const workspace = yield* client.RegisterWorkspace({ registration });
   const message = formatRegistrationResult(registration.name, workspace);
   if (workspace._tag === "Failed") return yield* Console.error(message);
@@ -83,7 +82,7 @@ const runDeregister = Effect.fn("workspace.deregister")(function* (options: {
   readonly workspace: string;
 }) {
   const workspace = yield* decodeWorkspaceId(options.workspace);
-  const client = yield* RpcClient.make(DaemonRpcs);
+  const client = yield* makeDaemonClient();
   const deregistered = yield* client.DeregisterWorkspace({ workspace });
   yield* Console.log(`Deregistered ${deregistered}.`);
 });
@@ -94,7 +93,7 @@ const runRebind = Effect.fn("workspace.rebind")(function* (options: {
   readonly checkout: string;
 }) {
   const workspace = yield* decodeWorkspaceId(options.workspace);
-  const client = yield* RpcClient.make(DaemonRpcs);
+  const client = yield* makeDaemonClient();
   const rebound = yield* client.RebindWorkspace({ workspace, checkoutPath: options.checkout });
   const message = formatRebindResult(rebound);
   if (rebound._tag === "Failed") return yield* Console.error(message);

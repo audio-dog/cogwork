@@ -16,8 +16,8 @@ import type {
   TokenUsage,
 } from "@cogwork/contracts";
 import {
+  AgUiEvent,
   agUiIsStructuredOutputComplete,
-  agUiUsage,
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
   ImplementStageResultCompletion,
@@ -39,6 +39,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability, availabilityCauseSummary } from "./availability";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
@@ -47,10 +48,10 @@ import { ContextAssembler, type ContextAssemblerError } from "./context-assemble
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
 import * as Cooldown from "./cooldown";
-import type { CredentialError } from "./credential-store";
+import { type CredentialError, CredentialStore } from "./credential-store";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
-import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
+import { Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
 import {
@@ -71,13 +72,14 @@ import {
   admittedContributions,
   admittedMcpServers,
   applicableContributionSettings,
-  assembleRunPlan,
   availabilityCauses,
   operationBindingsOf,
   type ResolvedOperation,
   type ResolvedStage,
+  type RunPlanAssemblyError,
   resolveEngineContributionEnabled,
   resolveRunPlanStage,
+  tryAssembleRunPlan,
 } from "./run-plan";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
@@ -99,6 +101,7 @@ type PrepareError =
   | CredentialError
   | ContextFsError
   | ContextAssemblerError
+  | RunPlanAssemblyError
   | RunLedgerError;
 
 interface RunAccumulator {
@@ -174,12 +177,18 @@ interface CommonStageOps {
 
 interface TriageStageOps extends CommonStageOps {
   readonly kind: "triage";
-  readonly complete: (record: RunRecord, acc: TriageAccumulator) => Effect.Effect<void, IssueTrackerError>;
+  readonly complete: (
+    record: RunRecord,
+    acc: TriageAccumulator,
+  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
 }
 
 interface TextStageOps extends CommonStageOps {
   readonly kind: "text";
-  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
+  readonly complete: (
+    runId: RunId,
+    acc: RunAccumulator,
+  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
 }
 
 type StageOps = TriageStageOps | TextStageOps;
@@ -203,16 +212,33 @@ const resumeWorktreeOptions = (item: EligibleWork) => {
   return { resume: true };
 };
 
-const appendStructuredOutput = (acc: Pick<RunAccumulator, "structuredOutputs">, event: AgUiEvent) => {
-  if (!agUiIsStructuredOutputComplete(event)) return acc.structuredOutputs;
-  return [...acc.structuredOutputs, event.value];
-};
+const withHandle = (acc: RunAccumulator, handle: string | null) => ({ ...acc, handle });
 
-const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator => ({
-  handle,
-  usage: agUiUsage(event) ?? acc.usage,
-  structuredOutputs: appendStructuredOutput(acc, event),
-});
+const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator =>
+  AgUiEvent.matchOrElse(
+    event,
+    {
+      CUSTOM: (event) => ({
+        ...withHandle(acc, handle),
+        structuredOutputs: agUiIsStructuredOutputComplete(event)
+          ? [...acc.structuredOutputs, event.value]
+          : acc.structuredOutputs,
+      }),
+      RUN_FINISHED: ({ usage }) => {
+        if (!usage) return withHandle(acc, handle);
+        return {
+          ...withHandle(acc, handle),
+          usage: {
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+            ...(usage.estimated ? { estimated: true } : {}),
+          },
+        };
+      },
+    },
+    () => withHandle(acc, handle),
+  );
 
 const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: string | null) =>
   ({
@@ -222,9 +248,9 @@ const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: stri
 
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 const successfulTerminal = (event: AgUiEvent) =>
-  event.type === "RUN_FINISHED" && event.finishReason !== "failed";
+  AgUiEvent.guards.RUN_FINISHED(event) && event.finishReason !== "failed";
 
-const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
+const withFailureTerminal = <R>(stream: Stream.Stream<AgUiEvent, HarnessError, R>) =>
   Stream.catchCause(stream, (cause) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
@@ -357,6 +383,17 @@ export const make = Effect.gen(function* () {
   const contextAssembler = yield* ContextAssembler;
   const availability = yield* Availability;
   const fs = yield* FileSystem.FileSystem;
+  const harnessRunnerContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
+    Effect.map(
+      Context.pick(
+        SessionStore,
+        ContextAssembler,
+        CredentialStore,
+        FileSystem.FileSystem,
+        HttpClient.HttpClient,
+      ),
+    ),
+  );
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
   const claimCooldowns = yield* Cooldown.make;
@@ -600,7 +637,7 @@ export const make = Effect.gen(function* () {
       preparedRequest.session ??
       (selectedOps.resumePolicy ? null : compatiblePrevious) ??
       (yield* mintSession(workspace, selectedOps, startedAtMillis));
-    const plan = assembleRunPlan({
+    const plan = yield* tryAssembleRunPlan({
       runId,
       workspace,
       item,
@@ -741,7 +778,11 @@ export const make = Effect.gen(function* () {
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
   ) => {
     const budget = defaultRunBudget(request.plan.operation);
-    return Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
+    return Stream.runFoldEffect(
+      withFailureTerminal(harness.run(request)).pipe(Stream.provideContext(harnessRunnerContext)),
+      () => initial,
+      step,
+    ).pipe(
       Effect.timeout(budget),
       Effect.catchTag("TimeoutError", () =>
         recorder.record(record, failedTerminal).pipe(
@@ -1227,19 +1268,22 @@ export const make = Effect.gen(function* () {
   const harnessAvailability = Effect.fn("Executor.harnessAvailability")(function* (
     resolved: ResolvedOperation,
   ) {
-    return yield* harness.preflight(resolved.stage.harness, resolved.profile, resolved.stage.model).pipe(
-      Effect.match({
-        onFailure: (error) => {
-          if (error.retryable) return null;
-          if (error.reason === "credential") return hostFailure("credential", error.message);
-          if (error.reason === "policy") {
-            return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
-          }
-          return hostFailure("harness", error.message);
-        },
-        onSuccess: () => null,
-      }),
-    );
+    return yield* harness
+      .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
+      .pipe(
+        Effect.provide(harnessRunnerContext),
+        Effect.match({
+          onFailure: (error) => {
+            if (error.retryable) return null;
+            if (error.reason === "credential") return hostFailure("credential", error.message);
+            if (error.reason === "policy") {
+              return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
+            }
+            return hostFailure("harness", error.message);
+          },
+          onSuccess: () => null,
+        }),
+      );
   });
 
   const connectionAvailability = Effect.fn("Executor.connectionAvailability")(function* () {
@@ -1265,7 +1309,7 @@ export const make = Effect.gen(function* () {
   });
 
   const harnessProbeKey = (resolved: ResolvedOperation) =>
-    JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model]);
+    JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort]);
 
   const loadAvailabilityFacts = Effect.fn("Executor.loadAvailabilityFacts")(function* (
     workspace: RegisteredWorkspace,
@@ -1416,19 +1460,34 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     request: HarnessRequest,
   ) {
-    const settle = <A>(
-      attempt: Effect.Effect<A, PrepareError | HarnessError>,
-      complete: (acc: A) => Effect.Effect<void, IssueTrackerError>,
+    const recordEncodingFailureTerminal = (error: PrepareError | HarnessError) => {
+      if (error._tag !== "RunLedgerError" || error.operation !== "encode run event") {
+        return Effect.succeed(null);
+      }
+      return recorder.record(record, failedTerminal);
+    };
+
+    const settleFailure = (error: PrepareError | HarnessError) =>
+      recordEncodingFailureTerminal(error).pipe(
+        Effect.andThen(handleOf(ledger, record.session)),
+        Effect.flatMap((handle) =>
+          applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
+        ),
+      );
+
+    const settleCompletionFailure = (error: RunLedgerError) => {
+      if (error.operation === "encode run event") return settleFailure(error);
+      return Effect.fail(error);
+    };
+
+    const settle = <A, R>(
+      attempt: Effect.Effect<A, PrepareError | HarnessError, R>,
+      complete: (acc: A) => Effect.Effect<void, IssueTrackerError | RunLedgerError>,
     ) =>
       attempt.pipe(
         Effect.matchEffect({
-          onFailure: (error) =>
-            handleOf(ledger, record.session).pipe(
-              Effect.flatMap((handle) =>
-                applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
-              ),
-            ),
-          onSuccess: complete,
+          onFailure: settleFailure,
+          onSuccess: (acc) => complete(acc).pipe(Effect.catchTag("RunLedgerError", settleCompletionFailure)),
         }),
       );
 
@@ -1476,55 +1535,60 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       runId,
     };
-    return yield* Effect.gen(function* () {
-      const previous = yield* candidateSession(workspace, item, ops.branch);
-      const selectedOps: StageOps =
-        previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-      return yield* selectedOps.prepare.pipe(
-        Effect.flatMap((prepared) =>
-          Effect.gen(function* () {
-            const checked = yield* evaluateAvailability(workspace, item.stage);
-            if (!checked.resolved || !checked.availability.available) {
-              yield* noteUnavailableResume(workspace, item, checked.availability.causes);
-              return null;
-            }
-            const currentOps = opsFor(workspace, item, checked.resolved);
-            const refreshedOps =
-              previous === item.resume?.session ? currentOps : freshRecoveryOps(workspace, item, currentOps);
-            const planned = yield* planSession(
-              runId,
-              workspace,
-              item,
-              refreshedOps,
-              prepared,
-              startedAtMillis,
-              previous,
-              observation,
-            );
-            return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
-          }),
-        ),
-        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
-        Effect.matchEffect({
-          onFailure: (error) =>
-            handleOf(ledger, previous).pipe(
-              Effect.flatMap((handle) =>
-                reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
+    return yield* runControl.run(
+      runId,
+      workspace,
+      Effect.gen(function* () {
+        const previous = yield* candidateSession(workspace, item, ops.branch);
+        const selectedOps: StageOps =
+          previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+        return yield* selectedOps.prepare.pipe(
+          Effect.flatMap((prepared) =>
+            Effect.gen(function* () {
+              const checked = yield* evaluateAvailability(workspace, item.stage);
+              if (!checked.resolved || !checked.availability.available) {
+                yield* noteUnavailableResume(workspace, item, checked.availability.causes);
+                return null;
+              }
+              const currentOps = opsFor(workspace, item, checked.resolved);
+              const refreshedOps =
+                previous === item.resume?.session
+                  ? currentOps
+                  : freshRecoveryOps(workspace, item, currentOps);
+              const planned = yield* planSession(
+                runId,
+                workspace,
+                item,
+                refreshedOps,
+                prepared,
+                startedAtMillis,
+                previous,
+                observation,
+              );
+              return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
+            }),
+          ),
+          Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+          Effect.matchEffect({
+            onFailure: (error) =>
+              handleOf(ledger, previous).pipe(
+                Effect.flatMap((handle) =>
+                  reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
+                ),
               ),
-            ),
-          onSuccess: (accepted) => {
-            if (!accepted) return Effect.void;
-            const { request, selectedOps: acceptedOps, record } = accepted;
-            return Effect.withFiber((self) => runControl.register(runId, self, workspace)).pipe(
-              Effect.andThen(settleOutcome(workspace, item, acceptedOps, record, runId, request)),
-            );
-          },
-        }),
-      );
-    }).pipe(
-      Effect.ensuring(cleanupRunContext(runId)),
-      Effect.annotateLogs(correlation),
-      Effect.annotateSpans(correlation),
+            onSuccess: (accepted) => {
+              if (!accepted) return Effect.void;
+              const { request, selectedOps: acceptedOps, record } = accepted;
+              return settleOutcome(workspace, item, acceptedOps, record, runId, request);
+            },
+          }),
+        );
+      }).pipe(
+        Effect.ensuring(cleanupRunContext(runId)),
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
+      ),
+      releaseClaim(workspace, item.id),
     );
   });
 

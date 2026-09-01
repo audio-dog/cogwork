@@ -222,7 +222,14 @@ export const worktreeFsLayer = Layer.effect(
             Effect.mapError(fail(`link ${linkPath}`)),
           ),
       runCommand: (cwd, command) =>
-        capture(ChildProcess.make(command, { cwd, shell: true })).pipe(
+        capture(
+          ChildProcess.make(command, {
+            cwd,
+            env: { CI: "true" },
+            extendEnv: true,
+            shell: true,
+          }),
+        ).pipe(
           Effect.mapError(fail(command)),
           Effect.timeout(setupCommandDeadline),
           Effect.catchTag(
@@ -238,7 +245,8 @@ export const worktreeFsLayer = Layer.effect(
               ? Effect.void
               : new WorktreeFs.WorktreeFsError({
                   operation: command,
-                  message: result.stderr.trim() || `exited with code ${result.exitCode}`,
+                  message:
+                    result.stderr.trim() || result.stdout.trim() || `exited with code ${result.exitCode}`,
                 }),
           ),
         ),

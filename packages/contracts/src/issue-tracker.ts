@@ -10,4 +10,7 @@ export class IssueTrackerError extends Schema.TaggedError<IssueTrackerError>()("
   connectionId: Schema.optional(ConnectionId),
 }) {}
 
-export const issueTrackerErrorIsPermanent = (error: IssueTrackerError) => error.retryable === false;
+// A rate limit and a rejected credential are both `retryable: false` — do not retry *now* — yet both
+// clear on their own. Only an `unavailable` refusal is the tracker declining the write itself.
+export const issueTrackerErrorIsPermanent = (error: IssueTrackerError) =>
+  error.retryable === false && error.reason === "unavailable";

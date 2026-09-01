@@ -1,3 +1,4 @@
+import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -474,6 +475,19 @@ describe("linear client", () => {
     }).pipe(withToken("app-token", "client-credentials", invalidated));
   });
 
+  it.effect("keeps the credential when Linear denies access to a resource", () => {
+    const invalidated: Array<string> = [];
+    return Effect.gen(function* () {
+      stubLinear(() => ({
+        body: { errors: [{ message: "access denied", extensions: { type: "forbidden" } }] },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.deepStrictEqual(invalidated, []);
+    }).pipe(withToken("app-token", "client-credentials", invalidated));
+  });
+
   it.effect("keeps the credential when Linear throttles rather than rejects", () => {
     const invalidated: Array<string> = [];
     return Effect.gen(function* () {
@@ -497,13 +511,50 @@ describe("linear client", () => {
         return Promise.withResolvers<Response>().promise;
       });
       const client = yield* LinearClient;
-      const request = yield* Effect.forkChild(client.observeIssues(ref, null));
+      const requestFiber = yield* Effect.forkChild(client.observeIssues(ref, null));
       yield* TestClock.adjust("1 minute");
-      const issues = yield* Fiber.join(request);
+      const issues = yield* Fiber.join(requestFiber);
       assert.deepStrictEqual(
         issues.map((issue) => issue.identifier),
         ["AUD-1"],
       );
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("retries a rejected transport request", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) =>
+        document.includes("TeamsByKey")
+          ? { body: { data: { teams: { nodes: [teamBundle] } } } }
+          : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
+      );
+      fetchStub.mockRejectedValueOnce(new TypeError("fetch failed"));
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(client.observeIssues(ref, null));
+      yield* TestClock.adjust("5 seconds");
+      const issues = yield* Fiber.join(requestFiber);
+      assert.deepStrictEqual(
+        issues.map((issue) => issue.identifier),
+        ["AUD-1"],
+      );
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+    }).pipe(withToken()),
+  );
+
+  it.effect("retries a mutation after a hanging attempt reaches its deadline", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { commentCreate: { success: true } } } }));
+      const onAbort = vi.fn();
+      fetchStub.mockImplementationOnce((_input, init) => {
+        init?.signal?.addEventListener("abort", onAbort);
+        return Promise.withResolvers<Response>().promise;
+      });
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(client.createComment(ref, "AUD-1", "body"));
+      yield* TestClock.adjust("1 minute");
+      yield* Fiber.join(requestFiber);
       assert.strictEqual(fetchStub.mock.calls.length, 2);
       assert.strictEqual(onAbort.mock.calls.length, 1);
     }).pipe(withToken()),
@@ -514,6 +565,20 @@ describe("linear client", () => {
       const fetchStub = stubLinear(() => ({ status: 401, body: {} }));
       const client = yield* LinearClient;
       yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("does not retry an invalid input failure", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({
+        body: {
+          errors: [{ message: "invalid comment", extensions: { type: "invalid input", userError: true } }],
+        },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.createComment(ref, "AUD-1", "body"));
+      assert.strictEqual(error.reason, "unavailable");
       assert.strictEqual(fetchStub.mock.calls.length, 1);
     }).pipe(withToken()),
   );
@@ -547,6 +612,38 @@ describe("linear client", () => {
       const client = yield* LinearClient;
       const error = yield* Effect.flip(client.observeIssues(ref, null));
       assert.strictEqual(error.retryAfterMillis, 90_000);
+    }).pipe(withToken()),
+  );
+
+  it.effect("measures a rate-limit reset from the attempt that received it", () =>
+    Effect.gen(function* () {
+      const startedAt = yield* Clock.currentTimeMillis;
+      const fetchStub = stubLinear(() => ({
+        status: 429,
+        body: {},
+        headers: { "x-ratelimit-requests-reset": String(startedAt + 90_000) },
+      }));
+      fetchStub.mockImplementationOnce(() => Promise.withResolvers<Response>().promise);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(Effect.flip(client.observeIssues(ref, null)));
+      yield* TestClock.adjust("31 seconds");
+      const error = yield* Fiber.join(requestFiber);
+      assert.isAtMost(error.retryAfterMillis ?? Number.POSITIVE_INFINITY, 60_000);
+    }).pipe(withToken()),
+  );
+
+  it.effect("rechecks a shared rate-limit cooldown before retrying", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ status: 429, body: {} }));
+      fetchStub.mockImplementationOnce(() => Promise.withResolvers<Response>().promise);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(Effect.flip(client.observeIssues(ref, null)));
+      yield* Effect.yieldNow;
+      yield* Effect.flip(client.observeIssues(ref, null));
+      yield* TestClock.adjust("31 seconds");
+      const error = yield* Fiber.join(requestFiber);
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
     }).pipe(withToken()),
   );
 
@@ -680,7 +777,7 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("treats a label it cannot create as permanent once the retries are spent", () =>
+  it.effect("treats an untyped refusal to create a label as permanent, without retrying it", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear((document) => {
         if (document.includes("TeamsByKey")) {
@@ -698,24 +795,19 @@ describe("linear client", () => {
         };
       });
       const client = yield* LinearClient;
-      const attempt = yield* Effect.forkChild(
-        Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName)),
-      );
-      yield* TestClock.adjust("1 minute");
-      const error = yield* Fiber.join(attempt);
+      const error = yield* Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName));
       assert.include(error.message, claimLabelName);
       assert.include(error.message, "AUD");
       assert.include(error.message, "not allowed to create labels");
-      // Linear tagged the refusal with no type at all, so permanence cannot come from its taxonomy.
-      assert.strictEqual(error.retryable, false);
+      assert.isTrue(issueTrackerErrorIsPermanent(error));
       assert.strictEqual(
         sentRequests(fetchStub).filter((request) => request.query.includes("issueLabelCreate")).length,
-        4,
+        1,
       );
     }).pipe(withToken()),
   );
 
-  it.effect("keeps a rate-limited label create retryable", () =>
+  it.effect("never reads a rate-limited label create as a permanent refusal", () =>
     Effect.gen(function* () {
       stubLinear((document) => {
         if (document.includes("TeamsByKey")) {
@@ -729,7 +821,7 @@ describe("linear client", () => {
       const client = yield* LinearClient;
       const error = yield* Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName));
       assert.strictEqual(error.reason, "rate-limited");
-      assert.notStrictEqual(error.retryable, false);
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
     }).pipe(withToken()),
   );
 

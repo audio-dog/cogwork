@@ -15,11 +15,17 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import { CredentialStore } from "./credential-store";
-import { fullHarnessExecution, HarnessError, type HarnessRunner } from "./harness";
-import { defaultModelAdapterFactory, type ModelAdapterFactory } from "./provider-adapter";
+import {
+  fullHarnessExecution,
+  HarnessError,
+  type HarnessPreflightInput,
+  type HarnessRunner,
+  selectionOfPreflightInput,
+  staticCatalogSource,
+} from "./harness";
+import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
 import { SessionStore } from "./session-store";
@@ -105,9 +111,13 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
   const defaultModel = options.defaultModel ?? "anthropic/claude-sonnet-4-5";
   const makeAdapter = options.makeAdapter ?? defaultModelAdapterFactory;
   const runChat = options.runChat ?? defaultRunChat;
-  const preflight = Effect.fn("ProviderRunner.preflight")(function* (model: string | null) {
+  const preflight = Effect.fn("ProviderRunner.preflight")(function* (input: HarnessPreflightInput) {
     const credentials = yield* CredentialStore;
-    yield* resolveModelAdapter(credentials, model ?? defaultModel, makeAdapter);
+    yield* resolveModelAdapter(
+      credentials,
+      selectionOfPreflightInput(input).model ?? defaultModel,
+      makeAdapter,
+    );
   });
 
   return {
@@ -125,8 +135,47 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
     ],
     planMiddleware: ["persistence", "instruction-context"],
     execution: fullHarnessExecution,
-    preflight: (model) =>
-      preflight(model).pipe(
+    capabilities: {
+      authenticationModes: ["byok"],
+      session: { affinity: "portable", fork: false },
+      policyFidelity: "exact",
+      fileEventFidelity: "native",
+      usageQuality: "metered",
+      readinessDiagnostics: true,
+      journal: false,
+      takeover: false,
+    },
+    authentication: { mode: "byok", reference: "Cogwork provider key" },
+    catalogSources: {
+      runtime: staticCatalogSource(
+        {
+          models: providerModelRefs.map((model) => ({ value: model, label: model })),
+        },
+        {
+          source: "tanstack-runtime",
+          packageVersion: "ai-anthropic@0.18.3+ai-gemini@0.26.4+ai-openai@0.22.3",
+        },
+      ),
+      fallback: staticCatalogSource(
+        { models: [{ value: defaultModel, label: defaultModel }] },
+        { source: "cogwork-fallback", fallbackVersion: "provider-1" },
+      ),
+    },
+    readiness: Effect.fn("ProviderRunner.readiness")(() =>
+      Effect.succeed({
+        operational: { status: "ready", retryable: false, diagnostic: "Provider runner is ready" },
+        installation: { status: "installed", version: "built-in" },
+        compatibility: { status: "compatible", requirement: "bundled" },
+        authentication: {
+          mode: "byok",
+          status: "unknown",
+          diagnostic: "Provider-key availability is verified for the selected model during preflight",
+        },
+        diagnostics: [],
+      }),
+    ),
+    preflight: (input) =>
+      preflight(input).pipe(
         Effect.mapError(
           (error) =>
             new HarnessError({
@@ -159,10 +208,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const sandbox = yield* openWorktreeSandbox(plan.sandbox.workspace).pipe(
             Effect.mapError((error) => launchError(true, error.message)),
           );
-          const baseSha = yield* resolveBaseSha(sandbox);
-          const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
-            Effect.provide(FetchHttpClient.layer),
+          const baseSha = yield* resolveBaseSha(sandbox).pipe(
+            Effect.mapError((error) => launchError(true, error.message)),
           );
+          const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>();
           const toolSet = makeOwnedToolSet(sandbox, runPromise, policyForProfile(plan.harness.profile));
           const toolsByName: ReadonlyMap<string, AnyTool> = new Map(Object.entries(toolSet));
           const tools = plan.tools.flatMap((name) => {

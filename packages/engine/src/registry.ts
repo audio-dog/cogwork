@@ -1,9 +1,10 @@
 import {
   IssueTrackerConfig,
+  McpSkill,
   SourceControlConfig,
+  TrimmedNonEmptyString,
   WorkspaceConfig,
   WorkspaceId,
-  WorkspaceInput,
   WorkspaceManagementError,
   WorkspaceNotFound,
   type WorkspaceRegistration,
@@ -14,10 +15,9 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import type * as PlatformError from "effect/PlatformError";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { type ScanAuthoringTreesRequest, scanAuthoringTrees } from "./authoring-tree";
@@ -56,7 +56,8 @@ interface WorkspaceLoadingServices {
   readonly scanAuthoringTrees: AuthoringTreeScanner;
 }
 
-export interface WorkspaceRegistryService extends RegistryState {
+export interface WorkspaceRegistryService {
+  readonly state: Effect.Effect<RegistryState>;
   readonly refresh: Effect.Effect<RegistryState, WorkspaceRegistrationError>;
 }
 
@@ -65,12 +66,7 @@ export class WorkspaceRegistry extends Context.Service<WorkspaceRegistry, Worksp
 ) {}
 
 export const readOnlyRegistry = (state: RegistryState): WorkspaceRegistryService => ({
-  get workspaces() {
-    return state.workspaces;
-  },
-  get failures() {
-    return state.failures;
-  },
+  state: Effect.succeed(state),
   refresh: Effect.succeed(state),
 });
 
@@ -120,33 +116,40 @@ interface WorkspaceRow {
   readonly gitRemote: string | null;
   readonly issueTracker: string;
   readonly sourceControl: string | null;
+  readonly mcpSkills: string | null;
   readonly linearHistory: number;
   readonly worktreeRoot: string | null;
   readonly worktreeRemote: string | null;
   readonly worktreeBaseBranch: string | null;
+  readonly worktreeLinkPaths: string | null;
+  readonly worktreeSetup: string | null;
   readonly worktreeReapAfterMillis: number | null;
   readonly concurrency: number | null;
 }
 
-interface WorkspaceBindingRow {
+interface WorkspaceIdentityRow {
   readonly id: string;
 }
 
-const workspaceInputName = "workspace.json";
-const emptyWorkspaceInputJson = "{}";
-
-// EISDIR, ENOTDIR, and ELOOP also decode to BadResource, so only NotFound means the file is absent.
-const isMissingWorkspaceInput = (error: PlatformError.PlatformError) => error.reason._tag === "NotFound";
+const McpSkills = Schema.Array(McpSkill);
+const WorktreeValues = Schema.Array(TrimmedNonEmptyString);
+const WorkspaceBindingColumns = Schema.Struct({
+  mcpSkills: Schema.NullOr(Schema.fromJsonString(McpSkills)),
+  worktreeLinkPaths: Schema.NullOr(Schema.fromJsonString(WorktreeValues)),
+  worktreeSetup: Schema.NullOr(Schema.fromJsonString(WorktreeValues)),
+});
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId);
 const decodeWorkspaceIdOption = Schema.decodeUnknownOption(WorkspaceId);
 const decodeIssueTracker = Schema.decodeUnknownEffect(Schema.fromJsonString(IssueTrackerConfig));
 const decodeIssueTrackerOption = Schema.decodeUnknownOption(Schema.fromJsonString(IssueTrackerConfig));
 const decodeSourceControl = Schema.decodeUnknownEffect(Schema.fromJsonString(SourceControlConfig));
 const decodeSourceControlOption = Schema.decodeUnknownOption(Schema.fromJsonString(SourceControlConfig));
-const decodeWorkspaceInput = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceInput));
+const decodeWorkspaceBindingColumns = Schema.decodeUnknownEffect(WorkspaceBindingColumns);
 const decodeWorkspaceConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
 const encodeIssueTracker = Schema.encodeSync(Schema.fromJsonString(IssueTrackerConfig));
 const encodeSourceControl = Schema.encodeSync(Schema.fromJsonString(SourceControlConfig));
+const encodeMcpSkills = Schema.encodeSync(Schema.fromJsonString(McpSkills));
+const encodeWorktreeValues = Schema.encodeSync(Schema.fromJsonString(WorktreeValues));
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -156,9 +159,6 @@ const isWorkspaceNotFound = Schema.is(WorkspaceNotFound);
 
 const managementError = (operation: string) => (error: unknown) =>
   isWorkspaceNotFound(error) ? error : new WorkspaceManagementError({ operation, message: messageOf(error) });
-
-const workspaceInputPath = (path: Path.Path, checkoutPath: string) =>
-  path.join(checkoutPath, ".agents", workspaceInputName);
 
 const present = <A>(value: A | null) => (value === null ? undefined : value);
 
@@ -193,13 +193,13 @@ export const findWorkspaceIssueTrackerBinding = (registry: RegistryState, name: 
 export const findWorkspaceIssueTracker = (registry: RegistryState, name: string) =>
   findWorkspaceIssueTrackerBinding(registry, name)?.config.issueTracker;
 
-const mergedWorktrees = (row: WorkspaceRow, input: WorkspaceInput) => {
+const worktreesFrom = (row: WorkspaceRow, binding: typeof WorkspaceBindingColumns.Type) => {
   const root = present(row.worktreeRoot);
   const remote = present(row.worktreeRemote);
   const baseBranch = present(row.worktreeBaseBranch);
   const reapAfterMillis = present(row.worktreeReapAfterMillis);
-  const linkPaths = input.worktrees?.linkPaths;
-  const setup = input.worktrees?.setup;
+  const linkPaths = present(binding.worktreeLinkPaths);
+  const setup = present(binding.worktreeSetup);
   if (
     root === undefined &&
     remote === undefined &&
@@ -225,14 +225,6 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   row: WorkspaceRow,
   authoringRoots: AuthoringRoots,
 ) {
-  const inputPath = workspaceInputPath(services.path, row.checkoutPath);
-  const input = yield* services.fileSystem.readFileString(inputPath).pipe(
-    Effect.catchIf(isMissingWorkspaceInput, () => Effect.succeed(emptyWorkspaceInputJson)),
-    Effect.flatMap(decodeWorkspaceInput),
-    Effect.mapError((error) =>
-      registrationError(`Cannot load Workspace input ${inputPath}: ${messageOf(error)}`),
-    ),
-  );
   const name = yield* decodeWorkspaceId(row.id).pipe(Effect.mapError((error) => registrationError(error)));
   const issueTracker = yield* decodeIssueTracker(row.issueTracker).pipe(
     Effect.mapError((error) => registrationError(error)),
@@ -243,15 +235,17 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
       : yield* decodeSourceControl(row.sourceControl).pipe(
           Effect.mapError((error) => registrationError(error)),
         );
+  const binding = yield* decodeWorkspaceBindingColumns(row).pipe(
+    Effect.mapError((error) => registrationError(error)),
+  );
   const config = yield* decodeWorkspaceConfig({
     name,
     displayName: row.name,
     checkoutPath: row.checkoutPath,
     issueTracker,
     sourceControl,
-    mcpSkills: input.mcpSkills,
-    playbook: input.playbook,
-    worktrees: mergedWorktrees(row, input),
+    mcpSkills: present(binding.mcpSkills),
+    worktrees: worktreesFrom(row, binding),
     linearHistory: row.linearHistory === 1,
   }).pipe(Effect.mapError((error) => registrationError(error)));
   const contributions = yield* services
@@ -277,10 +271,13 @@ const selectRows = Effect.fn("WorkspaceRegistry.selectRows")(function* (sql: Sql
     git_remote AS gitRemote,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
+    mcp_skills AS mcpSkills,
     linear_history AS linearHistory,
     worktree_root AS worktreeRoot,
     worktree_remote AS worktreeRemote,
     worktree_base_branch AS worktreeBaseBranch,
+    worktree_link_paths AS worktreeLinkPaths,
+    worktree_setup AS worktreeSetup,
     worktree_reap_after_millis AS worktreeReapAfterMillis,
     concurrency
   FROM workspaces
@@ -291,7 +288,7 @@ const selectWorkspaceBinding = Effect.fn("WorkspaceRegistry.selectWorkspaceBindi
   sql: SqlClient.SqlClient,
   checkoutPath: string,
 ) {
-  const [row] = yield* sql<WorkspaceBindingRow>`SELECT id
+  const [row] = yield* sql<WorkspaceIdentityRow>`SELECT id
     FROM workspaces
     WHERE checkout_path = ${checkoutPath}
     LIMIT 1`;
@@ -309,10 +306,13 @@ const selectWorkspaceRow = Effect.fn("WorkspaceRegistry.selectWorkspaceRow")(fun
     git_remote AS gitRemote,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
+    mcp_skills AS mcpSkills,
     linear_history AS linearHistory,
     worktree_root AS worktreeRoot,
     worktree_remote AS worktreeRemote,
     worktree_base_branch AS worktreeBaseBranch,
+    worktree_link_paths AS worktreeLinkPaths,
+    worktree_setup AS worktreeSetup,
     worktree_reap_after_millis AS worktreeReapAfterMillis,
     concurrency
   FROM workspaces
@@ -370,8 +370,9 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
 ) {
   const worktrees = registration.worktrees;
   const [row] = yield* sql<WorkspaceRow>`INSERT INTO workspaces (
-    id, name, checkout_path, git_remote, issue_tracker, source_control, linear_history,
-    worktree_root, worktree_remote, worktree_base_branch, worktree_reap_after_millis, concurrency
+    id, name, checkout_path, git_remote, issue_tracker, source_control, mcp_skills, linear_history,
+    worktree_root, worktree_remote, worktree_base_branch, worktree_link_paths, worktree_setup,
+    worktree_reap_after_millis, concurrency
   ) VALUES (
     ${id},
     ${registration.name},
@@ -379,10 +380,13 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
     ${registration.gitRemote ?? null},
     ${encodeIssueTracker(registration.issueTracker)},
     ${registration.sourceControl ? encodeSourceControl(registration.sourceControl) : null},
+    ${registration.mcpSkills ? encodeMcpSkills(registration.mcpSkills) : null},
     ${registration.linearHistory ? 1 : 0},
     ${worktrees?.root ?? null},
     ${worktrees?.remote ?? null},
     ${worktrees?.baseBranch ?? null},
+    ${worktrees?.linkPaths ? encodeWorktreeValues(worktrees.linkPaths) : null},
+    ${worktrees?.setup ? encodeWorktreeValues(worktrees.setup) : null},
     ${worktrees?.reapAfterMillis ?? null},
     ${registration.concurrency ?? null}
   ) RETURNING
@@ -392,10 +396,13 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
     git_remote AS gitRemote,
     issue_tracker AS issueTracker,
     source_control AS sourceControl,
+    mcp_skills AS mcpSkills,
     linear_history AS linearHistory,
     worktree_root AS worktreeRoot,
     worktree_remote AS worktreeRemote,
     worktree_base_branch AS worktreeBaseBranch,
+    worktree_link_paths AS worktreeLinkPaths,
+    worktree_setup AS worktreeSetup,
     worktree_reap_after_millis AS worktreeReapAfterMillis,
     concurrency`;
   if (!row) return yield* registrationError(`Workspace ${id} was not stored`);
@@ -444,36 +451,37 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         return yield* loadAvailableState(sql, loadingServices, authoringRoots);
       });
       const initial = yield* loadState();
-      const cell = MutableRef.make(initial);
-      const revision = MutableRef.make(0);
-      const commitChange = (change: WorkspaceRegistrationChange) => {
-        MutableRef.update(cell, (state) => foldRegistration(state, change));
-        MutableRef.update(revision, (current) => current + 1);
-        return change;
-      };
-      const commitRemoval = (workspace: WorkspaceId) => {
-        MutableRef.update(cell, (state) => withoutWorkspace(state, workspace));
-        MutableRef.update(revision, (current) => current + 1);
-        return workspace;
-      };
-      const commitRefresh = (startedAt: number, state: RegistryState) => {
-        if (MutableRef.get(revision) !== startedAt) return MutableRef.get(cell);
-        MutableRef.set(cell, state);
-        MutableRef.update(revision, (current) => current + 1);
-        return state;
-      };
+      const cell = yield* Ref.make({ state: initial, revision: 0 });
+      const commitChange = Effect.fn("WorkspaceRegistry.commitChange")(
+        (change: WorkspaceRegistrationChange) =>
+          Ref.modify(cell, (current) => [
+            change,
+            {
+              state: foldRegistration(current.state, change),
+              revision: current.revision + 1,
+            },
+          ]),
+      );
+      const commitRemoval = (workspace: WorkspaceId) =>
+        Ref.modify(cell, (current) => [
+          workspace,
+          {
+            state: withoutWorkspace(current.state, workspace),
+            revision: current.revision + 1,
+          },
+        ]);
+      const commitRefresh = (expectedRevision: number, state: RegistryState) =>
+        Ref.modify(cell, (current) => {
+          if (current.revision !== expectedRevision) return [current.state, current];
+          return [state, { state, revision: current.revision + 1 }];
+        });
       const registry: WorkspaceRegistryService = {
-        get workspaces() {
-          return MutableRef.get(cell).workspaces;
-        },
-        get failures() {
-          return MutableRef.get(cell).failures;
-        },
-        refresh: Effect.sync(() => MutableRef.get(revision)).pipe(
-          Effect.flatMap((startedAt) =>
+        state: Ref.get(cell).pipe(Effect.map((current) => current.state)),
+        refresh: Ref.get(cell).pipe(
+          Effect.flatMap(({ revision }) =>
             loadState().pipe(
               Effect.mapError((error) => registrationError(error)),
-              Effect.map((state) => commitRefresh(startedAt, state)),
+              Effect.flatMap((state) => commitRefresh(revision, state)),
             ),
           ),
         ),
@@ -507,7 +515,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
               Effect.mapError((error) => registrationError(error)),
             );
             const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
-            return commitChange(change);
+            return yield* commitChange(change);
           }),
         );
       });
@@ -545,7 +553,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
               { ...current, checkoutPath: normalizedPath },
               authoringRoots,
             );
-            return commitChange(change);
+            return yield* commitChange(change);
           }).pipe(Effect.mapError(managementError("re-bind workspace"))),
         );
       });
@@ -575,7 +583,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
                 });
               }),
             );
-            return commitRemoval(workspace);
+            return yield* commitRemoval(workspace);
           }).pipe(Effect.mapError(managementError("deregister workspace"))),
         );
       });

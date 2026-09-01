@@ -78,12 +78,24 @@ The projection the executor hands the harness for one accepted Run Plan, plus se
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
-The engine's dispatcher — given a harness request, it routes to the registered harness runner by name and provides the runner services for session and context access. Its preflight checks that the selected runner exists and can enforce the operation's hard posture before the executor claims work. It also exposes `sessionKind(name)`: the declared kind for a harness, read straight off the runner registry (an unregistered name falls back to opaque-handle, though preflight rejects it before claim). This is the one place runner lookup lives — no separate harness-to-kind map. Knows nothing about any specific agent.
+The engine's registry and dispatcher for Harness runners. It exposes each runner's Session kind, operational profile, controlled option catalog, and readiness; performs static preflight before claim and full Plan preflight before launch; and dispatches only to the selected runner, with no Harness or authentication fallback.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
-A pluggable implementation of one agent backend: a `name`, a declared **session kind**, and a `run` that returns a stream of harness events. The session kind says who owns the conversation: the Cursor runner declares opaque-handle (the harness keeps its own history and hands back a resume handle), the provider runner declares owned-transcript (the run ledger holds the conversation). It pulls the session's history in-process from the request's reference — a CLI runner its opaque resume handle, the owned runner the folded transcript. The runner derives the operation's root-object Standard JSON Schema, asks TanStack AI to stream against it, and emits one terminal `structured-output.complete`; the request carries no duplicate schema or selector. The executor holds triage's `RUN_FINISHED` until it decodes that terminal envelope once through the shared Effect Schema, then publishes either the original success terminal or a failed terminal. Missing, duplicate, or malformed values are retryable harness failures. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
+A pluggable implementation of one agent backend. Beside dispatch it declares its Session kind, operational facts, explicit authentication binding, catalog sources, observational readiness, and authoritative preflight; unavailable runners remain registered without preventing unrelated Harnesses from running.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
+
+**Harness capability profile**:
+The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity and fork behavior, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, structured-output behavior, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
+_Avoid_: Feature flags, adapter metadata, projection matrix
+
+**External Harness runtime**:
+The engine-owned execution module beneath external Harness runners. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate.
+_Avoid_: Harness service (the dispatcher above it), Harness runner (the engine-facing backend seam), provider runner (the owned-transcript path)
+
+**Harness Workspace projection**:
+The one portable TanStack Workspace definition the external Harness runtime creates for each Run. It carries the Context assembler's ordered mandatory Instructions, the host-provisioned Operating Instructions package path, resolved MCP servers, and fresh per-Run `SecretRef`s. TanStack renders that definition into each native Harness form. The work-specific Message remains the user turn, public MCP servers get no invented secret, and authenticated MCP secrets are resolved only into the live Sandbox environment. Its source is `none` and snapshots are off: the selected Sandbox provider binds the prepared checkout, while the Worktree manager continues to own checkout, branch, Git metadata, and cleanup. A missing required projection is a launch refusal, never ambient discovery.
+_Avoid_: Workspace (the registered repository), Workspace registry, Worktree, native Harness config
 
 **MCP server assembler**:
 Turns a Workspace's configured MCP servers into the resolved set a Run gets, filling in authentication and checking MCP server readiness before dispatch. Registry identity/version remains provenance and runtime `serverInfo` remains observed metadata; secret values travel on the Harness Request only, never into the ledger or event log.

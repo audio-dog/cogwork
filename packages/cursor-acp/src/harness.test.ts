@@ -2,7 +2,7 @@ import { once } from "node:events";
 import { RequestError } from "@agentclientprotocol/sdk";
 import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it, layer } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -11,10 +11,12 @@ import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   type CursorRunChat,
   cursorModelOptions,
@@ -41,7 +43,7 @@ const sessionStore: SessionStore.SessionStoreService = {
 
 const unexpected = () => Effect.die(new Error("unexpected service access"));
 
-const harnessServices: Harness.HarnessRunnerServices = {
+const harnessServices = {
   sessionStore,
   contextAssembler: { assemble: unexpected, cleanup: unexpected },
   credentialStore: {
@@ -54,8 +56,19 @@ const harnessServices: Harness.HarnessRunnerServices = {
     configureConnection: unexpected,
     removeConnection: unexpected,
   },
-  fileSystem: FileSystem.makeNoop({}),
+  fileSystem: FileSystem.makeNoop({
+    access: () => Effect.void,
+    stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+  }),
 };
+
+const harnessRunnerLayer = Layer.mergeAll(
+  Layer.succeed(SessionStore.SessionStore, harnessServices.sessionStore),
+  Layer.succeed(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
+  Layer.succeed(CredentialStore.CredentialStore, harnessServices.credentialStore),
+  Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  FetchHttpClient.layer,
+);
 
 const request = (checkoutPath: string) =>
   ({
@@ -126,6 +139,84 @@ const runRunner = (runner: Harness.HarnessRunner) =>
       Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
     );
 
+describe("Cursor Harness registry", () => {
+  it.effect("discovers the native catalog with provenance and every supported effort", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+      const catalog = yield* Harness.make([runner]).catalog(cursorName);
+
+      assert.strictEqual(catalog.provenance.source, "native-discovery");
+      assert.isTrue(catalog.models.some(({ value }) => value === "fake-native"));
+      assert.isTrue(catalog.efforts?.some(({ value }) => value === "none"));
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("reports outdated and missing native Harnesses", () =>
+    Effect.gen(function* () {
+      const outdated = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent} --fake-version=2025.01.01-old`,
+      });
+      const missing = cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-149" });
+
+      const outdatedReadiness = yield* outdated.readiness();
+      const missingReadiness = yield* missing.readiness();
+
+      assert.strictEqual(outdatedReadiness.compatibility.status, "incompatible");
+      assert.strictEqual(outdatedReadiness.compatibility.requirement, ">=2026.08.11");
+      assert.strictEqual(missingReadiness.installation.status, "missing");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects a Run Plan without mandatory Sandbox projection", () =>
+    Effect.gen(function* () {
+      const base = request("/tmp");
+      const invalid = {
+        ...base,
+        plan: new RunPlan({ ...base.plan, middleware: [] }),
+      } satisfies Harness.HarnessRequest;
+      const runner = cursorRunner({ name: cursorName });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.reason, "sandbox");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects a missing checkout before Cursor launch", () =>
+    Effect.gen(function* () {
+      const invalid = request("/missing-cursor-checkout");
+      const runner = cursorRunner({ name: cursorName });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "/missing-cursor-checkout");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects an unreadable checkout before Cursor launch", () =>
+    Effect.gen(function* () {
+      const invalid = request("/unreadable-cursor-checkout");
+      const runner = cursorRunner({ name: cursorName });
+      const unreadable = FileSystem.makeNoop({
+        stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+      });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, unreadable), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "cannot read");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+});
+
 describe("interceptCursorTelemetry", () => {
   it.effect("keeps reading after a telemetry acknowledgment fails", () =>
     Effect.gen(function* () {
@@ -194,7 +285,7 @@ describe("mcpWorkspaceProjection", () => {
   });
 });
 
-describe("cursorRunner", () => {
+layer(harnessRunnerLayer)("cursorRunner", (it) => {
   it("declares the opaque-handle session kind", () => {
     const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
@@ -209,16 +300,7 @@ describe("cursorRunner", () => {
       };
       const runner = cursorRunner({ name: cursorName, runChat });
       const execution = yield* Effect.forkChild(
-        Stream.runDrain(
-          runner
-            .run(request("/tmp"))
-            .pipe(
-              Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
-              Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
-              Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
-              Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
-            ),
-        ).pipe(Effect.timeout("1 second")),
+        Stream.runDrain(runner.run(request("/tmp"))).pipe(Effect.timeout("1 second")),
       );
       const abortController = yield* Effect.promise(() => captured.promise);
 
@@ -260,12 +342,39 @@ describe("cursorRunner", () => {
       const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
       const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
 
-      assert.strictEqual(error.reason, "launch");
+      assert.strictEqual(error.reason, "credential");
+      assert.isFalse(error.retryable);
+      assert.include(error.message, "Sign in to Cursor");
+    }),
+  );
+
+  it.effect("keeps post-launch ACP failures retryable", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: () => failedChat(RequestError.internalError({}, "temporary prompt failure")),
+      });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
+
+  it.effect("keeps permanent ACP protocol failures non-retryable", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: () => failedChat(RequestError.methodNotFound("session/prompt")),
+      });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "turn");
       assert.isFalse(error.retryable);
     }),
   );
 
-  it.live("refuses a Cursor triage run before native launch", () =>
+  it.effect("refuses a Cursor triage run before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -275,7 +384,7 @@ describe("cursorRunner", () => {
         name: cursorName,
         agentBin: `node ${fakeCursorAgent}`,
       });
-      const harness = Harness.make([runner], harnessServices);
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 
@@ -285,7 +394,7 @@ describe("cursorRunner", () => {
     }),
   );
 
-  it.live("refuses malformed Cursor input before native launch", () =>
+  it.effect("refuses malformed Cursor input before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -295,7 +404,7 @@ describe("cursorRunner", () => {
         name: cursorName,
         agentBin: `node ${fakeCursorAgent} --malformed`,
       });
-      const harness = Harness.make([runner], harnessServices);
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 

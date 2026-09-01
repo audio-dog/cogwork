@@ -39,13 +39,26 @@ describe("applyRunPreview", () => {
     expect(previewsOf([]).size).toBe(0);
   });
 
-  it("labels a tool call by its name and shows the result", () => {
+  it.each([
+    {
+      name: "tool end result",
+      result: { type: "TOOL_CALL_END", toolCallId: "t1", result: "contents" },
+    },
+    {
+      name: "tool result event",
+      result: { type: "TOOL_CALL_RESULT", toolCallId: "t1", result: "contents" },
+    },
+    {
+      name: "tool end content fallback",
+      result: { type: "TOOL_CALL_END", toolCallId: "t1", content: "contents" },
+    },
+  ])("shows output from $name with the original tool label", ({ result }) => {
     const previews = previewsOf([
-      activity("run-1", 0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "grep" }),
-      activity("run-1", 1, { type: "TOOL_CALL_END", toolCallId: "t1", result: "12 matches" }),
+      activity("run-1", 0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
+      activity("run-1", 1, result),
     ]);
 
-    expect(previews.get("run-1")).toEqual({ label: "grep", text: "12 matches" });
+    expect(previews.get("run-1")).toEqual({ label: "read", text: "contents" });
   });
 
   it("accumulates streaming text within one message", () => {
@@ -107,6 +120,17 @@ describe("applyRunPreview", () => {
 
     expect(previews.has("run-1")).toBe(false);
   });
+
+  it("renders structured custom event detail", () => {
+    const previews = previewsOf([
+      activity("run-1", 0, { type: "CUSTOM", name: "progress", value: { current: 1, total: 2 } }),
+    ]);
+
+    expect(previews.get("run-1")).toEqual({
+      label: "progress",
+      text: '{"current":1,"total":2}',
+    });
+  });
 });
 
 describe("foldTranscript", () => {
@@ -117,6 +141,15 @@ describe("foldTranscript", () => {
     ]);
 
     expect(entries).toMatchObject([{ kind: "tool", name: "read", result: "contents", complete: true }]);
+  });
+
+  it("does not render an untyped tool result as JSON", () => {
+    const entries = foldTranscript([
+      runActivity(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
+      runActivity(1, { type: "TOOL_CALL_RESULT", toolCallId: "t1", result: { path: "secret.txt" } }),
+    ]);
+
+    expect(entries).toMatchObject([{ kind: "tool", name: "read", result: "", complete: true }]);
   });
 
   it("marks a tool call done when it ends without a result event", () => {

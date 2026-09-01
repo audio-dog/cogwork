@@ -1,13 +1,15 @@
 import {
-  type AgUiEvent,
+  AgUiEvent,
+  agUiIsSessionHandleEvent,
   type Board,
   type BoardItem,
-  ClassifiedItem,
   type RunActivity,
   type RunSummary,
   type SchedulerStats,
 } from "@cogwork/contracts";
+import { formatClassifiedItem } from "./classified-item";
 import { formatScheduler } from "./status";
+import { sanitizeTerminalText, terminalLine } from "./terminal-text";
 
 interface TextBuffer {
   readonly label: string;
@@ -22,20 +24,12 @@ export interface WatchState {
 export const initialWatchState: WatchState = { text: new Map(), tools: new Map() };
 
 const maxValueLength = 2000;
-const preservedControls = new Set([0x09, 0x0a]);
-
-const isDisplayable = (code: number) =>
-  preservedControls.has(code) || (code > 0x1f && code < 0x7f) || code > 0x9f;
-
-const sanitize = (text: string) =>
-  [...text].filter((char) => isDisplayable(char.codePointAt(0) ?? 0)).join("");
-
 const clip = (text: string) =>
   text.length > maxValueLength ? `${text.slice(0, maxValueLength - 1)}…` : text;
 
 const compact = (value: unknown) => {
-  if (typeof value === "string") return sanitize(value);
-  return value === undefined ? "" : sanitize(JSON.stringify(value) ?? "");
+  if (typeof value === "string") return sanitizeTerminalText(value);
+  return value === undefined ? "" : sanitizeTerminalText(JSON.stringify(value) ?? "");
 };
 
 const withEntry = <V>(map: ReadonlyMap<string, V>, key: string, value: V) =>
@@ -67,7 +61,7 @@ const dropTool = (state: WatchState, id: string) => ({
 const line = (label: string, body: string) => `${label} · ${body}`;
 
 const textLines = (buffer: TextBuffer) => {
-  const clean = sanitize(buffer.text).trim();
+  const clean = sanitizeTerminalText(buffer.text).trim();
   if (clean.length === 0) return [];
   return clean
     .split("\n")
@@ -81,126 +75,135 @@ const flushText = (state: WatchState, runId: string): readonly [WatchState, Read
   return pending ? [dropText(state, runId), textLines(pending)] : [state, []];
 };
 
-const finishSummary = (event: AgUiEvent) => {
-  const reason = sanitize(event.finishReason ?? "finished");
+type NamedEvent<Type extends string> = Extract<AgUiEvent, { readonly type: Type }>;
+
+const finishSummary = (event: NamedEvent<"RUN_FINISHED">) => {
+  const reason = sanitizeTerminalText(event.finishReason ?? "finished");
   const usage = event.usage;
   if (usage?.totalTokens === undefined) return `■ run ${reason}`;
   return `■ run ${reason} (${usage.estimated ? "~" : ""}${usage.totalTokens} tokens)`;
 };
 
-interface Ctx {
+interface Ctx<Event extends AgUiEvent> {
   readonly state: WatchState;
   readonly runId: string;
   readonly label: string;
-  readonly event: AgUiEvent;
+  readonly event: Event;
 }
 
-type Handler = (ctx: Ctx) => readonly [WatchState, ReadonlyArray<string>];
+type Handler<Event extends AgUiEvent> = (ctx: Ctx<Event>) => readonly [WatchState, ReadonlyArray<string>];
 
-const runStarted: Handler = ({ state, label }) => [state, [line(label, "▶ run started")]];
+const runStarted = (state: WatchState, label: string): readonly [WatchState, ReadonlyArray<string>] => [
+  state,
+  [line(label, "▶ run started")],
+];
 
-const toolStart: Handler = ({ state, label, event }) => {
+const toolStart: Handler<NamedEvent<"TOOL_CALL_START">> = ({ state, label, event }) => {
   const id = event.toolCallId ?? "";
-  const name = sanitize(event.toolCallName ?? "tool");
+  const name = sanitizeTerminalText(event.toolCallName ?? "tool");
   return [setTool(state, id, ""), [line(label, `⚙ ${name}`)]];
 };
 
-const toolArgs: Handler = ({ state, event }) => {
+const toolArgs: Handler<NamedEvent<"TOOL_CALL_ARGS">> = ({ state, event }) => {
   const id = event.toolCallId ?? "";
   const pending = state.tools.get(id);
   if (pending === undefined) return [state, []];
   return [setTool(state, id, clip(pending + (event.delta ?? ""))), []];
 };
 
-const resultText = (event: AgUiEvent) => compact(event.result ?? event.content);
+type ToolResultEvent = NamedEvent<"TOOL_CALL_END"> | NamedEvent<"TOOL_CALL_RESULT">;
 
-const resultLines = (label: string, event: AgUiEvent) => {
-  const result = resultText(event);
+const resultLines = (label: string, event: ToolResultEvent) => {
+  const result = compact(event.result ?? event.content);
   return result.length > 0 ? [line(label, `  → ${clip(result)}`)] : [];
 };
 
-const toolEnd: Handler = ({ state, label, event }) => {
+const toolEnd: Handler<NamedEvent<"TOOL_CALL_END">> = ({ state, label, event }) => {
   const id = event.toolCallId ?? "";
   const args = (state.tools.get(id) || event.args) ?? "";
   const argLines = args.length > 0 ? [line(label, `  args ${clip(compact(args))}`)] : [];
   return [dropTool(state, id), [...argLines, ...resultLines(label, event)]];
 };
 
-const toolResult: Handler = ({ state, label, event }) => [state, resultLines(label, event)];
+const toolResult: Handler<NamedEvent<"TOOL_CALL_RESULT">> = ({ state, label, event }) => [
+  state,
+  resultLines(label, event),
+];
 
-const custom: Handler = ({ state, label, event }) => {
-  if (event.name?.endsWith(".session-id")) return [state, []];
-  const name = sanitize(event.name ?? "custom");
+const custom: Handler<NamedEvent<"CUSTOM">> = ({ state, label, event }) => {
+  if (agUiIsSessionHandleEvent(event)) return [state, []];
+  const name = sanitizeTerminalText(event.name ?? "custom");
   const detail = clip(compact(event.value));
   const body = detail.length > 0 ? `✎ ${name} ${detail}` : `✎ ${name}`;
   return [state, [line(label, body)]];
 };
 
-const step: Handler = ({ state, label, event }) =>
-  event.stepName ? [state, [line(label, `▸ ${sanitize(event.stepName)}`)]] : [state, []];
+const step: Handler<NamedEvent<"STEP_STARTED">> = ({ state, label, event }) =>
+  event.stepName ? [state, [line(label, `▸ ${sanitizeTerminalText(event.stepName)}`)]] : [state, []];
 
-const runFinished: Handler = ({ state, label, event }) => [state, [line(label, finishSummary(event))]];
-
-const runError: Handler = ({ state, label, event }) => [
+const runFinished: Handler<NamedEvent<"RUN_FINISHED">> = ({ state, label, event }) => [
   state,
-  [line(label, `✖ ${sanitize(event.message ?? "run error")}`)],
+  [line(label, finishSummary(event))],
 ];
 
-const ignore: Handler = ({ state }) => [state, []];
+const runError: Handler<NamedEvent<"RUN_ERROR">> = ({ state, label, event }) => [
+  state,
+  [line(label, `✖ ${sanitizeTerminalText(event.message ?? "run error")}`)],
+];
 
-const handlers: Record<string, Handler> = {
-  RUN_STARTED: runStarted,
-  TOOL_CALL_START: toolStart,
-  TOOL_CALL_ARGS: toolArgs,
-  TOOL_CALL_END: toolEnd,
-  TOOL_CALL_RESULT: toolResult,
-  CUSTOM: custom,
-  STEP_STARTED: step,
-  RUN_FINISHED: runFinished,
-  RUN_ERROR: runError,
-};
+const ignore = (state: WatchState): readonly [WatchState, ReadonlyArray<string>] => [state, []];
 
 export const stepWatch = (
   state: WatchState,
   activity: RunActivity,
 ): readonly [WatchState, ReadonlyArray<string>] => {
   const { runId, event } = activity;
-  const label = sanitize(`${activity.stage} ${activity.workItem}`);
-  if (event.type === "TEXT_MESSAGE_CONTENT") {
+  const label = sanitizeTerminalText(`${activity.stage} ${activity.workItem}`);
+  if (AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event)) {
     const text = (state.text.get(runId)?.text ?? "") + (event.delta ?? "");
     return [setText(state, runId, { label, text }), []];
   }
   const [flushed, flushedLines] = flushText(state, runId);
-  const handle = handlers[event.type] ?? ignore;
-  const [next, lines] = handle({ state: flushed, runId, label, event });
+  const context = { state: flushed, runId, label };
+  const [next, lines] = AgUiEvent.matchOrElse(
+    event,
+    {
+      RUN_STARTED: () => runStarted(flushed, label),
+      TEXT_MESSAGE_START: () => ignore(flushed),
+      TEXT_MESSAGE_CONTENT: () => ignore(flushed),
+      TEXT_MESSAGE_END: () => ignore(flushed),
+      REASONING_MESSAGE_CONTENT: () => ignore(flushed),
+      TOOL_CALL_START: (event) => toolStart({ ...context, event }),
+      TOOL_CALL_ARGS: (event) => toolArgs({ ...context, event }),
+      TOOL_CALL_END: (event) => toolEnd({ ...context, event }),
+      TOOL_CALL_RESULT: (event) => toolResult({ ...context, event }),
+      CUSTOM: (event) => custom({ ...context, event }),
+      STEP_STARTED: (event) => step({ ...context, event }),
+      STEP_FINISHED: () => ignore(flushed),
+      RUN_FINISHED: (event) => runFinished({ ...context, event }),
+      RUN_ERROR: (event) => runError({ ...context, event }),
+    },
+    () => ignore(flushed),
+  );
   return [next, [...flushedLines, ...lines]];
 };
 
 export const flushWatch = (state: WatchState) =>
   [...state.text.values()].flatMap((buffer) => textLines(buffer));
 
-const cell = (value: string) => sanitize(value).replace(/[\t\n]+/g, " ");
-
-const itemLine = (item: ClassifiedItem) =>
-  ClassifiedItem.match(item, {
-    Eligible: ({ stage, id, title }) => `${stage} ${id} ${title}`,
-    Claimed: ({ id, title, claim }) => `claimed ${id} ${title} (by ${claim.by})`,
-    Blocked: ({ id, title, openBlockers }) =>
-      `blocked ${id} ${title} (${openBlockers} open blocker${openBlockers === 1 ? "" : "s"})`,
-    NeedsHuman: ({ reason, id, title }) => `needs-human ${reason} ${id} ${title}`,
-  });
-
 const workspaceNames = (items: ReadonlyArray<BoardItem>) =>
   [...new Set(items.map((entry) => entry.workspace))].sort();
 
 const workspaceLines = (items: ReadonlyArray<BoardItem>) =>
   workspaceNames(items).flatMap((name) => [
-    `  ${cell(name)}`,
-    ...items.filter((entry) => entry.workspace === name).map((entry) => `    ${cell(itemLine(entry.item))}`),
+    `  ${terminalLine(name)}`,
+    ...items
+      .filter((entry) => entry.workspace === name)
+      .map((entry) => `    ${terminalLine(formatClassifiedItem(entry.item))}`),
   ]);
 
 const runningLine = (run: RunSummary) =>
-  `  ${cell(`${run.stage} ${run.workItem} [${run.harness}] ${run.id}`)}`;
+  `  ${terminalLine(`${run.stage} ${run.workItem} [${run.harness}] ${run.id}`)}`;
 
 const schedulerLine = (scheduler: SchedulerStats | null) =>
   scheduler ? formatScheduler(scheduler) : "scheduler: (pending)";
