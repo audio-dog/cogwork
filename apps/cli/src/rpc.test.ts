@@ -140,20 +140,12 @@ class SocketFixture extends Context.Service<
   );
 }
 
-const socketTransportLayer = Layer.unwrap(
-  Effect.map(SocketFixture, ({ socketPath }) =>
-    transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson)),
-  ),
-);
-const socketTestLayer = socketTransportLayer.pipe(
-  Layer.provideMerge(SocketFixture.layer),
-  Layer.provideMerge(NodeServices.layer),
-);
-const looseSocketTestLayer = socketTransportLayer.pipe(
-  Layer.provideMerge(SocketFixture.looseDirectoryLayer),
-  Layer.provideMerge(NodeServices.layer),
-);
-const socketFixtureLayer = SocketFixture.layer.pipe(Layer.provideMerge(NodeServices.layer));
+const socketTestLayer = <E, R>(fixtureLayer: Layer.Layer<SocketFixture, E, R>) =>
+  Layer.unwrap(
+    Effect.map(SocketFixture, ({ socketPath }) =>
+      transportLayer(socketPath).pipe(Layer.provide(RpcSerialization.layerNdjson)),
+    ),
+  ).pipe(Layer.provideMerge(fixtureLayer), Layer.provideMerge(NodeServices.layer));
 
 const withTransport = <A, E, R>(socketPath: string, effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
@@ -270,7 +262,7 @@ describe("daemon socket", () => {
 
       assert.strictEqual((yield* fs.stat(socketPath)).mode & 0o777, 0o600);
       assert.strictEqual((yield* fs.stat(dir)).mode & 0o777, 0o700);
-    }).pipe(Effect.provide(socketTestLayer)),
+    }).pipe(Effect.provide(socketTestLayer(SocketFixture.layer))),
   );
 
   it.effect("tightens a pre-existing loose socket directory to 0700", () =>
@@ -279,7 +271,7 @@ describe("daemon socket", () => {
       const { dir } = yield* SocketFixture;
 
       assert.strictEqual((yield* fs.stat(dir)).mode & 0o777, 0o700);
-    }).pipe(Effect.provide(looseSocketTestLayer)),
+    }).pipe(Effect.provide(socketTestLayer(SocketFixture.looseDirectoryLayer))),
   );
 
   it.effect("releases the socket on scope teardown, leaving nothing to leak", () =>
@@ -295,6 +287,6 @@ describe("daemon socket", () => {
       assert.isFalse(yield* fs.exists(socketPath));
 
       yield* withTransport(socketPath, Effect.void);
-    }).pipe(Effect.provide(socketFixtureLayer)),
+    }).pipe(Effect.provide(SocketFixture.layer.pipe(Layer.provideMerge(NodeServices.layer)))),
   );
 });
