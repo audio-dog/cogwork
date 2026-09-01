@@ -620,6 +620,53 @@ describe("CancelRun", () => {
     }).pipe(Effect.provide(daemonLayer(recordingTracker([claimed], calls))), Effect.scoped);
   });
 
+  it.effect("settles cancellation after the RPC caller disconnects", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    const claimed = trackerItem({
+      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+    });
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+
+      const started = yield* Deferred.make<void>();
+      const interrupted = yield* Deferred.make<void>();
+      const finishTeardown = yield* Deferred.make<void>();
+      const control = yield* RunControl.RunControl;
+      const running = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+            Effect.ensuring(Deferred.await(finishTeardown)),
+          ),
+        ),
+      );
+      yield* Deferred.await(started);
+
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const cancelling = yield* Effect.forkChild(client.CancelRun({ runId: rid("run-1") }));
+      yield* Deferred.await(interrupted);
+      cancelling.interruptUnsafe(Fiber.getCurrent()?.id);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("5 seconds");
+      yield* Effect.yieldNow;
+
+      const statusAfterDisconnect = (yield* ledger.getRun(rid("run-1")))?.status;
+      const callsAfterDisconnect = yield* Ref.get(calls);
+      yield* Deferred.succeed(finishTeardown, undefined);
+      yield* Fiber.await(running);
+      yield* Fiber.await(cancelling);
+
+      assert.strictEqual(statusAfterDisconnect, "interrupted");
+      assert.deepStrictEqual(callsAfterDisconnect.released, [id("AUD-1")]);
+    }).pipe(Effect.provide(daemonLayer(recordingTracker([claimed], calls))), Effect.scoped);
+  });
+
   it.effect("logs tracker cleanup failures and still returns the parked item", () => {
     const messages: string[] = [];
     const unavailable = () =>
