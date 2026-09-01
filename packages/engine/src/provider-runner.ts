@@ -159,7 +159,9 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const sandbox = yield* openWorktreeSandbox(plan.sandbox.workspace).pipe(
             Effect.mapError((error) => launchError(true, error.message)),
           );
-          const baseSha = yield* resolveBaseSha(sandbox);
+          const baseSha = yield* resolveBaseSha(sandbox).pipe(
+            Effect.mapError((error) => launchError(true, error.message)),
+          );
           const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
             Effect.provide(FetchHttpClient.layer),
           );

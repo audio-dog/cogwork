@@ -1,7 +1,14 @@
 import { type Priority, resolvePriority } from "@cogwork/contracts";
-import { LinearError, LinearClient as LinearSdk, RatelimitedLinearError } from "@linear/sdk";
+import {
+  LinearError,
+  LinearErrorType,
+  LinearClient as LinearSdk,
+  parseLinearError,
+  RatelimitedLinearError,
+} from "@linear/sdk";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -145,12 +152,29 @@ const unavailable = (message: string) => new IssueTrackerError({ reason: "unavai
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
 const isAuthStatus = (status: number | undefined) => status === 401 || status === 403;
+const transientErrorTypes = new Set([
+  LinearErrorType.NetworkError,
+  LinearErrorType.InternalError,
+  LinearErrorType.LockTimeout,
+]);
 
 const reasonFor = (cause: unknown): IssueTrackerError["reason"] => {
   if (cause instanceof RatelimitedLinearError) return "rate-limited";
-  if (cause instanceof LinearError && isAuthStatus(cause.status)) return "auth";
+  if (
+    cause instanceof LinearError &&
+    (isAuthStatus(cause.status) || cause.type === LinearErrorType.AuthenticationError)
+  ) {
+    return "auth";
+  }
   return "unavailable";
 };
+
+const isTransportCause = (cause: LinearError) =>
+  cause.type === LinearErrorType.Unknown && cause.raw instanceof TypeError;
+
+const isTransientCause = (cause: unknown) =>
+  cause instanceof LinearError &&
+  (isTransportCause(cause) || (cause.type !== undefined && transientErrorTypes.has(cause.type)));
 
 const finiteOrNull = (value: number | undefined) =>
   value !== undefined && Number.isFinite(value) ? value : null;
@@ -170,14 +194,38 @@ const fromSdkError = (cause: unknown, nowMillis: number) =>
     retryAfterMillis: retryAfterMillisOf(cause, nowMillis),
   });
 
+class LinearRequestFailure extends Data.TaggedError("LinearRequestFailure")<{
+  readonly error: IssueTrackerError;
+  readonly retryable: boolean;
+}> {}
+
+const fromSdkFailure = (cause: unknown, nowMillis: number) =>
+  new LinearRequestFailure({ error: fromSdkError(cause, nowMillis), retryable: isTransientCause(cause) });
+
+const nonRetryableFailure = (error: IssueTrackerError) =>
+  new LinearRequestFailure({ error, retryable: false });
+
 const isoMillis = (millis: number) =>
   Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
 
 const defaultCooldownMillis = 60_000;
 
-const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
+const isTransient = (failure: LinearRequestFailure) => failure.retryable;
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
+
+const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, LinearRequestFailure, R>) =>
+  attempt.pipe(
+    Effect.timeout(transientAttemptDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(
+        new LinearRequestFailure({
+          error: unavailable(`Linear request timed out after ${transientAttemptDeadline}`),
+          retryable: true,
+        }),
+      ),
+    ),
+  );
 
 const teamIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -369,10 +417,12 @@ const sdkAuth = (credential: Credential) =>
 
 export const verifyCredential = Effect.fn("linear.verifyCredential")(function* (credential: Credential) {
   const nowMillis = yield* Clock.currentTimeMillis;
-  yield* Effect.tryPromise({
-    try: (signal) => new LinearSdk({ ...sdkAuth(credential), signal }).viewer,
-    catch: (cause) => fromSdkError(cause, nowMillis),
-  });
+  yield* withTransientAttemptDeadline(
+    Effect.tryPromise({
+      try: (signal) => new LinearSdk({ ...sdkAuth(credential), signal }).viewer,
+      catch: (cause) => fromSdkFailure(cause, nowMillis),
+    }),
+  ).pipe(Effect.mapError((failure) => failure.error));
 });
 
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {
@@ -408,18 +458,27 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     ref: LinearTeamRef,
     run: (sdk: LinearSdk) => PromiseLike<A>,
   ) {
-    const nowMillis = yield* Clock.currentTimeMillis;
-    yield* holdOff(ref, nowMillis);
     const credential = yield* Effect.mapError(
       credentials.bearerToken(ref.account),
       (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
     );
-    return yield* Effect.tapError(
-      Effect.tryPromise({
-        try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
-        catch: (cause) => fromSdkError(cause, nowMillis),
+    return yield* Effect.retry(
+      Effect.gen(function* () {
+        const attemptStartedAt = yield* Clock.currentTimeMillis;
+        yield* Effect.mapError(holdOff(ref, attemptStartedAt), nonRetryableFailure);
+        return yield* withTransientAttemptDeadline(
+          Effect.tryPromise({
+            try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
+            catch: (cause) => fromSdkFailure(cause, attemptStartedAt),
+          }),
+        );
       }),
-      (error) => noteFailure(ref, nowMillis, error),
+      { while: isTransient, schedule: transientBackoff, times: 3 },
+    ).pipe(
+      Effect.mapError((failure) => failure.error),
+      Effect.tapError((error) =>
+        Effect.flatMap(Clock.currentTimeMillis, (nowMillis) => noteFailure(ref, nowMillis, error)),
+      ),
     );
   });
 
@@ -431,13 +490,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     variables: Record<string, unknown>,
   ) {
     const response = yield* call(ref, (sdk) =>
-      sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables),
-    ).pipe(
-      Effect.timeout(transientAttemptDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        Effect.fail(unavailable(`Linear request timed out after ${transientAttemptDeadline}`)),
-      ),
-      Effect.retry({ while: isTransient, schedule: transientBackoff, times: 3 }),
+      sdk.client
+        .rawRequest<unknown, Record<string, unknown>>(document, variables)
+        .catch((cause) => Promise.reject(parseLinearError(cause))),
     );
     if (response.data === undefined) {
       return yield* unavailable("Linear response missing data");

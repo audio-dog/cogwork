@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
@@ -8,7 +9,8 @@ import * as PlatformError from "effect/PlatformError";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { FILE_DIFF_EVENT, toFileDiffEvent, watchWorktreeDiffs } from "./file-diff-feed";
+import * as TestClock from "effect/testing/TestClock";
+import { computeDiff, FILE_DIFF_EVENT, toFileDiffEvent, watchWorktreeDiffs } from "./file-diff-feed";
 import { writeFile } from "./owned-tools";
 import { resolveBaseSha, type WorktreeSandbox } from "./sandbox";
 
@@ -77,6 +79,83 @@ describe("file diff feed", () => {
         timestamp: 0,
       });
       assert.isNull(event);
+    }),
+  );
+
+  it.effect("surfaces a rejected diff subprocess as a typed error", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const sandbox: WorktreeSandbox = {
+        ...original,
+        handle: {
+          ...original.handle,
+          process: {
+            ...original.handle.process,
+            exec: () => Promise.reject(new Error("subprocess unavailable")),
+          },
+        },
+      };
+      const error = yield* computeDiff(sandbox, "base", {
+        type: "delete",
+        path: "/workspace/seed.txt",
+        timestamp: 0,
+      }).pipe(Effect.flip);
+      assert.strictEqual(error.reason, "exec-failed");
+      assert.include(error.message, "subprocess unavailable");
+    }),
+  );
+
+  it.effect("surfaces a git failure instead of faking a create diff", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* openSandbox();
+      yield* writeFile(sandbox, { path: "seed.txt", content: "seed changed\n" });
+      const error = yield* computeDiff(sandbox, "not-a-commit", {
+        type: "change",
+        path: "/workspace/seed.txt",
+        timestamp: 0,
+      }).pipe(Effect.flip);
+      assert.strictEqual(error.reason, "exec-failed");
+      assert.include(error.message, "git diff");
+    }),
+  );
+
+  it.effect("aborts a diff subprocess when its deadline expires", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const started = yield* Deferred.make<void>();
+      const aborted = yield* Deferred.make<void>();
+      const sandbox: WorktreeSandbox = {
+        ...original,
+        handle: {
+          ...original.handle,
+          process: {
+            ...original.handle.process,
+            exec: (_command, options) => {
+              const pending = Promise.withResolvers<never>();
+              Deferred.doneUnsafe(started, Effect.void);
+              options?.signal?.addEventListener(
+                "abort",
+                () => {
+                  Deferred.doneUnsafe(aborted, Effect.void);
+                  pending.reject(new Error("aborted"));
+                },
+                { once: true },
+              );
+              return pending.promise;
+            },
+          },
+        },
+      };
+      const fiber = yield* computeDiff(sandbox, "base", {
+        type: "change",
+        path: "/workspace/seed.txt",
+        timestamp: 0,
+      }).pipe(Effect.flip, Effect.forkChild);
+      yield* Deferred.await(started);
+      yield* TestClock.adjust("5 minutes");
+      const error = yield* Fiber.join(fiber);
+      assert.strictEqual(error.reason, "timeout");
+      assert.isTrue(Option.isSome(yield* Deferred.poll(aborted)));
     }),
   );
 

@@ -8,9 +8,12 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { RpcClientDefect, RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { SocketOpenError } from "effect/unstable/socket/Socket";
 import {
@@ -26,6 +29,7 @@ import {
   resolveTarget,
   schedulingActions,
   schedulingCommand,
+  withWatchReconnect,
 } from "./commands";
 
 const runId = Schema.decodeSync(RunIdSchema);
@@ -38,6 +42,45 @@ const unavailableSocket = new SocketOpenError({
   cause: new Error("socket unavailable"),
 });
 const unavailableDaemon = new RpcClientError({ reason: unavailableSocket });
+
+describe("watch reconnect", () => {
+  it.effect("retries a daemon transport failure", () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make(0);
+      const source = Stream.unwrap(
+        Ref.updateAndGet(attempts, (count) => count + 1).pipe(
+          Effect.map((attempt) =>
+            attempt === 1 ? Stream.fail(unavailableDaemon) : Stream.succeed("connected"),
+          ),
+        ),
+      );
+      const fiber = yield* withWatchReconnect(source).pipe(
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+
+      yield* TestClock.adjust("1 second");
+
+      assert.deepStrictEqual(Array.from(yield* Fiber.join(fiber)), ["connected"]);
+      assert.strictEqual(yield* Ref.get(attempts), 2);
+    }),
+  );
+
+  it.effect("surfaces an RPC decode defect without retrying", () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make(0);
+      const defect = new RpcClientError({
+        reason: new RpcClientDefect({ message: "decode failed", cause: new Error("invalid frame") }),
+      });
+      const source = Stream.unwrap(
+        Ref.update(attempts, (count) => count + 1).pipe(Effect.map(() => Stream.fail(defect))),
+      );
+
+      assert.strictEqual(yield* Effect.flip(withWatchReconnect(source).pipe(Stream.runDrain)), defect);
+      assert.strictEqual(yield* Ref.get(attempts), 1);
+    }),
+  );
+});
 
 const unavailableStoreStatus: DaemonStatus = {
   health: "store-unavailable",
