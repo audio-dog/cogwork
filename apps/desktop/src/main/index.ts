@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
-import { Cause, Effect, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { app, BrowserWindow } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
@@ -127,7 +127,9 @@ const bootstrap = () => {
     });
     installShutdownBeforeQuit(app, () => runtime.dispose());
 
-    await runtime.runPromise(supervisor.start);
+    const startExit = await runtime.runPromiseExit(supervisor.start);
+    if (Exit.isSuccess(startExit) || Cause.hasInterruptsOnly(startExit.cause)) return;
+    mainLogger.error("Engine startup failed", startExit.cause);
   });
 };
 
