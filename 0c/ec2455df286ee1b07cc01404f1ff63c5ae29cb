@@ -1,0 +1,29 @@
+AGENTS.md
+  s_10d54901fda76b::t_f841f9eed71817 19-27
+.agents/skills/create-patterns/SKILL.md
+  h_46518a29d4dd91 1-52,55-83
+  s_10d54901fda76b::t_ee895a9a8314ed 53-54
+docs/agent-patterns/effect-observability.md
+  s_10d54901fda76b::t_83e0e262236a13 91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0cec2455df286ee1b07cc01404f1ff63c5ae29cb",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_10d54901fda76b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49d22256-a80a-4e3f-9f46-e991b6f39bee",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
