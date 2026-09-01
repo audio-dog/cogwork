@@ -1,0 +1,177 @@
+packages/codex-cli/src/harness.test.ts
+  s_a32be0b24c76c1::t_45281d8519cf82 559-567
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 2-3,43,178,181,204-207,211,214-217,219-222,256,294,324,401,447,482,485,568-572,590,599,601,605,614-615,620,623,629-646,648-694,767-769,922,928
+packages/engine/src/run-plan.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 315-348,386-449
+  s_a32be0b24c76c1::t_151acf08ca8e0c 450
+packages/contracts/src/ag-ui.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 5-6,48,54,60,97-98,106,110,112,118,123,131-134,136-139,148-151,153-156,160,163,165-167,170,180
+packages/engine/src/workspace-registry.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 101,124,209,254-256,315-318,333,336,344,350,352-356,359-362,440,505,551-553,560
+apps/cli/src/rpc.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 84
+apps/cli/src/platform.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 225-232,248-249
+packages/engine/src/playbook.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 49
+packages/engine/src/session-store.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 16-18,29,34,61-87,105-117
+packages/engine/src/daemon.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 181,245,263-265,436
+packages/engine/src/provider-bridge.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 13-25,27
+apps/desktop/src/main/ipc.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 6,8-9,41-45,52-58,73-74,90,102-103,116,128-129,160,167,196,207,215
+apps/cli/src/platform.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 26,32,47-54,60-64,67-69,80-123,216-237
+  s_a32be0b24c76c1::t_5ab8e8ccf68081 238-239
+packages/engine/src/recovery.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 13,35-43,82,159,240-250,272-278,309-310,320-324
+packages/cursor-acp/src/harness.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 341
+packages/engine/src/event-publisher.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 54,56,83,86,89-90,92-105,129-139,214-220,243-249,259-261,267,270-272,326,330,332,339-341,344-370,414-431,436-456,461-480,485-511,515,523,526-527,531,534-536,559,570-573,576-579,587-605,607-609,614-618,620-621,623-657,662-664,666-671,673-674,679-717,730-749
+packages/engine/src/testing/engine-test-layer.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1-27
+packages/engine/src/event-publisher.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 112,131,168,197-199
+packages/engine/src/executor.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 68,1338,1340
+packages/engine/src/run-plan.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 228-232,239-244,257-258,304-307,363-364,683-685,688,690,783-785,805,834
+apps/desktop/src/renderer/src/components/item-tab-actions.test.tsx
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1-179
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 3-4,28
+packages/engine/src/run-recorder.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 22-23,31,62,133-148,198-212,214-215
+  s_a32be0b24c76c1::t_e458bd778750d7 213,216
+apps/desktop/src/main/ipc.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1,11,17,19,41-42,44-53,62-67,69,76,87
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 2-3,49-52,68-72,81,90-95,100,106-107,113,116,120,124-133,205
+packages/engine/src/commands.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 93,163,372,631
+docs/agent-patterns/effect-observability.md
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 91
+packages/engine/src/engine.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 23,26,47,88-91,142-178,284-316,410-413,415-416,418-423,425-428,430-432,435,437,441-443,565-607,628-630,632,637-643,645-646,653,656,658,660-672,674-676,680,682-683,686-689,692-706,710-723,726-758,760,762,764-779,782-791,797-806,809-812,815-816,823,827-833,837-845,847,970-1007,1043-1048,1050-1051,1053-1054,1082,1094
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1,29-36
+  s_a32be0b24c76c1::t_b45c5149d7039e 37
+packages/engine/src/control-store.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 35,74-84,88-103,165-172,186-207,209,220-221,228-229,254,261,265,279-281,307-314
+packages/engine/src/recovery.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 19,21,36,42-45,252-257,259,273,656,658-659,675-684,693-702
+packages/engine/src/scheduler.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 13,16,18,28-40,169-193,260,271-278,283-289,298,300-312,357-361
+packages/engine/src/commands.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 58,200,366,375,377-378,380,394-398,402-415,1516-1560,1657
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 2-3,7-12,16-18,20-26,31-37,39,41-51,53-67,70-112,119-122,124-127,130-132,134,136-137,140-141,143-150,152-153,155,157-158,160-162,164-173,175-177,180,188-196,198-200,203-204,206-209,211-213,219-282,284-320
+packages/engine/src/playbook.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 48-61
+apps/desktop/src/main/engine-supervisor.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1-16,24,35,37-58,61-224,226-274
+packages/engine/src/plugin.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 26,29,51-57,60
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 24,26,70-75,80-83,101-105,127-129,136-149,158-164,169-172,247-248,250-254,257,259,294-295,299-300,310,317,328,335,343-362,366,376,378-379,415,417,437-438,454-474,490-491,493,496,554
+packages/engine/CONTEXT.md
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 92-95
+packages/engine/src/testing/engine-test-layer.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1-60
+apps/cli/src/worktree-commands.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 33
+packages/contracts/src/ag-ui.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 5,12,14,24,27,51-52,64,67,88-96
+apps/cli/src/watch.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1,3-8,78-80,87,91,94,96-99,101,107,114,116-117,121,128-131,133-134,141,144-147,149,154,162,167-187
+packages/engine/src/external-harness-runtime.ts
+  s_a32be0b24c76c1::t_73c1410e1641c1 189-190,257,263-267,270,272-273,277-279
+  s_a32be0b24c76c1::t_5a898120eb5311 320-322
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1-10,23-24,27,37,154,191-216,219-256,258-262,327,395,403-404
+  s_1ffaa2973c6998::t_8a245ed9d994be 275
+apps/cli/src/ledger.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 79,83,85,343,353-355,368-369,384,446,461,482,492,518,591-592,601
+AGENTS.md
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 19-27
+packages/engine/src/executor.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 19,52,213,215-239,249
+packages/engine/src/external-harness-runtime.test.ts
+  s_a32be0b24c76c1::t_4fa2ae772bede5 240-241
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1-2,13-20,24,46,76-78,101,104-121,165,190-208,236,308,348-354,387-396,399-406,410-659,661-698
+  s_a32be0b24c76c1::t_c53e951768411f 323-327,330-334
+  s_a32be0b24c76c1::t_16e20b264b1e76 373-377,381-383
+  s_a32be0b24c76c1::t_3908123f81ef58 407-409,660,859-861,881,892,895-911,921-922
+  s_0ff46604c1ed0f::t_1dd94b9ff27626 242
+packages/engine/src/registry.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 20,59-60,69,443-466,468-470,473,507,545,575
+packages/engine/src/run-control.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 15,50,56,71-72,82-84,90-91
+apps/desktop/src/main/logger.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1,14-18,21-24,28-30,37
+packages/codex-cli/src/harness.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 27,93-94,107-122,125-152,154-158,160,203,292-296,299-303,308,340,374-377,384,396,401,415-417,482,490-496,510-511
+  s_1ffaa2973c6998::t_ca87c7b9297185 167
+packages/engine/src/run-recorder.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 2,24-39,62,87
+apps/cli/src/rpc.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 119-155,261-265,271-274,280-284,289-290
+packages/engine/src/watch-activity.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 13-14,21
+packages/engine/src/reconcile.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 18,21,35-38,211,309-321,329-330
+packages/engine/src/run-ledger.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 65-67,104,116-120,122,228,230,244,255,257-258,261,275,277,326,328
+apps/desktop/src/main/index.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 4,10,19,32-33,43,54,59-60,62-83,85-89,91,94,96,110-111,126
+packages/engine/src/scheduler.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 18,31,37-49,441,443,450,454,549,553-554,558,574-623,673,675-676,708
+apps/cli/src/commands.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 268
+packages/engine/src/plugin.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 1,5,68,71-72,91-124,127-182,188-219,222,224-235,237-256,258-278,285-288,291-293,299-314,320,322,325,331,337-349,356,358,362,365,368-369,375-386,388-410,415,418,422-441,448-462,469-483
+apps/cli/src/ledger.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 347,399,409,457,476,479
+packages/engine/src/run-ledger.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 17,23,25,31-52,221,231-233,247,264,276,296,323,351,476,486,514,547,558,566,577,588,609,619-620,630
+packages/engine/src/session-store.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 2-6,8-9,82-83,86,89,92-104,107-125
+  s_a32be0b24c76c1::t_8559441f671f46 126
+apps/cli/src/watch.test.ts
+  s_a32be0b24c76c1::t_4208e0d96a9fa4 179-180,186-192
+  s_a32be0b24c76c1::t_5904db1b6434fa 193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0219079f397bd386a252653df87f2208e0cb1215",
+  "prompts": {},
+  "sessions": {
+    "s_0ff46604c1ed0f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d6e-eb6b-7f62-bd54-1d48bd2e235b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_1ffaa2973c6998": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03d83829-eff3-46e6-ac40-c57850b4d2b4",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_a32be0b24c76c1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ceb-76eb-7021-99e7-fac99010ebe9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
