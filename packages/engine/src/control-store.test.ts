@@ -7,14 +7,21 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
+import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as MutableRef from "effect/MutableRef";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { afterEach, vi } from "vitest";
 import {
   bootControlStoreLayer,
@@ -35,16 +42,21 @@ vi.mock("drizzle-kit/payload/sqlite", () =>
     }),
 );
 
-const storeLayerAt = (storePath: string) => bootControlStoreLayer(storePath);
-
 const interruptionGate = Latch.makeUnsafe();
+const lockHolderScript = `
+const lockfile = require("proper-lockfile");
+lockfile.lock(process.argv[1], { realpath: false }).then(() => {
+  process.stdout.write("locked\\n");
+  process.stdin.resume();
+});
+`;
 
 const storeAt = (storePath: string) =>
   Effect.map(ControlStore, (store) =>
     store.health === "available"
       ? { health: store.health }
       : { health: store.health, message: store.message },
-  ).pipe(Effect.provide(storeLayerAt(storePath)));
+  ).pipe(Effect.provide(bootControlStoreLayer(storePath)));
 
 const withStore = <A, E, R>(
   storePath: string,
@@ -53,7 +65,7 @@ const withStore = <A, E, R>(
   Effect.flatMap(ControlStore, (store) => {
     if (store.health === "unavailable") return Effect.die(new Error(store.message));
     return use(store);
-  }).pipe(Effect.provide(storeLayerAt(storePath)));
+  }).pipe(Effect.provide(bootControlStoreLayer(storePath)));
 
 const poke = (storePath: string, statements: string) =>
   Effect.acquireUseRelease(
@@ -141,6 +153,29 @@ const LoggedSchemaConvergence = Schema.Tuple([
   Schema.Struct({ changes: LoggedSchemaChanges }),
 ]);
 
+type StructuredLog = ReturnType<typeof Logger.formatStructured.log>;
+
+class ControlStoreLogProbe extends Context.Service<
+  ControlStoreLogProbe,
+  {
+    readonly entries: Effect.Effect<ReadonlyArray<StructuredLog>>;
+    readonly logger: Logger.Logger<unknown, void>;
+  }
+>()("@cogwork/engine/control-store.test/ControlStoreLogProbe") {
+  static readonly layer = Layer.sync(ControlStoreLogProbe, () => {
+    const entries = MutableRef.make<ReadonlyArray<StructuredLog>>([]);
+    return {
+      entries: Effect.sync(() => MutableRef.get(entries)),
+      logger: Logger.make((options) =>
+        MutableRef.update(entries, (current) => [...current, Logger.formatStructured.log(options)]),
+      ),
+    };
+  });
+}
+
+const controlStoreBackups = (names: ReadonlyArray<string>) =>
+  names.filter((name) => name.startsWith("control.db.") && name.endsWith(".backup"));
+
 afterEach(() => pushSchemaMock.mockClear());
 
 layer(NodeServices.layer)((it) => {
@@ -157,36 +192,57 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("adds a column and table while preserving existing rows", () =>
+  it.effect("creates the store directory before acquiring its schema lock", () =>
     Effect.gen(function* () {
-      const { storePath } = yield* temporaryStore();
-      yield* poke(
-        storePath,
-        `${createStatements.join("\n")}
+      const path = yield* Path.Path;
+      const { dir } = yield* temporaryStore();
+      const storePath = path.join(dir, "missing", "control.db");
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.strictEqual(yield* modeOf(path.dirname(storePath)), "700");
+    }),
+  );
+
+  it.layer(ControlStoreLogProbe.layer)((it) => {
+    it.effect("adds a column and table while preserving existing rows", () =>
+      Effect.gen(function* () {
+        const { storePath } = yield* temporaryStore();
+        const logProbe = yield* ControlStoreLogProbe;
+        yield* poke(
+          storePath,
+          `${createStatements.join("\n")}
          INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history)
          VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0);
          ALTER TABLE workspaces DROP COLUMN source_control;
          DROP TABLE connections;`,
-      );
+        );
 
-      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
-        { id: "workspace-1", name: "kept" },
-      ]);
-      assert.isTrue(
-        (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
-          (column) => column.name === "source_control",
-        ),
-      );
-      assert.deepStrictEqual(
-        yield* query(
-          storePath,
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'connections'",
-        ),
-        [{ name: "connections" }],
-      );
-    }),
-  );
+        assert.deepStrictEqual(yield* storeAt(storePath).pipe(Effect.withLogger(logProbe.logger)), {
+          health: "available",
+        });
+        assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
+          { id: "workspace-1", name: "kept" },
+        ]);
+        assert.isTrue(
+          (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
+            (column) => column.name === "source_control",
+          ),
+        );
+        assert.deepStrictEqual(
+          yield* query(
+            storePath,
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'connections'",
+          ),
+          [{ name: "connections" }],
+        );
+        const convergenceLog = (yield* logProbe.entries)
+          .map((entry) => entry.message)
+          .find(Schema.is(LoggedSchemaConvergence));
+        if (!convergenceLog) return assert.fail("expected convergence log");
+        assert.isTrue(convergenceLog[1].changes.every((change) => change.classification === "additive"));
+      }),
+    );
+  });
 
   it.effect("changes a column type while preserving existing rows", () =>
     Effect.gen(function* () {
@@ -219,6 +275,19 @@ layer(NodeServices.layer)((it) => {
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
       assert.strictEqual(pushSchemaMock.mock.calls.length, 5);
+    }),
+  );
+
+  it.effect("keeps a store valid when two boots race to converge it", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const results = yield* Effect.all([storeAt(storePath), storeAt(storePath)], {
+        concurrency: "unbounded",
+      });
+
+      assert.isTrue(results.some((store) => store.health === "available"));
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(storePath, "PRAGMA integrity_check"), [{ integrity_check: "ok" }]);
     }),
   );
 
@@ -260,9 +329,7 @@ layer(NodeServices.layer)((it) => {
       pushSchemaMock.mockRejectedValueOnce(new Error("unexpected converge failure"));
 
       const store = yield* storeAt(storePath);
-      const backups = (yield* fs.readDirectory(dir)).filter(
-        (name) => name.startsWith("control.db.") && name.endsWith(".backup"),
-      );
+      const backups = controlStoreBackups(yield* fs.readDirectory(dir));
 
       assert.strictEqual(store.health, "unavailable");
       assert.isTrue(store.health === "unavailable" && store.message.includes("unexpected converge failure"));
@@ -292,9 +359,7 @@ layer(NodeServices.layer)((it) => {
       );
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      const backups = (yield* fs.readDirectory(dir)).filter(
-        (name) => name.startsWith("control.db.") && name.endsWith(".backup"),
-      );
+      const backups = controlStoreBackups(yield* fs.readDirectory(dir));
       assert.strictEqual(backups.length, 1);
       const backupPath = path.join(dir, backups[0] ?? "missing");
       assert.deepStrictEqual(
@@ -306,6 +371,132 @@ layer(NodeServices.layer)((it) => {
         (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
           (column) => column.name === "source_control",
         ),
+      );
+    }),
+  );
+
+  it.effect("serializes racing rename-shaped preflights", () => {
+    const actualPushSchema = pushSchemaMock.getMockImplementation();
+    if (!actualPushSchema) return Effect.die("missing pushSchema implementation");
+    const concurrency = { active: 0, maximum: 0 };
+    pushSchemaMock.mockImplementation((...args) => {
+      concurrency.active += 1;
+      concurrency.maximum = Math.max(concurrency.maximum, concurrency.active);
+      return Promise.resolve()
+        .then(() => actualPushSchema(...args))
+        .finally(() => {
+          concurrency.active -= 1;
+        });
+    });
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { dir, storePath } = yield* temporaryStore();
+      yield* poke(
+        storePath,
+        `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
+         INSERT INTO workspaces (
+           id, name, checkout_path, issue_tracker, source_control_old, linear_history
+         ) VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 'original', 0);`,
+      );
+
+      const results = yield* Effect.all([storeAt(storePath), storeAt(storePath)], {
+        concurrency: "unbounded",
+      });
+      const backups = controlStoreBackups(yield* fs.readDirectory(dir));
+
+      assert.strictEqual(concurrency.maximum, 1);
+      assert.isTrue(results.some((store) => store.health === "available"));
+      assert.strictEqual(backups.length, 1);
+      assert.deepStrictEqual(
+        yield* query(path.join(dir, backups[0] ?? "missing"), "SELECT id FROM workspaces"),
+        [{ id: "workspace-1" }],
+      );
+    }).pipe(Effect.ensuring(Effect.sync(() => pushSchemaMock.mockImplementation(actualPushSchema))));
+  });
+
+  it.effect(
+    "waits for a cross-process schema preflight lock",
+    () =>
+      Effect.gen(function* () {
+        const { storePath } = yield* temporaryStore();
+        const child = yield* ChildProcess.make(process.execPath, ["-e", lockHolderScript, storePath]);
+        const ready = yield* child.stdout.pipe(
+          Stream.decodeText(),
+          Stream.runHead,
+          Effect.timeout("5 seconds"),
+        );
+        assert.strictEqual(Option.getOrUndefined(ready)?.trim(), "locked");
+
+        const bootFiber = yield* Effect.forkChild(storeAt(storePath));
+        yield* Effect.forEach(Array.from({ length: 20 }), () => Effect.yieldNow, { discard: true });
+        assert.isUndefined(bootFiber.pollUnsafe());
+
+        yield* child.kill({ killSignal: "SIGTERM", forceKillAfter: "5 seconds" });
+        yield* Effect.ignore(child.exitCode);
+        assert.deepStrictEqual(yield* Fiber.join(bootFiber).pipe(Effect.timeout("5 seconds")), {
+          health: "available",
+        });
+      }),
+    10_000,
+  );
+
+  it.effect("fails closed when the schema preflight lock is compromised", () => {
+    const actualPushSchema = pushSchemaMock.getMockImplementation();
+    if (!actualPushSchema) return Effect.die("missing pushSchema implementation");
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof actualPushSchema>>>();
+    const started = Deferred.makeUnsafe<void>();
+    pushSchemaMock.mockImplementation(() => {
+      Deferred.doneUnsafe(started, Effect.void);
+      return pending.promise;
+    });
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { storePath } = yield* temporaryStore();
+      const bootFiber = yield* Effect.forkChild(storeAt(storePath));
+      yield* Deferred.await(started);
+
+      assert.strictEqual(pushSchemaMock.mock.calls.length, 1);
+      assert.isTrue(yield* fs.exists(`${storePath}.lock`));
+      yield* fs.remove(`${storePath}.lock`, { recursive: true });
+
+      const store = yield* Fiber.join(bootFiber);
+      assert.strictEqual(store.health, "unavailable");
+      assert.isTrue(store.health === "unavailable" && store.message.includes("schema lock was compromised"));
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          pending.resolve(schemaDiff([]));
+          pushSchemaMock.mockImplementation(actualPushSchema);
+        }),
+      ),
+    );
+  });
+
+  it.effect("preserves an existing backup from the same timestamp", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { dir, storePath } = yield* temporaryStore();
+      const existingBackupPath = `${storePath}.1234.backup`;
+      yield* TestClock.setTime(1234);
+      yield* poke(
+        existingBackupPath,
+        "CREATE TABLE evidence (value TEXT NOT NULL); INSERT INTO evidence VALUES ('first');",
+      );
+      yield* poke(
+        storePath,
+        createStatements.join("\n").replace("`source_control` text", "`source_control_old` text"),
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(existingBackupPath, "SELECT value FROM evidence"), [
+        { value: "first" },
+      ]);
+      assert.strictEqual(
+        (yield* fs.readDirectory(dir)).filter(
+          (name) => name.startsWith("control.db.1234") && name.endsWith(".backup"),
+        ).length,
+        2,
       );
     }),
   );
@@ -526,47 +717,57 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("drops a column and table while preserving surviving rows", () =>
-    Effect.gen(function* () {
-      const { storePath } = yield* temporaryStore();
-      const logs: ReturnType<typeof Logger.formatStructured.log>[] = [];
-      const logger = Logger.make((options) => logs.push(Logger.formatStructured.log(options)));
-      yield* poke(
-        storePath,
-        `${createStatements.join("\n")}
+  it.layer(ControlStoreLogProbe.layer)((it) => {
+    it.effect("drops a column and table while preserving surviving rows", () =>
+      Effect.gen(function* () {
+        const { storePath } = yield* temporaryStore();
+        const logProbe = yield* ControlStoreLogProbe;
+        yield* poke(
+          storePath,
+          `${createStatements.join("\n")}
          ALTER TABLE workspaces ADD COLUMN legacy TEXT;
          INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history, legacy)
          VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0, 'removed');
          CREATE TABLE extra_data (value TEXT NOT NULL);
          INSERT INTO extra_data (value) VALUES ('kept');`,
-      );
+        );
 
-      assert.deepStrictEqual(yield* storeAt(storePath).pipe(Effect.withLogger(logger)), {
-        health: "available",
-      });
-      assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
-        { id: "workspace-1", name: "kept" },
-      ]);
-      assert.isFalse(
-        (yield* query(storePath, "PRAGMA table_info(workspaces)")).some((column) => column.name === "legacy"),
-      );
-      assert.deepStrictEqual(
-        yield* query(
-          storePath,
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'extra_data'",
-        ),
-        [],
-      );
-      const convergenceLog = logs.map((entry) => entry.message).find(Schema.is(LoggedSchemaConvergence));
-      if (!convergenceLog) return assert.fail("expected convergence log");
-      const changes = convergenceLog[1].changes;
-      assert.isTrue(
-        changes.some(
-          (change) => change.classification === "destructive" && change.statement.includes("extra_data"),
-        ),
-      );
-    }),
-  );
+        assert.deepStrictEqual(yield* storeAt(storePath).pipe(Effect.withLogger(logProbe.logger)), {
+          health: "available",
+        });
+        assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
+          { id: "workspace-1", name: "kept" },
+        ]);
+        assert.isFalse(
+          (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
+            (column) => column.name === "legacy",
+          ),
+        );
+        assert.deepStrictEqual(
+          yield* query(
+            storePath,
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'extra_data'",
+          ),
+          [],
+        );
+        const convergenceLog = (yield* logProbe.entries)
+          .map((entry) => entry.message)
+          .find(Schema.is(LoggedSchemaConvergence));
+        if (!convergenceLog) return assert.fail("expected convergence log");
+        const changes = convergenceLog[1].changes;
+        assert.isTrue(
+          changes.some(
+            (change) => change.classification === "destructive" && change.statement.includes("extra_data"),
+          ),
+        );
+        assert.isTrue(
+          changes.some(
+            (change) => change.classification === "destructive" && change.statement.includes("workspaces"),
+          ),
+        );
+      }),
+    );
+  });
 
   it.effect("restores a missing index without replacing the store", () =>
     Effect.gen(function* () {

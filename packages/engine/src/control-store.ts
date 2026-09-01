@@ -28,6 +28,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
+import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
@@ -37,6 +38,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import lockfile, { type LockOptions } from "proper-lockfile";
 import * as controlStoreSchema from "./control-store-schema";
 
 export type ControlStoreService =
@@ -111,9 +113,22 @@ type ControlStoreSchemaChange = {
   readonly classification: "additive" | "destructive";
   readonly statement: string;
 };
-type ControlStoreClientOptions = Omit<SqliteClient.SqliteClientConfig, "filename">;
+type ControlStoreClientOptions = Pick<SqliteClient.SqliteClientConfig, "busyTimeout">;
 
 const maximumRunEventAge = Duration.days(30);
+const schemaPreflightGate = Semaphore.makeUnsafe(1);
+const schemaPreflightLockOptions = {
+  realpath: false,
+  retries: {
+    retries: 200,
+    factor: 1,
+    minTimeout: 50,
+    maxTimeout: 50,
+    randomize: true,
+  },
+  stale: 5_000,
+  update: 1_000,
+} satisfies LockOptions;
 const additiveSchemaStatementPatterns = [
   /^CREATE\s+TABLE\s+/i,
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+/i,
@@ -708,29 +723,80 @@ const backupRenameShapedStore = Effect.fn("ControlStore.backupRenameShapedStore"
   storePath: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
   const timestamp = yield* Clock.currentTimeMillis;
-  const backupPath = `${storePath}.${timestamp}.backup`;
+  const reservationPath = yield* fs.makeTempDirectory({
+    directory: path.dirname(storePath),
+    prefix: `${path.basename(storePath)}.${timestamp}.`,
+  });
+  const backupPath = `${reservationPath}.backup`;
+  yield* fs.remove(reservationPath, { recursive: true });
   yield* fs.rename(storePath, backupPath);
   yield* Effect.logWarning("backed up rename-shaped Control store", { backupPath });
 });
 
+const withSchemaPreflightLock = <A, E, R>(storePath: string, effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.gen(function* () {
+      yield* prepareStoreDirectory(storePath);
+      const compromised = yield* Deferred.make<never, ControlStoreBootError>();
+      const release = yield* Effect.tryPromise({
+        try: () =>
+          lockfile.lock(storePath, {
+            ...schemaPreflightLockOptions,
+            onCompromised: (error) =>
+              Deferred.doneUnsafe(
+                compromised,
+                Effect.fail(
+                  new ControlStoreBootError({
+                    message: `Control store schema lock was compromised: ${messageOf(error)}`,
+                  }),
+                ),
+              ),
+          }),
+        catch: (error) =>
+          new ControlStoreBootError({
+            message: `Control store schema lock failed: ${messageOf(error)}`,
+          }),
+      });
+      return { compromised, release };
+    }),
+    ({ compromised }) => Effect.raceFirst(effect, Deferred.await(compromised)),
+    ({ release }) =>
+      Effect.tryPromise({
+        try: () => release(),
+        catch: (error) =>
+          new ControlStoreBootError({
+            message: `Control store schema lock release failed: ${messageOf(error)}`,
+          }),
+      }),
+  );
+
 const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
   (storePath: string, options: ControlStoreClientOptions) =>
-    Effect.scoped(
-      controlStoreSchemaStatements().pipe(Effect.provide(controlStoreClientLayer(storePath, options))),
-    ).pipe(
-      Effect.as<ControlStoreBootError | null>(null),
-      Effect.catchTag("RenameShapedControlStoreDiff", () =>
-        backupRenameShapedStore(storePath).pipe(Effect.as<ControlStoreBootError | null>(null)),
-      ),
-      Effect.catch((error) =>
-        Effect.succeed(
-          new ControlStoreBootError({
-            message: `Control store schema preflight failed: ${messageOf(error)}`,
-          }),
+    schemaPreflightGate
+      .withPermits(1)(
+        withSchemaPreflightLock(
+          storePath,
+          Effect.scoped(
+            controlStoreSchemaStatements().pipe(Effect.provide(controlStoreClientLayer(storePath, options))),
+          ).pipe(
+            Effect.as<ControlStoreBootError | null>(null),
+            Effect.catchTag("RenameShapedControlStoreDiff", () =>
+              backupRenameShapedStore(storePath).pipe(Effect.as<ControlStoreBootError | null>(null)),
+            ),
+          ),
+        ),
+      )
+      .pipe(
+        Effect.catch((error) =>
+          Effect.succeed(
+            new ControlStoreBootError({
+              message: `Control store schema preflight failed: ${messageOf(error)}`,
+            }),
+          ),
         ),
       ),
-    ),
 );
 
 const unavailable = (message: string): ControlStoreService => {
@@ -757,23 +823,32 @@ export const ControlStore = Context.Reference<ControlStoreService>(
   { defaultValue: () => unavailable("Control store did not boot") },
 );
 
+const bootFailureMessage = (cause: Cause.Cause<unknown>) => {
+  if (!Cause.hasFails(cause)) return Cause.pretty(cause);
+  return messageOf(Cause.squash(cause));
+};
+
+const recoverBootFailure = (cause: Cause.Cause<unknown>) => {
+  if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+  return Effect.andThen(
+    Effect.logError("control store boot failed", { cause: Cause.pretty(cause) }),
+    Effect.succeed(unavailable(bootFailureMessage(cause))),
+  );
+};
+
+const bootControlStore = (storePath: string, preflightError: ControlStoreBootError | null) => {
+  if (preflightError) return Effect.succeed(unavailable(preflightError.message));
+  return Effect.andThen(boot(storePath), makeAvailableControlStore).pipe(
+    Effect.catchCause(recoverBootFailure),
+  );
+};
+
 export const bootControlStoreLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
   Layer.unwrap(
     Effect.map(prepareSchemaFallback(storePath, options), (preflightError) => {
       const client = controlStoreClientLayer(storePath, options);
-      const service = preflightError
-        ? Effect.succeed(unavailable(preflightError.message))
-        : Effect.andThen(boot(storePath), makeAvailableControlStore).pipe(
-            Effect.catchCause((cause) => {
-              if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
-              return Effect.andThen(
-                Effect.logError("control store boot failed", { cause: Cause.pretty(cause) }),
-                Effect.succeed(
-                  unavailable(Cause.hasFails(cause) ? messageOf(Cause.squash(cause)) : Cause.pretty(cause)),
-                ),
-              );
-            }),
-          );
-      return Layer.effect(ControlStore, service).pipe(Layer.provideMerge(client));
+      return Layer.effect(ControlStore, bootControlStore(storePath, preflightError)).pipe(
+        Layer.provideMerge(client),
+      );
     }),
   );
