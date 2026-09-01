@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { isDaemonListening } from "./socket-probe";
 
@@ -22,7 +23,7 @@ describe("isDaemonListening", () => {
       await new Promise<void>((resolve) => server.listen(socketPath, resolve));
 
       try {
-        expect(await isDaemonListening(socketPath)).toBe(true);
+        expect(await Effect.runPromise(isDaemonListening(socketPath))).toBe(true);
       } finally {
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }
@@ -30,6 +31,6 @@ describe("isDaemonListening", () => {
 
   it("returns false when nothing is listening", () =>
     withTempDir(async (dir) => {
-      expect(await isDaemonListening(join(dir, "missing.sock"))).toBe(false);
+      expect(await Effect.runPromise(isDaemonListening(join(dir, "missing.sock")))).toBe(false);
     }));
 });

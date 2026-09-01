@@ -17,6 +17,7 @@ export interface ResolvedMcpSkill {
   readonly name: string;
   readonly endpoint: string;
   readonly bearer: Redacted.Redacted<string> | null;
+  readonly unavailableReason?: string | null;
 }
 
 // Injected so the assembler stays free of any one issue tracker's config shape.
@@ -56,9 +57,23 @@ export const make = (
     assemble: Effect.fn("McpSkillAssembler.assemble")(function* (config: WorkspaceConfig) {
       const skills = config.mcpSkills ?? [];
       return yield* Effect.forEach(skills, (skill) =>
-        Effect.map(
-          resolveBearer(config, skill),
-          (bearer): ResolvedMcpSkill => ({ name: skill.name, endpoint: skill.endpoint, bearer }),
+        resolveBearer(config, skill).pipe(
+          Effect.match({
+            onFailure: (error) =>
+              ({
+                name: skill.name,
+                endpoint: skill.endpoint,
+                bearer: null,
+                unavailableReason: error.message,
+              }) satisfies ResolvedMcpSkill,
+            onSuccess: (bearer) =>
+              ({
+                name: skill.name,
+                endpoint: skill.endpoint,
+                bearer,
+                unavailableReason: null,
+              }) satisfies ResolvedMcpSkill,
+          }),
         ),
       );
     }),
