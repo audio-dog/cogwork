@@ -720,30 +720,19 @@ export class RunPlanAssemblyError extends Schema.TaggedError<RunPlanAssemblyErro
   cause: Schema.Defect(),
 }) {}
 
-const planMemberFrom = (cause: Error) => cause.stack?.match(/\bnew (RunPlan\w+)/)?.[1] ?? "RunPlan";
+const schemaConstructorNameFromStack = (cause: Error) =>
+  cause.stack?.match(/\bnew (RunPlan\w+)/)?.[1] ?? "RunPlan";
 
-const pathKey = (part: unknown) => {
-  if (typeof part === "object" && part !== null && "key" in part) return part.key;
-  return part;
-};
-
-const formatPath = (path: ReadonlyArray<unknown>) =>
-  path
-    .map(pathKey)
-    .map((part) => (typeof part === "number" ? `[${part}]` : `.${String(part)}`))
-    .join("");
+const formatSchemaIssue = SchemaIssue.makeFormatterDefault();
 
 const formatAssemblyError = (cause: unknown) => {
   if (!(cause instanceof Error) || !SchemaIssue.isIssue(cause.cause)) {
     return `RunPlan: ${cause instanceof Error ? cause.message : String(cause)}`;
   }
-  const member = planMemberFrom(cause);
-  return SchemaIssue.makeFormatterStandardSchemaV1()(cause.cause)
-    .issues.map((issue) => `${member}${formatPath(issue.path ?? [])}: ${issue.message}`)
-    .join("; ");
+  return `${schemaConstructorNameFromStack(cause)}: ${formatSchemaIssue(cause.cause)}`;
 };
 
-const assembleRunPlanUnsafe = (input: AssembleRunPlanInput) => {
+export const assembleRunPlan = (input: AssembleRunPlanInput) => {
   const workContext = input.item.workContext;
   const observation = RunPlanObservation.make({ ...input.observation });
   const admitted = admittedContributions(
@@ -882,8 +871,9 @@ const assembleRunPlanUnsafe = (input: AssembleRunPlanInput) => {
   );
 };
 
-export const assembleRunPlan = (input: AssembleRunPlanInput) =>
+export const tryAssembleRunPlan = Effect.fn("RunPlan.tryAssemble")((input: AssembleRunPlanInput) =>
   Effect.try({
-    try: () => assembleRunPlanUnsafe(input),
+    try: () => assembleRunPlan(input),
     catch: (cause) => new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause }),
-  });
+  }),
+);

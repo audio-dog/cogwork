@@ -23,11 +23,11 @@ import {
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
   projectedContributionName,
-  RunPlanAssemblyError,
   resolveEngineContributionEnabled,
   resolveEngineContributionUnion,
   resolveEngineOperationSetting,
   resolveRunPlanStage,
+  tryAssembleRunPlan,
 } from "./run-plan";
 
 describe("projectedContributionName", () => {
@@ -272,6 +272,7 @@ const hostHarness: OperationSettingRow = {
 };
 const solModel: OperationSettingRow = { ...profileDefault, setting: "model", value: "gpt-5.6-sol" };
 const highEffort: OperationSettingRow = { ...profileDefault, setting: "effort", value: "high" };
+const invalidPlanRunId = Schema.decodeSync(RunId)("run-invalid-plan");
 
 describe("stage settings come from Operation settings", () => {
   it("enables a stage from an Operation setting rather than the Workspace input", () => {
@@ -314,15 +315,15 @@ describe("stage settings come from Operation settings", () => {
 });
 
 describe("Run Plan assembly", () => {
-  it.effect("fails invalid plan input with a typed assembly error", () =>
-    Effect.gen(function* () {
-      const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
-      assert.isNotNull(resolved);
-      if (!resolved) return;
+  it.effect("fails invalid plan input with a typed assembly error", () => {
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
+    assert.isNotNull(resolved);
+    if (!resolved) return Effect.void;
 
+    return Effect.gen(function* () {
       const error = yield* Effect.flip(
-        assembleRunPlan({
-          runId: yield* Schema.decodeEffect(RunId)("run-invalid-plan"),
+        tryAssembleRunPlan({
+          runId: invalidPlanRunId,
           workspace,
           item,
           observation: { generation: 12, observedAtMillis: 1000 },
@@ -342,372 +343,359 @@ describe("Run Plan assembly", () => {
         }),
       );
 
-      assert.isTrue(Schema.is(RunPlanAssemblyError)(error));
-      assert.include(error.message, "RunPlanInstruction.content");
-    }),
-  );
+      assert.strictEqual(error._tag, "RunPlanAssemblyError");
+      assert.include(error.message, "RunPlanInstruction");
+      assert.include(error.message, "content");
+    });
+  });
 
-  it.effect("projects same-named servers under distinct qualified names recorded in Provenance", () =>
-    Effect.gen(function* () {
-      const runId = yield* Schema.decodeEffect(RunId)("run-qualified-mcp");
-      const contributions = [
-        {
-          id: "plugin:linear/mcp/linear",
-          authority: "plugin:linear",
-          kind: "mcp-server",
-          localName: "linear",
-          file: "/plugins/linear/mcp/linear.json",
-        },
-        {
-          id: "local:repo/mcp/linear",
-          authority: "local:repo",
-          kind: "mcp-server",
-          localName: "linear",
-          file: "/repo/.agents/mcp/linear.json",
-        },
-      ] satisfies ReadonlyArray<FileContribution>;
-      const resolved = resolveRunPlanStage(
-        workspace.config,
-        "implement",
-        [codexHarness],
-        [
-          {
-            contribution: { id: "local:repo/mcp/linear", kind: "mcp-server" },
-            scope: { _tag: "SettingsProfile" },
-            enabled: true,
-          },
-        ],
-      );
-      assert.isNotNull(resolved);
-      if (!resolved) return;
-
-      const plan = yield* assembleRunPlan({
-        runId,
-        workspace,
-        item,
-        observation: { generation: 12, observedAtMillis: 1000 },
-        resolved,
-        prompt: "Implement #230",
-        checkoutPath: "/worktrees/230",
-        sessionKind: "opaque-handle",
-        projectedMembers: ["MCP"],
-        middleware: [],
-        context,
-        contributions,
-        mcpServers: contributions.map((contribution) => ({
-          identity: contribution.id,
-          name: contribution.localName,
-          endpoint: `https://${contribution.authority}.example.test/mcp`,
-          authenticated: false,
-        })),
-        provenanceStamps: [],
-      });
-
-      const projected = plan.mcp.flatMap((server) => ("projectedName" in server ? [server] : []));
-      assert.strictEqual(projected.length, 2);
-      assert.notStrictEqual(projected[0]?.projectedName, projected[1]?.projectedName);
-      assert.deepStrictEqual(
-        resolvedMcpSkills({ plan, session: null, mcpCredentials: new Map() }).map(({ name }) => name),
-        projected.map(({ projectedName }) => projectedName),
-      );
-      assert.deepStrictEqual(
-        plan.provenance.projectedNames.map(({ identity, name }) => ({ identity, name })),
-        projected.map(({ identity, projectedName: name }) => ({ identity, name })),
-      );
-    }),
-  );
-
-  it.effect("records optional contributions the selected runner cannot project", () =>
-    Effect.gen(function* () {
-      const runId = yield* Schema.decodeEffect(RunId)("run-optional-projection");
-      const contribution = {
+  it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
+    const runId = Schema.decodeSync(RunId)("run-qualified-mcp");
+    const contributions = [
+      {
         id: "plugin:linear/mcp/linear",
         authority: "plugin:linear",
         kind: "mcp-server",
         localName: "linear",
         file: "/plugins/linear/mcp/linear.json",
-      } satisfies FileContribution;
-      const resolved = resolveRunPlanStage(workspace.config, "implement", [
+      },
+      {
+        id: "local:repo/mcp/linear",
+        authority: "local:repo",
+        kind: "mcp-server",
+        localName: "linear",
+        file: "/repo/.agents/mcp/linear.json",
+      },
+    ] satisfies ReadonlyArray<FileContribution>;
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      "implement",
+      [codexHarness],
+      [
+        {
+          contribution: { id: "local:repo/mcp/linear", kind: "mcp-server" },
+          scope: { _tag: "SettingsProfile" },
+          enabled: true,
+        },
+      ],
+    );
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId,
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #230",
+      checkoutPath: "/worktrees/230",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
+      middleware: [],
+      context,
+      contributions,
+      mcpServers: contributions.map((contribution) => ({
+        identity: contribution.id,
+        name: contribution.localName,
+        endpoint: `https://${contribution.authority}.example.test/mcp`,
+        authenticated: false,
+      })),
+      provenanceStamps: [],
+    });
+
+    const projected = plan.mcp.flatMap((server) => ("projectedName" in server ? [server] : []));
+    assert.strictEqual(projected.length, 2);
+    assert.notStrictEqual(projected[0]?.projectedName, projected[1]?.projectedName);
+    assert.deepStrictEqual(
+      resolvedMcpSkills({ plan, session: null, mcpCredentials: new Map() }).map(({ name }) => name),
+      projected.map(({ projectedName }) => projectedName),
+    );
+    assert.deepStrictEqual(
+      plan.provenance.projectedNames.map(({ identity, name }) => ({ identity, name })),
+      projected.map(({ identity, projectedName: name }) => ({ identity, name })),
+    );
+  });
+
+  it("records optional contributions the selected runner cannot project", () => {
+    const runId = Schema.decodeSync(RunId)("run-optional-projection");
+    const contribution = {
+      id: "plugin:linear/mcp/linear",
+      authority: "plugin:linear",
+      kind: "mcp-server",
+      localName: "linear",
+      file: "/plugins/linear/mcp/linear.json",
+    } satisfies FileContribution;
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [
+      codexHarness,
+      {
+        setting: "bindings",
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        value: [{ need: "tracker", contribution: contribution.id }],
+      },
+    ]);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId,
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #230",
+      checkoutPath: "/worktrees/230",
+      sessionKind: "opaque-handle",
+      projectedMembers: [],
+      middleware: [],
+      context,
+      contributions: [contribution],
+      mcpServers: [
+        {
+          identity: contribution.id,
+          name: contribution.localName,
+          endpoint: "https://linear.example.test/mcp",
+          authenticated: false,
+        },
+      ],
+      provenanceStamps: [],
+    });
+
+    assert.deepStrictEqual(plan.provenance.projectedNames, []);
+    assert.deepStrictEqual(
+      {
+        ...plan.provenance.projection.find(({ member }) => member === `MCP ${contribution.id}`),
+      },
+      {
+        member: `MCP ${contribution.id}`,
+        disposition: "not-projected",
+        reason: "selected harness does not project MCP",
+      },
+    );
+  });
+
+  it("freezes Messages, admitting Work Context facts, and provenance", () => {
+    const resolved = resolveRunPlanStage(
+      workspace.config,
+      "implement",
+      [
         codexHarness,
+        {
+          setting: "model",
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          value: "default-model",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "profile-model",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+          value: "private-model",
+        },
+        {
+          setting: "model",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
+          value: "other-workspace-model",
+        },
+        {
+          setting: "permission-profile",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+          value: "read-only",
+        },
         {
           setting: "bindings",
           level: { _tag: "Operation", workflow: "coding", operation: "implement" },
           scope: { _tag: "SettingsProfile" },
-          value: [{ need: "tracker", contribution: contribution.id }],
+          value: [{ need: "review", contribution: "local:private/skill/review" }],
         },
-      ]);
-      assert.isNotNull(resolved);
-      if (!resolved) return;
-
-      const plan = yield* assembleRunPlan({
-        runId,
-        workspace,
-        item,
-        observation: { generation: 12, observedAtMillis: 1000 },
-        resolved,
-        prompt: "Implement #230",
-        checkoutPath: "/worktrees/230",
-        sessionKind: "opaque-handle",
-        projectedMembers: [],
-        middleware: [],
-        context,
-        contributions: [contribution],
-        mcpServers: [
-          {
-            identity: contribution.id,
-            name: contribution.localName,
-            endpoint: "https://linear.example.test/mcp",
-            authenticated: false,
-          },
-        ],
-        provenanceStamps: [],
-      });
-
-      assert.deepStrictEqual(plan.provenance.projectedNames, []);
-      assert.deepStrictEqual(
+      ],
+      [
         {
-          ...plan.provenance.projection.find(({ member }) => member === `MCP ${contribution.id}`),
-        },
-        {
-          member: `MCP ${contribution.id}`,
-          disposition: "not-projected",
-          reason: "selected harness does not project MCP",
-        },
-      );
-    }),
-  );
-
-  it.effect("freezes Messages, admitting Work Context facts, and provenance", () =>
-    Effect.gen(function* () {
-      const resolved = resolveRunPlanStage(
-        workspace.config,
-        "implement",
-        [
-          codexHarness,
-          {
-            setting: "model",
-            level: { _tag: "Default" },
-            scope: { _tag: "SettingsProfile" },
-            value: "default-model",
-          },
-          {
-            setting: "model",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-            scope: { _tag: "SettingsProfile" },
-            value: "profile-model",
-          },
-          {
-            setting: "model",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-            scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
-            value: "private-model",
-          },
-          {
-            setting: "model",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-            scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
-            value: "other-workspace-model",
-          },
-          {
-            setting: "permission-profile",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-            scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
-            value: "read-only",
-          },
-          {
-            setting: "bindings",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-            scope: { _tag: "SettingsProfile" },
-            value: [{ need: "review", contribution: "local:private/skill/review" }],
-          },
-        ],
-        [
-          {
-            contribution: { id: "local:private/mcp/tools", kind: "mcp-server" },
-            scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
-            enabled: false,
-          },
-        ],
-      );
-      assert.isNotNull(resolved);
-      if (!resolved) return;
-
-      const plan = yield* assembleRunPlan({
-        runId: yield* Schema.decodeEffect(RunId)("run-228"),
-        workspace,
-        item,
-        observation: { generation: 12, observedAtMillis: 1000 },
-        resolved,
-        prompt: "Implement #228",
-        checkoutPath: "/worktrees/228",
-        sessionKind: "opaque-handle",
-        projectedMembers: ["Instructions", "Messages", "MCP", "Sandbox", "Persistence"],
-        middleware: ["sandbox"],
-        context,
-        contributions: workspace.contributions,
-        mcpServers: [],
-        provenanceStamps: [{ _tag: "DeclaredVersion", source: "plugin:linear", version: "1.2.3" }],
-      });
-
-      assert.deepStrictEqual(
-        plan.messages.map(({ role, content }) => ({ role, content })),
-        [{ role: "user", content: "Implement #228" }],
-      );
-      assert.deepStrictEqual({ ...plan.workContext.facts }, item.workContext?.facts);
-      assert.deepStrictEqual(
-        { ...plan.workContext.observation },
-        {
-          generation: 12,
-          observedAtMillis: 1000,
-        },
-      );
-      assert.strictEqual(plan.harness.model, "private-model");
-      assert.strictEqual(plan.harness.profile, "read-only");
-      assert.deepStrictEqual(
-        plan.provenance.resolution.slice(0, operationSettingNames.length).map((entry) => entry.key),
-        [...operationSettingNames],
-      );
-      const modelTrace = plan.provenance.resolution.find((entry) => entry.key === "model");
-      assert.strictEqual(modelTrace?.winner?.source, "Private workspace overlay workspace");
-      assert.deepStrictEqual(
-        modelTrace?.shadowed.map((candidate) => candidate.value),
-        ["profile-model", "default-model"],
-      );
-      assert.deepStrictEqual(
-        modelTrace?.dropped.map(({ candidate, reason }) => ({ value: candidate.value, reason })),
-        [
-          {
-            value: "other-workspace-model",
-            reason: "scope does not apply to this workspace",
-          },
-        ],
-      );
-      assert.deepStrictEqual(
-        plan.provenance.resolution
-          .find((entry) => entry.key === "bindings")
-          ?.contributors.map((candidate) => candidate.value),
-        [[{ need: "review", contribution: "local:private/skill/review" }]],
-      );
-      assert.deepStrictEqual(
-        plan.provenance.stamps.map((stamp) => stamp.source),
-        [
-          "/repo/AGENTS.md",
-          "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md",
-          "/engine/operating-instructions/implement-agent/CHECKLIST.md",
-          "/repo/.agents.local/skills/review/SKILL.md",
-          "/repo/.agents/mcp/tools.json",
-          "plugin:linear",
-          "implement Operation Definition",
-          "Engine Harness Adapter",
-          "Engine Messages",
-          "Engine Work Context",
-          "Engine Tools",
-          "Engine Middleware",
-          "Engine Sandbox",
-          "Engine Structured Output",
-          "Engine Persistence",
-          "Engine Connections",
-        ],
-      );
-      assert.strictEqual(plan.skills[0]?.identity, "local:private/skill/review");
-      assert.strictEqual(
-        plan.provenance.resolution.find(({ key }) => key === "contribution:local:private/mcp/tools:enabled")
-          ?.dropped[0]?.reason,
-        "scope does not apply to this workspace",
-      );
-      assert.strictEqual(plan.commands[0]?.identity, "local:repo/command/release");
-      assert.strictEqual(
-        plan.provenance.resolution.find(({ key }) => key === "contribution:local:repo/mcp/disabled:enabled")
-          ?.dropped[0]?.reason,
-        "contribution entry gate disabled by default",
-      );
-      assert.strictEqual(plan.mcp[0]?.identity, "local:private/mcp/tools");
-      assert.strictEqual(
-        plan.provenance.projection.find(({ member }) => member === "MCP local:private/mcp/tools")
-          ?.disposition,
-        "not-projected",
-      );
-      assert.isNotNull(plan.structuredOutput);
-      assert.deepStrictEqual(plan.provenance.observation, plan.workContext.observation);
-      assert.strictEqual(
-        plan.provenance.projection.find(({ member }) => member === "Messages")?.disposition,
-        "projected",
-      );
-      assert.strictEqual(
-        plan.provenance.projection.find(({ member }) => member === "Tools")?.disposition,
-        "not-projected",
-      );
-      assert.isTrue(Object.isFrozen(plan));
-      assert.isTrue(Object.isFrozen(plan.messages));
-      assert.isTrue(Object.isFrozen(plan.workContext.facts.roles));
-    }),
-  );
-
-  it.effect("applies workspace MCP settings to resolved servers and their trace", () =>
-    Effect.gen(function* () {
-      const contribution = {
-        id: "plugin:linear/mcp/linear",
-        authority: "plugin:linear" as const,
-        kind: "mcp-server" as const,
-        localName: "linear",
-        file: "/plugins/linear/mcp/linear.json",
-      };
-      const contributionSettings: ReadonlyArray<ContributionSettingRow> = [
-        {
-          contribution: { id: contribution.id, kind: "mcp-server" },
-          scope: { _tag: "SettingsProfile" },
-          enabled: true,
-        },
-        {
-          contribution: { id: contribution.id, kind: "mcp-server" },
-          scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+          contribution: { id: "local:private/mcp/tools", kind: "mcp-server" },
+          scope: { _tag: "PrivateWorkspaceOverlay", workspace: otherWorkspace },
           enabled: false,
         },
-      ];
-      const resolved = resolveRunPlanStage(
-        workspace.config,
-        "implement",
-        [codexHarness],
-        contributionSettings,
-      );
-      assert.isNotNull(resolved);
-      if (!resolved) return;
+      ],
+    );
+    assert.isNotNull(resolved);
+    if (!resolved) return;
 
-      const plan = yield* assembleRunPlan({
-        runId: yield* Schema.decodeEffect(RunId)("run-mcp-gate"),
-        workspace,
-        item,
-        observation: { generation: 12, observedAtMillis: 1000 },
-        resolved,
-        prompt: "Implement #228",
-        checkoutPath: "/worktrees/228",
-        sessionKind: "opaque-handle",
-        projectedMembers: ["MCP"],
-        middleware: [],
-        context,
-        contributions: [contribution],
-        mcpServers: [
-          {
-            identity: contribution.id,
-            name: contribution.id,
-            endpoint: "https://mcp.linear.app/mcp",
-            authenticated: false,
-          },
-        ],
-        provenanceStamps: [],
-      });
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-228"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["Instructions", "Messages", "MCP", "Sandbox", "Persistence"],
+      middleware: ["sandbox"],
+      context,
+      contributions: workspace.contributions,
+      mcpServers: [],
+      provenanceStamps: [{ _tag: "DeclaredVersion", source: "plugin:linear", version: "1.2.3" }],
+    });
 
-      assert.deepStrictEqual(plan.mcp, []);
-      const trace = plan.provenance.resolution.find(
-        ({ key }) => key === `contribution:${contribution.id}:enabled`,
-      );
-      assert.strictEqual(trace?.winner?.source, "Private workspace overlay workspace");
-      assert.strictEqual(trace?.winner?.value, false);
-      assert.deepStrictEqual(
-        trace?.shadowed.map(({ value }) => value),
-        [true],
-      );
-      assert.strictEqual(trace?.dropped[0]?.reason, "contribution entry gate disabled");
-    }),
-  );
+    assert.deepStrictEqual(
+      plan.messages.map(({ role, content }) => ({ role, content })),
+      [{ role: "user", content: "Implement #228" }],
+    );
+    assert.deepStrictEqual({ ...plan.workContext.facts }, item.workContext?.facts);
+    assert.deepStrictEqual(
+      { ...plan.workContext.observation },
+      {
+        generation: 12,
+        observedAtMillis: 1000,
+      },
+    );
+    assert.strictEqual(plan.harness.model, "private-model");
+    assert.strictEqual(plan.harness.profile, "read-only");
+    assert.deepStrictEqual(
+      plan.provenance.resolution.slice(0, operationSettingNames.length).map((entry) => entry.key),
+      [...operationSettingNames],
+    );
+    const modelTrace = plan.provenance.resolution.find((entry) => entry.key === "model");
+    assert.strictEqual(modelTrace?.winner?.source, "Private workspace overlay workspace");
+    assert.deepStrictEqual(
+      modelTrace?.shadowed.map((candidate) => candidate.value),
+      ["profile-model", "default-model"],
+    );
+    assert.deepStrictEqual(
+      modelTrace?.dropped.map(({ candidate, reason }) => ({ value: candidate.value, reason })),
+      [
+        {
+          value: "other-workspace-model",
+          reason: "scope does not apply to this workspace",
+        },
+      ],
+    );
+    assert.deepStrictEqual(
+      plan.provenance.resolution
+        .find((entry) => entry.key === "bindings")
+        ?.contributors.map((candidate) => candidate.value),
+      [[{ need: "review", contribution: "local:private/skill/review" }]],
+    );
+    assert.deepStrictEqual(
+      plan.provenance.stamps.map((stamp) => stamp.source),
+      [
+        "/repo/AGENTS.md",
+        "/engine/operating-instructions/implement-agent/INSTRUCTIONS.md",
+        "/engine/operating-instructions/implement-agent/CHECKLIST.md",
+        "/repo/.agents.local/skills/review/SKILL.md",
+        "/repo/.agents/mcp/tools.json",
+        "plugin:linear",
+        "implement Operation Definition",
+        "Engine Harness Adapter",
+        "Engine Messages",
+        "Engine Work Context",
+        "Engine Tools",
+        "Engine Middleware",
+        "Engine Sandbox",
+        "Engine Structured Output",
+        "Engine Persistence",
+        "Engine Connections",
+      ],
+    );
+    assert.strictEqual(plan.skills[0]?.identity, "local:private/skill/review");
+    assert.strictEqual(
+      plan.provenance.resolution.find(({ key }) => key === "contribution:local:private/mcp/tools:enabled")
+        ?.dropped[0]?.reason,
+      "scope does not apply to this workspace",
+    );
+    assert.strictEqual(plan.commands[0]?.identity, "local:repo/command/release");
+    assert.strictEqual(
+      plan.provenance.resolution.find(({ key }) => key === "contribution:local:repo/mcp/disabled:enabled")
+        ?.dropped[0]?.reason,
+      "contribution entry gate disabled by default",
+    );
+    assert.strictEqual(plan.mcp[0]?.identity, "local:private/mcp/tools");
+    assert.strictEqual(
+      plan.provenance.projection.find(({ member }) => member === "MCP local:private/mcp/tools")?.disposition,
+      "not-projected",
+    );
+    assert.isNotNull(plan.structuredOutput);
+    assert.deepStrictEqual(plan.provenance.observation, plan.workContext.observation);
+    assert.strictEqual(
+      plan.provenance.projection.find(({ member }) => member === "Messages")?.disposition,
+      "projected",
+    );
+    assert.strictEqual(
+      plan.provenance.projection.find(({ member }) => member === "Tools")?.disposition,
+      "not-projected",
+    );
+    assert.isTrue(Object.isFrozen(plan));
+    assert.isTrue(Object.isFrozen(plan.messages));
+    assert.isTrue(Object.isFrozen(plan.workContext.facts.roles));
+  });
+
+  it("applies workspace MCP settings to resolved servers and their trace", () => {
+    const contribution = {
+      id: "plugin:linear/mcp/linear",
+      authority: "plugin:linear" as const,
+      kind: "mcp-server" as const,
+      localName: "linear",
+      file: "/plugins/linear/mcp/linear.json",
+    };
+    const contributionSettings: ReadonlyArray<ContributionSettingRow> = [
+      {
+        contribution: { id: contribution.id, kind: "mcp-server" },
+        scope: { _tag: "SettingsProfile" },
+        enabled: true,
+      },
+      {
+        contribution: { id: contribution.id, kind: "mcp-server" },
+        scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspace.config.name },
+        enabled: false,
+      },
+    ];
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness], contributionSettings);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-mcp-gate"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
+      middleware: [],
+      context,
+      contributions: [contribution],
+      mcpServers: [
+        {
+          identity: contribution.id,
+          name: contribution.id,
+          endpoint: "https://mcp.linear.app/mcp",
+          authenticated: false,
+        },
+      ],
+      provenanceStamps: [],
+    });
+
+    assert.deepStrictEqual(plan.mcp, []);
+    const trace = plan.provenance.resolution.find(
+      ({ key }) => key === `contribution:${contribution.id}:enabled`,
+    );
+    assert.strictEqual(trace?.winner?.source, "Private workspace overlay workspace");
+    assert.strictEqual(trace?.winner?.value, false);
+    assert.deepStrictEqual(
+      trace?.shadowed.map(({ value }) => value),
+      [true],
+    );
+    assert.strictEqual(trace?.dropped[0]?.reason, "contribution entry gate disabled");
+  });
 });
