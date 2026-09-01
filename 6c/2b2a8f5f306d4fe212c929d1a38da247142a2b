@@ -1,0 +1,39 @@
+packages/engine/src/run-ledger.test.ts
+  s_fd8ea12c93a03f::t_e0cceaa0f3a67c 32-34,37,40,43,46,49
+  s_fd8ea12c93a03f::t_6187fc66372f5a 23,25,221,231-233,247,264,323,351,476,486,514,547,558,566,577,588,609,619-620,630
+  s_fd8ea12c93a03f::t_58105ab8930c7c 17
+  s_fd8ea12c93a03f::t_54419cb5d17ce5 276,296
+  s_b304ad8e010215::t_74d1868164c471 31,35-36,38-39,41-42,44-45,47-48,50-52
+packages/engine/src/run-ledger.ts
+  s_fd8ea12c93a03f::t_7ec6e71f4c81ee 104,122,228,230,244,255,261,275,277,326,328
+  s_fd8ea12c93a03f::t_e0cceaa0f3a67c 65-67,116-120,257
+  s_b304ad8e010215::t_fe97c90addd7f0 258
+apps/cli/src/ledger.ts
+  s_fd8ea12c93a03f::t_150013d8e1c9ac 347,399,409,457,476,479
+apps/cli/src/ledger.test.ts
+  s_fd8ea12c93a03f::t_150013d8e1c9ac 79,83,85,343,353-355,368-369,384,446,461,482,492,518,591-592,601
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6c2b2a8f5f306d4fe212c929d1a38da247142a2b",
+  "prompts": {},
+  "sessions": {
+    "s_b304ad8e010215": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05a9e-703d-7340-aba8-c81609f06a03",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_fd8ea12c93a03f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cfd-509b-7350-802e-c04779baa3db",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
