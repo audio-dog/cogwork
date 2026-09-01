@@ -255,7 +255,7 @@ export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(funct
       return updated;
     }),
   );
-  yield* worker.submit().pipe(Effect.ignore);
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
   const published = yield* publisher.publishControlStore(controlStore);
   yield* publisher.publishWorkspaces();
   return published;
@@ -348,7 +348,7 @@ export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")
       return updated;
     }),
   );
-  yield* worker.submit().pipe(Effect.ignore);
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
   const published = yield* publisher.publishControlStore(controlStore);
   yield* publisher.publishWorkspaces();
   return published;
@@ -419,7 +419,7 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
       return { overview, notices };
     }),
   );
-  yield* worker.submit().pipe(Effect.ignore);
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
   yield* publisher.publishPlugins(result.overview, result.notices);
   yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
   yield* publisher.publishWorkspaces();
