@@ -1,0 +1,36 @@
+packages/ui/src/components/radio-group.tsx
+  s_ab0a2f9ba936f8::t_bff387ff19ab81 3,5-8,10-17,19-28,30-31
+  h_46518a29d4dd91 1-2,4,9,18,29,32
+packages/ui/src/components/brand-icons.tsx
+  s_5f77081014115e::t_4461262fbd2dd0 1-13,15-19
+  s_5f77081014115e::t_252d1f734ada68 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6ded6eb225a0fe19d05452241bb28c8e3959058d",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_5f77081014115e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a58dbab-f8f5-4017-86cc-246deaae4f59",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ab0a2f9ba936f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0be73c09-366b-4bf6-b2e2-7a76ccb2d42e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
