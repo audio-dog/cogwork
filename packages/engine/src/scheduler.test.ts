@@ -27,6 +27,7 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -423,25 +424,20 @@ const providedRegistryLayer = (deps: SchedulerLayerDependencies) => {
 };
 
 const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerDependencies) => {
-  const bus = DaemonEventBus.layer;
-  const runLedger = RunLedger.publishingLayer.pipe(
-    Layer.provide(RunLedger.layerMemoryCore),
-    Layer.provide(bus),
-  );
+  const engineServices = engineTestLayer();
   const probe = probeLayer(deps.snapshots);
-  const executor = executorStubLayer(deps.execute).pipe(Layer.provide(Layer.merge(probe, runLedger)));
+  const executor = executorStubLayer(deps.execute).pipe(Layer.provide(Layer.merge(probe, engineServices)));
   return Scheduler.layer(config).pipe(
     Layer.provide(
       Layer.mergeAll(
         providedRegistryLayer(deps),
         workerLayer.pipe(Layer.provide(probe)),
         executor,
-        runLedger,
+        engineServices,
       ),
     ),
     Layer.provideMerge(probe),
-    Layer.provideMerge(runLedger),
-    Layer.provideMerge(bus),
+    Layer.provideMerge(engineServices),
   );
 };
 
