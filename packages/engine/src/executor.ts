@@ -16,8 +16,7 @@ import type {
   TokenUsage,
 } from "@cogwork/contracts";
 import {
-  agUiIsStructuredOutputComplete,
-  agUiUsage,
+  AgUiEventUnion,
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
   ImplementStageResultCompletion,
@@ -210,16 +209,32 @@ const resumeWorktreeOptions = (item: EligibleWork) => {
   return { resume: true };
 };
 
-const appendStructuredOutput = (acc: Pick<RunAccumulator, "structuredOutputs">, event: AgUiEvent) => {
-  if (!agUiIsStructuredOutputComplete(event)) return acc.structuredOutputs;
-  return [...acc.structuredOutputs, event.value];
-};
+const withHandle = (acc: RunAccumulator, handle: string | null) => ({ ...acc, handle });
 
-const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator => ({
-  handle,
-  usage: agUiUsage(event) ?? acc.usage,
-  structuredOutputs: appendStructuredOutput(acc, event),
-});
+const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator =>
+  AgUiEventUnion.matchOrElse(
+    event,
+    {
+      CUSTOM: ({ name, value }) => ({
+        ...withHandle(acc, handle),
+        structuredOutputs:
+          name === "structured-output.complete" ? [...acc.structuredOutputs, value] : acc.structuredOutputs,
+      }),
+      RUN_FINISHED: ({ usage }) => {
+        if (!usage) return withHandle(acc, handle);
+        return {
+          ...withHandle(acc, handle),
+          usage: {
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+            ...(usage.estimated ? { estimated: true } : {}),
+          },
+        };
+      },
+    },
+    () => withHandle(acc, handle),
+  );
 
 const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: string | null) =>
   ({
@@ -229,7 +244,7 @@ const mergeTriageEvent = (acc: TriageAccumulator, event: AgUiEvent, handle: stri
 
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 const successfulTerminal = (event: AgUiEvent) =>
-  event.type === "RUN_FINISHED" && event.finishReason !== "failed";
+  AgUiEventUnion.guards.RUN_FINISHED(event) && event.finishReason !== "failed";
 
 const withFailureTerminal = <R>(stream: Stream.Stream<AgUiEvent, HarnessError, R>) =>
   Stream.catchCause(stream, (cause) =>

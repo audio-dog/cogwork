@@ -1,4 +1,4 @@
-import { Effect, Exit, Scope } from "effect";
+import { Effect, Exit, Scope, SubscriptionRef } from "effect";
 import type * as ManagedRuntime from "effect/ManagedRuntime";
 import { type BrowserWindow, ipcMain, type WebContents } from "electron";
 import {
@@ -8,15 +8,15 @@ import {
   type WindowPreferences,
 } from "../shared/ipc";
 import { createDaemonBridgePort, type DaemonBridgePort } from "./daemon-bridge";
-import type { EngineSupervisor } from "./engine-supervisor";
+import type { EngineSupervisor, EngineSupervisorService } from "./engine-supervisor";
 import { mainLogger, rendererLogger } from "./logger";
 import type { WindowPreferencesStore } from "./window-preferences";
 
 export interface IpcDeps {
   readonly socketPath: string;
-  readonly supervisor: EngineSupervisor;
+  readonly supervisor: EngineSupervisorService;
   readonly windowPreferences: WindowPreferencesStore;
-  readonly runtime: ManagedRuntime.ManagedRuntime<never, never>;
+  readonly runtime: ManagedRuntime.ManagedRuntime<EngineSupervisor, never>;
 }
 
 // `WebContents.isDestroyed()` stays false after a GPU/renderer crash or during a reload, yet the
@@ -38,12 +38,19 @@ interface RendererSession {
   readonly port?: DaemonBridgePort;
 }
 
+const closeSessionScope = (scope: Scope.Closeable) => Scope.close(scope, Exit.void);
+
 export const registerIpc = (deps: IpcDeps) => {
-  ipcMain.handle(IpcChannel.getEngineStatus, () => deps.supervisor.status);
-  ipcMain.handle(IpcChannel.setEngineEnabled, async (_event, enabled: boolean) => {
-    await (enabled ? deps.supervisor.start() : deps.supervisor.stop());
-    return deps.supervisor.status;
-  });
+  ipcMain.handle(IpcChannel.getEngineStatus, () =>
+    deps.runtime.runPromise(SubscriptionRef.get(deps.supervisor.status)),
+  );
+  ipcMain.handle(IpcChannel.setEngineEnabled, (_event, enabled: boolean) =>
+    deps.runtime.runPromise(
+      (enabled ? deps.supervisor.start : deps.supervisor.stop).pipe(
+        Effect.andThen(SubscriptionRef.get(deps.supervisor.status)),
+      ),
+    ),
+  );
 
   ipcMain.handle(IpcChannel.getWindowPreferences, () => deps.windowPreferences.get());
   ipcMain.handle(IpcChannel.setWindowPreferences, (_event, preferences: WindowPreferences) =>
@@ -52,17 +59,21 @@ export const registerIpc = (deps: IpcDeps) => {
 
   const sessions = new WeakMap<WebContents, RendererSession>();
 
+  const closeSession = (sender: WebContents) => {
+    const session = sessions.get(sender);
+    if (!session) return Effect.void;
+    return closeSessionScope(session.scope);
+  };
+
   const openSession = Effect.fn("DesktopIpc.openSession")(function* (sender: WebContents) {
-    const existing = sessions.get(sender);
-    if (existing) yield* Scope.close(existing.scope, Exit.void);
+    yield* closeSession(sender);
 
     const scope = yield* Scope.fork(deps.runtime.scope);
     const port = yield* createDaemonBridgePort(deps.socketPath, {
       onData: (frame) => safeSend(sender, IpcChannel.rpcData, frame),
       onClosed: (reason) => safeSend(sender, IpcChannel.rpcClosed, reason),
     }).pipe(Scope.provide(scope));
-    sessions.set(sender, { scope, port });
-    const onDestroyed = () => deps.runtime.runFork(Scope.close(scope, Exit.void));
+    const onDestroyed = () => deps.runtime.runFork(closeSessionScope(scope));
     sender.once("destroyed", onDestroyed);
     yield* Scope.addFinalizer(
       scope,
@@ -73,7 +84,7 @@ export const registerIpc = (deps: IpcDeps) => {
       Effect.sync(() => sessions.delete(sender)),
     );
     sessions.set(sender, { scope });
-    yield* port.connect.pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
+    yield* port.connect.pipe(Effect.onError(() => closeSessionScope(scope)));
     // The port never crosses IPC: the renderer contract is `Promise<void>`, and Electron cannot
     // structured-clone an object of Effects. `rpcSend` reads the port from `sessions` instead.
     sessions.set(sender, { scope, port });
