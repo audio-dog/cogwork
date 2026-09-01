@@ -1,4 +1,5 @@
 import {
+  AvailabilityCause,
   type ContributionSettingRow,
   type FileContribution,
   type OperationSettingRow,
@@ -17,6 +18,7 @@ import { resolvedMcpSkills } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
 import {
   assembleRunPlan,
+  availabilityCauses,
   engineAdmissibleSettingScope,
   engineSettingScopeDirection,
   projectedContributionName,
@@ -63,6 +65,95 @@ describe("engine setting resolution", () => {
       assert.deepStrictEqual(resolvedValue(testCase), testCase.expected);
     });
   }
+});
+
+describe("Operation availability", () => {
+  it("reports every unsatisfied declared need", () => {
+    const causes = availabilityCauses({
+      needs: [
+        { name: "review", kind: "skill" },
+        { name: "tracker", kind: "mcp-server" },
+        { name: "release", kind: "command" },
+      ],
+      bindings: [
+        { need: "review", contribution: "local:repo/skill/review" },
+        { need: "tracker", contribution: "plugin:linear/mcp/linear" },
+      ],
+      contributions: [
+        {
+          id: "local:repo/skill/review",
+          kind: "skill",
+          enabled: false,
+          ready: true,
+          reason: null,
+        },
+        {
+          id: "plugin:linear/mcp/linear",
+          kind: "mcp-server",
+          enabled: true,
+          ready: false,
+          reason: "credential unavailable",
+        },
+      ],
+      projectedMembers: ["Skills", "MCP", "Commands"],
+    });
+
+    assert.deepStrictEqual(
+      causes.flatMap((cause) =>
+        AvailabilityCause.guards.UnsatisfiedNeed(cause)
+          ? [{ _tag: cause._tag, need: cause.need, reason: cause.reason }]
+          : [],
+      ),
+      [
+        { _tag: "UnsatisfiedNeed", need: "review", reason: "off" },
+        { _tag: "UnsatisfiedNeed", need: "tracker", reason: "not-ready" },
+        { _tag: "UnsatisfiedNeed", need: "release", reason: "unbound" },
+      ],
+    );
+  });
+
+  it("rejects a required contribution the selected Harness cannot project", () => {
+    const causes = availabilityCauses({
+      needs: [{ name: "review", kind: "skill" }],
+      bindings: [{ need: "review", contribution: "local:private/skill/review" }],
+      contributions: [
+        {
+          id: "local:private/skill/review",
+          kind: "skill",
+          enabled: true,
+          ready: true,
+          reason: null,
+        },
+      ],
+      projectedMembers: ["MCP"],
+    });
+
+    const cause = causes[0];
+    assert.isTrue(cause && AvailabilityCause.guards.UnsatisfiedNeed(cause));
+    if (!cause || !AvailabilityCause.guards.UnsatisfiedNeed(cause)) return;
+    assert.strictEqual(cause.reason, "not-ready");
+    assert.include(cause.message, "does not project Skills");
+  });
+
+  it("accepts ready Hook and Connection bindings when their sources are available", () => {
+    const causes = availabilityCauses({
+      needs: [
+        { name: "notify", kind: "hook" },
+        { name: "tracker", kind: "connection" },
+      ],
+      bindings: [
+        { need: "notify", contribution: "engine/hook/notify" },
+        { need: "tracker", contribution: "linear/acme" },
+      ],
+      contributions: [
+        { id: "engine/hook/notify", kind: "hook", enabled: true, ready: true, reason: null },
+        { id: "linear/acme", kind: "connection", enabled: true, ready: true, reason: null },
+      ],
+      projectedMembers: ["Hooks", "Connections"],
+    });
+
+    assert.deepStrictEqual(causes, []);
+  });
 });
 
 const workspace: RegisteredWorkspace = {
