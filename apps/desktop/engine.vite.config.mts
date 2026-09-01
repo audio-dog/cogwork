@@ -9,8 +9,11 @@ const workspaceRequire = createRequire(new URL("../../package.json", import.meta
 const enginePackageRoot = dirname(dirname(engineRequire.resolve("@cogwork/engine")));
 const drizzleKitRoot = dirname(engineRequire.resolve("drizzle-kit/payload/sqlite"));
 const drizzleOrmRoot = dirname(engineRequire.resolve("drizzle-orm"));
-const nodeBinary = workspaceRequire.resolve("node/bin/node");
+const nodePackageRoot = dirname(workspaceRequire.resolve("node/package.json"));
 const outputDir = fileURLToPath(new URL("./out/engine", import.meta.url));
+
+export const resolveNodeBinary = (packageRoot: string, platform: string) =>
+  platform === "win32" ? join(packageRoot, "node.exe") : join(packageRoot, "bin", "node");
 
 const resolveBuildPlatform = (mode: string) => {
   const buildPlatform = mode === "production" ? process.platform : mode;
@@ -45,6 +48,7 @@ export default defineConfig(({ mode }) => {
         name: "stage-engine-runtime",
         closeBundle() {
           const nodeExecutableName = buildPlatform === "win32" ? "node.exe" : "node";
+          const nodeBinary = resolveNodeBinary(nodePackageRoot, buildPlatform);
           writeFileSync(join(outputDir, "package.json"), JSON.stringify({ type: "module" }));
           const nodeOutput = join(outputDir, "bin", nodeExecutableName);
           mkdirSync(dirname(nodeOutput), { recursive: true });
