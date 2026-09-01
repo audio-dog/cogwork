@@ -66,6 +66,12 @@ const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   linearHistory: false,
   concurrency: 2,
 });
+const unboundRegistration = Schema.decodeSync(WorkspaceRegistration)({
+  name: "unbound",
+  checkoutPath: "/repos/unbound",
+  issueTracker: { type: "github", repo: "acme/repo" },
+  sourceControl: { type: "github", repo: "acme/repo" },
+});
 const mismatchedRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "mismatch",
   checkoutPath: "/repos/mismatch",
@@ -199,7 +205,7 @@ const connectionStoreLayerWithStatus = (
   remove: ConnectionStoreService["remove"] = () => Effect.die("unexpected Connection remove"),
 ) =>
   Layer.succeed(ConnectionStore, {
-    overview: () => Effect.succeed({ connections: [] }),
+    overview: Effect.succeed({ connections: [] }),
     find: (connectionId) =>
       Effect.succeed(
         Connection.make({
@@ -941,6 +947,19 @@ describe("SetContributionSetting", () => {
 });
 
 describe("RegisterWorkspace", () => {
+  // A registration that names no Connection is not a Connection problem, and saying so sends the
+  // reader to a Connections screen where everything is already established and fine.
+  it.effect("names the unset field when a registration binds no Connection", () =>
+    Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const error = yield* Effect.flip(client.RegisterWorkspace({ registration: unboundRegistration }));
+
+      assert.include(error.message, "issueTracker names no Connection");
+      assert.include(error.message, '"issueTracker.connectionId"');
+      assert.include(error.message, "github/<account>");
+    }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
+  );
+
   it.effect("rejects a tracker bound to the wrong Connection system", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);

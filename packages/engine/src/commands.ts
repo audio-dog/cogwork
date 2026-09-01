@@ -16,6 +16,7 @@ import {
   type PluginOverview,
   Principal,
   type PrincipalId,
+  pluginRequiringConnection,
   RunAlreadyFinished,
   type RunId,
   RunNotFound,
@@ -34,7 +35,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { ConnectionStore, requiringPluginId } from "./connection";
+import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
@@ -252,12 +253,18 @@ const connectionSystemFor = Effect.fn("Daemon.connectionSystemFor")(function* (t
   return yield* new WorkspaceRegistrationError({ message: `${type} has no Connection system` });
 });
 
+// An unbound registration and a bad binding fail for different reasons, and only one of them is
+// about the Connection: "unbound" means the registration never named one, so pointing the reader at
+// their Connections sends them to look at something that is very likely already fine.
 const requireConfiguredBinding = Effect.fn("Daemon.requireConfiguredConnectionBinding")(function* (
   connectionId: WorkspaceRegistration["issueTracker"]["connectionId"],
   system: ConnectionSystem,
+  field: string,
 ) {
   if (connectionId === "unbound") {
-    return yield* new WorkspaceRegistrationError({ message: `${system} needs an established Connection` });
+    return yield* new WorkspaceRegistrationError({
+      message: `${field} names no Connection: set "${field}.connectionId" to an established ${system} Connection id, such as "${system}/<account>"`,
+    });
   }
   return yield* requireBinding(connectionId, system);
 });
@@ -294,8 +301,14 @@ export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function*
   readonly registration: WorkspaceRegistration;
 }) {
   const { issueTracker, sourceControl } = payload.registration;
-  yield* requireConfiguredBinding(issueTracker.connectionId, yield* connectionSystemFor(issueTracker.type));
-  if (sourceControl) yield* requireConfiguredBinding(sourceControl.connectionId, "github");
+  yield* requireConfiguredBinding(
+    issueTracker.connectionId,
+    yield* connectionSystemFor(issueTracker.type),
+    "issueTracker",
+  );
+  if (sourceControl) {
+    yield* requireConfiguredBinding(sourceControl.connectionId, "github", "sourceControl");
+  }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const change = yield* management.register(payload.registration);
@@ -385,10 +398,8 @@ const publishConnections = Effect.fn("Daemon.publishConnections")(function* (
   danglingWorkspaces: readonly WorkspaceId[],
 ) {
   const connections = yield* ConnectionStore;
-  const plugins = yield* PluginManager;
   const publisher = yield* DaemonEventPublisher;
-  const pluginOverview = yield* plugins.overview;
-  const overview = yield* connections.overview(pluginOverview);
+  const overview = yield* connections.overview;
   yield* publisher.publishConnections(overview, danglingWorkspaces);
   return { overview, danglingWorkspaces } satisfies ConnectionMutationResult;
 });
@@ -406,11 +417,11 @@ const ensureRequiredPlugin = Effect.fn("Daemon.ensureRequiredPlugin")(function* 
 ) {
   const plugins = yield* PluginManager;
   const overview = yield* plugins.overview;
-  const pluginId = requiringPluginId(overview, system);
-  if (!pluginId) return;
-  const plugin = overview.plugins.find((item) => item.pluginId === pluginId);
-  if (plugin?.record) return;
-  yield* publishPluginMutation(plugins.install(pluginId, principalId)).pipe(Effect.tapError(() => rollback));
+  const plugin = pluginRequiringConnection(overview, system);
+  if (!plugin || plugin.record) return;
+  yield* publishPluginMutation(plugins.install(plugin.pluginId, principalId)).pipe(
+    Effect.tapError(() => rollback),
+  );
 });
 
 export const establishConnection = Effect.fn("Daemon.EstablishConnection")(function* (payload: {

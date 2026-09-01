@@ -39,7 +39,7 @@ const linearConnection = Schema.decodeSync(Connection)({
   status: "established",
 });
 const connectionStoreLayer = Layer.succeed(ConnectionStore, {
-  overview: () => Effect.succeed({ connections: [] }),
+  overview: Effect.succeed({ connections: [] }),
   find: (connectionId) => Effect.succeed(connectionId === linearConnection.id ? linearConnection : null),
   findSystem: (system) => Effect.succeed(system === "linear" ? linearConnection : null),
   bearer: () => Effect.die("unexpected credential read"),
@@ -51,7 +51,7 @@ const connectionStoreLayer = Layer.succeed(ConnectionStore, {
   remove: () => Effect.void,
 });
 const unavailableConnectionStoreLayer = Layer.succeed(ConnectionStore, {
-  overview: () => Effect.succeed({ connections: [] }),
+  overview: Effect.succeed({ connections: [] }),
   find: () => Effect.succeed(null),
   findSystem: () => Effect.succeed(null),
   bearer: () => Effect.die("unexpected credential read"),
