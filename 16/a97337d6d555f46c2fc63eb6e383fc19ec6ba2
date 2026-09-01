@@ -1,0 +1,19 @@
+packages/engine/src/recovery.ts
+  s_950d9dc8b8e5cb::t_d21282877b1b92 39-40,243,273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "16a97337d6d555f46c2fc63eb6e383fc19ec6ba2",
+  "prompts": {},
+  "sessions": {
+    "s_950d9dc8b8e5cb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cfc-33ec-7fa1-8ffc-d8b169330393",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
