@@ -1,0 +1,66 @@
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_5f77081014115e::t_34618a3580ffcf 15-17
+  s_f5fab53336c6eb::t_0800b8e4434f40 1
+  s_5f77081014115e::t_adeaccc795e048 10-11
+  s_f5fab53336c6eb::t_8ecb345a7fa8e6 26
+  s_5f77081014115e::t_30542e28215123 12-13
+  s_5f77081014115e::t_32a07b689a2bb9 9
+apps/desktop/src/renderer/src/components/connections-surface.tsx
+  s_5f77081014115e::t_c68453c6cceae5 7,45,232-233,236-238
+  s_5f77081014115e::t_df89c9dcf5241f 240,242,270-272
+  s_ab0a2f9ba936f8::t_39c409753c2c2a 64
+  s_ab0a2f9ba936f8::t_aee78ebf24e7a7 43,47,73-76,108-112,119-120,131-132,136
+  s_5f77081014115e::t_6aba32fca9dea2 219,221-225
+  s_5f77081014115e::t_d38cb1e8f18697 52,63,69-70,90-100,105-106,118,124-127,129,241,243-246,336
+  s_5f77081014115e::t_8ea3f6ed7ac302 23
+  s_5f77081014115e::t_a4237fb60d7166 61,234-235,239,247-248,250-264,289
+  s_ab0a2f9ba936f8::t_83975e05338dcd 148-155,163,165-173
+  s_5f77081014115e::t_cd2bfd2863edae 209-210,214-216,218,220,227-231,249,265-266,274-280,282
+  s_5f77081014115e::t_34618a3580ffcf 208
+  s_5f77081014115e::t_4c422d58c278c3 8,67-68,71
+  s_ab0a2f9ba936f8::t_fd3cd1c29ebbb1 212
+  s_5f77081014115e::t_7b68222b79c1cc 191
+  s_f5fab53336c6eb::t_ebc220d0540953 36-42,211,213,285-288
+  s_5f77081014115e::t_442f74e4217059 57-60,62
+  s_ab0a2f9ba936f8::t_e25f3aae958662 48
+  s_5f77081014115e::t_f1ec96185cccc2 217
+  s_f5fab53336c6eb::t_dbd55934492c86 107,226,267
+apps/desktop/src/renderer/src/features/connections-view.test.ts
+  s_5f77081014115e::t_bc25f86808c7e1 58-60,62,64-66
+  s_5f77081014115e::t_5b55791737bcb7 14
+  s_5f77081014115e::t_27f81511a3abaf 84
+  s_5f77081014115e::t_7ad0908b2c0b35 41
+  s_5f77081014115e::t_389da24a23bc49 3,56-57,61,63,67-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4ba2d078038a0afc4b6848ae6ccc02e2593e8cc0",
+  "prompts": {},
+  "sessions": {
+    "s_5f77081014115e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4a58dbab-f8f5-4017-86cc-246deaae4f59",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ab0a2f9ba936f8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0be73c09-366b-4bf6-b2e2-7a76ccb2d42e",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f5fab53336c6eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc25f657-525a-438d-ba08-07b670b8ac56",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
