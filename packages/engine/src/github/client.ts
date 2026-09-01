@@ -309,12 +309,16 @@ const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
 const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
+const paginationDeadline = "5 minutes";
 
-const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, IssueTrackerError, R>) =>
-  attempt.pipe(
-    Effect.timeout(transientAttemptDeadline),
+const withTransientRetry = <A, R>(attempt: Effect.Effect<A, IssueTrackerError, R>) =>
+  Effect.retry(attempt, { while: isTransient, schedule: transientBackoff, times: 3 });
+
+const withPaginationDeadline = <A, R>(operation: Effect.Effect<A, IssueTrackerError, R>) =>
+  operation.pipe(
+    Effect.timeout(paginationDeadline),
     Effect.catchTag("TimeoutError", () =>
-      Effect.fail(unavailable(`GitHub request timed out after ${transientAttemptDeadline}`)),
+      Effect.fail(unavailable(`GitHub pagination timed out after ${paginationDeadline}`)),
     ),
   );
 
@@ -355,13 +359,15 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     if (cooldownUntil !== null && now < cooldownUntil) {
       return yield* rateLimited(cooldownUntil);
     }
-    const response = yield* Effect.catchTag(
-      client.execute(
-        request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
-      ),
-      "HttpClientError",
-      (error) => Effect.fail(unavailable(error.message)),
-    );
+    const response = yield* client
+      .execute(request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)))
+      .pipe(
+        Effect.catchTag("HttpClientError", (error) => Effect.fail(unavailable(error.message))),
+        Effect.timeout(transientAttemptDeadline),
+        Effect.catchTag("TimeoutError", () =>
+          Effect.fail(unavailable(`GitHub request timed out after ${transientAttemptDeadline}`)),
+        ),
+      );
     const remaining = response.headers["x-ratelimit-remaining"];
     const resumeAt = rateLimitResumeAt(response.headers, now);
     if (remaining === "0" && resumeAt !== null) {
@@ -414,18 +420,15 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     const cached = (yield* Ref.get(etags)).get(path);
     const base = HttpClientRequest.get(path);
     const request = cached ? HttpClientRequest.setHeader(base, "if-none-match", cached.etag) : base;
-    const { body, etag } = yield* Effect.retry(
-      withTransientAttemptDeadline(
-        Effect.gen(function* () {
-          const response = yield* send(repo, request);
-          if (response.status === 304 && cached) return { body: cached.body, etag: undefined };
-          return {
-            body: yield* Effect.mapError(response.json, toUnavailable),
-            etag: response.headers.etag,
-          };
-        }),
-      ),
-      { while: isTransient, schedule: transientBackoff, times: 3 },
+    const { body, etag } = yield* withTransientRetry(
+      Effect.gen(function* () {
+        const response = yield* send(repo, request);
+        if (response.status === 304 && cached) return { body: cached.body, etag: undefined };
+        return {
+          body: yield* Effect.mapError(response.json, toUnavailable),
+          etag: response.headers.etag,
+        };
+      }),
     );
     if (etag !== undefined) {
       yield* Ref.update(etags, (entries) => new Map(entries).set(path, { etag, body }));
@@ -462,7 +465,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     body: unknown,
   ) {
     const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), toUnavailable);
-    yield* send(repo, withBody);
+    yield* withTransientRetry(send(repo, withBody));
   });
 
   // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
@@ -476,14 +479,11 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       HttpClientRequest.bodyJson(request, { query, variables }),
       toUnavailable,
     );
-    const json = yield* Effect.retry(
-      withTransientAttemptDeadline(
-        Effect.gen(function* () {
-          const response = yield* send(repo, withBody);
-          return yield* Effect.mapError(response.json, toUnavailable);
-        }),
-      ),
-      { while: isTransient, schedule: transientBackoff, times: 3 },
+    const json = yield* withTransientRetry(
+      Effect.gen(function* () {
+        const response = yield* send(repo, withBody);
+        return yield* Effect.mapError(response.json, toUnavailable);
+      }),
     );
     const decoded = yield* Effect.mapError(decodeGraphQl(json), toUnavailable);
     const result = graphQlData(decoded);
@@ -521,14 +521,16 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     repo: GitHubRepoRef,
     source: GitHubPrioritySource,
   ) {
-    return yield* collectPriorityPages(repo, source, source.field ?? defaultPriorityField);
+    return yield* withPaginationDeadline(
+      collectPriorityPages(repo, source, source.field ?? defaultPriorityField),
+    );
   });
 
-  const pullClosingReferences: (
+  const collectClosingReferencePages: (
     repo: GitHubRepoRef,
     cursor?: string | null,
   ) => Effect.Effect<ReadonlyMap<number, ReadonlyArray<number>>, IssueTrackerError> = Effect.fn(
-    "github.pullClosingReferences",
+    "github.pullClosingReferencePage",
   )(function* (repo: GitHubRepoRef, cursor: string | null = null) {
     const data = yield* graphql(repo, closingReferencesQuery, {
       owner: repo.owner,
@@ -539,8 +541,12 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     const nextCursor = closingReferencesCursor(payload);
     const current = closingReferencesFor(repo, payload);
     if (nextCursor === null) return current;
-    const remaining = yield* pullClosingReferences(repo, nextCursor);
+    const remaining = yield* collectClosingReferencePages(repo, nextCursor);
     return new Map([...current, ...remaining]);
+  });
+
+  const pullClosingReferences = Effect.fn("github.pullClosingReferences")(function* (repo: GitHubRepoRef) {
+    return yield* withPaginationDeadline(collectClosingReferencePages(repo));
   });
 
   return {
@@ -603,10 +609,12 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       }),
     removeLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
       Effect.asVoid(
-        send(
-          repo,
-          HttpClientRequest.delete(
-            repoPath(repo, `/issues/${issueNumber}/labels/${encodeURIComponent(label)}`),
+        withTransientRetry(
+          send(
+            repo,
+            HttpClientRequest.delete(
+              repoPath(repo, `/issues/${issueNumber}/labels/${encodeURIComponent(label)}`),
+            ),
           ),
         ),
       ),
