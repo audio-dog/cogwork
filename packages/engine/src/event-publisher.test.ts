@@ -89,13 +89,13 @@ interface EventPublisherProbeService {
 class EventPublisherProbe extends Context.Service<EventPublisherProbe, EventPublisherProbeService>()(
   "@cogwork/engine/event-publisher.test/EventPublisherProbe",
 ) {
-  static readonly layer = (items: ReadonlyArray<TrackerItem> = [], global = 0) =>
+  static readonly layer = (items: ReadonlyArray<TrackerItem> = [], globalInFlight = 0) =>
     Layer.effect(
       EventPublisherProbe,
       Effect.gen(function* () {
         return {
           items: yield* Ref.make(items),
-          stats: yield* Ref.make(schedulerState(global)),
+          stats: yield* Ref.make(schedulerState(globalInFlight)),
           registry: yield* Ref.make<Registry.RegistryState>({
             workspaces: [registeredWorkspace],
             failures: [],
@@ -211,11 +211,13 @@ describe("controlStoreWithDiagnostics", () => {
   });
 });
 
-const mutableRegistryLayer = (probe: EventPublisherProbeService) =>
-  Layer.succeed(Registry.WorkspaceRegistry, {
+const mutableRegistryLayer = Layer.effect(
+  Registry.WorkspaceRegistry,
+  Effect.map(EventPublisherProbe, (probe) => ({
     state: Ref.get(probe.registry),
     refresh: Ref.get(probe.registry),
-  });
+  })),
+);
 
 const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerService => ({
   rateLimitScope: () => null,
@@ -238,14 +240,13 @@ const providerStub = Layer.succeed(SourceControlProvider, {
   comment: () => Effect.void,
 });
 
-const observing = (probe: EventPublisherProbeService) =>
-  Layer.mergeAll(
-    Layer.succeed(
-      IssueTracker,
-      trackerStub(() => Ref.get(probe.items)),
-    ),
-    providerStub,
-  );
+const observing = Layer.mergeAll(
+  Layer.effect(
+    IssueTracker,
+    Effect.map(EventPublisherProbe, (probe) => trackerStub(() => Ref.get(probe.items))),
+  ),
+  providerStub,
+);
 
 const schedulerState = (global: number): Scheduler.SchedulerState => ({
   ...Scheduler.initialState,
@@ -255,8 +256,9 @@ const schedulerState = (global: number): Scheduler.SchedulerState => ({
   budgetUsed: 0,
 });
 
-const schedulerStub = (probe: EventPublisherProbeService) =>
-  Layer.succeed(Scheduler.Scheduler, {
+const schedulerStub = Layer.effect(
+  Scheduler.Scheduler,
+  Effect.map(EventPublisherProbe, (probe) => ({
     tick: () => Effect.succeed(0),
     awaitIdle: Effect.void,
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
@@ -266,7 +268,8 @@ const schedulerStub = (probe: EventPublisherProbeService) =>
     setLimit: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
     config: Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
     stats: Ref.get(probe.stats),
-  });
+  })),
+);
 
 const eligibleItem = (title: string): TrackerItem => ({
   id: id("AUD-1"),
@@ -320,61 +323,50 @@ const itemSentinelEvent = {
   item: classifiedItem({ _tag: "Eligible", id: "AUD-marker", title: "marker", url: null, stage: "triage" }),
 } as const;
 
-const publisherLayer = (
-  probe: EventPublisherProbeService,
-  workspaces = mutableRegistryLayer(probe),
-  store = controlStoreLayer,
-) =>
+const publisherLayer = (workspaces = mutableRegistryLayer, store = controlStoreLayer) =>
   eventPublisherLayer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        reconcileLayer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(probe)))),
+        reconcileLayer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing))),
         workspaces,
-        schedulerStub(probe),
+        schedulerStub,
         store,
         DaemonEventBus.layer,
       ),
     ),
   );
 
-const publisherTestLayer = (items: ReadonlyArray<TrackerItem> = [], global = 0) =>
-  Layer.unwrap(Effect.map(EventPublisherProbe, (probe) => publisherLayer(probe))).pipe(
-    Layer.provideMerge(EventPublisherProbe.layer(items, global)),
-  );
+const publisherTestLayer = (items: ReadonlyArray<TrackerItem> = [], globalInFlight = 0) =>
+  publisherLayer().pipe(Layer.provideMerge(EventPublisherProbe.layer(items, globalInFlight)));
 
 describe("DaemonEventPublisher", () => {
   it.layer(
-    Layer.unwrap(
-      Effect.map(EventPublisherProbe, (publisherProbe) =>
-        publisherLayer(
-          publisherProbe,
-          registryLayer,
-          Layer.effect(
-            ControlStore,
-            Effect.gen(function* () {
-              const probe = yield* ControlStoreProbe;
-              const gate = Semaphore.makeUnsafe(1);
-              return {
-                health: "available",
-                seed: defaultControlStore,
-                picture: Ref.get(probe.current).pipe(
-                  Effect.tap(() => Deferred.succeed(probe.readStarted, undefined)),
-                  Effect.tap(() => Deferred.await(probe.releaseRead)),
-                ),
-                setDaemonLimit: () => Ref.get(probe.current),
-                establishConnection: () => Ref.get(probe.current),
-                revokeConnection: () => Ref.get(probe.current),
-                removeConnection: () => Ref.get(probe.current),
-                updateOperationSetting: () => Ref.get(probe.current),
-                installPlugin: () => Ref.get(probe.current),
-                uninstallPlugin: () => Ref.get(probe.current),
-                updateContributionSetting: () => Ref.get(probe.current),
-                withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
-              } satisfies ControlStoreService;
-            }),
-          ).pipe(Layer.provideMerge(ControlStoreProbe.layer)),
-        ),
-      ),
+    publisherLayer(
+      registryLayer,
+      Layer.effect(
+        ControlStore,
+        Effect.gen(function* () {
+          const probe = yield* ControlStoreProbe;
+          const gate = Semaphore.makeUnsafe(1);
+          return {
+            health: "available",
+            seed: defaultControlStore,
+            picture: Ref.get(probe.current).pipe(
+              Effect.tap(() => Deferred.succeed(probe.readStarted, undefined)),
+              Effect.tap(() => Deferred.await(probe.releaseRead)),
+            ),
+            setDaemonLimit: () => Ref.get(probe.current),
+            establishConnection: () => Ref.get(probe.current),
+            revokeConnection: () => Ref.get(probe.current),
+            removeConnection: () => Ref.get(probe.current),
+            updateOperationSetting: () => Ref.get(probe.current),
+            installPlugin: () => Ref.get(probe.current),
+            uninstallPlugin: () => Ref.get(probe.current),
+            updateContributionSetting: () => Ref.get(probe.current),
+            withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
+          } satisfies ControlStoreService;
+        }),
+      ).pipe(Layer.provideMerge(ControlStoreProbe.layer)),
     ).pipe(Layer.provideMerge(EventPublisherProbe.layer()), Layer.provideMerge(ControlStoreProbe.layer)),
   )("Control store refresh", (it) => {
     it.effect("keeps a concurrent write newer than a workspace refresh", () =>
@@ -520,8 +512,7 @@ describe("DaemonEventPublisher", () => {
   );
 
   const daemonLayer = (
-    probe: EventPublisherProbeService,
-    workspaces = mutableRegistryLayer(probe),
+    workspaces = mutableRegistryLayer,
     store = controlStoreLayer,
     plugins = pluginManagerLayer,
   ) =>
@@ -529,21 +520,19 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(eventPublisherLayer),
-      Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(probe))))),
+      Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing)))),
       Layer.provideMerge(workspaces),
       Layer.provideMerge(Registry.managementReadOnlyLayer),
-      Layer.provideMerge(schedulerStub(probe)),
+      Layer.provideMerge(schedulerStub),
       Layer.provideMerge(engineServices),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(store),
       Layer.provideMerge(plugins),
-      Layer.provideMerge(observing(probe)),
+      Layer.provideMerge(observing),
     );
 
-  const daemonTestLayer = (items: ReadonlyArray<TrackerItem> = [], global = 0) =>
-    Layer.unwrap(Effect.map(EventPublisherProbe, (probe) => daemonLayer(probe))).pipe(
-      Layer.provideMerge(EventPublisherProbe.layer(items, global)),
-    );
+  const daemonTestLayer = (items: ReadonlyArray<TrackerItem> = [], globalInFlight = 0) =>
+    daemonLayer().pipe(Layer.provideMerge(EventPublisherProbe.layer(items, globalInFlight)));
 
   const storeFailure = new ControlStoreFailure({
     operation: "read Control store",
@@ -584,11 +573,10 @@ describe("DaemonEventPublisher", () => {
       assert.isTrue(MutableRef.get(messages).some((message) => message.includes("Plugin seed failed")));
     }).pipe(
       Effect.provide(
-        Layer.unwrap(
-          Effect.map(EventPublisherProbe, (probe) =>
-            daemonLayer(probe, registryLayer, failingStore, failingPlugins),
-          ),
-        ).pipe(Layer.provideMerge(EventPublisherProbe.layer()), Layer.provideMerge(LogMessages.captureLayer)),
+        daemonLayer(registryLayer, failingStore, failingPlugins).pipe(
+          Layer.provideMerge(EventPublisherProbe.layer()),
+          Layer.provideMerge(LogMessages.captureLayer),
+        ),
       ),
       Effect.scoped,
     ),
@@ -737,24 +725,6 @@ describe("DaemonEventPublisher", () => {
     }),
   );
 
-  const failedLoadDaemonLayer = (probe: EventPublisherProbeService) =>
-    Daemon.handlersLayer.pipe(
-      Layer.provideMerge(Daemon.principalMiddlewareLayer),
-      Layer.provideMerge(Daemon.daemonInfoLayer),
-      Layer.provideMerge(eventPublisherLayer),
-      Layer.provideMerge(
-        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(failingRegistryLayer, observing(probe)))),
-      ),
-      Layer.provideMerge(failingRegistryLayer),
-      Layer.provideMerge(Registry.managementReadOnlyLayer),
-      Layer.provideMerge(schedulerStub(probe)),
-      Layer.provideMerge(engineServices),
-      Layer.provideMerge(RunControl.layer),
-      Layer.provideMerge(controlStoreLayer),
-      Layer.provideMerge(pluginManagerLayer),
-      Layer.provideMerge(observing(probe)),
-    );
-
   it.effect("seeds a failed-to-load workspace onto the board with its failure", () =>
     Effect.gen(function* () {
       const client = yield* RpcTest.makeClient(DaemonRpcs);
@@ -774,11 +744,7 @@ describe("DaemonEventPublisher", () => {
       const status = yield* client.GetStatus();
       assert.strictEqual(status.failures[0]?.source, "broken.workspace.ts");
     }).pipe(
-      Effect.provide(
-        Layer.unwrap(Effect.map(EventPublisherProbe, failedLoadDaemonLayer)).pipe(
-          Layer.provideMerge(EventPublisherProbe.layer()),
-        ),
-      ),
+      Effect.provide(daemonLayer(failingRegistryLayer).pipe(Layer.provideMerge(EventPublisherProbe.layer()))),
       Effect.scoped,
     ),
   );
