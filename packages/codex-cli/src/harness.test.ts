@@ -26,6 +26,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
+  abortOnReturn,
   type CodexRunChat,
   type CodexRunChatOptions,
   type CodexRunnerOptions,
@@ -215,6 +216,36 @@ const runErrorChunk = (
 
 const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
   [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+});
+
+describe("abortOnReturn", () => {
+  it.effect("closes the source iterator when abort teardown fails", () =>
+    Effect.gen(function* () {
+      const returned: Array<unknown> = [];
+      const source = {
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.resolve({ done: false, value: "event" }),
+          return: (value?: unknown) => {
+            returned.push(value);
+            return Promise.resolve({ done: true, value: undefined });
+          },
+        }),
+      } satisfies AsyncIterable<string>;
+      const iterator = abortOnReturn(source, () => Promise.reject(new Error("destroy failed")))[
+        Symbol.asyncIterator
+      ]();
+
+      const failure = yield* Effect.promise(() =>
+        (iterator.return?.("stop") ?? Promise.resolve({ done: true, value: undefined })).catch(
+          (cause: unknown) => cause,
+        ),
+      );
+
+      assert.instanceOf(failure, Error);
+      assert.strictEqual(failure.message, "destroy failed");
+      assert.deepStrictEqual(returned, ["stop"]);
+    }),
+  );
 });
 
 const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>

@@ -69,13 +69,18 @@ const defaultRunChat: CodexRunChat = (options) =>
 
 const completedIteration = () => ({ done: true, value: undefined }) satisfies IteratorReturnResult<undefined>;
 
-const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abort: () => void | Promise<void>) => ({
+export const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abort: () => void | Promise<void>) => ({
   [Symbol.asyncIterator]: () => {
     const iterator = stream[Symbol.asyncIterator]();
     return {
       next: () => iterator.next(),
-      return: (value?: unknown) =>
-        Promise.resolve(abort()).then(() => iterator.return?.(value) ?? completedIteration()),
+      return: (value?: unknown) => {
+        const close = () => iterator.return?.(value) ?? completedIteration();
+        return Promise.resolve()
+          .then(abort)
+          .catch((error) => Promise.resolve(close()).then(() => Promise.reject(error)))
+          .then(close);
+      },
     };
   },
 });
