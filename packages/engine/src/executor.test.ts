@@ -1007,6 +1007,9 @@ class SelectedHarness extends Context.Service<SelectedHarness, Ref.Ref<ReadonlyA
         seed: pictureOf(runnableStages),
         picture: Effect.map(Ref.get(selected), pictureOf),
         setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+        establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
+        revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
+        removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
         updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
         installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
         uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
@@ -1835,7 +1838,7 @@ describe("Executor.execute", () => {
 
       const [request] = yield* Ref.get(requests);
       const [skill] = request ? resolvedMcpSkills(request) : [];
-      assert.match(skill?.name ?? "", /^cogwork_/);
+      assert.strictEqual(skill?.name, projectedContributionName("plugin:linear/mcp/linear"));
       assert.strictEqual(skill?.endpoint, "https://mcp.linear.app/mcp");
       assert.strictEqual(skill?.bearer ? Redacted.value(skill.bearer) : null, "connection-token");
       assert.deepStrictEqual(
@@ -2853,7 +2856,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           missingPluginCredentialLayer,
         ),
