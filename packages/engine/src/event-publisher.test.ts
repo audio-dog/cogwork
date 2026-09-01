@@ -89,18 +89,17 @@ interface EventPublisherProbeService {
 class EventPublisherProbe extends Context.Service<EventPublisherProbe, EventPublisherProbeService>()(
   "@cogwork/engine/event-publisher.test/EventPublisherProbe",
 ) {
-  static readonly layer = (
-    items: ReadonlyArray<TrackerItem> = [],
-    global = 0,
-    registry: Registry.RegistryState = { workspaces: [registeredWorkspace], failures: [] },
-  ) =>
+  static readonly layer = (items: ReadonlyArray<TrackerItem> = [], global = 0) =>
     Layer.effect(
       EventPublisherProbe,
       Effect.gen(function* () {
         return {
           items: yield* Ref.make(items),
           stats: yield* Ref.make(schedulerState(global)),
-          registry: yield* Ref.make(registry),
+          registry: yield* Ref.make<Registry.RegistryState>({
+            workspaces: [registeredWorkspace],
+            failures: [],
+          }),
         };
       }),
     );
@@ -338,13 +337,9 @@ const publisherLayer = (
     ),
   );
 
-const publisherTestLayer = (
-  items: ReadonlyArray<TrackerItem> = [],
-  global = 0,
-  registry: Registry.RegistryState = { workspaces: [registeredWorkspace], failures: [] },
-) =>
+const publisherTestLayer = (items: ReadonlyArray<TrackerItem> = [], global = 0) =>
   Layer.unwrap(Effect.map(EventPublisherProbe, (probe) => publisherLayer(probe))).pipe(
-    Layer.provideMerge(EventPublisherProbe.layer(items, global, registry)),
+    Layer.provideMerge(EventPublisherProbe.layer(items, global)),
   );
 
 describe("DaemonEventPublisher", () => {
@@ -545,13 +540,9 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(observing(probe)),
     );
 
-  const daemonTestLayer = (
-    items: ReadonlyArray<TrackerItem> = [],
-    global = 0,
-    registry: Registry.RegistryState = { workspaces: [registeredWorkspace], failures: [] },
-  ) =>
+  const daemonTestLayer = (items: ReadonlyArray<TrackerItem> = [], global = 0) =>
     Layer.unwrap(Effect.map(EventPublisherProbe, (probe) => daemonLayer(probe))).pipe(
-      Layer.provideMerge(EventPublisherProbe.layer(items, global, registry)),
+      Layer.provideMerge(EventPublisherProbe.layer(items, global)),
     );
 
   const storeFailure = new ControlStoreFailure({
