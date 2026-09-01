@@ -1,4 +1,4 @@
-import { Connection, DeclaredVersion, localOwnerId, WorkspaceId } from "@cogwork/contracts";
+import { Connection, ContentRevision, DeclaredVersion, localOwnerId, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -65,11 +65,11 @@ const unavailableConnectionStoreLayer = Layer.succeed(ConnectionStore, {
 });
 const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { LINEAR_API_KEY: "test-key" } }));
 
-const manifestDocument = (version: string) =>
+const manifestDocument = (version: string | null, provenance = `fixture-${version}`) =>
   JSON.stringify({
     pluginId: "linear",
-    version,
-    provenance: `fixture-${version}`,
+    ...(version === null ? {} : { version }),
+    provenance,
     authRecipe: null,
     requiredConnections: ["linear"],
     contributions: [
@@ -180,7 +180,6 @@ const interruptedFixtureLayer = () =>
       managerLayerFor(fixture, connectionStoreLayer, interruptedStoreLayer),
     ),
   ).pipe(Layer.provideMerge(Layer.merge(PluginFixture.layer, RemovalStarted.layer)));
-
 layer(NodeServices.layer)((it) => {
   it.effect("installs atomically, enables its MCP server, and retries idempotently", () =>
     Effect.gen(function* () {
@@ -217,6 +216,42 @@ layer(NodeServices.layer)((it) => {
       ]);
       assert.isTrue(yield* fs.exists(path.join(fixture.provisionRoot, "linear@1.0.0")));
       assert.deepStrictEqual((yield* fs.readDirectory(fixture.provisionRoot)).sort(), ["linear@1.0.0"]);
+    }).pipe(Effect.provide(fixtureLayer())),
+  );
+
+  it.effect("trims provenance values and treats a blank declared version as absent", () =>
+    Effect.gen(function* () {
+      const { bundlePath } = yield* PluginFixture;
+      const path = yield* Path.Path;
+      const plugins = yield* PluginManager;
+      yield* write(path.join(bundlePath, "plugin.json"), manifestDocument("  1.0.0\n", "fixture-version"));
+      const versioned = yield* plugins.install("linear", localOwnerId);
+      yield* write(path.join(bundlePath, "plugin.json"), manifestDocument(null, "\tfixture-revision  "));
+      const revisioned = yield* plugins.install("linear", localOwnerId);
+      yield* write(
+        path.join(bundlePath, "plugin.json"),
+        manifestDocument("  \n", "  fixture-blank-version\t"),
+      );
+      const blankVersion = yield* plugins.install("linear", localOwnerId);
+
+      assert.strictEqual(versioned.overview.plugins[0]?.record?.resolvedIdentity, "linear@1.0.0");
+      assert.deepStrictEqual(
+        versioned.overview.plugins[0]?.provenanceStamp,
+        DeclaredVersion.make({ source: "plugin:linear", version: "1.0.0" }),
+      );
+      assert.strictEqual(revisioned.overview.plugins[0]?.record?.resolvedIdentity, "linear@fixture-revision");
+      assert.deepStrictEqual(
+        revisioned.overview.plugins[0]?.provenanceStamp,
+        ContentRevision.make({ source: "plugin:linear", revision: "fixture-revision" }),
+      );
+      assert.strictEqual(
+        blankVersion.overview.plugins[0]?.record?.resolvedIdentity,
+        "linear@fixture-blank-version",
+      );
+      assert.deepStrictEqual(
+        blankVersion.overview.plugins[0]?.provenanceStamp,
+        ContentRevision.make({ source: "plugin:linear", revision: "fixture-blank-version" }),
+      );
     }).pipe(Effect.provide(fixtureLayer())),
   );
 

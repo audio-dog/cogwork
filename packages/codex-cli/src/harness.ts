@@ -24,6 +24,7 @@ export type CodexEffort = NonNullable<CodexTextConfig["modelReasoningEffort"]>;
 
 export interface CodexRunnerOptions {
   readonly name: HarnessName;
+  readonly environment: NodeJS.ProcessEnv;
   readonly codexExecutable?: string;
   readonly makeAdapter?: MakeCodexAdapter;
   readonly runChat?: CodexRunChat;
@@ -89,25 +90,63 @@ const launchError = (message: string) =>
 
 const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
 const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
+const missingExecutableCodes = new Set(["ENOENT", "EACCES"]);
+const missingExecutableExitCodes = new Set([126, 127]);
 const codexPreflightDeadline = "5 seconds";
+const gitMetadataDeadline = "5 seconds";
+
+const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = new Set()): boolean => {
+  if (typeof cause !== "object" || cause === null) return false;
+  if (seen.has(cause)) return false;
+  if ("code" in cause && typeof cause.code === "string" && missingExecutableCodes.has(cause.code)) {
+    return true;
+  }
+  const nextSeen = new Set(seen).add(cause);
+  return ["error", "rawEvent", "cause"].some(
+    (field) => field in cause && isMissingExecutableCause(Reflect.get(cause, field), nextSeen),
+  );
+};
+
+const missingHarnessError = (message = "Codex CLI is not installed or executable") =>
+  new Harness.HarnessError({ reason: "missing-harness", retryable: false, message });
 
 const codexPreflightError = (cause: unknown) => {
-  const message = String(cause);
-  if (missingExecutablePattern.test(message)) {
-    return new Harness.HarnessError({
-      reason: "missing-harness",
-      retryable: false,
-      message: "Codex CLI is not installed or executable",
-    });
+  if (isMissingExecutableCause(cause)) return missingHarnessError();
+  return launchError(HarnessBridge.messageFromUnknown(cause));
+};
+
+const codexPreflightExitError = (result: {
+  readonly exitCode: number;
+  readonly stderr: string;
+  readonly stdout: string;
+}) => {
+  if (missingExecutableExitCodes.has(result.exitCode)) return missingHarnessError();
+  return launchError(`${result.stderr}\n${result.stdout}`);
+};
+
+const codexTurnError = (cause: unknown) => {
+  const message = HarnessBridge.messageFromUnknown(cause);
+  if (isMissingExecutableCause(cause)) return missingHarnessError(message);
+  return new Harness.HarnessError({ reason: "turn", retryable: true, message });
+};
+
+const withMessage = (error: Harness.HarnessError, message: string) =>
+  new Harness.HarnessError({ reason: error.reason, retryable: error.retryable, message });
+
+const addRemediation = (error: Harness.HarnessError) => {
+  if (error.reason === "missing-harness" || missingExecutablePattern.test(error.message)) {
+    return withMessage(
+      error,
+      `Codex CLI could not start. Install Codex CLI, then run \`codex login\`. (${error.message})`,
+    );
   }
-  if (missingLoginPattern.test(message)) {
-    return new Harness.HarnessError({
-      reason: "credential",
-      retryable: false,
-      message: "Codex CLI is not authenticated",
-    });
+  if (error.reason === "credential" || missingLoginPattern.test(error.message)) {
+    return withMessage(
+      error,
+      `Codex CLI is not authenticated. Run \`codex login\`, then retry. (${error.message})`,
+    );
   }
-  return launchError(message);
+  return error;
 };
 
 const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
@@ -126,9 +165,7 @@ const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =
         }),
       ),
       Effect.flatMap((result) =>
-        result.exitCode === 0
-          ? Effect.void
-          : Effect.fail(codexPreflightError(`${result.stderr}\n${result.stdout}`)),
+        result.exitCode === 0 ? Effect.void : Effect.fail(codexPreflightExitError(result)),
       ),
     ),
   ).pipe(
@@ -142,35 +179,33 @@ const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =
           message: "Codex CLI did not answer its readiness check",
         }),
     ),
+    Effect.mapError(addRemediation),
   ),
 );
-
-const classifyTurnError = (error: Harness.HarnessError) => {
-  if (missingExecutablePattern.test(error.message)) {
-    return launchError(
-      `Codex CLI could not start. Install Codex CLI, then run \`codex login\`. (${error.message})`,
-    );
-  }
-  if (missingLoginPattern.test(error.message)) {
-    return launchError(`Codex CLI is not authenticated. Run \`codex login\`, then retry. (${error.message})`);
-  }
-  return error;
-};
 
 const codexEfforts: ReadonlyArray<CodexEffort> = ["minimal", "low", "medium", "high"];
 
 const gitMetadataDirectory = (checkoutPath: string) =>
   Effect.scoped(
     Effect.acquireRelease(
-      Effect.promise(() => localProcessSandbox({ dir: checkoutPath }).create({})),
-      (sandbox) => Effect.promise(() => sandbox.destroy()),
+      Effect.tryPromise({
+        try: () => localProcessSandbox({ dir: checkoutPath }).create({}),
+        catch: () => null,
+      }),
+      (sandbox) => Effect.tryPromise({ try: () => sandbox.destroy(), catch: () => null }).pipe(Effect.ignore),
     ).pipe(
       Effect.flatMap((sandbox) =>
-        Effect.promise(() => sandbox.process.exec("git rev-parse --path-format=absolute --git-common-dir")),
+        Effect.tryPromise({
+          try: (signal) =>
+            sandbox.process.exec("git rev-parse --path-format=absolute --git-common-dir", { signal }),
+          catch: () => null,
+        }),
       ),
       Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)),
-      Effect.orElseSucceed(() => null),
     ),
+  ).pipe(
+    Effect.timeout(gitMetadataDeadline),
+    Effect.orElseSucceed(() => null),
   );
 
 const decodeEffort = (effort: string): CodexEffort | null =>
@@ -201,7 +236,7 @@ const codexEnvironmentNames = [
   "LC_CTYPE",
 ];
 
-export const codexChildEnvironment = (environment: NodeJS.ProcessEnv = process.env) =>
+export const codexChildEnvironment = (environment: NodeJS.ProcessEnv) =>
   Object.fromEntries(
     codexEnvironmentNames.flatMap((name) => {
       const value = environment[name];
@@ -235,14 +270,17 @@ const mcpEntries = (skill: Harness.ResolvedMcpSkill) => {
   return { configEntries, envEntries: bearer.envEntries };
 };
 
-const mcpAdapterConfig = (mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
+const mcpAdapterConfig = (
+  mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>,
+  environment: NodeJS.ProcessEnv,
+) => {
   const entries = mcpSkills.map(mcpEntries);
   return {
     ...(entries.length > 0
       ? { config: Object.fromEntries(entries.flatMap((entry) => entry.configEntries)) }
       : {}),
     env: {
-      ...codexChildEnvironment(),
+      ...codexChildEnvironment(environment),
       ...Object.fromEntries(entries.flatMap((entry) => entry.envEntries)),
     },
   };
@@ -254,17 +292,21 @@ const adapterConfig = (
   codexExecutable: string | undefined,
   mcpSkills: ReadonlyArray<Harness.ResolvedMcpSkill>,
   gitDirectory: string | null,
+  environment: NodeJS.ProcessEnv,
 ): CodexTextConfig => ({
   ...codexRuntimeConfig(effort, profile),
   ...(codexExecutable ? { codexExecutable } : {}),
   ...(gitDirectory ? { additionalDirectories: [gitDirectory] } : {}),
-  ...mcpAdapterConfig(mcpSkills),
+  ...mcpAdapterConfig(mcpSkills, environment),
 });
 
 export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner => {
   const makeAdapter = options.makeAdapter ?? codexText;
   const runChat = options.runChat ?? defaultRunChat;
   const resolveGitMetadataDirectory = options.resolveGitMetadataDirectory ?? gitMetadataDirectory;
+  const ambientMcpEnvironmentNames = Object.keys(options.environment).filter((name) =>
+    name.startsWith("COGWORK_MCP_"),
+  );
 
   return {
     name: options.name,
@@ -308,6 +350,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
               options.codexExecutable,
               Harness.resolvedMcpSkills(request),
               gitDirectory,
+              options.environment,
             ),
           );
           const sandbox = defineSandbox({
@@ -315,7 +358,13 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
             fileEvents: false,
             provider: localProcessSandbox({
               dir: plan.sandbox.workspace,
-              scrubEnv: ["GITHUB_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "CODEX_API_KEY"],
+              scrubEnv: [
+                "GITHUB_TOKEN",
+                "GH_TOKEN",
+                "OPENAI_API_KEY",
+                "CODEX_API_KEY",
+                ...ambientMcpEnvironmentNames,
+              ],
             }),
             workspace: defineWorkspace({ source: { type: "none" } }),
           });
@@ -329,8 +378,8 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
             modelOptions: codexModelOptions(handle, effort),
             outputSchema: plan.structuredOutput ?? undefined,
           });
-          return HarnessBridge.bridgeChat(stream).pipe(
-            Stream.mapError(classifyTurnError),
+          return HarnessBridge.bridgeChat(stream, codexTurnError, codexTurnError).pipe(
+            Stream.mapError(addRemediation),
             Stream.ensuring(Effect.sync(() => abortController.abort())),
           );
         }),
