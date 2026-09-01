@@ -585,7 +585,7 @@ describe("Scheduler.tick", () => {
         failure: (yield* Metric.value(failure)).count,
         interrupt: (yield* Metric.value(interrupt)).count,
       };
-      const run = (execute: ExecuteStub) =>
+      const runSchedulerToIdle = (execute: ExecuteStub) =>
         Effect.gen(function* () {
           const scheduler = yield* Scheduler.Scheduler;
           yield* scheduler.tick();
@@ -599,8 +599,8 @@ describe("Scheduler.tick", () => {
           ),
         );
 
-      yield* run(succeed);
-      yield* run(crashIn(wsA.config.name));
+      yield* runSchedulerToIdle(succeed);
+      yield* runSchedulerToIdle(crashIn(wsA.config.name));
       yield* Effect.gen(function* () {
         const scheduler = yield* Scheduler.Scheduler;
         yield* scheduler.tick();
@@ -608,15 +608,19 @@ describe("Scheduler.tick", () => {
       }).pipe(
         Effect.provide(
           schedulerLayer(
-            { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 10 },
-            { registry: [wsA], snapshots: [{ workspace: wsA, eligible: [work(1)] }], execute: waitForGate },
+            { globalLimit: 2, perWorkspaceLimit: 2, dailyBudget: 10 },
+            {
+              registry: [wsA],
+              snapshots: [{ workspace: wsA, eligible: [work(1), work(2)] }],
+              execute: waitForGate,
+            },
           ),
         ),
       );
 
       assert.strictEqual((yield* Metric.value(success)).count, before.success + 1);
       assert.strictEqual((yield* Metric.value(failure)).count, before.failure + 1);
-      assert.strictEqual((yield* Metric.value(interrupt)).count, before.interrupt + 1);
+      assert.strictEqual((yield* Metric.value(interrupt)).count, before.interrupt + 2);
       assert.strictEqual((yield* Metric.value(runsInFlight)).value, 0);
     }),
   );

@@ -15,6 +15,7 @@ import * as FiberSet from "effect/FiberSet";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
+import * as Semaphore from "effect/Semaphore";
 import type { EligibleWork } from "./classify";
 import { Executor } from "./executor";
 import { operationStages } from "./playbook";
@@ -256,6 +257,7 @@ export const make = (config: SchedulerConfig) =>
     const ledger = yield* RunLedger;
     const jobs = yield* FiberSet.make<void>();
     const stateRef = yield* Ref.make(seedState(config));
+    const stateMetricsGate = Semaphore.makeUnsafe(1);
     const configRef = yield* Ref.make(config);
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
@@ -269,7 +271,9 @@ export const make = (config: SchedulerConfig) =>
         Effect.flatMap((started) =>
           started
             ? Effect.void
-            : Ref.updateAndGet(stateRef, refundBudget).pipe(Effect.flatMap(updateStateMetrics)),
+            : stateMetricsGate.withPermit(
+                Ref.updateAndGet(stateRef, refundBudget).pipe(Effect.flatMap(updateStateMetrics)),
+              ),
         ),
         Effect.onExit(recordJobOutcome),
         Effect.catchCauseIf(
@@ -277,8 +281,10 @@ export const make = (config: SchedulerConfig) =>
           (cause) => Effect.logWarning("scheduled job crashed", cause),
         ),
         Effect.ensuring(
-          Ref.updateAndGet(stateRef, (state) => release(state, candidate)).pipe(
-            Effect.flatMap(updateStateMetrics),
+          stateMetricsGate.withPermit(
+            Ref.updateAndGet(stateRef, (state) => release(state, candidate)).pipe(
+              Effect.flatMap(updateStateMetrics),
+            ),
           ),
         ),
         Effect.annotateLogs(correlation),
@@ -291,11 +297,16 @@ export const make = (config: SchedulerConfig) =>
       const snapshot = yield* worker.snapshot;
       const candidates = candidatesOf(yield* registry.state, snapshot, config);
       const day = utcDay(yield* Clock.currentTimeMillis);
-      const planned = yield* Ref.modify(stateRef, (state) => {
-        const next = plan(candidates, state, config, { day, generation: snapshot.generation });
-        return [next, next.state];
-      });
-      yield* updateStateMetrics(planned.state);
+      const planned = yield* stateMetricsGate.withPermit(
+        Effect.gen(function* () {
+          const planned = yield* Ref.modify(stateRef, (state) => {
+            const next = plan(candidates, state, config, { day, generation: snapshot.generation });
+            return [next, next.state];
+          });
+          yield* updateStateMetrics(planned.state);
+          return planned;
+        }),
+      );
       if (isBudgetExhaustedTick(planned, candidates, config)) {
         yield* Metric.update(budgetExhaustedTicks, 1);
       }
@@ -343,8 +354,11 @@ export const make = (config: SchedulerConfig) =>
     ) {
       const config = yield* Ref.get(configRef);
       const candidate = candidateOf(workspace, work, config, observation);
-      const state = yield* Ref.updateAndGet(stateRef, (state) => reserve(state, candidate));
-      yield* updateStateMetrics(state);
+      yield* stateMetricsGate.withPermit(
+        Ref.updateAndGet(stateRef, (state) => reserve(state, candidate)).pipe(
+          Effect.flatMap(updateStateMetrics),
+        ),
+      );
       yield* FiberSet.run(jobs, runJob(candidate));
     });
 
