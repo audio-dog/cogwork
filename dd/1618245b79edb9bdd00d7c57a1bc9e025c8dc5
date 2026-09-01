@@ -1,0 +1,22 @@
+packages/cursor-acp/src/harness.test.ts
+  s_6a9b2cb720fa0a::t_eaedafb82ba10f 111
+packages/cursor-acp/src/harness.ts
+  s_6a9b2cb720fa0a::t_a1affe2e555991 195,212
+  s_6a9b2cb720fa0a::t_eaedafb82ba10f 191-194,196,199-200,211,213,218-220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dd1618245b79edb9bdd00d7c57a1bc9e025c8dc5",
+  "prompts": {},
+  "sessions": {
+    "s_6a9b2cb720fa0a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ac9-e715-7660-b756-793beeefb473",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
