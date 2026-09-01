@@ -1,4 +1,5 @@
 import { once } from "node:events";
+import { RequestError } from "@agentclientprotocol/sdk";
 import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
@@ -107,6 +108,20 @@ const stalledChat = (signal: AbortSignal) => ({
   },
 });
 
+const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
+  [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+});
+
+const runRunner = (runner: Harness.HarnessRunner) =>
+  runner
+    .run(request("/tmp"))
+    .pipe(
+      Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
+      Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
+      Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
+      Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
+    );
+
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
     const projection = mcpWorkspaceProjection([]);
@@ -180,6 +195,41 @@ describe("cursorRunner", () => {
 
       assert.strictEqual(error._tag, "TimeoutError");
       assert.isTrue(abortController.signal.aborted);
+    }),
+  );
+
+  it.effect("keeps unrecognized failures retryable without reading their message", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: () => failedChat(new Error("model output says command not found")),
+      });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
+
+  it.effect("hands off failures with a missing-executable code", () =>
+    Effect.gen(function* () {
+      const failure = Object.assign(new Error("Cursor could not start"), { code: "ENOENT" });
+      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("hands off ACP request failures", () =>
+    Effect.gen(function* () {
+      const failure = RequestError.authRequired();
+      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
     }),
   );
 
