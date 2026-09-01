@@ -533,8 +533,9 @@ describe("CancelRun", () => {
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
-  it.effect("does not cancel a run that finishes before interruption", () =>
-    Effect.gen(function* () {
+  it.effect("releases the claim when a run finishes before interruption", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    return Effect.gen(function* () {
       const cancelStarted = yield* Deferred.make<void>();
       const finishCancel = yield* Deferred.make<void>();
       const runControl = Layer.succeed(RunControl.RunControl, {
@@ -561,10 +562,11 @@ describe("CancelRun", () => {
         const error = yield* Fiber.join(cancelling);
         assert.strictEqual(error._tag, "RunAlreadyFinished");
         if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
+        assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
       }).pipe(
         Effect.provide(
           daemonLayer(
-            trackerLayer({}),
+            recordingTracker([], calls),
             schedulerStub(),
             controlStoreStub(),
             registryServices,
@@ -574,8 +576,8 @@ describe("CancelRun", () => {
           ),
         ),
       );
-    }).pipe(Effect.scoped),
-  );
+    }).pipe(Effect.scoped);
+  });
 
   it.effect("returns still draining after settling and releasing interrupted work", () => {
     const calls = Ref.makeUnsafe(emptyCalls);

@@ -159,10 +159,20 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
       const observed = observedFor(snapshot, run.workspace, run.workItem);
       if (!drained) yield* Effect.logWarning("run cancellation still draining", { runId: payload.runId });
 
+      const registry = yield* WorkspaceRegistry;
+      const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
+      const workspace = Option.getOrUndefined(controlledWorkspace) ?? currentWorkspace;
+      const trackerClaim = workspace === undefined ? null : { workspace, issueTracker: yield* IssueTracker };
+      const releaseRunClaim =
+        trackerClaim === null
+          ? Effect.void
+          : releaseClaim(trackerClaim.issueTracker)(trackerClaim.workspace, run.workItem);
+
       const endedAtMillis = yield* Clock.currentTimeMillis;
       const settled = yield* ledger.getRun(payload.runId);
       if (settled === null) return yield* new RunNotFound({ runId: payload.runId });
       if (settled.status !== "running") {
+        yield* releaseRunClaim;
         return yield* new RunAlreadyFinished({ runId: payload.runId, status: settled.status });
       }
       yield* ledger.updateRun(payload.runId, {
@@ -171,19 +181,15 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
         endedAtMillis,
       });
 
-      const registry = yield* WorkspaceRegistry;
-      const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
-      const workspace = Option.getOrUndefined(controlledWorkspace) ?? currentWorkspace;
-      if (workspace !== undefined) {
-        const issueTracker = yield* IssueTracker;
-        yield* issueTracker
-          .handOff(workspace, run.workItem, { stage: run.stage, note: payload.note })
+      if (trackerClaim !== null) {
+        yield* trackerClaim.issueTracker
+          .handOff(trackerClaim.workspace, run.workItem, { stage: run.stage, note: payload.note })
           .pipe(
             Effect.catchTag("IssueTrackerError", (error) =>
               Effect.logWarning("run hand-off failed", { message: error.message }),
             ),
           );
-        yield* releaseClaim(issueTracker)(workspace, run.workItem);
+        yield* releaseRunClaim;
       }
 
       const item = parkedItem(observed) ?? parkedNeedsHuman(run.workItem, run.workItem);
