@@ -1159,8 +1159,10 @@ export const make = Effect.gen(function* () {
             );
           },
           onSuccess: ({ request, selectedOps: acceptedOps, record }) =>
-            Effect.withFiber((self) => runControl.register(runId, self, workspace)).pipe(
-              Effect.andThen(settleOutcome(workspace, item, acceptedOps, record, runId, request)),
+            runControl.run(
+              runId,
+              workspace,
+              settleOutcome(workspace, item, acceptedOps, record, runId, request),
             ),
         }),
       );

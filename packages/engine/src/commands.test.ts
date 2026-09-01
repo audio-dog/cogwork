@@ -730,12 +730,9 @@ describe("RunControl", () => {
   it.effect("forgets a registered fiber when it completes", () =>
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
-      const fiber = yield* Effect.forkChild(Effect.void);
-      yield* control.register(rid("run-1"), fiber, registered);
-      yield* Fiber.await(fiber);
+      yield* control.run(rid("run-1"), registered, Effect.void);
 
-      assert.isTrue(Option.isNone(yield* control.workspaceFor(rid("run-1"))));
-      assert.isFalse(yield* control.cancel(rid("run-1")));
+      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
   );
 
@@ -744,8 +741,8 @@ describe("RunControl", () => {
       const scope = yield* Scope.make();
       const context = yield* Layer.buildWithScope(RunControl.layer, scope);
       const control = Context.get(context, RunControl.RunControl);
-      const fiber = yield* Effect.forkChild(Effect.never);
-      yield* control.register(rid("run-1"), fiber);
+      const fiber = yield* Effect.forkChild(control.run(rid("run-1"), undefined, Effect.never));
+      yield* Effect.yieldNow;
 
       yield* Scope.close(scope, Exit.void);
 
@@ -757,18 +754,102 @@ describe("RunControl", () => {
   it.effect("interrupts a registered fiber on cancel and reports unknown runs", () =>
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
-      const fiber = yield* Effect.forkChild(Effect.never);
-      yield* control.register(rid("run-1"), fiber, registered);
+      const started = yield* Deferred.make<void>();
+      const fiber = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+        ),
+      );
+      yield* Deferred.await(started);
 
-      assert.deepStrictEqual(yield* control.workspaceFor(rid("run-1")), Option.some(registered));
       const cancelled = yield* control.cancel(rid("run-1"));
+      assert.strictEqual(cancelled._tag, "Interrupting");
+      if (cancelled._tag === "Interrupting") {
+        assert.deepStrictEqual(cancelled.workspace, Option.some(registered));
+      }
+      if (cancelled._tag === "Interrupting") yield* cancelled.awaitTermination;
       const exit = yield* Fiber.await(fiber);
-      assert.isTrue(cancelled);
       assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
 
-      assert.isTrue(Option.isNone(yield* control.workspaceFor(rid("run-1"))));
-      assert.isFalse(yield* control.cancel(rid("run-1")));
-      assert.isFalse(yield* control.cancel(rid("ghost")));
+      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
+      assert.strictEqual((yield* control.cancel(rid("ghost")))._tag, "NotFound");
+    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
+  );
+
+  it.effect("propagates caller interruption to the registered fiber", () =>
+    Effect.gen(function* () {
+      const control = yield* RunControl.RunControl;
+      const started = yield* Deferred.make<void>();
+      const interrupted = yield* Deferred.make<void>();
+      const finishTeardown = yield* Deferred.make<void>();
+      const caller = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+            Effect.ensuring(Deferred.await(finishTeardown)),
+          ),
+        ),
+      );
+      yield* Deferred.await(started);
+
+      caller.interruptUnsafe(Fiber.getCurrent()?.id);
+      yield* Deferred.await(interrupted);
+
+      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "Interrupting");
+      yield* Deferred.succeed(finishTeardown, undefined);
+      yield* Fiber.await(caller);
+    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
+  );
+
+  it.effect("does not interrupt a replacement registered after cancellation starts", () =>
+    Effect.gen(function* () {
+      const control = yield* RunControl.RunControl;
+      const replacementWorkspace = {
+        ...registered,
+        config: { ...registered.config, name: wsid("replacement") },
+      };
+      const firstStarted = yield* Deferred.make<void>();
+      const finishFirstTeardown = yield* Deferred.make<void>();
+      const first = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(firstStarted, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.ensuring(Deferred.await(finishFirstTeardown)),
+          ),
+        ),
+      );
+      yield* Deferred.await(firstStarted);
+
+      const cancelled = yield* control.cancel(rid("run-1"));
+      assert.strictEqual(cancelled._tag, "Interrupting");
+
+      const replacementStarted = yield* Deferred.make<void>();
+      const replacement = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          replacementWorkspace,
+          Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(Effect.never)),
+        ),
+      );
+      yield* Deferred.await(replacementStarted);
+      yield* Deferred.succeed(finishFirstTeardown, undefined);
+      if (cancelled._tag === "Interrupting") yield* cancelled.awaitTermination;
+
+      assert.isUndefined(replacement.pollUnsafe());
+      const replacementCancellation = yield* control.cancel(rid("run-1"));
+      assert.strictEqual(replacementCancellation._tag, "Interrupting");
+      if (replacementCancellation._tag === "Interrupting") {
+        assert.deepStrictEqual(replacementCancellation.workspace, Option.some(replacementWorkspace));
+        yield* replacementCancellation.awaitTermination;
+      }
+      yield* Fiber.await(first);
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
   );
 });
@@ -1350,9 +1431,16 @@ describe("workspace lifecycle commands", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       yield* ledger.insertRun(runRecord({ workspace: registeredState.name }));
-      const fiber = yield* Effect.forkChild(Effect.never);
+      const started = yield* Deferred.make<void>();
       const control = yield* RunControl.RunControl;
-      yield* control.register(rid("run-1"), fiber, registeredWorkspace);
+      yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registeredWorkspace,
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+        ),
+      );
+      yield* Deferred.await(started);
 
       yield* client.DeregisterWorkspace({ workspace: registeredState.name });
       const bus = yield* DaemonEventBus.DaemonEventBus;
