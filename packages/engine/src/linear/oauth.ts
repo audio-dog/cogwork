@@ -19,6 +19,8 @@ import {
 // two-legged redirect + POST flow the SDK does not wrap, so these two endpoints stay hand-built.
 export const authorizeEndpoint = "https://linear.app/oauth/authorize";
 export const tokenEndpoint = "https://api.linear.app/oauth/token";
+export const tokenEndpointDeadline = "30 seconds";
+const identityRequestDeadline = "30 seconds";
 
 export const defaultRedirectPort = 39_517;
 export const defaultScopes = ["read", "write", "app:assignable", "app:mentionable"] as const;
@@ -142,33 +144,44 @@ export const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse);
 export const exchangeToken = Effect.fn("linear.oauth.exchangeToken")(function* (params: TokenExchangeParams) {
   const client = yield* HttpClient.HttpClient;
   const request = tokenExchangeRequest(params);
-  const response = yield* client
-    .execute(
-      HttpClientRequest.post(request.url).pipe(
-        HttpClientRequest.setHeaders(request.headers),
-        HttpClientRequest.bodyText(request.body, request.headers["content-type"]),
-      ),
-    )
-    .pipe(
-      Effect.catchTag("HttpClientError", (error) =>
-        Effect.fail(
-          new LinearOAuthError({ message: `Linear token exchange could not reach Linear: ${error.message}` }),
+  return yield* Effect.gen(function* () {
+    const response = yield* client
+      .execute(
+        HttpClientRequest.post(request.url).pipe(
+          HttpClientRequest.setHeaders(request.headers),
+          HttpClientRequest.bodyText(request.body, request.headers["content-type"]),
         ),
+      )
+      .pipe(
+        Effect.catchTag("HttpClientError", (error) =>
+          Effect.fail(
+            new LinearOAuthError({
+              message: `Linear token exchange could not reach Linear: ${error.message}`,
+            }),
+          ),
+        ),
+      );
+    if (response.status >= 400) {
+      return yield* new LinearOAuthError({
+        message: `Linear rejected the token exchange (HTTP ${response.status})`,
+      });
+    }
+    const body = yield* response.json.pipe(
+      Effect.catchTag("HttpClientError", () =>
+        Effect.fail(new LinearOAuthError({ message: "Linear token exchange returned an unreadable body" })),
       ),
     );
-  if (response.status >= 400) {
-    return yield* new LinearOAuthError({
-      message: `Linear rejected the token exchange (HTTP ${response.status})`,
-    });
-  }
-  const body = yield* response.json.pipe(
-    Effect.catchTag("HttpClientError", () =>
-      Effect.fail(new LinearOAuthError({ message: "Linear token exchange returned an unreadable body" })),
-    ),
-  );
-  return yield* decodeTokenResponse(body).pipe(
-    Effect.mapError(
-      () => new LinearOAuthError({ message: "Linear token exchange returned an unexpected shape" }),
+    return yield* decodeTokenResponse(body).pipe(
+      Effect.mapError(
+        () => new LinearOAuthError({ message: "Linear token exchange returned an unexpected shape" }),
+      ),
+    );
+  }).pipe(
+    Effect.timeout(tokenEndpointDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(
+        new LinearOAuthError({ message: `Linear token exchange timed out after ${tokenEndpointDeadline}` }),
+      ),
     ),
   );
 });
@@ -203,20 +216,29 @@ const refreshFailed = (account: string, detail: string) =>
 
 export const makeTokenRefresh = (client: HttpClient.HttpClient): TokenRefresh =>
   Effect.fn("linear.oauth.tokenRefresh")(function* (request: TokenRefreshRequest) {
-    const response = yield* Effect.mapError(client.execute(refreshRequest(request)), () =>
-      refreshFailed(request.account, "the token endpoint could not be reached"),
+    return yield* Effect.gen(function* () {
+      const response = yield* Effect.mapError(client.execute(refreshRequest(request)), () =>
+        refreshFailed(request.account, "the token endpoint could not be reached"),
+      );
+      if (response.status !== 200) {
+        return yield* refreshFailed(request.account, `the token endpoint returned ${response.status}`);
+      }
+      const body = yield* Effect.mapError(response.json, () =>
+        refreshFailed(request.account, "the token endpoint returned an unreadable body"),
+      );
+      const decoded = yield* Effect.mapError(decodeTokenResponse(body), () =>
+        refreshFailed(request.account, "the token endpoint returned an unexpected payload"),
+      );
+      const now = yield* Clock.currentTimeMillis;
+      return storedTokenFrom(decoded, now);
+    }).pipe(
+      Effect.timeout(tokenEndpointDeadline),
+      Effect.catchTag("TimeoutError", () =>
+        Effect.fail(
+          refreshFailed(request.account, `the token endpoint timed out after ${tokenEndpointDeadline}`),
+        ),
+      ),
     );
-    if (response.status !== 200) {
-      return yield* refreshFailed(request.account, `the token endpoint returned ${response.status}`);
-    }
-    const body = yield* Effect.mapError(response.json, () =>
-      refreshFailed(request.account, "the token endpoint returned an unreadable body"),
-    );
-    const decoded = yield* Effect.mapError(decodeTokenResponse(body), () =>
-      refreshFailed(request.account, "the token endpoint returned an unexpected payload"),
-    );
-    const now = yield* Clock.currentTimeMillis;
-    return storedTokenFrom(decoded, now);
   });
 
 export class LinearOAuthError extends Schema.TaggedError<LinearOAuthError>()("LinearOAuthError", {
@@ -231,13 +253,24 @@ export interface DiscoveredIdentity {
 // The org's urlKey is what `issueTracker.organization` config and `StoredCredential.organization`
 // carry — it's the slug operators already see in Linear's URLs, unlike the opaque org id.
 export const discoverIdentity = Effect.fn("linear.oauth.discoverIdentity")(function* (accessToken: string) {
-  const sdk = new LinearSdk({ accessToken });
   const [viewer, organization] = yield* Effect.tryPromise({
-    try: () => Promise.all([sdk.viewer, sdk.organization]),
+    try: (signal) => {
+      const sdk = new LinearSdk({ accessToken, signal });
+      return Promise.all([sdk.viewer, sdk.organization]);
+    },
     catch: (cause) =>
       new LinearOAuthError({
         message: `Linear identity discovery failed: ${cause instanceof Error ? cause.message : String(cause)}`,
       }),
-  });
+  }).pipe(
+    Effect.timeout(identityRequestDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(
+        new LinearOAuthError({
+          message: `Linear identity discovery timed out after ${identityRequestDeadline}`,
+        }),
+      ),
+    ),
+  );
   return { organization: organization.urlKey, actorUserId: viewer.id } satisfies DiscoveredIdentity;
 });
