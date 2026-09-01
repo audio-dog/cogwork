@@ -272,6 +272,12 @@ const recoveryLayer = (deps: RecoveryDeps) => {
   );
 };
 
+const recoverWith = (layer: ReturnType<typeof recoveryLayer>) =>
+  Recovery.Recovery.pipe(
+    Effect.flatMap((recovery) => recovery.recover()),
+    Effect.provide(layer),
+  );
+
 interface LiveRecoveryProbeState {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
   readonly attempts: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
@@ -341,16 +347,13 @@ describe("Recovery.recover", () => {
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
         attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.deepStrictEqual(yield* Ref.get(released), []);
-        assert.deepStrictEqual(yield* Ref.get(attempts), []);
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map((work) => work.id),
-          [id("#1")],
-        );
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+      yield* recoverWith(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted }));
+      assert.deepStrictEqual(yield* Ref.get(released), []);
+      assert.deepStrictEqual(yield* Ref.get(attempts), []);
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map((work) => work.id),
+        [id("#1")],
+      );
     }),
   );
 
@@ -386,32 +389,26 @@ describe("Recovery.recover", () => {
         },
       };
       yield* ledger.insertRun({ ...interrupted, stage: "follow-up" });
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map(({ stage }) => stage),
-          ["follow-up"],
-        );
-        assert.deepStrictEqual(yield* Ref.get(released), []);
-      }).pipe(
-        Effect.provide(
-          recoveryLayer({
-            observed: [stalledFollowUp],
-            ledger,
-            admitted,
-            issueTracker: {
-              release: (_workspace, itemId) => Ref.update(released, (items) => [...items, itemId]),
-            },
-            availability: {
-              operation: "follow-up",
-              available: false,
-              causes: [],
-            },
-          }),
-        ),
+      yield* recoverWith(
+        recoveryLayer({
+          observed: [stalledFollowUp],
+          ledger,
+          admitted,
+          issueTracker: {
+            release: (_workspace, itemId) => Ref.update(released, (items) => [...items, itemId]),
+          },
+          availability: {
+            operation: "follow-up",
+            available: false,
+            causes: [],
+          },
+        }),
       );
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map(({ stage }) => stage),
+        ["follow-up"],
+      );
+      assert.deepStrictEqual(yield* Ref.get(released), []);
     }),
   );
 
@@ -420,12 +417,9 @@ describe("Recovery.recover", () => {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun({ ...interrupted, session });
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        const [work] = yield* Ref.get(admitted);
-        assert.deepStrictEqual(work?.resume, { session, reason: "interrupted" });
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })));
+      yield* recoverWith(recoveryLayer({ observed: [claimedByUs], ledger, admitted }));
+      const [work] = yield* Ref.get(admitted);
+      assert.deepStrictEqual(work?.resume, { session, reason: "interrupted" });
     }),
   );
 
@@ -434,12 +428,9 @@ describe("Recovery.recover", () => {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        const [work] = yield* Ref.get(admitted);
-        assert.isUndefined(work?.resume);
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })));
+      yield* recoverWith(recoveryLayer({ observed: [claimedByUs], ledger, admitted }));
+      const [work] = yield* Ref.get(admitted);
+      assert.isUndefined(work?.resume);
     }),
   );
 
@@ -454,16 +445,11 @@ describe("Recovery.recover", () => {
         attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
         handOff: (_workspace, itemId) => Ref.update(handoffs, (xs) => [...xs, itemId]),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.deepStrictEqual(yield* Ref.get(attempts), []);
-        assert.deepStrictEqual(yield* Ref.get(handoffs), []);
-      }).pipe(
-        Effect.provide(
-          recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
-        ),
+      yield* recoverWith(
+        recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
       );
+      assert.deepStrictEqual(yield* Ref.get(attempts), []);
+      assert.deepStrictEqual(yield* Ref.get(handoffs), []);
     }),
   );
 
@@ -480,22 +466,17 @@ describe("Recovery.recover", () => {
           Ref.update(attempts, (xs) => [...xs, { item: itemId, reason: outcome.reason }]),
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
-        assert.deepStrictEqual(yield* Ref.get(attempts), [{ item: id("#1"), reason: recoveryReason }]);
-        assert.deepStrictEqual(yield* Ref.get(notes), []);
-      }).pipe(
-        Effect.provide(
-          recoveryLayer({
-            observed: [claimedByUs, claimedByOther, unclaimed],
-            issueTracker,
-            ledger,
-            admitted,
-          }),
-        ),
+      yield* recoverWith(
+        recoveryLayer({
+          observed: [claimedByUs, claimedByOther, unclaimed],
+          issueTracker,
+          ledger,
+          admitted,
+        }),
       );
+      assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+      assert.deepStrictEqual(yield* Ref.get(attempts), [{ item: id("#1"), reason: recoveryReason }]);
+      assert.deepStrictEqual(yield* Ref.get(notes), []);
     }),
   );
 
@@ -513,16 +494,13 @@ describe("Recovery.recover", () => {
         handOff: (_workspace, itemId) => Ref.update(handoffs, (xs) => [...xs, itemId]),
         note: (_workspace, _itemId, detail) => Ref.update(notes, (xs) => [...xs, detail]),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        const note = (yield* Ref.get(notes))[0] ?? "";
-        assert.include(note, "Recovered a stale claim after a daemon restart.");
-        assert.include(note, recoveryReason);
-        assert.deepStrictEqual(yield* Ref.get(released), [id("#4")]);
-        assert.deepStrictEqual(yield* Ref.get(attempts), []);
-        assert.deepStrictEqual(yield* Ref.get(handoffs), []);
-      }).pipe(Effect.provide(recoveryLayer({ observed: [staleNoStage], issueTracker, ledger, admitted })));
+      yield* recoverWith(recoveryLayer({ observed: [staleNoStage], issueTracker, ledger, admitted }));
+      const note = (yield* Ref.get(notes))[0] ?? "";
+      assert.include(note, "Recovered a stale claim after a daemon restart.");
+      assert.include(note, recoveryReason);
+      assert.deepStrictEqual(yield* Ref.get(released), [id("#4")]);
+      assert.deepStrictEqual(yield* Ref.get(attempts), []);
+      assert.deepStrictEqual(yield* Ref.get(handoffs), []);
     }),
   );
 
@@ -543,15 +521,10 @@ describe("Recovery.recover", () => {
       const issueTracker: Partial<IssueTrackerService> = {
         handOff: (_workspace, _itemId, outcome) => Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'cursor-abc'");
-      }).pipe(
-        Effect.provide(
-          recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
-        ),
+      yield* recoverWith(
+        recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
       );
+      assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'cursor-abc'");
     }),
   );
 
@@ -563,23 +536,17 @@ describe("Recovery.recover", () => {
       const ledger = yield* RunLedger.makeMemory;
       const issueTracker: Partial<IssueTrackerService> = {
         handOff: (_workspace, _itemId, outcome) =>
-          Effect.gen(function* () {
-            yield* Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]);
-            yield* Ref.update(stages, (xs) => [...xs, outcome.stage]);
-          }),
+          Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]).pipe(
+            Effect.andThen(Ref.update(stages, (xs) => [...xs, outcome.stage])),
+          ),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        const note = (yield* Ref.get(notes))[0] ?? "";
-        assert.include(note, "Exhausted after 3 failed implement attempts");
-        assert.include(note, recoveryReason);
-        assert.deepStrictEqual(yield* Ref.get(stages), ["implement"]);
-      }).pipe(
-        Effect.provide(
-          recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
-        ),
+      yield* recoverWith(
+        recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
       );
+      const note = (yield* Ref.get(notes))[0] ?? "";
+      assert.include(note, "Exhausted after 3 failed implement attempts");
+      assert.include(note, recoveryReason);
+      assert.deepStrictEqual(yield* Ref.get(stages), ["implement"]);
     }),
   );
 
@@ -594,17 +561,14 @@ describe("Recovery.recover", () => {
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
         attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map((work) => work.id),
-          [id("#1")],
-        );
-        assert.deepStrictEqual(yield* Ref.get(released), []);
-        assert.deepStrictEqual(yield* Ref.get(attempts), []);
-        assert.strictEqual((yield* ledger.getRun(interruptedRun.id))?.status, "crashed");
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+      yield* recoverWith(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted }));
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map((work) => work.id),
+        [id("#1")],
+      );
+      assert.deepStrictEqual(yield* Ref.get(released), []);
+      assert.deepStrictEqual(yield* Ref.get(attempts), []);
+      assert.strictEqual((yield* ledger.getRun(interruptedRun.id))?.status, "crashed");
     }),
   );
 
@@ -613,12 +577,9 @@ describe("Recovery.recover", () => {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun({ ...crashedRun("crash-live", 1, "running"), session });
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        const [work] = yield* Ref.get(admitted);
-        assert.deepStrictEqual(work?.resume, { session, reason: "crashed" });
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })));
+      yield* recoverWith(recoveryLayer({ observed: [claimedByUs], ledger, admitted }));
+      const [work] = yield* Ref.get(admitted);
+      assert.deepStrictEqual(work?.resume, { session, reason: "crashed" });
     }),
   );
 
@@ -634,15 +595,12 @@ describe("Recovery.recover", () => {
       const issueTracker: Partial<IssueTrackerService> = {
         handOff: (_workspace, itemId) => Ref.update(handoffs, (xs) => [...xs, itemId]),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map((work) => work.id),
-          [id("#1")],
-        );
-        assert.deepStrictEqual(yield* Ref.get(handoffs), []);
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+      yield* recoverWith(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted }));
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map((work) => work.id),
+        [id("#1")],
+      );
+      assert.deepStrictEqual(yield* Ref.get(handoffs), []);
     }),
   );
 
@@ -665,42 +623,38 @@ describe("Recovery.recover", () => {
         release: (_workspace, itemId) => Ref.update(released, (xs) => [...xs, itemId]),
         attemptFailed: (_workspace, itemId) => Ref.update(attempts, (xs) => [...xs, itemId]),
         handOff: (_workspace, _itemId, outcome) =>
-          Effect.gen(function* () {
-            yield* Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]);
-            yield* Ref.update(stages, (xs) => [...xs, outcome.stage]);
-          }),
-      };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover().pipe(
-          Effect.withLogger(
-            Logger.make(({ fiber, message }) =>
-              logs.push({
-                message,
-                annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
-              }),
-            ),
+          Ref.update(notes, (xs) => [...xs, outcome.note ?? ""]).pipe(
+            Effect.andThen(Ref.update(stages, (xs) => [...xs, outcome.stage])),
           ),
-        );
-        const note = (yield* Ref.get(notes))[0] ?? "";
-        assert.include(note, "Exhausted after 3 consecutive implement crashes");
-        assert.include(note, recoveryReason);
-        assert.deepStrictEqual(yield* Ref.get(stages), ["implement"]);
-        assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
-        assert.deepStrictEqual(yield* Ref.get(attempts), []);
-        assert.deepStrictEqual(yield* Ref.get(admitted), []);
-        assert.strictEqual((yield* ledger.getRun(running.id))?.status, "crashed");
-        assert.strictEqual((yield* Metric.value(cappedMetric)).count, cappedBefore + 1);
-        const capped = logs.find(({ message }) =>
-          Array.isArray(message) ? message.includes("crash loop capped") : message === "crash loop capped",
-        );
-        assert.deepStrictEqual(capped?.annotations, {
-          workspace: "a",
-          item: "#1",
-          stage: "implement",
-        });
-        assert.deepStrictEqual(capped?.message, ["crash loop capped", { crashes: 3 }]);
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+      };
+      yield* recoverWith(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })).pipe(
+        Effect.withLogger(
+          Logger.make(({ fiber, message }) =>
+            logs.push({
+              message,
+              annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
+            }),
+          ),
+        ),
+      );
+      const note = (yield* Ref.get(notes))[0] ?? "";
+      assert.include(note, "Exhausted after 3 consecutive implement crashes");
+      assert.include(note, recoveryReason);
+      assert.deepStrictEqual(yield* Ref.get(stages), ["implement"]);
+      assert.deepStrictEqual(yield* Ref.get(released), [id("#1")]);
+      assert.deepStrictEqual(yield* Ref.get(attempts), []);
+      assert.deepStrictEqual(yield* Ref.get(admitted), []);
+      assert.strictEqual((yield* ledger.getRun(running.id))?.status, "crashed");
+      assert.strictEqual((yield* Metric.value(cappedMetric)).count, cappedBefore + 1);
+      const capped = logs.find(({ message }) =>
+        Array.isArray(message) ? message.includes("crash loop capped") : message === "crash loop capped",
+      );
+      assert.deepStrictEqual(capped?.annotations, {
+        workspace: "a",
+        item: "#1",
+        stage: "implement",
+      });
+      assert.deepStrictEqual(capped?.message, ["crash loop capped", { crashes: 3 }]);
     }),
   );
 
@@ -766,21 +720,15 @@ describe("Recovery.recover", () => {
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
       const logged: Array<string> = [];
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.deepStrictEqual(yield* Ref.get(admitted), []);
-      }).pipe(
-        Effect.provide(
-          recoveryLayer({
-            observed: [],
-            ledger,
-            admitted,
-            poll: { status: "paused", reason: "rate-limited", message: "backing off", retryAtMillis: null },
-          }),
-        ),
-        Effect.withLogger(Logger.make(({ message }) => void logged.push(String(message)))),
-      );
+      yield* recoverWith(
+        recoveryLayer({
+          observed: [],
+          ledger,
+          admitted,
+          poll: { status: "paused", reason: "rate-limited", message: "backing off", retryAtMillis: null },
+        }),
+      ).pipe(Effect.withLogger(Logger.make(({ message }) => void logged.push(String(message)))));
+      assert.deepStrictEqual(yield* Ref.get(admitted), []);
       assert.isTrue(logged.some((line) => line.includes("claim recovery deferred")));
     }),
   );
@@ -792,15 +740,10 @@ describe("Recovery.recover", () => {
       const issueTracker: Partial<IssueTrackerService> = {
         attemptFailed: () => Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "boom" })),
       };
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        assert.deepStrictEqual(yield* Ref.get(admitted), []);
-      }).pipe(
-        Effect.provide(
-          recoveryLayer({ observed: [withAttempts(claimedByUs, 0)], issueTracker, ledger, admitted }),
-        ),
+      yield* recoverWith(
+        recoveryLayer({ observed: [withAttempts(claimedByUs, 0)], issueTracker, ledger, admitted }),
       );
+      assert.deepStrictEqual(yield* Ref.get(admitted), []);
     }),
   );
 
@@ -809,24 +752,22 @@ describe("Recovery.recover", () => {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interruptedRun);
-      yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const subscription = yield* bus.subscribe();
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "crashed"),
-          Stream.runCollect,
-        );
-        const changed = [...events].flatMap((event) =>
-          DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
-        );
-        assert.deepStrictEqual(
-          changed.map((run) => run.status),
-          ["crashed"],
-        );
-        assert.strictEqual(changed.at(0)?.id, interruptedRun.id);
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })), Effect.scoped);
+      const context = yield* Layer.build(recoveryLayer({ observed: [claimedByUs], ledger, admitted }));
+      const bus = Context.get(context, DaemonEventBus.DaemonEventBus);
+      const subscription = yield* bus.subscribe();
+      yield* Context.get(context, Recovery.Recovery).recover();
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "crashed"),
+        Stream.runCollect,
+      );
+      const changed = [...events].flatMap((event) =>
+        DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
+      );
+      assert.deepStrictEqual(
+        changed.map((run) => run.status),
+        ["crashed"],
+      );
+      assert.strictEqual(changed.at(0)?.id, interruptedRun.id);
     }),
   );
 
@@ -836,24 +777,22 @@ describe("Recovery.recover", () => {
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(crashedRun("stale-a", 1, "running"));
       yield* ledger.insertRun(crashedRun("done-b", 2, "succeeded"));
-      yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const subscription = yield* bus.subscribe();
-        const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
-        const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "failed"),
-          Stream.runCollect,
-        );
-        const changed = [...events].flatMap((event) =>
-          DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
-        );
-        assert.deepStrictEqual(
-          changed.map((run) => run.status),
-          ["failed"],
-        );
-        assert.strictEqual(changed.at(0)?.id, rid("stale-a"));
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted })), Effect.scoped);
+      const context = yield* Layer.build(recoveryLayer({ observed: [claimedByUs], ledger, admitted }));
+      const bus = Context.get(context, DaemonEventBus.DaemonEventBus);
+      const subscription = yield* bus.subscribe();
+      yield* Context.get(context, Recovery.Recovery).recover();
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "failed"),
+        Stream.runCollect,
+      );
+      const changed = [...events].flatMap((event) =>
+        DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
+      );
+      assert.deepStrictEqual(
+        changed.map((run) => run.status),
+        ["failed"],
+      );
+      assert.strictEqual(changed.at(0)?.id, rid("stale-a"));
     }),
   );
 });
@@ -869,19 +808,17 @@ describe("Recovery.recoverWhenLive", () => {
       });
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
+      const context = yield* Layer.build(recoveryLayer({ observed: [], ledger, admitted, snapshot }));
+      const recovery = Context.get(context, Recovery.Recovery);
+      yield* recovery.recoverWhenLive();
+      assert.deepStrictEqual(yield* Ref.get(admitted), []);
 
-        yield* recovery.recoverWhenLive();
-        assert.deepStrictEqual(yield* Ref.get(admitted), []);
-
-        yield* Ref.set(snapshot, snapshotOf([claimedByUs]));
-        yield* recovery.recoverWhenLive();
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map((work) => work.id),
-          [id("#1")],
-        );
-      }).pipe(Effect.provide(recoveryLayer({ observed: [], ledger, admitted, snapshot })));
+      yield* Ref.set(snapshot, snapshotOf([claimedByUs]));
+      yield* recovery.recoverWhenLive();
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map((work) => work.id),
+        [id("#1")],
+      );
     }),
   );
 
@@ -895,20 +832,18 @@ describe("Recovery.recoverWhenLive", () => {
       });
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
+      const context = yield* Layer.build(recoveryLayer({ observed: [], ledger, admitted, snapshot }));
+      const recovery = Context.get(context, Recovery.Recovery);
+      yield* recovery.recoverWhenLive();
+      assert.deepStrictEqual(yield* Ref.get(admitted), []);
 
-        yield* recovery.recoverWhenLive();
-        assert.deepStrictEqual(yield* Ref.get(admitted), []);
-
-        yield* Ref.set(snapshot, snapshotOf([claimedByUs]));
-        yield* recovery.recoverWhenLive();
-        yield* recovery.recoverWhenLive();
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map((work) => work.id),
-          [id("#1")],
-        );
-      }).pipe(Effect.provide(recoveryLayer({ observed: [], ledger, admitted, snapshot })));
+      yield* Ref.set(snapshot, snapshotOf([claimedByUs]));
+      yield* recovery.recoverWhenLive();
+      yield* recovery.recoverWhenLive();
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map((work) => work.id),
+        [id("#1")],
+      );
     }),
   );
 
@@ -918,25 +853,25 @@ describe("Recovery.recoverWhenLive", () => {
       const paused = yield* Ref.make(true);
       const ledger = yield* RunLedger.makeMemory;
       yield* ledger.insertRun(interrupted);
-      yield* Effect.gen(function* () {
-        const recovery = yield* Recovery.Recovery;
+      const context = yield* Layer.build(
+        recoveryLayer({ observed: [claimedByUs], ledger, admitted, paused }),
+      );
+      const recovery = Context.get(context, Recovery.Recovery);
+      yield* recovery.recoverWhenLive();
+      assert.deepStrictEqual(yield* Ref.get(admitted), []);
 
-        yield* recovery.recoverWhenLive();
-        assert.deepStrictEqual(yield* Ref.get(admitted), []);
+      yield* Ref.set(paused, false);
+      yield* recovery.recoverWhenLive();
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map((work) => work.id),
+        [id("#1")],
+      );
 
-        yield* Ref.set(paused, false);
-        yield* recovery.recoverWhenLive();
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map((work) => work.id),
-          [id("#1")],
-        );
-
-        yield* recovery.recoverWhenLive();
-        assert.deepStrictEqual(
-          (yield* Ref.get(admitted)).map((work) => work.id),
-          [id("#1")],
-        );
-      }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], ledger, admitted, paused })));
+      yield* recovery.recoverWhenLive();
+      assert.deepStrictEqual(
+        (yield* Ref.get(admitted)).map((work) => work.id),
+        [id("#1")],
+      );
     }),
   );
 

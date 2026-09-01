@@ -160,11 +160,9 @@ describe("watchActivity", () => {
       const racing: RunRecorderService = {
         ...recorder,
         replay: (run) =>
-          Effect.gen(function* () {
-            const history = yield* recorder.replay(run);
-            yield* eventBus.publishActivity(activity("run-1", 2, late, 1002));
-            return history;
-          }),
+          recorder
+            .replay(run)
+            .pipe(Effect.tap(() => eventBus.publishActivity(activity("run-1", 2, late, 1002)))),
       };
 
       const seen = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
