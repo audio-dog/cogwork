@@ -1,0 +1,21 @@
+packages/contracts/src/rpc.ts
+  s_cd9a2a4babdc0a::t_3426d3ae58212b 150
+  s_cd9a2a4babdc0a::t_31cfb7aff88917 17
+  s_cd9a2a4babdc0a::t_466d48b2970e4c 43-44,85,149,151-153,225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b4d58fa954e4b2e6702c823dec6d5d83d4458a12",
+  "prompts": {},
+  "sessions": {
+    "s_cd9a2a4babdc0a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-86b1-72a0-a7f0-d3a37a22936d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
