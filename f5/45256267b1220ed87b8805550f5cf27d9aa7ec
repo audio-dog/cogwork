@@ -1,0 +1,20 @@
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_457143d6fd1eb2::t_a4a90758a3435e 131-132
+  s_457143d6fd1eb2::t_fddb8245086855 106-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f545256267b1220ed87b8805550f5cf27d9aa7ec",
+  "prompts": {},
+  "sessions": {
+    "s_457143d6fd1eb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c6daa2f-8d09-4729-a7e5-4681491aef90",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
