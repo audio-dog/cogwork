@@ -1,0 +1,27 @@
+packages/codex-cli/src/harness.ts
+  s_82e0301d24005b::t_5c87d422cf2763 84-88,91-95,97,99-109,111,113,574-575,581,598
+  s_82e0301d24005b::t_e5c836648f8366 83
+  s_82e0301d24005b::t_26b7c13d5a44eb 96,110,112
+  s_82e0301d24005b::t_e143f649c252e4 26,28,89-90,573,576
+  s_82e0301d24005b::t_3f1f7941e96a27 98
+  s_82e0301d24005b::t_4b45457532f6e0 17-23,70-82,114,583,596
+  s_82e0301d24005b::t_a780cd9550e887 563-572
+packages/codex-cli/src/harness.test.ts
+  s_82e0301d24005b::t_9df10a342bd271 985
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c949ec4ec8a7145c06dc70df865d6883e94bb547",
+  "prompts": {},
+  "sessions": {
+    "s_82e0301d24005b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e4e-ea87-7762-a257-ad3a480a7de5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
