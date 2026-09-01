@@ -495,9 +495,9 @@ describe("linear client", () => {
         return Promise.withResolvers<Response>().promise;
       });
       const client = yield* LinearClient;
-      const request = yield* Effect.forkChild(client.observeIssues(ref, null));
+      const requestFiber = yield* Effect.forkChild(client.observeIssues(ref, null));
       yield* TestClock.adjust("1 minute");
-      const issues = yield* Fiber.join(request);
+      const issues = yield* Fiber.join(requestFiber);
       assert.deepStrictEqual(
         issues.map((issue) => issue.identifier),
         ["AUD-1"],
@@ -516,9 +516,9 @@ describe("linear client", () => {
         return Promise.withResolvers<Response>().promise;
       });
       const client = yield* LinearClient;
-      const request = yield* Effect.forkChild(client.createComment(ref, "AUD-1", "body"));
+      const requestFiber = yield* Effect.forkChild(client.createComment(ref, "AUD-1", "body"));
       yield* TestClock.adjust("1 minute");
-      yield* Fiber.join(request);
+      yield* Fiber.join(requestFiber);
       assert.strictEqual(fetchStub.mock.calls.length, 2);
       assert.strictEqual(onAbort.mock.calls.length, 1);
     }).pipe(withToken()),
@@ -529,6 +529,20 @@ describe("linear client", () => {
       const fetchStub = stubLinear(() => ({ status: 401, body: {} }));
       const client = yield* LinearClient;
       yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(fetchStub.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
+  it.effect("does not retry an invalid input failure", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({
+        body: {
+          errors: [{ message: "invalid comment", extensions: { type: "InvalidInput", userError: true } }],
+        },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.createComment(ref, "AUD-1", "body"));
+      assert.strictEqual(error.reason, "unavailable");
       assert.strictEqual(fetchStub.mock.calls.length, 1);
     }).pipe(withToken()),
   );
@@ -562,6 +576,23 @@ describe("linear client", () => {
       const client = yield* LinearClient;
       const error = yield* Effect.flip(client.observeIssues(ref, null));
       assert.strictEqual(error.retryAfterMillis, 90_000);
+    }).pipe(withToken()),
+  );
+
+  it.effect("measures a rate-limit reset from the attempt that received it", () =>
+    Effect.gen(function* () {
+      const startedAt = yield* Clock.currentTimeMillis;
+      const fetchStub = stubLinear(() => ({
+        status: 429,
+        body: {},
+        headers: { "x-ratelimit-requests-reset": String(startedAt + 90_000) },
+      }));
+      fetchStub.mockImplementationOnce(() => Promise.withResolvers<Response>().promise);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(Effect.flip(client.observeIssues(ref, null)));
+      yield* TestClock.adjust("31 seconds");
+      const error = yield* Fiber.join(requestFiber);
+      assert.isAtMost(error.retryAfterMillis ?? Number.POSITIVE_INFINITY, 60_000);
     }).pipe(withToken()),
   );
 
