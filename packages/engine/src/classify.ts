@@ -110,10 +110,10 @@ const classifyOne = (
   if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
   const stage = stageFor(item);
   if (!stage) return Outcome.Drop({});
-  if (availability?.get(stage)?.available === false) return Outcome.Drop({});
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
   const failures = consecutiveFailures(item, stage);
   if (failures >= maxAttemptsPerStage) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  if (availability?.get(stage)?.available === false) return Outcome.Drop({});
   return Outcome.Eligible({ stage });
 };
 

@@ -40,6 +40,27 @@ const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"
   ...over,
 });
 
+const unavailable = (stage: LifecycleStage) =>
+  new Map<LifecycleStage, OperationAvailability>([
+    [
+      stage,
+      {
+        operation: stage,
+        available: false,
+        causes: [
+          {
+            _tag: "UnsatisfiedNeed",
+            need: "review",
+            kind: "skill",
+            reason: "unbound",
+            contribution: null,
+            message: "review is unbound",
+          },
+        ],
+      },
+    ],
+  ]);
+
 describe("classify", () => {
   it("routes ready-for-agent with no PR to implement", () => {
     const { eligible } = classify([item({ id: "1", roles: ["ready-for-agent"] })]);
@@ -50,29 +71,34 @@ describe("classify", () => {
   });
 
   it("holds an unavailable Operation out of eligible work", () => {
-    const availability = new Map<LifecycleStage, OperationAvailability>([
-      [
-        "implement",
-        {
-          operation: "implement",
-          available: false,
-          causes: [
-            {
-              _tag: "UnsatisfiedNeed",
-              need: "review",
-              kind: "skill",
-              reason: "unbound",
-              contribution: null,
-              message: "review is unbound",
-            },
-          ],
-        },
-      ],
-    ]);
-
-    const result = classify([item({ id: "1", roles: ["ready-for-agent"] })], undefined, availability);
+    const result = classify(
+      [item({ id: "1", roles: ["ready-for-agent"] })],
+      undefined,
+      unavailable("implement"),
+    );
 
     assert.deepStrictEqual(result.eligible, []);
+  });
+
+  it("reports blocked work even when its Operation is unavailable", () => {
+    const result = classify(
+      [item({ id: "1", roles: ["ready-for-agent"], openBlockers: 1 })],
+      undefined,
+      unavailable("implement"),
+    );
+
+    assert.strictEqual(result.blocked[0]?.openBlockers, 1);
+  });
+
+  it("hands exhausted work to a human even when its Operation is unavailable", () => {
+    const attempt = { stage: "triage" as const, outcome: "failed" as const, atMillis: 1 };
+    const result = classify(
+      [item({ id: "1", roles: ["needs-triage"], attempts: [attempt, attempt, attempt] })],
+      undefined,
+      unavailable("triage"),
+    );
+
+    assert.strictEqual(result.needsHuman[0]?.reason, "ready-for-human");
   });
 
   it("routes needs-triage with no PR to triage", () => {
