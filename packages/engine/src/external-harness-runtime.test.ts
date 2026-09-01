@@ -297,7 +297,8 @@ const descriptor = (
     execution: fullHarnessExecution,
     profile: {
       authenticationModes: ["host"],
-      session: { affinity: "runtime-host", fork: false },
+      session: { affinity: "runtime-host", fork: false, humanAttach: true },
+      structuredOutput: "native",
       policyFidelity: "exact",
       fileEventFidelity: "sandbox",
       usageQuality: "estimated",
@@ -920,6 +921,46 @@ describe("external Harness runtime", () => {
 
         assert.strictEqual(error.reason, "workspace");
         assert.include(error.message, "Instructions");
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
+    it.effect("rejects a Run Plan without Sandbox middleware before adapter launch", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const created: Array<string> = [];
+        const harness = makeHarness(descriptor([], probe), created);
+        const plan = RunPlan.make({
+          ...request,
+          middleware: [],
+        });
+        const error = yield* harness
+          .run({ plan, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "sandbox");
+        assert.include(error.message, "missing mandatory Sandbox projection");
+        assert.deepStrictEqual(created, []);
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
+    it.effect("rejects a Sandbox policy mismatch before adapter launch", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const created: Array<string> = [];
+        const harness = makeHarness(descriptor([], probe), created);
+        const plan = RunPlan.make({
+          ...request,
+          sandbox: { ...request.sandbox, policy: "read-only" },
+        });
+        const error = yield* harness
+          .run({ plan, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "policy");
+        assert.include(error.message, "does not match its immutable Harness profile");
+        assert.deepStrictEqual(created, []);
         assert.deepStrictEqual(probe.resolved, []);
       }),
     );
