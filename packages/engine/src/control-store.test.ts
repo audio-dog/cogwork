@@ -74,6 +74,15 @@ const poke = (storePath: string, statements: string) =>
     (db) => Effect.sync(() => db.close()),
   );
 
+const pokeRenameShapedStore = (storePath: string) =>
+  poke(
+    storePath,
+    `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
+     INSERT INTO workspaces (
+       id, name, checkout_path, issue_tracker, source_control_old, linear_history
+     ) VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 'original', 0);`,
+  );
+
 const query = (storePath: string, sql: string) =>
   Effect.acquireUseRelease(
     Effect.sync(() => new DatabaseSync(storePath)),
@@ -350,13 +359,7 @@ layer(NodeServices.layer)((it) => {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const { dir, storePath } = yield* temporaryStore();
-      yield* poke(
-        storePath,
-        `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
-         INSERT INTO workspaces (
-           id, name, checkout_path, issue_tracker, source_control_old, linear_history
-         ) VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 'original', 0);`,
-      );
+      yield* pokeRenameShapedStore(storePath);
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
       const backups = controlStoreBackups(yield* fs.readDirectory(dir));
@@ -375,45 +378,43 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("serializes racing rename-shaped preflights", () => {
-    const actualPushSchema = pushSchemaMock.getMockImplementation();
-    if (!actualPushSchema) return Effect.die("missing pushSchema implementation");
-    const concurrency = { active: 0, maximum: 0 };
-    pushSchemaMock.mockImplementation((...args) => {
-      concurrency.active += 1;
-      concurrency.maximum = Math.max(concurrency.maximum, concurrency.active);
-      return Promise.resolve()
-        .then(() => actualPushSchema(...args))
-        .finally(() => {
-          concurrency.active -= 1;
+  it.effect("serializes racing rename-shaped preflights", () =>
+    Effect.gen(function* () {
+      const actualPushSchema = pushSchemaMock.getMockImplementation();
+      if (!actualPushSchema) return yield* Effect.die("missing pushSchema implementation");
+      const concurrency = MutableRef.make({ active: 0, maximum: 0 });
+      pushSchemaMock.mockImplementation((...args) => {
+        const current = MutableRef.get(concurrency);
+        MutableRef.set(concurrency, {
+          active: current.active + 1,
+          maximum: Math.max(current.maximum, current.active + 1),
         });
-    });
-    return Effect.gen(function* () {
+        return Promise.resolve()
+          .then(() => actualPushSchema(...args))
+          .finally(() => MutableRef.update(concurrency, (state) => ({ ...state, active: state.active - 1 })));
+      });
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => pushSchemaMock.mockImplementation(actualPushSchema)),
+      );
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const { dir, storePath } = yield* temporaryStore();
-      yield* poke(
-        storePath,
-        `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
-         INSERT INTO workspaces (
-           id, name, checkout_path, issue_tracker, source_control_old, linear_history
-         ) VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 'original', 0);`,
-      );
+      yield* pokeRenameShapedStore(storePath);
 
       const results = yield* Effect.all([storeAt(storePath), storeAt(storePath)], {
         concurrency: "unbounded",
       });
       const backups = controlStoreBackups(yield* fs.readDirectory(dir));
 
-      assert.strictEqual(concurrency.maximum, 1);
+      assert.strictEqual(MutableRef.get(concurrency).maximum, 1);
       assert.isTrue(results.some((store) => store.health === "available"));
       assert.strictEqual(backups.length, 1);
       assert.deepStrictEqual(
         yield* query(path.join(dir, backups[0] ?? "missing"), "SELECT id FROM workspaces"),
         [{ id: "workspace-1" }],
       );
-    }).pipe(Effect.ensuring(Effect.sync(() => pushSchemaMock.mockImplementation(actualPushSchema))));
-  });
+    }),
+  );
 
   it.effect(
     "waits for a cross-process schema preflight lock",
@@ -441,16 +442,22 @@ layer(NodeServices.layer)((it) => {
     10_000,
   );
 
-  it.effect("fails closed when the schema preflight lock is compromised", () => {
-    const actualPushSchema = pushSchemaMock.getMockImplementation();
-    if (!actualPushSchema) return Effect.die("missing pushSchema implementation");
-    const pending = Promise.withResolvers<Awaited<ReturnType<typeof actualPushSchema>>>();
-    const started = Deferred.makeUnsafe<void>();
-    pushSchemaMock.mockImplementation(() => {
-      Deferred.doneUnsafe(started, Effect.void);
-      return pending.promise;
-    });
-    return Effect.gen(function* () {
+  it.effect("fails closed when the schema preflight lock is compromised", () =>
+    Effect.gen(function* () {
+      const actualPushSchema = pushSchemaMock.getMockImplementation();
+      if (!actualPushSchema) return yield* Effect.die("missing pushSchema implementation");
+      const pending = Promise.withResolvers<Awaited<ReturnType<typeof actualPushSchema>>>();
+      const started = Deferred.makeUnsafe<void>();
+      pushSchemaMock.mockImplementation(() => {
+        Deferred.doneUnsafe(started, Effect.void);
+        return pending.promise;
+      });
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          pending.resolve(schemaDiff([]));
+          pushSchemaMock.mockImplementation(actualPushSchema);
+        }),
+      );
       const fs = yield* FileSystem.FileSystem;
       const { storePath } = yield* temporaryStore();
       const bootFiber = yield* Effect.forkChild(storeAt(storePath));
@@ -463,15 +470,8 @@ layer(NodeServices.layer)((it) => {
       const store = yield* Fiber.join(bootFiber);
       assert.strictEqual(store.health, "unavailable");
       assert.isTrue(store.health === "unavailable" && store.message.includes("schema lock was compromised"));
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          pending.resolve(schemaDiff([]));
-          pushSchemaMock.mockImplementation(actualPushSchema);
-        }),
-      ),
-    );
-  });
+    }),
+  );
 
   it.effect("preserves an existing backup from the same timestamp", () =>
     Effect.gen(function* () {

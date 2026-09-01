@@ -116,7 +116,6 @@ type ControlStoreSchemaChange = {
 type ControlStoreClientOptions = Pick<SqliteClient.SqliteClientConfig, "busyTimeout">;
 
 const maximumRunEventAge = Duration.days(30);
-const schemaPreflightGate = Semaphore.makeUnsafe(1);
 const schemaPreflightLockOptions = {
   realpath: false,
   retries: {
@@ -666,7 +665,7 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
   return yield* Effect.acquireUseRelease(
     sql.unsafe("PRAGMA foreign_keys=OFF;"),
     () => transaction,
-    () => sql.unsafe("PRAGMA foreign_keys=ON;").pipe(Effect.orDie),
+    () => sql.unsafe("PRAGMA foreign_keys=ON;"),
   );
 });
 
@@ -774,29 +773,25 @@ const withSchemaPreflightLock = <A, E, R>(storePath: string, effect: Effect.Effe
 
 const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
   (storePath: string, options: ControlStoreClientOptions) =>
-    schemaPreflightGate
-      .withPermits(1)(
-        withSchemaPreflightLock(
-          storePath,
-          Effect.scoped(
-            controlStoreSchemaStatements().pipe(Effect.provide(controlStoreClientLayer(storePath, options))),
-          ).pipe(
-            Effect.as<ControlStoreBootError | null>(null),
-            Effect.catchTag("RenameShapedControlStoreDiff", () =>
-              backupRenameShapedStore(storePath).pipe(Effect.as<ControlStoreBootError | null>(null)),
-            ),
-          ),
-        ),
-      )
-      .pipe(
-        Effect.catch((error) =>
-          Effect.succeed(
-            new ControlStoreBootError({
-              message: `Control store schema preflight failed: ${messageOf(error)}`,
-            }),
-          ),
+    withSchemaPreflightLock(
+      storePath,
+      Effect.scoped(
+        controlStoreSchemaStatements().pipe(Effect.provide(controlStoreClientLayer(storePath, options))),
+      ).pipe(
+        Effect.as<ControlStoreBootError | null>(null),
+        Effect.catchTag("RenameShapedControlStoreDiff", () =>
+          backupRenameShapedStore(storePath).pipe(Effect.as<ControlStoreBootError | null>(null)),
         ),
       ),
+    ).pipe(
+      Effect.catch((error) =>
+        Effect.succeed(
+          new ControlStoreBootError({
+            message: `Control store schema preflight failed: ${messageOf(error)}`,
+          }),
+        ),
+      ),
+    ),
 );
 
 const unavailable = (message: string): ControlStoreService => {
