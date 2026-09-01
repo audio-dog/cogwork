@@ -1,0 +1,22 @@
+packages/engine/src/provider-bridge.ts
+  s_0b2a07c72076ba::t_b272eba5cf43e5 25
+  s_0b2a07c72076ba::t_4f1f27596f0452 21-23,26
+  s_0b2a07c72076ba::t_1353debe66408e 24,29
+  s_0b2a07c72076ba::t_2c10ee32f724ef 10,13,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b92cdea043c660564769e742f609fa6ea4d2eaf3",
+  "prompts": {},
+  "sessions": {
+    "s_0b2a07c72076ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b67-61fa-74e2-b18b-c6a97b52045e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
