@@ -1,0 +1,30 @@
+packages/engine/src/run-recorder.ts
+  s_20609725d0c48d::t_3e9efda661bc58 22-47,71,96
+  s_cfc9c6593dbaa8::t_3e2e5b90818167 2
+packages/engine/src/run-recorder.test.ts
+  s_20609725d0c48d::t_0f3eb1fac2095b 185-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1e15a55d012220c832d153f81f1b8ebe31af07cd",
+  "prompts": {},
+  "sessions": {
+    "s_20609725d0c48d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b82-c84b-70a0-b5e5-15bad1267a40",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_cfc9c6593dbaa8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b81-9f9b-7aa2-b500-ed62bdc602b4",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
