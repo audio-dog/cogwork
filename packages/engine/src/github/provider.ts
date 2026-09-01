@@ -163,8 +163,8 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
       baseDivergence: baseDivergenceOf(mergeableState),
       waitingSinceMillis: pull.updatedAtMillis,
       headRef: pull.headRef,
-      followable:
-        !pull.draft && pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase(),
+      followable: pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase(),
+      draft: pull.draft,
     } satisfies PrSignals;
   });
 

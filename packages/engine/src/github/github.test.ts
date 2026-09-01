@@ -777,7 +777,8 @@ describe("github work source adapter", () => {
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
       assert.isEmpty(classify(items).eligible);
-      assert.isTrue(items.every((item) => item.pr !== null));
+      assert.isTrue(items.every((item) => item.pr?.draft === true));
+      assert.isTrue(items.every((item) => item.pr?.followable === true));
     }).pipe(Effect.provide(withClient(followUpTriggerSeed({ authorLogin: bot.login, draft: true })))),
   );
 
