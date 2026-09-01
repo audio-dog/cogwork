@@ -1,0 +1,19 @@
+packages/contracts/CONTEXT.md
+  s_59283c64607566::t_e49882eda2d2c3 129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "55af4e2a6abe9bf4c223582b38b12f2d203307ed",
+  "prompts": {},
+  "sessions": {
+    "s_59283c64607566": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c5dab4a-1995-4971-a517-0763c15a97b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
