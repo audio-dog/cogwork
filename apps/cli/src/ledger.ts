@@ -1,4 +1,13 @@
-import type { RunEvent, RunId, RunPlan, RunRecord, Session, TokenUsage } from "@cogwork/contracts";
+import type {
+  RunEvent,
+  RunId,
+  RunPlan,
+  RunRecord,
+  Session,
+  TokenUsage,
+  WorkItemId,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import {
   RunEvent as RunEventSchema,
   RunId as RunIdSchema,
@@ -378,7 +387,7 @@ const make = Effect.fn("ledger.make")(function* () {
           .all(),
       ),
 
-    consecutiveCrashes: (workspace: string, workItem: string) =>
+    consecutiveCrashes: (workspace: WorkspaceId, workItem: WorkItemId, sinceMillis: number) =>
       readRows("consecutiveCrashes", () =>
         db
           .select({ count: sql<number>`count(*)` })
@@ -388,6 +397,7 @@ const make = Effect.fn("ledger.make")(function* () {
               eq(runs.workspace, workspace),
               eq(runs.workItem, workItem),
               eq(runs.status, "crashed"),
+              gt(runs.startedAt, sinceMillis),
               gt(
                 runs.startedAt,
                 sql<number>`coalesce((select max(${runs.startedAt}) from ${runs} where ${runs.workspace} = ${workspace} and ${runs.workItem} = ${workItem} and ${runs.status} <> 'crashed'), -1)`,

@@ -542,6 +542,7 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
           }),
         handOff: (_workspace, itemId, outcome) =>
           record(calls, { method: "handOff", item: itemId, stage: outcome.stage, note: outcome.note }),
+        handBack: () => Effect.void,
         stalled: (_workspace, itemId, outcome) =>
           record(calls, {
             method: "stalled",
