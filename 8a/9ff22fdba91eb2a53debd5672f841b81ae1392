@@ -1,0 +1,27 @@
+docs/research/electron-node-performance-practices.md
+  s_4ae61d8d70e02e::t_fbada06aacbc2d 1-325
+docs/research/performance-feedback-loop-into-tracker.md
+  s_4ae61d8d70e02e::t_f2ae92cdb9830d 1-341
+docs/research/effect-observability-for-performance.md
+  s_4ae61d8d70e02e::t_330d40b97a2aad 1-305
+docs/research/repeatable-performance-benchmarking.md
+  s_4ae61d8d70e02e::t_f71a4be04c6913 1-350
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_4ae61d8d70e02e::t_3ab9ded1bd0f79 1-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8a9ff22fdba91eb2a53debd5672f841b81ae1392",
+  "prompts": {},
+  "sessions": {
+    "s_4ae61d8d70e02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb42e325-567c-4173-8033-8e65733e9986",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
