@@ -7,12 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": [
-      "**",
-      "!**/*.gen.ts",
-      "!**/.tanstack-output-schema-codex-*.json",
-      "!configs/lint/tests/fixtures"
-    ]
+    "includes": ["**", "!**/*.gen.ts", "!**/.tanstack-output-schema-codex-*.json"]
   },
   "formatter": {
     "enabled": true,
@@ -84,6 +79,12 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["configs/lint/tests/fixtures/**"],
+      "linter": {
+        "enabled": false
+      }
+    },
     {
       "includes": ["**/routes/**"],
       "linter": {
