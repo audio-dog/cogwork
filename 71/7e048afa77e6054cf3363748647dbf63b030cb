@@ -1,0 +1,33 @@
+packages/engine/src/control-store.test.ts
+  s_ffed0fe3f37454::t_f4b14478557622 18,26-37,74-79,130-136,139-152,155-162,165-172,176,178,180-186,188-206,426,428,430-435,439-441,445,450,452-459
+packages/engine/src/control-store.ts
+  s_ffed0fe3f37454::t_f4b14478557622 26,33,40,102-107,109-113,117-119,579,581-604,607-609,611-626,657
+packages/engine/package.json
+  s_ffed0fe3f37454::t_f4b14478557622 25
+pnpm-lock.yaml
+  s_c09cd36848ebc7::t_a805b5a659e66f 325,328,331,338,341,347,360,366,384,387,390,397,400,409,436,439,442-445,461,467,5932,5935,6257,6272,6807,6811,6823,6826,6857,6862,6864,6866,6868,6872,6874-6875,6881,6886,6910,7231,7249,7259,7281,7289,9730,9821,9845
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "717e048afa77e6054cf3363748647dbf63b030cb",
+  "prompts": {},
+  "sessions": {
+    "s_c09cd36848ebc7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e80-2d7d-7600-b17e-4072a5cd9a6f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ffed0fe3f37454": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dd5-8ef9-7211-94eb-c47c2b6e29be",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
