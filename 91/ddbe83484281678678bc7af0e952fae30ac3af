@@ -1,0 +1,23 @@
+packages/engine/src/tools/sandbox.ts
+  s_aa1445cc8bee68::t_c1283375d4fa7b 46
+packages/engine/src/tools/sandbox.test.ts
+  s_aa1445cc8bee68::t_ef5ccee9f5dd39 1,7,13,16,26,32-41,43
+  s_aa1445cc8bee68::t_15dcd01abb879e 2,30-31,44-45
+  s_aa1445cc8bee68::t_47f76eed28b6b9 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "91ddbe83484281678678bc7af0e952fae30ac3af",
+  "prompts": {},
+  "sessions": {
+    "s_aa1445cc8bee68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05adf-0996-74c1-84fe-d09daadd9d31",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
