@@ -1,0 +1,31 @@
+apps/desktop/src/main/daemon-bridge.test.ts
+  s_ebaf2e72481122::t_be3579660c9d52 1-61
+apps/desktop/src/main/daemon-bridge.ts
+  s_ebaf2e72481122::t_361d36b400c11d 1-3,11-12,14-15,18,20-25,27-58,60-64
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_5609bcd3867bea::t_b2375a766bcf98 8,12,20,41,44-75,77-78,87,121,156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "53b971b023de702670e96aef6a989a7f723cf869",
+  "prompts": {},
+  "sessions": {
+    "s_5609bcd3867bea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05aa2-b042-7331-8e8c-55191c7eb9f5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ebaf2e72481122": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05aba-ca57-7471-9130-0a23ba35db09",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
