@@ -95,21 +95,16 @@ const missingExecutableExitCodes = new Set([126, 127]);
 const codexPreflightDeadline = "5 seconds";
 const gitMetadataDeadline = "5 seconds";
 
-const errorCode = (cause: unknown, seen: ReadonlySet<object> = new Set()): string | null => {
-  if (typeof cause !== "object" || cause === null) return null;
-  if (seen.has(cause)) return null;
-  if ("code" in cause && typeof cause.code === "string") return cause.code;
+const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = new Set()): boolean => {
+  if (typeof cause !== "object" || cause === null) return false;
+  if (seen.has(cause)) return false;
+  if ("code" in cause && typeof cause.code === "string" && missingExecutableCodes.has(cause.code)) {
+    return true;
+  }
   const nextSeen = new Set(seen).add(cause);
-  return (
-    ["error", "rawEvent", "cause"]
-      .flatMap((field) => (field in cause ? [errorCode(Reflect.get(cause, field), nextSeen)] : []))
-      .find((code) => code !== null) ?? null
+  return ["error", "rawEvent", "cause"].some(
+    (field) => field in cause && isMissingExecutableCause(Reflect.get(cause, field), nextSeen),
   );
-};
-
-const isMissingExecutableCause = (cause: unknown) => {
-  const code = errorCode(cause);
-  return code !== null && missingExecutableCodes.has(code);
 };
 
 const missingHarnessError = (message = "Codex CLI is not installed or executable") =>

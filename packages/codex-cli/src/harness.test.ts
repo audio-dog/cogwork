@@ -583,6 +583,26 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
     }),
   );
 
+  it.effect("finds a nested missing-executable code behind a generic RUN_ERROR code", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () =>
+          toAsyncIterable([
+            runErrorChunk("Codex could not start", {
+              code: "unknown",
+              rawEvent: { error: { code: "ENOENT" } },
+            }),
+          ]),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
   it.effect("classifies a thrown missing-executable code", () =>
     Effect.gen(function* () {
       const failure = Object.assign(new Error("Codex could not start"), { code: "EACCES" });
