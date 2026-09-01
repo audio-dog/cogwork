@@ -50,12 +50,17 @@ export const make = Effect.gen(function* () {
   });
 
   const record = Effect.fn("RunRecorder.record")(function* (run: RunRecord, event: AgUiEvent) {
+    const data = yield* encodeJson(event).pipe(
+      Effect.tapError((error) =>
+        Effect.logError("run event encoding failed", { runId: run.id, type: event.type, error }),
+      ),
+      Effect.orDie,
+    );
     const atMillis = yield* Clock.currentTimeMillis;
     const previous = yield* trackOf(run.id);
     const seq = previous.seq;
     const handle = yield* captureHandle(run, previous, event);
     yield* putTrack(run.id, { seq: seq + 1, handle });
-    const data = yield* encodeJson(event).pipe(Effect.orElseSucceed(() => "{}"));
     yield* ledger.appendEvent(run.id, {
       seq,
       type: event.type,

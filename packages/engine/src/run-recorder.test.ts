@@ -12,7 +12,9 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as DaemonEventBus from "./daemon-event-bus";
@@ -232,6 +234,28 @@ describe("RunRecorder", () => {
         const decoded = yield* recorder.sessionEvents(session);
 
         assert.deepStrictEqual(decoded, [text("first"), text("second")]);
+      }),
+    );
+    it.effect("logs an event encoding failure without persisting a placeholder", () =>
+      Effect.gen(function* () {
+        const record = run("run-encode-failure");
+        const recorder = yield* RunRecorder;
+        const ledger = yield* RunLedger.RunLedger;
+        const messages: Array<string> = [];
+        const event = { type: "CUSTOM", content: 1n } satisfies AgUiEvent;
+
+        const exit = yield* recorder.record(record, event).pipe(
+          Effect.withLogger(
+            Logger.make(({ message }) => {
+              messages.push(String(message));
+            }),
+          ),
+          Effect.exit,
+        );
+
+        assert.isTrue(Exit.isFailure(exit));
+        assert.deepStrictEqual(yield* ledger.events(record.id), []);
+        assert.isTrue(messages.some((message) => message.includes("run event encoding failed")));
       }),
     );
   });
