@@ -547,8 +547,7 @@ describe("Worktree.remove", () => {
         Worktree.make,
         provide(fakeGit(recorder, {}), fakeFs(recorder, {})),
       );
-      const result = yield* Effect.exit(manager.remove(workspaceWith(), "../../escape"));
-      assert.strictEqual(result._tag, "Failure");
+      yield* Effect.flip(manager.remove(workspaceWith(), "../../escape"));
       const removed = yield* Ref.get(recorder.removed);
       assert.deepStrictEqual(removed, []);
     }),
