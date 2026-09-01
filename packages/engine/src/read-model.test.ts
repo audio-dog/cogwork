@@ -135,8 +135,6 @@ const workspace: RegisteredWorkspace = {
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github", repo: "owner/example", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
-    playbook: { triage: { enabled: true } },
   }),
 };
 

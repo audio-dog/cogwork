@@ -57,7 +57,7 @@ import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
 import { operationPolicyProfile } from "./operation-policy";
-import { type ResolvedStage, resolveStage } from "./playbook";
+import { type OperationDefinition, resolveStage } from "./playbook";
 import type { RegisteredWorkspace } from "./projector";
 import { ownedToolNames } from "./tools";
 
@@ -298,13 +298,19 @@ const booleanValue = (value: unknown, fallback: boolean) => (typeof value === "b
 
 const isHarnessName = Schema.is(HarnessName);
 
-const harnessValue = (value: unknown, fallback: ResolvedStage["harness"]) =>
-  isHarnessName(value) ? value : fallback;
+const harnessValue = (value: unknown) => (isHarnessName(value) ? value : null);
 
 const isPolicyProfile = Schema.is(RunPlanPolicyProfile);
 
 const policyProfileValue = (value: unknown, fallback: RunPlanPolicyProfile) =>
   isPolicyProfile(value) ? value : fallback;
+
+export interface ResolvedStage extends OperationDefinition {
+  readonly enabled: boolean;
+  readonly harness: HarnessName;
+  readonly model: string | null;
+  readonly effort: string | null;
+}
 
 export interface ResolvedOperation {
   readonly stage: ResolvedStage;
@@ -335,13 +341,15 @@ export const resolveRunPlanStage = (
     ),
   );
   const settingValueOf = (setting: OperationSettingName) => settings.get(setting)?.value;
+  const harness = harnessValue(settingValueOf("harness"));
+  if (!harness) return null;
   return {
     stage: {
       ...base,
-      enabled: booleanValue(settingValueOf("enabled"), base.enabled),
-      harness: harnessValue(settingValueOf("harness"), base.harness),
-      model: stringValue(settingValueOf("model"), base.model),
-      effort: stringValue(settingValueOf("effort"), base.effort),
+      enabled: booleanValue(settingValueOf("enabled"), false),
+      harness,
+      model: stringValue(settingValueOf("model"), null),
+      effort: stringValue(settingValueOf("effort"), null),
     },
     profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
     settings,

@@ -16,7 +16,6 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded>) =>
       type: "linear",
       teams: ["ENG"],
     },
-    harness: { preferred: "cursor" },
     ...over,
   });
 

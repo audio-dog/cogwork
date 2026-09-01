@@ -56,7 +56,6 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
-  type ResolvedStage,
 } from "./playbook";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
@@ -73,6 +72,7 @@ import {
   availabilityCauses,
   operationBindingsOf,
   type ResolvedOperation,
+  type ResolvedStage,
   resolveEngineContributionEnabled,
   resolveRunPlanStage,
 } from "./run-plan";

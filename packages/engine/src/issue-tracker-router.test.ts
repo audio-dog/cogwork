@@ -18,7 +18,6 @@ const workspaceOf = (
     name,
     checkoutPath: `/repos/${name}`,
     issueTracker,
-    harness: { preferred: "cursor" },
   }),
 });
 

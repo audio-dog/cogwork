@@ -1,11 +1,5 @@
 import * as Schema from "effect/Schema";
-import {
-  HarnessName,
-  IssueTrackerType,
-  TrimmedNonEmptyString,
-  WorkItemId,
-  WorkspaceId,
-} from "./base-schemas";
+import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionOverview } from "./connection";
 import { LocalContribution } from "./contribution";
 import {
@@ -35,7 +29,6 @@ export const WorkspaceState = Schema.TaggedUnion({
     displayName: Schema.optional(TrimmedNonEmptyString),
     checkoutPath: TrimmedNonEmptyString,
     issueTracker: IssueTrackerType,
-    harness: HarnessName,
     poll: PollState,
     contributions: Schema.Array(LocalContribution),
     availability: OperationAvailabilityList,

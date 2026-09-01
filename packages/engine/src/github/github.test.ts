@@ -193,7 +193,6 @@ const workspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -205,7 +204,6 @@ const noBotWorkspace: RegisteredWorkspace = {
     name: "gh-nobot",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo" },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -222,7 +220,6 @@ const trustsCursorBot: RegisteredWorkspace = {
       actorLogin: bot.login,
       botAllowlist: ["cursor[bot]"],
     },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -233,7 +230,6 @@ const prioritizedWorkspace: RegisteredWorkspace = {
     name: "gh-priority",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: bot.login, priority: { project: 1 } },
-    harness: { preferred: "cursor" },
   }),
 };
 

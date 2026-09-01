@@ -1,12 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import {
-  HarnessName,
-  IssueTrackerType,
-  TrimmedNonEmptyString,
-  WorkItemId,
-  WorkspaceId,
-} from "./base-schemas";
+import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { Connection } from "./connection";
 import { LocalContribution } from "./contribution";
 import { Claim } from "./coordination";
@@ -124,7 +118,6 @@ export const WorkspaceInfo = Schema.Struct({
   displayName: Schema.optional(TrimmedNonEmptyString),
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerType,
-  harness: HarnessName,
   poll: PollState,
   contributions: Schema.Array(LocalContribution),
   availability: OperationAvailabilityList,

@@ -40,8 +40,6 @@ const workspaceOf = (name: string, concurrency?: number): RegisteredWorkspace =>
     name,
     checkoutPath: `/repos/${name}`,
     issueTracker: { type: "github", repo: `owner/${name}`, actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
-    playbook: { triage: { enabled: true } },
   }),
   ...(concurrency === undefined ? {} : { workspaceLimit: concurrency }),
 });

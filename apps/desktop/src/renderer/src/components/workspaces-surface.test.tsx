@@ -11,7 +11,6 @@ const workspace = Schema.decodeSync(WorkspaceState)({
   displayName: "Cogwork",
   checkoutPath: "/Users/taylor/sites/cogwork",
   issueTracker: "github",
-  harness: "codex",
   poll: { status: "ok" },
   contributions: [],
 });
