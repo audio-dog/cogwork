@@ -76,10 +76,13 @@ const insertRunsBulk = (storePath: string, records: ReadonlyArray<RunRecord>) =>
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
+const otherWorkspace = Schema.decodeSync(WorkspaceId)("other");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
 const crashItem = Schema.decodeSync(WorkItemId)("#101");
 const resolveItem = Schema.decodeSync(WorkItemId)("#202");
+const bareResolveItem = Schema.decodeSync(WorkItemId)("202");
 const resolveOther = Schema.decodeSync(WorkItemId)("#303");
+const missingResolveItem = Schema.decodeSync(WorkItemId)("#404");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const replacementSession = Schema.decodeSync(SessionId)("sess-replaced");
 const midSession = Schema.decodeSync(SessionId)("sess-mid");
@@ -337,7 +340,7 @@ describe("sqlite RunLedger", () => {
     it.effect("returns the most recent resumable run's session for a branch", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
-        const sessionByBranch = (workspace: string, branch: string) =>
+        const sessionByBranch = (workspace: WorkspaceId, branch: string) =>
           Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
         yield* ledger.insertRun(record("branch-1", 1000, { branch: "7-fix-export", session }));
@@ -347,9 +350,9 @@ describe("sqlite RunLedger", () => {
           usage: null,
           endedAtMillis: 1500,
         });
-        assert.strictEqual(yield* sessionByBranch("gh", "7-fix-export"), "sess-abc");
-        assert.isNull(yield* sessionByBranch("gh", "9-other"));
-        assert.isNull(yield* sessionByBranch("other", "7-fix-export"));
+        assert.strictEqual(yield* sessionByBranch(workspace, "7-fix-export"), "sess-abc");
+        assert.isNull(yield* sessionByBranch(workspace, "9-other"));
+        assert.isNull(yield* sessionByBranch(otherWorkspace, "7-fix-export"));
       }),
     );
 
@@ -362,8 +365,8 @@ describe("sqlite RunLedger", () => {
         yield* ledger.insertRun(record("tie-earlier", 1000, { branch, session }));
         yield* ledger.insertRun(record("tie-later", 1000, { branch, session: replacementSession }));
 
-        assert.strictEqual(yield* ledger.sessionForBranch("gh", branch), replacementSession);
-        assert.strictEqual((yield* ledger.latestRunByBranch("gh", branch))?.session, replacementSession);
+        assert.strictEqual(yield* ledger.sessionForBranch(workspace, branch), replacementSession);
+        assert.strictEqual((yield* ledger.latestRunByBranch(workspace, branch))?.session, replacementSession);
       }),
     );
 
@@ -378,7 +381,7 @@ describe("sqlite RunLedger", () => {
           createdAtMillis: 0,
         });
         yield* ledger.insertRun(record("owned-branch", 1000, { branch: "15-owned", session: ownedSession }));
-        const run = yield* ledger.latestRunByBranch("gh", "15-owned");
+        const run = yield* ledger.latestRunByBranch(workspace, "15-owned");
         assert.strictEqual(run?.session, ownedSession);
         assert.isNull(sessionHandle(yield* ledger.getSession(ownedSession)));
       }),
@@ -440,7 +443,7 @@ describe("sqlite RunLedger", () => {
         const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertRun(record("crash-c1", 1000, { workItem: crashItem, status: "crashed" }));
         yield* ledger.insertRun(record("crash-running", 2000, { workItem: crashItem }));
-        yield* ledger.crashRunning("gh", "#101", 2500);
+        yield* ledger.crashRunning(workspace, crashItem, 2500);
 
         assert.strictEqual((yield* ledger.getRun(runId("crash-running")))?.status, "crashed");
         assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, crashItem, 0), 2);
@@ -455,7 +458,7 @@ describe("sqlite RunLedger", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
         const sessionByBranch = (branch: string) =>
-          Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
+          Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
         yield* ledger.insertRun(
           record("crashed-branch", 5000, { branch: "13-crash", session, status: "crashed" }),
@@ -476,7 +479,7 @@ describe("sqlite RunLedger", () => {
         yield* ledger.insertSession(sessionRecord({ id: midSession, handle: null }));
         yield* ledger.insertRun(record("in-flight", 7000, { branch: "11-mid-run", session: midSession }));
 
-        assert.isNull(yield* ledger.latestRunByBranch("gh", "11-mid-run"));
+        assert.isNull(yield* ledger.latestRunByBranch(workspace, "11-mid-run"));
 
         yield* ledger.recordSessionHandle(midSession, "cursor-mid");
         assert.strictEqual(sessionHandle(yield* ledger.getSession(midSession)), "cursor-mid");
@@ -486,7 +489,7 @@ describe("sqlite RunLedger", () => {
         assert.strictEqual(inFlight?.status, "running");
         assert.isNull(inFlight?.endedAtMillis);
 
-        const byBranch = yield* ledger.latestRunByBranch("gh", "11-mid-run");
+        const byBranch = yield* ledger.latestRunByBranch(workspace, "11-mid-run");
         assert.strictEqual(byBranch?.id, id);
       }),
     );
@@ -512,7 +515,7 @@ describe("sqlite RunLedger", () => {
           atMillis: 8100,
         });
 
-        assert.strictEqual(yield* ledger.sessionForBranch("gh", "22-two-runs"), foldSession);
+        assert.strictEqual(yield* ledger.sessionForBranch(workspace, "22-two-runs"), foldSession);
         const events = yield* ledger.sessionEvents(foldSession);
         assert.deepStrictEqual(
           events.map((event) => event.type),
@@ -585,8 +588,8 @@ describe("sqlite RunLedger", () => {
           ),
         );
 
-        const byHash = yield* ledger.resolveWatchTarget("#202");
-        const byBare = yield* ledger.resolveWatchTarget("202");
+        const byHash = yield* ledger.resolveWatchTarget(resolveItem);
+        const byBare = yield* ledger.resolveWatchTarget(bareResolveItem);
         assert.strictEqual(byHash?.id, "resolve-running");
         assert.strictEqual(byBare?.id, "resolve-running");
       }),
@@ -595,7 +598,7 @@ describe("sqlite RunLedger", () => {
     it.effect("resolves nothing for a work item that has never run", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
-        assert.isNull(yield* ledger.resolveWatchTarget("#404"));
+        assert.isNull(yield* ledger.resolveWatchTarget(missingResolveItem));
       }),
     );
   });
