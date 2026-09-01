@@ -1,0 +1,21 @@
+scripts/format-edited-files.test.mjs
+  s_c09cd36848ebc7::t_71dd236efa2841 157-180
+scripts/format-edited-files.mjs
+  s_c09cd36848ebc7::t_c1ab9be0008cf9 98-103,107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6c938e2251d3b5f4df6c216da4a950ed5a6b0dd0",
+  "prompts": {},
+  "sessions": {
+    "s_c09cd36848ebc7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e80-2d7d-7600-b17e-4072a5cd9a6f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
