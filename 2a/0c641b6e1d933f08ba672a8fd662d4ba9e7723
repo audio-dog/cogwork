@@ -1,0 +1,19 @@
+packages/cursor-acp/CONTEXT.md
+  s_a32be0b24c76c1::t_0aa456de9e93b3 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2a0c641b6e1d933f08ba672a8fd662d4ba9e7723",
+  "prompts": {},
+  "sessions": {
+    "s_a32be0b24c76c1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ceb-76eb-7021-99e7-fac99010ebe9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
