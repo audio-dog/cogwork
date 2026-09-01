@@ -133,6 +133,43 @@ class LogMessages extends Context.Service<LogMessages, MutableRef.MutableRef<Rea
   ]).pipe(Layer.provideMerge(LogMessages.layer));
 }
 
+interface ReconcileCoordinationProbeService {
+  readonly observes: Ref.Ref<number>;
+  readonly firstStarted: Latch.Latch;
+  readonly secondStarted: Deferred.Deferred<void>;
+  readonly release: Latch.Latch;
+}
+
+class ReconcileCoordinationProbe extends Context.Service<
+  ReconcileCoordinationProbe,
+  ReconcileCoordinationProbeService
+>()("@cogwork/engine/engine.test/ReconcileCoordinationProbe") {
+  static readonly layer = Layer.effect(
+    ReconcileCoordinationProbe,
+    Effect.gen(function* () {
+      return {
+        observes: yield* Ref.make(0),
+        firstStarted: yield* Latch.make(),
+        secondStarted: yield* Deferred.make<void>(),
+        release: yield* Latch.make(),
+      };
+    }),
+  );
+}
+
+class ConnectionRevocations extends Context.Service<
+  ConnectionRevocations,
+  Ref.Ref<ReadonlyArray<ConnectionId>>
+>()("@cogwork/engine/engine.test/ConnectionRevocations") {
+  static readonly layer = Layer.effect(ConnectionRevocations, Ref.make<ReadonlyArray<ConnectionId>>([]));
+}
+
+class PublishedItemCount extends Context.Service<PublishedItemCount, Ref.Ref<number>>()(
+  "@cogwork/engine/engine.test/PublishedItemCount",
+) {
+  static readonly layer = Layer.effect(PublishedItemCount, Ref.make(0));
+}
+
 describe("workspace observation", () => {
   const workspace: Registry.RegisteredWorkspace = {
     ...registeredWorkspace,
@@ -238,6 +275,44 @@ describe("reconcile worker", () => {
     ),
     Layer.provideMerge(LogMessages.captureLayer),
   );
+  const coalescingSource = sources(
+    Layer.effect(
+      IssueTracker.IssueTracker,
+      Effect.map(ReconcileCoordinationProbe, (probe) =>
+        stub({
+          observe: Effect.fn(function* () {
+            const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
+            if (count > 0) yield* Deferred.succeed(probe.secondStarted, undefined);
+            yield* probe.release.await;
+            return [];
+          }),
+        }),
+      ),
+    ),
+  );
+  const postCurrentSource = sources(
+    Layer.effect(
+      IssueTracker.IssueTracker,
+      Effect.map(ReconcileCoordinationProbe, (probe) =>
+        stub({
+          observe: Effect.fn(function* () {
+            const count = yield* Ref.getAndUpdate(probe.observes, (current) => current + 1);
+            if (count > 0) return [];
+            yield* probe.firstStarted.open;
+            yield* probe.release.await;
+            return [];
+          }),
+        }),
+      ),
+    ),
+  );
+  const coordinatedWorkerLayer = (
+    source: Layer.Layer<IssueTracker.IssueTracker | SourceControlProvider, never, ReconcileCoordinationProbe>,
+  ) =>
+    reconcileLayer.pipe(
+      Layer.provide(Layer.mergeAll(registryLayer, source)),
+      Layer.provideMerge(ReconcileCoordinationProbe.layer),
+    );
 
   it.effect("emits a receipt reflecting the registry when a reconcile is submitted", () =>
     Effect.gen(function* () {
@@ -331,77 +406,40 @@ describe("reconcile worker", () => {
 
   it.effect("coalesces submissions while a timed-out reconcile is still running", () =>
     Effect.gen(function* () {
-      const release = yield* Latch.make();
-      const secondStarted = yield* Deferred.make<void>();
-      const observes = yield* Ref.make(0);
-      const source = sources(
-        Layer.succeed(
-          IssueTracker.IssueTracker,
-          stub({
-            observe: Effect.fn(function* () {
-              const count = yield* Ref.getAndUpdate(observes, (current) => current + 1);
-              if (count > 0) yield* Deferred.succeed(secondStarted, undefined);
-              yield* release.await;
-              return [];
-            }),
-          }),
-        ),
+      const probe = yield* ReconcileCoordinationProbe;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const submissions = yield* Effect.forkChild(
+        Effect.all([worker.submit(), worker.submit()], { concurrency: "unbounded" }).pipe(Effect.exit),
       );
-      const layer = reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
+      yield* TestClock.adjust("31 seconds");
+      yield* Fiber.join(submissions);
 
-      yield* Effect.gen(function* () {
-        const worker = yield* Reconcile.ReconcileWorker;
-        const submissions = yield* Effect.forkChild(
-          Effect.all([worker.submit(), worker.submit()], { concurrency: "unbounded" }).pipe(Effect.exit),
-        );
-        yield* TestClock.adjust("31 seconds");
-        yield* Fiber.join(submissions);
+      const duplicate = yield* Effect.forkChild(
+        Deferred.await(probe.secondStarted).pipe(Effect.timeout("1 second"), Effect.flip),
+      );
+      yield* probe.release.open;
+      yield* TestClock.adjust("1 second");
+      const error = yield* Fiber.join(duplicate);
 
-        const duplicate = yield* Effect.forkChild(
-          Deferred.await(secondStarted).pipe(Effect.timeout("1 second"), Effect.flip),
-        );
-        yield* release.open;
-        yield* TestClock.adjust("1 second");
-        const error = yield* Fiber.join(duplicate);
-
-        assert.isTrue(Cause.isTimeoutError(error));
-        assert.strictEqual(yield* Ref.get(observes), 1);
-      }).pipe(Effect.provide(layer), Effect.scoped);
-    }),
+      assert.isTrue(Cause.isTimeoutError(error));
+      assert.strictEqual(yield* Ref.get(probe.observes), 1);
+    }).pipe(Effect.provide(coordinatedWorkerLayer(coalescingSource)), Effect.scoped),
   );
 
-  it.effect("runs a post-current submission after an in-flight reconcile", () => {
-    const firstStarted = Latch.makeUnsafe(false);
-    const releaseFirst = Latch.makeUnsafe(false);
-    const observes = Ref.makeUnsafe(0);
-    const source = sources(
-      Layer.succeed(
-        IssueTracker.IssueTracker,
-        stub({
-          observe: Effect.fn(function* () {
-            const count = yield* Ref.getAndUpdate(observes, (current) => current + 1);
-            if (count > 0) return [];
-            yield* firstStarted.open;
-            yield* releaseFirst.await;
-            return [];
-          }),
-        }),
-      ),
-    );
-    const layer = reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
-
-    return Effect.gen(function* () {
+  it.effect("runs a post-current submission after an in-flight reconcile", () =>
+    Effect.gen(function* () {
+      const probe = yield* ReconcileCoordinationProbe;
       const worker = yield* Reconcile.ReconcileWorker;
       const current = yield* Effect.forkChild(worker.submit());
-      yield* firstStarted.await;
+      yield* probe.firstStarted.await;
       const next = yield* Effect.forkChild(worker.submitAfterCurrent());
-      yield* releaseFirst.open;
+      yield* probe.release.open;
       yield* Fiber.join(current);
       yield* Fiber.join(next);
 
-      assert.strictEqual(yield* Ref.get(observes), 2);
-    }).pipe(Effect.provide(layer), Effect.scoped);
-  });
+      assert.strictEqual(yield* Ref.get(probe.observes), 2);
+    }).pipe(Effect.provide(coordinatedWorkerLayer(postCurrentSource)), Effect.scoped),
+  );
 
   const eligibleItem: TrackerItem = {
     id: id("AUD-1"),
@@ -523,6 +561,49 @@ describe("reconcile worker", () => {
       },
     }),
   };
+  const connectedRegistry = Layer.succeed(
+    Registry.WorkspaceRegistry,
+    Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
+  );
+  const revokingConnectionStore = Layer.effect(
+    ConnectionStore,
+    Effect.map(ConnectionRevocations, (revoked) => ({
+      overview: Ref.get(revoked).pipe(
+        Effect.map((connections) => {
+          const isRevoked = connections.length > 0;
+          const connection = Connection.make({
+            id: connectionIdOf("github", "acme"),
+            system: "github",
+            account: "acme",
+            status: isRevoked ? "revoked" : "established",
+          });
+          const readiness = isRevoked
+            ? ({ _tag: "NotReady", reason: "Connection needs re-connect" } satisfies ConnectionReadiness)
+            : ({ _tag: "Ready" } satisfies ConnectionReadiness);
+          return connectionOverview([connection], new Map([[connection.id, readiness]]));
+        }),
+      ),
+      find: () => Effect.succeed(null),
+      findSystem: () => Effect.succeed(null),
+      bearer: () => Effect.die("unexpected Connection bearer"),
+      readiness: () => Effect.succeed({ _tag: "Ready" } satisfies ConnectionReadiness),
+      requireReady: () => Effect.void,
+      requireSystemReady: () => Effect.void,
+      establish: () => Effect.die("unexpected Connection establish"),
+      revoke: (connectionId) => Ref.update(revoked, (connections) => [...connections, connectionId]),
+      remove: () => Effect.die("unexpected Connection remove"),
+    })),
+  );
+  const workerWithConnectionRevocation = reconcileLayer.pipe(
+    Layer.provide(Layer.mergeAll(connectedRegistry, authFailingSource, revokingConnectionStore)),
+    Layer.provideMerge(ConnectionRevocations.layer),
+  );
+  const workerWithConnectionEvents = Reconcile.layer.pipe(
+    Layer.provideMerge(DaemonEventBus.layer),
+    Layer.provide(pluginManagerLayer),
+    Layer.provide(Layer.mergeAll(connectedRegistry, authFailingSource, revokingConnectionStore)),
+    Layer.provideMerge(ConnectionRevocations.layer),
+  );
 
   it.effect("pauses a workspace on auth failure instead of failing the tick", () =>
     Effect.gen(function* () {
@@ -543,218 +624,154 @@ describe("reconcile worker", () => {
 
   it.effect("revokes the configured Connection when an auth failure omits its identity", () =>
     Effect.gen(function* () {
-      const revoked = yield* Ref.make<ReadonlyArray<ConnectionId>>([]);
-      const registry = Layer.succeed(
-        Registry.WorkspaceRegistry,
-        Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
-      );
-      const connectionStore = Layer.succeed(ConnectionStore, {
-        overview: Effect.succeed({ connections: [] }),
-        find: () => Effect.succeed(null),
-        findSystem: () => Effect.succeed(null),
-        bearer: () => Effect.die("unexpected Connection bearer"),
-        readiness: () => Effect.succeed({ _tag: "Ready" } satisfies ConnectionReadiness),
-        requireReady: () => Effect.void,
-        requireSystemReady: () => Effect.void,
-        establish: () => Effect.die("unexpected Connection establish"),
-        revoke: (connectionId) => Ref.update(revoked, (connections) => [...connections, connectionId]),
-        remove: () => Effect.die("unexpected Connection remove"),
-      });
-      const layer = reconcileLayer.pipe(
-        Layer.provide(Layer.mergeAll(registry, authFailingSource, connectionStore)),
-      );
-
-      yield* Effect.gen(function* () {
-        const worker = yield* Reconcile.ReconcileWorker;
-        yield* worker.submit();
-      }).pipe(Effect.provide(layer), Effect.scoped);
-
+      const revoked = yield* ConnectionRevocations;
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
       assert.deepStrictEqual(yield* Ref.get(revoked), [connectionIdOf("github", "acme")]);
-    }),
+    }).pipe(Effect.provide(workerWithConnectionRevocation), Effect.scoped),
   );
 
   it.effect("publishes revoked Connection readiness after an auth failure", () =>
     Effect.gen(function* () {
-      const revoked = yield* Ref.make(false);
-      const connectionStore = Layer.succeed(ConnectionStore, {
-        overview: Ref.get(revoked).pipe(
-          Effect.map((isRevoked) => {
-            const connection = Connection.make({
-              id: connectionIdOf("github", "acme"),
-              system: "github",
-              account: "acme",
-              status: isRevoked ? "revoked" : "established",
-            });
-            const readiness = isRevoked
-              ? ({ _tag: "NotReady", reason: "Connection needs re-connect" } satisfies ConnectionReadiness)
-              : ({ _tag: "Ready" } satisfies ConnectionReadiness);
-            return connectionOverview([connection], new Map([[connection.id, readiness]]));
-          }),
-        ),
-        find: () => Effect.succeed(null),
-        findSystem: () => Effect.succeed(null),
-        bearer: () => Effect.die("unexpected Connection bearer"),
-        readiness: () => Effect.succeed({ _tag: "Ready" } satisfies ConnectionReadiness),
-        requireReady: () => Effect.void,
-        requireSystemReady: () => Effect.void,
-        establish: () => Effect.die("unexpected Connection establish"),
-        revoke: () => Ref.set(revoked, true),
-        remove: () => Effect.die("unexpected Connection remove"),
-      });
-      const registry = Layer.succeed(
-        Registry.WorkspaceRegistry,
-        Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const published = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.filter((event) => event._tag === "ConnectionsChanged"),
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkChild,
       );
-      const layer = Reconcile.layer.pipe(
-        Layer.provideMerge(DaemonEventBus.layer),
-        Layer.provide(pluginManagerLayer),
-        Layer.provide(Layer.mergeAll(registry, authFailingSource, connectionStore)),
-      );
-
-      const events = yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const subscription = yield* bus.subscribe();
-        const published = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.filter((event) => event._tag === "ConnectionsChanged"),
-          Stream.take(1),
-          Stream.runCollect,
-          Effect.forkChild,
-        );
-        yield* (yield* Reconcile.ReconcileWorker).submit();
-        return yield* Fiber.join(published);
-      }).pipe(Effect.provide(layer), Effect.scoped);
+      yield* (yield* Reconcile.ReconcileWorker).submit();
+      const events = yield* Fiber.join(published);
 
       const event = events[0];
       if (event?._tag !== "ConnectionsChanged") return assert.fail("expected ConnectionsChanged");
       const github = event.connections.connections.find((connection) => connection.system === "github");
       assert.strictEqual(github?.connection?.status, "revoked");
       assert.strictEqual(github?.readiness._tag, "NotReady");
-    }),
+    }).pipe(Effect.provide(workerWithConnectionEvents), Effect.scoped),
   );
 
-  const rateLimitedSource = (observes: Ref.Ref<number>, retryAfterMillis: number | undefined) =>
+  const rateLimitedSource = (retryAfterMillis: number | undefined) =>
     sources(
-      Layer.succeed(
+      Layer.effect(
         IssueTracker.IssueTracker,
-        stub({
-          rateLimitScope: () => "linear:LINEAR_API_KEY",
-          observe: () =>
-            Effect.flatMap(
-              Ref.update(observes, (count) => count + 1),
-              () =>
-                Effect.fail(
-                  new IssueTracker.IssueTrackerError({
-                    reason: "rate-limited",
-                    message: "Linear rate limit exceeded",
-                    retryAfterMillis,
-                  }),
+        Effect.map(ReconcileObserveCount, (observes) =>
+          stub({
+            rateLimitScope: () => "linear:LINEAR_API_KEY",
+            observe: () =>
+              Ref.update(observes, (count) => count + 1).pipe(
+                Effect.andThen(
+                  Effect.fail(
+                    new IssueTracker.IssueTrackerError({
+                      reason: "rate-limited",
+                      message: "Linear rate limit exceeded",
+                      retryAfterMillis,
+                    }),
+                  ),
                 ),
-            ),
-        }),
+              ),
+          }),
+        ),
       ),
     );
 
-  const rateLimitedWorker = (observes: Ref.Ref<number>, retryAfterMillis?: number) =>
+  const rateLimitedWorker = (retryAfterMillis?: number) =>
     reconcileLayer.pipe(
-      Layer.provide(Layer.mergeAll(registryLayer, rateLimitedSource(observes, retryAfterMillis))),
+      Layer.provide(Layer.mergeAll(registryLayer, rateLimitedSource(retryAfterMillis))),
+      Layer.provideMerge(ReconcileObserveCount.layer),
     );
+
+  const loggedRateLimitedWorker = rateLimitedWorker(30_000).pipe(
+    Layer.provideMerge(LogMessages.captureLayer),
+  );
 
   it.effect("skips polling a rate-limited credential until its window elapses", () =>
     Effect.gen(function* () {
-      const observes = yield* Ref.make(0);
-      yield* Effect.gen(function* () {
-        const worker = yield* Reconcile.ReconcileWorker;
-        yield* worker.submit();
-        assert.strictEqual(yield* Ref.get(observes), 1);
+      const observes = yield* ReconcileObserveCount;
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 1);
 
-        yield* worker.submit();
-        assert.strictEqual(yield* Ref.get(observes), 1);
-        const paused = (yield* worker.snapshot).workspaces[0]?.poll;
-        assert.strictEqual(paused?.status === "paused" ? paused.reason : null, "rate-limited");
-        assert.isNotNull(paused?.status === "paused" ? paused.retryAtMillis : null);
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 1);
+      const paused = (yield* worker.snapshot).workspaces[0]?.poll;
+      assert.strictEqual(paused?.status === "paused" ? paused.reason : null, "rate-limited");
+      assert.isNotNull(paused?.status === "paused" ? paused.retryAtMillis : null);
 
-        yield* TestClock.adjust("31 seconds");
-        yield* worker.submit();
-        assert.strictEqual(yield* Ref.get(observes), 2);
-      }).pipe(Effect.provide(rateLimitedWorker(observes, 30_000)), Effect.scoped);
-    }),
+      yield* TestClock.adjust("31 seconds");
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 2);
+    }).pipe(Effect.provide(rateLimitedWorker(30_000)), Effect.scoped),
   );
 
   it.effect("warns once on entering a backoff window rather than on every skipped tick", () =>
     Effect.gen(function* () {
-      const observes = yield* Ref.make(0);
-      const logged: Array<string> = [];
-      yield* Effect.gen(function* () {
-        const worker = yield* Reconcile.ReconcileWorker;
-        yield* worker.submit();
-        yield* worker.submit();
-        yield* worker.submit();
-      }).pipe(
-        Effect.provide(rateLimitedWorker(observes, 30_000)),
-        Effect.scoped,
-        Effect.withLogger(Logger.make(({ message }) => void logged.push(String(message)))),
+      const messages = yield* LogMessages;
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      yield* worker.submit();
+      yield* worker.submit();
+      const warnings = MutableRef.get(messages).filter((line) =>
+        line.includes("work source rate limited; backing off"),
       );
-      const warnings = logged.filter((line) => line.includes("work source rate limited; backing off"));
       assert.strictEqual(warnings.length, 1);
-    }),
+    }).pipe(Effect.provide(loggedRateLimitedWorker), Effect.scoped),
   );
 
   it.effect("falls back to exponential backoff when the source reports no retry timing", () =>
     Effect.gen(function* () {
-      const observes = yield* Ref.make(0);
-      yield* Effect.gen(function* () {
-        const worker = yield* Reconcile.ReconcileWorker;
-        yield* worker.submit();
-        yield* TestClock.adjust("59 seconds");
-        yield* worker.submit();
-        assert.strictEqual(yield* Ref.get(observes), 1);
-        yield* TestClock.adjust("2 seconds");
-        yield* worker.submit();
-        assert.strictEqual(yield* Ref.get(observes), 2);
-      }).pipe(Effect.provide(rateLimitedWorker(observes)), Effect.scoped);
-    }),
+      const observes = yield* ReconcileObserveCount;
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      yield* TestClock.adjust("59 seconds");
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 1);
+      yield* TestClock.adjust("2 seconds");
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 2);
+    }).pipe(Effect.provide(rateLimitedWorker()), Effect.scoped),
   );
 
-  const scopelessSource = (observes: Ref.Ref<number>) =>
-    sources(
-      Layer.succeed(
-        IssueTracker.IssueTracker,
+  const scopelessSource = sources(
+    Layer.effect(
+      IssueTracker.IssueTracker,
+      Effect.map(ReconcileObserveCount, (observes) =>
         stub({
           observe: () =>
-            Effect.flatMap(
-              Ref.update(observes, (count) => count + 1),
-              () =>
+            Ref.update(observes, (count) => count + 1).pipe(
+              Effect.andThen(
                 Effect.fail(
                   new IssueTracker.IssueTrackerError({
                     reason: "rate-limited",
                     message: "secondary rate limit",
                   }),
                 ),
+              ),
             ),
         }),
       ),
-    );
+    ),
+  );
+
+  const scopelessWorker = reconcileLayer.pipe(
+    Layer.provide(Layer.mergeAll(registryLayer, scopelessSource)),
+    Layer.provideMerge(ReconcileObserveCount.layer),
+  );
 
   it.effect("keeps polling a source that reports no rate-limit scope, and invents no retry time", () =>
     Effect.gen(function* () {
-      const observes = yield* Ref.make(0);
-      yield* Effect.gen(function* () {
-        const worker = yield* Reconcile.ReconcileWorker;
-        yield* worker.submit();
-        yield* worker.submit();
-        assert.strictEqual(yield* Ref.get(observes), 2);
-        const paused = (yield* worker.snapshot).workspaces[0]?.poll;
-        assert.deepStrictEqual(
-          paused?.status === "paused" ? { reason: paused.reason, retryAtMillis: paused.retryAtMillis } : null,
-          { reason: "rate-limited", retryAtMillis: null },
-        );
-      }).pipe(
-        Effect.provide(
-          reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, scopelessSource(observes)))),
-        ),
-        Effect.scoped,
+      const observes = yield* ReconcileObserveCount;
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+      yield* worker.submit();
+      assert.strictEqual(yield* Ref.get(observes), 2);
+      const paused = (yield* worker.snapshot).workspaces[0]?.poll;
+      assert.deepStrictEqual(
+        paused?.status === "paused" ? { reason: paused.reason, retryAtMillis: paused.retryAtMillis } : null,
+        { reason: "rate-limited", retryAtMillis: null },
       );
-    }),
+    }).pipe(Effect.provide(scopelessWorker), Effect.scoped),
   );
 });
 
@@ -877,6 +894,44 @@ describe("daemon heartbeats", () => {
         ),
       ),
     );
+  const countingPublisherLayer = Layer.effect(
+    EventPublisher.DaemonEventPublisher,
+    Effect.map(PublishedItemCount, (publishes) => ({
+      publishItems: () => Ref.update(publishes, (count) => count + 1),
+      publishWorkspaces: () => Effect.void,
+      publishWorkspaceRemoved: Effect.succeed,
+      publishScheduler: () =>
+        Effect.succeed({
+          scheduling: "running",
+          globalInFlight: 0,
+          globalLimit: 4,
+          perWorkspaceLimit: 4,
+          dailyBudgetUsed: 0,
+          dailyBudgetLimit: 50,
+          perWorkspace: [],
+        }),
+      publishControlStore: (controlStore) => Effect.succeed(controlStore),
+      publishPlugins: (plugins) => Effect.succeed(plugins),
+      publishConnections: (connections) => Effect.succeed(connections),
+    })),
+  );
+  const publishingHeartbeatLayer = countingPublisherLayer.pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(
+        defectiveWorkerLayer,
+        registeredSample,
+        SchedulerTickCount.schedulerLayer,
+        availableControlStore,
+        worktreeStub,
+        DaemonEventBus.layer,
+        Layer.succeed(Recovery.Recovery, {
+          recover: () => Effect.void,
+          recoverWhenLive: () => Effect.void,
+        }),
+      ),
+    ),
+    Layer.provideMerge(PublishedItemCount.layer),
+  );
 
   it.effect("drains the scheduler when a stop signal interrupts them", () =>
     Effect.gen(function* () {
@@ -912,55 +967,18 @@ describe("daemon heartbeats", () => {
 
   it.effect("publishes state after a reconcile submission fails", () =>
     Effect.gen(function* () {
-      const publishes = yield* Ref.make(0);
-      const publisherLayer = Layer.succeed(EventPublisher.DaemonEventPublisher, {
-        publishItems: () => Ref.update(publishes, (count) => count + 1),
-        publishWorkspaces: () => Effect.void,
-        publishWorkspaceRemoved: Effect.succeed,
-        publishScheduler: () =>
-          Effect.succeed({
-            scheduling: "running",
-            globalInFlight: 0,
-            globalLimit: 4,
-            perWorkspaceLimit: 4,
-            dailyBudgetUsed: 0,
-            dailyBudgetLimit: 50,
-            perWorkspace: [],
-          }),
-        publishControlStore: (controlStore) => Effect.succeed(controlStore),
-        publishPlugins: (plugins) => Effect.succeed(plugins),
-        publishConnections: (connections) => Effect.succeed(connections),
-      });
-      const layer = publisherLayer.pipe(
-        Layer.provideMerge(
-          Layer.mergeAll(
-            defectiveWorkerLayer,
-            registeredSample,
-            SchedulerTickCount.schedulerLayer,
-            availableControlStore,
-            worktreeStub,
-            DaemonEventBus.layer,
-            Layer.succeed(Recovery.Recovery, {
-              recover: () => Effect.void,
-              recoverWhenLive: () => Effect.void,
-            }),
-          ),
-        ),
+      const publishes = yield* PublishedItemCount;
+      const beats = yield* Effect.forkChild(
+        Daemon.heartbeats({
+          pollIntervalMillis: 60_000,
+          drain: { graceMillis: 1234, abort: Latch.makeUnsafe(false).await },
+        }),
       );
+      yield* TestClock.adjust("1 second");
+      yield* Fiber.interrupt(beats);
 
-      yield* Effect.gen(function* () {
-        const beats = yield* Effect.forkChild(
-          Daemon.heartbeats({
-            pollIntervalMillis: 60_000,
-            drain: { graceMillis: 1234, abort: Latch.makeUnsafe(false).await },
-          }),
-        );
-        yield* TestClock.adjust("1 second");
-        yield* Fiber.interrupt(beats);
-
-        assert.strictEqual(yield* Ref.get(publishes), 1);
-      }).pipe(Effect.provide(layer), Effect.scoped);
-    }),
+      assert.strictEqual(yield* Ref.get(publishes), 1);
+    }).pipe(Effect.provide(publishingHeartbeatLayer), Effect.scoped),
   );
 
   it.effect("keeps both heartbeats running after a reconcile submission fails", () =>
