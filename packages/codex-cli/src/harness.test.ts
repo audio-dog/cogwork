@@ -15,17 +15,23 @@ import { assert, describe, it, layer, live } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
-import type { SandboxHandle } from "@tanstack/ai-sandbox";
+import type { SandboxHandle, SandboxProvider } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Config from "effect/Config";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
+  abortOnReturn,
   type CodexRunChat,
   type CodexRunChatOptions,
   type CodexRunnerOptions,
@@ -33,6 +39,8 @@ import {
   codexModelOptions,
   codexRunner,
   codexRuntimeConfig,
+  createSandboxHandle,
+  destroySandboxHandle,
   renderContext,
 } from "./harness";
 
@@ -215,6 +223,105 @@ const runErrorChunk = (
 
 const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
   [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+});
+
+describe("abortOnReturn", () => {
+  it.effect("closes the source iterator when abort teardown fails", () =>
+    Effect.gen(function* () {
+      const returned: Array<unknown> = [];
+      const source = {
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.resolve({ done: false, value: "event" }),
+          return: (value?: unknown) => {
+            returned.push(value);
+            return Promise.resolve({ done: true, value: undefined });
+          },
+        }),
+      } satisfies AsyncIterable<string>;
+      const iterator = abortOnReturn(source, () => Promise.reject(new Error("destroy failed")))[
+        Symbol.asyncIterator
+      ]();
+
+      const failure = yield* Effect.promise(() =>
+        (iterator.return?.("stop") ?? Promise.resolve({ done: true, value: undefined })).catch(
+          (cause: unknown) => cause,
+        ),
+      );
+
+      assert.instanceOf(failure, Error);
+      assert.strictEqual(failure.message, "destroy failed");
+      assert.deepStrictEqual(returned, ["stop"]);
+    }),
+  );
+});
+
+describe("ownRunSandbox", () => {
+  it.effect("joins teardown already in progress", () =>
+    Effect.gen(function* () {
+      const { handle } = yield* makeLiveHarness();
+      const runPromise = yield* FiberSet.makeRuntimePromise();
+      const destroyStarted = yield* Deferred.make<void>();
+      const finishDestroy = yield* Deferred.make<void>();
+      const trackedHandle = {
+        ...handle,
+        destroy: () =>
+          runPromise(
+            Deferred.succeed(destroyStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(finishDestroy)),
+              Effect.asVoid,
+            ),
+          ),
+      } satisfies SandboxHandle;
+      const sandboxHandleRef = yield* SynchronizedRef.make<SandboxHandle | null>(trackedHandle);
+
+      const firstDestroy = yield* destroySandboxHandle(sandboxHandleRef).pipe(Effect.forkChild);
+      yield* Deferred.await(destroyStarted);
+      const secondDestroy = yield* destroySandboxHandle(sandboxHandleRef).pipe(Effect.forkChild);
+      yield* Effect.yieldNow;
+
+      assert.isUndefined(secondDestroy.pollUnsafe());
+      yield* Deferred.succeed(finishDestroy, undefined);
+      yield* Fiber.join(firstDestroy);
+      yield* Fiber.join(secondDestroy);
+    }),
+  );
+
+  it.effect("retains a handle created while the caller is interrupted", () =>
+    Effect.gen(function* () {
+      const { handle } = yield* makeLiveHarness();
+      const runPromise = yield* FiberSet.makeRuntimePromise();
+      const createStarted = yield* Deferred.make<void>();
+      const finishCreate = yield* Deferred.make<void>();
+      const destroyed = yield* Deferred.make<void>();
+      const trackedHandle = {
+        ...handle,
+        destroy: () => runPromise(Deferred.succeed(destroyed, undefined).pipe(Effect.asVoid)),
+      } satisfies SandboxHandle;
+      const source = {
+        name: "test",
+        capabilities: () => handle.capabilities,
+        create: () =>
+          runPromise(
+            Deferred.succeed(createStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(finishCreate)),
+              Effect.map(() => trackedHandle),
+            ),
+          ),
+        resume: () => Promise.resolve(null),
+        destroy: () => Promise.resolve(),
+      } satisfies SandboxProvider;
+      const sandboxHandleRef = yield* SynchronizedRef.make<SandboxHandle | null>(null);
+
+      const creation = yield* createSandboxHandle(source, {}, sandboxHandleRef).pipe(Effect.forkChild);
+      yield* Deferred.await(createStarted);
+      const interruption = yield* Fiber.interrupt(creation).pipe(Effect.forkChild);
+      yield* Deferred.succeed(finishCreate, undefined);
+      yield* Fiber.join(interruption);
+      yield* destroySandboxHandle(sandboxHandleRef);
+
+      assert.isTrue(Option.isSome(yield* Deferred.poll(destroyed)));
+    }),
+  );
 });
 
 const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>
@@ -974,20 +1081,20 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
     }),
   );
 
-  it.effect("terminates the Codex child process when the run is interrupted", () =>
+  it.effect("settles an interrupted run after the Codex child process exits", () =>
     Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness(fakeCodexExecutable(" --hang"));
+      const { handle, harness } = yield* makeLiveHarness(fakeCodexExecutable(" --hang --ignore-sigterm"));
 
       yield* harness
         .run(makeRequest({ checkoutPath: handle.id, session: null }))
-        .pipe(Stream.take(2), Stream.runDrain);
+        .pipe(Stream.takeUntil(agUiIsSessionHandleEvent), Stream.runDrain);
 
-      const pid = yield* Schema.decodeUnknownEffect(Schema.FiniteFromString)(
+      const pid = yield* Schema.decodeEffect(Schema.FiniteFromString)(
         yield* Effect.promise(() => handle.fs.read("/workspace/.pid")),
       );
       const stopped = yield* Effect.promise(() =>
         handle.process.exec(
-          `for attempt in $(seq 1 100); do state=$(ps -o stat= -p ${pid} 2>/dev/null); case "$state" in ""|Z*) exit 0 ;; esac; sleep 0.01; done; exit 1`,
+          `state=$(ps -o stat= -p ${pid} 2>/dev/null); case "$state" in ""|Z*) exit 0 ;; esac; exit 1`,
         ),
       );
       assert.strictEqual(stopped.exitCode, 0);
