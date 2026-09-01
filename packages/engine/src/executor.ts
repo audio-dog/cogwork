@@ -17,6 +17,7 @@ import type {
 } from "@cogwork/contracts";
 import {
   AgUiEvent,
+  agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
@@ -41,7 +42,13 @@ import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability, availabilityCauseSummary } from "./availability";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
-import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
+import {
+  followUpNoteBody,
+  handoffNote,
+  handoffSession,
+  prepareFailureReason,
+  triageProposalBody,
+} from "./comments";
 import { ConnectionStore } from "./connection";
 import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
@@ -742,10 +749,10 @@ export const make = Effect.gen(function* () {
   const foldTriageRun = (record: RunRecord, request: HarnessRequest) =>
     foldStream(record, request, emptyTriageAccumulator, (acc, event) => foldTriageEvent(record, acc, event));
 
-  const guardResume = <A extends RunAccumulator>(prev: A, next: A, expected: string) =>
-    prev.handle === null && next.handle !== null && next.handle !== expected
-      ? Effect.fail(new SessionRestarted({}))
-      : Effect.succeed(next);
+  const guardResume = (event: AgUiEvent, expected: string) => {
+    if (!agUiIsSessionHandleEvent(event) || event.value.sessionId === expected) return Effect.void;
+    return Effect.fail(new SessionRestarted({}));
+  };
 
   const rejectedResume = (record: RunRecord) =>
     recorder.record(record, failedTerminal).pipe(
@@ -762,30 +769,28 @@ export const make = Effect.gen(function* () {
 
   const foldResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
     foldStream(record, request, emptyAccumulator, (acc, event) =>
-      foldEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
+      guardResume(event, expected).pipe(Effect.andThen(foldEvent(record, acc, event))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldTriageResume = (record: RunRecord, request: HarnessRequest, expected: string) =>
     foldStream(record, request, emptyTriageAccumulator, (acc, event) =>
-      foldTriageEvent(record, acc, event).pipe(Effect.flatMap((next) => guardResume(acc, next, expected))),
+      guardResume(event, expected).pipe(Effect.andThen(foldTriageEvent(record, acc, event))),
     ).pipe(Effect.catchTag("SessionRestarted", () => rejectedResume(record)));
 
   const foldOutcome = Effect.fn("Executor.foldOutcome")(function* (
     record: RunRecord,
-    ops: CommonStageOps,
     request: HarnessRequest,
   ) {
-    const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
+    const expected = yield* handleOf(ledger, request.session);
     if (!expected) return yield* foldRun(record, request);
     return yield* foldResume(record, request, expected);
   });
 
   const foldTriageOutcome = Effect.fn("Executor.foldTriageOutcome")(function* (
     record: RunRecord,
-    ops: TriageStageOps,
     request: HarnessRequest,
   ) {
-    const expected = ops.resume ? yield* handleOf(ledger, request.session) : null;
+    const expected = yield* handleOf(ledger, request.session);
     if (!expected) return yield* foldTriageRun(record, request);
     return yield* foldTriageResume(record, request, expected);
   });
@@ -820,14 +825,7 @@ export const make = Effect.gen(function* () {
           stage: item.stage,
           cause: handoffCause(retryable, attempts),
           reason,
-          session: handle
-            ? {
-                handle,
-                access: harness.capabilities(harnessName)?.session.humanAttach
-                  ? "human-attach"
-                  : "programmatic-only",
-              }
-            : null,
+          session: handoffSession(handle, harness.capabilities(harnessName)?.session.humanAttach),
         }),
       });
     }
@@ -1459,9 +1457,9 @@ export const make = Effect.gen(function* () {
       );
 
     if (ops.kind === "triage") {
-      return yield* settle(foldTriageOutcome(record, ops, request), (acc) => ops.complete(record, acc));
+      return yield* settle(foldTriageOutcome(record, request), (acc) => ops.complete(record, acc));
     }
-    return yield* settle(foldOutcome(record, ops, request), (acc) => ops.complete(runId, acc));
+    return yield* settle(foldOutcome(record, request), (acc) => ops.complete(runId, acc));
   });
 
   const acceptPlannedRun = Effect.fn("Executor.acceptPlannedRun")(function* (

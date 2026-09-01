@@ -1,4 +1,5 @@
 import {
+  AgUiEvent,
   ConnectionId,
   type ContributionSettingRow,
   DeclaredVersion,
@@ -44,8 +45,8 @@ import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
-  type AgUiEvent,
   fullHarnessExecution,
+  type HarnessCapabilityProfile,
   HarnessError,
   type HarnessRequest,
   type HarnessRunner,
@@ -314,6 +315,11 @@ const implementFinished: AgUiEvent = finished;
 
 const implementEvents: ReadonlyArray<AgUiEvent> = [...implementStreamEvents, implementFinished];
 
+const replaceSessionHandle = (event: AgUiEvent, handle: string) => {
+  if (AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id") return sessionEvent(handle);
+  return event;
+};
+
 const resumedImplementEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-prev"),
@@ -574,7 +580,7 @@ interface TestRunner {
 const testRunnerDefaults = {
   capabilities: {
     authenticationModes: ["host"],
-    session: { affinity: "runtime-host", fork: false, humanAttach: true },
+    session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
     structuredOutput: "none",
     policyFidelity: "exact",
     fileEventFidelity: "none",
@@ -630,7 +636,7 @@ const capturingRunner = (
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
   sessionKind: SessionKind = "opaque-handle",
   name: HarnessName = cursor,
-  humanAttach = true,
+  humanAttach: HarnessCapabilityProfile["session"]["humanAttach"] = "codex-cli",
 ): TestRunner => ({
   make: (requests) => ({
     ...testRunnerDefaults,
@@ -648,6 +654,24 @@ const capturingRunner = (
         Ref.update(requests, (xs) => [...xs, request]).pipe(
           Effect.map(() => Stream.concat(Stream.fromArray(events), tail)),
         ),
+      ),
+  }),
+});
+
+const sequenceRunner = (streams: ReadonlyArray<Stream.Stream<AgUiEvent, HarnessError>>): TestRunner => ({
+  make: (requests) => ({
+    ...testRunnerDefaults,
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    run: (request) =>
+      Stream.unwrap(
+        Ref.modify(requests, (captured) => [
+          streams[captured.length] ?? Stream.empty,
+          [...captured, request],
+        ]),
       ),
   }),
 });
@@ -2534,7 +2558,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
-      assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
+      assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
       assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
@@ -2566,6 +2590,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
       assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
     }).pipe(Effect.provide(provide([capturingRunner(successEvents)])));
@@ -2589,6 +2614,29 @@ describe("Executor.execute", () => {
       assert.strictEqual(captured[1]?.session, run?.session);
       assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
     }).pipe(Effect.provide(provide([capturingRunner(implementStreamEvents, Stream.fail(error))])));
+  });
+
+  it.effect("rejects a different handle during an ordinary same-Harness retry", () => {
+    const error = new HarnessError({ reason: "turn", retryable: true, message: "network blip" });
+    const first = Stream.concat(Stream.fromArray(implementStreamEvents), Stream.fail(error));
+    const restarted = Stream.fromArray(
+      implementEvents.map((event) => replaceSessionHandle(event, "sess-restarted")),
+    );
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const captured = yield* Ref.get(requests);
+      assert.strictEqual(captured[1]?.session, captured[0]?.session);
+
+      const ledger = yield* RunLedger.RunLedger;
+      assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+      assert.isTrue((yield* Ref.get(calls)).some((call) => call.method === "attemptFailed"));
+    }).pipe(Effect.provide(provide([sequenceRunner([first, restarted])])));
   });
 
   it.effect("exhausts a failed implement job and hands the issue back to a human", () => {
@@ -2622,7 +2670,7 @@ describe("Executor.execute", () => {
 
       const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
       assert.notInclude(handOff?.note ?? "", "Resume the session");
-      assert.notInclude(handOff?.note ?? "", "agent --resume");
+      assert.notInclude(handOff?.note ?? "", "codex resume");
     }).pipe(
       Effect.provide(
         provide([
@@ -2835,7 +2883,7 @@ describe("Executor.execute", () => {
       const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
       assert.strictEqual(runs.length, 1);
       assert.strictEqual(runs[0]?.session, succeeded?.session);
-      assert.include(handOff?.note ?? "", "agent --resume 'sess-42'");
+      assert.include(handOff?.note ?? "", "codex resume 'sess-42'");
     }).pipe(Effect.provide(provide([runner(implementEvents)], worktree)));
   });
 
