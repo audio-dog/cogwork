@@ -1,8 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { afterEach, vi } from "vitest";
@@ -196,6 +198,22 @@ describe("linear oauth helpers", () => {
     }).pipe(withTokenEndpoint(endpoint));
   });
 
+  it.effect("fails a hanging refresh at the token endpoint deadline", () => {
+    const onAbort = vi.fn();
+    const fetch: typeof globalThis.fetch = (_input, init) => {
+      init?.signal?.addEventListener("abort", onAbort);
+      return Promise.withResolvers<Response>().promise;
+    };
+    return Effect.gen(function* () {
+      const requestFiber = yield* Effect.forkChild(Effect.flip(refresh("refresh-1")));
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Fiber.join(requestFiber);
+      assert.strictEqual(error.account, "AUD");
+      assert.include(error.message, "timed out");
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(Effect.provide(FetchHttpClient.layer), Effect.provideService(FetchHttpClient.Fetch, fetch));
+  });
+
   it.effect("rejects a token response the schema does not accept", () => {
     const endpoint = tokenEndpoint(() => ({ body: { token_type: "Bearer" } }));
     return Effect.gen(function* () {
@@ -299,6 +317,26 @@ describe("linear oauth helpers", () => {
     }),
   );
 
+  it.effect("fails a hanging token exchange at the token endpoint deadline", () =>
+    Effect.gen(function* () {
+      const onAbort = vi.fn();
+      const requestFiber = yield* Effect.forkChild(
+        Effect.flip(
+          exchangeToken(exchangeParams).pipe(
+            withFetch((_input, init) => {
+              init?.signal?.addEventListener("abort", onAbort);
+              return Promise.withResolvers<Response>().promise;
+            }),
+          ),
+        ),
+      );
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Fiber.join(requestFiber);
+      assert.include(error.message, "timed out");
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+    }),
+  );
+
   it.effect("discovers the organization's urlKey and the viewer's id via the SDK", () =>
     Effect.gen(function* () {
       stubLinear((document) =>
@@ -327,6 +365,25 @@ describe("linear oauth helpers", () => {
       stubLinear(() => ({ status: 401, body: { errors: [{ message: "not authorized" }] } }));
       const error = yield* Effect.flip(discoverIdentity("bad-token"));
       assert.include(error.message, "identity discovery failed");
+    }),
+  );
+
+  it.effect("aborts identity discovery at its deadline", () =>
+    Effect.gen(function* () {
+      const signals: Array<AbortSignal> = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((_input: unknown, init?: RequestInit) => {
+          if (init?.signal) signals.push(init.signal);
+          return Promise.withResolvers<Response>().promise;
+        }),
+      );
+      const requestFiber = yield* Effect.forkChild(Effect.flip(discoverIdentity("access-token")));
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Fiber.join(requestFiber);
+      assert.include(error.message, "timed out");
+      assert.isAbove(signals.length, 0);
+      assert.isTrue(signals.every((signal) => signal.aborted));
     }),
   );
 });

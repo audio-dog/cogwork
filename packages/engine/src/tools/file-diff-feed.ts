@@ -7,11 +7,19 @@ import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
 
 export const FILE_DIFF_EVENT = "sandbox.file.diff";
+const diffCommandDeadline = "5 minutes";
 
 const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
 
 const relTo = (path: string) =>
   path.startsWith(`${DEFAULT_WORKSPACE_ROOT}/`) ? path.slice(DEFAULT_WORKSPACE_ROOT.length + 1) : path;
+
+const execFailure = (command: string, rel: string, result: ExecResult) =>
+  toolError(
+    "exec-failed",
+    `${command} exited ${result.exitCode}${result.stderr === "" ? "" : `: ${result.stderr.trim()}`}`,
+    rel,
+  );
 
 const synthesizeAddPatch = (rel: string, content: string) => {
   const header = `diff --git a/${rel} b/${rel}\nnew file mode 100644\n`;
@@ -23,13 +31,32 @@ const synthesizeAddPatch = (rel: string, content: string) => {
   return `${header}--- /dev/null\n+++ b/${rel}\n@@ -0,0 +1,${lines.length} @@\n${body}${tail}`;
 };
 
-const exec = (sandbox: WorktreeSandbox, command: string): Effect.Effect<ExecResult> =>
-  Effect.tryPromise(() => sandbox.handle.process.exec(command)).pipe(
-    Effect.orElseSucceed(() => ({ stdout: "", stderr: "", exitCode: 1 })),
+const exec = (sandbox: WorktreeSandbox, command: string): Effect.Effect<ExecResult, ToolError> =>
+  Effect.tryPromise({
+    try: (signal) => sandbox.handle.process.exec(command, { signal }),
+    catch: (cause) => toolError("exec-failed", `diff command failed: ${String(cause)}`),
+  }).pipe(
+    Effect.timeoutOrElse({
+      duration: diffCommandDeadline,
+      orElse: () => Effect.fail(toolError("timeout", `diff command timed out after ${diffCommandDeadline}`)),
+    }),
   );
 
 const currentContent = (sandbox: WorktreeSandbox, path: string): Effect.Effect<string> =>
   Effect.tryPromise(() => sandbox.handle.fs.read(path)).pipe(Effect.orElseSucceed(() => ""));
+
+const trackedAtBase = Effect.fn("Tools.trackedAtBase")(function* (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  rel: string,
+) {
+  const command = `git ls-tree -r --name-only ${quote(baseSha)} -- ${quote(rel)}`;
+  const result = yield* exec(sandbox, command);
+  if (result.exitCode !== 0) {
+    return yield* execFailure(command, rel, result);
+  }
+  return result.stdout.trim() !== "";
+});
 
 const addPatchFromCurrent = Effect.fn("Tools.addPatchFromCurrent")(function* (
   sandbox: WorktreeSandbox,
@@ -50,12 +77,16 @@ export const computeDiff = Effect.fn("Tools.computeDiff")(function* (
     if (event.type === "delete") return "";
     return yield* addPatchFromCurrent(sandbox, rel, event.path);
   }
-  const diffed = yield* exec(sandbox, `git diff ${quote(baseSha)} -- ${quote(rel)}`);
-  if (diffed.exitCode === 0 && diffed.stdout !== "") return diffed.stdout;
+  const diffCommand = `git diff ${quote(baseSha)} -- ${quote(rel)}`;
+  const diffed = yield* exec(sandbox, diffCommand);
+  if (diffed.exitCode !== 0) {
+    return yield* execFailure(diffCommand, rel, diffed);
+  }
+  if (diffed.stdout !== "") return diffed.stdout;
   if (event.type === "delete") return "";
-  const shown = yield* exec(sandbox, `git show ${quote(baseSha)}:${quote(rel)}`);
-  if (shown.exitCode === 0) return "";
-  return yield* addPatchFromCurrent(sandbox, rel, event.path);
+  return (yield* trackedAtBase(sandbox, baseSha, rel))
+    ? ""
+    : yield* addPatchFromCurrent(sandbox, rel, event.path);
 });
 
 export const fileDiffEvent = (path: string, diff: string): AgUiEvent => ({

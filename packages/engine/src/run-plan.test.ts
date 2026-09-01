@@ -11,6 +11,7 @@ import {
   WorkspaceConfig,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
@@ -26,6 +27,7 @@ import {
   resolveEngineContributionUnion,
   resolveEngineOperationSetting,
   resolveRunPlanStage,
+  tryAssembleRunPlan,
 } from "./run-plan";
 
 describe("projectedContributionName", () => {
@@ -270,6 +272,7 @@ const hostHarness: OperationSettingRow = {
 };
 const solModel: OperationSettingRow = { ...profileDefault, setting: "model", value: "gpt-5.6-sol" };
 const highEffort: OperationSettingRow = { ...profileDefault, setting: "effort", value: "high" };
+const invalidPlanRunId = Schema.decodeSync(RunId)("run-invalid-plan");
 
 describe("stage settings come from Operation settings", () => {
   it("enables a stage from an Operation setting rather than the Workspace input", () => {
@@ -312,6 +315,40 @@ describe("stage settings come from Operation settings", () => {
 });
 
 describe("Run Plan assembly", () => {
+  it.effect("fails invalid plan input with a typed assembly error", () => {
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
+    assert.isNotNull(resolved);
+    if (!resolved) return Effect.void;
+
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        tryAssembleRunPlan({
+          runId: invalidPlanRunId,
+          workspace,
+          item,
+          observation: { generation: 12, observedAtMillis: 1000 },
+          resolved,
+          prompt: "Implement #228",
+          checkoutPath: "/worktrees/228",
+          sessionKind: "opaque-handle",
+          projectedMembers: ["Instructions", "Messages", "MCP", "Sandbox", "Persistence"],
+          middleware: [],
+          context: {
+            ...context,
+            layers: [{ kind: "repo", source: "/repo/AGENTS.md", content: "trailing newline\n" }],
+          },
+          contributions: workspace.contributions,
+          mcpServers: [],
+          provenanceStamps: [],
+        }),
+      );
+
+      assert.strictEqual(error._tag, "RunPlanAssemblyError");
+      assert.include(error.message, "RunPlanInstruction");
+      assert.include(error.message, "content");
+    });
+  });
+
   it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
     const runId = Schema.decodeSync(RunId)("run-qualified-mcp");
     const contributions = [

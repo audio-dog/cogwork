@@ -1,13 +1,14 @@
-import {
-  type AgUiEvent,
-  type Board,
-  type BoardItem,
-  ClassifiedItem,
-  type RunActivity,
-  type RunSummary,
-  type SchedulerStats,
+import type {
+  AgUiEvent,
+  Board,
+  BoardItem,
+  RunActivity,
+  RunSummary,
+  SchedulerStats,
 } from "@cogwork/contracts";
+import { formatClassifiedItem } from "./classified-item";
 import { formatScheduler } from "./status";
+import { sanitizeTerminalText, terminalLine } from "./terminal-text";
 
 interface TextBuffer {
   readonly label: string;
@@ -22,20 +23,12 @@ export interface WatchState {
 export const initialWatchState: WatchState = { text: new Map(), tools: new Map() };
 
 const maxValueLength = 2000;
-const preservedControls = new Set([0x09, 0x0a]);
-
-const isDisplayable = (code: number) =>
-  preservedControls.has(code) || (code > 0x1f && code < 0x7f) || code > 0x9f;
-
-const sanitize = (text: string) =>
-  [...text].filter((char) => isDisplayable(char.codePointAt(0) ?? 0)).join("");
-
 const clip = (text: string) =>
   text.length > maxValueLength ? `${text.slice(0, maxValueLength - 1)}…` : text;
 
 const compact = (value: unknown) => {
-  if (typeof value === "string") return sanitize(value);
-  return value === undefined ? "" : sanitize(JSON.stringify(value) ?? "");
+  if (typeof value === "string") return sanitizeTerminalText(value);
+  return value === undefined ? "" : sanitizeTerminalText(JSON.stringify(value) ?? "");
 };
 
 const withEntry = <V>(map: ReadonlyMap<string, V>, key: string, value: V) =>
@@ -67,7 +60,7 @@ const dropTool = (state: WatchState, id: string) => ({
 const line = (label: string, body: string) => `${label} · ${body}`;
 
 const textLines = (buffer: TextBuffer) => {
-  const clean = sanitize(buffer.text).trim();
+  const clean = sanitizeTerminalText(buffer.text).trim();
   if (clean.length === 0) return [];
   return clean
     .split("\n")
@@ -82,7 +75,7 @@ const flushText = (state: WatchState, runId: string): readonly [WatchState, Read
 };
 
 const finishSummary = (event: AgUiEvent) => {
-  const reason = sanitize(event.finishReason ?? "finished");
+  const reason = sanitizeTerminalText(event.finishReason ?? "finished");
   const usage = event.usage;
   if (usage?.totalTokens === undefined) return `■ run ${reason}`;
   return `■ run ${reason} (${usage.estimated ? "~" : ""}${usage.totalTokens} tokens)`;
@@ -101,7 +94,7 @@ const runStarted: Handler = ({ state, label }) => [state, [line(label, "▶ run 
 
 const toolStart: Handler = ({ state, label, event }) => {
   const id = event.toolCallId ?? "";
-  const name = sanitize(event.toolCallName ?? "tool");
+  const name = sanitizeTerminalText(event.toolCallName ?? "tool");
   return [setTool(state, id, ""), [line(label, `⚙ ${name}`)]];
 };
 
@@ -130,20 +123,20 @@ const toolResult: Handler = ({ state, label, event }) => [state, resultLines(lab
 
 const custom: Handler = ({ state, label, event }) => {
   if (event.name?.endsWith(".session-id")) return [state, []];
-  const name = sanitize(event.name ?? "custom");
+  const name = sanitizeTerminalText(event.name ?? "custom");
   const detail = clip(compact(event.value));
   const body = detail.length > 0 ? `✎ ${name} ${detail}` : `✎ ${name}`;
   return [state, [line(label, body)]];
 };
 
 const step: Handler = ({ state, label, event }) =>
-  event.stepName ? [state, [line(label, `▸ ${sanitize(event.stepName)}`)]] : [state, []];
+  event.stepName ? [state, [line(label, `▸ ${sanitizeTerminalText(event.stepName)}`)]] : [state, []];
 
 const runFinished: Handler = ({ state, label, event }) => [state, [line(label, finishSummary(event))]];
 
 const runError: Handler = ({ state, label, event }) => [
   state,
-  [line(label, `✖ ${sanitize(event.message ?? "run error")}`)],
+  [line(label, `✖ ${sanitizeTerminalText(event.message ?? "run error")}`)],
 ];
 
 const ignore: Handler = ({ state }) => [state, []];
@@ -165,7 +158,7 @@ export const stepWatch = (
   activity: RunActivity,
 ): readonly [WatchState, ReadonlyArray<string>] => {
   const { runId, event } = activity;
-  const label = sanitize(`${activity.stage} ${activity.workItem}`);
+  const label = sanitizeTerminalText(`${activity.stage} ${activity.workItem}`);
   if (event.type === "TEXT_MESSAGE_CONTENT") {
     const text = (state.text.get(runId)?.text ?? "") + (event.delta ?? "");
     return [setText(state, runId, { label, text }), []];
@@ -179,28 +172,19 @@ export const stepWatch = (
 export const flushWatch = (state: WatchState) =>
   [...state.text.values()].flatMap((buffer) => textLines(buffer));
 
-const cell = (value: string) => sanitize(value).replace(/[\t\n]+/g, " ");
-
-const itemLine = (item: ClassifiedItem) =>
-  ClassifiedItem.match(item, {
-    Eligible: ({ stage, id, title }) => `${stage} ${id} ${title}`,
-    Claimed: ({ id, title, claim }) => `claimed ${id} ${title} (by ${claim.by})`,
-    Blocked: ({ id, title, openBlockers }) =>
-      `blocked ${id} ${title} (${openBlockers} open blocker${openBlockers === 1 ? "" : "s"})`,
-    NeedsHuman: ({ reason, id, title }) => `needs-human ${reason} ${id} ${title}`,
-  });
-
 const workspaceNames = (items: ReadonlyArray<BoardItem>) =>
   [...new Set(items.map((entry) => entry.workspace))].sort();
 
 const workspaceLines = (items: ReadonlyArray<BoardItem>) =>
   workspaceNames(items).flatMap((name) => [
-    `  ${cell(name)}`,
-    ...items.filter((entry) => entry.workspace === name).map((entry) => `    ${cell(itemLine(entry.item))}`),
+    `  ${terminalLine(name)}`,
+    ...items
+      .filter((entry) => entry.workspace === name)
+      .map((entry) => `    ${terminalLine(formatClassifiedItem(entry.item))}`),
   ]);
 
 const runningLine = (run: RunSummary) =>
-  `  ${cell(`${run.stage} ${run.workItem} [${run.harness}] ${run.id}`)}`;
+  `  ${terminalLine(`${run.stage} ${run.workItem} [${run.harness}] ${run.id}`)}`;
 
 const schedulerLine = (scheduler: SchedulerStats | null) =>
   scheduler ? formatScheduler(scheduler) : "scheduler: (pending)";
