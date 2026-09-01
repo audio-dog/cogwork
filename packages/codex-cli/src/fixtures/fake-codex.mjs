@@ -27,9 +27,9 @@ if (process.argv.includes("login") && process.argv.includes("status")) {
 }
 
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
-const mcpEnvIndex = process.argv.indexOf("--capture-mcp-env");
-const mcpEnvName = mcpEnvIndex === -1 ? undefined : process.argv.at(mcpEnvIndex + 1);
-const mcpBearer = mcpEnvName ? process.env[mcpEnvName] : undefined;
+const mcpBearer = Object.entries(process.env).find(
+  ([name, value]) => name.startsWith("COGWORK_MCP_") && value !== undefined,
+)?.[1];
 const mcpFileIndex = process.argv.indexOf("--capture-mcp-file");
 const mcpFile = mcpFileIndex === -1 ? undefined : process.argv.at(mcpFileIndex + 1);
 const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
@@ -44,6 +44,9 @@ const capture = JSON.stringify({
   hasCodexConfig,
   hasCodexApiKey: process.env.CODEX_API_KEY !== undefined,
   hasOpenAiApiKey: process.env.OPENAI_API_KEY !== undefined,
+  hasGithubToken: process.env.GITHUB_TOKEN !== undefined,
+  hasGhToken: process.env.GH_TOKEN !== undefined,
+  hasLinearApiKey: process.env.LINEAR_API_KEY !== undefined,
 });
 const outputSchemaPath = () => {
   const index = process.argv.indexOf("--output-schema");

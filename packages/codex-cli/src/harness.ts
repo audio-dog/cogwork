@@ -221,11 +221,26 @@ const catalogOptions = {
   efforts: codexEfforts.map((effort) => ({ value: effort, label: effort })),
 };
 
-const scrubbedEnvironment = (environment: NodeJS.ProcessEnv) => [
-  "CODEX_API_KEY",
-  "OPENAI_API_KEY",
-  ...Object.keys(environment).filter((name) => name.startsWith("COGWORK_MCP_")),
-];
+const inheritedCodexEnvironment = new Set([
+  "HOME",
+  "PATH",
+  "CODEX_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+]);
+
+const scrubbedEnvironment = (environment: NodeJS.ProcessEnv) =>
+  Object.keys(environment).filter((name) => !inheritedCodexEnvironment.has(name));
 
 const hostAuthentication = () =>
   Effect.succeed({
@@ -293,6 +308,7 @@ const codexDescriptor = (
     makeAdapter: ({ model, authentication, request }) =>
       makeAdapter(model, {
         authMode: authentication,
+        approvalPolicy: "never",
         codexExecutable: executable,
         ...(request.checkout.sharedGitDirectory
           ? { additionalDirectories: [request.checkout.sharedGitDirectory] }

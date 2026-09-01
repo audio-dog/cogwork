@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
@@ -204,6 +203,9 @@ const Capture = Schema.fromJsonString(
     hasCodexConfig: Schema.Boolean,
     hasCodexApiKey: Schema.Boolean,
     hasOpenAiApiKey: Schema.Boolean,
+    hasGithubToken: Schema.Boolean,
+    hasGhToken: Schema.Boolean,
+    hasLinearApiKey: Schema.Boolean,
   }),
 );
 
@@ -233,9 +235,6 @@ const runInRepository = (
     const checkoutPath = yield* initializeRepository(handle);
     return yield* collectEvents(harness.run(makeRequest({ checkoutPath, session: null, ...overrides })));
   });
-
-const mcpEnvironmentName = (name: string) =>
-  `COGWORK_MCP_${createHash("sha256").update(name).digest("hex").toUpperCase()}_BEARER`;
 
 const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
   {
@@ -289,6 +288,9 @@ describe("codexRunner", () => {
             runner({
               environment: {
                 ...process.env,
+                GITHUB_TOKEN: "inherited-github-token",
+                GH_TOKEN: "inherited-gh-token",
+                LINEAR_API_KEY: "inherited-linear-key",
                 CODEX_API_KEY: "inherited-codex-key",
                 OPENAI_API_KEY: "inherited-openai-key",
               },
@@ -314,6 +316,9 @@ describe("codexRunner", () => {
           assert.include(capture.args, 'model_reasoning_effort="high"');
           assert.isFalse(capture.hasCodexApiKey);
           assert.isFalse(capture.hasOpenAiApiKey);
+          assert.isFalse(capture.hasGithubToken);
+          assert.isFalse(capture.hasGhToken);
+          assert.isFalse(capture.hasLinearApiKey);
         }),
       ),
     );
@@ -325,13 +330,9 @@ describe("codexRunner", () => {
           const checkoutPath = yield* initializeRepository(handle);
           const fs = yield* FileSystem.FileSystem;
           const capturePath = yield* fs.makeTempFileScoped({ prefix: "codex-mcp-capture-" });
-          const projectedName = projectedMcpName("linear.api", 0);
-          const envName = mcpEnvironmentName(projectedName);
           const harness = Harness.make([
             runner({
-              codexExecutable: fakeCodexExecutable(
-                ` --capture-mcp-env ${envName} --capture-mcp-file ${capturePath}`,
-              ),
+              codexExecutable: fakeCodexExecutable(` --capture-mcp-file ${capturePath}`),
             }),
           ]);
           const first = yield* collectEvents(
@@ -389,7 +390,7 @@ describe("codexRunner", () => {
           assert.include(fullCapture.args, 'approval_policy="never"');
           assert.include(fullCapture.args, "sandbox_workspace_write.network_access=true");
           assert.include(readOnlyCapture.args, "read-only");
-          assert.include(readOnlyCapture.args, 'approval_policy="on-request"');
+          assert.include(readOnlyCapture.args, 'approval_policy="never"');
           assert.notInclude(readOnlyCapture.args, "danger-full-access");
         }),
       ),
