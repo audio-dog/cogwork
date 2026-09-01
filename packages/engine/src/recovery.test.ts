@@ -368,6 +368,7 @@ describe("Recovery.recover", () => {
           waitingSinceMillis: 0,
           headRef: "1-ours",
           followable: true,
+          draft: false,
           followUp: {
             checks: "failing",
             humanCommentAtMillis: 0,
