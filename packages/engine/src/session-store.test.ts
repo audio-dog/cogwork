@@ -80,6 +80,19 @@ describe("foldThread", () => {
 
     assert.deepStrictEqual(foldThread(events), [{ role: "assistant", content: raw }]);
   });
+
+  it("ignores a malformed structured result envelope", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      {
+        type: "CUSTOM",
+        name: "structured-output.complete",
+        value: { object: { _tag: "triage" } },
+      },
+      { type: "RUN_FINISHED", finishReason: "stop" },
+    ];
+
+    assert.deepStrictEqual(foldThread(events), []);
+  });
 });
 
 describe("SessionStore ledger-backed message store", () => {
