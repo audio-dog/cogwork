@@ -11,16 +11,17 @@ import {
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
+import type * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { ContextAssembler, type ContextAssemblerService } from "./context-assembler";
-import { CredentialStore, type CredentialStoreService } from "./credential-store";
+import type * as HttpClient from "effect/unstable/http/HttpClient";
+import type { ContextAssembler } from "./context-assembler";
+import type { CredentialStore } from "./credential-store";
 import type { ResolvedMcpSkill } from "./mcp-skill";
 import type { OperationPolicyProfile } from "./operation-policy";
-import { SessionStore, type SessionStoreService } from "./session-store";
+import type { SessionStore } from "./session-store";
 
 export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
@@ -60,7 +61,12 @@ export const fullHarnessExecution: HarnessExecution = {
   profiles: ["read-only", "full"],
 };
 
-export type HarnessRunnerEnv = SessionStore | ContextAssembler | CredentialStore | FileSystem.FileSystem;
+export type HarnessRunnerEnv =
+  | SessionStore
+  | ContextAssembler
+  | CredentialStore
+  | FileSystem.FileSystem
+  | HttpClient.HttpClient;
 
 export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessError", {
   reason: Schema.Literals(["unknown-harness", "missing-harness", "credential", "policy", "launch", "turn"]),
@@ -83,21 +89,14 @@ export interface HarnessService {
     harness: HarnessName,
     profile: OperationPolicyProfile,
     model: string | null,
-  ) => Effect.Effect<void, HarnessError>;
-  readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError>;
+  ) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
+  readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
   readonly projectedMembers: (harness: HarnessName) => ReadonlyArray<RunPlanMember>;
   readonly planMiddleware: (harness: HarnessName) => ReadonlyArray<RunPlanMiddlewareName>;
 }
 
 export class Harness extends Context.Service<Harness, HarnessService>()("@cogwork/engine/harness") {}
-
-export interface HarnessRunnerServices {
-  readonly sessionStore: SessionStoreService;
-  readonly contextAssembler: ContextAssemblerService;
-  readonly credentialStore: CredentialStoreService;
-  readonly fileSystem: FileSystem.FileSystem;
-}
 
 const unknownHarness = (harness: HarnessName) =>
   new HarnessError({
@@ -132,10 +131,7 @@ const preflightRunner = (
   return Effect.succeed(runner);
 };
 
-export const make = (
-  runners: ReadonlyArray<HarnessRunner>,
-  services: HarnessRunnerServices,
-): HarnessService => {
+export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
   const preflight = Effect.fn("Harness.preflight")(function* (
     harness: HarnessName,
@@ -146,39 +142,15 @@ export const make = (
     yield* runner.preflight?.(model) ?? Effect.void;
   });
   return {
-    preflight: (harness, profile, model) =>
-      preflight(harness, profile, model).pipe(
-        Effect.provideService(SessionStore, services.sessionStore),
-        Effect.provideService(ContextAssembler, services.contextAssembler),
-        Effect.provideService(CredentialStore, services.credentialStore),
-        Effect.provideService(FileSystem.FileSystem, services.fileSystem),
-      ),
+    preflight,
     run: (request) =>
       Stream.fromEffect(
         preflightRunner(registry, request.plan.harness.name, request.plan.harness.profile),
-      ).pipe(
-        Stream.flatMap((runner) => runner.run(request)),
-        Stream.provideService(SessionStore, services.sessionStore),
-        Stream.provideService(ContextAssembler, services.contextAssembler),
-        Stream.provideService(CredentialStore, services.credentialStore),
-        Stream.provideService(FileSystem.FileSystem, services.fileSystem),
-      ),
+      ).pipe(Stream.flatMap((runner) => runner.run(request))),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
     projectedMembers: (harness) => registry.get(harness)?.projectedMembers ?? [],
     planMiddleware: (harness) => registry.get(harness)?.planMiddleware ?? [],
   };
 };
 
-export const layer = (runners: ReadonlyArray<HarnessRunner>) =>
-  Layer.effect(
-    Harness,
-    Effect.map(
-      Effect.all({
-        sessionStore: SessionStore,
-        contextAssembler: ContextAssembler,
-        credentialStore: CredentialStore,
-        fileSystem: FileSystem.FileSystem,
-      }),
-      (services) => make(runners, services),
-    ),
-  );
+export const layer = (runners: ReadonlyArray<HarnessRunner>) => Layer.succeed(Harness, make(runners));
