@@ -16,7 +16,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
+import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
@@ -36,6 +38,10 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const session = Schema.decodeSync(SessionId)("sess-abc");
+
+const crashLoopsCapped = Metric.counter("cogwork_recovery_crash_loops_capped_total", {
+  description: "Recovery crash loops capped before another resume.",
+});
 
 const wsA: RegisteredWorkspace = {
   source: "a.workspace.ts",
@@ -647,7 +653,10 @@ describe("Recovery.recover", () => {
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
       const stages = yield* Ref.make<ReadonlyArray<string>>([]);
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }> = [];
       const ledger = yield* RunLedger.makeMemory;
+      const cappedMetric = Metric.withAttributes(crashLoopsCapped, { stage: "implement" });
+      const cappedBefore = (yield* Metric.value(cappedMetric)).count;
       const running = crashedRun("crash-c", 3, "running");
       yield* ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
       yield* ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
@@ -663,7 +672,16 @@ describe("Recovery.recover", () => {
       };
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
-        yield* recovery.recover();
+        yield* recovery.recover().pipe(
+          Effect.withLogger(
+            Logger.make(({ fiber, message }) =>
+              logs.push({
+                message,
+                annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
+              }),
+            ),
+          ),
+        );
         const note = (yield* Ref.get(notes))[0] ?? "";
         assert.include(note, "Exhausted after 3 consecutive implement crashes");
         assert.include(note, recoveryReason);
@@ -672,6 +690,16 @@ describe("Recovery.recover", () => {
         assert.deepStrictEqual(yield* Ref.get(attempts), []);
         assert.deepStrictEqual(yield* Ref.get(admitted), []);
         assert.strictEqual((yield* ledger.getRun(running.id))?.status, "crashed");
+        assert.strictEqual((yield* Metric.value(cappedMetric)).count, cappedBefore + 1);
+        const capped = logs.find(({ message }) =>
+          Array.isArray(message) ? message.includes("crash loop capped") : message === "crash loop capped",
+        );
+        assert.deepStrictEqual(capped?.annotations, {
+          workspace: "a",
+          item: "#1",
+          stage: "implement",
+        });
+        assert.deepStrictEqual(capped?.message, ["crash loop capped", { crashes: 3 }]);
       }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
     }),
   );

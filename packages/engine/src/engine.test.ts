@@ -20,8 +20,10 @@ import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
+import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -82,6 +84,10 @@ const sampleRegistry: Registry.RegistryState = {
 };
 
 const id = Schema.decodeSync(WorkItemId);
+
+const rateLimitHits = Metric.counter("cogwork_reconcile_rate_limit_hits_total", {
+  description: "Rate-limit responses observed while polling issue trackers.",
+});
 
 const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.IssueTrackerService => ({
   rateLimitScope: () => null,
@@ -696,6 +702,78 @@ describe("reconcile worker", () => {
       );
       const warnings = logged.filter((line) => line.includes("work source rate limited; backing off"));
       assert.strictEqual(warnings.length, 1);
+    }),
+  );
+
+  it.effect("counts every shared-scope rate-limit hit while warning once with workspace correlation", () =>
+    Effect.gen(function* () {
+      const observes = yield* Ref.make(0);
+      const observationGate = yield* Latch.make();
+      const otherWorkspace: Registry.RegisteredWorkspace = {
+        ...registeredWorkspace,
+        config: { ...registeredWorkspace.config, name: workspaceId("other") },
+      };
+      const registry = Layer.succeed(
+        Registry.WorkspaceRegistry,
+        Registry.readOnlyRegistry({ workspaces: [registeredWorkspace, otherWorkspace], failures: [] }),
+      );
+      const source = sources(
+        Layer.succeed(
+          IssueTracker.IssueTracker,
+          stub({
+            rateLimitScope: () => "linear:LINEAR_API_KEY",
+            observe: () =>
+              Effect.gen(function* () {
+                const count = yield* Ref.updateAndGet(observes, (current) => current + 1);
+                if (count === 2) yield* observationGate.open;
+                yield* observationGate.await;
+                return yield* new IssueTracker.IssueTrackerError({
+                  reason: "rate-limited",
+                  message: "Linear rate limit exceeded",
+                  retryAfterMillis: 30_000,
+                });
+              }),
+          }),
+        ),
+      );
+      const layer = reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registry, source)));
+      const logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }> = [];
+      const hitMetric = Metric.withAttributes(rateLimitHits, { scope: "linear:LINEAR_API_KEY" });
+      const hitsBefore = (yield* Metric.value(hitMetric)).count;
+
+      yield* Effect.gen(function* () {
+        yield* (yield* Reconcile.ReconcileWorker).submit();
+      }).pipe(
+        Effect.provide(layer),
+        Effect.scoped,
+        Effect.withLogger(
+          Logger.make(({ fiber, message }) =>
+            logs.push({
+              message,
+              annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
+            }),
+          ),
+        ),
+      );
+
+      assert.strictEqual(yield* Ref.get(observes), 2);
+      assert.strictEqual((yield* Metric.value(hitMetric)).count, hitsBefore + 2);
+      const warnings = logs.filter(({ message }) =>
+        Array.isArray(message)
+          ? message.includes("work source rate limited; backing off")
+          : message === "work source rate limited; backing off",
+      );
+      assert.strictEqual(warnings.length, 1);
+      assert.deepStrictEqual(Object.keys(warnings[0]?.annotations ?? {}), ["workspace"]);
+      assert.isTrue(["example", "other"].includes(String(warnings[0]?.annotations.workspace)));
+      assert.deepStrictEqual(warnings[0]?.message, [
+        "work source rate limited; backing off",
+        {
+          scope: "linear:LINEAR_API_KEY",
+          message: "Linear rate limit exceeded",
+          retryAtMillis: 30_000,
+        },
+      ]);
     }),
   );
 
