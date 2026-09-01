@@ -13,10 +13,11 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { TestClock } from "effect/testing";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { layerMemory, RunLedger } from "./run-ledger";
 import { layer as runRecorderLayer } from "./run-recorder";
-import { foldThread, make, SessionStore } from "./session-store";
+import { foldThread, SessionStore, layer as sessionStoreLayer } from "./session-store";
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
@@ -35,9 +36,7 @@ const event = (seq: number, value: AgUiEvent): RunEvent => ({
 const bus = DaemonEventBus.layer;
 const runLedger = layerMemory.pipe(Layer.provide(bus));
 const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
-const layer = Layer.effect(SessionStore, make).pipe(
-  Layer.provideMerge(Layer.mergeAll(runLedger, runRecorder)),
-);
+const layer = sessionStoreLayer.pipe(Layer.provideMerge(Layer.mergeAll(runLedger, runRecorder)));
 
 describe("foldThread", () => {
   it("splits assistant text on a tool call and keeps the tool's name and args", () => {
@@ -143,6 +142,28 @@ describe("SessionStore ledger-backed message store", () => {
     Effect.gen(function* () {
       const store = yield* SessionStore;
       assert.deepStrictEqual(yield* loadThread(store, session), []);
+    }).pipe(Effect.provide(layer)),
+  );
+});
+
+describe("SessionStore interrupt persistence adapter", () => {
+  it.effect("runs the Effect service through the Promise contract", () =>
+    Effect.gen(function* () {
+      const store = yield* SessionStore;
+      const interrupts = store.persistence.stores.interrupts;
+      yield* Effect.promise(() =>
+        interrupts.create({
+          interruptId: "interrupt-1",
+          runId: "run-1",
+          threadId: "thread-1",
+          requestedAt: 10,
+          payload: {},
+        }),
+      );
+      yield* TestClock.setTime(1234);
+      yield* Effect.promise(() => interrupts.resolve("interrupt-1"));
+
+      assert.strictEqual((yield* Effect.promise(() => interrupts.get("interrupt-1")))?.resolvedAt, 1234);
     }).pipe(Effect.provide(layer)),
   );
 });
