@@ -11,6 +11,12 @@ export type ProviderId = "openai" | "anthropic" | "google";
 
 const providerIds: ReadonlyArray<ProviderId> = ["openai", "anthropic", "google"];
 
+export const providerModelRefs = [
+  ...OPENAI_CHAT_MODELS.map((model) => `openai/${model}`),
+  ...ANTHROPIC_MODELS.map((model) => `anthropic/${model}`),
+  ...GEMINI_MODELS.map((model) => `google/${model}`),
+];
+
 const asProviderId = (value: string) => providerIds.find((id) => id === value) ?? null;
 
 export interface ResolvedModel {

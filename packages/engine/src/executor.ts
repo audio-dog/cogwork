@@ -21,6 +21,7 @@ import {
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
   ImplementStageResultCompletion,
+  issueTrackerErrorIsPermanent,
   PluginContributionLoad,
   RunId,
   sessionHandle,
@@ -46,6 +47,7 @@ import { ConnectionStore } from "./connection";
 import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
+import * as Cooldown from "./cooldown";
 import { type CredentialError, CredentialStore } from "./credential-store";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
@@ -394,6 +396,7 @@ export const make = Effect.gen(function* () {
   );
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
+  const claimCooldowns = yield* Cooldown.make;
 
   const cleanupRunContext = (runId: RunId) =>
     contextAssembler
@@ -668,18 +671,79 @@ export const make = Effect.gen(function* () {
     return { request: runRequest, session, plan, selectedOps };
   });
 
+  const claimScope = (workspace: RegisteredWorkspace, item: EligibleWork) =>
+    `${workspace.config.name}:${item.id}:${item.stage}`;
+
+  const holdOffClaim = Effect.fn("Executor.holdOffClaim")(function* (
+    scope: string,
+    item: EligibleWork,
+    error: IssueTrackerError,
+  ) {
+    const { retryAtMillis } = yield* claimCooldowns.enter(scope, error.retryAfterMillis);
+    yield* Effect.logWarning("claim failed; holding this item off until the window expires", {
+      stage: item.stage,
+      item: item.id,
+      retryAtMillis,
+      error,
+    });
+  });
+
+  const logParkStep = (step: string, item: EligibleWork, error: IssueTrackerError) =>
+    Effect.logWarning("could not park a refused claim", {
+      step,
+      stage: item.stage,
+      item: item.id,
+      error,
+    });
+
+  // The note goes first and on its own: the role writes can hit the very refusal being reported, and
+  // a human surface that survives that is the whole point of parking.
+  const parkRefusedClaim = Effect.fn("Executor.parkRefusedClaim")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    error: IssueTrackerError,
+  ) {
+    yield* issueTracker
+      .note(
+        workspace,
+        item.id,
+        handoffNote({
+          workspace,
+          item,
+          stage: item.stage,
+          cause: { kind: "refused-claim" },
+          reason: error.message,
+          session: null,
+        }),
+      )
+      .pipe(Effect.catchTag("IssueTrackerError", (error) => logParkStep("note", item, error)));
+    yield* issueTracker
+      .handOff(workspace, item.id, { stage: item.stage })
+      .pipe(Effect.catchTag("IssueTrackerError", (error) => logParkStep("roles", item, error)));
+  });
+
+  const declineClaim = Effect.fn("Executor.declineClaim")(function* (
+    scope: string,
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+    error: IssueTrackerError,
+  ) {
+    yield* holdOffClaim(scope, item, error);
+    if (issueTrackerErrorIsPermanent(error)) yield* parkRefusedClaim(workspace, item, error);
+    return false;
+  });
+
   const tryClaim = Effect.fn("Executor.tryClaim")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     at: number,
   ) {
+    const scope = claimScope(workspace, item);
+    if ((yield* claimCooldowns.heldUntil(scope)) !== null) return false;
     return yield* issueTracker.claim(workspace, item.id, { claimedAtMillis: at, stage: item.stage }).pipe(
       Effect.matchEffect({
-        onFailure: (error) =>
-          Effect.logWarning("claim failed", { stage: item.stage, item: item.id, error }).pipe(
-            Effect.map(() => false),
-          ),
-        onSuccess: () => Effect.succeed(true),
+        onFailure: (error) => declineClaim(scope, workspace, item, error),
+        onSuccess: () => claimCooldowns.clear(scope).pipe(Effect.map(() => true)),
       }),
     );
   });
@@ -1204,20 +1268,22 @@ export const make = Effect.gen(function* () {
   const harnessAvailability = Effect.fn("Executor.harnessAvailability")(function* (
     resolved: ResolvedOperation,
   ) {
-    return yield* harness.preflight(resolved.stage.harness, resolved.profile, resolved.stage.model).pipe(
-      Effect.provide(harnessRunnerContext),
-      Effect.match({
-        onFailure: (error) => {
-          if (error.retryable) return null;
-          if (error.reason === "credential") return hostFailure("credential", error.message);
-          if (error.reason === "policy") {
-            return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
-          }
-          return hostFailure("harness", error.message);
-        },
-        onSuccess: () => null,
-      }),
-    );
+    return yield* harness
+      .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
+      .pipe(
+        Effect.provide(harnessRunnerContext),
+        Effect.match({
+          onFailure: (error) => {
+            if (error.retryable) return null;
+            if (error.reason === "credential") return hostFailure("credential", error.message);
+            if (error.reason === "policy") {
+              return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
+            }
+            return hostFailure("harness", error.message);
+          },
+          onSuccess: () => null,
+        }),
+      );
   });
 
   const connectionAvailability = Effect.fn("Executor.connectionAvailability")(function* () {
@@ -1243,7 +1309,7 @@ export const make = Effect.gen(function* () {
   });
 
   const harnessProbeKey = (resolved: ResolvedOperation) =>
-    JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model]);
+    JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort]);
 
   const loadAvailabilityFacts = Effect.fn("Executor.loadAvailabilityFacts")(function* (
     workspace: RegisteredWorkspace,

@@ -1,6 +1,17 @@
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
+if (process.argv.includes("--version")) {
+  const override = process.argv.find((argument) => argument.startsWith("--fake-version="));
+  process.stdout.write(`${override?.slice("--fake-version=".length) ?? "2026.08.11-fake"}\n`);
+  process.exit(0);
+}
+
+if (process.argv.includes("--list-models")) {
+  process.stdout.write("Available models:\nfake-native - Fake native model\nauto - Auto\n");
+  process.exit(0);
+}
+
 const result = JSON.stringify({
   _tag: "triage",
   role: "ready-for-agent",

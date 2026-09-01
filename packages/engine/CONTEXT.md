@@ -45,6 +45,10 @@ _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, 
 The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when it has no run and the scheduler does not hold the work item in flight.
 _Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
 
+**Claim hold-off**:
+What the executor does with a **refused claim**: the item is held out of claiming for a growing window, keyed by workspace, item and operation, so one refusal cannot re-write coordination on every generation — the failure is not contention, so the next poll would get the same answer. A refusal the port reports as permanent also parks the item: the refusal is posted as a note *before* the role writes, since those writes can hit the very refusal being reported, then `ready-for-human` escalates it. A cleared claim clears the window, so the item recovers on its own once a person fixes the tracker.
+_Avoid_: Rate-limit cooldown (the reconcile worker's, keyed by credential scope — same mechanism, different scope), backoff, retry, exhausted (a run that gave up after trying)
+
 **Admit**:
 The narrow scheduler capability that reserves capacity for a recovered run and starts it. It always launches because recovery is resuming work this daemon already claimed; the scheduler separately exposes whether a work item is in flight so the live sweep cannot release a claim while its run starts.
 _Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue
@@ -74,15 +78,19 @@ The projection the executor hands the harness for one accepted Run Plan, plus se
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
-The engine's dispatcher — given a harness request, it routes to the registered harness runner by name and provides the runner services for session and context access. Its preflight checks that the selected runner exists and can enforce the operation's hard posture before the executor claims work. It also exposes `sessionKind(name)`: the declared kind for a harness, read straight off the runner registry (an unregistered name falls back to opaque-handle, though preflight rejects it before claim). This is the one place runner lookup lives — no separate harness-to-kind map. Knows nothing about any specific agent.
+The engine's registry and dispatcher for Harness runners. It exposes each runner's Session kind, operational profile, controlled option catalog, and readiness; performs static preflight before claim and full Plan preflight before launch; and dispatches only to the selected runner, with no Harness or authentication fallback.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
-A pluggable implementation of one agent backend: a `name`, a declared **session kind**, and a `run` that returns a stream of harness events. The session kind says who owns the conversation: the Cursor runner declares opaque-handle (the harness keeps its own history and hands back a resume handle), the provider runner declares owned-transcript (the run ledger holds the conversation). It pulls the session's history in-process from the request's reference — a CLI runner its opaque resume handle, the owned runner the folded transcript. The runner derives the operation's root-object Standard JSON Schema, asks TanStack AI to stream against it, and emits one terminal `structured-output.complete`; the request carries no duplicate schema or selector. The executor holds triage's `RUN_FINISHED` until it decodes that terminal envelope once through the shared Effect Schema, then publishes either the original success terminal or a failed terminal. Missing, duplicate, or malformed values are retryable harness failures. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
+A pluggable implementation of one agent backend. Beside dispatch it declares its Session kind, operational facts, explicit authentication binding, catalog sources, observational readiness, and authoritative preflight; unavailable runners remain registered without preventing unrelated Harnesses from running.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
+**Harness capability profile**:
+The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity and fork behavior, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, structured-output behavior, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
+_Avoid_: Feature flags, adapter metadata, projection matrix
+
 **External Harness runtime**:
-The engine-owned execution module beneath external Harness runners. It resolves one Run into explicit identity, selection, authentication, policy, instructions, Operating Instructions, MCP, secret-reference, checkout, prompt, and output-schema inputs; then it composes the typed TanStack adapter, Harness Workspace, selected Sandbox provider, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate. Its descriptor holds only native differences. The trusted local-process provider binds the prepared checkout while a `none` Workspace source leaves Worktree creation, Git metadata, branch ownership, and cleanup with the engine.
+The engine-owned execution module beneath external Harness runners. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate.
 _Avoid_: Harness service (the dispatcher above it), Harness runner (the engine-facing backend seam), provider runner (the owned-transcript path)
 
 **Harness Workspace projection**:
@@ -130,7 +138,7 @@ A command-glob rule refused in every profile, for every operation — the small 
 _Avoid_: Confinement (that keeps writes inside the worktree root; this bounds shell commands), sandbox isolation
 
 **Operating-instructions package**:
-The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills.
+The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills. The engine ships the default package, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Operation resolution**:

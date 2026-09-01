@@ -126,7 +126,7 @@ The surface that owns Connection **establishment** — connect, re-connect, remo
 _Avoid_: Integration, connector, Customize, Plugins, setup wizard, *paired install* (retired — it never said what was paired with what, and named an act nobody refers to twice)
 
 **Workspaces**:
-The surface that owns what the daemon operates over and under on this machine: register and deregister a **Workspace**, re-bind its checkout path, set the daemon's runtime limits, and restore the **Control store**'s pre-migration copy. Named for its dominant subject; the limits and restore live here because none of its five acts touches a Scope-held setting — the workspace record's columns, the limits, and the store are machine facts (ADR 0016).
+The surface that owns what the daemon operates over and under on this machine: register and deregister a **Workspace**, re-bind its checkout path, and set the daemon's runtime limits. Named for its dominant subject; the limits live here because none of its four acts touches a Scope-held setting — the workspace record's columns and the limits are machine facts (ADR 0016). (A fifth act, restoring the **Control store**'s pre-migration copy, was withdrawn with ADR 0015's 2026-08-27 amendment.)
 **Register is the trust act.** Registering admits the repository's Workspace input Authoring tree — see **Scope** and ADR 0018. There is no repository settings file behind this surface: `register` writes the workspace record instead.
 _Avoid_: Settings (already on Customize's _Avoid_ line), Engine (the machinery being managed, not a pane), Daemon, Workspace (the singular is the registered repo, not the surface), machine config
 
@@ -271,6 +271,10 @@ _Avoid_: Block reason (blocking now means open dependencies), error, failure.
 A coordination record marking an item as being worked: `by`, `claimedAtMillis`, and an optional operation. Persisted onto the issue tracker (a label plus a marker), so it survives a daemon restart.
 _Avoid_: Lock, lease, reservation
 
+**Refused claim**:
+A claim the issue tracker will not accept — a write the credential is not permitted to make, such as creating the claim label in a team that forbids it. Distinct from a *contended* claim, which cannot happen: classify only ever offers unclaimed work. A refusal the port reports as permanent (`IssueTrackerError.retryable === false`) is one every retry gets the same answer to; absent that field a refusal is worth polling again. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`. What the engine does about one is the executor's, in the engine glossary.
+_Avoid_: Contended claim, stale claim (one we release), exhausted (a run that gave up after trying)
+
 **Attempt record**:
 A coordination record of one finished operation attempt on an item: its operation, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the issue tracker.
 _Avoid_: Run — a run is the local execution; an attempt is the durable outcome
@@ -335,6 +339,18 @@ _Avoid_: Model, provider, target (that word belongs to sync)
 The credentials an external CLI harness owns and resolves from its host installation, such as a Codex CLI `codex login`. Cogwork selects and launches the harness but does not copy, store, refresh, or fall back from those credentials.
 _Avoid_: Provider key, Cogwork login, harness fallback
 
+**Harness option catalog**:
+The controlled model and option choices one Harness currently offers on one Runtime host, stamped with the runtime metadata, native discovery, or versioned Cogwork fallback that produced them. An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
+_Avoid_: Model catalog, settings, arbitrary option
+
+**Harness readiness**:
+An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
+_Avoid_: Health check, launch guarantee, availability fallback
+
+**Harness preflight**:
+The authoritative per-Run check that one registered Harness can execute the accepted Run Plan with its selected catalog values, authentication binding, policy, Workspace projection, required MCP servers, and Sandbox provider. It validates the Plan as frozen and never re-resolves settings.
+_Avoid_: Readiness, Run Plan resolution, fallback
+
 **Harness execution boundary**:
 The sandbox, approval mode, and native tools an external CLI harness enforces inside its agent loop. Cogwork chooses that boundary when it launches the harness, but its owned-tool policy cannot intercept native shell or file operations inside Cursor or Codex. An unattended harness must use a non-interactive approval mode and remain bounded to its worktree; full host access is not an unattended default.
 _Avoid_: Owned tool policy, provider sandbox, fallback
@@ -348,7 +364,7 @@ The tagged, Effect-Schema-defined value an operation returns through the harness
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:
-The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path; `SKILL.md` is reserved for real Skills.
+The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path; `SKILL.md` is reserved for real Skills. The engine ships the default package, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Harness event**:

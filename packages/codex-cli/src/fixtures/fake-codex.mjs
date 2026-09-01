@@ -1,8 +1,35 @@
 import { once } from "node:events";
 import { access, readFile, writeFile } from "node:fs/promises";
 
+const probeDelayArgument = process.argv.find((argument) => argument.startsWith("--fake-probe-delay="));
+const probeDelay = Number(probeDelayArgument?.slice("--fake-probe-delay=".length) ?? 0);
+if (probeDelay > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, probeDelay);
+
+if (process.argv.includes("--version")) {
+  if (process.argv.includes("--fake-version-failure")) {
+    process.stderr.write("unexpected version failure\n");
+    process.exit(2);
+  }
+  const override = process.argv.find((argument) => argument.startsWith("--fake-version="));
+  process.stdout.write(
+    `${override?.slice("--fake-version=".length).replaceAll("_", " ") ?? "codex-cli 1.0.0"}\n`,
+  );
+  process.exit(0);
+}
+
+if (process.argv.includes("login") && process.argv.includes("status")) {
+  if (process.argv.includes("--fake-login-failure")) {
+    process.stderr.write("You are not logged in\n");
+    process.exit(1);
+  }
+  process.stdout.write("Logged in\n");
+  process.exit(0);
+}
+
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
-const mcpBearer = Object.entries(process.env).findLast(([name]) => /^COGWORK_MCP_.*_BEARER$/.test(name))?.[1];
+const mcpEnvIndex = process.argv.indexOf("--capture-mcp-env");
+const mcpEnvName = mcpEnvIndex === -1 ? undefined : process.argv.at(mcpEnvIndex + 1);
+const mcpBearer = mcpEnvName ? process.env[mcpEnvName] : undefined;
 const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
   () => true,
   () => false,

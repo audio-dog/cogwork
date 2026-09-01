@@ -1,0 +1,11 @@
+language js(typescript, jsx)
+
+// Effect.sync is synchronous. An async thunk makes it Effect<Promise<A>>: the promise is never
+// awaited, its rejection never reaches the error channel, and interruption cannot cancel it.
+or {
+  `Effect.sync(async $params => $body)` as $call,
+  `Effect.sync(async function $_($_) { $body })` as $call,
+  `Effect.sync<$types>(async $params => $body)` as $call
+} where {
+  register_diagnostic(span=$call, message="Rule: do not pass an async thunk to Effect.sync. Why: the result is Effect<Promise<A>>, so the promise is never awaited, a rejection becomes an unhandled rejection instead of a typed failure, and interruption cannot cancel it. Fix: use Effect.tryPromise, whose callback receives an AbortSignal wired to interruption, or Effect.promise when it cannot reject.", severity="error")
+}
