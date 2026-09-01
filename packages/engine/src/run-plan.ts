@@ -225,16 +225,23 @@ const droppedReason = (row: OperationSettingRow, context: OperationSettingContex
   return null;
 };
 
+const isBlankOptionalStringSetting = (row: OperationSettingRow) =>
+  (row.setting === "model" || row.setting === "effort") &&
+  typeof row.value === "string" &&
+  row.value.trim() === "";
+
 const selectedOperationRows = (
   rows: readonly OperationSettingRow[],
   setting: OperationSettingName,
   context: OperationSettingContext,
 ) => {
   const candidates = rows.filter((row) => row.setting === setting);
-  const ranked = operationRowsForContext(candidates, context).map((row) => ({
-    row,
-    rank: levelRank(row.level, context),
-  }));
+  const ranked = operationRowsForContext(candidates, context)
+    .filter((row) => !isBlankOptionalStringSetting(row))
+    .map((row) => ({
+      row,
+      rank: levelRank(row.level, context),
+    }));
   const selectedRank = Math.max(-1, ...ranked.map(({ rank }) => rank));
   const selected = ranked
     .filter(({ rank }) => rank === selectedRank)
@@ -247,7 +254,8 @@ const selectedOperationRows = (
     )
     .map(({ row }) => row);
   const dropped = candidates.flatMap((row) => {
-    const reason = droppedReason(row, context);
+    const reason =
+      droppedReason(row, context) ?? (isBlankOptionalStringSetting(row) ? "blank value is unset" : null);
     return reason ? [{ row, reason }] : [];
   });
   return { selected, lowerLevel, dropped };
@@ -293,7 +301,7 @@ export const resolveEngineOperationSetting = (
 export const operatorForSetting = (setting: OperationSettingName) =>
   setting === "bindings" ? "union-values" : "override-scalar";
 
-const stringValue = (value: unknown, fallback: string | null) => {
+const trimmedStringValue = (value: unknown, fallback: string | null) => {
   if (typeof value !== "string") return fallback;
   return value.trim() || fallback;
 };
@@ -352,8 +360,8 @@ export const resolveRunPlanStage = (
       ...base,
       enabled: booleanValue(settingValueOf("enabled"), false),
       harness,
-      model: stringValue(settingValueOf("model"), null),
-      effort: stringValue(settingValueOf("effort"), null),
+      model: trimmedStringValue(settingValueOf("model"), null),
+      effort: trimmedStringValue(settingValueOf("effort"), null),
     },
     profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
     settings,
@@ -772,6 +780,9 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     ...projectedNamesFor("Commands", commands, projectedMembers),
   ];
   const mcp = [...mcpServersForRun, ...unresolvedMcp];
+  const connectionNames = input.resolved.stage.mcpSkills
+    .filter((server) => server.auth !== undefined)
+    .map((server) => server.name.trim());
   const engineStamps = [
     contentStamp(`${input.item.stage} Operation Definition`, {
       operation: input.item.stage,
@@ -791,12 +802,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     contentStamp("Engine Sandbox", { workspace: input.checkoutPath, policy: input.resolved.profile }),
     contentStamp("Engine Structured Output", structuredOutput(input.item.stage)),
     contentStamp("Engine Persistence", { sessionKind: input.sessionKind }),
-    contentStamp(
-      "Engine Connections",
-      input.resolved.stage.mcpSkills
-        .filter((server) => server.auth !== undefined)
-        .map((server) => server.name),
-    ),
+    contentStamp("Engine Connections", connectionNames),
   ];
   return freezeRunPlan(
     RunPlan.make({
@@ -825,9 +831,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
       hooks: [],
       middleware: [...input.middleware],
       structuredOutput: structuredOutput(input.item.stage),
-      connections: input.resolved.stage.mcpSkills
-        .filter((server) => server.auth !== undefined)
-        .map((server) => server.name),
+      connections: connectionNames,
       workContext: RunPlanWorkContext.make({
         reference: RunPlanWorkContextReference.make({ ...workContext.reference }),
         facts: RunPlanWorkContextFacts.make({

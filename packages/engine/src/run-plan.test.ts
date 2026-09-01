@@ -321,14 +321,30 @@ describe("stage settings come from Operation settings", () => {
     ]);
     const blank = resolveRunPlanStage(bareConfig, "implement", [
       codexHarness,
-      { ...profileDefault, setting: "model", value: "  " },
-      { ...profileDefault, setting: "effort", value: "\n" },
+      solModel,
+      highEffort,
+      {
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        setting: "model",
+        value: "  ",
+      },
+      {
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        setting: "effort",
+        value: "\n",
+      },
     ]);
 
     assert.strictEqual(configured?.stage.model, "gpt-5.6-sol");
     assert.strictEqual(configured?.stage.effort, "high");
-    assert.isNull(blank?.stage.model);
-    assert.isNull(blank?.stage.effort);
+    assert.strictEqual(blank?.stage.model, "gpt-5.6-sol");
+    assert.strictEqual(blank?.stage.effort, "high");
+    assert.deepStrictEqual(
+      blank?.settings.get("model")?.dropped.map(({ reason }) => reason),
+      ["blank value is unset"],
+    );
   });
 });
 
@@ -370,12 +386,22 @@ describe("Run Plan assembly", () => {
   it("trims workspace and Plugin MCP server names and endpoints", () => {
     const pluginMcp = {
       id: "plugin:linear/mcp/linear",
-      authority: "plugin:linear" as const,
-      kind: "mcp-server" as const,
+      authority: "plugin:linear",
+      kind: "mcp-server",
       localName: "linear",
       file: "/plugins/linear/mcp/linear.json",
+    } satisfies FileContribution;
+    const workspaceConfig: WorkspaceConfig = {
+      ...workspace.config,
+      mcpSkills: [
+        {
+          name: "  workspace-tools\n",
+          endpoint: "  https://mcp.example.test/tools\t",
+          auth: { type: "credential-store" },
+        },
+      ],
     };
-    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
+    const resolved = resolveRunPlanStage(workspaceConfig, "implement", [codexHarness]);
     assert.isNotNull(resolved);
     if (!resolved) return;
 
@@ -397,7 +423,7 @@ describe("Run Plan assembly", () => {
           identity: null,
           name: "  workspace-tools\n",
           endpoint: "  https://mcp.example.test/tools\t",
-          authenticated: false,
+          authenticated: true,
         },
         {
           identity: pluginMcp.id,
@@ -419,6 +445,7 @@ describe("Run Plan assembly", () => {
         { name: "linear", endpoint: "https://mcp.linear.app/mcp" },
       ],
     );
+    assert.deepStrictEqual(plan.connections, ["workspace-tools"]);
   });
 
   it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
