@@ -228,8 +228,6 @@ describe("daemon server composition", () => {
         Layer.provide(Daemon.serializationLayer),
       );
 
-      // Dispatch is not merely idle: `bootstrap` must not submit a reconcile, and `heartbeats`
-      // must never begin polling. Both are asserted after time has had a chance to pass.
       const result = yield* inspectUnavailableDaemon().pipe(
         Effect.provide(Layer.mergeAll(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer))),
         Effect.scoped,
