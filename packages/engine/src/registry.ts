@@ -441,14 +441,16 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
       });
       const initial = yield* loadState();
       const cell = yield* Ref.make({ state: initial, revision: 0 });
-      const commitChange = (change: WorkspaceRegistrationChange) =>
-        Ref.modify(cell, (current) => [
-          change,
-          {
-            state: foldRegistration(current.state, change),
-            revision: current.revision + 1,
-          },
-        ]);
+      const commitChange = Effect.fn("WorkspaceRegistry.commitChange")(
+        (change: WorkspaceRegistrationChange) =>
+          Ref.modify(cell, (current) => [
+            change,
+            {
+              state: foldRegistration(current.state, change),
+              revision: current.revision + 1,
+            },
+          ]),
+      );
       const commitRemoval = (workspace: WorkspaceId) =>
         Ref.modify(cell, (current) => [
           workspace,
@@ -457,9 +459,9 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
             revision: current.revision + 1,
           },
         ]);
-      const commitRefresh = (startedAt: number, state: RegistryState) =>
+      const commitRefresh = (expectedRevision: number, state: RegistryState) =>
         Ref.modify(cell, (current) => {
-          if (current.revision !== startedAt) return [current.state, current];
+          if (current.revision !== expectedRevision) return [current.state, current];
           return [state, { state, revision: current.revision + 1 }];
         });
       const registry: WorkspaceRegistryService = {
