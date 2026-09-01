@@ -6,6 +6,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FiberSet from "effect/FiberSet";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -28,6 +29,7 @@ import { fullProfile } from "./policy";
 import type { WorktreeSandbox } from "./sandbox";
 
 const runId = Schema.decodeSync(RunId)("run-tool-cancel");
+const interruptionGate = Latch.makeUnsafe();
 
 const openSandbox = Effect.fn("owned-tools.test.openSandbox")(function* () {
   const handle = yield* Effect.acquireRelease(
@@ -350,7 +352,7 @@ describe("owned tools", () => {
         Effect.suspend(() => {
           Deferred.doneUnsafe(started, Effect.void);
           signal.addEventListener("abort", () => Deferred.doneUnsafe(aborted, Effect.void), { once: true });
-          return Effect.never;
+          return interruptionGate.await.pipe(Effect.flatMap(() => Effect.die("interruption gate opened")));
         }),
       );
       const fiber = yield* webFetch(sandbox, { url: "https://example.com" }).pipe(
