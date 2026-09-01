@@ -1,6 +1,5 @@
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
-import { waitForDaemonListening } from "./wait-for-socket";
 
 export interface EngineChild {
   readonly pid?: number;
@@ -25,7 +24,7 @@ export interface EngineSupervisorOptions {
   readonly onStatus: (status: EngineStatus) => void;
   readonly logger: EngineLogger;
   readonly maxRestarts?: number;
-  readonly awaitReachable?: (socketPath: string, signal: AbortSignal) => Promise<boolean>;
+  readonly awaitReachable: (socketPath: string, signal: AbortSignal) => Promise<boolean>;
 }
 
 export class EngineSupervisor {
@@ -40,7 +39,7 @@ export class EngineSupervisor {
 
   constructor(private readonly options: EngineSupervisorOptions) {
     this.#maxRestarts = options.maxRestarts ?? 3;
-    this.#awaitReachable = options.awaitReachable ?? waitForDaemonListening;
+    this.#awaitReachable = options.awaitReachable;
   }
 
   get status(): EngineStatus {

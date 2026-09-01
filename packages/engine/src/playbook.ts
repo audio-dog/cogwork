@@ -6,6 +6,7 @@ export interface OperationDefinition {
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
   readonly mcpSkills: ReadonlyArray<McpSkill>;
+  readonly needs: NonNullable<PlaybookStageConfig["needs"]>;
 }
 
 const dayMillis = 86_400_000;
@@ -49,6 +50,7 @@ const resolveStageConfig = (
   resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
   resumeMaxTokens: stage?.resumeMaxTokens ?? defaults.resumeMaxTokens,
   mcpSkills: config.mcpSkills ?? [],
+  needs: stage?.needs ?? [],
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
@@ -80,6 +82,8 @@ const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) =
   implement: resolveImplement,
   "follow-up": resolveFollowUp,
 };
+
+export const operationStages = ["triage", "implement", "follow-up"] satisfies ReadonlyArray<LifecycleStage>;
 
 export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
   stageResolvers[stage]?.(config) ?? null;
