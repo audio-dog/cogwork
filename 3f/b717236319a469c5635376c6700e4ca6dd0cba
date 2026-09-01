@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_db2a96f5f7e91d::t_01c7fd15b5dae6 2-3,107
+  s_db2a96f5f7e91d::t_bc7e81928c9979 49-52,68-72,81,90-95,100,106,113,116,124-133
+  s_db2a96f5f7e91d::t_06405a793e69a0 120,205
+apps/cli/src/watch.ts
+  s_db2a96f5f7e91d::t_4cbe0493d10972 78-80,87,91,94,96-99,101,107,114,116-117,121,128-131,133,141,144-147,149,154,167-168,171-186
+  s_db2a96f5f7e91d::t_06405a793e69a0 2,162
+  s_db2a96f5f7e91d::t_db711ec6fadfdd 3,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3fb717236319a469c5635376c6700e4ca6dd0cba",
+  "prompts": {},
+  "sessions": {
+    "s_db2a96f5f7e91d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cf6-e630-72a2-b80b-f43dd7cb67f9",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
