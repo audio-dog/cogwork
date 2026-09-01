@@ -52,7 +52,7 @@ describe("waitForDaemonListening", () => {
   it("stops waiting when the caller's timeout expires", () =>
     withTempDir(async (dir) => {
       const result = await Effect.runPromise(
-        waitForDaemonListening(join(dir, "never.sock")).pipe(Effect.timeoutOption("10 millis")),
+        waitForDaemonListening(join(dir, "never.sock")).pipe(Effect.timeoutOption(0)),
       );
 
       expect(result._tag).toBe("None");

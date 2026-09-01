@@ -1,4 +1,4 @@
-import { EventEmitter } from "node:events";
+import { EventEmitter, once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
@@ -84,6 +84,50 @@ it("closes a renderer's socket when the renderer is destroyed", async () => {
     await closed.promise;
 
     expect((await accepted.promise).destroyed).toBe(true);
+  } finally {
+    await runtime.dispose();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it("replaces a renderer's socket when it connects again", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
+  const socketPath = join(dir, "daemon.sock");
+  const frames = new EventEmitter();
+  const server = net.createServer((socket) =>
+    socket.on("data", (frame) => frames.emit("frame", { frame, socket })),
+  );
+  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  const runtime = ManagedRuntime.make(Layer.empty);
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    const connect = ipc.handlers.get(IpcChannel.rpcConnect);
+    const send = ipc.listeners.get(IpcChannel.rpcSend);
+    if (!connect || !send) throw new Error("RPC handlers were not registered");
+
+    await connect({ sender });
+    const firstReceived = once(frames, "frame");
+    send({ sender }, "first");
+    const [firstEvent] = await firstReceived;
+    if (!firstEvent || !(firstEvent.socket instanceof net.Socket)) {
+      throw new Error("First frame did not identify its socket");
+    }
+    const firstClosed = once(firstEvent.socket, "close");
+    await connect({ sender });
+    await firstClosed;
+    const replacementReceived = once(frames, "frame");
+    send({ sender }, "replacement");
+
+    const [replacementEvent] = await replacementReceived;
+    if (!replacementEvent || !Buffer.isBuffer(replacementEvent.frame)) {
+      throw new Error("Replacement frame was not received");
+    }
+    expect(replacementEvent.frame.toString()).toBe("replacement");
+    expect(replacementEvent.socket).not.toBe(firstEvent.socket);
+    expect(firstEvent.socket.destroyed).toBe(true);
   } finally {
     await runtime.dispose();
     await new Promise<void>((resolve) => server.close(() => resolve()));
