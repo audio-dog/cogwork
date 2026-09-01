@@ -14,7 +14,7 @@ import {
   type CodexTextProviderOptions,
   codexText,
 } from "@tanstack/ai-codex";
-import { defineSandbox, defineWorkspace, withSandbox } from "@tanstack/ai-sandbox";
+import { defineSandbox, defineWorkspace, type SandboxHandle, withSandbox } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
@@ -88,6 +88,9 @@ export const codexModelOptions = (handle: string | null, effort: CodexEffort): C
 const launchError = (message: string) =>
   new Harness.HarnessError({ reason: "launch", retryable: false, message });
 
+const credentialError = (message: string) =>
+  new Harness.HarnessError({ reason: "credential", retryable: false, message });
+
 const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
 const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
 const missingExecutableCodes = new Set(["ENOENT", "EACCES"]);
@@ -135,6 +138,15 @@ const codexPreflightExitError = (result: {
   return launchError(`${result.stderr}\n${result.stdout}`);
 };
 
+const codexLoginExitError = (result: {
+  readonly exitCode: number;
+  readonly stderr: string;
+  readonly stdout: string;
+}) => {
+  if (missingExecutableExitCodes.has(result.exitCode)) return missingHarnessError();
+  return credentialError(`${result.stderr}\n${result.stdout}`);
+};
+
 const codexTurnError = (cause: unknown) => {
   const message = HarnessBridge.messageFromUnknown(cause);
   if (isMissingExecutableCause(cause)) return missingHarnessError(message);
@@ -160,48 +172,61 @@ const addRemediation = (error: Harness.HarnessError) => {
   return error;
 };
 
-const requireCodexSuccess = (result: {
+interface CodexCommandResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-}) => (result.exitCode === 0 ? Effect.succeed(result) : Effect.fail(codexPreflightExitError(result)));
+}
+
+const requireCodexSuccess = (
+  result: CodexCommandResult,
+  failure: (result: CodexCommandResult) => Harness.HarnessError,
+) => (result.exitCode === 0 ? Effect.succeed(result) : Effect.fail(failure(result)));
+
+const codexReadinessTimeout = (subject: string) =>
+  new Harness.HarnessError({
+    reason: "launch",
+    retryable: true,
+    message: `Codex CLI did not answer its readiness check for ${subject} within ${codexPreflightDeadline}`,
+  });
+
+const createCodexSandbox = Effect.fn("CodexRunner.createSandbox")(() =>
+  Effect.tryPromise({
+    try: () => localProcessSandbox({ dir: process.cwd() }).create({}),
+    catch: codexPreflightError,
+  }).pipe(
+    Effect.timeout(codexPreflightDeadline),
+    Effect.catchTag("TimeoutError", () => codexReadinessTimeout("sandbox creation")),
+  ),
+);
+
+const codexCommand = Effect.fn("CodexRunner.command")(
+  (sandbox: SandboxHandle, executable: string, argument: string) =>
+    Effect.tryPromise({
+      try: (signal) => sandbox.process.exec(`${executable} ${argument}`, { signal }),
+      catch: codexPreflightError,
+    }).pipe(
+      Effect.timeout(codexPreflightDeadline),
+      Effect.catchTag("TimeoutError", () => codexReadinessTimeout(argument)),
+    ),
+);
 
 const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
   Effect.scoped(
-    Effect.acquireRelease(
-      Effect.tryPromise({
-        try: () => localProcessSandbox({ dir: process.cwd() }).create({}),
-        catch: codexPreflightError,
-      }),
-      (sandbox) => Effect.promise(() => sandbox.destroy()),
-    ).pipe(
+    Effect.acquireRelease(createCodexSandbox(), (sandbox) => Effect.promise(() => sandbox.destroy())).pipe(
       Effect.flatMap((sandbox) =>
         Effect.gen(function* () {
-          const version = yield* Effect.tryPromise({
-            try: (signal) => sandbox.process.exec(`${executable} --version`, { signal }),
-            catch: codexPreflightError,
-          }).pipe(Effect.flatMap(requireCodexSuccess));
-          yield* Effect.tryPromise({
-            try: (signal) => sandbox.process.exec(`${executable} login status`, { signal }),
-            catch: codexPreflightError,
-          }).pipe(Effect.flatMap(requireCodexSuccess));
+          const version = yield* codexCommand(sandbox, executable, "--version").pipe(
+            Effect.flatMap((result) => requireCodexSuccess(result, codexPreflightExitError)),
+          );
+          yield* codexCommand(sandbox, executable, "login status").pipe(
+            Effect.flatMap((result) => requireCodexSuccess(result, codexLoginExitError)),
+          );
           return version.stdout.trim() || version.stderr.trim();
         }),
       ),
     ),
-  ).pipe(
-    Effect.timeout(codexPreflightDeadline),
-    Effect.catchTag(
-      "TimeoutError",
-      () =>
-        new Harness.HarnessError({
-          reason: "launch",
-          retryable: true,
-          message: "Codex CLI did not answer its readiness check",
-        }),
-    ),
-    Effect.mapError(addRemediation),
-  ),
+  ).pipe(Effect.mapError(addRemediation)),
 );
 
 const codexReadiness = Effect.fn("CodexRunner.readiness")((executable: string) =>

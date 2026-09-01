@@ -11,7 +11,7 @@ import {
   TriageStageResult,
 } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
-import { assert, describe, it, layer } from "@effect/vitest";
+import { assert, describe, it, layer, live } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -19,13 +19,11 @@ import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   type CodexRunChat,
@@ -484,7 +482,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
   it.effect("preserves unexpected preflight exit codes as launch errors", () =>
     Effect.gen(function* () {
       const runner = testRunner({
-        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(2)'`,
+        codexExecutable: fakeCodexExecutable(" --fake-version-failure"),
       });
       const harness = Harness.make([runner]);
 
@@ -492,7 +490,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
 
       assert.strictEqual(error.reason, "launch");
       assert.isFalse(error.retryable);
-      assert.include(error.message, "unexpected login status failure");
+      assert.include(error.message, "unexpected version failure");
     }),
   );
 
@@ -572,36 +570,54 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
     }),
   );
 
-  it.effect("keeps a timed-out preflight retryable", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        codexExecutable: `node -e 'process.stdin.resume()'`,
-      });
-      const harness = Harness.make([runner]);
+  live(
+    "keeps a timed-out preflight retryable",
+    () =>
+      Effect.gen(function* () {
+        const runner = testRunner({
+          codexExecutable: `node -e 'process.stdin.resume()'`,
+        });
+        const harness = Harness.make([runner]);
 
-      const fiber = yield* Effect.forkChild(Effect.flip(harness.preflight(name, "full", null)));
-      yield* TestClock.adjust("6 seconds");
-      const error = yield* Fiber.join(fiber);
+        const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
-      assert.strictEqual(error.reason, "launch");
-      assert.isTrue(error.retryable);
-      assert.include(error.message, "readiness check");
-    }),
+        assert.strictEqual(error.reason, "launch");
+        assert.isTrue(error.retryable);
+        assert.include(error.message, "readiness check");
+      }).pipe(Effect.provide(harnessRunnerLayer)),
+    10_000,
   );
 
-  it.effect("adds login remediation without changing an ambiguous preflight exit classification", () =>
+  it.effect("reports a failed host login as unavailable credentials", () =>
     Effect.gen(function* () {
       const runner = testRunner({
-        codexExecutable: `node -e 'process.stderr.write("You are not logged in"); process.exit(1)'`,
+        codexExecutable: fakeCodexExecutable(" --fake-login-failure"),
       });
       const harness = Harness.make([runner]);
 
+      const readiness = yield* runner.readiness();
       const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
-      assert.strictEqual(error.reason, "launch");
+      assert.strictEqual(readiness.authentication.status, "unavailable");
+      assert.strictEqual(error.reason, "credential");
       assert.isFalse(error.retryable);
       assert.include(error.message, "codex login");
     }),
+  );
+
+  live(
+    "gives each Codex readiness command its own deadline",
+    () =>
+      Effect.gen(function* () {
+        const runner = testRunner({
+          codexExecutable: fakeCodexExecutable(" --fake-probe-delay=3000"),
+        });
+
+        const readiness = yield* runner.readiness();
+
+        assert.strictEqual(readiness.operational.status, "ready");
+      }).pipe(Effect.provide(harnessRunnerLayer)),
+    10_000,
   );
 
   it.effect("does not classify missing-executable wording as a permanent failure", () =>
