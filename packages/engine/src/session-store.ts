@@ -1,4 +1,5 @@
 import {
+  type AgUiEvent,
   AgUiEventUnion,
   type HarnessName,
   type Session,
@@ -91,7 +92,17 @@ const appendTool = (state: FoldState, callId: string | undefined, content = "", 
 
 const isStructuredOutputCompleteValue = Schema.is(StructuredOutputCompleteValue);
 
-const foldEvent = (state: FoldState, event: AgUiEventUnion): FoldState =>
+const foldUnknownToolEvent = (state: FoldState, event: AgUiEvent) => {
+  if (!event.type.startsWith("TOOL_CALL_")) return state;
+  return appendTool(
+    state,
+    event.toolCallId,
+    event.args,
+    event.toolCallName ?? event.name ?? event.stepName ?? "tool",
+  );
+};
+
+const foldEvent = (state: FoldState, event: AgUiEvent): FoldState =>
   AgUiEventUnion.matchOrElse(
     event,
     {
@@ -108,12 +119,12 @@ const foldEvent = (state: FoldState, event: AgUiEventUnion): FoldState =>
       RUN_FINISHED: () => flushText(state),
       RUN_ERROR: () => flushText(state),
     },
-    () => state,
+    () => foldUnknownToolEvent(state, event),
   );
 
 // Takes the harness events the recorder already decoded and folds them into transcript messages.
 // The recorder owns the decode, so this never touches a run event's stored payload.
-export const foldThread = (events: ReadonlyArray<AgUiEventUnion>) =>
+export const foldThread = (events: ReadonlyArray<AgUiEvent>) =>
   flushText(events.reduce(foldEvent, emptyFold)).messages;
 
 const labelToolResult = (message: ThreadMessage) =>
@@ -141,8 +152,8 @@ const ledgerMessageStore = (recorder: RunRecorderService, runPromise: RunPromise
   loadThread: (threadId) =>
     runPromise(
       Option.match(decodeSession(threadId), {
-        onNone: (): Effect.Effect<ReadonlyArray<AgUiEventUnion>> => Effect.succeed([]),
-        onSome: (session): Effect.Effect<ReadonlyArray<AgUiEventUnion>> => recorder.sessionEvents(session),
+        onNone: (): Effect.Effect<ReadonlyArray<AgUiEvent>> => Effect.succeed([]),
+        onSome: (session): Effect.Effect<ReadonlyArray<AgUiEvent>> => recorder.sessionEvents(session),
       }).pipe(Effect.map((events) => toModelMessages(foldThread(events)))),
     ),
   saveThread: () => Promise.resolve(),

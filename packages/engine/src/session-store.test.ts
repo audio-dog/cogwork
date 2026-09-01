@@ -63,6 +63,19 @@ describe("foldThread", () => {
     assert.deepStrictEqual(foldThread(events), [{ role: "tool", content: "a.ts", toolName: "read" }]);
   });
 
+  it("folds a forward-compatible tool call event", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      {
+        type: "TOOL_CALL_CHUNK",
+        toolCallId: "t1",
+        toolCallName: "bash",
+        args: "ls",
+      },
+    ];
+
+    assert.deepStrictEqual(foldThread(events), [{ role: "tool", content: "ls", toolName: "bash" }]);
+  });
+
   it("preserves a structured result as an assistant turn", () => {
     const raw = '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}';
     const events: ReadonlyArray<AgUiEvent> = [
