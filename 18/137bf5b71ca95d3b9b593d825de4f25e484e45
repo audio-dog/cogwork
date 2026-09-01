@@ -1,0 +1,21 @@
+packages/engine/src/session-store.test.ts
+  s_20609725d0c48d::t_0b50758dfa738a 83-95
+packages/engine/src/session-store.ts
+  s_20609725d0c48d::t_3e9efda661bc58 2-5,7-9,82-83,86,89,92-112,116,144-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "18137bf5b71ca95d3b9b593d825de4f25e484e45",
+  "prompts": {},
+  "sessions": {
+    "s_20609725d0c48d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b82-c84b-70a0-b5e5-15bad1267a40",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
