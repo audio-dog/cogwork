@@ -79,6 +79,7 @@ const pr: PrSignals = {
   waitingSinceMillis: 1,
   headRef: "7-retry-me",
   followable: true,
+  draft: false,
 };
 
 describe("observeWorkspace handback barrier", () => {
