@@ -69,6 +69,7 @@ const unexpected = () => Effect.die(new Error("unexpected credential-store acces
 
 const credentialStore: CredentialStore.CredentialStoreService = {
   bearerToken: unexpected,
+  resolveSource: unexpected,
   persist: unexpected,
   invalidate: unexpected,
   providerKey: unexpected,

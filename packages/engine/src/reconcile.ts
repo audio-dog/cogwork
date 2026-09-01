@@ -21,7 +21,6 @@ import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker, type IssueTrackerError, type ObservedItem } from "./issue-tracker";
 import { observeWorkspace } from "./observe";
-import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
@@ -131,7 +130,6 @@ export const make = Effect.gen(function* () {
   const provider = yield* SourceControlProvider;
   const connections = yield* ConnectionStore;
   const controlStore = yield* ControlStore;
-  const plugins = yield* PluginManager;
   const bus = yield* DaemonEventBus;
   const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
@@ -204,8 +202,7 @@ export const make = Effect.gen(function* () {
         yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: picture });
       }).pipe(Effect.ignore);
       yield* Effect.gen(function* () {
-        const pluginOverview = yield* plugins.overview;
-        const overview = yield* connections.overview(pluginOverview);
+        const overview = yield* connections.overview;
         yield* bus.publish({ _tag: "ConnectionsChanged", connections: overview, danglingWorkspaces: [] });
       }).pipe(Effect.ignore);
     }

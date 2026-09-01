@@ -19,6 +19,7 @@ import {
 import { connectionCommand } from "./connection-commands";
 import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
+import { defaultEnvFilePath } from "./paths";
 import { pluginCommand } from "./plugin-commands";
 import { workspaceCommand } from "./workspace-commands";
 import { worktreeCommand } from "./worktree-commands";
@@ -46,7 +47,8 @@ const cli = Command.make("cogwork").pipe(
 NodeRuntime.runMain(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    if (yield* fs.exists(".env")) yield* Effect.sync(() => process.loadEnvFile());
+    if (yield* fs.exists(defaultEnvFilePath))
+      yield* Effect.sync(() => process.loadEnvFile(defaultEnvFilePath));
   }).pipe(
     Effect.andThen(Command.run(cli, { version: "0.0.1" })),
     Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer)),

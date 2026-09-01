@@ -1,23 +1,17 @@
 import { type ConnectionItem, connectionIdOf } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
-import {
-  connectionAction,
-  connectionPluginLabel,
-  connectionStatus,
-  readyConnections,
-} from "./connections-view";
+import { connectionAction, connectionStatus, pluginRequiring, readyConnections } from "./connections-view";
 
 const item = (over: Partial<ConnectionItem>): ConnectionItem => ({
   system: "linear",
   connection: null,
   readiness: { _tag: "NotReady", reason: "Not connected" },
-  pluginId: "linear",
   ...over,
 });
 
 describe("Connections view", () => {
   it("presents establish, ready, and re-connect states", () => {
-    expect(connectionStatus(item({}))).toBe("Not connected");
+    expect(connectionStatus(item({})).label).toBe("Not connected");
     expect(connectionAction(item({}))).toBe("establish");
     expect(
       connectionAction(
@@ -44,7 +38,7 @@ describe("Connections view", () => {
           readiness: { _tag: "Ready" },
         }),
       ),
-    ).toBe("Established");
+    ).toEqual({ label: "Connected", tone: "positive" });
     expect(
       connectionAction(
         item({
@@ -59,9 +53,22 @@ describe("Connections view", () => {
     ).toBe("re-connect");
   });
 
-  it("makes a missing Plugin explicit", () => {
-    expect(connectionPluginLabel(item({ pluginId: null }))).toBe("No Plugin");
-    expect(connectionPluginLabel(item({ pluginId: "linear" }))).toBe("Plugin: linear");
+  it("names the one Plugin that requires the system, or none", () => {
+    const plugin = (pluginId: string, requires: "github" | "linear") => ({
+      pluginId,
+      name: pluginId,
+      summary: pluginId,
+      record: null,
+      resolvedIdentity: pluginId,
+      requiredConnections: [requires] as const,
+      contributions: [],
+      manifestFailure: null,
+    });
+    const overview = { plugins: [plugin("linear", "linear")] };
+    expect(pluginRequiring(overview, "linear")?.pluginId).toBe("linear");
+    // The shipped GitHub Plugin requires no Connection; the Engine's own ports use that one.
+    expect(pluginRequiring(overview, "github")).toBeNull();
+    expect(pluginRequiring({ plugins: [] }, "linear")).toBeNull();
   });
 
   it("selects ready workspace bindings from the Connection overview", () => {
@@ -74,7 +81,7 @@ describe("Connections view", () => {
       },
       readiness: { _tag: "Ready" },
     });
-    const github = item({ system: "github", pluginId: null });
+    const github = item({ system: "github" });
 
     expect(readyConnections({ connections: [linear, github] })).toEqual([linear.connection]);
   });

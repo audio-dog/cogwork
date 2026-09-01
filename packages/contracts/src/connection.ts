@@ -46,7 +46,6 @@ export const ConnectionItem = Schema.Struct({
   system: ConnectionSystem,
   connection: Schema.NullOr(Connection),
   readiness: ConnectionReadiness,
-  pluginId: Schema.NullOr(TrimmedNonEmptyString),
 });
 export type ConnectionItem = typeof ConnectionItem.Type;
 

@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
 import {
   agUiIsTerminal,
-  ConnectionFailure,
   type ConnectionOverview,
   type DaemonEvent,
   DaemonRpcs,
@@ -46,6 +45,7 @@ import {
 } from "./commands";
 
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
+import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
 import {
   bootControlStoreLayer,
@@ -186,8 +186,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
       onSuccess: (overview) => [{ _tag: "PluginsChanged" as const, plugins: overview, notices: [] }],
     }),
   );
-  const connectionEvents = yield* plugins.overview.pipe(
-    Effect.flatMap(connections.overview),
+  const connectionEvents = yield* connections.overview.pipe(
     Effect.match({
       onFailure: () => [],
       onSuccess: (overview) => [connectionSeedEvent(overview)],
@@ -257,19 +256,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     return yield* (yield* PluginManager).overview;
   }),
   GetConnections: Effect.fn("Daemon.GetConnections")(function* () {
-    const connections = yield* ConnectionStore;
-    const plugins = yield* PluginManager;
-    const overview = yield* plugins.overview.pipe(
-      Effect.mapError(
-        (error) =>
-          new ConnectionFailure({
-            operation: "read Connections",
-            connectionId: null,
-            message: error.message,
-          }),
-      ),
-    );
-    return yield* connections.overview(overview);
+    return yield* (yield* ConnectionStore).overview;
   }),
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
@@ -326,14 +313,21 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
   // one, or they would mint and rotate the app-actor token independently.
   const credentials = adapters.credentials;
+  // One GitHub client, built once: the issue tracker and the establish-time credential check must
+  // share it, or the second instance resolves its own credentials and drifts from the first.
+  const githubClient = GitHub.clientLayer.pipe(Layer.provide(credentials));
   const issueTracker = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
-    Layer.provide(GitHub.clientLayer),
+    Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
   );
   const storeClient = controlStoreClientLayer(adapters.controlStorePath);
   const controlStore = bootControlStoreLayer(adapters.controlStorePath).pipe(Layer.provide(storeClient));
-  const connections = connectionStoreLayer.pipe(Layer.provide(controlStore), Layer.provide(credentials));
+  const connections = connectionStoreLayer.pipe(
+    Layer.provide(controlStore),
+    Layer.provide(credentials),
+    Layer.provide(connectionVerifierLayer.pipe(Layer.provide(githubClient))),
+  );
   const plugins = pluginManagerLayer({
     catalogPath:
       adapters.pluginCatalogPath ?? fileURLToPath(new URL("../plugins/catalog.json", import.meta.url)),

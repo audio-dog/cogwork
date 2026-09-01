@@ -284,7 +284,6 @@ describe("applyDaemonEvent", () => {
                 status: "established",
               },
               readiness: { _tag: "Ready" },
-              pluginId: "linear",
             },
           ],
         },

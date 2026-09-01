@@ -8,11 +8,11 @@ import {
   type ConnectionReadiness,
   type ConnectionSystem,
   connectionIdOf,
-  type PluginOverview,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { ConnectionVerifier } from "./connection-verify";
 import { ControlStore } from "./control-store";
 import {
   type Credential,
@@ -23,12 +23,8 @@ import {
 
 const knownSystems: ReadonlyArray<ConnectionSystem> = ["github", "linear"];
 
-export const requiringPluginId = (plugins: PluginOverview, system: ConnectionSystem) =>
-  plugins.plugins.find((plugin) => plugin.requiredConnections.includes(system))?.pluginId ?? null;
-
 export const connectionOverview = (
   connections: ReadonlyArray<Connection>,
-  plugins: PluginOverview,
   readinessById: ReadonlyMap<string, ConnectionReadiness>,
 ): ConnectionOverview => ({
   connections: knownSystems.map((system) => {
@@ -37,12 +33,7 @@ export const connectionOverview = (
       ? (readinessById.get(connection.id) ??
         ({ _tag: "NotReady", reason: "Connection unavailable" } satisfies ConnectionReadiness))
       : ({ _tag: "NotReady", reason: "Not connected" } satisfies ConnectionReadiness);
-    return {
-      system,
-      connection,
-      readiness,
-      pluginId: requiringPluginId(plugins, system),
-    };
+    return { system, connection, readiness };
   }),
 });
 
@@ -59,8 +50,20 @@ export const credentialAccountFor = (connection: Connection): CredentialAccount 
 const unavailable = (operation: string, connectionId: ConnectionId | null, message: string) =>
   new ConnectionFailure({ operation, connectionId, message });
 
+const unreadable = (connectionId: ConnectionId, error: { readonly message: string }) =>
+  new ConnectionNotReady({
+    connectionId,
+    message: `Cogwork could not read the credential: ${error.message}`,
+  });
+
+const refused = (connectionId: ConnectionId, system: ConnectionSystem, error: { readonly message: string }) =>
+  new ConnectionNotReady({
+    connectionId,
+    message: `${system === "github" ? "GitHub" : "Linear"} rejected the credential: ${error.message}`,
+  });
+
 export interface ConnectionStoreService {
-  readonly overview: (plugins: PluginOverview) => Effect.Effect<ConnectionOverview, ConnectionFailure>;
+  readonly overview: Effect.Effect<ConnectionOverview, ConnectionFailure>;
   readonly find: (connectionId: ConnectionId) => Effect.Effect<Connection | null, ConnectionFailure>;
   readonly findSystem: (system: ConnectionSystem) => Effect.Effect<Connection | null, ConnectionFailure>;
   readonly bearer: (
@@ -73,15 +76,17 @@ export interface ConnectionStoreService {
   readonly requireSystemReady: (
     system: ConnectionSystem,
   ) => Effect.Effect<void, ConnectionNotReady | ConnectionFailure>;
+  // `ConnectionNotReady` is the rejected-credential case: nothing was written. Only its message
+  // survives the RPC seam, so the message alone has to say what happened.
   readonly establish: (
     input: ConnectionEstablishment,
-  ) => Effect.Effect<Connection, ConnectionFailure | CredentialError>;
+  ) => Effect.Effect<Connection, ConnectionFailure | ConnectionNotReady | CredentialError>;
   readonly revoke: (connectionId: ConnectionId) => Effect.Effect<void, ConnectionFailure>;
   readonly remove: (connectionId: ConnectionId) => Effect.Effect<void, ConnectionFailure | CredentialError>;
 }
 
 const missingStore: ConnectionStoreService = {
-  overview: () => Effect.fail(unavailable("read Connections", null, "Connection store unavailable")),
+  overview: Effect.fail(unavailable("read Connections", null, "Connection store unavailable")),
   find: (connectionId) =>
     Effect.fail(unavailable("find Connection", connectionId, "Connection store unavailable")),
   findSystem: () => Effect.succeed(null),
@@ -121,6 +126,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const controlStore = yield* ControlStore;
     const credentials = yield* CredentialStore;
+    const verifier = yield* ConnectionVerifier;
 
     const picture = Effect.fn("ConnectionStore.picture")(function* () {
       return yield* controlStore.picture.pipe(
@@ -175,13 +181,22 @@ export const layer = Layer.effect(
 
     const establish = Effect.fn("ConnectionStore.establish")(function* (input: ConnectionEstablishment) {
       const id = connectionIdOf(input.system, input.account);
-      yield* credentials.configureConnection(id, input.source);
       const connection = Connection.make({
         id,
         system: input.system,
         account: input.account,
         status: "established",
       });
+      // Resolve and check the proposed credential *before* configuring it. Persisting first and
+      // checking after would leave a rejected credential on disk, and on a re-connect it would have
+      // already overwritten the working one it was meant to replace.
+      const candidate = yield* credentials
+        .resolveSource(credentialAccountFor(connection), input.source)
+        .pipe(Effect.mapError((error) => unreadable(id, error)));
+      yield* verifier
+        .verify(input.system, candidate)
+        .pipe(Effect.mapError((error) => refused(id, input.system, error)));
+      yield* credentials.configureConnection(id, input.source);
       yield* controlStore
         .establishConnection(connection)
         .pipe(Effect.mapError((error) => unavailable("establish Connection", id, error.message)));
@@ -201,12 +216,11 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError((error) => unavailable("remove Connection", connectionId, error.message)));
     });
 
-    const overview = Effect.fn("ConnectionStore.overview")(function* (plugins: PluginOverview) {
+    const overview = Effect.fn("ConnectionStore.overview")(function* () {
       const connections = (yield* picture()).connections;
       const states = yield* Effect.forEach(connections, (connection) => readiness(connection.id));
       return connectionOverview(
         connections,
-        plugins,
         new Map(
           connections.map((connection, index) => [
             connection.id,
@@ -217,7 +231,7 @@ export const layer = Layer.effect(
     });
 
     return {
-      overview,
+      overview: overview(),
       find,
       findSystem,
       bearer,

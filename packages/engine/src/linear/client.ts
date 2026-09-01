@@ -367,6 +367,14 @@ const sdkAuth = (credential: Credential) =>
     ? { apiKey: Redacted.value(credential.token) }
     : { accessToken: Redacted.value(credential.token) };
 
+export const verifyCredential = Effect.fn("linear.verifyCredential")(function* (credential: Credential) {
+  const nowMillis = yield* Clock.currentTimeMillis;
+  yield* Effect.tryPromise({
+    try: (signal) => new LinearSdk({ ...sdkAuth(credential), signal }).viewer,
+    catch: (cause) => fromSdkError(cause, nowMillis),
+  });
+});
+
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {
   const resumeAt = yield* Ref.make(new Map<string, number>());
 

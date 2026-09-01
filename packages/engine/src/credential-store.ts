@@ -1,6 +1,6 @@
 import {
   ConnectionId,
-  type ConnectionSource,
+  ConnectionSource,
   connectionAccountOf,
   connectionSystemOf,
   TrimmedNonEmptyString,
@@ -181,6 +181,12 @@ export interface CredentialSources {
 
 export interface CredentialStoreService {
   readonly bearerToken: (account: CredentialAccount) => Effect.Effect<Credential, CredentialError>;
+  // Resolves a source that has not been persisted yet, so a proposed credential can be checked
+  // before it replaces the one already on disk.
+  readonly resolveSource: (
+    account: CredentialAccount,
+    source: ConnectionSource,
+  ) => Effect.Effect<Credential, CredentialError>;
   readonly persist: (credential: StoredCredential) => Effect.Effect<void, CredentialError>;
   readonly invalidate: (account: CredentialAccount) => Effect.Effect<void>;
   readonly providerKey: (account: ProviderAccount) => Effect.Effect<ProviderCredential, CredentialError>;
@@ -321,23 +327,32 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
     return { source: "client-credentials", token, identity: null } satisfies Credential;
   });
 
+  const resolveStoredGrant = Effect.fn("CredentialStore.resolveStoredGrant")(function* (
+    account: CredentialAccount,
+  ) {
+    const candidate = yield* resolveStored(account);
+    if (candidate) return storedCredential(candidate);
+    return yield* new CredentialError({
+      account: account.key,
+      message: `no saved browser login for ${account.key}`,
+    });
+  });
+
+  const resolveSource = (
+    account: CredentialAccount,
+    source: ConnectionSource,
+  ): Effect.Effect<Credential, CredentialError> =>
+    ConnectionSource.match(source, {
+      ApiKey: ({ key }): Effect.Effect<Credential, CredentialError> =>
+        Effect.succeed({ source: "stored-key", token: key, identity: null }),
+      Env: ({ name }) => envCredential({ ...account, tokenEnv: name }),
+      Stored: () => resolveStoredGrant(account),
+    });
+
   const resolve = Effect.fn("CredentialStore.resolve")(function* (account: CredentialAccount) {
     const connectionCredentials = yield* sources.stored.loadConnectionCredentials ?? Effect.succeed([]);
     const configured = connectionCredentials.find((entry) => entry.connectionId === account.connectionId);
-    if (configured?._tag === "ApiKey") {
-      return { source: "stored-key", token: configured.key, identity: null } satisfies Credential;
-    }
-    if (configured?._tag === "Env") {
-      return yield* envCredential({ ...account, tokenEnv: configured.name });
-    }
-    if (configured?._tag === "Stored") {
-      const candidate = yield* resolveStored(account);
-      if (candidate) return storedCredential(candidate);
-      return yield* new CredentialError({
-        account: account.key,
-        message: `no saved browser login for ${account.key}`,
-      });
-    }
+    if (configured) return yield* resolveSource(account, configured);
     const candidate = yield* resolveStored(account);
     if (candidate) return storedCredential(candidate);
     const granted = yield* grantedCredential(sources.clientCredentials, account);
@@ -433,6 +448,7 @@ export const make = (sources: CredentialSources): CredentialStoreService => {
       });
       return credential;
     }),
+    resolveSource,
     persist: sources.stored.save,
     invalidate: (account) => sources.clientCredentials?.forget(account) ?? Effect.void,
     providerKey,
