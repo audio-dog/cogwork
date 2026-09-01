@@ -1,0 +1,42 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_6e9e628a99a807::t_8e369c301a3be7 255,257,413,415,552
+  s_6e9e628a99a807::t_c95ceb13395937 26,129,136-138,162,172
+  s_6e9e628a99a807::t_005be591c4fff2 139,141-149,159,163,353,489
+  s_6e9e628a99a807::t_85bb4bb4c82cc5 292,297,435
+  s_6e9e628a99a807::t_93f4c14823e162 344,436,458-459,461-462,468-469,471-472,488,491,494
+  s_6e9e628a99a807::t_f0c118fb1767fd 24,73-75,80-83,101-105,127-128,158,160-161,164,169-171,293,298,308,315,326,333,345,347,352,355,364,376-377
+  s_6e9e628a99a807::t_962073541ef1c3 453-457,460,463-467,470
+  s_6e9e628a99a807::t_5ba019b7619224 140
+  s_6e9e628a99a807::t_24be8e20b4d982 245-251,254
+  s_6e9e628a99a807::t_28b6081a50f926 70,341-343,346,348-351,354,356,374
+  s_613373c69b0923::t_79e4cb9c666642 71-72,357-360,452
+apps/desktop/src/renderer/src/components/item-tab-actions.test.tsx
+  s_6e9e628a99a807::t_dfcce00e0f99af 2-4,24,42,73-74,127-164
+  s_6e9e628a99a807::t_f2f7729f1a2bab 8,113-116
+  s_6e9e628a99a807::t_c7211605ddb2f8 51,60,67
+  s_6e9e628a99a807::t_e9695fa30b135c 1,5-7,9-23,25-41,43-50,52-59,61-66,68-72,75-112,117-126,165-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "fe7128c387d36e7b26a2111d4c6d08d1f31b4d3a",
+  "prompts": {},
+  "sessions": {
+    "s_613373c69b0923": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05aeb-ef99-7300-be21-491679d01c88",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_6e9e628a99a807": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05af9-3f07-7b21-984f-de336e55702c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
