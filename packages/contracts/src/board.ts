@@ -119,4 +119,4 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
   });
 
 export const liveOnly = <E, R>(events: Stream.Stream<DaemonEvent, E, R>) =>
-  events.pipe(Stream.dropUntil((event) => event._tag === "SeedEnd"));
+  events.pipe(Stream.dropUntil(DaemonEvent.guards.SeedEnd));

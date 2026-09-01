@@ -22,7 +22,7 @@ export const SettingScope = Schema.Union([
   RuntimeHostScope,
   WorkspaceInputScope,
   PrivateWorkspaceOverlayScope,
-]);
+]).pipe(Schema.toTaggedUnion("_tag"));
 export type SettingScope = typeof SettingScope.Type;
 
 export const DefaultSettingLevel = Schema.TaggedStruct("Default", {});
@@ -39,7 +39,11 @@ export const OperationSettingLevel = Schema.TaggedStruct("Operation", {
 });
 export type OperationSettingLevel = typeof OperationSettingLevel.Type;
 
-export const SettingLevel = Schema.Union([DefaultSettingLevel, WorkflowSettingLevel, OperationSettingLevel]);
+export const SettingLevel = Schema.Union([
+  DefaultSettingLevel,
+  WorkflowSettingLevel,
+  OperationSettingLevel,
+]).pipe(Schema.toTaggedUnion("_tag"));
 export type SettingLevel = typeof SettingLevel.Type;
 
 export const OperationSettingName = Schema.Literals([
@@ -202,24 +206,31 @@ export const settingScopeDirection = [
   "PrivateWorkspaceOverlay",
 ] as const satisfies readonly SettingScope["_tag"][];
 
-const scopeRank = (scope: SettingScope) => {
-  if (scope._tag === "SettingsProfile") return 0;
-  if (scope._tag === "RuntimeHost") return 1;
-  if (scope._tag === "WorkspaceInput") return 2;
-  return 3;
-};
+const scopeRank = (scope: SettingScope) =>
+  SettingScope.match(scope, {
+    SettingsProfile: () => 0,
+    RuntimeHost: () => 1,
+    WorkspaceInput: () => 2,
+    PrivateWorkspaceOverlay: () => 3,
+  });
 
-const levelRank = (level: SettingLevel, context: OperationSettingContext) => {
-  if (level._tag === "Default") return 0;
-  if (level.workflow !== context.workflow) return -1;
-  if (level._tag === "Workflow") return 1;
-  return level.operation === context.operation ? 2 : -1;
-};
+const levelRank = (level: SettingLevel, context: OperationSettingContext) =>
+  SettingLevel.match(level, {
+    Default: () => 0,
+    Workflow: ({ workflow }) => (workflow === context.workflow ? 1 : -1),
+    Operation: ({ workflow, operation }) =>
+      workflow === context.workflow && operation === context.operation ? 2 : -1,
+  });
 
-const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSettingContext) => {
-  if (scope._tag !== "PrivateWorkspaceOverlay") return true;
-  return context.workspace !== null && scope.workspace === context.workspace;
-};
+const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSettingContext) =>
+  SettingScope.matchOrElse(
+    scope,
+    {
+      PrivateWorkspaceOverlay: ({ workspace }) =>
+        context.workspace !== null && workspace === context.workspace,
+    },
+    () => true,
+  );
 
 export const operationSettingRowsForContext = (
   rows: readonly OperationSettingRow[],
