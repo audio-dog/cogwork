@@ -1,0 +1,24 @@
+apps/desktop/src/main/engine-command.ts
+  s_0384338913b047::t_5d255cf8a5fee8 7,27-28,32,36-41,47
+apps/desktop/src/main/engine-command.test.ts
+  s_0384338913b047::t_add5ae3cc741ad 8,14-15
+  s_0384338913b047::t_2d219d3e636a8e 9-13,71
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_0384338913b047::t_2d75692b281e24 39-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "73064f018d498a4751e341b2ff8226073929cfa2",
+  "prompts": {},
+  "sessions": {
+    "s_0384338913b047": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e51-8507-7780-a257-5053eaff8553",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
