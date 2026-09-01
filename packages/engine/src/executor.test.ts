@@ -3079,7 +3079,7 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(followUpEvents)], worktreeStubLayer)));
   });
 
-  it.effect("hands a stalled follow-up to a human without resolving the Run Plan", () => {
+  it.effect("hands a stalled follow-up to a human when its Operation is unavailable", () => {
     const stalledItem = {
       ...followUpItem,
       followUp: { ...followUpItem.followUp, noProgress: 3, stalled: true },
@@ -3089,8 +3089,9 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
-      yield* execute(executor, followUpWorkspace, stalledItem);
+      const started = yield* execute(executor, followUpWorkspace, stalledItem);
 
+      assert.isTrue(started);
       assert.strictEqual((yield* Ref.get(requests)).length, 0);
       const log = yield* Ref.get(calls);
       const stalled = log.find((c) => c.method === "stalled");
@@ -3111,7 +3112,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          runnableStages,
+          [],
           ContextCleanupCalls.contextAssemblerLayer,
           missingPluginCredentialLayer,
         ),

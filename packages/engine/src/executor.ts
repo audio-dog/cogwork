@@ -46,7 +46,7 @@ import { ContextAssembler, type ContextAssemblerError } from "./context-assemble
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
 import type { CredentialError } from "./credential-store";
-import { type FollowUpContext, noProgressAfterRound } from "./follow-up";
+import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
 import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
@@ -1403,19 +1403,6 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const runOrHandoff = Effect.fn("Executor.runOrHandoff")(function* (
-    workspace: RegisteredWorkspace,
-    item: EligibleWork,
-    ops: StageOps,
-    startedAtMillis: number,
-    observation: RunPlanObservation,
-  ) {
-    if (item.stage === "follow-up" && item.followUp?.stalled) {
-      return yield* handoffStalled(workspace, item);
-    }
-    yield* runClaimed(workspace, item, ops, startedAtMillis, observation);
-  });
-
   const noteUnavailableResume = Effect.fn("Executor.noteUnavailableResume")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -1450,11 +1437,27 @@ export const make = Effect.gen(function* () {
     return false;
   });
 
+  const claimAndHandoffStalled = Effect.fn("Executor.claimAndHandoffStalled")(function* (
+    workspace: RegisteredWorkspace,
+    item: EligibleWork,
+  ) {
+    const startedAtMillis = yield* Clock.currentTimeMillis;
+    const claimed = yield* tryClaim(workspace, item, startedAtMillis);
+    if (!claimed) return false;
+    yield* handoffStalled(workspace, item).pipe(
+      Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
+    );
+    return true;
+  });
+
   const execute = Effect.fn("Executor.execute")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
     observation: RunPlanObservation,
   ) {
+    if (isStalledFollowUp(item.stage, item.followUp)) {
+      return yield* claimAndHandoffStalled(workspace, item);
+    }
     const checked = yield* evaluateAvailability(workspace, item.stage);
     if (!checked.resolved || !checked.availability.available) {
       return yield* decline(workspace, item, checked.availability.causes);
@@ -1465,7 +1468,7 @@ export const make = Effect.gen(function* () {
     if (!claimed) {
       return false;
     }
-    yield* runOrHandoff(workspace, item, stageOps, startedAtMillis, observation).pipe(
+    yield* runClaimed(workspace, item, stageOps, startedAtMillis, observation).pipe(
       Effect.onExit((exit) => (Exit.hasInterrupts(exit) ? Effect.void : releaseClaim(workspace, item.id))),
     );
     return true;
