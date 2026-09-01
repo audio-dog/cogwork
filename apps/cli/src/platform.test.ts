@@ -12,7 +12,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
@@ -87,6 +87,23 @@ const recordedSpawnerLayer = (handleFor: (command: string) => ChildProcessSpawne
       }),
     ),
   ).pipe(Layer.provideMerge(GitCommands.layer));
+
+const interruptedGitLayer = () =>
+  gitLayer.pipe(
+    Layer.provideMerge(
+      Layer.mergeAll(
+        recordedSpawnerLayer((text) =>
+          processHandle(
+            text.endsWith(" --abort")
+              ? Effect.succeed(ChildProcessSpawner.ExitCode(0))
+              : Effect.sleep("1 hour").pipe(Effect.map(() => ChildProcessSpawner.ExitCode(0))),
+          ),
+        ),
+        FileSystem.layerNoop({}),
+        Path.layer,
+      ),
+    ),
+  );
 
 const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
   Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer)),
@@ -201,30 +218,15 @@ describe("subprocess deadlines", () => {
 
   it.effect("aborts an interrupted rebase", () =>
     Effect.gen(function* () {
-      const commands = yield* Ref.make<ReadonlyArray<string>>([]);
-      const spawner = ChildProcessSpawner.make((command) =>
-        Ref.update(commands, (current) => [...current, commandText(command)]).pipe(
-          Effect.andThen(
-            commandText(command).endsWith(" --abort")
-              ? Effect.succeed(ChildProcessSpawner.ExitCode(0))
-              : Effect.sleep("1 hour").pipe(Effect.map(() => ChildProcessSpawner.ExitCode(0))),
-          ),
-          Effect.map((exitCode) => processHandle(Effect.succeed(exitCode))),
-        ),
-      );
-      const interruptedGitLayer = gitLayerWithSpawner(spawner);
-      const fiber = yield* Effect.forkChild(
-        Git.Git.pipe(
-          Effect.flatMap((git) => git.rebase("/repo", "origin", "main")),
-          Effect.provide(interruptedGitLayer),
-        ),
-      );
+      const commands = yield* GitCommands;
+      const git = yield* Git.Git;
+      const fiber = yield* Effect.forkChild(git.rebase("/repo", "origin", "main"));
 
       yield* TestClock.adjust("1 minute");
       yield* Fiber.interrupt(fiber);
 
       assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
-    }),
+    }).pipe(Effect.provide(interruptedGitLayer())),
   );
 });
 
