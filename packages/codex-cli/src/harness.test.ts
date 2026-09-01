@@ -15,15 +15,20 @@ import { assert, describe, it, layer, live } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
-import type { SandboxHandle } from "@tanstack/ai-sandbox";
+import type { SandboxHandle, SandboxProvider } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Config from "effect/Config";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   abortOnReturn,
@@ -34,6 +39,8 @@ import {
   codexModelOptions,
   codexRunner,
   codexRuntimeConfig,
+  createSandboxHandle,
+  destroySandboxHandle,
   renderContext,
 } from "./harness";
 
@@ -244,6 +251,75 @@ describe("abortOnReturn", () => {
       assert.instanceOf(failure, Error);
       assert.strictEqual(failure.message, "destroy failed");
       assert.deepStrictEqual(returned, ["stop"]);
+    }),
+  );
+});
+
+describe("ownRunSandbox", () => {
+  it.effect("joins teardown already in progress", () =>
+    Effect.gen(function* () {
+      const { handle } = yield* makeLiveHarness();
+      const runPromise = yield* FiberSet.makeRuntimePromise();
+      const destroyStarted = yield* Deferred.make<void>();
+      const finishDestroy = yield* Deferred.make<void>();
+      const trackedHandle = {
+        ...handle,
+        destroy: () =>
+          runPromise(
+            Deferred.succeed(destroyStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(finishDestroy)),
+              Effect.asVoid,
+            ),
+          ),
+      } satisfies SandboxHandle;
+      const sandboxHandleRef = yield* SynchronizedRef.make<SandboxHandle | null>(trackedHandle);
+
+      const firstDestroy = yield* destroySandboxHandle(sandboxHandleRef).pipe(Effect.forkChild);
+      yield* Deferred.await(destroyStarted);
+      const secondDestroy = yield* destroySandboxHandle(sandboxHandleRef).pipe(Effect.forkChild);
+      yield* Effect.yieldNow;
+
+      assert.isUndefined(secondDestroy.pollUnsafe());
+      yield* Deferred.succeed(finishDestroy, undefined);
+      yield* Fiber.join(firstDestroy);
+      yield* Fiber.join(secondDestroy);
+    }),
+  );
+
+  it.effect("retains a handle created while the caller is interrupted", () =>
+    Effect.gen(function* () {
+      const { handle } = yield* makeLiveHarness();
+      const runPromise = yield* FiberSet.makeRuntimePromise();
+      const createStarted = yield* Deferred.make<void>();
+      const finishCreate = yield* Deferred.make<void>();
+      const destroyed = yield* Deferred.make<void>();
+      const trackedHandle = {
+        ...handle,
+        destroy: () => runPromise(Deferred.succeed(destroyed, undefined).pipe(Effect.asVoid)),
+      } satisfies SandboxHandle;
+      const source = {
+        name: "test",
+        capabilities: () => handle.capabilities,
+        create: () =>
+          runPromise(
+            Deferred.succeed(createStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(finishCreate)),
+              Effect.map(() => trackedHandle),
+            ),
+          ),
+        resume: () => Promise.resolve(null),
+        destroy: () => Promise.resolve(),
+      } satisfies SandboxProvider;
+      const sandboxHandleRef = yield* SynchronizedRef.make<SandboxHandle | null>(null);
+
+      const creation = yield* createSandboxHandle(source, {}, sandboxHandleRef).pipe(Effect.forkChild);
+      yield* Deferred.await(createStarted);
+      const interruption = yield* Fiber.interrupt(creation).pipe(Effect.forkChild);
+      yield* Deferred.succeed(finishCreate, undefined);
+      yield* Fiber.join(interruption);
+      yield* destroySandboxHandle(sandboxHandleRef);
+
+      assert.isTrue(Option.isSome(yield* Deferred.poll(destroyed)));
     }),
   );
 });

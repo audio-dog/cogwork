@@ -17,6 +17,7 @@ import {
 import {
   defineSandbox,
   defineWorkspace,
+  type SandboxCreateInput,
   type SandboxHandle,
   type SandboxProvider,
   withSandbox,
@@ -25,8 +26,8 @@ import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Redacted from "effect/Redacted";
-import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 
 export type CodexEffort = NonNullable<CodexTextConfig["modelReasoningEffort"]>;
 
@@ -87,35 +88,39 @@ export const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abort: () => 
 
 type RunPromise = <A, E>(effect: Effect.Effect<A, E, never>) => Promise<A>;
 
-const destroySandboxHandle = (sandboxHandleRef: Ref.Ref<SandboxHandle | null>) =>
-  Ref.getAndSet(sandboxHandleRef, null).pipe(
-    Effect.flatMap((sandboxHandle) =>
-      sandboxHandle ? Effect.promise(() => sandboxHandle.destroy()) : Effect.void,
-    ),
-  );
+const destroyTrackedSandbox = (sandboxHandle: SandboxHandle | null) => {
+  if (!sandboxHandle) return Effect.succeed(null);
+  return Effect.promise(() => sandboxHandle.destroy()).pipe(Effect.map(() => null));
+};
+
+export const destroySandboxHandle = (
+  sandboxHandleRef: SynchronizedRef.SynchronizedRef<SandboxHandle | null>,
+) => SynchronizedRef.updateEffect(sandboxHandleRef, destroyTrackedSandbox);
+
+export const createSandboxHandle = (
+  source: SandboxProvider,
+  input: SandboxCreateInput,
+  sandboxHandleRef: SynchronizedRef.SynchronizedRef<SandboxHandle | null>,
+) =>
+  SynchronizedRef.modifyEffect(sandboxHandleRef, () =>
+    Effect.tryPromise({
+      try: () => source.create(input),
+      catch: codexTurnError,
+    }).pipe(Effect.map((sandboxHandle) => [sandboxHandle, sandboxHandle] as const)),
+  ).pipe(Effect.uninterruptible);
 
 const ownRunSandbox = (
   source: SandboxProvider,
   runPromise: RunPromise,
-  sandboxHandleRef: Ref.Ref<SandboxHandle | null>,
-) => {
-  const trackSandboxHandle = (sandboxHandle: SandboxHandle) =>
-    Ref.set(sandboxHandleRef, sandboxHandle).pipe(Effect.map(() => sandboxHandle));
-
-  return {
+  sandboxHandleRef: SynchronizedRef.SynchronizedRef<SandboxHandle | null>,
+) =>
+  ({
     name: source.name,
     capabilities: () => source.capabilities(),
-    create: (input) =>
-      runPromise(
-        Effect.tryPromise({
-          try: () => source.create(input),
-          catch: codexTurnError,
-        }).pipe(Effect.flatMap(trackSandboxHandle)),
-      ),
+    create: (input) => runPromise(createSandboxHandle(source, input, sandboxHandleRef)),
     resume: () => Promise.resolve(null),
     destroy: () => runPromise(destroySandboxHandle(sandboxHandleRef)),
-  } satisfies SandboxProvider;
-};
+  }) satisfies SandboxProvider;
 
 const sandboxMode = (profile: Harness.OperationPolicyProfile) =>
   profile === "read-only" ? "read-only" : "workspace-write";
@@ -578,7 +583,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
           });
           const runPromise = yield* FiberSet.makeRuntimePromise();
           const sandboxHandleRef = yield* Effect.acquireRelease(
-            Ref.make<SandboxHandle | null>(null),
+            SynchronizedRef.make<SandboxHandle | null>(null),
             destroySandboxHandle,
           );
           const sandbox = defineSandbox({
