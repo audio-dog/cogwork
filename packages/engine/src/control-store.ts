@@ -23,18 +23,21 @@ import {
 } from "@cogwork/contracts";
 
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import * as DrizzleSqlite from "drizzle-kit/payload/sqlite";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { createStatements } from "./control-store-create.gen";
+import * as controlStoreSchema from "./control-store-schema";
 
 export type ControlStoreService =
   | {
@@ -96,9 +99,23 @@ export class ControlStoreBootError extends Data.TaggedError("ControlStoreBootErr
   readonly message: string;
 }> {}
 
-const maximumRunEventAgeMillis = 1000 * 60 * 60 * 24 * 30;
+type ControlStoreSchemaStatements = Effect.Effect<
+  ReadonlyArray<string>,
+  ControlStoreBootError,
+  SqlClient.SqlClient
+>;
+
+const maximumRunEventAge = Duration.days(30);
+const additiveSchemaStatementPatterns = [
+  /^CREATE\s+TABLE\s+/i,
+  /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+/i,
+  /^ALTER\s+TABLE\s+(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|\S+)\s+ADD(?:\s+COLUMN)?\s+/i,
+];
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+const isAdditiveSchemaStatement = (statement: string) =>
+  additiveSchemaStatementPatterns.some((pattern) => pattern.test(statement.trim()));
 
 const storeFailure = (operation: string) => (error: unknown) =>
   ControlStoreFailure.make({ operation, message: messageOf(error) });
@@ -559,32 +576,60 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
   };
 });
 
-const schemaFingerprint = Effect.fn("ControlStore.schemaFingerprint")(function* () {
+const controlStoreSchemaStatements = Effect.fn("ControlStore.schemaStatements")(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const rows = yield* sql<{
-    readonly type: string;
-    readonly name: string;
-    readonly sql: string | null;
-  }>`SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' OR name LIKE 'sqlite_autoindex_%' ORDER BY type, name`;
-  return rows.map((row) => `${row.type}:${row.name}:${row.sql ?? ""}`).join("\n");
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      const runPromise = yield* FiberSet.makeRuntimePromise();
+      const database = {
+        query: <T = never>(query: string, params: ReadonlyArray<unknown> = []) =>
+          runPromise(sql.unsafe<T & object>(query, params)).then((rows) => rows.map((row) => row)),
+        run: (query: string) => runPromise(sql.unsafe(query)).then(() => undefined),
+        batch: (statements: ReadonlyArray<string>) =>
+          runPromise(
+            Effect.forEach(statements, (statement) => sql.unsafe(statement), {
+              discard: true,
+            }),
+          ).then(() => undefined),
+      };
+      const result = yield* Effect.tryPromise({
+        try: () => DrizzleSqlite.pushSchema(controlStoreSchema, database),
+        catch: (error) =>
+          new ControlStoreBootError({
+            message: `Control store schema diff failed: ${messageOf(error)}`,
+          }),
+      });
+      return result.sqlStatements;
+    }),
+  );
 });
 
-const createSchema = Effect.fn("ControlStore.createSchema")(function* () {
+const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
+  schemaStatements: ControlStoreSchemaStatements,
+) {
   const sql = yield* SqlClient.SqlClient;
-  for (const statement of createStatements) yield* sql.unsafe(statement);
-});
-
-const expectedSchemaFingerprint = Effect.fn("ControlStore.expectedSchemaFingerprint")(function* () {
-  return yield* Effect.gen(function* () {
-    yield* createSchema();
-    return yield* schemaFingerprint();
-  }).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" })));
+  const statements = yield* schemaStatements;
+  if (statements.length === 0) return;
+  const nonAdditiveStatements = statements.filter((statement) => !isAdditiveSchemaStatement(statement));
+  if (nonAdditiveStatements.length > 0)
+    return yield* new ControlStoreBootError({
+      message: `Control store schema requires non-additive changes:\n${nonAdditiveStatements.join("\n")}`,
+    });
+  yield* Effect.logInfo("converging Control store schema", { statements });
+  yield* sql.withTransaction(
+    Effect.forEach(statements, (statement) => sql.unsafe(statement), { discard: true }),
+  );
+  const remaining = yield* schemaStatements;
+  if (remaining.length === 0) return;
+  return yield* new ControlStoreBootError({
+    message: `Control store schema did not converge. Remaining statements:\n${remaining.join("\n")}`,
+  });
 });
 
 const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
-  yield* sql`DELETE FROM run_events WHERE at < ${now - maximumRunEventAgeMillis}`;
+  yield* sql`DELETE FROM run_events WHERE at < ${now - Duration.toMillis(maximumRunEventAge)}`;
 });
 
 const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* () {
@@ -606,17 +651,10 @@ const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* ()
   `;
 });
 
-// cogwork has no released version to migrate anyone from, so a store is created once and replaced
-// whenever the schema moves. The comparison is exact because both sides run the same statements.
 const boot = Effect.fn("ControlStore.boot")(function* (storePath: string) {
   const fs = yield* FileSystem.FileSystem;
   yield* fs.chmod(storePath, 0o600);
-  const found = yield* schemaFingerprint();
-  if (found === "") yield* createSchema();
-  else if (found !== (yield* expectedSchemaFingerprint()))
-    return yield* new ControlStoreBootError({
-      message: `Control store schema does not match this build. Delete ${storePath} and start again.`,
-    });
+  yield* convergeSchema(controlStoreSchemaStatements());
   yield* seedDaemonLimits();
   yield* retainRunEvents();
 });

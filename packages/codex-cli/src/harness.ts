@@ -521,7 +521,8 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
     },
     capabilities: {
       authenticationModes: ["host"],
-      session: { affinity: "runtime-host", fork: false },
+      session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
+      structuredOutput: "native",
       policyFidelity: "profile-only",
       fileEventFidelity: "sandbox",
       usageQuality: "metered",

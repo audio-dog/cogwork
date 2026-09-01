@@ -10,6 +10,7 @@ import {
   type WorkItemId,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type { FollowUpMarker, ObservedPr } from "./follow-up";
@@ -17,6 +18,8 @@ import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
 export { IssueTrackerError };
+
+export const defaultTrackerCooldown = Duration.minutes(1);
 
 export type ClaimRequest = Omit<Claim, "by">;
 

@@ -1,39 +1,47 @@
-import { once } from "node:events";
-import { RequestError } from "@agentclientprotocol/sdk";
-import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema } from "@cogwork/contracts";
+import {
+  AgUiEvent,
+  agUiIsStructuredOutputComplete,
+  agUiUsage,
+  HarnessName,
+  RunPlan,
+  SessionId,
+  stageResultJsonSchema,
+} from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it, layer } from "@effect/vitest";
-import { EventType, type StreamChunk } from "@tanstack/ai";
 import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
-import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import {
-  type CursorRunChat,
-  cursorModelOptions,
-  cursorRunner,
-  estimatedUsage,
-  interceptCursorTelemetry,
-  mcpWorkspaceProjection,
-  toEvent,
-  withEstimatedUsage,
-} from "./harness";
+import { cursorModelOptions, cursorRunner, estimatedUsage, interceptCursorTelemetry } from "./harness";
+import { cursorModels } from "./models.generated";
 
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
-const collect = (stream: Stream.Stream<AgUiEvent, Harness.HarnessError>) =>
-  Effect.runPromise(Stream.runCollect(stream));
-
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
+const resumedSessionId = Schema.decodeSync(SessionId)("sess-cursor-resume");
+
+const decodeObservation = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      instructions: Schema.String,
+      model: Schema.String,
+      mcp: Schema.Array(
+        Schema.Struct({
+          name: Schema.String,
+          url: Schema.String,
+          authenticated: Schema.Boolean,
+        }),
+      ),
+    }),
+  ),
+);
 
 const sessionStore: SessionStore.SessionStoreService = {
   persistence: memoryPersistence(),
@@ -116,37 +124,16 @@ const request = (checkoutPath: string) =>
 
 const fakeCursorAgent = new URL("./fixtures/fake-cursor-agent.mjs", import.meta.url).pathname;
 
-const stalledChat = (signal: AbortSignal) => ({
-  [Symbol.asyncIterator]: () => {
-    const aborted = once(signal, "abort").then(() => {
-      throw new Error("aborted");
-    });
-    return { next: () => aborted, return: () => aborted };
-  },
-});
-
-const failedChat = (error: unknown) => ({
-  [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
-});
-
-const runRunner = (runner: Harness.HarnessRunner) =>
-  runner
-    .run(request("/tmp"))
-    .pipe(
-      Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
-      Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
-      Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
-      Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
-    );
-
 describe("Cursor Harness registry", () => {
-  it.effect("discovers the native catalog with provenance and every supported effort", () =>
+  it.effect("uses the generated model tuple for the catalog and every supported effort", () =>
     Effect.gen(function* () {
       const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
       const catalog = yield* Harness.make([runner]).catalog(cursorName);
 
-      assert.strictEqual(catalog.provenance.source, "native-discovery");
-      assert.isTrue(catalog.models.some(({ value }) => value === "fake-native"));
+      assert.deepStrictEqual(
+        catalog.models.map(({ value }) => value),
+        Array.from(cursorModels),
+      );
       assert.isTrue(catalog.efforts?.some(({ value }) => value === "none"));
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
@@ -165,6 +152,19 @@ describe("Cursor Harness registry", () => {
       assert.strictEqual(outdatedReadiness.compatibility.status, "incompatible");
       assert.strictEqual(outdatedReadiness.compatibility.requirement, ">=2026.08.11");
       assert.strictEqual(missingReadiness.installation.status, "missing");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects stale model and effort selections before launch", () =>
+    Effect.gen(function* () {
+      const harness = Harness.make([cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` })]);
+      const staleModel = yield* harness
+        .preflight(cursorName, "full", "retired-cursor-model", "high")
+        .pipe(Effect.flip);
+      const staleEffort = yield* harness.preflight(cursorName, "full", "auto", "extreme").pipe(Effect.flip);
+
+      assert.strictEqual(staleModel.reason, "stale-selection");
+      assert.strictEqual(staleEffort.reason, "stale-selection");
     }).pipe(Effect.provide(harnessRunnerLayer)),
   );
 
@@ -243,138 +243,165 @@ describe("interceptCursorTelemetry", () => {
       assert.deepStrictEqual(Array.from(messages), [sessionNotification]);
     }),
   );
-});
 
-describe("mcpWorkspaceProjection", () => {
-  it("returns nothing and no secrets when the run declares no MCP skills", () => {
-    const projection = mcpWorkspaceProjection([]);
-    assert.deepStrictEqual(projection.skills, []);
-    assert.isFalse(projection.hasSecrets);
-    assert.deepStrictEqual(resolveAllSecrets(projection.secrets), {});
-  });
+  it.effect("acknowledges telemetry and leaves blocking extensions for prompt refusal", () =>
+    Effect.gen(function* () {
+      const telemetryRequest = { jsonrpc: "2.0", id: 1, method: "cursor/update_todos" } satisfies AcpMessage;
+      const blockingRequest = { jsonrpc: "2.0", id: 2, method: "cursor/create_plan" } satisfies AcpMessage;
+      const replies: Array<AcpMessage> = [];
+      const base = {
+        readable: new ReadableStream<AcpMessage>({
+          start: (controller) => {
+            controller.enqueue(telemetryRequest);
+            controller.enqueue(blockingRequest);
+            controller.close();
+          },
+        }),
+        writable: new WritableStream<AcpMessage>({
+          write: (message) => {
+            replies.push(message);
+          },
+        }),
+      } satisfies AcpJsonRpcStream;
 
-  it("maps a public skill onto a plain TanStack mcpSkill with no auth header or secret", () => {
-    const skills: ReadonlyArray<Harness.ResolvedMcpSkill> = [
-      { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: null },
-    ];
-    const projection = mcpWorkspaceProjection(skills);
-    assert.deepStrictEqual(projection.skills, [
-      { kind: "mcp", name: "linear", config: { url: "https://mcp.linear.app/mcp/readonly" } },
-    ]);
-    assert.isFalse(projection.hasSecrets);
-    assert.deepStrictEqual(resolveAllSecrets(projection.secrets), {});
-  });
+      const messages = yield* Stream.fromReadableStream({
+        evaluate: () => interceptCursorTelemetry(base).readable,
+        onError: String,
+      }).pipe(Stream.runCollect);
 
-  it("routes an authed skill's bearer through a secret, never as a plaintext header value", () => {
-    const skills: ReadonlyArray<Harness.ResolvedMcpSkill> = [
-      { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: Redacted.make("tok_123") },
-    ];
-    const projection = mcpWorkspaceProjection(skills);
-
-    const [projected] = projection.skills;
-    if (projected?.kind !== "mcp") throw new Error("expected an mcp skill");
-    assert.strictEqual(projected.name, "linear");
-    assert.strictEqual(projected.config.url, "https://mcp.linear.app/mcp/readonly");
-    const authorization = projected.config.headers?.Authorization;
-    assert.isObject(authorization);
-    assert.notStrictEqual(authorization, "tok_123");
-    assert.notStrictEqual(authorization, "Bearer tok_123");
-
-    assert.isTrue(projection.hasSecrets);
-    assert.deepStrictEqual(resolveAllSecrets(projection.secrets), { MCP_LINEAR_BEARER: "tok_123" });
-  });
+      assert.deepStrictEqual(Array.from(messages), [blockingRequest]);
+      assert.deepStrictEqual(replies, [{ jsonrpc: "2.0", id: 1, result: {} }]);
+    }),
+  );
 });
 
 layer(harnessRunnerLayer)("cursorRunner", (it) => {
-  it("declares the opaque-handle session kind", () => {
+  it("declares programmatic resume and Cursor's lower runtime fidelity", () => {
     const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
+    assert.deepStrictEqual(runner.capabilities.authenticationModes, ["host"]);
+    assert.isFalse(runner.capabilities.session.humanAttach);
+    assert.strictEqual(runner.capabilities.structuredOutput, "prompt-and-parse");
+    assert.strictEqual(runner.capabilities.policyFidelity, "none");
+    assert.strictEqual(runner.capabilities.fileEventFidelity, "none");
+    assert.isFalse(runner.capabilities.journal);
+    assert.isFalse(runner.capabilities.takeover);
+    assert.isFalse(runner.execution.nonInteractive);
+    assert.isFalse(runner.execution.worktreeConfined);
+    assert.deepStrictEqual(runner.execution.profiles, []);
   });
 
-  it.effect("aborts the underlying chat when the harness stream is interrupted", () =>
+  it.effect("uses host login and the shared mandatory Workspace projection", () =>
     Effect.gen(function* () {
-      const captured = Promise.withResolvers<AbortController>();
-      const runChat: CursorRunChat = ({ abortController }) => {
-        captured.resolve(abortController);
-        return stalledChat(abortController.signal);
-      };
-      const runner = cursorRunner({ name: cursorName, runChat });
-      const execution = yield* Effect.forkChild(
-        Stream.runDrain(runner.run(request("/tmp"))).pipe(Effect.timeout("1 second")),
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
       );
-      const abortController = yield* Effect.promise(() => captured.promise);
-
-      yield* TestClock.adjust("1 second");
-      const error = yield* Fiber.join(execution).pipe(Effect.flip);
-
-      assert.strictEqual(error._tag, "TimeoutError");
-      assert.isTrue(abortController.signal.aborted);
-    }),
-  );
-
-  it.effect("keeps unrecognized failures retryable without reading their message", () =>
-    Effect.gen(function* () {
+      const base = request(checkout.id);
+      const projectedRequest = {
+        ...base,
+        plan: new RunPlan({
+          ...base.plan,
+          harness: { ...base.plan.harness, effort: "high" },
+          instructions: [{ kind: "repo", source: "repo", content: "Mandatory repository context." }],
+          operatingInstructions: {
+            name: "triage-agent",
+            path: "/operating-instructions/triage-agent",
+            resources: [],
+          },
+          mcp: [
+            {
+              identity: "local:user/mcp-server/linear",
+              name: "linear",
+              projectedName: "linear",
+              endpoint: "https://mcp.example.test/readonly",
+              authenticated: true,
+              unavailableReason: null,
+            },
+          ],
+          structuredOutput: null,
+        }),
+        mcpCredentials: new Map([["local:user/mcp-server/linear", Redacted.make("cursor-mcp-secret")]]),
+      } satisfies Harness.HarnessRequest;
       const runner = cursorRunner({
         name: cursorName,
-        runChat: () => failedChat(new Error("model output says command not found")),
+        agentBin: `node ${fakeCursorAgent} --observe`,
       });
-      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
 
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
+      const events = yield* Stream.runCollect(runner.run(projectedRequest));
+      const output = Array.from(events)
+        .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
+        .map(({ delta }) => delta ?? "")
+        .join("");
+      const observation = decodeObservation(output);
+
+      assert.include(observation.instructions, "Mandatory repository context.");
+      assert.include(observation.instructions, "/operating-instructions/triage-agent");
+      assert.strictEqual(observation.model, "auto[effort=high]");
+      assert.deepStrictEqual(observation.mcp, [
+        {
+          name: "linear",
+          url: "https://mcp.example.test/readonly",
+          authenticated: true,
+        },
+      ]);
+      assert.notInclude(output, "cursor-mcp-secret");
     }),
   );
 
-  it.effect("hands off failures with a missing-executable code", () =>
+  it.effect("streams a fresh ACP session, parsed structured result, and estimated terminal usage", () =>
     Effect.gen(function* () {
-      const failure = Object.assign(new Error("Cursor could not start"), { code: "ENOENT" });
-      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
-      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
 
-      assert.strictEqual(error.reason, "launch");
-      assert.isFalse(error.retryable);
-    }),
-  );
+      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
+      const session = Array.from(events).find(
+        (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
+      );
+      const structured = Array.from(events).find(agUiIsStructuredOutputComplete);
+      const finished = events.at(-1);
 
-  it.effect("hands off ACP request failures", () =>
-    Effect.gen(function* () {
-      const failure = RequestError.authRequired();
-      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
-      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
-
-      assert.strictEqual(error.reason, "credential");
-      assert.isFalse(error.retryable);
-      assert.include(error.message, "Sign in to Cursor");
-    }),
-  );
-
-  it.effect("keeps post-launch ACP failures retryable", () =>
-    Effect.gen(function* () {
-      const runner = cursorRunner({
-        name: cursorName,
-        runChat: () => failedChat(RequestError.internalError({}, "temporary prompt failure")),
+      assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
+      assert.deepStrictEqual(structured?.value.object, {
+        _tag: "triage",
+        role: "ready-for-agent",
+        proposal: "Verified and ready.",
       });
-      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
-
-      assert.strictEqual(error.reason, "turn");
-      assert.isTrue(error.retryable);
+      assert.strictEqual(finished?.type, "RUN_FINISHED");
+      assert.isDefined(finished);
+      assert.isTrue(agUiUsage(finished)?.estimated);
     }),
   );
 
-  it.effect("keeps permanent ACP protocol failures non-retryable", () =>
+  it.effect("projects the persisted opaque handle through modelOptions.sessionId", () =>
     Effect.gen(function* () {
-      const runner = cursorRunner({
-        name: cursorName,
-        runChat: () => failedChat(RequestError.methodNotFound("session/prompt")),
-      });
-      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const resumeHandle = "persisted-cursor-session";
+      const resumedRequest = {
+        ...request(checkout.id),
+        session: resumedSessionId,
+      } satisfies Harness.HarnessRequest;
+      const resumedStore = { ...sessionStore, resumeHandle: () => Effect.succeed(resumeHandle) };
+      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
 
-      assert.strictEqual(error.reason, "turn");
-      assert.isFalse(error.retryable);
+      const events = yield* Stream.runCollect(
+        runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
+      );
+      const session = Array.from(events).find(
+        (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
+      );
+
+      assert.deepStrictEqual(session?.value, { sessionId: resumeHandle });
     }),
   );
 
-  it.effect("refuses a Cursor triage run before native launch", () =>
+  it.effect("preserves metered ACP usage instead of estimating it", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -382,19 +409,21 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       );
       const runner = cursorRunner({
         name: cursorName,
-        agentBin: `node ${fakeCursorAgent}`,
+        agentBin: `node ${fakeCursorAgent} --metered`,
       });
-      const harness = Harness.make([runner]);
 
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
+      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
+      const finished = events.at(-1);
 
-      assert.strictEqual(error.reason, "policy");
-      assert.isFalse(error.retryable);
-      assert.match(error.message, /cursor.*non-interactive/);
+      assert.deepStrictEqual(finished && agUiUsage(finished), {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+      });
     }),
   );
 
-  it.effect("refuses malformed Cursor input before native launch", () =>
+  it.effect("refuses a blocking Cursor extension without hanging the turn", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -402,14 +431,55 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       );
       const runner = cursorRunner({
         name: cursorName,
-        agentBin: `node ${fakeCursorAgent} --malformed`,
+        agentBin: `node ${fakeCursorAgent} --blocking-extension`,
       });
-      const harness = Harness.make([runner]);
 
-      const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
+      const events = yield* Stream.runCollect(runner.run(request(checkout.id)));
 
-      assert.strictEqual(error.reason, "policy");
-      assert.isFalse(error.retryable);
+      assert.isTrue(Array.from(events).some(agUiIsStructuredOutputComplete));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.effect("exposes a new handle when ACP silently falls back after rejected load", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const resumedRequest = {
+        ...request(checkout.id),
+        session: resumedSessionId,
+      } satisfies Harness.HarnessRequest;
+      const resumedStore = { ...sessionStore, resumeHandle: () => Effect.succeed("missing-cursor-session") };
+      const runner = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent} --reject-load`,
+      });
+
+      const events = yield* Stream.runCollect(
+        runner.run(resumedRequest).pipe(Stream.provideService(SessionStore.SessionStore, resumedStore)),
+      );
+      const session = Array.from(events).find(
+        (event) => AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id",
+      );
+
+      assert.deepStrictEqual(session?.value, { sessionId: "fake-cursor-session" });
+    }),
+  );
+
+  it.effect("surfaces post-launch transport failures through the Harness runner", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const runner = cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-151" });
+
+      const error = yield* runner.run(request(checkout.id)).pipe(Stream.runDrain, Effect.flip);
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
     }),
   );
 });
@@ -425,54 +495,6 @@ describe("cursorModelOptions", () => {
 
   it("is empty when the run neither resumes nor sets an effort", () => {
     assert.deepStrictEqual(cursorModelOptions(null, null), {});
-  });
-});
-
-describe("toEvent", () => {
-  it("carries a tool call result whole, args/results and all, including keys the schema never names", () => {
-    const chunk = {
-      type: EventType.TOOL_CALL_RESULT,
-      toolCallId: "call-1",
-      messageId: "msg-1",
-      content: "diff applied",
-      role: "tool",
-    } satisfies StreamChunk;
-
-    const event = toEvent(chunk);
-
-    assert.strictEqual(event.type, "TOOL_CALL_RESULT");
-    assert.strictEqual(event.content, "diff applied");
-    assert.strictEqual(event.toolCallId, "call-1");
-    assert.strictEqual(event.messageId, "msg-1");
-    assert.strictEqual(event.role, "tool");
-  });
-
-  it("carries streamed tool call arguments", () => {
-    const chunk = {
-      type: EventType.TOOL_CALL_ARGS,
-      toolCallId: "call-1",
-      delta: '{"path":"src/x.ts"}',
-    } satisfies StreamChunk;
-
-    const event = toEvent(chunk);
-
-    assert.strictEqual(event.type, "TOOL_CALL_ARGS");
-    assert.strictEqual(event.toolCallId, "call-1");
-    assert.strictEqual(event.delta, '{"path":"src/x.ts"}');
-  });
-
-  it("carries reasoning deltas", () => {
-    const chunk = {
-      type: EventType.REASONING_MESSAGE_CONTENT,
-      messageId: "msg-0",
-      delta: "weighing the two approaches",
-    } satisfies StreamChunk;
-
-    const event = toEvent(chunk);
-
-    assert.strictEqual(event.type, "REASONING_MESSAGE_CONTENT");
-    assert.strictEqual(event.delta, "weighing the two approaches");
-    assert.strictEqual(event.messageId, "msg-0");
   });
 });
 
@@ -492,47 +514,6 @@ describe("estimatedUsage", () => {
       completionTokens: 1,
       totalTokens: 2,
       estimated: true,
-    });
-  });
-});
-
-describe("withEstimatedUsage", () => {
-  it("attaches an estimate from prompt + streamed text when the terminal event has none", () => {
-    const events: ReadonlyArray<AgUiEvent> = [
-      { type: "TEXT_MESSAGE_CONTENT", delta: "hello" },
-      { type: "REASONING_MESSAGE_CONTENT", delta: "abcd" },
-      { type: "RUN_FINISHED", finishReason: "stop" },
-    ];
-
-    return collect(withEstimatedUsage(8, Stream.fromIterable(events))).then((out) => {
-      const finished = out.at(-1);
-      assert.strictEqual(finished?.type, "RUN_FINISHED");
-      assert.deepStrictEqual(finished && agUiUsage(finished), {
-        inputTokens: 2,
-        outputTokens: 3,
-        totalTokens: 5,
-        estimated: true,
-      });
-    });
-  });
-
-  it("leaves a run that already reports real usage untouched", () => {
-    const events: ReadonlyArray<AgUiEvent> = [
-      { type: "TEXT_MESSAGE_CONTENT", delta: "hello" },
-      {
-        type: "RUN_FINISHED",
-        finishReason: "stop",
-        usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
-      },
-    ];
-
-    return collect(withEstimatedUsage(8, Stream.fromIterable(events))).then((out) => {
-      const finished = out.at(-1);
-      assert.deepStrictEqual(finished && agUiUsage(finished), {
-        inputTokens: 100,
-        outputTokens: 20,
-        totalTokens: 120,
-      });
     });
   });
 });
