@@ -265,22 +265,27 @@ describe("owned tools", () => {
           },
         },
       };
-      const fiber = yield* Effect.forkScoped(
-        Effect.scoped(
-          makeTools(controlled).pipe(
-            Effect.flatMap((tools) => {
-              const bash = tools.bash.execute;
-              if (bash === undefined) return Effect.die("bash tool is missing a server executor");
-              return Effect.promise(() => Promise.resolve(bash({ command: "wait" })));
-            }),
+      const control = yield* RunControl.RunControl;
+      yield* Effect.forkScoped(
+        control.run(
+          runId,
+          undefined,
+          Effect.scoped(
+            makeTools(controlled).pipe(
+              Effect.flatMap((tools) => {
+                const bash = tools.bash.execute;
+                if (bash === undefined) return Effect.die("bash tool is missing a server executor");
+                return Effect.promise(() => Promise.resolve(bash({ command: "wait" })));
+              }),
+            ),
           ),
         ),
       );
-      const control = yield* RunControl.RunControl;
-      yield* control.register(runId, fiber);
       yield* Deferred.await(started);
 
-      assert.isTrue(yield* control.cancel(runId));
+      const cancellation = yield* control.cancel(runId);
+      assert.strictEqual(cancellation._tag, "Interrupting");
+      if (cancellation._tag === "Interrupting") yield* cancellation.awaitTermination;
       yield* Effect.yieldNow;
       assert.isTrue(Option.isSome(yield* Deferred.poll(aborted)));
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),

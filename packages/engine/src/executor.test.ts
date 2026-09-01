@@ -28,7 +28,6 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
-import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
@@ -921,9 +920,8 @@ const unavailableCommentProviderLayer: Layer.Layer<SourceControlProvider | Poste
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
 const runControlStub = Layer.succeed(RunControl.RunControl, {
-  register: () => Effect.void,
-  workspaceFor: () => Effect.succeed(Option.none()),
-  cancel: () => Effect.succeed(false),
+  run: (_runId, _workspace, effect) => effect,
+  cancel: () => Effect.succeed(RunControl.RunCancellation.NotFound({})),
 });
 const pluginManagerStub = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
@@ -1254,6 +1252,7 @@ function provide(
     layer: Layer.Layer<RunLedger.RunLedger>,
   ) => Layer.Layer<RunLedger.RunLedger> = runLedgerIdentity,
   connections = connectionStoreStub,
+  runControl: Layer.Layer<RunControl.RunControl> = runControlStub,
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = transformRunLedger(RunLedger.layerMemory.pipe(Layer.provide(bus)));
@@ -1276,7 +1275,7 @@ function provide(
         runRecorder,
         bus,
         ContextCleanupCalls.layer,
-        runControlStub,
+        runControl,
         worktree,
         assemblerStub,
         contextAssembler,
@@ -2315,6 +2314,55 @@ describe("Executor.execute", () => {
       assert.isFalse(log.some((c) => c.method === "release"));
       assert.lengthOf(yield* Ref.get(cleanups), 1);
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
+  });
+
+  it.effect("releases the claim after a manual cancellation finishes cleanup", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const cleanups = yield* ContextCleanupCalls;
+      const executor = yield* Executor.Executor;
+      const control = yield* RunControl.RunControl;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+
+      yield* DaemonEventBus.runActivityStream(Stream.fromSubscription(subscription)).pipe(
+        Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
+        Stream.runHead,
+      );
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.isNotNull(run ?? null);
+      if (!run) return;
+
+      const cancellation = yield* control.cancel(run.id);
+      assert.strictEqual(cancellation._tag, "Interrupting");
+      if (cancellation._tag === "Interrupting") yield* cancellation.awaitTermination;
+      yield* Fiber.await(running);
+
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.lengthOf(yield* Ref.get(cleanups), 1);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [gatedRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages, []),
+          runLedgerIdentity,
+          connectionStoreStub,
+          RunControl.layer,
+        ),
+      ),
+      Effect.scoped,
+    );
   });
 
   it.effect("releases the claim without ledgering a Run when preparation is interrupted", () => {

@@ -1412,55 +1412,60 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       runId,
     };
-    return yield* Effect.gen(function* () {
-      const previous = yield* candidateSession(workspace, item, ops.branch);
-      const selectedOps: StageOps =
-        previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-      return yield* selectedOps.prepare.pipe(
-        Effect.flatMap((prepared) =>
-          Effect.gen(function* () {
-            const checked = yield* evaluateAvailability(workspace, item.stage);
-            if (!checked.resolved || !checked.availability.available) {
-              yield* noteUnavailableResume(workspace, item, checked.availability.causes);
-              return null;
-            }
-            const currentOps = opsFor(workspace, item, checked.resolved);
-            const refreshedOps =
-              previous === item.resume?.session ? currentOps : freshRecoveryOps(workspace, item, currentOps);
-            const planned = yield* planSession(
-              runId,
-              workspace,
-              item,
-              refreshedOps,
-              prepared,
-              startedAtMillis,
-              previous,
-              observation,
-            );
-            return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
-          }),
-        ),
-        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
-        Effect.matchEffect({
-          onFailure: (error) =>
-            handleOf(ledger, previous).pipe(
-              Effect.flatMap((handle) =>
-                reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
+    return yield* runControl.run(
+      runId,
+      workspace,
+      Effect.gen(function* () {
+        const previous = yield* candidateSession(workspace, item, ops.branch);
+        const selectedOps: StageOps =
+          previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+        return yield* selectedOps.prepare.pipe(
+          Effect.flatMap((prepared) =>
+            Effect.gen(function* () {
+              const checked = yield* evaluateAvailability(workspace, item.stage);
+              if (!checked.resolved || !checked.availability.available) {
+                yield* noteUnavailableResume(workspace, item, checked.availability.causes);
+                return null;
+              }
+              const currentOps = opsFor(workspace, item, checked.resolved);
+              const refreshedOps =
+                previous === item.resume?.session
+                  ? currentOps
+                  : freshRecoveryOps(workspace, item, currentOps);
+              const planned = yield* planSession(
+                runId,
+                workspace,
+                item,
+                refreshedOps,
+                prepared,
+                startedAtMillis,
+                previous,
+                observation,
+              );
+              return yield* acceptPlannedRun(runId, workspace, item, startedAtMillis, planned);
+            }),
+          ),
+          Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+          Effect.matchEffect({
+            onFailure: (error) =>
+              handleOf(ledger, previous).pipe(
+                Effect.flatMap((handle) =>
+                  reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
+                ),
               ),
-            ),
-          onSuccess: (accepted) => {
-            if (!accepted) return Effect.void;
-            const { request, selectedOps: acceptedOps, record } = accepted;
-            return Effect.withFiber((self) => runControl.register(runId, self, workspace)).pipe(
-              Effect.andThen(settleOutcome(workspace, item, acceptedOps, record, runId, request)),
-            );
-          },
-        }),
-      );
-    }).pipe(
-      Effect.ensuring(cleanupRunContext(runId)),
-      Effect.annotateLogs(correlation),
-      Effect.annotateSpans(correlation),
+            onSuccess: (accepted) => {
+              if (!accepted) return Effect.void;
+              const { request, selectedOps: acceptedOps, record } = accepted;
+              return settleOutcome(workspace, item, acceptedOps, record, runId, request);
+            },
+          }),
+        );
+      }).pipe(
+        Effect.ensuring(cleanupRunContext(runId)),
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
+      ),
+      releaseClaim(workspace, item.id),
     );
   });
 
