@@ -175,10 +175,14 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
   };
 };
 
+const fakeCodexExecutable = (args = "") =>
+  `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${args}`;
+
 const testRunner = (options: Omit<CodexRunnerOptions, "name" | "environment">) =>
   codexRunner({
     name,
     environment: testEnvironment,
+    codexExecutable: fakeCodexExecutable(),
     resolveGitMetadataDirectory: () => Effect.succeed(null),
     ...options,
   });
@@ -239,9 +243,6 @@ const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
     ),
   );
 };
-
-const fakeCodexExecutable = (args = "") =>
-  `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${args}`;
 
 const makeLiveHarness = (codexExecutable = fakeCodexExecutable()) =>
   Effect.acquireRelease(
@@ -318,6 +319,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
           "gpt-5.6-sol",
           {
             approvalPolicy: "never",
+            codexExecutable: fakeCodexExecutable(),
             sandboxMode: "workspace-write",
             networkAccessEnabled: true,
             modelReasoningEffort: "high",
