@@ -472,6 +472,29 @@ describe("codexRunner", () => {
     }),
   );
 
+  it.live(
+    "keeps a timed-out preflight retryable",
+    () =>
+      Effect.gen(function* () {
+        const runner = testRunner({
+          codexExecutable: `node -e 'process.stdin.resume()'`,
+        });
+        const harness = Harness.make([runner], {
+          sessionStore,
+          contextAssembler,
+          credentialStore,
+          fileSystem,
+        });
+
+        const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+        assert.strictEqual(error.reason, "launch");
+        assert.isTrue(error.retryable);
+        assert.include(error.message, "readiness check");
+      }),
+    10_000,
+  );
+
   it.live("classifies explicit preflight login failures as credential errors", () =>
     Effect.gen(function* () {
       const runner = testRunner({

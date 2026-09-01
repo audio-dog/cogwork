@@ -137,8 +137,8 @@ const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =
       "TimeoutError",
       () =>
         new Harness.HarnessError({
-          reason: "missing-harness",
-          retryable: false,
+          reason: "launch",
+          retryable: true,
           message: "Codex CLI did not answer its readiness check",
         }),
     ),
