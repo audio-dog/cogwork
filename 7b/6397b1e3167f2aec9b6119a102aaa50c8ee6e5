@@ -1,0 +1,21 @@
+packages/engine/src/executor.test.ts
+  s_c9346782afcc5c::t_3d0b3a228c0c71 1841
+  s_c9346782afcc5c::t_13192d4f72592f 1010-1012
+  s_c9346782afcc5c::t_da1618ac5f36e3 2859
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7b6397b1e3167f2aec9b6119a102aaa50c8ee6e5",
+  "prompts": {},
+  "sessions": {
+    "s_c9346782afcc5c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "36ecd53b-6ab9-4977-9d1e-dd24f161841f",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
