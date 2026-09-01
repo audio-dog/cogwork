@@ -1,0 +1,25 @@
+apps/cli/src/rpc.test.ts
+  s_ab78a33639204b::t_45da9f5e233014 148
+  s_ab78a33639204b::t_42638f460355c5 145-147,149-150,162
+  s_ab78a33639204b::t_53b8ab0474c522 11,80,82-87,89-94,96-114,116,139-143,151-152,155-161
+  s_ab78a33639204b::t_4721f181289bb5 7,46-51,81,88,95,115,144,153-154
+  s_ab78a33639204b::t_6f3eb46d2f0688 163-165
+apps/cli/src/rpc.ts
+  s_ab78a33639204b::t_a72b3cc2452553 152-155,213-215,218-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ca59854baa46454b73f34a6bcdecf1faa9521f0e",
+  "prompts": {},
+  "sessions": {
+    "s_ab78a33639204b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05adc-2d51-7660-aac3-8c1abec20767",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
