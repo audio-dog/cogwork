@@ -90,7 +90,7 @@ const resolveObserved = Effect.fn("Daemon.resolveObserved")(function* (
   workspaceId: WorkspaceId,
   workItem: WorkItemId,
 ) {
-  const registry = yield* WorkspaceRegistry;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const workspace = workspaceById(registry, workspaceId);
   if (workspace === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
   const snapshot = yield* (yield* ReconcileWorker).snapshot;
@@ -160,7 +160,7 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
       const observed = observedFor(snapshot, run.workspace, run.workItem);
       if (!drained) yield* Effect.logWarning("run cancellation still draining", { runId: payload.runId });
 
-      const registry = yield* WorkspaceRegistry;
+      const registry = yield* (yield* WorkspaceRegistry).state;
       const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
       const workspace = Option.getOrUndefined(controlledWorkspace) ?? currentWorkspace;
       const trackerClaim = workspace === undefined ? null : { workspace, issueTracker: yield* IssueTracker };
@@ -369,7 +369,7 @@ const contributionSettingRefusal = (update: ContributionSettingUpdate, registry:
 export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")(function* (payload: {
   readonly update: ContributionSettingUpdate;
 }) {
-  const registry = yield* WorkspaceRegistry;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const refusal = contributionSettingRefusal(payload.update, registry);
   if (refusal) return yield* refusal;
   const store = yield* ControlStore;
@@ -617,7 +617,6 @@ export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (
 }) {
   const connections = yield* ConnectionStore;
   const plugins = yield* PluginManager;
-  const registry = yield* WorkspaceRegistry;
   const connection = yield* connections.find(payload.connectionId);
   if (!connection) {
     return yield* connectionFailure("remove Connection", payload.connectionId, "Connection not found");
@@ -629,6 +628,7 @@ export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (
   yield* Effect.forEach(requiring, (plugin) => publishPluginMutation(plugins.uninstall(plugin.pluginId)), {
     discard: true,
   });
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const danglingWorkspaces = boundWorkspaceIds(registry, payload.connectionId);
   yield* connections
     .remove(payload.connectionId)

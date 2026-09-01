@@ -301,8 +301,8 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
   });
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* () {
-    yield* registry.refresh;
-    const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
+    const state = yield* registry.refresh;
+    const states = yield* Effect.forEach(state.workspaces, pollWorkspace, {
       concurrency: 4,
     });
     const observedAtMillis = yield* Clock.currentTimeMillis;
@@ -312,8 +312,8 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
       workspaces: states,
     }));
     return {
-      workspaces: registry.workspaces.length,
-      failures: registry.failures.length,
+      workspaces: state.workspaces.length,
+      failures: state.failures.length,
       pendingWork: states.reduce((total, state) => total + state.eligible.length, 0),
       paused: states.filter((state) => state.poll.status === "paused").length,
     };
