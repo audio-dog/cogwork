@@ -13,6 +13,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import { expectTypeOf } from "vitest";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { layerMemory as memoryLedgerLayer, RunLedger, type RunLedgerService } from "./run-ledger";
 
@@ -28,27 +29,22 @@ const session = Schema.decodeSync(SessionId)("sess-abc");
 const laterSession = Schema.decodeSync(SessionId)("sess-later");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
-type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
-type Expect<T extends true> = T;
-
-type _CrashRunningArgs = Expect<
-  Equal<Parameters<RunLedgerService["crashRunning"]>, [WorkspaceId, WorkItemId, number]>
->;
-type _CloseRunningArgs = Expect<
-  Equal<Parameters<RunLedgerService["closeRunning"]>, [WorkspaceId, WorkItemId, number]>
->;
-type _LatestRunForItemArgs = Expect<
-  Equal<Parameters<RunLedgerService["latestRunForItem"]>, [WorkspaceId, WorkItemId]>
->;
-type _LatestRunByBranchArgs = Expect<
-  Equal<Parameters<RunLedgerService["latestRunByBranch"]>, [WorkspaceId, string]>
->;
-type _SessionForBranchArgs = Expect<
-  Equal<Parameters<RunLedgerService["sessionForBranch"]>, [WorkspaceId, string]>
->;
-type _ResolveWatchTargetArgs = Expect<
-  Equal<Parameters<RunLedgerService["resolveWatchTarget"]>, [WorkItemId]>
->;
+describe("RunLedger service", () => {
+  it("keeps identifiers distinct", () => {
+    expectTypeOf<RunLedgerService["crashRunning"]>().parameters.branded.toEqualTypeOf<
+      [WorkspaceId, WorkItemId, number]
+    >();
+    expectTypeOf<RunLedgerService["closeRunning"]>().parameters.branded.toEqualTypeOf<
+      [WorkspaceId, WorkItemId, number]
+    >();
+    expectTypeOf<RunLedgerService["latestRunForItem"]>().parameters.branded.toEqualTypeOf<
+      [WorkspaceId, WorkItemId]
+    >();
+    expectTypeOf<Parameters<RunLedgerService["latestRunByBranch"]>[0]>().branded.toEqualTypeOf<WorkspaceId>();
+    expectTypeOf<Parameters<RunLedgerService["sessionForBranch"]>[0]>().branded.toEqualTypeOf<WorkspaceId>();
+    expectTypeOf<RunLedgerService["resolveWatchTarget"]>().parameters.branded.toEqualTypeOf<[WorkItemId]>();
+  });
+});
 
 const runPlan = (id: string) =>
   Schema.decodeSync(RunPlan)({
