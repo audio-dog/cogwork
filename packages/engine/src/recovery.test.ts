@@ -207,6 +207,7 @@ const snapshotOf = (
       blocked: [],
       needsHuman: [],
       observed,
+      observedCount: observed.length,
       availability: [],
     },
   ],
