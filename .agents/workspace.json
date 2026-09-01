@@ -1,6 +1,0 @@
-{
-  "worktrees": {
-    "linkPaths": [".env"],
-    "setup": ["pnpm install", "pnpm setup-worktree"]
-  }
-}

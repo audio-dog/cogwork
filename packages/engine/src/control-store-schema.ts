@@ -150,10 +150,13 @@ export const workspaces = sqliteTable("workspaces", {
   gitRemote: text("git_remote"),
   issueTracker: text("issue_tracker").notNull(),
   sourceControl: text("source_control"),
+  mcpSkills: text("mcp_skills"),
   linearHistory: integer("linear_history", { mode: "boolean" }).notNull(),
   worktreeRoot: text("worktree_root"),
   worktreeRemote: text("worktree_remote"),
   worktreeBaseBranch: text("worktree_base_branch"),
+  worktreeLinkPaths: text("worktree_link_paths"),
+  worktreeSetup: text("worktree_setup"),
   worktreeReapAfterMillis: integer("worktree_reap_after_millis"),
   concurrency: integer("concurrency"),
 });
