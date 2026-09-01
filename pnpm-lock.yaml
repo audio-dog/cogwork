@@ -368,8 +368,8 @@ importers:
   packages/cursor-acp:
     dependencies:
       '@agentclientprotocol/sdk':
-        specifier: 1.4.0
-        version: 1.4.0(zod@4.5.4)
+        specifier: ^0.25.1
+        version: 0.25.1(zod@4.5.4)
       '@cogwork/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -536,11 +536,6 @@ packages:
 
   '@agentclientprotocol/sdk@0.25.1':
     resolution: {integrity: sha512-jx2rF3bdpGwZ75Q/meyEDLLbYmbtxk82Uh9hDCdxDvcEedBnNSF5hZAnL/kJR5VNz56JqwOmqnAqasC84MwwkQ==}
-    peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
-
-  '@agentclientprotocol/sdk@1.4.0':
-    resolution: {integrity: sha512-/eufudw+aFY1LKLolT6yFE6UMmYRl7fMJ/DEONSIyR6wI3slHWITBsANRGqXEY8FRzqUxwh7QEaGiZHcJPVThg==}
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
@@ -5457,10 +5452,6 @@ snapshots:
       zod: 4.5.4
 
   '@agentclientprotocol/sdk@0.25.1(zod@4.5.4)':
-    dependencies:
-      zod: 4.5.4
-
-  '@agentclientprotocol/sdk@1.4.0(zod@4.5.4)':
     dependencies:
       zod: 4.5.4
 

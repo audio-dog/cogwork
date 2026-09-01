@@ -18,7 +18,7 @@
     "spike:resume": "node --env-file-if-exists=.env --experimental-strip-types probe-resume.ts"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "1.4.0",
+    "@agentclientprotocol/sdk": "^0.25.1",
     "@cogwork/contracts": "workspace:*",
     "@cogwork/engine": "workspace:*",
     "@tanstack/ai": "catalog:",
