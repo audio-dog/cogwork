@@ -63,6 +63,12 @@ export const PluginOverview = Schema.Struct({
 });
 export type PluginOverview = typeof PluginOverview.Type;
 
+// At most one first-party Plugin may require a given Connection, so this answers one bundle or none,
+// never a set. It lives in the kernel because the Engine and every client derive it from the same
+// overview: a second copy of the rule is a second place to change when the tie-break moves.
+export const pluginRequiringConnection = (plugins: PluginOverview, system: ConnectionSystem) =>
+  plugins.plugins.find((plugin) => plugin.requiredConnections.includes(system)) ?? null;
+
 export const PluginMutationResult = Schema.Struct({
   overview: PluginOverview,
   notices: Schema.Array(TrimmedNonEmptyString),
