@@ -1,0 +1,28 @@
+packages/cursor-acp/CONTEXT.md
+  s_ffed0fe3f37454::t_af13ffc4fc7f36 13,17,25,28-30
+  s_a2be459ac722c0::t_0bdb5398269858 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "66014f9bea61eb1efcd83259ddc3d9c03ffb42a9",
+  "prompts": {},
+  "sessions": {
+    "s_a2be459ac722c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05da3-95c9-7111-8295-de6ed47a57c7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ffed0fe3f37454": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dd5-8ef9-7211-94eb-c47c2b6e29be",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
