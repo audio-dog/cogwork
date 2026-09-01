@@ -820,8 +820,14 @@ export const make = Effect.gen(function* () {
           stage: item.stage,
           cause: handoffCause(retryable, attempts),
           reason,
-          session: handle,
-          humanAttach: harness.capabilities(harnessName)?.session.humanAttach ?? false,
+          session: handle
+            ? {
+                handle,
+                access: harness.capabilities(harnessName)?.session.humanAttach
+                  ? "human-attach"
+                  : "programmatic-only",
+              }
+            : null,
         }),
       });
     }

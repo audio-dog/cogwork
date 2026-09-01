@@ -117,13 +117,18 @@ export interface HandoffRequest {
   readonly stage: LifecycleStage;
   readonly cause: HandoffCause;
   readonly reason: string;
-  readonly session: string | null | undefined;
-  readonly humanAttach?: boolean;
+  readonly session:
+    | {
+        readonly handle: string;
+        readonly access: "human-attach" | "programmatic-only";
+      }
+    | null
+    | undefined;
 }
 
 export const handoffNote = (request: HandoffRequest) => {
   const { workspace, item, stage, cause, reason, session } = request;
   const checkout = checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
-  const resume = session && request.humanAttach !== false ? attachCommand(checkout, session) : undefined;
+  const resume = session?.access === "human-attach" ? attachCommand(checkout, session.handle) : undefined;
   return handoffComment(stage, cause, reason, resume);
 };

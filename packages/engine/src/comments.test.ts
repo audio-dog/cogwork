@@ -169,7 +169,7 @@ describe("comments", () => {
       stage: "implement",
       cause: { kind: "max-attempts", attempts: 3 },
       reason: "boom",
-      session: "sess-1",
+      session: { handle: "sess-1", access: "human-attach" },
     });
     assert.include(note, "Exhausted after 3 failed implement attempts.");
     assert.include(note, "Last failure: `boom`");
@@ -196,8 +196,7 @@ describe("comments", () => {
       stage: "implement",
       cause: { kind: "non-retryable" },
       reason: "boom",
-      session: "cursor-acp-session",
-      humanAttach: false,
+      session: { handle: "cursor-acp-session", access: "programmatic-only" },
     });
     assert.notInclude(note, "Resume the session");
     assert.notInclude(note, "agent --resume");
