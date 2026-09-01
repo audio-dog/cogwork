@@ -240,7 +240,7 @@ export const make = (config: SchedulerConfig) =>
     const tick = Effect.fn("Scheduler.tick")(function* () {
       const config = yield* Ref.get(configRef);
       const snapshot = yield* worker.snapshot;
-      const candidates = candidatesOf(registry, snapshot, config);
+      const candidates = candidatesOf(yield* registry.state, snapshot, config);
       const day = utcDay(yield* Clock.currentTimeMillis);
       const planned = yield* Ref.modify(stateRef, (state) => {
         const next = plan(candidates, state, config, { day, generation: snapshot.generation });
