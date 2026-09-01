@@ -1,0 +1,19 @@
+packages/engine/src/tools/errors.ts
+  s_aa1445cc8bee68::t_a6a5a858d9b0f6 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0a42514dd71bcb61128ddd368146710d95046e55",
+  "prompts": {},
+  "sessions": {
+    "s_aa1445cc8bee68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05adf-0996-74c1-84fe-d09daadd9d31",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
