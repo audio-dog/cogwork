@@ -1,0 +1,21 @@
+packages/engine/src/commands.ts
+  s_ec9503ac556343::t_560d545c18a876 145-198
+packages/engine/src/commands.test.ts
+  s_ec9503ac556343::t_ac2f8e683c369e 623-669
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d75e6f6926d456ef340d70370e8d8de5acca3150",
+  "prompts": {},
+  "sessions": {
+    "s_ec9503ac556343": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05acd-7c47-71c2-85d7-95a2285f1ca0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
