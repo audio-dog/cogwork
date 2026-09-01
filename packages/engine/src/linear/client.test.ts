@@ -507,6 +507,23 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("retries a mutation after a hanging attempt reaches its deadline", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ body: { data: { commentCreate: { success: true } } } }));
+      const onAbort = vi.fn();
+      fetchStub.mockImplementationOnce((_input, init) => {
+        init?.signal?.addEventListener("abort", onAbort);
+        return Promise.withResolvers<Response>().promise;
+      });
+      const client = yield* LinearClient;
+      const request = yield* Effect.forkChild(client.createComment(ref, "AUD-1", "body"));
+      yield* TestClock.adjust("1 minute");
+      yield* Fiber.join(request);
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+      assert.strictEqual(onAbort.mock.calls.length, 1);
+    }).pipe(withToken()),
+  );
+
   it.effect("does not retry an auth failure", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ status: 401, body: {} }));

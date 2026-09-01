@@ -179,6 +179,21 @@ const isTransient = (error: IssueTrackerError) => error.reason === "unavailable"
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
 
+const withTransientAttemptDeadline = <A, R>(attempt: Effect.Effect<A, IssueTrackerError, R>) =>
+  attempt.pipe(
+    Effect.timeout(transientAttemptDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      Effect.fail(unavailable(`Linear request timed out after ${transientAttemptDeadline}`)),
+    ),
+  );
+
+const withTransientRequestPolicy = <A, R>(attempt: Effect.Effect<A, IssueTrackerError, R>) =>
+  Effect.retry(withTransientAttemptDeadline(attempt), {
+    while: isTransient,
+    schedule: transientBackoff,
+    times: 3,
+  });
+
 const teamIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const millisFromIso = (value: string) => {
@@ -369,10 +384,12 @@ const sdkAuth = (credential: Credential) =>
 
 export const verifyCredential = Effect.fn("linear.verifyCredential")(function* (credential: Credential) {
   const nowMillis = yield* Clock.currentTimeMillis;
-  yield* Effect.tryPromise({
-    try: (signal) => new LinearSdk({ ...sdkAuth(credential), signal }).viewer,
-    catch: (cause) => fromSdkError(cause, nowMillis),
-  });
+  yield* withTransientRequestPolicy(
+    Effect.tryPromise({
+      try: (signal) => new LinearSdk({ ...sdkAuth(credential), signal }).viewer,
+      catch: (cause) => fromSdkError(cause, nowMillis),
+    }),
+  );
 });
 
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {
@@ -414,13 +431,12 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       credentials.bearerToken(ref.account),
       (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
     );
-    return yield* Effect.tapError(
+    return yield* withTransientRequestPolicy(
       Effect.tryPromise({
         try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
         catch: (cause) => fromSdkError(cause, nowMillis),
       }),
-      (error) => noteFailure(ref, nowMillis, error),
-    );
+    ).pipe(Effect.tapError((error) => noteFailure(ref, nowMillis, error)));
   });
 
   // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
@@ -432,12 +448,6 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
   ) {
     const response = yield* call(ref, (sdk) =>
       sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables),
-    ).pipe(
-      Effect.timeout(transientAttemptDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        Effect.fail(unavailable(`Linear request timed out after ${transientAttemptDeadline}`)),
-      ),
-      Effect.retry({ while: isTransient, schedule: transientBackoff, times: 3 }),
     );
     if (response.data === undefined) {
       return yield* unavailable("Linear response missing data");
