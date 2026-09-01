@@ -265,7 +265,7 @@ export const schedulingActions = {
 
 const runDaemon = Effect.fn("commands.runDaemon")(
   function* (options: DaemonOptions) {
-    const registry = yield* Registry.WorkspaceRegistry;
+    const registry = yield* (yield* Registry.WorkspaceRegistry).state;
     yield* Effect.logInfo("cogwork daemon started", {
       socket: options.socketPath,
       workspaces: registry.workspaces.length,
