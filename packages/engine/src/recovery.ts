@@ -1,4 +1,5 @@
 import type {
+  AvailabilityCause,
   LifecycleStage,
   PollState,
   RunPlanObservation,
@@ -11,6 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
+import { availabilityCauseSummary } from "./availability";
 import {
   consecutiveFailures,
   type EligibleWork,
@@ -19,6 +21,8 @@ import {
   observedStage,
 } from "./classify";
 import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
+import { Executor } from "./executor";
+import { isStalledFollowUp } from "./follow-up";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
@@ -34,6 +38,7 @@ export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const ledger = yield* RunLedger;
   const scheduler = yield* Scheduler;
+  const executor = yield* Executor;
   const releaseClaim = makeReleaseClaim(issueTracker);
   const recoveredWorkspaces = yield* Ref.make<ReadonlySet<WorkspaceId>>(new Set());
   const recoveredGenerations = yield* Ref.make<ReadonlyMap<WorkspaceId, number>>(new Map());
@@ -180,13 +185,44 @@ export const make = Effect.gen(function* () {
     yield* handoffCrashLoop(workspace, item, stage, crashes, session);
   });
 
+  const rejectRecovery = Effect.fn("Recovery.rejectRecovery")(function* (
+    workspace: RegisteredWorkspace,
+    item: ObservedItem,
+    causes: ReadonlyArray<AvailabilityCause>,
+  ) {
+    const endedAtMillis = yield* Clock.currentTimeMillis;
+    yield* ledger.closeRunning(workspace.config.name, item.id, endedAtMillis);
+    const detail = causes.map((cause) => `- ${availabilityCauseSummary(cause)}`).join("\n");
+    yield* issueTracker
+      .note(
+        workspace,
+        item.id,
+        [
+          "> *This was posted by cogwork.*",
+          "",
+          "**Released a stale claim because the Operation is unavailable.**",
+          "",
+          detail,
+        ].join("\n"),
+      )
+      .pipe(Effect.ignore);
+    yield* releaseClaim(workspace, item.id);
+  });
+
   const recoverItem = Effect.fn("Recovery.recoverItem")(function* (
     workspace: RegisteredWorkspace,
     item: ObservedItem,
     observation: RunPlanObservation,
   ) {
-    const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
     const stage = observedStage(item);
+    const work = stage ? eligibleWork(item, stage) : null;
+    if (work && !isStalledFollowUp(work.stage, work.followUp)) {
+      const availability = yield* executor.availabilityOf(workspace, work);
+      if (!availability.available) {
+        return yield* rejectRecovery(workspace, item, availability.causes);
+      }
+    }
+    const last = yield* ledger.latestRunForItem(workspace.config.name, item.id);
     if (stage && last?.status === "interrupted") {
       return yield* reschedule(workspace, item, stage, "interrupted", last.session, observation);
     }

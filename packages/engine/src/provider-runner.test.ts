@@ -3,7 +3,11 @@ import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
-import { type ChatWithInterruptsPersistence, defineAIPersistence } from "@tanstack/ai-persistence";
+import {
+  type ChatWithInterruptsPersistence,
+  defineAIPersistence,
+  memoryPersistence,
+} from "@tanstack/ai-persistence";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -13,7 +17,6 @@ import * as Stream from "effect/Stream";
 import { ContextAssembler, type ContextAssemblerService, type InstructionLayer } from "./context-assembler";
 import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 import type { HarnessRequest } from "./harness";
-import { makeInterruptStore } from "./interrupt-store";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
 import {
   defaultLoopBudget,
@@ -103,7 +106,7 @@ const stubPersistence = (thread: ReadonlyArray<ModelMessage>): ChatWithInterrupt
         saveThread: () => Promise.resolve(),
       },
       runs: new InMemoryRunStore(),
-      interrupts: makeInterruptStore(),
+      interrupts: memoryPersistence().stores.interrupts,
     },
   });
 

@@ -14,7 +14,7 @@ The long-lived host process that runs the engine on one machine: it serves the R
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
 **Reconcile worker**:
-The background worker that polls every workspace's issue tracker (and, when one is configured, attaches its source control provider's PR state), classifies the results, and stores them in an in-memory reconcile snapshot. One of the daemon's two heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
+The background worker that polls every workspace's issue tracker, asks its configured source control provider to resolve a trusted pull request for every observed work item, classifies the combined results, and stores them in an in-memory reconcile snapshot. A coordination comment is the record of acting, not a precondition for observing a pull request. One of the daemon's two heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
 _Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (resuming this daemon's own interrupted runs or releasing genuinely stale claims).
 
 **Rate-limit scope**:
@@ -134,7 +134,7 @@ A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `
 _Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
 
 **Source control provider adapter**:
-A concrete implementation of the source control provider port — read-only PR observation, GitHub the only one today. Given a work item, it resolves the item's PR by the link key: a GitHub closing reference for numeric GitHub items, or the open PR whose head branch starts with `ticketSlug(item.id)`. It reads checks, reviews, mergeable / base-divergence signal, human comments, and the head branch; it writes nothing. A same-repository head can drive a follow-up worktree on its exact branch. A GitHub issue tracker doubles as its own provider by default; a Linear tracker pairs with a GitHub provider through an explicit `sourceControl` config block.
+A concrete implementation of the source control provider port — read-only PR observation, GitHub the only one today. Given every observed work item, it resolves the item's PR by the link key: a GitHub closing reference for numeric GitHub items, or the open PR whose head branch starts with `ticketSlug(item.id)`. A pull request is trusted when the actor opened it or a write-access account opened it. It reads checks, reviews, mergeable / base-divergence signal, human comments, the draft flag, and the head branch; it writes nothing. A non-draft same-repository head can drive a follow-up worktree on its exact branch. A draft remains attached to the work item but cannot enter follow-up. A GitHub issue tracker doubles as its own provider by default; a Linear tracker pairs with a GitHub provider through an explicit `sourceControl` config block.
 _Avoid_: Forge, code host, client (the HTTP client is a lower-level detail), plugin
 
 **Credential store**:
@@ -202,7 +202,7 @@ A worktree branch holding commits its remote branch lacks while the remote holds
 _Avoid_: Conflict (that's one reason a rebase fails), drift, stale branch (that's just being behind)
 
 **Base divergence**:
-A bot pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the source control provider's mergeable signal (GitHub's `dirty`) on the reconcile poll and treats it as a fourth follow-up trigger; the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
+A pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the source control provider's mergeable signal (GitHub's `dirty`) on the reconcile poll and treats it as a fourth follow-up trigger; the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
 _Avoid_: Branch divergence (that's the branch versus its own remote, not the base), merge conflict (one reason integrating the base fails), stale branch (that's merely behind)
 
 **Workspace registry**:

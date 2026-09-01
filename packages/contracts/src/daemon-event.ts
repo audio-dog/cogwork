@@ -8,6 +8,7 @@ import {
   ClaimedItem,
   ControlStore,
   NeedsHumanItem,
+  OperationAvailabilityList,
   PollState,
   SchedulerStats,
 } from "./daemon";
@@ -30,6 +31,7 @@ export const WorkspaceState = Schema.TaggedUnion({
     issueTracker: IssueTrackerType,
     poll: PollState,
     contributions: Schema.Array(LocalContribution),
+    availability: OperationAvailabilityList,
   },
   Failed: {
     name: Schema.optional(WorkspaceId),

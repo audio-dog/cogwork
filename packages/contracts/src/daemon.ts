@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { Connection } from "./connection";
@@ -6,7 +7,7 @@ import { Claim } from "./coordination";
 import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
 import { LifecycleStage, NeedsHumanReason } from "./triage";
-import { WorkspaceConcurrency } from "./workspace";
+import { OperationNeedKind, WorkspaceConcurrency } from "./workspace";
 
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -67,6 +68,36 @@ export const NeedsHumanItem = Schema.Struct({
 });
 export type NeedsHumanItem = typeof NeedsHumanItem.Type;
 
+export const AvailabilityCause = Schema.TaggedUnion({
+  UnsatisfiedNeed: {
+    need: TrimmedNonEmptyString,
+    kind: OperationNeedKind,
+    reason: Schema.Literals(["unbound", "off", "unavailable", "not-ready"]),
+    contribution: Schema.NullOr(TrimmedNonEmptyString),
+    message: TrimmedNonEmptyString,
+  },
+  RuntimeHostFactFailed: {
+    fact: Schema.Literals(["checkout-path", "harness", "credential"]),
+    message: TrimmedNonEmptyString,
+  },
+  PolicyRefusal: {
+    source: TrimmedNonEmptyString,
+    message: TrimmedNonEmptyString,
+  },
+});
+export type AvailabilityCause = typeof AvailabilityCause.Type;
+
+export const OperationAvailability = Schema.Struct({
+  operation: LifecycleStage,
+  available: Schema.Boolean,
+  causes: Schema.Array(AvailabilityCause),
+});
+export type OperationAvailability = typeof OperationAvailability.Type;
+
+export const OperationAvailabilityList = Schema.Array(OperationAvailability).pipe(
+  Schema.withDecodingDefaultKey(Effect.succeed([])),
+);
+
 export const PollPauseReason = Schema.Literals(["auth", "unavailable", "rate-limited"]);
 export type PollPauseReason = typeof PollPauseReason.Type;
 
@@ -89,6 +120,7 @@ export const WorkspaceInfo = Schema.Struct({
   issueTracker: IssueTrackerType,
   poll: PollState,
   contributions: Schema.Array(LocalContribution),
+  availability: OperationAvailabilityList,
   eligible: Schema.Array(ActionableItem),
   claimed: Schema.Array(ClaimedItem),
   blocked: Schema.Array(BlockedItem),
