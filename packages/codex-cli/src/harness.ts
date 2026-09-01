@@ -80,7 +80,7 @@ const addRemediation = (error: Harness.HarnessError) => {
 
 const codexDiagnostics = (cause: unknown) => {
   const message = HarnessBridge.messageFromUnknown(cause);
-  if (isMissingExecutableCause(cause) || missingExecutablePattern.test(message)) {
+  if (isMissingExecutableCause(cause)) {
     return addRemediation(missingHarnessError(message));
   }
   if (missingLoginPattern.test(message)) return addRemediation(credentialError(message));
