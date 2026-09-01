@@ -36,8 +36,8 @@ const crashLoopsCapped = Metric.counter("cogwork_recovery_crash_loops_capped_tot
   description: "Recovery crash loops capped before another resume.",
 });
 
-const correlationOf = (workspace: RegisteredWorkspace, item: ObservedItem) => {
-  const correlation = { workspace: workspace.config.name, item: item.id };
+const correlationOf = (item: ObservedItem) => {
+  const correlation = { item: item.id };
   const stage = observedStage(item);
   return stage ? { ...correlation, stage } : correlation;
 };
@@ -240,7 +240,7 @@ export const make = Effect.gen(function* () {
     yield* Effect.forEach(
       ours,
       (item) => {
-        const correlation = correlationOf(workspace, item);
+        const correlation = correlationOf(item);
         return recoverItem(workspace, item, observation).pipe(
           Effect.annotateLogs(correlation),
           Effect.annotateSpans(correlation),
@@ -270,7 +270,7 @@ export const make = Effect.gen(function* () {
     yield* Effect.forEach(
       observed.filter((item) => item.claimedByUs),
       (item) => {
-        const correlation = correlationOf(workspace, item);
+        const correlation = correlationOf(item);
         return recoverOrphan(workspace, item).pipe(
           Effect.annotateLogs(correlation),
           Effect.annotateSpans(correlation),
