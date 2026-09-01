@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -51,7 +51,9 @@
     "./configs/lint/no-effect-fn-generator.grit",
     "./configs/lint/no-match-effect-branch.grit",
     "./configs/lint/no-match-void-branch.grit",
-    "./configs/lint/warn-effect-sync-wrapper.grit",
+    "./configs/lint/no-effect-sync-throw.grit",
+    "./configs/lint/no-effect-sync-promise.grit",
+    "./configs/lint/no-effect-sync-effect.grit",
     "./configs/lint/no-runtime-runfork.grit",
     "./configs/lint/no-effect-never.grit",
     "./configs/lint/no-side-effect-in-state-updater.grit",

@@ -37,7 +37,7 @@ export const createDaemonBridgePort = Effect.fn("DaemonBridge.createPort")(funct
     waitForDaemonListening(socketPath).pipe(
       Effect.timeout(connectTimeout),
       Effect.andThen(
-        socket.run((frame) => Effect.sync(() => sink.onData(frame)), {
+        socket.run((frame) => sink.onData(frame), {
           onOpen: Deferred.succeed(connected, undefined),
         }),
       ),
