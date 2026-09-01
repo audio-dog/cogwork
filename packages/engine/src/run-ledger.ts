@@ -62,6 +62,9 @@ const applyUpdate = (record: RunRecord, update: RunUpdate): RunRecord => ({
 const patchRun = (runs: ReadonlyArray<RunRecord>, runId: RunId, patch: (run: RunRecord) => RunRecord) =>
   runs.map((run) => (run.id === runId ? patch(run) : run));
 
+const runningForItem = (workspace: WorkspaceId, workItem: WorkItemId) => (run: RunRecord) =>
+  forItem(workspace, workItem)(run) && run.status === "running";
+
 const transition = (
   runs: ReadonlyArray<RunRecord>,
   match: (run: RunRecord) => boolean,
@@ -98,7 +101,7 @@ const runningBefore = (record: RunRecord, beforeMillis: number) =>
 
 const unresumableStatuses = new Set<RunRecord["status"]>(["interrupted", "crashed", "exhausted"]);
 
-const forItem = (workspace: string, workItem: string) => (run: RunRecord) =>
+const forItem = (workspace: WorkspaceId, workItem: WorkItemId) => (run: RunRecord) =>
   run.workspace === workspace && run.workItem === workItem;
 
 const consecutiveCrashesOf = (runs: ReadonlyArray<RunRecord>, sinceMillis: number) => {
@@ -110,13 +113,13 @@ const consecutiveCrashesOf = (runs: ReadonlyArray<RunRecord>, sinceMillis: numbe
 };
 
 const latestRunWhere = (runs: ReadonlyArray<RunRecord>, match: (run: RunRecord) => boolean) =>
-  runs.reduce<RunRecord | null>(
-    (latest, run) =>
-      !match(run) || (latest !== null && latest.startedAtMillis > run.startedAtMillis) ? latest : run,
-    null,
-  );
+  runs.reduce<RunRecord | null>((latest, run) => {
+    if (!match(run)) return latest;
+    if (latest !== null && latest.startedAtMillis > run.startedAtMillis) return latest;
+    return run;
+  }, null);
 
-const resolveWatchTargetFrom = (runs: ReadonlyArray<RunRecord>, workItem: string) => {
+const resolveWatchTargetFrom = (runs: ReadonlyArray<RunRecord>, workItem: WorkItemId) => {
   const candidates = workItemCandidates(workItem);
   const matches = (run: RunRecord) => candidates.includes(run.workItem);
   return (
@@ -222,13 +225,9 @@ export const makeMemory = Effect.gen(function* () {
           (run) => interrupted(run, endedAtMillis),
         ),
       ),
-    crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+    crashRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
       Ref.modify(runsRef, (runs) =>
-        transition(
-          runs,
-          (run) => forItem(workspace, workItem)(run) && run.status === "running",
-          (run) => crashed(run, endedAtMillis),
-        ),
+        transition(runs, runningForItem(workspace, workItem), (run) => crashed(run, endedAtMillis)),
       ),
     consecutiveCrashes: (workspace: WorkspaceId, workItem: WorkItemId, sinceMillis: number) =>
       Effect.map(Ref.get(runsRef), (runs) =>
@@ -242,7 +241,7 @@ export const makeMemory = Effect.gen(function* () {
         const existing = sessions.get(id);
         return existing ? new Map(sessions).set(id, withHandle(existing, handle)) : sessions;
       }),
-    sessionForBranch: (workspace: string, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
       Effect.map(
         Ref.get(runsRef),
         (runs) =>
@@ -253,15 +252,13 @@ export const makeMemory = Effect.gen(function* () {
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
         Effect.map(([runs, events]) => eventsForSession(runs, events, session)),
       ),
-    closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+    closeRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
       Ref.modify(runsRef, (runs) =>
-        transition(
-          runs,
-          (run) => forItem(workspace, workItem)(run) && run.status === "running",
-          (run) => applyUpdate(run, closeRunningUpdate(endedAtMillis)),
+        transition(runs, runningForItem(workspace, workItem), (run) =>
+          applyUpdate(run, closeRunningUpdate(endedAtMillis)),
         ),
       ),
-    latestRunByBranch: (workspace: string, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
       Effect.all([Ref.get(runsRef), Ref.get(sessionsRef)]).pipe(
         Effect.map(([runs, sessions]) =>
           latestRunWhere(
@@ -275,9 +272,9 @@ export const makeMemory = Effect.gen(function* () {
           ),
         ),
       ),
-    latestRunForItem: (workspace: string, workItem: string) =>
+    latestRunForItem: (workspace: WorkspaceId, workItem: WorkItemId) =>
       Effect.map(Ref.get(runsRef), (runs) => latestRunWhere(runs, forItem(workspace, workItem))),
-    resolveWatchTarget: (workItem: string) =>
+    resolveWatchTarget: (workItem: WorkItemId) =>
       Effect.map(Ref.get(runsRef), (runs) => resolveWatchTargetFrom(runs, workItem)),
     listRuns: (limit: number) =>
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
@@ -326,9 +323,9 @@ const withRunChangedPublishing = (core: RunLedgerService, bus: DaemonEventBusSer
       Effect.tap(core.interruptRunning(startedFromMillis, endedAtMillis), publishAll),
     interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
       Effect.tap(core.interruptRunningBefore(beforeMillis, endedAtMillis), publishAll),
-    crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+    crashRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
       Effect.tap(core.crashRunning(workspace, workItem, endedAtMillis), publishAll),
-    closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+    closeRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
       Effect.tap(core.closeRunning(workspace, workItem, endedAtMillis), publishAll),
   } satisfies RunLedgerService;
 };
