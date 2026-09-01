@@ -1,5 +1,6 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
@@ -241,15 +242,21 @@ export const make = Effect.gen(function* () {
     const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
     if (!exists) {
       const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
-      yield* git.addWorktree({ repoPath, worktreePath, branch, startPoint });
-    } else if (hasRemoteBranch) {
-      yield* syncBranch(worktreePath, remote, branch);
-    } else {
-      yield* logMissingRemote(remote, branch);
+      yield* Effect.acquireUseRelease(
+        git.addWorktree({ repoPath, worktreePath, branch, startPoint }),
+        () => runSetup(repoPath, worktreePath, config),
+        (_created, exit) =>
+          Exit.isSuccess(exit)
+            ? Effect.void
+            : Effect.ignore(git.removeWorktree(repoPath, worktreePath, true)),
+      );
+      return { branch, path: worktreePath, created: true } satisfies EnsuredWorktree;
     }
 
+    if (hasRemoteBranch) yield* syncBranch(worktreePath, remote, branch);
+    else yield* logMissingRemote(remote, branch);
     yield* runSetup(repoPath, worktreePath, config);
-    return { branch, path: worktreePath, created: !exists } satisfies EnsuredWorktree;
+    return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
   });
 
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {

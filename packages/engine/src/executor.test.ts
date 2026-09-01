@@ -25,7 +25,6 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
-import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
@@ -34,6 +33,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { EligibleWork } from "./classify";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import * as ContextAssembler from "./context-assembler";
@@ -260,6 +260,17 @@ const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
           source: contribution.file,
           content: contribution.id,
         })),
+      operatingInstructionsPath: "/",
+      operatingInstructionResources: [],
+      sources: [],
+    }),
+  cleanup: () => Effect.void,
+});
+
+const invalidRunPlanContext = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: () =>
+    Effect.succeed({
+      layers: [{ kind: "repo" as const, source: "/repos/gh/AGENTS.md", content: "trailing newline\n" }],
       operatingInstructionsPath: "/",
       operatingInstructionResources: [],
       sources: [],
@@ -534,6 +545,7 @@ class HarnessGate extends Context.Service<HarnessGate, Deferred.Deferred<void>>(
 interface HarnessObservationState {
   readonly span: Ref.Ref<Tracer.Span | null>;
   readonly preflightEntered: Deferred.Deferred<void>;
+  readonly released: Ref.Ref<boolean>;
   readonly logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }>;
 }
 
@@ -545,6 +557,7 @@ class HarnessObservation extends Context.Service<HarnessObservation, HarnessObse
     Effect.all({
       span: Ref.make<Tracer.Span | null>(null),
       preflightEntered: Deferred.make<void>(),
+      released: Ref.make(false),
       logs: Effect.succeed([]),
     }),
   );
@@ -633,6 +646,22 @@ const observingRunner: TestRunner = {
           yield* Effect.logInfo("library log", { session: "sess-42" });
           return Stream.fromArray(implementEvents);
         }),
+      ),
+  }),
+};
+
+const resourceRunner: TestRunner = {
+  make: (_requests, _gate, observation) => ({
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    run: () =>
+      Stream.unwrap(
+        Effect.acquireRelease(Effect.succeed(Stream.fromArray(implementEvents)), () =>
+          Ref.set(observation.released, true),
+        ),
       ),
   }),
 };
@@ -861,9 +890,8 @@ const unavailableCommentProviderLayer: Layer.Layer<SourceControlProvider | Poste
 ).pipe(Layer.provideMerge(PostedComments.layer));
 
 const runControlStub = Layer.succeed(RunControl.RunControl, {
-  register: () => Effect.void,
-  workspaceFor: () => Effect.succeed(Option.none()),
-  cancel: () => Effect.succeed(false),
+  run: (_runId, _workspace, effect) => effect,
+  cancel: () => Effect.succeed(RunControl.RunCancellation.NotFound({})),
 });
 const pluginManagerStub = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
@@ -1165,6 +1193,7 @@ function provide(
     layer: Layer.Layer<RunLedger.RunLedger>,
   ) => Layer.Layer<RunLedger.RunLedger> = runLedgerIdentity,
   connections = connectionStoreStub,
+  runControl: Layer.Layer<RunControl.RunControl> = runControlStub,
 ) {
   const bus = DaemonEventBus.layer;
   const runLedger = transformRunLedger(RunLedger.layerMemory.pipe(Layer.provide(bus)));
@@ -1175,6 +1204,7 @@ function provide(
     contextAssembler,
     CredentialStore.layerEnv,
     FileSystem.layerNoop({}),
+    FetchHttpClient.layer,
   );
   return Executor.layer.pipe(
     Layer.provideMerge(
@@ -1182,12 +1212,13 @@ function provide(
         issueTracker,
         sourceControl,
         sessionStore,
-        testHarness(runners).pipe(Layer.provide(runnerServices)),
+        testHarness(runners),
+        runnerServices,
         runLedger,
         runRecorder,
         bus,
         ContextCleanupCalls.layer,
-        runControlStub,
+        runControl,
         worktree,
         assemblerStub,
         contextAssembler,
@@ -1340,6 +1371,42 @@ describe("Executor.execute", () => {
       assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured");
     }).pipe(Effect.provide(provide([runner([text("I could not produce a result."), finished])])));
   });
+
+  it.effect("settles a run when an event cannot be encoded", () =>
+    Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "exhausted");
+      assert.strictEqual(run?.eventCount, 1);
+      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+    }).pipe(
+      Effect.provide(provide([runner([{ type: "CUSTOM", content: 1n } satisfies AgUiEvent, finished])])),
+    ),
+  );
+
+  it.effect("settles a run when its deferred terminal event cannot be encoded", () =>
+    Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "exhausted");
+      assert.strictEqual(run?.eventCount, successEvents.length);
+      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+    }).pipe(
+      Effect.provide(
+        provide([
+          runner(
+            successEvents.map((event) => (event.type === "RUN_FINISHED" ? { ...event, content: 1n } : event)),
+          ),
+        ]),
+      ),
+    ),
+  );
 
   it.effect("retries a triage run that emits more than one structured result", () => {
     const result = {
@@ -1833,6 +1900,15 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([observingRunner])));
   });
 
+  it.effect("releases runner resources when the run ends", () =>
+    Effect.gen(function* () {
+      const observation = yield* HarnessObservation;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+      assert.isTrue(yield* Ref.get(observation.released));
+    }).pipe(Effect.provide(provide([resourceRunner]))),
+  );
+
   it.effect("logs cleanup failures without repeating claimed-run annotations", () => {
     return Effect.gen(function* () {
       const observation = yield* HarnessObservation;
@@ -2116,6 +2192,55 @@ describe("Executor.execute", () => {
       assert.isFalse(log.some((c) => c.method === "release"));
       assert.lengthOf(yield* Ref.get(cleanups), 1);
     }).pipe(Effect.provide(provide([gatedRunner])), Effect.scoped);
+  });
+
+  it.effect("releases the claim after a manual cancellation finishes cleanup", () => {
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const cleanups = yield* ContextCleanupCalls;
+      const executor = yield* Executor.Executor;
+      const control = yield* RunControl.RunControl;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+
+      yield* DaemonEventBus.runActivityStream(Stream.fromSubscription(subscription)).pipe(
+        Stream.filter((item) => item.event.type === "TEXT_MESSAGE_CONTENT"),
+        Stream.runHead,
+      );
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.isNotNull(run ?? null);
+      if (!run) return;
+
+      const cancellation = yield* control.cancel(run.id);
+      assert.strictEqual(cancellation._tag, "Interrupting");
+      if (cancellation._tag === "Interrupting") yield* cancellation.awaitTermination;
+      yield* Fiber.await(running);
+
+      const log = yield* Ref.get(calls);
+      assert.isTrue(log.some((call) => call.method === "release"));
+      assert.lengthOf(yield* Ref.get(cleanups), 1);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [gatedRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer(runnableStages, []),
+          runLedgerIdentity,
+          connectionStoreStub,
+          RunControl.layer,
+        ),
+      ),
+      Effect.scoped,
+    );
   });
 
   it.effect("releases the claim without ledgering a Run when preparation is interrupted", () => {
@@ -2499,6 +2624,45 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([runner(implementEvents)], unreachableRemoteWorktree)));
+  });
+
+  it.effect("records invalid Run Plan input through the normal attempt path", () => {
+    const atCap = { ...implementItem, priorFailures: 2 };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, atCap);
+
+      const log = yield* Ref.get(calls);
+      const attempts = log.filter((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempts.length, 2);
+      assert.isTrue(
+        attempts.every(
+          (attempt) =>
+            attempt.reason?.includes("RunPlanInstruction") === true && attempt.reason.includes("content"),
+        ),
+      );
+      const handOff = log.find((call) => call.method === "handOff");
+      assert.include(handOff?.note ?? "", "3 failed implement attempts");
+      assert.strictEqual((yield* Ref.get(requests)).length, 0);
+
+      const ledger = yield* RunLedger.RunLedger;
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          invalidRunPlanContext,
+        ),
+      ),
+    );
   });
 
   it.effect("hands a permanent Run acceptance failure to a human without retrying", () => {

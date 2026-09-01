@@ -10,8 +10,8 @@ import {
   stageResultJsonSchema,
   TriageStageResult,
 } from "@cogwork/contracts";
-import { type ContextAssembler, type CredentialStore, Harness, type SessionStore } from "@cogwork/engine";
-import { assert, describe, it } from "@effect/vitest";
+import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
+import { assert, describe, it, layer } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -19,10 +19,14 @@ import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   type CodexRunChat,
   type CodexRunChatOptions,
@@ -36,6 +40,7 @@ import {
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const session = Schema.decodeSync(SessionId)("session-1");
+const testEnvironment = { HOME: "/home/codex", PATH: "/usr/bin" };
 
 const assembled: ContextAssembler.AssembledContext = {
   layers: [
@@ -79,6 +84,14 @@ const credentialStore: CredentialStore.CredentialStoreService = {
 };
 
 const fileSystem = FileSystem.makeNoop({});
+
+const harnessRunnerLayer = Layer.mergeAll(
+  Layer.succeed(SessionStore.SessionStore, sessionStore),
+  Layer.succeed(ContextAssembler.ContextAssembler, contextAssembler),
+  Layer.succeed(CredentialStore.CredentialStore, credentialStore),
+  Layer.succeed(FileSystem.FileSystem, fileSystem),
+  FetchHttpClient.layer,
+);
 
 interface RequestOverrides {
   readonly checkoutPath?: string;
@@ -159,9 +172,10 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
   };
 };
 
-const testRunner = (options: Omit<CodexRunnerOptions, "name">) =>
+const testRunner = (options: Omit<CodexRunnerOptions, "name" | "environment">) =>
   codexRunner({
     name,
+    environment: testEnvironment,
     resolveGitMetadataDirectory: () => Effect.succeed(null),
     ...options,
   });
@@ -184,12 +198,19 @@ const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => ({
   },
 });
 
-const runErrorChunk = (message: string) =>
+const runErrorChunk = (
+  message: string,
+  fields: { readonly code?: string; readonly rawEvent?: unknown } = {},
+) =>
   ({
     type: EventType.RUN_ERROR,
     message,
-    error: { message },
+    ...fields,
   }) satisfies StreamChunk;
+
+const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
+  [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+});
 
 const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>
   events.flatMap((event) => {
@@ -226,15 +247,13 @@ const makeLiveHarness = (codexExecutable = fakeCodexExecutable()) =>
   ).pipe(
     Effect.map((handle) => ({
       handle,
-      harness: Harness.make(
-        [
-          codexRunner({
-            name,
-            codexExecutable,
-          }),
-        ],
-        { sessionStore, contextAssembler, credentialStore, fileSystem },
-      ),
+      harness: Harness.make([
+        codexRunner({
+          name,
+          environment: process.env,
+          codexExecutable,
+        }),
+      ]),
     })),
   );
 
@@ -260,7 +279,7 @@ const linkedWorktree = (handle: SandboxHandle) =>
     return { checkoutPath, commonDirectory: commonDirectory.stdout.trim() };
   });
 
-describe("codexRunner", () => {
+layer(harnessRunnerLayer)("codexRunner", (it) => {
   it("encodes projected MCP names into exact environment keys", () => {
     assert.strictEqual(
       testMcpEnvName("test__linear__0"),
@@ -269,7 +288,7 @@ describe("codexRunner", () => {
   });
 
   it("declares an opaque Codex-owned session", () => {
-    assert.strictEqual(codexRunner({ name }).sessionKind, "opaque-handle");
+    assert.strictEqual(codexRunner({ name, environment: testEnvironment }).sessionKind, "opaque-handle");
   });
 
   it.effect("assembles context, applies policy, resumes Codex, and bridges every event field", () =>
@@ -287,7 +306,7 @@ describe("codexRunner", () => {
         },
         runChat,
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       const events = yield* Stream.runCollect(harness.run(makeRequest()));
 
@@ -299,7 +318,7 @@ describe("codexRunner", () => {
             sandboxMode: "workspace-write",
             networkAccessEnabled: true,
             modelReasoningEffort: "high",
-            env: codexChildEnvironment(),
+            env: codexChildEnvironment(testEnvironment),
           },
         ],
       ]);
@@ -334,7 +353,7 @@ describe("codexRunner", () => {
           return toAsyncIterable(chunks);
         },
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       yield* harness.run(makeRequest()).pipe(Stream.take(1), Stream.runDrain);
 
@@ -352,7 +371,7 @@ describe("codexRunner", () => {
         },
         runChat: () => toAsyncIterable(chunks),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       yield* Stream.runDrain(
         harness.run(
@@ -376,7 +395,7 @@ describe("codexRunner", () => {
         [`mcp_servers.${projectedName}.bearer_token_env_var`]: `"${envName}"`,
       });
       assert.deepStrictEqual(config.env, {
-        ...codexChildEnvironment(),
+        ...codexChildEnvironment(testEnvironment),
         [envName]: "mcp-secret",
       });
       assert.strictEqual(config.env?.[envName], "mcp-secret");
@@ -395,7 +414,7 @@ describe("codexRunner", () => {
         },
         runChat: () => toAsyncIterable(chunks),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       yield* Stream.runDrain(
         harness.run(
@@ -422,7 +441,7 @@ describe("codexRunner", () => {
         [`mcp_servers.${privateName}.bearer_token_env_var`]: `"${privateEnvName}"`,
       });
       assert.deepStrictEqual(config.env, {
-        ...codexChildEnvironment(),
+        ...codexChildEnvironment(testEnvironment),
         [privateEnvName]: "rotated-secret",
       });
       const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
@@ -440,7 +459,7 @@ describe("codexRunner", () => {
         },
         runChat: () => toAsyncIterable(chunks),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
       const mcpSkill = (bearer: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [
         { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", bearer: Redacted.make(bearer) },
       ];
@@ -457,12 +476,12 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("preserves unexpected preflight failures as launch errors", () =>
+  it.effect("preserves unexpected preflight exit codes as launch errors", () =>
     Effect.gen(function* () {
       const runner = testRunner({
-        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(1)'`,
+        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(2)'`,
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
@@ -472,70 +491,142 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live(
-    "keeps a timed-out preflight retryable",
-    () =>
-      Effect.gen(function* () {
-        const runner = testRunner({
-          codexExecutable: `node -e 'process.stdin.resume()'`,
-        });
-        const harness = Harness.make([runner], {
-          sessionStore,
-          contextAssembler,
-          credentialStore,
-          fileSystem,
-        });
+  it.effect("classifies a missing preflight executable by exit code", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: `node -e 'process.exit(127)'`,
+      });
+      const harness = Harness.make([runner]);
 
-        const error = yield* Effect.flip(harness.preflight(name, "full", null));
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
-        assert.strictEqual(error.reason, "launch");
-        assert.isTrue(error.retryable);
-        assert.include(error.message, "readiness check");
-      }),
-    10_000,
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
   );
 
-  it.live("classifies explicit preflight login failures as credential errors", () =>
+  it.effect("keeps a timed-out preflight retryable", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: `node -e 'process.stdin.resume()'`,
+      });
+      const harness = Harness.make([runner]);
+
+      const fiber = yield* Effect.forkChild(Effect.flip(harness.preflight(name, "full", null)));
+      yield* TestClock.adjust("6 seconds");
+      const error = yield* Fiber.join(fiber);
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isTrue(error.retryable);
+      assert.include(error.message, "readiness check");
+    }),
+  );
+
+  it.effect("adds login remediation without changing an ambiguous preflight exit classification", () =>
     Effect.gen(function* () {
       const runner = testRunner({
         codexExecutable: `node -e 'process.stderr.write("You are not logged in"); process.exit(1)'`,
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
-      assert.strictEqual(error.reason, "credential");
+      assert.strictEqual(error.reason, "launch");
       assert.isFalse(error.retryable);
-      assert.include(error.message, "not authenticated");
+      assert.include(error.message, "codex login");
     }),
   );
 
-  it.effect("gives an actionable handoff for a missing Codex binary", () =>
+  it.effect("does not classify missing-executable wording as a permanent failure", () =>
     Effect.gen(function* () {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("spawn codex ENOENT")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
-      assert.strictEqual(error.reason, "launch");
-      assert.isFalse(error.retryable);
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
       assert.include(error.message, "Install Codex CLI");
     }),
   );
 
-  it.effect("gives an actionable handoff for a missing Codex login", () =>
+  it.effect("hands off a RUN_ERROR with a missing-executable code", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () => toAsyncIterable([runErrorChunk("Codex could not start", { code: "ENOENT" })]),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("reads a missing-executable code from the raw RUN_ERROR payload", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () =>
+          toAsyncIterable([
+            runErrorChunk("Codex could not start", { rawEvent: { error: { code: "ENOENT" } } }),
+          ]),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("finds a nested missing-executable code behind a generic RUN_ERROR code", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () =>
+          toAsyncIterable([
+            runErrorChunk("Codex could not start", {
+              code: "unknown",
+              rawEvent: { error: { code: "ENOENT" } },
+            }),
+          ]),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("classifies a thrown missing-executable code", () =>
+    Effect.gen(function* () {
+      const failure = Object.assign(new Error("Codex could not start"), { code: "EACCES" });
+      const runner = testRunner({ runChat: () => failedChat(failure) });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("does not classify missing-login wording as a permanent failure", () =>
     Effect.gen(function* () {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("You are not logged in")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
-      assert.strictEqual(error.reason, "launch");
-      assert.isFalse(error.retryable);
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
       assert.include(error.message, "codex login");
     }),
   );
@@ -545,7 +636,7 @@ describe("codexRunner", () => {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("File not found: /repo/input.json")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
@@ -559,7 +650,7 @@ describe("codexRunner", () => {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("Provider authentication failed with status 401")]),
       });
-      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
@@ -568,7 +659,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("completes a fresh run through the Codex adapter and native event loop", () =>
+  it.effect("completes a fresh run through the Codex adapter and native event loop", () =>
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness();
 
@@ -603,17 +694,14 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("grants Codex access to linked-worktree Git metadata", () =>
+  it.effect("grants Codex access to linked-worktree Git metadata", () =>
     Effect.gen(function* () {
       const { handle } = yield* makeLiveHarness();
       const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
 
-      const harness = Harness.make([codexRunner({ name, codexExecutable: fakeCodexExecutable() })], {
-        sessionStore,
-        contextAssembler,
-        fileSystem,
-        credentialStore,
-      });
+      const harness = Harness.make([
+        codexRunner({ name, environment: process.env, codexExecutable: fakeCodexExecutable() }),
+      ]);
       const events = yield* Stream.runCollect(harness.run(makeRequest({ checkoutPath, session: null })));
       const capture = yield* structuredCapture(events);
 
@@ -622,7 +710,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("probes authenticated Codex linked-worktree commits when explicitly enabled", () =>
+  it.effect("probes authenticated Codex linked-worktree commits when explicitly enabled", () =>
     Effect.gen(function* () {
       const probe = yield* Config.string("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
       if (probe !== "1") return;
@@ -651,7 +739,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("returns a plain capture when the stage has no output schema", () =>
+  it.effect("returns a plain capture when the stage has no output schema", () =>
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness();
       const events = yield* Stream.runCollect(
@@ -673,7 +761,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("keeps an MCP bearer out of the Codex command, events, and worktree configuration", () =>
+  it.effect("keeps an MCP bearer out of the Codex command, events, and worktree configuration", () =>
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness();
       const events = yield* Stream.runCollect(
@@ -703,7 +791,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("streams one structured triage result through the native Codex adapter", () =>
+  it.effect("streams one structured triage result through the native Codex adapter", () =>
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness();
       const events = yield* Stream.runCollect(
@@ -735,7 +823,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("streams one structured follow-up result through the native Codex adapter", () =>
+  it.effect("streams one structured follow-up result through the native Codex adapter", () =>
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness();
       const events = yield* Stream.runCollect(
@@ -757,7 +845,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("records a fresh Codex handle and resumes it natively with reinjected context", () =>
+  it.effect("records a fresh Codex handle and resumes it natively with reinjected context", () =>
     Effect.gen(function* () {
       const { handle, harness: freshHarness } = yield* makeLiveHarness();
       const freshEvents = yield* Stream.runCollect(
@@ -766,22 +854,20 @@ describe("codexRunner", () => {
       const recordedHandle = freshEvents.map(agUiSessionId).find((value) => value !== null);
       if (!recordedHandle) return assert.fail("fresh Codex run emitted no session handle");
 
-      const resumedHarness = Harness.make(
-        [
-          codexRunner({
-            name,
-            codexExecutable: `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}`,
-          }),
-        ],
-        {
-          sessionStore: { ...sessionStore, resumeHandle: () => Effect.succeed(recordedHandle) },
-          contextAssembler,
-          credentialStore,
-          fileSystem,
-        },
-      );
+      const resumedHarness = Harness.make([
+        codexRunner({
+          name,
+          environment: process.env,
+          codexExecutable: `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}`,
+        }),
+      ]);
       const resumedEvents = yield* Stream.runCollect(
         resumedHarness.run(makeRequest({ checkoutPath: handle.id, prompt: "current run prompt" })),
+      ).pipe(
+        Effect.provideService(SessionStore.SessionStore, {
+          ...sessionStore,
+          resumeHandle: () => Effect.succeed(recordedHandle),
+        }),
       );
       const capture = yield* structuredCapture(resumedEvents);
 
@@ -802,7 +888,7 @@ describe("codexRunner", () => {
     }),
   );
 
-  it.live("terminates the Codex child process when the run is interrupted", () =>
+  it.effect("terminates the Codex child process when the run is interrupted", () =>
     Effect.gen(function* () {
       const { handle, harness } = yield* makeLiveHarness(fakeCodexExecutable(" --hang"));
 

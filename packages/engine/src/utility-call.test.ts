@@ -1,6 +1,10 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
+import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
+import * as TestClock from "effect/testing/TestClock";
 import { CredentialError, type CredentialStoreService } from "./credential-store";
 import { defaultModelAdapterFactory, type ModelAdapterFactory } from "./provider-adapter";
 import {
@@ -110,6 +114,34 @@ describe("UtilityModel.complete", () => {
       const error = yield* Effect.flip(utility.complete({ model: "openai/gpt-4o", prompt: "hi" }));
       assert.instanceOf(error, UtilityCallError);
       assert.strictEqual(error.message, "provider exploded");
+    }),
+  );
+
+  it.effect("aborts a utility call when its deadline expires", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const aborted = yield* Deferred.make<void>();
+      const utility = make(credentialStore(keyProvider), {
+        runChat: ({ abortController }) => {
+          Deferred.doneUnsafe(started, Effect.void);
+          const pending = Promise.withResolvers<string>();
+          abortController.signal.addEventListener(
+            "abort",
+            () => {
+              Deferred.doneUnsafe(aborted, Effect.void);
+              pending.reject(new Error("aborted"));
+            },
+            { once: true },
+          );
+          return pending.promise;
+        },
+      });
+      const fiber = yield* utility.complete({ prompt: "summarize" }).pipe(Effect.flip, Effect.forkChild);
+      yield* Deferred.await(started);
+      yield* TestClock.adjust("2 minutes");
+      const error = yield* Fiber.join(fiber);
+      assert.strictEqual(error.reason, "timeout");
+      assert.isTrue(Option.isSome(yield* Deferred.poll(aborted)));
     }),
   );
 });

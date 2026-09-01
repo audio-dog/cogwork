@@ -5,7 +5,6 @@ import {
   type ConnectionMutationResult,
   ConnectionSystem,
   type ConnectionSystem as ConnectionSystemType,
-  DaemonRpcs,
 } from "@cogwork/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -15,9 +14,8 @@ import * as Schema from "effect/Schema";
 import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { defaultSocketPath } from "./paths";
-import { clientLayer } from "./rpc";
+import { clientLayer, makeDaemonClient } from "./rpc";
 
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
@@ -106,7 +104,7 @@ const mutate = Effect.fn("connection.mutate")(function* (options: {
 }) {
   const system = yield* decodeSystem(options.system);
   const source = yield* sourceOf(options, system);
-  const client = yield* RpcClient.make(DaemonRpcs);
+  const client = yield* makeDaemonClient();
   const establishment = { system, account: options.account, source };
   const result =
     options.operation === "establish"
@@ -127,7 +125,7 @@ const remove = Effect.fn("connection.remove")(function* (options: {
   readonly socket: string;
   readonly connectionId: string;
 }) {
-  const client = yield* RpcClient.make(DaemonRpcs);
+  const client = yield* makeDaemonClient();
   const connectionId = yield* decodeConnectionId(options.connectionId);
   const result = yield* client.RemoveConnection({ connectionId });
   yield* Console.log(formatConnectionMutation("Removed", result));

@@ -1,20 +1,22 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
+import { Cause, Effect, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { app, BrowserWindow } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveEngineCommand } from "./engine-command";
 import { EngineSupervisor } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
-import { engineLogger, mainLogger } from "./logger";
+import { engineLoggerLayer, mainLogger } from "./logger";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
+import { waitForDaemonListening } from "./wait-for-socket";
 import { createMainWindow, type MainWindowDeps } from "./window";
 import { createWindowPreferencesStore } from "./window-preferences";
 
-const control = { quitting: false, engineStopped: false };
+const control = { quitting: false };
 
-const requestQuit = (): void => {
+const requestQuit = () => {
   control.quitting = true;
   app.quit();
 };
@@ -27,8 +29,8 @@ const windowDeps: MainWindowDeps = {
   requestQuit,
 };
 
-const showMainWindow = (): void => {
-  const [window] = BrowserWindow.getAllWindows();
+const showMainWindow = () => {
+  const window = BrowserWindow.getAllWindows()[0];
   if (!window) {
     createMainWindow(windowDeps);
     return;
@@ -38,7 +40,7 @@ const showMainWindow = (): void => {
   window.focus();
 };
 
-const makeSupervisor = (): EngineSupervisor => {
+const makeSupervisorLayer = () => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
   const command = resolveEngineCommand({
@@ -49,25 +51,49 @@ const makeSupervisor = (): EngineSupervisor => {
     engineEntry: process.env.COGWORK_ENGINE_ENTRY,
   });
 
-  const supervisor = new EngineSupervisor({
+  return EngineSupervisor.layer({
     command,
     socketPath,
     spawn: (engine) =>
       spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),
     probe: isDaemonListening,
-    logger: engineLogger,
-    onStatus: (status) => {
-      engineLogger.info(`Engine status: ${status}`);
-      broadcastEngineStatus(BrowserWindow.getAllWindows(), status);
-    },
+    awaitReachable: waitForDaemonListening,
   });
-
-  registerIpc({ socketPath, supervisor, windowPreferences });
-  return supervisor;
 };
 
-const bootstrap = (): void => {
+const publishEngineStatus = Effect.fn("DesktopMain.publishEngineStatus")(function* (
+  status: Parameters<typeof broadcastEngineStatus>[1],
+) {
+  yield* Effect.logInfo("Engine status changed", { status });
+  yield* Effect.sync(() => broadcastEngineStatus(BrowserWindow.getAllWindows(), status));
+});
+
+const engineStatusPublisherLayer = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const supervisor = yield* EngineSupervisor;
+    yield* SubscriptionRef.changes(supervisor.status).pipe(
+      Stream.runForEach(publishEngineStatus),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) => Effect.logError("Engine status publisher failed", { cause }),
+      ),
+      Effect.forkScoped({ startImmediately: true }),
+    );
+  }),
+);
+
+const makeMainLayer = () => {
+  const supervisor = makeSupervisorLayer();
+  const publisher = engineStatusPublisherLayer.pipe(
+    Layer.provide(supervisor),
+    Layer.provide(engineLoggerLayer),
+  );
+  return Layer.mergeAll(supervisor, publisher, engineLoggerLayer);
+};
+
+const bootstrap = () => {
   app.whenReady().then(async () => {
+    const runtime = ManagedRuntime.make(makeMainLayer());
     electronApp.setAppUserModelId("com.cogwork");
     app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
 
@@ -81,7 +107,8 @@ const bootstrap = (): void => {
       mainLogger.error(`Render process gone: ${details.reason} (exitCode ${details.exitCode})`);
     });
 
-    const supervisor = makeSupervisor();
+    const supervisor = runtime.runSync(EngineSupervisor);
+    registerIpc({ socketPath: defaultSocketPath, supervisor, windowPreferences, runtime });
 
     createMainWindow(windowDeps);
     createTray({
@@ -94,16 +121,9 @@ const bootstrap = (): void => {
     app.on("before-quit", () => {
       control.quitting = true;
     });
-    app.on("will-quit", (event) => {
-      if (control.engineStopped) return;
-      event.preventDefault();
-      supervisor.stop().finally(() => {
-        control.engineStopped = true;
-        app.quit();
-      });
-    });
+    app.on("will-quit", () => runtime.dispose());
 
-    await supervisor.start();
+    await runtime.runPromise(supervisor.start);
   });
 };
 

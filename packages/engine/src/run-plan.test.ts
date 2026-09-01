@@ -11,6 +11,7 @@ import {
   WorkspaceConfig,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
@@ -26,6 +27,7 @@ import {
   resolveEngineContributionUnion,
   resolveEngineOperationSetting,
   resolveRunPlanStage,
+  tryAssembleRunPlan,
 } from "./run-plan";
 
 describe("projectedContributionName", () => {
@@ -270,6 +272,7 @@ const hostHarness: OperationSettingRow = {
 };
 const solModel: OperationSettingRow = { ...profileDefault, setting: "model", value: "gpt-5.6-sol" };
 const highEffort: OperationSettingRow = { ...profileDefault, setting: "effort", value: "high" };
+const invalidPlanRunId = Schema.decodeSync(RunId)("run-invalid-plan");
 
 describe("stage settings come from Operation settings", () => {
   it("enables a stage from an Operation setting rather than the Workspace input", () => {
@@ -309,9 +312,142 @@ describe("stage settings come from Operation settings", () => {
     assert.strictEqual(resolved?.stage.model, "gpt-5.6-sol");
     assert.strictEqual(resolved?.stage.effort, "high");
   });
+
+  it("trims model and effort and treats blank values as unset", () => {
+    const configured = resolveRunPlanStage(bareConfig, "implement", [
+      codexHarness,
+      { ...profileDefault, setting: "model", value: "  gpt-5.6-sol\n" },
+      { ...profileDefault, setting: "effort", value: "  high\t" },
+    ]);
+    const blank = resolveRunPlanStage(bareConfig, "implement", [
+      codexHarness,
+      solModel,
+      highEffort,
+      {
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        setting: "model",
+        value: "  ",
+      },
+      {
+        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        scope: { _tag: "SettingsProfile" },
+        setting: "effort",
+        value: "\n",
+      },
+    ]);
+
+    assert.strictEqual(configured?.stage.model, "gpt-5.6-sol");
+    assert.strictEqual(configured?.stage.effort, "high");
+    assert.strictEqual(blank?.stage.model, "gpt-5.6-sol");
+    assert.strictEqual(blank?.stage.effort, "high");
+    assert.deepStrictEqual(
+      blank?.settings.get("model")?.dropped.map(({ reason }) => reason),
+      ["blank value is unset"],
+    );
+  });
 });
 
 describe("Run Plan assembly", () => {
+  it.effect("fails invalid plan input with a typed assembly error", () => {
+    const resolved = resolveRunPlanStage(workspace.config, "implement", [codexHarness]);
+    assert.isNotNull(resolved);
+    if (!resolved) return Effect.void;
+
+    return Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        tryAssembleRunPlan({
+          runId: invalidPlanRunId,
+          workspace,
+          item,
+          observation: { generation: 12, observedAtMillis: 1000 },
+          resolved,
+          prompt: "Implement #228",
+          checkoutPath: "/worktrees/228",
+          sessionKind: "opaque-handle",
+          projectedMembers: ["Instructions", "Messages", "MCP", "Sandbox", "Persistence"],
+          middleware: [],
+          context: {
+            ...context,
+            layers: [{ kind: "repo", source: "/repo/AGENTS.md", content: "trailing newline\n" }],
+          },
+          contributions: workspace.contributions,
+          mcpServers: [],
+          provenanceStamps: [],
+        }),
+      );
+
+      assert.strictEqual(error._tag, "RunPlanAssemblyError");
+      assert.include(error.message, "RunPlanInstruction");
+      assert.include(error.message, "content");
+    });
+  });
+
+  it("trims workspace and Plugin MCP server names and endpoints", () => {
+    const pluginMcp = {
+      id: "plugin:linear/mcp/linear",
+      authority: "plugin:linear",
+      kind: "mcp-server",
+      localName: "linear",
+      file: "/plugins/linear/mcp/linear.json",
+    } satisfies FileContribution;
+    const workspaceConfig: WorkspaceConfig = {
+      ...workspace.config,
+      mcpSkills: [
+        {
+          name: "  workspace-tools\n",
+          endpoint: "  https://mcp.example.test/tools\t",
+          auth: { type: "credential-store" },
+        },
+      ],
+    };
+    const resolved = resolveRunPlanStage(workspaceConfig, "implement", [codexHarness]);
+    assert.isNotNull(resolved);
+    if (!resolved) return;
+
+    const plan = assembleRunPlan({
+      runId: Schema.decodeSync(RunId)("run-trimmed-mcp"),
+      workspace,
+      item,
+      observation: { generation: 12, observedAtMillis: 1000 },
+      resolved,
+      prompt: "Implement #228",
+      checkoutPath: "/worktrees/228",
+      sessionKind: "opaque-handle",
+      projectedMembers: ["MCP"],
+      middleware: [],
+      context,
+      contributions: [pluginMcp],
+      mcpServers: [
+        {
+          identity: null,
+          name: "  workspace-tools\n",
+          endpoint: "  https://mcp.example.test/tools\t",
+          authenticated: true,
+        },
+        {
+          identity: pluginMcp.id,
+          name: "\tlinear  ",
+          endpoint: "\nhttps://mcp.linear.app/mcp  ",
+          authenticated: true,
+        },
+      ],
+      provenanceStamps: [],
+    });
+
+    assert.deepStrictEqual(
+      plan.mcp.map((server) => ({
+        name: server.name,
+        endpoint: "endpoint" in server ? server.endpoint : null,
+      })),
+      [
+        { name: "workspace-tools", endpoint: "https://mcp.example.test/tools" },
+        { name: "linear", endpoint: "https://mcp.linear.app/mcp" },
+      ],
+    );
+    assert.deepStrictEqual(plan.connections, ["workspace-tools"]);
+  });
+
   it("projects same-named servers under distinct qualified names recorded in Provenance", () => {
     const runId = Schema.decodeSync(RunId)("run-qualified-mcp");
     const contributions = [

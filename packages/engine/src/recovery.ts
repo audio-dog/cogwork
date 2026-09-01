@@ -293,7 +293,8 @@ export const make = Effect.gen(function* () {
     completed: ReadonlySet<WorkspaceId>,
     generations: ReadonlyMap<WorkspaceId, number>,
   ) {
-    const byName = new Map(registry.workspaces.map((workspace) => [workspace.config.name, workspace]));
+    const state = yield* registry.state;
+    const byName = new Map(state.workspaces.map((workspace) => [workspace.config.name, workspace]));
     const observation = {
       generation: snapshot.generation,
       observedAtMillis: snapshot.observedAtMillis,

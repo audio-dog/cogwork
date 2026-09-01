@@ -32,6 +32,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -354,6 +355,7 @@ const daemonLayer = (
   registries = registryServices,
   plugins: Layer.Layer<PluginManager> = pluginManagerLayer,
   connections = connectionStoreLayer,
+  runControl: Layer.Layer<RunControl.RunControl> = RunControl.layer,
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -364,7 +366,7 @@ const daemonLayer = (
     Layer.provideMerge(scheduler),
     Layer.provideMerge(runRecorder),
     Layer.provideMerge(runLedgerLayer),
-    Layer.provideMerge(RunControl.layer),
+    Layer.provideMerge(runControl),
     Layer.provideMerge(controlStore),
     Layer.provideMerge(connections),
     Layer.provideMerge(plugins),
@@ -372,17 +374,12 @@ const daemonLayer = (
   );
 
 const registrationServices = (contributions: readonly LocalContribution[] = []) => {
-  const cell = MutableRef.make<Registry.RegistryState>(Registry.emptyRegistry);
+  const cell = Ref.makeUnsafe<Registry.RegistryState>(Registry.emptyRegistry);
   const registry: Registry.WorkspaceRegistryService = {
-    get workspaces() {
-      return MutableRef.get(cell).workspaces;
-    },
-    get failures() {
-      return MutableRef.get(cell).failures;
-    },
-    refresh: Effect.sync(() => MutableRef.get(cell)),
+    state: Ref.get(cell),
+    refresh: Ref.get(cell),
   };
-  const register: Registry.WorkspaceManagementService["register"] = (registration) => {
+  const register: Registry.WorkspaceManagementService["register"] = Effect.fn(function* (registration) {
     const workspace: Registry.RegisteredWorkspace = {
       source: "control-store:minted",
       contributions,
@@ -396,26 +393,28 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
       },
       workspaceLimit: registration.concurrency,
     };
-    MutableRef.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
-    return Effect.succeed({ _tag: "Registered" as const, workspace });
-  };
-  const deregister: Registry.WorkspaceManagementService["deregister"] = (workspace) => {
-    MutableRef.update(cell, (state) => ({
+    yield* Ref.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
+    return { _tag: "Registered" as const, workspace };
+  });
+  const deregister: Registry.WorkspaceManagementService["deregister"] = Effect.fn(function* (workspace) {
+    yield* Ref.update(cell, (state) => ({
       workspaces: state.workspaces.filter((entry) => entry.config.name !== workspace),
       failures: state.failures.filter((entry) => entry.name !== workspace),
     }));
-    return Effect.succeed(workspace);
-  };
-  const rebind: Registry.WorkspaceManagementService["rebind"] = (workspace, checkoutPath) => {
-    const current = MutableRef.get(cell).workspaces.find((entry) => entry.config.name === workspace);
-    if (!current) return Effect.die("workspace not found");
-    const rebound = { ...current, config: { ...current.config, checkoutPath } };
-    MutableRef.update(cell, (state) => ({
-      ...state,
-      workspaces: state.workspaces.map((entry) => (entry.config.name === workspace ? rebound : entry)),
-    }));
-    return Effect.succeed({ _tag: "Registered" as const, workspace: rebound });
-  };
+    return workspace;
+  });
+  const rebind: Registry.WorkspaceManagementService["rebind"] = Effect.fn(
+    function* (workspace, checkoutPath) {
+      const current = (yield* Ref.get(cell)).workspaces.find((entry) => entry.config.name === workspace);
+      if (!current) return yield* Effect.die("workspace not found");
+      const rebound = { ...current, config: { ...current.config, checkoutPath } };
+      yield* Ref.update(cell, (state) => ({
+        ...state,
+        workspaces: state.workspaces.map((entry) => (entry.config.name === workspace ? rebound : entry)),
+      }));
+      return { _tag: "Registered" as const, workspace: rebound };
+    },
+  );
   return Layer.mergeAll(
     Layer.succeed(Registry.WorkspaceRegistry, registry),
     Layer.succeed(Registry.WorkspaceManagement, { register, deregister, rebind }),
@@ -483,8 +482,10 @@ describe("CancelRun", () => {
       const subscription = yield* bus.subscribe();
 
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const item = yield* client.CancelRun({ runId: rid("run-1"), note: "stopping this one" });
+      const outcome = yield* client.CancelRun({ runId: rid("run-1"), note: "stopping this one" });
+      const { item } = outcome;
 
+      assert.strictEqual(outcome._tag, "Cancelled");
       assert.strictEqual(item._tag, "NeedsHuman");
       if (item._tag === "NeedsHuman") {
         assert.strictEqual(item.reason, "ready-for-human");
@@ -528,6 +529,181 @@ describe("CancelRun", () => {
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
+  it.effect("releases the claim when a run finishes before interruption", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    return Effect.gen(function* () {
+      const cancelStarted = yield* Deferred.make<void>();
+      const finishCancel = yield* Deferred.make<void>();
+      const runControl = Layer.succeed(RunControl.RunControl, {
+        run: (_runId, _workspace, effect) => effect,
+        cancel: () =>
+          Deferred.succeed(cancelStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(finishCancel)),
+            Effect.map(() => RunControl.RunCancellation.NotFound({})),
+          ),
+      });
+      yield* Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(runRecord());
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const cancelling = yield* Effect.forkChild(Effect.flip(client.CancelRun({ runId: rid("run-1") })));
+        yield* Deferred.await(cancelStarted);
+        yield* ledger.updateRun(rid("run-1"), {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 1,
+        });
+        yield* Deferred.succeed(finishCancel, undefined);
+
+        const error = yield* Fiber.join(cancelling);
+        assert.strictEqual(error._tag, "RunAlreadyFinished");
+        if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
+        assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
+      }).pipe(
+        Effect.provide(
+          daemonLayer(
+            recordingTracker([], calls),
+            schedulerStub(),
+            controlStoreStub(),
+            registryServices,
+            pluginManagerLayer,
+            connectionStoreLayer,
+            runControl,
+          ),
+        ),
+      );
+    }).pipe(Effect.scoped);
+  });
+
+  it.effect("keeps the claim while interrupted work is still draining", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    const claimed = trackerItem({
+      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+    });
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+
+      const started = yield* Deferred.make<void>();
+      const finishTeardown = yield* Deferred.make<void>();
+      const control = yield* RunControl.RunControl;
+      const issueTracker = yield* IssueTracker.IssueTracker;
+      const running = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.ensuring(Deferred.await(finishTeardown)),
+          ),
+          Effect.ignore(issueTracker.release(registered, id("AUD-1"))),
+        ),
+      );
+      yield* Deferred.await(started);
+
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const cancelling = yield* Effect.forkChild(client.CancelRun({ runId: rid("run-1") }));
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("5 seconds");
+      const outcome = yield* Fiber.join(cancelling);
+
+      assert.strictEqual(outcome._tag, "StillDraining");
+      assert.strictEqual(outcome.item._tag, "NeedsHuman");
+      assert.strictEqual((yield* ledger.getRun(rid("run-1")))?.status, "interrupted");
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, []);
+      assert.isUndefined(running.pollUnsafe());
+
+      yield* Deferred.succeed(finishTeardown, undefined);
+      yield* Fiber.await(running);
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
+    }).pipe(Effect.provide(daemonLayer(recordingTracker([claimed], calls))), Effect.scoped);
+  });
+
+  it.effect("settles cancellation after the RPC caller disconnects", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    const claimed = trackerItem({
+      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+    });
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+
+      const started = yield* Deferred.make<void>();
+      const interrupted = yield* Deferred.make<void>();
+      const finishTeardown = yield* Deferred.make<void>();
+      const control = yield* RunControl.RunControl;
+      const issueTracker = yield* IssueTracker.IssueTracker;
+      const running = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+            Effect.ensuring(Deferred.await(finishTeardown)),
+          ),
+          Effect.ignore(issueTracker.release(registered, id("AUD-1"))),
+        ),
+      );
+      yield* Deferred.await(started);
+
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const cancelling = yield* Effect.forkChild(client.CancelRun({ runId: rid("run-1") }));
+      yield* Deferred.await(interrupted);
+      cancelling.interruptUnsafe(Fiber.getCurrent()?.id);
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("5 seconds");
+      yield* Effect.yieldNow;
+
+      const statusAfterDisconnect = (yield* ledger.getRun(rid("run-1")))?.status;
+      const callsAfterDisconnect = yield* Ref.get(calls);
+      yield* Deferred.succeed(finishTeardown, undefined);
+      yield* Fiber.await(running);
+      yield* Fiber.await(cancelling);
+
+      assert.strictEqual(statusAfterDisconnect, "interrupted");
+      assert.deepStrictEqual(callsAfterDisconnect.released, []);
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
+    }).pipe(Effect.provide(daemonLayer(recordingTracker([claimed], calls))), Effect.scoped);
+  });
+
+  it.effect("logs tracker cleanup failures and still returns the parked item", () => {
+    const messages: string[] = [];
+    const unavailable = () =>
+      Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "tracker down" }));
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const outcome = yield* client
+        .CancelRun({ runId: rid("run-1") })
+        .pipe(Effect.withLogger(Logger.make(({ message }) => messages.push(String(message)))));
+
+      assert.strictEqual(outcome._tag, "Cancelled");
+      assert.strictEqual(outcome.item._tag, "NeedsHuman");
+      assert.isTrue(messages.some((message) => message.includes("run hand-off failed")));
+      assert.isTrue(messages.some((message) => message.includes("claim release failed")));
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({
+            observe: () => Effect.succeed([trackerItem()]),
+            handOff: unavailable,
+            release: unavailable,
+          }),
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("hands off and releases a run whose workspace input has failed", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     return Effect.gen(function* () {
@@ -535,11 +711,12 @@ describe("CancelRun", () => {
       yield* ledger.insertRun(runRecord());
       const client = yield* RpcTest.makeClient(DaemonRpcs);
 
-      const item = yield* client.CancelRun({ runId: rid("run-1") });
+      const outcome = yield* client.CancelRun({ runId: rid("run-1") });
       const run = (yield* client.ListRuns()).find(({ id }) => id === rid("run-1"));
       const recorded = yield* Ref.get(calls);
 
-      assert.strictEqual(item._tag, "NeedsHuman");
+      assert.strictEqual(outcome._tag, "Cancelled");
+      assert.strictEqual(outcome.item._tag, "NeedsHuman");
       assert.strictEqual(run?.status, "interrupted");
       assert.deepStrictEqual(recorded.handOff, [
         { workItem: id("AUD-1"), outcome: { stage: "implement", note: undefined } },
@@ -729,12 +906,9 @@ describe("RunControl", () => {
   it.effect("forgets a registered fiber when it completes", () =>
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
-      const fiber = yield* Effect.forkChild(Effect.void);
-      yield* control.register(rid("run-1"), fiber, registered);
-      yield* Fiber.await(fiber);
+      yield* control.run(rid("run-1"), registered, Effect.void);
 
-      assert.isTrue(Option.isNone(yield* control.workspaceFor(rid("run-1"))));
-      assert.isFalse(yield* control.cancel(rid("run-1")));
+      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
   );
 
@@ -743,8 +917,8 @@ describe("RunControl", () => {
       const scope = yield* Scope.make();
       const context = yield* Layer.buildWithScope(RunControl.layer, scope);
       const control = Context.get(context, RunControl.RunControl);
-      const fiber = yield* Effect.forkChild(Effect.never);
-      yield* control.register(rid("run-1"), fiber);
+      const fiber = yield* Effect.forkChild(control.run(rid("run-1"), undefined, Effect.never));
+      yield* Effect.yieldNow;
 
       yield* Scope.close(scope, Exit.void);
 
@@ -756,18 +930,111 @@ describe("RunControl", () => {
   it.effect("interrupts a registered fiber on cancel and reports unknown runs", () =>
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
-      const fiber = yield* Effect.forkChild(Effect.never);
-      yield* control.register(rid("run-1"), fiber, registered);
+      const started = yield* Deferred.make<void>();
+      const onCancel = yield* Deferred.make<void>();
+      const fiber = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(onCancel, undefined),
+        ),
+      );
+      yield* Deferred.await(started);
 
-      assert.deepStrictEqual(yield* control.workspaceFor(rid("run-1")), Option.some(registered));
       const cancelled = yield* control.cancel(rid("run-1"));
+      assert.strictEqual(cancelled._tag, "Interrupting");
+      if (cancelled._tag === "Interrupting") {
+        assert.deepStrictEqual(cancelled.workspace, Option.some(registered));
+      }
+      if (cancelled._tag === "Interrupting") yield* cancelled.awaitTermination;
+      yield* Deferred.await(onCancel);
       const exit = yield* Fiber.await(fiber);
-      assert.isTrue(cancelled);
       assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
 
-      assert.isTrue(Option.isNone(yield* control.workspaceFor(rid("run-1"))));
-      assert.isFalse(yield* control.cancel(rid("run-1")));
-      assert.isFalse(yield* control.cancel(rid("ghost")));
+      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
+      assert.strictEqual((yield* control.cancel(rid("ghost")))._tag, "NotFound");
+    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
+  );
+
+  it.effect("propagates caller interruption to the registered fiber", () =>
+    Effect.gen(function* () {
+      const control = yield* RunControl.RunControl;
+      const started = yield* Deferred.make<void>();
+      const interrupted = yield* Deferred.make<void>();
+      const finishTeardown = yield* Deferred.make<void>();
+      const onCancel = MutableRef.make(false);
+      const caller = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+            Effect.ensuring(Deferred.await(finishTeardown)),
+          ),
+          Effect.sync(() => MutableRef.set(onCancel, true)),
+        ),
+      );
+      yield* Deferred.await(started);
+
+      caller.interruptUnsafe(Fiber.getCurrent()?.id);
+      yield* Deferred.await(interrupted);
+      yield* Effect.yieldNow;
+
+      const callerBeforeTeardown = caller.pollUnsafe();
+      yield* Deferred.succeed(finishTeardown, undefined);
+      yield* Fiber.await(caller);
+      assert.isUndefined(callerBeforeTeardown);
+      assert.isFalse(MutableRef.get(onCancel));
+      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
+    }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
+  );
+
+  it.effect("does not interrupt a replacement registered after cancellation starts", () =>
+    Effect.gen(function* () {
+      const control = yield* RunControl.RunControl;
+      const replacementWorkspace = {
+        ...registered,
+        config: { ...registered.config, name: wsid("replacement") },
+      };
+      const firstStarted = yield* Deferred.make<void>();
+      const finishFirstTeardown = yield* Deferred.make<void>();
+      const first = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(firstStarted, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.ensuring(Deferred.await(finishFirstTeardown)),
+          ),
+        ),
+      );
+      yield* Deferred.await(firstStarted);
+
+      const cancelled = yield* control.cancel(rid("run-1"));
+      assert.strictEqual(cancelled._tag, "Interrupting");
+
+      const replacementStarted = yield* Deferred.make<void>();
+      const replacement = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          replacementWorkspace,
+          Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(Effect.never)),
+        ),
+      );
+      yield* Deferred.await(replacementStarted);
+      yield* Deferred.succeed(finishFirstTeardown, undefined);
+      if (cancelled._tag === "Interrupting") yield* cancelled.awaitTermination;
+
+      assert.isUndefined(replacement.pollUnsafe());
+      const replacementCancellation = yield* control.cancel(rid("run-1"));
+      assert.strictEqual(replacementCancellation._tag, "Interrupting");
+      if (replacementCancellation._tag === "Interrupting") {
+        assert.deepStrictEqual(replacementCancellation.workspace, Option.some(replacementWorkspace));
+        yield* replacementCancellation.awaitTermination;
+      }
+      yield* Fiber.await(first);
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
   );
 });
@@ -1248,6 +1515,51 @@ describe("Connection mutations", () => {
       Effect.scoped,
     );
   });
+
+  it.effect("includes a workspace registered while required Plugins uninstall", () =>
+    Effect.gen(function* () {
+      const github = connectionIdOf("github", "acme");
+      const uninstallStarted = yield* Deferred.make<void>();
+      const finishUninstall = yield* Deferred.make<void>();
+      const pluginOverview = {
+        plugins: [{ ...installedPlugin("github"), requiredConnections: ["github"] }],
+      } satisfies PluginOverview;
+      const plugins = Layer.succeed(PluginManager, {
+        overview: Effect.succeed(pluginOverview),
+        install: () => Effect.die("unexpected Plugin install"),
+        uninstall: () =>
+          Deferred.succeed(uninstallStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(finishUninstall)),
+            Effect.map(() => ({ overview: { plugins: [] }, notices: [] })),
+          ),
+        contributions: () => Effect.succeed([]),
+      });
+      const registries = registrationServices();
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const removing = yield* Effect.forkChild(client.RemoveConnection({ connectionId: github }));
+        yield* Deferred.await(uninstallStarted);
+        const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+        if (registered.name === undefined) return assert.fail("expected registration to succeed");
+        yield* Deferred.succeed(finishUninstall, undefined);
+        const result = yield* Fiber.join(removing);
+
+        assert.deepStrictEqual(result.danglingWorkspaces, [registered.name]);
+      }).pipe(
+        Effect.provide(
+          daemonLayer(
+            trackerLayer({}),
+            schedulerStub(),
+            controlStoreStub(),
+            registries,
+            plugins,
+            connectionStoreLayerWithStatus("established", null, () => Effect.void),
+          ),
+        ),
+        Effect.scoped,
+      );
+    }),
+  );
 });
 
 describe("workspace lifecycle commands", () => {
@@ -1344,14 +1656,23 @@ describe("workspace lifecycle commands", () => {
       if (registeredState._tag !== "Registered") return assert.fail("expected registration");
 
       const registry = yield* Registry.WorkspaceRegistry;
-      const registeredWorkspace = registry.workspaces.at(0);
+      const registeredWorkspace = (yield* registry.state).workspaces.at(0);
       if (!registeredWorkspace) return assert.fail("expected registered workspace");
 
       const ledger = yield* RunLedger.RunLedger;
       yield* ledger.insertRun(runRecord({ workspace: registeredState.name }));
-      const fiber = yield* Effect.forkChild(Effect.never);
+      const started = yield* Deferred.make<void>();
       const control = yield* RunControl.RunControl;
-      yield* control.register(rid("run-1"), fiber, registeredWorkspace);
+      const issueTracker = yield* IssueTracker.IssueTracker;
+      yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registeredWorkspace,
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Effect.ignore(issueTracker.release(registeredWorkspace, id("AUD-1"))),
+        ),
+      );
+      yield* Deferred.await(started);
 
       yield* client.DeregisterWorkspace({ workspace: registeredState.name });
       const bus = yield* DaemonEventBus.DaemonEventBus;

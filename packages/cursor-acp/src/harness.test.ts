@@ -1,27 +1,34 @@
 import { once } from "node:events";
+import { RequestError } from "@agentclientprotocol/sdk";
 import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it, layer } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
+import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   type CursorRunChat,
   cursorModelOptions,
   cursorRunner,
   estimatedUsage,
+  interceptCursorTelemetry,
   mcpWorkspaceProjection,
   toEvent,
   withEstimatedUsage,
 } from "./harness";
+
+type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
 const collect = (stream: Stream.Stream<AgUiEvent, Harness.HarnessError>) =>
   Effect.runPromise(Stream.runCollect(stream));
@@ -36,7 +43,7 @@ const sessionStore: SessionStore.SessionStoreService = {
 
 const unexpected = () => Effect.die(new Error("unexpected service access"));
 
-const harnessServices: Harness.HarnessRunnerServices = {
+const harnessServices = {
   sessionStore,
   contextAssembler: { assemble: unexpected, cleanup: unexpected },
   credentialStore: {
@@ -51,6 +58,14 @@ const harnessServices: Harness.HarnessRunnerServices = {
   },
   fileSystem: FileSystem.makeNoop({}),
 };
+
+const harnessRunnerLayer = Layer.mergeAll(
+  Layer.succeed(SessionStore.SessionStore, harnessServices.sessionStore),
+  Layer.succeed(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
+  Layer.succeed(CredentialStore.CredentialStore, harnessServices.credentialStore),
+  Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  FetchHttpClient.layer,
+);
 
 const request = (checkoutPath: string) =>
   ({
@@ -107,6 +122,48 @@ const stalledChat = (signal: AbortSignal) => ({
   },
 });
 
+const failedChat = (error: unknown) => ({
+  [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+});
+
+const runRunner = (runner: Harness.HarnessRunner) =>
+  runner
+    .run(request("/tmp"))
+    .pipe(
+      Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
+      Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
+      Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
+      Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
+    );
+
+describe("interceptCursorTelemetry", () => {
+  it.effect("keeps reading after a telemetry acknowledgment fails", () =>
+    Effect.gen(function* () {
+      const telemetryRequest = { jsonrpc: "2.0", id: 1, method: "cursor/task" } satisfies AcpMessage;
+      const sessionNotification = { jsonrpc: "2.0", method: "session/update" } satisfies AcpMessage;
+      const base = {
+        readable: new ReadableStream<AcpMessage>({
+          start: (controller) => {
+            controller.enqueue(telemetryRequest);
+            controller.enqueue(sessionNotification);
+            controller.close();
+          },
+        }),
+        writable: new WritableStream<AcpMessage>({
+          write: () => Promise.reject(new Error("transport closed")),
+        }),
+      } satisfies AcpJsonRpcStream;
+
+      const messages = yield* Stream.fromReadableStream({
+        evaluate: () => interceptCursorTelemetry(base).readable,
+        onError: String,
+      }).pipe(Stream.runCollect);
+
+      assert.deepStrictEqual(Array.from(messages), [sessionNotification]);
+    }),
+  );
+});
+
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
     const projection = mcpWorkspaceProjection([]);
@@ -147,7 +204,7 @@ describe("mcpWorkspaceProjection", () => {
   });
 });
 
-describe("cursorRunner", () => {
+layer(harnessRunnerLayer)("cursorRunner", (it) => {
   it("declares the opaque-handle session kind", () => {
     const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
@@ -162,16 +219,7 @@ describe("cursorRunner", () => {
       };
       const runner = cursorRunner({ name: cursorName, runChat });
       const execution = yield* Effect.forkChild(
-        Stream.runDrain(
-          runner
-            .run(request("/tmp"))
-            .pipe(
-              Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
-              Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
-              Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
-              Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
-            ),
-        ).pipe(Effect.timeout("1 second")),
+        Stream.runDrain(runner.run(request("/tmp"))).pipe(Effect.timeout("1 second")),
       );
       const abortController = yield* Effect.promise(() => captured.promise);
 
@@ -183,7 +231,42 @@ describe("cursorRunner", () => {
     }),
   );
 
-  it.live("refuses a Cursor triage run before native launch", () =>
+  it.effect("keeps unrecognized failures retryable without reading their message", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: () => failedChat(new Error("model output says command not found")),
+      });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
+
+  it.effect("hands off failures with a missing-executable code", () =>
+    Effect.gen(function* () {
+      const failure = Object.assign(new Error("Cursor could not start"), { code: "ENOENT" });
+      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("hands off ACP request failures", () =>
+    Effect.gen(function* () {
+      const failure = RequestError.authRequired();
+      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("refuses a Cursor triage run before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -193,7 +276,7 @@ describe("cursorRunner", () => {
         name: cursorName,
         agentBin: `node ${fakeCursorAgent}`,
       });
-      const harness = Harness.make([runner], harnessServices);
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 
@@ -203,7 +286,7 @@ describe("cursorRunner", () => {
     }),
   );
 
-  it.live("refuses malformed Cursor input before native launch", () =>
+  it.effect("refuses malformed Cursor input before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -213,7 +296,7 @@ describe("cursorRunner", () => {
         name: cursorName,
         agentBin: `node ${fakeCursorAgent} --malformed`,
       });
-      const harness = Harness.make([runner], harnessServices);
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 

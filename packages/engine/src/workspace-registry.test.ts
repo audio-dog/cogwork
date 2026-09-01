@@ -101,7 +101,7 @@ layer(NodeServices.layer)((it) => {
         .pipe(Effect.flip);
 
       assert.include(duplicate.message, `already registered as ${first.workspace.config.name}`);
-      assert.strictEqual(liveRegistry.workspaces.length, 1);
+      assert.strictEqual((yield* liveRegistry.state).workspaces.length, 1);
     }),
   );
 
@@ -124,7 +124,7 @@ layer(NodeServices.layer)((it) => {
       const readOnlyContext = yield* Layer.build(Registry.readOnlyLayerAt(storePath));
       const reloaded = Context.get(readOnlyContext, Registry.WorkspaceRegistry);
 
-      assert.isDefined(Registry.findWorkspace(reloaded, change.workspace.config.name));
+      assert.isDefined(Registry.findWorkspace(yield* reloaded.state, change.workspace.config.name));
     }),
   );
 
@@ -156,7 +156,7 @@ layer(NodeServices.layer)((it) => {
 
       if (change._tag === "Failed") return assert.fail("expected registration to succeed");
       const reloadedContext = yield* Layer.build(Registry.layerAt(storePath));
-      const [reloaded] = Context.get(reloadedContext, Registry.WorkspaceRegistry).workspaces;
+      const [reloaded] = (yield* Context.get(reloadedContext, Registry.WorkspaceRegistry).state).workspaces;
 
       assert.deepStrictEqual(reloaded?.config.worktrees, {
         setup: ["pnpm install"],
@@ -236,7 +236,7 @@ layer(NodeServices.layer)((it) => {
       yield* Deferred.succeed(releaseRefresh, undefined);
       yield* Fiber.join(refreshing);
 
-      assert.isDefined(Registry.findWorkspace(liveRegistry, second.workspace.config.name));
+      assert.isDefined(Registry.findWorkspace(yield* liveRegistry.state, second.workspace.config.name));
     }),
   );
 
@@ -281,8 +281,9 @@ layer(NodeServices.layer)((it) => {
       if (change._tag === "Failed") return assert.fail("expected registration to succeed");
 
       assert.strictEqual(
-        liveRegistry.workspaces.filter((workspace) => workspace.config.name === change.workspace.config.name)
-          .length,
+        (yield* liveRegistry.state).workspaces.filter(
+          (workspace) => workspace.config.name === change.workspace.config.name,
+        ).length,
         1,
       );
     }),
@@ -349,9 +350,10 @@ layer(NodeServices.layer)((it) => {
       assert.notStrictEqual(first.config.name, second.config.name);
       assert.strictEqual(first.config.displayName, "first clone");
       assert.strictEqual(second.config.displayName, "first clone");
-      assert.isUndefined(Registry.findWorkspace(liveRegistry, "first clone"));
-      assert.strictEqual(Registry.findWorkspace(liveRegistry, first.config.name), first);
-      assert.strictEqual(Registry.findWorkspace(liveRegistry, second.config.name), second);
+      const state = yield* liveRegistry.state;
+      assert.isUndefined(Registry.findWorkspace(state, "first clone"));
+      assert.strictEqual(Registry.findWorkspace(state, first.config.name), first);
+      assert.strictEqual(Registry.findWorkspace(state, second.config.name), second);
       assert.strictEqual(first.workspaceLimit, 2);
       assert.deepStrictEqual(first.config.worktrees, {
         root: path.join(root, "worktrees"),
@@ -366,33 +368,35 @@ layer(NodeServices.layer)((it) => {
         (sql) => sql`UPDATE workspaces SET mcp_skills = '{ not json' WHERE id = ${invalidName}`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
       yield* liveRegistry.refresh;
-      const [failure] = liveRegistry.failures;
+      const refreshedState = yield* liveRegistry.state;
+      const [failure] = refreshedState.failures;
       assert.strictEqual(failure?.name, invalidName);
       assert.strictEqual(failure?.displayName, "invalid stored settings");
       assert.strictEqual(failure?.workspaceLimit, 3);
-      const liveIssueTracker = Registry.findWorkspaceIssueTracker(liveRegistry, invalidName);
+      const liveIssueTracker = Registry.findWorkspaceIssueTracker(refreshedState, invalidName);
       assert.strictEqual(liveIssueTracker?.type, "github");
       assert.strictEqual(liveIssueTracker?.repo, "acme/repo");
-      assert.strictEqual(liveRegistry.failures.length, 1);
+      assert.strictEqual(refreshedState.failures.length, 1);
       assert.deepStrictEqual(
-        Registry.findWorkspace(liveRegistry, first.config.name)?.config.worktrees?.setup,
+        Registry.findWorkspace(refreshedState, first.config.name)?.config.worktrees?.setup,
         ["pnpm install"],
       );
 
       const reloadedContext = yield* Layer.build(Registry.layerAt(storePath));
       const reloaded = Context.get(reloadedContext, Registry.WorkspaceRegistry);
+      const reloadedState = yield* reloaded.state;
 
-      assert.strictEqual(reloaded.workspaces.length, 2);
-      assert.strictEqual(reloaded.failures.length, 1);
-      assert.strictEqual(reloaded.failures[0]?.displayName, "invalid stored settings");
-      assert.strictEqual(reloaded.failures[0]?.workspaceLimit, 3);
-      const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloaded, invalidName);
+      assert.strictEqual(reloadedState.workspaces.length, 2);
+      assert.strictEqual(reloadedState.failures.length, 1);
+      assert.strictEqual(reloadedState.failures[0]?.displayName, "invalid stored settings");
+      assert.strictEqual(reloadedState.failures[0]?.workspaceLimit, 3);
+      const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloadedState, invalidName);
       assert.strictEqual(reloadedIssueTracker?.type, "github");
       assert.strictEqual(reloadedIssueTracker?.repo, "acme/repo");
-      assert.deepStrictEqual(reloaded.workspaces.map((workspace) => workspace.config.displayName).sort(), [
-        "first clone",
-        "first clone",
-      ]);
+      assert.deepStrictEqual(
+        reloadedState.workspaces.map((workspace) => workspace.config.displayName).sort(),
+        ["first clone", "first clone"],
+      );
 
       const relativeError = yield* management
         .register(
@@ -470,7 +474,7 @@ layer(NodeServices.layer)((it) => {
       assert.deepStrictEqual(overlaysAfterRebind, [{ workspace }, { workspace: "other-workspace" }]);
 
       assert.strictEqual(yield* management.deregister(workspace), workspace);
-      assert.isUndefined(Registry.findWorkspace(liveRegistry, workspace));
+      assert.isUndefined(Registry.findWorkspace(yield* liveRegistry.state, workspace));
       assert.isFalse(yield* fs.exists(privateTree));
       const runs = yield* Effect.flatMap(
         SqlClient.SqlClient,
@@ -535,7 +539,7 @@ layer(NodeServices.layer)((it) => {
       const deregistration = yield* management.deregister(workspace).pipe(Effect.flip);
 
       assert.strictEqual(deregistration._tag, "WorkspaceManagementError");
-      assert.isDefined(Registry.findWorkspace(liveRegistry, workspace));
+      assert.isDefined(Registry.findWorkspace(yield* liveRegistry.state, workspace));
       assert.isTrue(yield* fs.exists(privateTree));
       const rows = yield* Effect.flatMap(
         SqlClient.SqlClient,
@@ -581,15 +585,16 @@ layer(NodeServices.layer)((it) => {
       yield* fs.writeFileString(privateSkill, "private Skill");
       yield* liveRegistry.refresh;
 
-      const first = Registry.findWorkspace(liveRegistry, firstChange.workspace.config.name);
-      const second = Registry.findWorkspace(liveRegistry, secondChange.workspace.config.name);
+      const state = yield* liveRegistry.state;
+      const first = Registry.findWorkspace(state, firstChange.workspace.config.name);
+      const second = Registry.findWorkspace(state, secondChange.workspace.config.name);
       assert.deepStrictEqual(
         first?.contributions?.map((entry) => entry.id),
         ["local:private/skill/shared", "local:repo/skill/shared"],
       );
       assert.deepStrictEqual(second?.contributions, []);
       assert.isFalse(
-        liveRegistry.workspaces.some(
+        state.workspaces.some(
           (workspace) => workspace.contributions?.some((entry) => entry.localName === "ignored") ?? false,
         ),
       );

@@ -1,134 +1,275 @@
+import { NodeStream } from "@effect/platform-node";
+import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
+import type * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
+import * as Schedule from "effect/Schedule";
+import * as Scope from "effect/Scope";
+import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
+import * as SubscriptionRef from "effect/SubscriptionRef";
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
-import { waitForDaemonListening } from "./wait-for-socket";
 
 export interface EngineChild {
   readonly pid?: number;
   kill(signal?: NodeJS.Signals): boolean;
   once(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  off(event: "exit", listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
   readonly stdout: NodeJS.ReadableStream | null;
   readonly stderr: NodeJS.ReadableStream | null;
 }
 
 export type SpawnEngine = (command: EngineCommand) => EngineChild;
 
-export interface EngineLogger {
-  info(message: string): void;
-  warn(message: string): void;
-}
-
 export interface EngineSupervisorOptions {
   readonly command: EngineCommand;
   readonly socketPath: string;
   readonly spawn: SpawnEngine;
-  readonly probe: (socketPath: string) => Promise<boolean>;
-  readonly onStatus: (status: EngineStatus) => void;
-  readonly logger: EngineLogger;
+  readonly probe: (socketPath: string) => Effect.Effect<boolean>;
   readonly maxRestarts?: number;
-  readonly awaitReachable?: (socketPath: string, signal: AbortSignal) => Promise<boolean>;
+  readonly awaitReachable: (socketPath: string) => Effect.Effect<void>;
+  readonly terminateTimeout?: Duration.Input;
+  readonly forceKillTimeout?: Duration.Input;
 }
 
-export class EngineSupervisor {
-  #status: EngineStatus = "stopped";
-  #child: EngineChild | null = null;
-  #owned = false;
-  #shuttingDown = false;
-  #restarts = 0;
-  #readyController: AbortController | null = null;
-  readonly #maxRestarts: number;
-  readonly #awaitReachable: (socketPath: string, signal: AbortSignal) => Promise<boolean>;
+interface EngineExit {
+  readonly code: number | null;
+  readonly pid: number | null;
+  readonly signal: NodeJS.Signals | null;
+}
 
-  constructor(private readonly options: EngineSupervisorOptions) {
-    this.#maxRestarts = options.maxRestarts ?? 3;
-    this.#awaitReachable = options.awaitReachable ?? waitForDaemonListening;
-  }
+interface OwnedChild {
+  readonly child: EngineChild;
+  readonly exit: Deferred.Deferred<EngineExit>;
+  readonly onExit: (code: number | null, signal: NodeJS.Signals | null) => void;
+  readonly outputFibers: ReadonlyArray<Fiber.Fiber<void>>;
+}
 
-  get status(): EngineStatus {
-    return this.#status;
-  }
+export interface EngineSupervisorService {
+  readonly status: SubscriptionRef.SubscriptionRef<EngineStatus>;
+  readonly start: Effect.Effect<void>;
+  readonly stop: Effect.Effect<void>;
+}
 
-  async start(): Promise<void> {
-    if (this.#child !== null || this.#status === "adopted") return;
-    this.#shuttingDown = false;
-    this.#restarts = 0;
+const defaultTerminateTimeout = "5 seconds";
+const defaultForceKillTimeout = "5 seconds";
+const maxOutputLineLength = 16_384;
+const outputDrainTimeout = "250 millis";
 
-    if (await this.options.probe(this.options.socketPath)) {
-      this.options.logger.info("Adopted an engine already listening on the socket");
-      this.#owned = false;
-      this.#setStatus("adopted");
-      return;
-    }
+const isActiveStatus = (status: EngineStatus) =>
+  status === "starting" || status === "running" || status === "adopted";
 
-    this.#spawnChild();
-  }
+const setStatus = (status: SubscriptionRef.SubscriptionRef<EngineStatus>, next: EngineStatus) =>
+  SubscriptionRef.modifySome(status, (current) => [
+    undefined,
+    current === next ? Option.none() : Option.some(next),
+  ]);
 
-  async stop(): Promise<void> {
-    this.#shuttingDown = true;
-    this.#readyController?.abort();
-    const child = this.#child;
+const signalChild = (child: EngineChild, signal: NodeJS.Signals) =>
+  Effect.try({
+    try: () => child.kill(signal),
+    catch: (cause) => cause,
+  }).pipe(Effect.ignore);
 
-    if (!this.#owned || child === null) {
-      this.#setStatus("stopped");
-      return;
-    }
+const awaitExitAfter = (owned: OwnedChild, signal: NodeJS.Signals, timeout: Duration.Input) =>
+  signalChild(owned.child, signal).pipe(
+    Effect.andThen(Deferred.await(owned.exit)),
+    Effect.timeoutOption(timeout),
+  );
 
-    this.options.logger.info("Stopping the supervised engine");
-    await new Promise<void>((resolve) => {
-      child.once("exit", () => resolve());
-      child.kill("SIGTERM");
+const releaseChild = (
+  owned: OwnedChild,
+  terminateTimeout: Duration.Input,
+  forceKillTimeout: Duration.Input,
+) =>
+  Effect.gen(function* () {
+    if (yield* Deferred.isDone(owned.exit)) return;
+    yield* Effect.logInfo("Stopping the supervised engine");
+    const terminated = yield* awaitExitAfter(owned, "SIGTERM", terminateTimeout);
+    if (Option.isSome(terminated)) return;
+    yield* Effect.logWarning("Engine ignored SIGTERM; sending SIGKILL");
+    yield* awaitExitAfter(owned, "SIGKILL", forceKillTimeout);
+  }).pipe(
+    Effect.annotateLogs({ pid: owned.child.pid ?? null }),
+    Effect.andThen(drainOutput(owned.outputFibers)),
+    Effect.ensuring(Effect.sync(() => owned.child.off("exit", owned.onExit))),
+    Effect.ignore,
+  );
+
+const logOutputLine = (stream: "stdout" | "stderr", line: string) => {
+  const fields = { line, stream };
+  if (stream === "stdout") return Effect.logInfo("Engine output", fields);
+  return Effect.logWarning("Engine output", fields);
+};
+
+const boundOutputSegment = (lineLength: number, segment: string) => {
+  if (!segment) return [lineLength, []] as const;
+  const available = maxOutputLineLength - lineLength;
+  if (segment.length <= available) return [lineLength + segment.length, [segment]] as const;
+  const remainder = segment.slice(available);
+  const remainderCount = Math.ceil(remainder.length / maxOutputLineLength);
+  const chunks = Array.from({ length: remainderCount }, (_, index) => {
+    const chunk = remainder.slice(index * maxOutputLineLength, (index + 1) * maxOutputLineLength);
+    return index < remainderCount - 1 ? `${chunk}\n` : chunk;
+  });
+  const finalLength = remainder.length % maxOutputLineLength || maxOutputLineLength;
+  return [finalLength, [`${segment.slice(0, available)}\n`, ...chunks]] as const;
+};
+
+const boundOutputChunk = (lineLength: number, text: string) =>
+  text.split(/(\r\n|\r|\n)/).reduce(
+    ([currentLength, output], token) => {
+      if (/^(\r\n|\r|\n)$/.test(token)) return [0, [...output, token]] as const;
+      const [nextLength, chunks] = boundOutputSegment(currentLength, token);
+      return [nextLength, [...output, ...chunks]] as const;
+    },
+    [lineLength, []] as readonly [number, ReadonlyArray<string>],
+  );
+
+const setRunning = (status: SubscriptionRef.SubscriptionRef<EngineStatus>) =>
+  Effect.logInfo("Engine is listening on the socket").pipe(Effect.andThen(setStatus(status, "running")));
+
+const pipeOutput = (readable: NodeJS.ReadableStream | null, stream: "stdout" | "stderr") => {
+  if (!readable) return Effect.void;
+  return NodeStream.fromReadable({ evaluate: () => readable }).pipe(
+    Stream.decodeText(),
+    Stream.mapAccum(() => 0, boundOutputChunk),
+    Stream.splitLines,
+    Stream.runForEach((line) => logOutputLine(stream, line)),
+    Effect.catch((error) => Effect.logWarning("Engine output stream failed", { error, stream })),
+    Effect.catchCauseIf(
+      (cause) => !Cause.hasInterruptsOnly(cause),
+      (cause) => Effect.logError("Engine output stream crashed", { cause, stream }),
+    ),
+  );
+};
+
+const acquireChild = (options: EngineSupervisorOptions, launched: Deferred.Deferred<void>) =>
+  Effect.gen(function* () {
+    const exit = yield* Deferred.make<EngineExit>();
+    const child = yield* Effect.sync(() => options.spawn(options.command));
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      Deferred.doneUnsafe(exit, Effect.succeed({ code, pid: child.pid ?? null, signal }));
+    };
+    yield* Effect.sync(() => child.once("exit", onExit));
+    const annotations = { pid: child.pid ?? null };
+    const stdout = yield* pipeOutput(child.stdout, "stdout").pipe(
+      Effect.annotateLogs(annotations),
+      Effect.annotateSpans(annotations),
+      Effect.forkScoped,
+    );
+    const stderr = yield* pipeOutput(child.stderr, "stderr").pipe(
+      Effect.annotateLogs(annotations),
+      Effect.annotateSpans(annotations),
+      Effect.forkScoped,
+    );
+    yield* Deferred.succeed(launched, undefined);
+    return { child, exit, onExit, outputFibers: [stdout, stderr] };
+  });
+
+const drainOutput = (fibers: ReadonlyArray<Fiber.Fiber<void>>) =>
+  Effect.all(fibers.map(Fiber.join), { concurrency: "unbounded", discard: true }).pipe(
+    Effect.timeoutOption(outputDrainTimeout),
+    Effect.asVoid,
+  );
+
+const make = (options: EngineSupervisorOptions) =>
+  Effect.gen(function* () {
+    const ownerScope = yield* Effect.scope;
+    const status = yield* SubscriptionRef.make<EngineStatus>("stopped");
+    const activeScope = yield* Ref.make<Scope.Closeable | null>(null);
+    const lifecycle = Semaphore.makeUnsafe(1);
+    const restartBudget = options.maxRestarts ?? 3;
+    const restartSchedule = Schedule.recurs(restartBudget);
+    const terminateTimeout = options.terminateTimeout ?? defaultTerminateTimeout;
+    const forceKillTimeout = options.forceKillTimeout ?? defaultForceKillTimeout;
+
+    const runChild = Effect.fn("EngineSupervisor.runChild")(function* (launched: Deferred.Deferred<void>) {
+      yield* setStatus(status, "starting");
+      const owned = yield* Effect.acquireRelease(acquireChild(options, launched), (child) =>
+        releaseChild(child, terminateTimeout, forceKillTimeout),
+      );
+      const pid = owned.child.pid ?? null;
+      return yield* Effect.gen(function* () {
+        yield* Effect.logInfo("Engine started");
+        const awaitExit = Deferred.await(owned.exit);
+        const exit = yield* Effect.raceFirst(
+          awaitExit,
+          options
+            .awaitReachable(options.socketPath)
+            .pipe(Effect.andThen(setRunning(status)), Effect.andThen(awaitExit)),
+        );
+        return exit;
+      }).pipe(Effect.annotateLogs({ pid }), Effect.annotateSpans({ pid }));
     });
-  }
 
-  #spawnChild(): void {
-    this.#setStatus("starting");
-    const child = this.options.spawn(this.options.command);
-    this.#child = child;
-    this.#owned = true;
-    const controller = new AbortController();
-    this.#readyController = controller;
-    this.#pipe(child);
-    child.once("exit", (code, signal) => this.#handleExit(code, signal));
-    this.options.logger.info(`Engine started (pid ${child.pid ?? "?"})`);
-    void this.#promoteWhenReachable(child, controller.signal);
-  }
+    const supervise = Effect.fn("EngineSupervisor.supervise")(function* (launched: Deferred.Deferred<void>) {
+      yield* Effect.scoped(runChild(launched)).pipe(
+        Effect.tap((exit) =>
+          Effect.logWarning("Engine exited unexpectedly", {
+            code: exit.code,
+            signal: exit.signal,
+          }).pipe(Effect.annotateLogs({ pid: exit.pid })),
+        ),
+        Effect.repeat(restartSchedule),
+      );
+      yield* Effect.logWarning("Engine restart budget exhausted", { restarts: restartBudget });
+      yield* setStatus(status, "failed");
+    });
 
-  async #promoteWhenReachable(child: EngineChild, signal: AbortSignal): Promise<void> {
-    const reachable = await this.#awaitReachable(this.options.socketPath, signal);
-    if (!reachable || this.#child !== child || this.#shuttingDown) return;
-    this.options.logger.info("Engine is listening on the socket");
-    this.#setStatus("running");
-  }
+    const closeActiveScope = Effect.fn("EngineSupervisor.closeActiveScope")(function* () {
+      const active = yield* Ref.getAndSet(activeScope, null);
+      if (!active) return;
+      yield* Scope.close(active, Exit.void);
+    });
 
-  #handleExit(code: number | null, signal: NodeJS.Signals | null): void {
-    this.#readyController?.abort();
-    this.#child = null;
+    const startUnlocked = Effect.fn("EngineSupervisor.start")(function* () {
+      const current = yield* SubscriptionRef.get(status);
+      if (isActiveStatus(current)) return;
+      yield* closeActiveScope();
+      if (yield* options.probe(options.socketPath)) {
+        yield* Effect.logInfo("Adopted an engine already listening on the socket");
+        yield* setStatus(status, "adopted");
+        return;
+      }
+      const launched = yield* Deferred.make<void>();
+      const scope = yield* Scope.fork(ownerScope);
+      yield* Ref.set(activeScope, scope);
+      yield* supervise(launched).pipe(
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logError("Engine supervisor failed", { cause }).pipe(
+              Effect.andThen(setStatus(status, "failed")),
+            ),
+        ),
+        Effect.ensuring(Deferred.succeed(launched, undefined)),
+        Effect.forkIn(scope, { startImmediately: true }),
+      );
+      yield* Deferred.await(launched);
+    });
 
-    if (this.#shuttingDown) {
-      this.#setStatus("stopped");
-      return;
-    }
+    const stopUnlocked = Effect.fn("EngineSupervisor.stop")(function* () {
+      yield* closeActiveScope();
+      yield* setStatus(status, "stopped");
+    });
 
-    this.options.logger.warn(`Engine exited unexpectedly (code ${code}, signal ${signal})`);
+    return {
+      status,
+      start: lifecycle.withPermits(1)(startUnlocked()),
+      stop: lifecycle.withPermits(1)(stopUnlocked()),
+    };
+  });
 
-    if (this.#restarts >= this.#maxRestarts) {
-      this.options.logger.warn(`Giving up after ${this.#restarts} restarts`);
-      this.#setStatus("failed");
-      return;
-    }
-
-    this.#restarts += 1;
-    this.options.logger.info(`Restarting engine (attempt ${this.#restarts})`);
-    this.#spawnChild();
-  }
-
-  #pipe(child: EngineChild): void {
-    child.stdout?.on("data", (chunk: Buffer) => this.options.logger.info(chunk.toString().trimEnd()));
-    child.stderr?.on("data", (chunk: Buffer) => this.options.logger.warn(chunk.toString().trimEnd()));
-  }
-
-  #setStatus(status: EngineStatus): void {
-    if (this.#status === status) return;
-    this.#status = status;
-    this.options.onStatus(status);
-  }
+export class EngineSupervisor extends Context.Service<EngineSupervisor, EngineSupervisorService>()(
+  "@cogwork/desktop/engine-supervisor",
+) {
+  static readonly layer = (options: EngineSupervisorOptions) => Layer.effect(EngineSupervisor, make(options));
 }

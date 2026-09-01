@@ -53,7 +53,9 @@ import {
   SettingScope as SettingScopeSchema,
   stageResultJsonSchema,
 } from "@cogwork/contracts";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
 import { operationPolicyProfile } from "./operation-policy";
@@ -223,16 +225,23 @@ const droppedReason = (row: OperationSettingRow, context: OperationSettingContex
   return null;
 };
 
+const isBlankOptionalStringSetting = (row: OperationSettingRow) =>
+  (row.setting === "model" || row.setting === "effort") &&
+  typeof row.value === "string" &&
+  row.value.trim() === "";
+
 const selectedOperationRows = (
   rows: readonly OperationSettingRow[],
   setting: OperationSettingName,
   context: OperationSettingContext,
 ) => {
   const candidates = rows.filter((row) => row.setting === setting);
-  const ranked = operationRowsForContext(candidates, context).map((row) => ({
-    row,
-    rank: levelRank(row.level, context),
-  }));
+  const ranked = operationRowsForContext(candidates, context)
+    .filter((row) => !isBlankOptionalStringSetting(row))
+    .map((row) => ({
+      row,
+      rank: levelRank(row.level, context),
+    }));
   const selectedRank = Math.max(-1, ...ranked.map(({ rank }) => rank));
   const selected = ranked
     .filter(({ rank }) => rank === selectedRank)
@@ -245,7 +254,8 @@ const selectedOperationRows = (
     )
     .map(({ row }) => row);
   const dropped = candidates.flatMap((row) => {
-    const reason = droppedReason(row, context);
+    const reason =
+      droppedReason(row, context) ?? (isBlankOptionalStringSetting(row) ? "blank value is unset" : null);
     return reason ? [{ row, reason }] : [];
   });
   return { selected, lowerLevel, dropped };
@@ -291,8 +301,10 @@ export const resolveEngineOperationSetting = (
 export const operatorForSetting = (setting: OperationSettingName) =>
   setting === "bindings" ? "union-values" : "override-scalar";
 
-const stringValue = (value: unknown, fallback: string | null) =>
-  typeof value === "string" ? value : fallback;
+const trimmedStringValue = (value: unknown, fallback: string | null) => {
+  if (typeof value !== "string") return fallback;
+  return value.trim() || fallback;
+};
 
 const booleanValue = (value: unknown, fallback: boolean) => (typeof value === "boolean" ? value : fallback);
 
@@ -348,8 +360,8 @@ export const resolveRunPlanStage = (
       ...base,
       enabled: booleanValue(settingValueOf("enabled"), false),
       harness,
-      model: stringValue(settingValueOf("model"), null),
-      effort: stringValue(settingValueOf("effort"), null),
+      model: trimmedStringValue(settingValueOf("model"), null),
+      effort: trimmedStringValue(settingValueOf("effort"), null),
     },
     profile: policyProfileValue(settingValueOf("permission-profile"), operationPolicyProfile(operation)),
     settings,
@@ -668,12 +680,14 @@ const mcpIdentity = (name: string, endpoint: string) =>
 
 const mcpServers = (servers: ReadonlyArray<RunPlanMcpServerInput>) =>
   servers.map((server) => {
-    const identity = server.identity ?? mcpIdentity(server.name, server.endpoint);
+    const name = server.name.trim();
+    const endpoint = server.endpoint.trim();
+    const identity = server.identity ?? mcpIdentity(name, endpoint);
     return RunPlanMcpServer.make({
       identity,
-      name: server.name,
+      name,
       projectedName: projectedContributionName(identity),
-      endpoint: server.endpoint,
+      endpoint,
       authenticated: server.authenticated,
       unavailableReason: server.unavailableReason ?? null,
     });
@@ -713,6 +727,23 @@ export interface AssembleRunPlanInput {
   readonly unavailableContributionReasons?: ReadonlyMap<string, string>;
 }
 
+export class RunPlanAssemblyError extends Schema.TaggedError<RunPlanAssemblyError>()("RunPlanAssemblyError", {
+  message: Schema.String,
+  cause: Schema.Defect(),
+}) {}
+
+const schemaConstructorNameFromStack = (cause: Error) =>
+  cause.stack?.match(/\bnew (RunPlan\w+)/)?.[1] ?? "RunPlan";
+
+const formatSchemaIssue = SchemaIssue.makeFormatterDefault();
+
+const formatAssemblyError = (cause: unknown) => {
+  if (!(cause instanceof Error) || !SchemaIssue.isIssue(cause.cause)) {
+    return `RunPlan: ${cause instanceof Error ? cause.message : String(cause)}`;
+  }
+  return `${schemaConstructorNameFromStack(cause)}: ${formatSchemaIssue(cause.cause)}`;
+};
+
 export const assembleRunPlan = (input: AssembleRunPlanInput) => {
   const workContext = input.item.workContext;
   const observation = RunPlanObservation.make({ ...input.observation });
@@ -749,6 +780,9 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     ...projectedNamesFor("Commands", commands, projectedMembers),
   ];
   const mcp = [...mcpServersForRun, ...unresolvedMcp];
+  const connectionNames = input.resolved.stage.mcpSkills
+    .filter((server) => server.auth !== undefined)
+    .map((server) => server.name.trim());
   const engineStamps = [
     contentStamp(`${input.item.stage} Operation Definition`, {
       operation: input.item.stage,
@@ -768,12 +802,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     contentStamp("Engine Sandbox", { workspace: input.checkoutPath, policy: input.resolved.profile }),
     contentStamp("Engine Structured Output", structuredOutput(input.item.stage)),
     contentStamp("Engine Persistence", { sessionKind: input.sessionKind }),
-    contentStamp(
-      "Engine Connections",
-      input.resolved.stage.mcpSkills
-        .filter((server) => server.auth !== undefined)
-        .map((server) => server.name),
-    ),
+    contentStamp("Engine Connections", connectionNames),
   ];
   return freezeRunPlan(
     RunPlan.make({
@@ -802,9 +831,7 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
       hooks: [],
       middleware: [...input.middleware],
       structuredOutput: structuredOutput(input.item.stage),
-      connections: input.resolved.stage.mcpSkills
-        .filter((server) => server.auth !== undefined)
-        .map((server) => server.name),
+      connections: connectionNames,
       workContext: RunPlanWorkContext.make({
         reference: RunPlanWorkContextReference.make({ ...workContext.reference }),
         facts: RunPlanWorkContextFacts.make({
@@ -851,3 +878,10 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     }),
   );
 };
+
+export const tryAssembleRunPlan = Effect.fn("RunPlan.tryAssemble")((input: AssembleRunPlanInput) =>
+  Effect.try({
+    try: () => assembleRunPlan(input),
+    catch: (cause) => new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause }),
+  }),
+);

@@ -5,12 +5,19 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import type * as PlatformError from "effect/PlatformError";
 import * as Stream from "effect/Stream";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 
 const describe = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 const timeoutMessage = (command: string, deadline: string) => `${command} timed out after ${deadline}`;
+const noFiles: ReadonlyArray<string> = [];
+
+const recoverNotFound =
+  <A, E>(fallback: A, fail: (error: PlatformError.PlatformError) => E) =>
+  (error: PlatformError.PlatformError) =>
+    error.reason._tag === "NotFound" ? Effect.succeed(fallback) : Effect.fail(fail(error));
 
 const captureWith = (spawner: ChildProcessSpawner["Service"]) => (command: ChildProcess.Command) =>
   Effect.scoped(
@@ -112,12 +119,15 @@ export const gitLayer = Layer.effect(
       const value = yield* runGit(worktreePath, ["rev-parse", "--git-path", marker]);
       const markerPath = path.resolve(worktreePath, value.trim());
       return yield* fs.exists(markerPath).pipe(
-        Effect.mapError(
-          (cause) =>
-            new Git.GitError({
-              command: `git rev-parse --git-path ${marker}`,
-              message: describe(cause),
-            }),
+        Effect.catch(
+          recoverNotFound(
+            false,
+            (cause) =>
+              new Git.GitError({
+                command: `git rev-parse --git-path ${marker}`,
+                message: describe(cause),
+              }),
+          ),
         ),
       );
     });
@@ -212,7 +222,14 @@ export const worktreeFsLayer = Layer.effect(
             Effect.mapError(fail(`link ${linkPath}`)),
           ),
       runCommand: (cwd, command) =>
-        capture(ChildProcess.make(command, { cwd, shell: true })).pipe(
+        capture(
+          ChildProcess.make(command, {
+            cwd,
+            env: { CI: "true" },
+            extendEnv: true,
+            shell: true,
+          }),
+        ).pipe(
           Effect.mapError(fail(command)),
           Effect.timeout(setupCommandDeadline),
           Effect.catchTag(
@@ -228,7 +245,8 @@ export const worktreeFsLayer = Layer.effect(
               ? Effect.void
               : new WorktreeFs.WorktreeFsError({
                   operation: command,
-                  message: result.stderr.trim() || `exited with code ${result.exitCode}`,
+                  message:
+                    result.stderr.trim() || result.stdout.trim() || `exited with code ${result.exitCode}`,
                 }),
           ),
         ),
@@ -240,7 +258,7 @@ export const worktreeFsLayer = Layer.effect(
               onSome: (mtime) => ({ mtimeMillis: mtime.getTime() }),
             }),
           ),
-          Effect.orElseSucceed(() => null),
+          Effect.catch(recoverNotFound(null, fail(`stat ${target}`))),
         ),
     } satisfies WorktreeFs.WorktreeFsService;
   }),
@@ -258,16 +276,11 @@ export const contextFsLayer = Layer.effect(
     const readDirectory = (target: string, options?: { readonly recursive?: boolean }) =>
       fs
         .readDirectory(target, options)
-        .pipe(
-          Effect.catch((error) =>
-            error.reason._tag === "NotFound"
-              ? Effect.succeed([])
-              : Effect.fail(fail(`read directory ${target}`)(error)),
-          ),
-        );
+        .pipe(Effect.catch(recoverNotFound(noFiles, fail(`read directory ${target}`))));
 
     return {
-      readFile: (target) => fs.readFileString(target).pipe(Effect.orElseSucceed(() => null)),
+      readFile: (target) =>
+        fs.readFileString(target).pipe(Effect.catch(recoverNotFound(null, fail(`read ${target}`)))),
       readDirectory,
       copyDirectory: (source, dest) =>
         fs

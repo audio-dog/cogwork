@@ -17,14 +17,14 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import type * as FileSystem from "effect/FileSystem";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import type * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { Availability } from "./availability";
@@ -112,21 +112,27 @@ type ControlStoreSeedEvent = Omit<
   Extract<DaemonEvent, { readonly _tag: "ControlStoreChanged" }>,
   "emittedAtMillis"
 >;
+type PluginSeedEvent = Omit<Extract<DaemonEvent, { readonly _tag: "PluginsChanged" }>, "emittedAtMillis">;
 
 const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(function* (
   store: ControlStoreService,
   registry: RegistryState,
 ) {
-  if (store.health === "unavailable") return [];
+  if (store.health === "unavailable") {
+    yield* Effect.logError("Control store seed unavailable", { message: store.message });
+    return [];
+  }
   return yield* store.picture.pipe(
-    Effect.match({
-      onFailure: () => [],
-      onSuccess: (controlStore) => [
-        {
-          _tag: "ControlStoreChanged",
-          controlStore: controlStoreWithDiagnostics(controlStore, registry),
-        } satisfies ControlStoreSeedEvent,
-      ],
+    Effect.matchEffect({
+      onFailure: (error) =>
+        Effect.logError("Control store seed failed", { error }).pipe(Effect.map(() => [])),
+      onSuccess: (controlStore) =>
+        Effect.succeed([
+          {
+            _tag: "ControlStoreChanged",
+            controlStore: controlStoreWithDiagnostics(controlStore, registry),
+          } satisfies ControlStoreSeedEvent,
+        ]),
     }),
   );
 });
@@ -137,6 +143,9 @@ const connectionSeedEvent = (connections: ConnectionOverview) =>
     connections,
     danglingWorkspaces: [],
   }) satisfies Omit<Extract<DaemonEvent, { readonly _tag: "ConnectionsChanged" }>, "emittedAtMillis">;
+
+const pluginSeedEvent = (plugins: PluginSeedEvent["plugins"]) =>
+  ({ _tag: "PluginsChanged", plugins, notices: [] }) satisfies PluginSeedEvent;
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
   const bus = yield* DaemonEventBus;
@@ -158,7 +167,6 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
 });
 
 const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
-  const registry = yield* WorkspaceRegistry;
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const controlStore = yield* ControlStore;
@@ -170,6 +178,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const config = yield* scheduler.config;
   const stats = yield* scheduler.stats;
   const running = yield* ledger.runningRuns;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const items = currentReconcileStatesOf(registry, snapshot).flatMap((state) =>
     classifiedItemsOf(state).map((item) => ({ _tag: "ItemChanged", workspace: state.name, item }) as const),
   );
@@ -183,9 +192,9 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   } as const;
   const controlStoreEvents = yield* controlStoreSeedEvents(controlStore, registry);
   const pluginEvents = yield* plugins.overview.pipe(
-    Effect.match({
-      onFailure: () => [],
-      onSuccess: (overview) => [{ _tag: "PluginsChanged" as const, plugins: overview, notices: [] }],
+    Effect.matchEffect({
+      onFailure: (error) => Effect.logError("Plugin seed failed", { error }).pipe(Effect.map(() => [])),
+      onSuccess: (overview) => Effect.succeed([pluginSeedEvent(overview)]),
     }),
   );
   const connectionEvents = yield* connections.overview.pipe(
@@ -225,7 +234,6 @@ const statesByName = (snapshot: ReconcileSnapshot) =>
 
 export const handlersLayer = DaemonRpcs.toLayer({
   GetStatus: Effect.fn("Daemon.GetStatus")(function* () {
-    const registry = yield* WorkspaceRegistry;
     const info = yield* DaemonInfo;
     const worker = yield* ReconcileWorker;
     const scheduler = yield* Scheduler;
@@ -234,6 +242,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
     const controlStore = yield* ControlStore;
+    const registry = yield* (yield* WorkspaceRegistry).state;
     const stateByName = statesByName(snapshot);
     return {
       health: controlStore.health === "available" ? "running" : "store-unavailable",
@@ -251,8 +260,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetControlStore: Effect.fn("Daemon.GetControlStore")(function* () {
     const store = yield* ControlStore;
-    const registry = yield* WorkspaceRegistry;
-    return controlStoreWithDiagnostics(yield* store.picture, registry);
+    const picture = yield* store.picture;
+    const registry = yield* (yield* WorkspaceRegistry).state;
+    return controlStoreWithDiagnostics(picture, registry);
   }),
   GetPlugins: Effect.fn("Daemon.GetPlugins")(function* () {
     return yield* (yield* PluginManager).overview;
@@ -353,24 +363,26 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     );
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
+  const runnerRequirements = Layer.mergeAll(
+    Layer.effect(FileSystem.FileSystem, FileSystem.FileSystem),
+    Layer.effect(HttpClient.HttpClient, HttpClient.HttpClient),
+  );
   const base = Layer.mergeAll(
     registry,
     controlStore,
     plugins,
     connections,
+    credentials,
     daemonInfoLayer,
     issueTracker,
     runLedger,
     runRecorder,
+    runnerRequirements,
     // The executor mints through the session store, so it is exposed here too;
     // layer memoization keeps it the same instance the harness runners pull from.
     sessionStore,
     adapters.contextAssembler,
-    Harness.layer(adapters.harnessRunners).pipe(
-      Layer.provide(sessionStore),
-      Layer.provide(adapters.contextAssembler),
-      Layer.provide(credentials),
-    ),
+    Harness.layer(adapters.harnessRunners),
     McpSkill.layer.pipe(Layer.provide(credentials)),
     daemonEventBusLayer,
     runControlLayer,
@@ -417,11 +429,11 @@ const activeTicketKeys = (state: WorkspaceReconcileState) =>
   state.observed.flatMap((item) => [ticketSlug(item.id), ...(item.pr?.followable ? [item.pr.headRef] : [])]);
 
 const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
-  const registry = yield* WorkspaceRegistry;
   const manager = yield* WorktreeManager;
   const worker = yield* ReconcileWorker;
   const snapshot = yield* worker.snapshot;
   const now = yield* Clock.currentTimeMillis;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const stateByName = statesByName(snapshot);
   const reconcilable = registry.workspaces
     .map((workspace) => ({ workspace, state: stateByName.get(workspace.config.name) }))
