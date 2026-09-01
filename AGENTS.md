@@ -39,6 +39,26 @@ leaves behind carries different DDL text and column order than the create statem
 boot's schema comparison — which is exact on purpose — refuses it. Deleting the store is the only
 supported way forward. See ADR 0015 for when migrations come back.
 
+## Never start the dev server
+
+Do not run `pnpm dev`, `turbo dev`, `electron-vite dev`, or any package's `dev` script. Not to check
+a change, not to grab a screenshot, not just this once. The human running the session starts it. You
+attach to what is already there.
+
+A second dev server does not give you a second app — it damages the first. The desktop main process
+takes a single-instance lock (`apps/desktop/src/main/index.ts`), so a second Electron process quits
+the moment it starts and only refocuses the window someone else was using. Any debug port it opened
+dies with it, and its Vite server has already claimed a different port. The result is that you
+believe you started something, you are attached to nothing, and you stole focus from a person.
+
+- **The app is running** — attach and verify. See `apps/desktop/AGENTS.md`.
+- **The app is not running** — say so, ask the human to start it, and wait.
+- **No human is in the session** — an autonomous triage, implement or follow-up Run has no app and
+  will not get one. Verify through tests, typecheck, build and the code itself, and report the UI as
+  unverified. Never start a server to close that gap.
+
+This covers every dev server in the workspace, not only the desktop app.
+
 ## Agent skills
 
 ### Issue tracker
