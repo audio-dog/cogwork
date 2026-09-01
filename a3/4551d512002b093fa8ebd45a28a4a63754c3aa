@@ -1,0 +1,19 @@
+packages/contracts/src/issue-tracker.ts
+  s_a76d1edf065141::t_61fff6450d4ef4 8,12-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a34551d512002b093fa8ebd45a28a4a63754c3aa",
+  "prompts": {},
+  "sessions": {
+    "s_a76d1edf065141": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89829111-87a1-4711-b21a-2d1d6a0f8330",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
