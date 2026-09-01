@@ -1,12 +1,11 @@
-import { DaemonRpcs, type PluginMutationResult } from "@cogwork/contracts";
+import type { PluginMutationResult } from "@cogwork/contracts";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { defaultSocketPath } from "./paths";
-import { clientLayer } from "./rpc";
+import { clientLayer, makeDaemonClient } from "./rpc";
 
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
@@ -24,7 +23,7 @@ const mutatePlugin = Effect.fn("plugin.mutate")(
     readonly pluginId: string;
     readonly operation: "install" | "uninstall";
   }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     const result =
       options.operation === "install"
         ? yield* client.InstallPlugin({ pluginId: options.pluginId })

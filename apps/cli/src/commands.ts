@@ -4,7 +4,6 @@ import {
   ContributionSettingUpdate,
   type ControlStore,
   type DaemonEvent,
-  DaemonRpcs,
   type DaemonStatus,
   initialBoard,
   type OperationSettingContext,
@@ -23,6 +22,7 @@ import {
 import { Daemon, Registry, readControlStore } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -33,11 +33,10 @@ import * as Stream from "effect/Stream";
 import * as Argument from "effect/unstable/cli/Argument";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import { SocketOpenError } from "effect/unstable/socket/Socket";
+import { SocketErrorReason, SocketOpenError } from "effect/unstable/socket/Socket";
 import { defaultControlStorePath, defaultCredentialsPath, defaultSocketPath } from "./paths";
-import { clientLayer, type DaemonOptions, serverLayer } from "./rpc";
+import { clientLayer, type DaemonOptions, type DaemonRpcTimeout, makeDaemonClient, serverLayer } from "./rpc";
 import { formatDaemonLimits, formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 import { secondStopSignal } from "./stop-signal";
 import { telemetryLayer } from "./telemetry";
@@ -324,7 +323,7 @@ const overSocket = <E, R>(effect: Effect.Effect<void, E, R>, socketPath: string)
 
 const runRuns = Effect.fn("commands.runRuns")(
   function* (_options: { readonly socketPath: string }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     const runs = yield* client.ListRuns();
     yield* Console.log(formatRuns(runs));
   },
@@ -333,7 +332,7 @@ const runRuns = Effect.fn("commands.runRuns")(
 
 const runEvents = Effect.fn("commands.runEvents")(
   function* (options: { readonly socketPath: string; readonly id: string }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     const id = yield* Schema.decodeUnknownEffect(RunId)(options.id);
     const events = yield* client.GetRunEvents({ id });
     yield* Console.log(formatEvents(events));
@@ -348,25 +347,41 @@ const markSeen = (seen: Ref.Ref<ReadonlyMap<string, number>>) => (activity: RunA
     return [true, new Map(map).set(activity.runId, activity.seq)] as const;
   });
 
-const reconnectSchedule = Schedule.spaced("1 second");
+type WatchRpcError = DaemonRpcTimeout | RpcClientError;
+
+const isWatchTransportError = (error: WatchRpcError) =>
+  Schema.is(RpcClientError)(error) && Schema.is(SocketErrorReason)(error.reason);
+
+export const watchReconnectBackoff = Schedule.exponential("500 millis", 2).pipe(
+  Schedule.jittered,
+  Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.seconds(10)))),
+  Schedule.setInputType<WatchRpcError>(),
+  Schedule.while(({ input }) => isWatchTransportError(input)),
+);
 
 const clearScreen = "\u001b[2J\u001b[H";
 
 type WatchPayload = { readonly id: RunId };
 
-const reconnecting = <A, E, R>(stream: Stream.Stream<A, E, R>) =>
+export const withWatchReconnect = <A, R>(stream: Stream.Stream<A, WatchRpcError, R>) =>
   stream.pipe(
-    Stream.tapError((error) => Console.error(`watch: connection lost, reconnecting… (${String(error)})`)),
-    Stream.retry(reconnectSchedule),
+    Stream.tapError((error) =>
+      isWatchTransportError(error)
+        ? Console.error(`watch: connection lost, reconnecting… (${String(error)})`)
+        : Effect.void,
+    ),
+    Stream.retry(watchReconnectBackoff),
   );
 
-const watchStream = <E>(source: Stream.Stream<RunActivity, E>, seen: Ref.Ref<ReadonlyMap<string, number>>) =>
-  reconnecting(source.pipe(Stream.filterEffect(markSeen(seen))));
+const watchStream = (
+  source: Stream.Stream<RunActivity, WatchRpcError>,
+  seen: Ref.Ref<ReadonlyMap<string, number>>,
+) => withWatchReconnect(source.pipe(Stream.filterEffect(markSeen(seen))));
 
 const overviewScreen = (board: Board) => `${clearScreen}${renderBoard(board).join("\n")}`;
 
-const watchOverview = <E>(source: Stream.Stream<DaemonEvent, E>) =>
-  reconnecting(source.pipe(Stream.scan(initialBoard, applyDaemonEvent))).pipe(
+const watchOverview = (source: Stream.Stream<DaemonEvent, WatchRpcError>) =>
+  withWatchReconnect(source.pipe(Stream.scan(initialBoard, applyDaemonEvent))).pipe(
     Stream.runForEach((board) => Console.log(overviewScreen(board))),
   );
 
@@ -398,7 +413,7 @@ const runWatch = Effect.fn("commands.runWatch")(
     readonly id: Option.Option<string>;
     readonly workItem: Option.Option<string>;
   }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     if (Option.isNone(options.id) && Option.isNone(options.workItem)) {
       return yield* watchOverview(client.WatchEvents());
     }
@@ -426,7 +441,7 @@ const runStatus = Effect.fn("commands.runStatus")(function* (options: {
 }) {
   yield* daemonOrStore(
     Effect.gen(function* () {
-      const client = yield* RpcClient.make(DaemonRpcs);
+      const client = yield* makeDaemonClient();
       const status = yield* client.GetStatus();
       return yield* daemonStatusPicture(status, client.GetControlStore());
     }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
@@ -442,7 +457,7 @@ interface ControlStoreReadOptions {
 const currentControlStore = (options: ControlStoreReadOptions) =>
   daemonOrStore(
     Effect.gen(function* () {
-      const client = yield* RpcClient.make(DaemonRpcs);
+      const client = yield* makeDaemonClient();
       return yield* client.GetControlStore();
     }).pipe(Effect.scoped, Effect.provide(clientLayer(options.socketPath))),
     readControlStore(options.controlStorePath),
@@ -458,7 +473,7 @@ const setLimit = Effect.fn("commands.setLimit")(
     readonly limit: "global-concurrency" | "per-workspace-concurrency" | "daily-budget";
     readonly value: number;
   }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     const current = yield* client.GetControlStore();
     const controlStore = yield* client.SetDaemonLimit({
       update: {
@@ -513,7 +528,7 @@ const changeContributionSetting = Effect.fn("commands.changeContributionSetting"
       readonly value: Option.Option<"on" | "off">;
     },
   ) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     const update = yield* makeContributionSettingUpdate(options, options.value);
     const controlStore = yield* client.SetContributionSetting({ update });
     yield* Console.log(formatContributionSettings(controlStore));
@@ -528,7 +543,7 @@ const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
       readonly value: Option.Option<string>;
     },
   ) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     const update = yield* makeOperationSettingUpdate(options, options.value);
     const controlStore = yield* client.SetOperationSetting({ update });
     yield* Console.log(formatOperationSettings(controlStore, yield* operationSettingContext(options)));
@@ -538,7 +553,7 @@ const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
 
 const setScheduling = Effect.fn("commands.setScheduling")(
   function* (options: { readonly socketPath: string; readonly desired: SchedulingState }) {
-    const client = yield* RpcClient.make(DaemonRpcs);
+    const client = yield* makeDaemonClient();
     const scheduler = yield* client.SetScheduling({ desired: options.desired });
     yield* Console.log(`scheduling: ${scheduler.scheduling}`);
   },

@@ -1,4 +1,4 @@
-import { type ConnectionEstablishment, DaemonRpcs } from "@cogwork/contracts";
+import type { ConnectionEstablishment } from "@cogwork/contracts";
 import { Linear } from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
@@ -6,11 +6,10 @@ import * as Layer from "effect/Layer";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { layer as credentialsLayer } from "./credentials";
 import { browserOpenerLayer, loginKey, loginLinear, ProviderKeyError } from "./login";
 import { defaultCredentialsPath, defaultSocketPath } from "./paths";
-import { clientLayer } from "./rpc";
+import { clientLayer, makeDaemonClient } from "./rpc";
 
 const clientIdFlag = Flag.string("client-id").pipe(Flag.withDescription("Linear OAuth client id"));
 
@@ -37,7 +36,7 @@ const runLogin = Effect.fn("login.linear")(
     readonly credentials: string;
   }) =>
     Effect.gen(function* () {
-      const client = yield* RpcClient.make(DaemonRpcs);
+      const client = yield* makeDaemonClient();
       const connections = yield* client.GetConnections();
       const existing = connections.connections.find((item) => item.system === "linear")?.connection;
       const result = yield* loginLinear({
