@@ -62,6 +62,10 @@ describe("formatStatus", () => {
     assert.include(output, "event bus: 17 dropped events");
   });
 
+  it("stays silent when the daemon event bus has not lost events", () => {
+    assert.notInclude(formatStatus(status()), "event bus:");
+  });
+
   it("shows stored rows and labels every daemon-derived section offline", () => {
     const output = formatOfflineStatus(controlStore);
 
