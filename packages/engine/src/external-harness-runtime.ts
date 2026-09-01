@@ -34,6 +34,8 @@ import {
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import {
@@ -83,6 +85,7 @@ export interface ExternalHarnessSelection {
 
 export interface ExternalHarnessCheckout {
   readonly path: string;
+  readonly sharedGitDirectory: string | null;
 }
 
 export interface ExternalHarnessSecrets {
@@ -111,6 +114,7 @@ export interface ExternalHarnessCapabilities {
 }
 
 export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
+  readonly workspaceRoot?: string;
   readonly messages?: (
     request: ExternalHarnessResolvedRequest,
   ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
@@ -133,6 +137,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter, Nativ
   readonly authentication: HarnessAuthenticationBinding;
   readonly catalogSources: HarnessCatalogSources;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
+  readonly sharedGit: "none" | "required";
   readonly makeAdapter: (input: {
     readonly model: AdapterModel<Adapter>;
     readonly authentication: NativeAuthentication;
@@ -216,10 +221,14 @@ const mcpWorkspaceProjection = (request: ExternalHarnessResolvedRequest) => {
   return { secrets, skills, hasSecrets: Object.keys(secretValues).length > 0 };
 };
 
-const harnessWorkspace = (request: ExternalHarnessResolvedRequest) => {
+const harnessWorkspace = <Adapter extends AnyTextAdapter, NativeAuthentication>(
+  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  request: ExternalHarnessResolvedRequest,
+) => {
   const mcp = mcpWorkspaceProjection(request);
   return {
     ...preparedWorkspace,
+    ...(descriptor.transport.workspaceRoot ? { root: descriptor.transport.workspaceRoot } : {}),
     instructions: workspaceInstructions(request),
     ...(mcp.skills.length > 0 ? { skills: mcp.skills } : {}),
     ...(mcp.hasSecrets ? { secrets: mcp.secrets } : {}),
@@ -286,11 +295,50 @@ const resolveResumeHandle = Effect.fn("ExternalHarnessRuntime.resolveResumeHandl
   return yield* store.resumeHandle(session);
 });
 
+const sharedGitError = (checkoutPath: string) =>
+  new HarnessError({
+    reason: "workspace",
+    retryable: false,
+    message: `shared Git metadata is unavailable for prepared checkout ${checkoutPath}`,
+  });
+
+const resolveSharedGitDirectory = Effect.fn("ExternalHarnessRuntime.resolveSharedGitDirectory")(
+  (checkoutPath: string) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeGitPath = path.resolve(checkoutPath, ".git");
+      const info = yield* fs.stat(worktreeGitPath);
+      if (info.type === "Directory") return yield* fs.realPath(worktreeGitPath);
+
+      const pointer = yield* fs.readFileString(worktreeGitPath);
+      const gitDirectoryMatch = /^gitdir:\s*(.+)$/m.exec(pointer.trim());
+      if (!gitDirectoryMatch?.[1]) return yield* sharedGitError(checkoutPath);
+
+      const gitDirectory = path.resolve(checkoutPath, gitDirectoryMatch[1]);
+      const commonDirectoryPath = path.resolve(gitDirectory, "commondir");
+      const commonDirectory = yield* fs
+        .readFileString(commonDirectoryPath)
+        .pipe(Effect.orElseSucceed(() => "."));
+      return yield* fs.realPath(path.resolve(gitDirectory, commonDirectory.trim()));
+    }).pipe(Effect.provide(Path.layer)),
+);
+
+const sharedGitDirectory = (
+  descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
+  checkoutPath: string,
+) => {
+  if (descriptor.sharedGit === "none") return Effect.succeed(null);
+  return resolveSharedGitDirectory(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
+};
+
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
+  descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
   request: HarnessRequest,
   authentication: ExternalHarnessAuthentication,
 ) {
   const resumeHandle = yield* resolveResumeHandle(request.session);
+  const gitDirectory = yield* sharedGitDirectory(descriptor, request.plan.sandbox.workspace);
   return {
     identity: { run: request.plan.id, session: request.session, resumeHandle },
     selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
@@ -300,7 +348,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     operatingInstructions: request.plan.operatingInstructions,
     mcp: resolvedMcpSkills(request),
     secrets: { mcp: request.mcpCredentials },
-    checkout: { path: request.plan.sandbox.workspace },
+    checkout: { path: request.plan.sandbox.workspace, sharedGitDirectory: gitDirectory },
     prompt: request.plan.messages,
     outputSchema: request.plan.structuredOutput,
   } satisfies ExternalHarnessResolvedRequest;
@@ -315,10 +363,10 @@ const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(
   request: HarnessRequest,
 ) {
   const authentication = yield* inputs.authentication(request);
-  const resolved = yield* resolvedRequest(request, authentication);
+  const resolved = yield* resolvedRequest(descriptor, request, authentication);
   const provider = yield* inputs.sandboxProvider(resolved);
   yield* validateExternalRequest(descriptor, request, resolved, provider);
-  const workspaceDefinition = harnessWorkspace(resolved);
+  const workspaceDefinition = harnessWorkspace(descriptor, resolved);
   const policy = yield* inputs.sandboxPolicy?.(resolved) ?? Effect.succeed(null);
   return { resolved, provider, workspaceDefinition, policy };
 });
@@ -397,13 +445,18 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
   const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
+  const watchesFiles =
+    inputs.fileHooks?.onFile !== undefined ||
+    inputs.fileHooks?.onFileCreate !== undefined ||
+    inputs.fileHooks?.onFileChange !== undefined ||
+    inputs.fileHooks?.onFileDelete !== undefined;
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,
     workspace: defineWorkspace(workspaceDefinition),
     lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
     ...(policy ? { policy } : {}),
-    fileEvents: inputs.fileHooks !== undefined,
+    fileEvents: watchesFiles,
     ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
   });
   const abortController = new AbortController();

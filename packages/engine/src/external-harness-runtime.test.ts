@@ -334,6 +334,7 @@ const descriptor = (
       },
       diagnostics: [],
     }),
+  sharedGit: "none",
   makeAdapter: (resolved) => {
     probe.resolved.push(resolved);
     return new ControlledAdapter(() => toAsyncIterable(chunks), probe);
