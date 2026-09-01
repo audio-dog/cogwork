@@ -60,6 +60,7 @@ import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
+import { projectedContributionName } from "./run-plan";
 import { layer as runRecorderLayer } from "./run-recorder";
 import * as SessionStore from "./session-store";
 import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
@@ -1588,7 +1589,7 @@ describe("Executor.execute", () => {
         [
           {
             identity: privateSkill.id,
-            name: `cogwork_${Array.from(privateSkill.id, (character) => character.codePointAt(0)?.toString(16) ?? "").join("_")}`,
+            name: projectedContributionName(privateSkill.id),
             source: privateSkill.file,
           },
         ],
@@ -1858,7 +1859,7 @@ describe("Executor.execute", () => {
 
       const [request] = yield* Ref.get(requests);
       const [skill] = request ? resolvedMcpSkills(request) : [];
-      assert.match(skill?.name ?? "", /^cogwork_/);
+      assert.match(skill?.name ?? "", /^engine__/);
       assert.isNotNull(skill?.bearer ?? null);
       assert.strictEqual(skill?.bearer ? Redacted.value(skill.bearer) : null, "token-for-linear");
 
