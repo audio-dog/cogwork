@@ -25,7 +25,7 @@ import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { describe, expect, it } from "vitest";
 import { createDaemonBridgePort, type DaemonBridgePort } from "../../../main/daemon-bridge";
 import type { DaemonRpcBridge } from "../../../shared/ipc";
-import { layerProtocolIpc, makeProtocolIpc } from "./protocol";
+import { layerProtocolIpc, makeProtocolIpc, protocolInboxCapacity } from "./protocol";
 
 const Ping = Rpc.make("Ping", { success: Schema.String });
 const Counter = Rpc.make("Counter", { success: Schema.Int, stream: true });
@@ -135,6 +135,30 @@ const makeObservedFailingBridge = (cause: Error) => {
   };
 };
 
+const makeFloodBridge = () => {
+  const dataListeners = new Set<(frame: Uint8Array) => void>();
+  const state = { connections: 0 };
+  const bridge: DaemonRpcBridge = {
+    connect: () => {
+      state.connections += 1;
+      return Promise.resolve();
+    },
+    send: () => undefined,
+    onData: (listener) => {
+      dataListeners.add(listener);
+      return () => dataListeners.delete(listener);
+    },
+    onClosed: () => () => undefined,
+  };
+  const flood = (count: number) => {
+    const frame = new TextEncoder().encode("{}\n");
+    for (const _ of Array.from({ length: count })) {
+      for (const listener of dataListeners) listener(frame);
+    }
+  };
+  return { bridge, flood, state };
+};
+
 const serializationThatDefectsOnReset = (defect: Error) => {
   const serialization = RpcSerialization.makeNdjson();
   const parsers = [serialization.makeUnsafe()][Symbol.iterator]();
@@ -183,6 +207,23 @@ const makeLogCapture = () => {
 };
 
 describe("IPC RPC protocol", () => {
+  it("reconnects when incoming frames exceed the bounded inbox", async () => {
+    const flood = makeFloodBridge();
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* buildProtocol(flood.bridge);
+        yield* Effect.yieldNow;
+        yield* Effect.sync(() => flood.flood(protocolInboxCapacity + 1));
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust("1 minute");
+        yield* Effect.yieldNow;
+      }).pipe(Effect.provide(TestClock.layer())),
+    );
+
+    expect(flood.state.connections).toBeGreaterThan(1);
+  });
+
   it("settles the connection gate when connecting fails", async () => {
     const cause = new Error("connection refused");
     const exit = await Effect.runPromise(
