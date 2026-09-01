@@ -293,8 +293,10 @@ export const resolveEngineOperationSetting = (
 export const operatorForSetting = (setting: OperationSettingName) =>
   setting === "bindings" ? "union-values" : "override-scalar";
 
-const stringValue = (value: unknown, fallback: string | null) =>
-  typeof value === "string" ? value : fallback;
+const stringValue = (value: unknown, fallback: string | null) => {
+  if (typeof value !== "string") return fallback;
+  return value.trim() || fallback;
+};
 
 const booleanValue = (value: unknown, fallback: boolean) => (typeof value === "boolean" ? value : fallback);
 
@@ -670,12 +672,14 @@ const mcpIdentity = (name: string, endpoint: string) =>
 
 const mcpServers = (servers: ReadonlyArray<RunPlanMcpServerInput>) =>
   servers.map((server) => {
-    const identity = server.identity ?? mcpIdentity(server.name, server.endpoint);
+    const name = server.name.trim();
+    const endpoint = server.endpoint.trim();
+    const identity = server.identity ?? mcpIdentity(name, endpoint);
     return RunPlanMcpServer.make({
       identity,
-      name: server.name,
+      name,
       projectedName: projectedContributionName(identity),
-      endpoint: server.endpoint,
+      endpoint,
       authenticated: server.authenticated,
       unavailableReason: server.unavailableReason ?? null,
     });
