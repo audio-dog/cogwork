@@ -18,13 +18,18 @@ import type { WorktreeSandbox } from "./sandbox";
 
 const IGNORED_DIRS = new Set([".git", "node_modules"]);
 const MAX_MATCHES = 1000;
+const bashDeadline = "5 minutes";
+const webFetchDeadline = "30 seconds";
 
 const standardSchema = <S extends Schema.Codec<unknown, unknown, never, never>>(schema: S) =>
   Schema.toStandardJSONSchemaV1(Schema.toStandardSchemaV1(schema));
 
 const readFailure = (path: string, cause: unknown): ToolError => {
   const message = String(cause);
-  const reason = /ENOENT|no such file/i.test(message) ? "not-found" : "read-failed";
+  const reason =
+    typeof cause === "object" && cause !== null && "code" in cause && cause.code === "ENOENT"
+      ? "not-found"
+      : "read-failed";
   return toolError(reason, message, path);
 };
 
@@ -161,6 +166,11 @@ export const runBash = Effect.fn("Tools.bash")(function* (sandbox: WorktreeSandb
       }),
     catch: (cause) => toolError("exec-failed", String(cause), cwd ?? null),
   }).pipe(
+    Effect.timeoutOrElse({
+      duration: bashDeadline,
+      orElse: () =>
+        Effect.fail(toolError("timeout", `bash command timed out after ${bashDeadline}`, cwd ?? null)),
+    }),
     Effect.map((result) => ({
       stdout: result.stdout,
       stderr: result.stderr,
@@ -236,13 +246,17 @@ export const webFetch = Effect.fn("Tools.webfetch")(function* (
   args: WebFetchArgs,
 ) {
   const client = yield* HttpClient.HttpClient;
-  const response = yield* client
-    .get(args.url)
-    .pipe(Effect.mapError((cause) => toolError("fetch-failed", cause.message)));
-  const content = yield* response.text.pipe(
+  return yield* Effect.gen(function* () {
+    const response = yield* client.get(args.url);
+    const content = yield* response.text;
+    return { url: args.url, status: response.status, content };
+  }).pipe(
     Effect.mapError((cause) => toolError("fetch-failed", cause.message)),
+    Effect.timeoutOrElse({
+      duration: webFetchDeadline,
+      orElse: () => Effect.fail(toolError("timeout", `webfetch timed out after ${webFetchDeadline}`)),
+    }),
   );
-  return { url: args.url, status: response.status, content };
 });
 
 type ToolRunPromise = Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<HttpClient.HttpClient>>>;

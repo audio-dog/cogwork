@@ -11,6 +11,7 @@ export class ToolError extends Schema.TaggedError<ToolError>()("ToolError", {
     "edit-ambiguous",
     "exec-failed",
     "fetch-failed",
+    "timeout",
   ]),
   path: Schema.NullOr(Schema.String),
   message: Schema.String,
