@@ -174,6 +174,7 @@ const snapshotOf = (
 const workerLayer = (observed: ReadonlyArray<ObservedItem>, poll: PollState = okPoll) =>
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
     snapshot: Effect.succeed(snapshotOf(observed, poll)),
     invalidateAvailability: () => Effect.void,
   });
@@ -181,6 +182,7 @@ const workerLayer = (observed: ReadonlyArray<ObservedItem>, poll: PollState = ok
 const workerSnapshotLayer = (snapshot: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
     snapshot: Ref.get(snapshot),
     invalidateAvailability: () => Effect.void,
   });

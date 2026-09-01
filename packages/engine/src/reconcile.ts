@@ -358,13 +358,25 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
     return selection.receipt;
   });
 
+  const receiptAfterCurrent = Effect.fn("ReconcileWorker.receiptAfterCurrent")(function* () {
+    const receipt = yield* Deferred.make<ReconcileReceipt>();
+    yield* Queue.offer(queue, { receipt });
+    return receipt;
+  });
+
   const submit = Effect.fn("ReconcileWorker.submit")(function* () {
     const receipt = yield* Effect.uninterruptible(receiptForSubmit());
     return yield* awaitReceipt(receipt);
   });
 
+  const submitAfterCurrent = Effect.fn("ReconcileWorker.submitAfterCurrent")(function* () {
+    const receipt = yield* Effect.uninterruptible(receiptAfterCurrent());
+    return yield* awaitReceipt(receipt);
+  });
+
   return {
     submit,
+    submitAfterCurrent,
     snapshot: Ref.get(snapshotRef),
     invalidateAvailability: availability.invalidate,
   };
