@@ -1,4 +1,5 @@
-import { HarnessName, RunPlan, SessionId } from "@cogwork/contracts";
+import { HarnessName, RunId, RunPlan, SessionId } from "@cogwork/contracts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it } from "@effect/vitest";
 import {
   type DefaultMessageMetadataByModality,
@@ -9,25 +10,30 @@ import {
   type TextOptions,
 } from "@tanstack/ai";
 import { memoryPersistence } from "@tanstack/ai-persistence";
-import type { SandboxCapabilities, SandboxHandle, SandboxProvider } from "@tanstack/ai-sandbox";
+import type {
+  SandboxCapabilities,
+  SandboxHandle,
+  SandboxProvider,
+  WorkspaceDefinition,
+} from "@tanstack/ai-sandbox";
+import { getSandbox, getWorkspaceProjection } from "@tanstack/ai-sandbox";
+import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
-import {
-  type ExternalHarnessDescriptor,
-  externalHarnessRunner,
-  preparedCheckoutWorkspace,
-} from "./external-harness-runtime";
+import { type ExternalHarnessDescriptor, externalHarnessRunner } from "./external-harness-runtime";
 import { fullHarnessExecution, HarnessError, make } from "./harness";
 import { SessionStore } from "./session-store";
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
 const resumedSession = Schema.decodeSync(SessionId)("sess-external-147");
+const secondCheckoutRunId = Schema.decodeSync(RunId)("run-second-checkout");
 
 interface ControlledOptions {
   readonly effort: string;
@@ -57,7 +63,9 @@ class ControlledAdapter
 
   chatStream(options: TextOptions<ControlledOptions>) {
     this.probe.chatOptions.push(options);
-    return this.stream(options);
+    const stream = this.stream(options);
+    const inspection = this.probe.inspect?.(options) ?? Promise.resolve();
+    return afterInspection(inspection, stream);
   }
 
   structuredOutput(_options: { readonly outputSchema: JSONSchema }) {
@@ -80,7 +88,26 @@ class ControlledProbe {
   readonly chatOptions: Array<TextOptions<ControlledOptions>> = [];
   readonly cancellations: Array<true> = [];
   readonly sandboxDestructions: Array<true> = [];
+  inspect?: (options: TextOptions<ControlledOptions>) => Promise<void>;
 }
+
+const runtimeCapabilities = (options: TextOptions<ControlledOptions>) => {
+  if (options.capabilities) return options.capabilities;
+  throw new Error("missing runtime capabilities");
+};
+
+const afterInspection = <Value>(inspection: Promise<void>, stream: AsyncIterable<Value>) => ({
+  [Symbol.asyncIterator]: () => {
+    const iterator = stream[Symbol.asyncIterator]();
+    return {
+      next: () => inspection.then(() => iterator.next()),
+      return: (value?: unknown): Promise<IteratorResult<Value>> =>
+        inspection.then(() =>
+          iterator.return ? iterator.return(value) : Promise.resolve({ done: true, value: undefined }),
+        ),
+    };
+  },
+});
 
 const capabilities: SandboxCapabilities = {
   fs: true,
@@ -125,7 +152,7 @@ const sandboxHandle = (id: string) =>
     fs: {
       read: () => Promise.reject(new Error("unexpected read")),
       readBytes: () => Promise.reject(new Error("unexpected byte read")),
-      write: () => Promise.reject(new Error("unexpected write")),
+      write: () => Promise.resolve(),
       list: () => Promise.resolve([]),
       mkdir: () => Promise.resolve(),
       remove: () => Promise.resolve(),
@@ -150,19 +177,25 @@ const sandboxHandle = (id: string) =>
     destroy: () => Promise.resolve(),
   }) satisfies SandboxHandle;
 
-const controlledProvider = (created: Array<string>, destructions: Array<true>): SandboxProvider => ({
-  name: "controlled",
-  capabilities: () => capabilities,
-  create: (input) => {
-    created.push(input.workspace?.source.type ?? "missing");
-    return Promise.resolve(sandboxHandle("controlled-sandbox"));
-  },
-  resume: () => Promise.resolve(null),
-  destroy: () => {
-    destructions.push(true);
-    return Promise.resolve();
-  },
-});
+const controlledProvider = (
+  created: Array<string>,
+  destructions: Array<true>,
+  workspaces: Array<WorkspaceDefinition> = [],
+) =>
+  ({
+    name: "controlled",
+    capabilities: () => capabilities,
+    create: (input) => {
+      created.push(input.workspace?.source.type ?? "missing");
+      if (input.workspace) workspaces.push(input.workspace);
+      return Promise.resolve(sandboxHandle("controlled-sandbox"));
+    },
+    resume: () => Promise.resolve(null),
+    destroy: () => {
+      destructions.push(true);
+      return Promise.resolve();
+    },
+  }) satisfies SandboxProvider;
 
 const harnessServices = {
   sessionStore: {
@@ -184,16 +217,17 @@ const harnessServices = {
     configureConnection: () => Effect.die("unexpected Connection configuration"),
     removeConnection: () => Effect.die("unexpected Connection removal"),
   },
-  fileSystem: FileSystem.makeNoop({}),
 };
 
 const harnessRunnerLayer = Layer.mergeAll(
   Layer.succeed(SessionStore, harnessServices.sessionStore),
   Layer.succeed(ContextAssembler, harnessServices.contextAssembler),
   Layer.succeed(CredentialStore, harnessServices.credentialStore),
-  Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  NodeFileSystem.layer,
   FetchHttpClient.layer,
 );
+
+const hostAuthentication = () => Effect.succeed({ mode: "host", secrets: {} });
 
 const request = Schema.decodeSync(RunPlan)({
   id: "run-external-test",
@@ -250,7 +284,7 @@ const descriptor = (
   sessionKind: "opaque-handle",
   capabilities: {
     execution: fullHarnessExecution,
-    projectedMembers: ["Harness Adapter", "Sandbox", "Structured Output"],
+    projectedMembers: ["Harness Adapter", "Instructions", "Messages", "MCP", "Sandbox", "Structured Output"],
     planMiddleware: ["sandbox"],
   },
   optionCatalogSource: { kind: "controlled", version: "1" },
@@ -265,10 +299,13 @@ const descriptor = (
     sessionId: resolved.identity.resumeHandle,
   }),
   projectAuthentication: (authentication) => authentication.mode,
-  transport: {
-    systemPrompts: (resolved) => resolved.instructions.map(({ content }) => content),
-  },
-  diagnostics: (cause) => new HarnessError({ reason: "turn", retryable: true, message: String(cause) }),
+  transport: {},
+  diagnostics: (cause) =>
+    new HarnessError({
+      reason: "turn",
+      retryable: true,
+      message: cause instanceof Error ? cause.message : JSON.stringify(cause),
+    }),
   estimateUsage: (_resolved, event, characters) =>
     event.type === EventType.RUN_FINISHED
       ? {
@@ -287,18 +324,325 @@ const makeHarness = (
   controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string>,
   created: Array<string>,
   destructions: Array<true> = [],
+  workspaces: Array<WorkspaceDefinition> = [],
 ) =>
   make([
     externalHarnessRunner(controlledDescriptor, {
       authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
-      sandboxProvider: () => Effect.succeed(controlledProvider(created, destructions)),
-      workspace: preparedCheckoutWorkspace(),
-      sandboxPolicy: () => Effect.succeed(undefined),
+      sandboxProvider: () => Effect.succeed(controlledProvider(created, destructions, workspaces)),
     }),
   ]);
 
+const terminalEvents: ReadonlyArray<StreamChunk> = [
+  { type: EventType.RUN_STARTED, threadId: "session-148", runId: request.id },
+  {
+    type: EventType.CUSTOM,
+    name: "structured-output.complete",
+    value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
+  },
+  { type: EventType.RUN_FINISHED, threadId: "session-148", runId: request.id },
+];
+
 describe("external Harness runtime", () => {
   it.layer(harnessRunnerLayer)((it) => {
+    it.effect(
+      "projects mandatory instructions through one Harness Workspace and keeps work context user-authored",
+      () =>
+        Effect.gen(function* () {
+          const created: Array<string> = [];
+          const destructions: Array<true> = [];
+          const workspaces: Array<WorkspaceDefinition> = [];
+          const probe = new ControlledProbe();
+          const harness = makeHarness(descriptor(terminalEvents, probe), created, destructions, workspaces);
+
+          yield* harness
+            .run({ plan: request, session: null, mcpCredentials: new Map() })
+            .pipe(Stream.runDrain);
+
+          assert.strictEqual(workspaces.length, 1);
+          assert.strictEqual(workspaces[0]?.source.type, "none");
+          assert.include(workspaces[0]?.instructions ?? "", "Follow repo rules.");
+          assert.include(
+            workspaces[0]?.instructions ?? "",
+            "Mandatory Operating Instructions: /instructions/implement-agent",
+          );
+          assert.deepStrictEqual(probe.chatOptions[0]?.messages, [
+            { role: "user", content: "Implement #147." },
+          ]);
+          assert.deepStrictEqual(probe.chatOptions[0]?.systemPrompts, []);
+          assert.deepStrictEqual(destructions, [true]);
+        }),
+    );
+
+    it.effect("keeps Operating Instructions resources host-provisioned and readable", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-harness-checkout-" });
+        const resourceDirectory = yield* fs.makeTempDirectoryScoped({
+          prefix: "cogwork-operating-instructions-",
+        });
+        const resource = `${resourceDirectory}/GUIDE.md`;
+        yield* fs.writeFileString(resource, "supporting guide");
+        const probe = new ControlledProbe();
+        const reads: Array<string> = [];
+        probe.inspect = (options) => {
+          const sandbox = getSandbox(runtimeCapabilities(options));
+          return sandbox.process
+            .exec(
+              `node -e 'process.stdout.write(require("node:fs").readFileSync(process.argv[1], "utf8"))' '${resource}'`,
+            )
+            .then((result) => {
+              reads.push(result.stdout);
+            });
+        };
+        const plan = RunPlan.make({
+          ...request,
+          operatingInstructions: {
+            name: "implement-agent",
+            path: resourceDirectory,
+            resources: [{ source: resource, content: "supporting guide" }],
+          },
+        });
+        const harness = make([
+          externalHarnessRunner(descriptor(terminalEvents, probe), {
+            authentication: hostAuthentication,
+            sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
+          }),
+        ]);
+
+        yield* harness.run({ plan, session: null, mcpCredentials: new Map() }).pipe(Stream.runDrain);
+
+        assert.deepStrictEqual(reads, ["supporting guide"]);
+        assert.isFalse(yield* fs.exists(`${checkout}/GUIDE.md`));
+        assert.include(yield* fs.readFileString(`${checkout}/AGENTS.md`), resourceDirectory);
+      }),
+    );
+
+    it.effect("binds each Run to its prepared checkout when a Session resumes", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const firstCheckout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-first-checkout-" });
+        const secondCheckout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-second-checkout-" });
+        const probe = new ControlledProbe();
+        const observedCheckouts: Array<string> = [];
+        probe.inspect = (options) =>
+          getSandbox(runtimeCapabilities(options))
+            .process.exec("pwd -P")
+            .then(({ stdout }) => {
+              observedCheckouts.push(stdout.trim());
+            });
+        const harness = make([
+          externalHarnessRunner(descriptor(terminalEvents, probe), {
+            authentication: hostAuthentication,
+            sandboxProvider: (resolved) =>
+              Effect.succeed(localProcessSandbox({ dir: resolved.checkout.path })),
+          }),
+        ]);
+        const runAt = (id: RunId, workspace: string) =>
+          harness
+            .run({
+              plan: RunPlan.make({
+                ...request,
+                id,
+                sandbox: { ...request.sandbox, workspace },
+              }),
+              session: resumedSession,
+              mcpCredentials: new Map(),
+            })
+            .pipe(Stream.runDrain);
+
+        yield* runAt(request.id, firstCheckout);
+        yield* runAt(secondCheckoutRunId, secondCheckout);
+
+        assert.deepStrictEqual(observedCheckouts, [
+          yield* fs.realPath(firstCheckout),
+          yield* fs.realPath(secondCheckout),
+        ]);
+      }),
+    );
+
+    it.effect("projects public and authenticated MCP servers with collision-safe live secrets per Run", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-harness-workspace-" });
+        const probe = new ControlledProbe();
+        const observations: Array<{
+          readonly names: ReadonlyArray<string>;
+          readonly publicHasAuthorization: boolean;
+          readonly liveBearers: ReadonlyArray<string>;
+        }> = [];
+        probe.inspect = (options) => {
+          const capabilities = runtimeCapabilities(options);
+          const sandbox = getSandbox(capabilities);
+          const projection = getWorkspaceProjection(capabilities);
+          const servers = projection.skills.filter((skill) => skill.kind === "mcp");
+          const publicServer = servers.find(({ name }) => name === "public.mcp");
+          const readBearer = (name: string) => {
+            const authorization = servers.find((server) => server.name === name)?.config.headers
+              ?.Authorization;
+            if (
+              typeof authorization !== "object" ||
+              authorization === null ||
+              !("__bearerRef" in authorization)
+            ) {
+              return Promise.reject(new Error(`authenticated MCP server ${name} has no bearer SecretRef`));
+            }
+            return sandbox.process
+              .exec(
+                `node -e 'process.stdout.write(process.env[process.argv[1]] ?? "")' '${authorization.__bearerRef.__secretName}'`,
+              )
+              .then(({ stdout }) => stdout);
+          };
+          return Promise.all([readBearer("linear.api"), readBearer("linear-api")]).then((liveBearers) => {
+            observations.push({
+              names: servers.map(({ name }) => name),
+              publicHasAuthorization: publicServer?.config.headers?.Authorization !== undefined,
+              liveBearers,
+            });
+          });
+        };
+        const plan = RunPlan.make({
+          ...request,
+          mcp: [
+            {
+              identity: "local:repo/mcp/public.mcp",
+              name: "public.mcp",
+              projectedName: "public.mcp",
+              endpoint: "https://public.example.test/mcp",
+              authenticated: false,
+              unavailableReason: null,
+            },
+            {
+              identity: "local:repo/mcp/linear.api",
+              name: "linear.api",
+              projectedName: "linear.api",
+              endpoint: "https://dot.example.test/mcp",
+              authenticated: true,
+              unavailableReason: null,
+            },
+            {
+              identity: "local:repo/mcp/linear-api",
+              name: "linear-api",
+              projectedName: "linear-api",
+              endpoint: "https://dash.example.test/mcp",
+              authenticated: true,
+              unavailableReason: null,
+            },
+          ],
+        });
+        const controlledDescriptor = descriptor(terminalEvents, probe);
+        const runWith = (version: string) =>
+          make([
+            externalHarnessRunner(controlledDescriptor, {
+              authentication: hostAuthentication,
+              sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
+            }),
+          ])
+            .run({
+              plan,
+              session: null,
+              mcpCredentials: new Map([
+                ["local:repo/mcp/linear.api", Redacted.make(`${version}-dot-bearer`)],
+                ["local:repo/mcp/linear-api", Redacted.make(`${version}-dash-bearer`)],
+              ]),
+            })
+            .pipe(Stream.runCollect);
+
+        yield* runWith("first");
+        yield* runWith("rotated");
+        const agents = yield* fs.readFileString(`${checkout}/AGENTS.md`);
+
+        assert.deepStrictEqual(observations, [
+          {
+            names: ["public.mcp", "linear.api", "linear-api"],
+            publicHasAuthorization: false,
+            liveBearers: ["first-dot-bearer", "first-dash-bearer"],
+          },
+          {
+            names: ["public.mcp", "linear.api", "linear-api"],
+            publicHasAuthorization: false,
+            liveBearers: ["rotated-dot-bearer", "rotated-dash-bearer"],
+          },
+        ]);
+        assert.notInclude(agents, "first-dot-bearer");
+        assert.notInclude(agents, "first-dash-bearer");
+        assert.notInclude(agents, "rotated-dot-bearer");
+        assert.notInclude(agents, "rotated-dash-bearer");
+      }),
+    );
+
+    it.effect("rejects a required MCP projection before the native Harness launches", () =>
+      Effect.gen(function* () {
+        const created: Array<string> = [];
+        const probe = new ControlledProbe();
+        const base = descriptor(terminalEvents, probe);
+        const harness = makeHarness(
+          {
+            ...base,
+            capabilities: {
+              ...base.capabilities,
+              projectedMembers: base.capabilities.projectedMembers.filter((member) => member !== "MCP"),
+            },
+          },
+          created,
+        );
+        const plan = RunPlan.make({
+          ...request,
+          mcp: [
+            {
+              identity: "local:repo/mcp/required",
+              name: "required",
+              projectedName: "required",
+              endpoint: "https://required.example.test/mcp",
+              authenticated: false,
+              unavailableReason: null,
+            },
+          ],
+        });
+
+        const error = yield* harness
+          .run({ plan, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "launch");
+        assert.strictEqual(error.retryable, false);
+        assert.include(error.message, "MCP");
+        assert.deepStrictEqual(created, []);
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
+    it.effect("rejects an authenticated MCP server without a live credential before launch", () =>
+      Effect.gen(function* () {
+        const created: Array<string> = [];
+        const probe = new ControlledProbe();
+        const harness = makeHarness(descriptor(terminalEvents, probe), created);
+        const plan = RunPlan.make({
+          ...request,
+          mcp: [
+            {
+              identity: "local:repo/mcp/required-auth",
+              name: "required-auth",
+              projectedName: "required-auth",
+              endpoint: "https://required.example.test/mcp",
+              authenticated: true,
+              unavailableReason: null,
+            },
+          ],
+        });
+
+        const error = yield* harness
+          .run({ plan, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "credential");
+        assert.strictEqual(error.retryable, false);
+        assert.include(error.message, "required-auth");
+        assert.deepStrictEqual(created, []);
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
     it.effect("launches through Harness and preserves complete AG-UI and structured-result events", () =>
       Effect.gen(function* () {
         const created: Array<string> = [];
