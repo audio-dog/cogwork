@@ -40,7 +40,6 @@ const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
   claimedByUs: false,
   attempts,
   handback: { by: "local-owner", atMillis: 5 },
-  owned: true,
   followUp,
   openBlockers: 0,
   proposal: null,
@@ -80,6 +79,7 @@ const pr: PrSignals = {
   waitingSinceMillis: 1,
   headRef: "7-retry-me",
   followable: true,
+  draft: false,
 };
 
 describe("observeWorkspace handback barrier", () => {

@@ -15,6 +15,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import type { EligibleWork } from "./classify";
 import { Executor } from "./executor";
+import { operationStages } from "./playbook";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
@@ -201,7 +202,9 @@ const candidatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot, conf
   return snapshot.workspaces.flatMap((state): ReadonlyArray<Candidate> => {
     const workspace = state.poll.status === "ok" ? byName.get(state.name) : undefined;
     if (!workspace) return [];
-    return state.eligible.map((work) => candidateOf(workspace, work, config, observation));
+    return state.eligible
+      .filter((work) => operationStages.some((operation) => operation === work.stage))
+      .map((work) => candidateOf(workspace, work, config, observation));
   });
 };
 

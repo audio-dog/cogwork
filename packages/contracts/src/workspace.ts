@@ -55,11 +55,27 @@ export const SourceControlConfig = Schema.Struct({
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
 
+export const OperationNeedKind = Schema.Literals([
+  "mcp-server",
+  "skill",
+  "subagent",
+  "command",
+  "hook",
+  "connection",
+]);
+export type OperationNeedKind = typeof OperationNeedKind.Type;
+
+export const OperationNeed = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  kind: OperationNeedKind,
+});
+export type OperationNeed = typeof OperationNeed.Type;
 export const PlaybookStageConfig = Schema.Struct({
   prompt: Schema.optional(TrimmedNonEmptyString),
   skill: Schema.optional(TrimmedNonEmptyString),
   resumeMaxAgeMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
   resumeMaxTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
+  needs: Schema.optional(Schema.Array(OperationNeed)),
 });
 export type PlaybookStageConfig = typeof PlaybookStageConfig.Type;
 

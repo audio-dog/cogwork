@@ -1,43 +1,77 @@
-import type { InterruptRecord, InterruptStore } from "@tanstack/ai-persistence";
+import type { InterruptRecord } from "@tanstack/ai-persistence";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
 
-// The provider runner's durable pause/resume seam, wired ahead of the
-// interactive phase. It is process-scoped: pending interrupts outlive the run
-// that raised them and are still there for the next run of the same session,
-// which mirrors the run ledger's own in-memory durability. Swap this for a
-// ledger-backed store when the ledger itself gains a persistent backend.
-export const makeInterruptStore = (): InterruptStore => {
-  const byId = new Map<string, InterruptRecord>();
+type NewInterrupt = Omit<InterruptRecord, "status" | "resolvedAt">;
+type InterruptStatus = Extract<InterruptRecord["status"], "resolved" | "cancelled">;
+type InterruptRecords = ReadonlyMap<string, InterruptRecord>;
 
-  const sortedWhere = (predicate: (record: InterruptRecord) => boolean) =>
-    [...byId.values()].filter(predicate).sort((a, b) => a.requestedAt - b.requestedAt);
+const sortedWhere = (records: InterruptRecords, predicate: (record: InterruptRecord) => boolean) =>
+  [...records.values()].filter(predicate).sort((a, b) => a.requestedAt - b.requestedAt);
 
-  const terminate = (interruptId: string, status: "resolved" | "cancelled", response?: unknown) => {
-    const existing = byId.get(interruptId);
-    if (existing !== undefined) {
-      // Promise-based store contract: no Effect Clock at this boundary.
-      // @effect-diagnostics-next-line globalDate:off
-      byId.set(interruptId, { ...existing, status, resolvedAt: Date.now(), response });
-    }
-    return Promise.resolve();
-  };
+const insert = (records: InterruptRecords, record: NewInterrupt) => {
+  if (records.has(record.interruptId)) return records;
+  return new Map(records).set(record.interruptId, { ...record, status: "pending" });
+};
+
+const terminate = (
+  records: InterruptRecords,
+  interruptId: string,
+  status: InterruptStatus,
+  resolvedAt: number,
+  response?: unknown,
+) => {
+  const existing = records.get(interruptId);
+  if (existing === undefined) return records;
+  return new Map(records).set(interruptId, { ...existing, status, resolvedAt, response });
+};
+
+export const make = Effect.gen(function* () {
+  const records = yield* Ref.make<InterruptRecords>(new Map());
+
+  const finish = (interruptId: string, status: InterruptStatus, response?: unknown) =>
+    Clock.currentTimeMillis.pipe(
+      Effect.flatMap((resolvedAt) =>
+        Ref.update(records, (current) => terminate(current, interruptId, status, resolvedAt, response)),
+      ),
+    );
+
+  const listWhere = (predicate: (record: InterruptRecord) => boolean) =>
+    Effect.map(Ref.get(records), (current) => sortedWhere(current, predicate));
 
   return {
-    // Insert-if-absent: a duplicate create never clobbers a resolved interrupt
-    // back to pending.
-    create: (record) => {
-      if (!byId.has(record.interruptId)) {
-        byId.set(record.interruptId, { ...record, status: "pending" });
-      }
-      return Promise.resolve();
-    },
-    resolve: (interruptId, response) => terminate(interruptId, "resolved", response),
-    cancel: (interruptId) => terminate(interruptId, "cancelled"),
-    get: (interruptId) => Promise.resolve(byId.get(interruptId) ?? null),
-    list: (threadId) => Promise.resolve(sortedWhere((record) => record.threadId === threadId)),
-    listPending: (threadId) =>
-      Promise.resolve(sortedWhere((record) => record.threadId === threadId && record.status === "pending")),
-    listByRun: (runId) => Promise.resolve(sortedWhere((record) => record.runId === runId)),
-    listPendingByRun: (runId) =>
-      Promise.resolve(sortedWhere((record) => record.runId === runId && record.status === "pending")),
+    create: Effect.fn("InterruptStore.create")((record: NewInterrupt) =>
+      Ref.update(records, (current) => insert(current, record)),
+    ),
+    resolve: Effect.fn("InterruptStore.resolve")((interruptId: string, response?: unknown) =>
+      finish(interruptId, "resolved", response),
+    ),
+    cancel: Effect.fn("InterruptStore.cancel")((interruptId: string) => finish(interruptId, "cancelled")),
+    get: Effect.fn("InterruptStore.get")((interruptId: string) =>
+      Effect.map(Ref.get(records), (current) => current.get(interruptId) ?? null),
+    ),
+    list: Effect.fn("InterruptStore.list")((threadId: string) =>
+      listWhere((record) => record.threadId === threadId),
+    ),
+    listPending: Effect.fn("InterruptStore.listPending")((threadId: string) =>
+      listWhere((record) => record.threadId === threadId && record.status === "pending"),
+    ),
+    listByRun: Effect.fn("InterruptStore.listByRun")((runId: string) =>
+      listWhere((record) => record.runId === runId),
+    ),
+    listPendingByRun: Effect.fn("InterruptStore.listPendingByRun")((runId: string) =>
+      listWhere((record) => record.runId === runId && record.status === "pending"),
+    ),
   };
-};
+});
+
+export type InterruptStoreService = Effect.Success<typeof make>;
+
+export class InterruptStore extends Context.Service<InterruptStore, InterruptStoreService>()(
+  "@cogwork/engine/interrupt-store/InterruptStore",
+) {}
+
+export const layer = Layer.effect(InterruptStore, make);

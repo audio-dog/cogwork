@@ -27,6 +27,7 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
+import { Availability } from "./availability";
 import {
   cancelRun,
   deregisterWorkspace,
@@ -77,9 +78,9 @@ import {
   workspaceStatesOf,
 } from "./read-model";
 import {
+  makeRefreshing as makeReconcile,
   type ReconcileSnapshot,
   ReconcileWorker,
-  layer as reconcileLayer,
   type WorkspaceReconcileState,
 } from "./reconcile";
 import { Recovery, layer as recoveryLayer } from "./recovery";
@@ -374,9 +375,12 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     daemonEventBusLayer,
     runControlLayer,
   );
-  const services = Layer.mergeAll(reconcileLayer, Executor.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),
-  );
+  const availability = Availability.layer;
+  const executor = Layer.effect(Executor.Executor, Executor.make);
+  const services = Layer.mergeAll(
+    Layer.effect(ReconcileWorker, makeReconcile).pipe(Layer.provide(executor)),
+    executor,
+  ).pipe(Layer.provide(availability), Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)));
   return eventPublisherLayer.pipe(
     Layer.provideMerge(
       recoveryLayer.pipe(
