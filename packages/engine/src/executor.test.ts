@@ -305,6 +305,17 @@ const contributionContext = Layer.succeed(ContextAssembler.ContextAssembler, {
   cleanup: () => Effect.void,
 });
 
+const invalidRunPlanContext = Layer.succeed(ContextAssembler.ContextAssembler, {
+  assemble: () =>
+    Effect.succeed({
+      layers: [{ kind: "repo" as const, source: "/repos/gh/AGENTS.md", content: "trailing newline\n" }],
+      operatingInstructionsPath: "/",
+      operatingInstructionResources: [],
+      sources: [],
+    }),
+  cleanup: () => Effect.void,
+});
+
 const assemblerStub = Layer.succeed(McpSkillAssembler, {
   assemble: (config) =>
     Effect.succeed(
@@ -2698,6 +2709,42 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
     }).pipe(Effect.provide(provide([runner(implementEvents)], unreachableRemoteWorktree)));
+  });
+
+  it.effect("records invalid Run Plan input through the normal attempt path", () => {
+    const atCap = { ...implementItem, priorFailures: 2 };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, atCap);
+
+      const log = yield* Ref.get(calls);
+      const attempts = log.filter((call) => call.method === "attemptFailed");
+      assert.strictEqual(attempts.length, 2);
+      assert.isTrue(
+        attempts.every((attempt) => attempt.reason?.includes("RunPlanInstruction.content") === true),
+      );
+      const handOff = log.find((call) => call.method === "handOff");
+      assert.include(handOff?.note ?? "", "3 failed implement attempts");
+      assert.strictEqual((yield* Ref.get(requests)).length, 0);
+
+      const ledger = yield* RunLedger.RunLedger;
+      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [capturingRunner(implementEvents)],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          invalidRunPlanContext,
+        ),
+      ),
+    );
   });
 
   it.effect("hands a permanent Run acceptance failure to a human without retrying", () => {
