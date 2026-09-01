@@ -1,0 +1,30 @@
+packages/engine/src/daemon-composition.test.ts
+  s_3c98e16f02dd05::t_46c2aec6e266da 33-43,155,206
+packages/engine/src/daemon.ts
+  s_3c98e16f02dd05::t_dbcaa69c30b91e 332,353
+  s_82e0301d24005b::t_32656518d1cf38 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "19662e1bc723ed14601b0bf369fa187e24c6e8a0",
+  "prompts": {},
+  "sessions": {
+    "s_3c98e16f02dd05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e9a-057f-71b2-add2-bed2e5b42a68",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_82e0301d24005b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e4e-ea87-7762-a257-ad3a480a7de5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
