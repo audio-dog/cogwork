@@ -3,7 +3,7 @@
   "hooks": {
     "afterFileEdit": [
       {
-        "command": "pnpm format-and-lint:fix"
+        "command": "node scripts/format-edited-files.mjs"
       }
     ]
   }
