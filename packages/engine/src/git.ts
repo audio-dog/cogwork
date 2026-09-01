@@ -1,5 +1,5 @@
 import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
+import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 export class GitError extends Schema.TaggedError<GitError>()("GitError", {
@@ -32,36 +32,35 @@ export interface GitOperationInProgress {
   readonly unmergedPaths: ReadonlyArray<string>;
 }
 
-const unavailable = Effect.fn("Git.unavailable")(function* (command: string) {
-  return yield* new GitError({ command, message: "git adapter not provided" });
-});
-
-const noWorktrees: ReadonlyArray<WorktreeEntry> = [];
-
-const noDivergence: BranchDivergence = { ahead: 0, behind: 0 };
-
-const noOperation = (): GitOperationInProgress | null => null;
-
-const makeUnavailable = () => ({
-  fetch: (_repoPath: string, remote: string) => Effect.asVoid(unavailable(`fetch ${remote}`)),
-  remoteBranchExists: (_repoPath: string, remote: string, branch: string) =>
-    Effect.map(unavailable(`rev-parse ${remote}/${branch}`), () => false),
-  addWorktree: (args: AddWorktreeArgs) => Effect.asVoid(unavailable(`worktree add ${args.branch}`)),
-  removeWorktree: (_repoPath: string, worktreePath: string, _force: boolean) =>
-    Effect.asVoid(unavailable(`worktree remove ${worktreePath}`)),
-  listWorktrees: (_repoPath: string) => Effect.map(unavailable("worktree list"), () => noWorktrees),
-  fastForward: (_worktreePath: string, remote: string, branch: string) =>
-    Effect.asVoid(unavailable(`merge ${remote}/${branch}`)),
-  divergence: (_worktreePath: string, remote: string, branch: string) =>
-    Effect.map(unavailable(`rev-list ${remote}/${branch}...HEAD`), () => noDivergence),
-  operationInProgress: (worktreePath: string) =>
-    Effect.map(unavailable(`rev-parse --git-path MERGE_HEAD (${worktreePath})`), noOperation),
-  rebase: (_worktreePath: string, remote: string, branch: string) =>
-    Effect.asVoid(unavailable(`rebase ${remote}/${branch}`)),
-  remoteUrl: (_repoPath: string, remote: string) =>
-    Effect.map(unavailable(`remote get-url ${remote}`), () => ""),
-});
-
-export type GitService = ReturnType<typeof makeUnavailable>;
+export interface GitService {
+  readonly fetch: (repoPath: string, remote: string) => Effect.Effect<void, GitError>;
+  readonly remoteBranchExists: (
+    repoPath: string,
+    remote: string,
+    branch: string,
+  ) => Effect.Effect<boolean, GitError>;
+  readonly addWorktree: (args: AddWorktreeArgs) => Effect.Effect<void, GitError>;
+  readonly removeWorktree: (
+    repoPath: string,
+    worktreePath: string,
+    force: boolean,
+  ) => Effect.Effect<void, GitError>;
+  readonly listWorktrees: (repoPath: string) => Effect.Effect<ReadonlyArray<WorktreeEntry>, GitError>;
+  readonly fastForward: (
+    worktreePath: string,
+    remote: string,
+    branch: string,
+  ) => Effect.Effect<void, GitError>;
+  readonly divergence: (
+    worktreePath: string,
+    remote: string,
+    branch: string,
+  ) => Effect.Effect<BranchDivergence, GitError>;
+  readonly operationInProgress: (
+    worktreePath: string,
+  ) => Effect.Effect<GitOperationInProgress | null, GitError>;
+  readonly rebase: (worktreePath: string, remote: string, branch: string) => Effect.Effect<void, GitError>;
+  readonly remoteUrl: (repoPath: string, remote: string) => Effect.Effect<string, GitError>;
+}
 
 export class Git extends Context.Service<Git, GitService>()("@cogwork/engine/git") {}
