@@ -1,0 +1,22 @@
+packages/engine/package.json
+  s_3c98e16f02dd05::t_813ba70d1bb8bd 27-28
+  s_3c98e16f02dd05::t_9f9598e105aa45 34
+pnpm-lock.yaml
+  s_3c98e16f02dd05::t_e3fe6de1dd1cb2 449-451,462-464,2485-2487,7282-7285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b803e9107ba814e1af078400823dfce6a7632805",
+  "prompts": {},
+  "sessions": {
+    "s_3c98e16f02dd05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e9a-057f-71b2-add2-bed2e5b42a68",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
