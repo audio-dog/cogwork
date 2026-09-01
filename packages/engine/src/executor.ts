@@ -322,6 +322,14 @@ interface PluginMcpContribution {
   readonly server: PluginMcpServer;
 }
 
+interface AvailabilityFacts {
+  readonly checkoutCause: AvailabilityCause | null;
+  readonly connectionContributions: ReadonlyArray<AvailabilityContribution>;
+  readonly harnessCauses: ReadonlyMap<string, AvailabilityCause | null>;
+  readonly liveReasons: ReadonlyMap<string, string | null>;
+  readonly pluginContributions: ReadonlyArray<PluginContribution>;
+}
+
 const pluginMcp = (contribution: PluginContribution) =>
   PluginContributionLoad.match(contribution.load, {
     Failed: () => [],
@@ -1192,30 +1200,13 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const evaluateAvailability = Effect.fn("Executor.evaluateAvailability")(function* (
-    workspace: RegisteredWorkspace,
-    operation: LifecycleStage,
-  ) {
-    const concludeAvailability = (causes: ReadonlyArray<AvailabilityCause>) =>
-      Effect.gen(function* () {
-        const conclusion: OperationAvailability = {
-          operation,
-          available: causes.length === 0,
-          causes,
-        };
-        yield* availability.record(workspace, conclusion);
-        return conclusion;
-      });
+  const harnessProbeKey = (resolved: ResolvedOperation) =>
+    JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model]);
 
-    const resolved = yield* controlStore.withWrite(resolvePlanStage(workspace, operation));
-    if (!resolved) {
-      return {
-        resolved,
-        availability: yield* concludeAvailability([
-          policyRefusal("Engine Operation Definition", `${operation} is not supported`),
-        ]),
-      };
-    }
+  const loadAvailabilityFacts = Effect.fn("Executor.loadAvailabilityFacts")(function* (
+    workspace: RegisteredWorkspace,
+    resolvedOperations: ReadonlyArray<ResolvedOperation>,
+  ) {
     const overview = yield* loadPluginOverview();
     const pluginContributions = installedContributions(overview);
     const pluginMcpServers = yield* Effect.forEach(
@@ -1228,18 +1219,68 @@ export const make = Effect.gen(function* () {
           [identity, unavailableReason] satisfies readonly [string, string | null],
       ),
     );
+    const distinctHarnesses = Array.from(
+      new Map(resolvedOperations.map((resolved) => [harnessProbeKey(resolved), resolved])).values(),
+    );
+    const harnessCauses = new Map(
+      yield* Effect.forEach(distinctHarnesses, (resolved) =>
+        harnessAvailability(resolved).pipe(
+          Effect.map(
+            (cause) =>
+              [harnessProbeKey(resolved), cause] satisfies readonly [string, AvailabilityCause | null],
+          ),
+        ),
+      ),
+    );
+    const needsConnections = resolvedOperations.some((resolved) =>
+      resolved.stage.needs.some(({ kind }) => kind === "connection"),
+    );
+    return {
+      checkoutCause: yield* checkoutAvailability(workspace),
+      connectionContributions: needsConnections ? yield* connectionAvailability() : [],
+      harnessCauses,
+      liveReasons,
+      pluginContributions,
+    } satisfies AvailabilityFacts;
+  });
+
+  const evaluateResolvedAvailability = Effect.fn("Executor.evaluateResolvedAvailability")(function* (
+    workspace: RegisteredWorkspace,
+    operation: LifecycleStage,
+    resolved: ResolvedOperation | null,
+    facts: AvailabilityFacts,
+  ) {
+    const concludeAvailability = (causes: ReadonlyArray<AvailabilityCause>) =>
+      Effect.gen(function* () {
+        const conclusion: OperationAvailability = {
+          operation,
+          available: causes.length === 0,
+          causes,
+        };
+        yield* availability.record(workspace, conclusion);
+        return conclusion;
+      });
+
+    if (!resolved) {
+      return {
+        resolved,
+        availability: yield* concludeAvailability([
+          policyRefusal("Engine Operation Definition", `${operation} is not supported`),
+        ]),
+      };
+    }
     const contributions = [
       ...workspace.contributions.map((contribution) => localAvailability(resolved, workspace, contribution)),
-      ...pluginContributions.map((contribution) =>
-        pluginAvailability(resolved, workspace, contribution, liveReasons),
+      ...facts.pluginContributions.map((contribution) =>
+        pluginAvailability(resolved, workspace, contribution, facts.liveReasons),
       ),
       ...(resolved.stage.needs.some(({ kind }) => kind === "connection")
-        ? yield* connectionAvailability()
+        ? facts.connectionContributions
         : []),
     ];
     const runtimeCauses = [
-      yield* checkoutAvailability(workspace),
-      yield* harnessAvailability(resolved),
+      facts.checkoutCause,
+      facts.harnessCauses.get(harnessProbeKey(resolved)) ?? null,
     ].filter((cause) => cause !== null);
     const bindings = operationBindingsOf(resolved);
     const causes = [
@@ -1257,6 +1298,15 @@ export const make = Effect.gen(function* () {
     return { resolved, availability: yield* concludeAvailability(causes) };
   });
 
+  const evaluateAvailability = Effect.fn("Executor.evaluateAvailability")(function* (
+    workspace: RegisteredWorkspace,
+    operation: LifecycleStage,
+  ) {
+    const resolved = yield* controlStore.withWrite(resolvePlanStage(workspace, operation));
+    const facts = yield* loadAvailabilityFacts(workspace, resolved ? [resolved] : []);
+    return yield* evaluateResolvedAvailability(workspace, operation, resolved, facts);
+  });
+
   const availabilityOf = Effect.fn("Executor.availabilityOf")(function* (
     workspace: RegisteredWorkspace,
     item: EligibleWork,
@@ -1269,8 +1319,19 @@ export const make = Effect.gen(function* () {
   const refreshAvailability = Effect.fn("Executor.refreshAvailability")(function* (
     workspace: RegisteredWorkspace,
   ) {
-    return yield* Effect.forEach(operationStages, (operation) =>
-      evaluateAvailability(workspace, operation).pipe(Effect.map(({ availability }) => availability)),
+    const operations = yield* Effect.forEach(operationStages, (operation) =>
+      controlStore
+        .withWrite(resolvePlanStage(workspace, operation))
+        .pipe(Effect.map((resolved) => ({ operation, resolved }))),
+    );
+    const facts = yield* loadAvailabilityFacts(
+      workspace,
+      operations.flatMap(({ resolved }) => (resolved ? [resolved] : [])),
+    );
+    return yield* Effect.forEach(operations, ({ operation, resolved }) =>
+      evaluateResolvedAvailability(workspace, operation, resolved, facts).pipe(
+        Effect.map(({ availability }) => availability),
+      ),
     );
   });
 

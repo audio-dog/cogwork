@@ -1318,6 +1318,30 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([runner(successEvents)])));
   });
 
+  it.effect("preflights each distinct Harness configuration once per availability refresh", () =>
+    Effect.gen(function* () {
+      const preflights = yield* Ref.make(0);
+      const probeRunner: TestRunner = {
+        make: () => ({
+          name: cursor,
+          sessionKind: "opaque-handle",
+          projectedMembers: [],
+          planMiddleware: [],
+          execution: fullHarnessExecution,
+          preflight: () => Ref.update(preflights, (count) => count + 1),
+          run: () => Stream.fromArray(implementEvents),
+        }),
+      };
+
+      yield* Effect.gen(function* () {
+        const executor = yield* Executor.Executor;
+        yield* executor.refreshAvailability(workspace);
+      }).pipe(Effect.provide(provide([probeRunner])));
+
+      assert.strictEqual(yield* Ref.get(preflights), 2);
+    }),
+  );
+
   it.effect("keeps transient Harness preflight failures out of availability", () => {
     const transientPreflight: TestRunner = {
       make: () => ({
