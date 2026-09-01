@@ -43,7 +43,7 @@ export const openWorktreeSandbox = (root: string) => {
 
 export const resolveBaseSha = Effect.fn("Tools.resolveBaseSha")(function* (sandbox: WorktreeSandbox) {
   const result = yield* Effect.tryPromise({
-    try: (signal) => sandbox.handle.process.exec("git rev-parse HEAD", { signal }),
+    try: (signal) => sandbox.handle.process.exec("git rev-parse --verify HEAD", { signal }),
     catch: (cause) => toolError("exec-failed", `failed to resolve base SHA: ${String(cause)}`, sandbox.root),
   }).pipe(
     Effect.timeoutOrElse({
