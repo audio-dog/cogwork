@@ -1,5 +1,5 @@
 import type { RunId, SessionId } from "@cogwork/contracts";
-import { type AgUiEvent, AgUiEventUnion, type RunRecord } from "@cogwork/contracts";
+import { AgUiEvent, agUiIsSessionHandleEvent, type RunRecord } from "@cogwork/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -19,23 +19,14 @@ const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : n
 // private detail. Nothing outside this module touches it, so live and replayed activity can only
 // ever agree.
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
-const decodeEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEventUnion));
+const decodeEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
 
-const SessionHandleValue = Schema.Struct({ sessionId: Schema.String });
-const isSessionHandleValue = Schema.is(SessionHandleValue);
+const optionalString = (value: unknown) => (typeof value === "string" ? value : null);
 
-const sessionHandle = (event: AgUiEvent) =>
-  AgUiEventUnion.matchOrElse(
-    event,
-    {
-      CUSTOM: ({ name, value }) =>
-        name?.endsWith(".session-id") && isSessionHandleValue(value) ? value.sessionId : null,
-    },
-    () => null,
-  );
+const sessionHandle = (event: AgUiEvent) => (agUiIsSessionHandleEvent(event) ? event.value.sessionId : null);
 
 const displayName = (event: AgUiEvent) =>
-  AgUiEventUnion.matchOrElse(
+  AgUiEvent.matchOrElse(
     event,
     {
       TOOL_CALL_START: ({ toolCallName }) => toolCallName ?? null,
@@ -43,7 +34,7 @@ const displayName = (event: AgUiEvent) =>
       STEP_STARTED: ({ stepName }) => stepName ?? null,
       STEP_FINISHED: ({ stepName }) => stepName ?? null,
     },
-    () => event.toolCallName ?? event.name ?? event.stepName ?? null,
+    () => optionalString(event.toolCallName) ?? optionalString(event.name) ?? optionalString(event.stepName),
   );
 
 interface RunTrack {

@@ -1,11 +1,12 @@
-import type {
-  HarnessName,
-  RunId,
-  RunPlanInstruction,
-  RunPlanMessage,
-  RunPlanOperatingInstructions,
-  SessionId,
-  SessionKind,
+import {
+  AgUiEvent,
+  type HarnessName,
+  type RunId,
+  type RunPlanInstruction,
+  type RunPlanMessage,
+  type RunPlanOperatingInstructions,
+  type SessionId,
+  type SessionKind,
 } from "@cogwork/contracts";
 import {
   type AnyTextAdapter,
@@ -32,7 +33,6 @@ import * as Effect from "effect/Effect";
 import type * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import {
-  type AgUiEvent,
   type HarnessError,
   type HarnessExecution,
   type HarnessRequest,
@@ -181,7 +181,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
 });
 
 const outputCharacters = (event: AgUiEvent) =>
-  event.type === "TEXT_MESSAGE_CONTENT" || event.type === "REASONING_MESSAGE_CONTENT"
+  AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
     ? (event.delta?.length ?? 0)
     : 0;
 

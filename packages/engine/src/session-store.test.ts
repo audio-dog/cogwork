@@ -26,7 +26,7 @@ const harness = Schema.decodeSync(HarnessName)("cursor");
 const event = (seq: number, value: AgUiEvent): RunEvent => ({
   seq,
   type: value.type,
-  name: value.name ?? null,
+  name: typeof value.name === "string" ? value.name : null,
   data: JSON.stringify(value),
   atMillis: 1000 + seq,
 });

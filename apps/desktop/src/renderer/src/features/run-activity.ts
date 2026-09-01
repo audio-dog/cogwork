@@ -1,6 +1,6 @@
 import {
-  type AgUiEvent,
-  AgUiEventUnion,
+  AgUiEvent,
+  agUiIsSessionHandleEvent,
   agUiTextDelta,
   type RunActivity,
   type RunId,
@@ -46,7 +46,10 @@ interface PreviewEntry {
 
 export type RunPreviewState = ReadonlyMap<string, PreviewEntry>;
 
-const toolKey = (runId: string, event: AgUiEvent) => `${runId}:${event.toolCallId ?? ""}`;
+type NamedEvent<Type extends string> = Extract<AgUiEvent, { readonly type: Type }>;
+
+const toolKey = (runId: string, event: { readonly toolCallId?: string }) =>
+  `${runId}:${event.toolCallId ?? ""}`;
 
 const entryFor = (state: RunPreviewState, runId: string): PreviewEntry =>
   state.get(runId) ?? { preview: { label: "starting", text: "" }, text: null, tools: new Map() };
@@ -62,7 +65,11 @@ const setEntry = (state: RunPreviewState, runId: string, update: (entry: Preview
 const onRunStarted = (state: RunPreviewState, { runId }: RunActivity) =>
   setEntry(state, runId, (entry) => withPreview(entry, "starting", ""));
 
-const onText = (state: RunPreviewState, { runId, event, correlation }: RunActivity) =>
+const onText = (
+  state: RunPreviewState,
+  { runId, correlation }: RunActivity,
+  event: NamedEvent<"TEXT_MESSAGE_CONTENT">,
+) =>
   setEntry(state, runId, (entry) => {
     const messageId = event.messageId ?? correlation.messageId ?? null;
     const previous = entry.text;
@@ -71,7 +78,7 @@ const onText = (state: RunPreviewState, { runId, event, correlation }: RunActivi
     return { ...withPreview(entry, "responding", text), text: { messageId, text } };
   });
 
-const onToolStart = (state: RunPreviewState, { runId, event }: RunActivity) =>
+const onToolStart = (state: RunPreviewState, runId: string, event: NamedEvent<"TOOL_CALL_START">) =>
   setEntry(state, runId, (entry) => {
     const name = event.toolCallName ?? "tool";
     return {
@@ -80,43 +87,50 @@ const onToolStart = (state: RunPreviewState, { runId, event }: RunActivity) =>
     };
   });
 
-const onToolEnd = (state: RunPreviewState, { runId, event }: RunActivity, result: string) =>
+const onToolEnd = (
+  state: RunPreviewState,
+  runId: string,
+  event: NamedEvent<"TOOL_CALL_END"> | NamedEvent<"TOOL_CALL_RESULT">,
+  result: string,
+) =>
   setEntry(state, runId, (entry) =>
     withPreview(entry, entry.tools.get(toolKey(runId, event)) ?? event.toolCallName ?? "tool", result),
   );
 
-const onStep = (state: RunPreviewState, { runId, event }: RunActivity) => {
+const onStep = (state: RunPreviewState, runId: string, event: NamedEvent<"STEP_STARTED">) => {
   if (!event.stepName) return state;
   const stepName = event.stepName;
   return setEntry(state, runId, (entry) => withPreview(entry, "step", stepName));
 };
 
-const onCustom = (state: RunPreviewState, { runId, event }: RunActivity) => {
-  if (event.name?.endsWith(".session-id")) return state;
+const onCustom = (state: RunPreviewState, runId: string, event: NamedEvent<"CUSTOM">) => {
+  if (agUiIsSessionHandleEvent(event)) return state;
   return setEntry(state, runId, (entry) =>
     withPreview(entry, event.name ?? "custom", customDetailText(event.value)),
   );
 };
 
-const onRunFinished = (state: RunPreviewState, { runId, event }: RunActivity) =>
+const onRunFinished = (state: RunPreviewState, runId: string, event: NamedEvent<"RUN_FINISHED">) =>
   setEntry(state, runId, (entry) => withPreview(entry, "finished", event.finishReason ?? ""));
 
-const onRunError = (state: RunPreviewState, { runId, event }: RunActivity) =>
+const onRunError = (state: RunPreviewState, runId: string, event: NamedEvent<"RUN_ERROR">) =>
   setEntry(state, runId, (entry) => withPreview(entry, "error", event.message ?? "run error"));
 
 export const applyRunPreview = (state: RunPreviewState, activity: RunActivity) =>
-  AgUiEventUnion.matchOrElse(
+  AgUiEvent.matchOrElse(
     activity.event,
     {
       RUN_STARTED: () => onRunStarted(state, activity),
-      TEXT_MESSAGE_CONTENT: () => onText(state, activity),
-      TOOL_CALL_START: () => onToolStart(state, activity),
-      TOOL_CALL_END: ({ result, content }) => onToolEnd(state, activity, firstString(result, content)),
-      TOOL_CALL_RESULT: ({ result, content }) => onToolEnd(state, activity, firstString(result, content)),
-      STEP_STARTED: () => onStep(state, activity),
-      CUSTOM: () => onCustom(state, activity),
-      RUN_FINISHED: () => onRunFinished(state, activity),
-      RUN_ERROR: () => onRunError(state, activity),
+      TEXT_MESSAGE_CONTENT: (event) => onText(state, activity, event),
+      TOOL_CALL_START: (event) => onToolStart(state, activity.runId, event),
+      TOOL_CALL_END: (event) =>
+        onToolEnd(state, activity.runId, event, firstString(event.result, event.content)),
+      TOOL_CALL_RESULT: (event) =>
+        onToolEnd(state, activity.runId, event, firstString(event.result, event.content)),
+      STEP_STARTED: (event) => onStep(state, activity.runId, event),
+      CUSTOM: (event) => onCustom(state, activity.runId, event),
+      RUN_FINISHED: (event) => onRunFinished(state, activity.runId, event),
+      RUN_ERROR: (event) => onRunError(state, activity.runId, event),
     },
     () => state,
   );
@@ -188,7 +202,7 @@ const setDiffEntry = (state: TranscriptFold, path: string, diff: string) => {
 };
 
 const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
-  AgUiEventUnion.matchOrElse(
+  AgUiEvent.matchOrElse(
     activity.event,
     {
       TEXT_MESSAGE_CONTENT: ({ messageId, delta }) =>
