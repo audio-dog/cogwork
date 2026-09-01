@@ -1,5 +1,11 @@
-import { type Priority, resolvePriority } from "@cogwork/contracts";
-import { LinearError, LinearClient as LinearSdk, RatelimitedLinearError } from "@linear/sdk";
+import { issueTrackerErrorIsPermanent, type Priority, resolvePriority } from "@cogwork/contracts";
+import {
+  FeatureNotAccessibleLinearError,
+  ForbiddenLinearError,
+  LinearError,
+  LinearClient as LinearSdk,
+  RatelimitedLinearError,
+} from "@linear/sdk";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -126,9 +132,16 @@ const IssuesTeamNode = Schema.Struct({
 });
 
 const MetaTeamNode = Schema.Struct({
-  id: Schema.String,
   states: Schema.Struct({ nodes: Schema.Array(StateNode) }),
+});
+
+const LabelTeamNode = Schema.Struct({
+  id: Schema.String,
   labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }),
+});
+
+const WorkspaceLabelsPayload = Schema.Struct({
+  issueLabels: Schema.Struct({ nodes: Schema.Array(LabelNode) }),
 });
 
 const CommentsPayload = Schema.Struct({
@@ -140,9 +153,17 @@ const CommentsPayload = Schema.Struct({
 });
 
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
+const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
+
+const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTrackerError) =>
+  new IssueTrackerError({
+    ...error,
+    ...(error.reason === "rate-limited" ? {} : { retryable: false }),
+    message: `Linear refused creating the "${name}" label in team ${ref.team}: ${error.message}`,
+  });
 
 const isAuthStatus = (status: number | undefined) => status === 401 || status === 403;
 
@@ -151,6 +172,9 @@ const reasonFor = (cause: unknown): IssueTrackerError["reason"] => {
   if (cause instanceof LinearError && isAuthStatus(cause.status)) return "auth";
   return "unavailable";
 };
+
+const isPermanent = (cause: unknown) =>
+  cause instanceof ForbiddenLinearError || cause instanceof FeatureNotAccessibleLinearError;
 
 const finiteOrNull = (value: number | undefined) =>
   value !== undefined && Number.isFinite(value) ? value : null;
@@ -163,10 +187,13 @@ const retryAfterMillisOf = (cause: unknown, nowMillis: number) => {
   return resetAtMillis === null ? undefined : Math.max(0, resetAtMillis - nowMillis);
 };
 
+// Reason stays `unavailable` for a permanent refusal on purpose: `auth` makes the credential store
+// invalidate a token that is working.
 const fromSdkError = (cause: unknown, nowMillis: number) =>
   new IssueTrackerError({
     reason: reasonFor(cause),
     message: cause instanceof Error ? cause.message : String(cause),
+    ...(isPermanent(cause) ? { retryable: false } : {}),
     retryAfterMillis: retryAfterMillisOf(cause, nowMillis),
   });
 
@@ -175,7 +202,8 @@ const isoMillis = (millis: number) =>
 
 const defaultCooldownMillis = 60_000;
 
-const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
+const isTransient = (error: IssueTrackerError) =>
+  error.reason === "unavailable" && !issueTrackerErrorIsPermanent(error);
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
 
@@ -241,9 +269,20 @@ const issuesFilter = (assigneeIds: ReadonlyArray<string> | null) => ({
 });
 
 const metaSelection = `
+  states { nodes { id name type } }`;
+
+// Linear caps an unpaginated connection at 50, and a team can hold more labels than that.
+const labelSelection = `
   id
-  states { nodes { id name type } }
-  labels { nodes { id name } }`;
+  labels(filter: { name: { eq: $label } }, first: 1) { nodes { id name } }`;
+
+// A workspace-level label belongs to no team, so no team-scoped connection lists it.
+const workspaceLabelQuery = `
+query WorkspaceLabelByName($label: String!) {
+  issueLabels(filter: { name: { eq: $label }, team: { null: true } }, first: 1) {
+    nodes { id name }
+  }
+}`;
 
 const commentsQuery = `
 query IssueComments($id: String!) {
@@ -299,6 +338,7 @@ const teamShape = <S extends Schema.Top & { readonly DecodingServices: never }>(
 };
 
 const metaShape = teamShape(MetaTeamNode, metaSelection);
+const labelShape = teamShape(LabelTeamNode, labelSelection, ", $label: String!");
 const issuesShape = teamShape(IssuesTeamNode, issuesSelection(""), issuesArgs);
 const coordinatedIssuesShape = teamShape(
   IssuesTeamNode,
@@ -505,11 +545,26 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     yield* requireSuccess(operation, payload);
   });
 
+  const resolveLabel = Effect.fn("linear.resolveLabel")(function* (ref: LinearTeamRef, name: string) {
+    const team = yield* loadTeam(ref, labelShape, { label: name });
+    const scoped = team.labels.nodes.at(0);
+    if (scoped) return { teamId: team.id, labelId: scoped.id };
+    const data = yield* rawData(ref, workspaceLabelQuery, { label: name });
+    const payload = yield* Effect.mapError(decodeWorkspaceLabels(data), toUnavailable);
+    return { teamId: team.id, labelId: payload.issueLabels.nodes.at(0)?.id ?? null };
+  });
+
   const ensureLabel = Effect.fn("linear.ensureLabel")(function* (ref: LinearTeamRef, name: string) {
-    const team = yield* loadTeam(ref, metaShape);
-    const existing = team.labels.nodes.find((label) => label.name === name);
-    if (existing) return existing.id;
-    const payload = yield* call(ref, (sdk) => sdk.createIssueLabel({ teamId: team.id, name }));
+    const { teamId, labelId } = yield* resolveLabel(ref, name);
+    if (labelId !== null) return labelId;
+    const payload = yield* call(ref, (sdk) => sdk.createIssueLabel({ teamId, name })).pipe(
+      Effect.timeout(transientAttemptDeadline),
+      Effect.catchTag("TimeoutError", () =>
+        Effect.fail(unavailable(`Linear label create timed out after ${transientAttemptDeadline}`)),
+      ),
+      Effect.retry({ while: isTransient, schedule: transientBackoff, times: 3 }),
+      Effect.mapError(labelCreateRefused(ref, name)),
+    );
     yield* requireSuccess("issueLabelCreate", payload);
     if (!payload.issueLabelId) {
       return yield* unavailable(`Linear issueLabelCreate returned no label for ${name}`);
@@ -534,10 +589,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       }),
     removeLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
-        const team = yield* loadTeam(ref, metaShape);
-        const found = team.labels.nodes.find((entry) => entry.name === label);
-        if (!found) return;
-        yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, found.id));
+        const { labelId } = yield* resolveLabel(ref, label);
+        if (labelId === null) return;
+        yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, labelId));
       }),
     setState: (ref: LinearTeamRef, issueId: string, stateId: string) =>
       mutate(ref, "issueUpdate", (sdk) => sdk.updateIssue(issueId, { stateId })),

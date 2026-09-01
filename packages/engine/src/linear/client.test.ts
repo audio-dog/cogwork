@@ -123,6 +123,8 @@ const withToken = (
   invalidated: Array<string> = [],
 ) => Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source, invalidated))));
 
+const claimLabelName = "cogwork:claimed";
+
 const lastPage = { hasNextPage: false, endCursor: null };
 
 const teamBundle = {
@@ -583,6 +585,168 @@ describe("linear client", () => {
       const error = yield* Effect.flip(client.createComment(ref, "AUD-1", "body"));
       assert.strictEqual(error.reason, "unavailable");
       assert.include(error.message, "commentCreate");
+    }).pipe(withToken()),
+  );
+
+  it.effect("resolves a team label by name rather than paging the team's labels", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return {
+            body: {
+              data: {
+                teams: {
+                  nodes: [
+                    { id: "team-uuid", labels: { nodes: [{ id: "claim-uuid", name: claimLabelName }] } },
+                  ],
+                },
+              },
+            },
+          };
+        }
+        if (document.includes("issueAddLabel")) {
+          return { body: { data: { issueAddLabel: { success: true } } } };
+        }
+        return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
+      });
+      const client = yield* LinearClient;
+      yield* client.addLabel(ref, "issue-uuid", claimLabelName);
+      const documents = sentRequests(fetchStub);
+      const lookup = documents[0];
+      assert.include(lookup?.query ?? "", "labels(filter: { name: { eq: $label } }, first: 1)");
+      assert.strictEqual(lookup?.variables.label, claimLabelName);
+      assert.isFalse(documents.some((request) => request.query.includes("issueLabelCreate")));
+    }).pipe(withToken()),
+  );
+
+  it.effect("resolves a workspace-level label that no team lists", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return {
+            body: {
+              data: { issueLabels: { nodes: [{ id: "workspace-label-uuid", name: claimLabelName }] } },
+            },
+          };
+        }
+        if (document.includes("issueAddLabel")) {
+          return { body: { data: { issueAddLabel: { success: true } } } };
+        }
+        return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
+      });
+      const client = yield* LinearClient;
+      yield* client.addLabel(ref, "issue-uuid", claimLabelName);
+      const documents = sentRequests(fetchStub);
+      assert.isTrue(documents.some((request) => request.query.includes("WorkspaceLabelByName")));
+      assert.isFalse(documents.some((request) => request.query.includes("issueLabelCreate")));
+      assert.strictEqual(
+        documents.find((request) => request.query.includes("issueAddLabel"))?.variables.labelId,
+        "workspace-label-uuid",
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("marks a refused label create permanent and does not retry it", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return {
+          body: {
+            errors: [
+              {
+                message: "Not allowed to take action - You are not allowed to create labels in this team.",
+                extensions: { type: "forbidden" },
+              },
+            ],
+          },
+        };
+      });
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName));
+      assert.strictEqual(error.retryable, false);
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(
+        sentRequests(fetchStub).filter((request) => request.query.includes("issueLabelCreate")).length,
+        1,
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("treats a label it cannot create as permanent once the retries are spent", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return {
+          body: {
+            errors: [
+              { message: "Not allowed to take action - You are not allowed to create labels in this team." },
+            ],
+          },
+        };
+      });
+      const client = yield* LinearClient;
+      const attempt = yield* Effect.forkChild(
+        Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName)),
+      );
+      yield* TestClock.adjust("1 minute");
+      const error = yield* Fiber.join(attempt);
+      assert.include(error.message, claimLabelName);
+      assert.include(error.message, "AUD");
+      assert.include(error.message, "not allowed to create labels");
+      // Linear tagged the refusal with no type at all, so permanence cannot come from its taxonomy.
+      assert.strictEqual(error.retryable, false);
+      assert.strictEqual(
+        sentRequests(fetchStub).filter((request) => request.query.includes("issueLabelCreate")).length,
+        4,
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("keeps a rate-limited label create retryable", () =>
+    Effect.gen(function* () {
+      stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return { status: 429, body: {} };
+      });
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName));
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.notStrictEqual(error.retryable, false);
+    }).pipe(withToken()),
+  );
+
+  it.effect("skips the remove when neither the team nor the workspace holds the label", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
+      });
+      const client = yield* LinearClient;
+      yield* client.removeLabel(ref, "issue-uuid", claimLabelName);
+      assert.isFalse(sentRequests(fetchStub).some((request) => request.query.includes("issueRemoveLabel")));
     }).pipe(withToken()),
   );
 });
