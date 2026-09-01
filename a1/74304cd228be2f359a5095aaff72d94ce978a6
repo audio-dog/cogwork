@@ -1,0 +1,20 @@
+apps/desktop/src/preload/index.ts
+  s_cd9a2a4babdc0a::t_8fa2076b5dbbce 19-29,33-35
+  s_cd9a2a4babdc0a::t_74a1f1a5f76679 4,30-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a174304cd228be2f359a5095aaff72d94ce978a6",
+  "prompts": {},
+  "sessions": {
+    "s_cd9a2a4babdc0a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-86b1-72a0-a7f0-d3a37a22936d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
