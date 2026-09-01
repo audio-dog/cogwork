@@ -409,14 +409,14 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
 ) {
   const publisher = yield* DaemonEventPublisher;
   const plugins = yield* PluginManager;
-  const store = yield* ControlStore;
   const completed = yield* mutation;
+  const store = yield* ControlStore;
   return yield* store.withWrite(
     Effect.gen(function* () {
       const overview = yield* plugins.overview;
       const notices = samePluginMembership(completed.overview, overview) ? completed.notices : [];
       yield* publisher.publishPlugins(overview, notices);
-      yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+      yield* publishControlStore();
       return { overview, notices };
     }),
   );
@@ -465,7 +465,12 @@ const publishConnections = Effect.fn("Daemon.publishConnections")(function* (
 const publishControlStore = Effect.fn("Daemon.publishControlStore")(function* () {
   const publisher = yield* DaemonEventPublisher;
   const store = yield* ControlStore;
-  yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+  yield* store.picture.pipe(
+    Effect.flatMap(publisher.publishControlStore),
+    Effect.catchTag("ControlStoreFailure", (error) =>
+      Effect.logWarning("Control store broadcast failed", { message: error.message }),
+    ),
+  );
 });
 
 const ensureRequiredPlugin = Effect.fn("Daemon.ensureRequiredPlugin")(function* (

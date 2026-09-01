@@ -1436,12 +1436,16 @@ describe("Executor.execute", () => {
   });
 
   it.effect("declines an unregistered harness before claiming or recording a run", () => {
+    const messages: string[] = [];
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
-      const accepted = yield* execute(executor, workspace, triageItem);
+      const accepted = yield* execute(executor, workspace, triageItem).pipe(
+        Effect.withLogger(Logger.make(({ message }) => messages.push(String(message)))),
+      );
 
       assert.isFalse(accepted);
+      assert.isTrue(messages.some((message) => message.includes("harness preflight failed")));
       assert.deepStrictEqual(yield* Ref.get(calls), []);
       const ledger = yield* RunLedger.RunLedger;
       assert.strictEqual((yield* ledger.listRuns(10)).length, 0);

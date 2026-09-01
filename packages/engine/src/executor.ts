@@ -1198,9 +1198,14 @@ export const make = Effect.gen(function* () {
   ) {
     const stageOps = yield* resolveStageOps(workspace, item);
     if (!stageOps) return yield* decline(workspace, item);
-    const runnable = yield* harness
-      .preflight(stageOps.resolved.harness, stageOps.planStage.profile)
-      .pipe(Effect.match({ onFailure: () => false, onSuccess: () => true }));
+    const runnable = yield* harness.preflight(stageOps.resolved.harness, stageOps.planStage.profile).pipe(
+      Effect.map(() => true),
+      Effect.catchTag("HarnessError", (error) =>
+        Effect.logWarning("harness preflight failed", { message: error.message }).pipe(
+          Effect.map(() => false),
+        ),
+      ),
+    );
     if (!runnable) return yield* decline(workspace, item);
     if (!(yield* preflightRunPlan(workspace, item))) return yield* decline(workspace, item);
     const startedAtMillis = yield* Clock.currentTimeMillis;
