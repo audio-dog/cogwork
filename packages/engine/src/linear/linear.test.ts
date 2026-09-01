@@ -1,5 +1,6 @@
 import { type AttemptRecord, type Priority, WorkItemId, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -57,8 +58,23 @@ interface Seed {
   >;
   readonly states?: ReadonlyArray<RawWorkflowState>;
   readonly authError?: boolean;
-  readonly observeCalls?: Ref.Ref<number>;
-  readonly assigneeFilters?: Array<ReadonlyArray<string> | null>;
+}
+
+interface LinearClientCallsState {
+  readonly observe: Ref.Ref<number>;
+  readonly assigneeFilters: Ref.Ref<ReadonlyArray<ReadonlyArray<string> | null>>;
+}
+
+class LinearClientCalls extends Context.Service<LinearClientCalls, LinearClientCallsState>()(
+  "@cogwork/engine/linear/linear.test/LinearClientCalls",
+) {
+  static readonly layer = Layer.effect(
+    LinearClientCalls,
+    Effect.all({
+      observe: Ref.make(0),
+      assigneeFilters: Ref.make<ReadonlyArray<ReadonlyArray<string> | null>>([]),
+    }),
+  );
 }
 
 const bot = { id: "bot-user" } as const;
@@ -76,6 +92,7 @@ const teamRef: LinearTeamRef = {
 };
 
 const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
+  const calls = yield* LinearClientCalls;
   const issuesRef = yield* Ref.make(
     seed.issues.map(
       (issue): RawIssue => ({
@@ -127,8 +144,6 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
           }),
         );
 
-  const countObserve = seed.observeCalls;
-
   // Deliberately looser than Linear's own filter: the adapter must not lean on the server to keep a
   // forged coordination comment out of the ledger.
   const coordinationFor = (
@@ -148,8 +163,8 @@ const fakeClient = Effect.fn("linear.fakeClient")(function* (seed: Seed) {
     observeIssues: (ref, coordination, assigneeIds = null) =>
       guard(
         Effect.gen(function* () {
-          if (countObserve) yield* Ref.update(countObserve, (count) => count + 1);
-          yield* Effect.sync(() => seed.assigneeFilters?.push(assigneeIds));
+          yield* Ref.update(calls.observe, (count) => count + 1);
+          yield* Ref.update(calls.assigneeFilters, (filters) => [...filters, assigneeIds]);
           const issues = yield* Ref.get(issuesRef);
           const comments = yield* Ref.get(commentsRef);
           return issues
@@ -277,7 +292,9 @@ const multiTeamWorkspace: RegisteredWorkspace = {
 
 const withClient = (seed: Seed) =>
   Layer.mergeAll(adapterLayer, SourceControl.emptyLayer).pipe(
-    Layer.provideMerge(Layer.effect(LinearClient, fakeClient(seed))),
+    Layer.provideMerge(
+      Layer.effect(LinearClient, fakeClient(seed)).pipe(Layer.provideMerge(LinearClientCalls.layer)),
+    ),
   );
 
 // A Linear tracker with no source control provider still composes the poll — the provider just
@@ -401,7 +418,6 @@ describe("linear work source adapter", () => {
   );
 
   it.effect("hands the workspace assignee allowlist to the client's server-side filter", () => {
-    const assigneeFilters: Array<ReadonlyArray<string> | null> = [];
     const allowlistWorkspace: RegisteredWorkspace = {
       ...workspace,
       config: {
@@ -410,9 +426,10 @@ describe("linear work source adapter", () => {
       },
     };
     return Effect.gen(function* () {
+      const calls = yield* LinearClientCalls;
       yield* observeItems(allowlistWorkspace);
-      assert.deepStrictEqual(assigneeFilters, [["user-me"]]);
-    }).pipe(Effect.provide(withClient({ issues: [], assigneeFilters })));
+      assert.deepStrictEqual(yield* Ref.get(calls.assigneeFilters), [["user-me"]]);
+    }).pipe(Effect.provide(withClient({ issues: [] })));
   });
 
   it.effect("uses configured role label strings instead of hardcoded defaults", () =>
@@ -545,21 +562,19 @@ describe("linear work source adapter", () => {
     ),
   );
 
-  it.effect("observes a whole backlog with one client read regardless of issue count", () =>
-    Effect.gen(function* () {
-      const observeCalls = yield* Ref.make(0);
-      const backlog = Array.from({ length: 60 }, (_, index) => ({
-        identifier: `AUD-${index + 1}`,
-        title: `issue ${index + 1}`,
-        labels: ["state:ready-for-agent"],
-      }));
-      yield* Effect.gen(function* () {
-        const items = yield* observeItems(workspace);
-        assert.strictEqual(items.length, 60);
-        assert.strictEqual(yield* Ref.get(observeCalls), 1);
-      }).pipe(Effect.provide(withClient({ issues: backlog, observeCalls })));
-    }),
-  );
+  it.effect("observes a whole backlog with one client read regardless of issue count", () => {
+    const backlog = Array.from({ length: 60 }, (_, index) => ({
+      identifier: `AUD-${index + 1}`,
+      title: `issue ${index + 1}`,
+      labels: ["state:ready-for-agent"],
+    }));
+    return Effect.gen(function* () {
+      const calls = yield* LinearClientCalls;
+      const items = yield* observeItems(workspace);
+      assert.strictEqual(items.length, 60);
+      assert.strictEqual(yield* Ref.get(calls.observe), 1);
+    }).pipe(Effect.provide(withClient({ issues: backlog })));
+  });
 
   it.effect("reports the rate-limit scope from the token env so shared credentials back off together", () =>
     Effect.gen(function* () {
