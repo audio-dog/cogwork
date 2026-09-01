@@ -1,0 +1,23 @@
+packages/engine/src/external-harness-runtime.ts
+  s_ffed0fe3f37454::t_2a9f85b3e4f9cb 273-286
+packages/engine/src/external-harness-runtime.test.ts
+  s_ffed0fe3f37454::t_bba278fdb60ff8 300-301
+  s_ffed0fe3f37454::t_d5cc978d7d1372 928-966
+  s_ffed0fe3f37454::t_68d5c9ad132131 967
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c3c33f8a9f839592c560bfa68602737e628a4d94",
+  "prompts": {},
+  "sessions": {
+    "s_ffed0fe3f37454": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dd5-8ef9-7211-94eb-c47c2b6e29be",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
