@@ -36,6 +36,7 @@ const pr = (review: PrReview, over: Partial<ObservedPr> = {}): ObservedItem["pr"
   waitingSinceMillis: 0,
   headRef: "1-test",
   followable: true,
+  draft: false,
   followUp: null,
   ...over,
 });
@@ -146,6 +147,14 @@ describe("classify", () => {
       item({ id: "1", roles: ["ready-for-agent"], pr: pr("pending") }),
     ]);
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
+  });
+
+  it("holds draft PRs out of follow-up and verify", () => {
+    const { eligible } = classify([
+      item({ id: "1", pr: pr("changes-requested", { checks: "failing", draft: true }) }),
+      item({ id: "2", pr: pr("ready", { draft: true }) }),
+    ]);
+    assert.isEmpty(eligible);
   });
 
   it("excludes claimed items from eligible and reports them as claimed", () => {
@@ -475,9 +484,9 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.stage, "implement");
   });
 
-  it("drops an allowlisted workspace's unassigned item", () => {
+  it("drops an allowlisted workspace's unassigned item with a follow-up trigger", () => {
     const { eligible, claimed, needsHuman } = classify(
-      [item({ id: "1", roles: ["ready-for-agent"], assignees: [] })],
+      [item({ id: "1", roles: ["ready-for-agent"], assignees: [], pr: pr("changes-requested") })],
       ["me"],
     );
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);

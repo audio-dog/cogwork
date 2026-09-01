@@ -1,15 +1,10 @@
-import type { ConnectionBindingId, ConnectionId, WorkItemId } from "@cogwork/contracts";
+import type { ConnectionBindingId, ConnectionId, WorkItem, WorkItemId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { checkState } from "../ci";
 import type { BaseDivergence, PrReview } from "../follow-up";
 import type { RegisteredWorkspace } from "../projector";
-import {
-  type OwnedItem,
-  type PrSignals,
-  SourceControlProvider,
-  type SourceControlProviderService,
-} from "../source-control";
+import { type PrSignals, SourceControlProvider, type SourceControlProviderService } from "../source-control";
 import { branchName, ticketSlug } from "../worktree";
 import {
   GitHubClient,
@@ -47,8 +42,6 @@ const targetFromRepo = (
   };
 };
 
-// A workspace's source control provider is its own `sourceControl` block when set, and otherwise its
-// GitHub tracker's settings. A Linear tracker with no block resolves to nothing, so it observes no PR.
 export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTarget | null => {
   const explicit = workspace.config.sourceControl;
   if (explicit) {
@@ -171,6 +164,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
       waitingSinceMillis: pull.updatedAtMillis,
       headRef: pull.headRef,
       followable: pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase(),
+      draft: pull.draft,
     } satisfies PrSignals;
   });
 
@@ -179,7 +173,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
 
   // The final key is the PR number: the higher number is the newer PR, since GitHub numbers them in
   // creation order.
-  const closesItem = (item: OwnedItem, pull: RawPull) => {
+  const closesItem = (item: WorkItem, pull: RawPull) => {
     const match = numericIssue.exec(item.id);
     return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
   };
@@ -187,26 +181,28 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   const sameRepositoryHead = (target: GitHubTarget, pull: RawPull) =>
     pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
 
-  const rank = (target: GitHubTarget, item: OwnedItem, branch: string, pull: RawPull) =>
+  const rank = (target: GitHubTarget, item: WorkItem, branch: string, pull: RawPull) =>
     [
       sameRepositoryHead(target, pull) ? 1 : 0,
+      pull.draft ? 0 : 1,
       closesItem(item, pull) ? 1 : 0,
       pull.headRef === branch ? 1 : 0,
       pull.authorLogin === target.actorLogin ? 1 : 0,
       pull.number,
     ] as const;
 
-  const outranks = (target: GitHubTarget, item: OwnedItem, branch: string, a: RawPull, b: RawPull) => {
-    const [aSameRepository, aClosing, aExact, aBot, aNumber] = rank(target, item, branch, a);
-    const [bSameRepository, bClosing, bExact, bBot, bNumber] = rank(target, item, branch, b);
+  const outranks = (target: GitHubTarget, item: WorkItem, branch: string, a: RawPull, b: RawPull) => {
+    const [aSameRepository, aNonDraft, aClosing, aExact, aBot, aNumber] = rank(target, item, branch, a);
+    const [bSameRepository, bNonDraft, bClosing, bExact, bBot, bNumber] = rank(target, item, branch, b);
     if (aSameRepository !== bSameRepository) return aSameRepository > bSameRepository;
+    if (aNonDraft !== bNonDraft) return aNonDraft > bNonDraft;
     if (aClosing !== bClosing) return aClosing > bClosing;
     if (aExact !== bExact) return aExact > bExact;
     if (aBot !== bBot) return aBot > bBot;
     return aNumber > bNumber;
   };
 
-  const linkedPull = (target: GitHubTarget, item: OwnedItem, trusted: ReadonlyArray<RawPull>) => {
+  const linkedPull = (target: GitHubTarget, item: WorkItem, trusted: ReadonlyArray<RawPull>) => {
     const slug = ticketSlug(item.id);
     const branch = branchName(item);
     const better = (best: RawPull | null, pull: RawPull) => {
@@ -223,12 +219,12 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     return pulls.filter((pull) => daemonPull(target, pull));
   });
 
-  const observeOwned = Effect.fn("github.observeOwned")(function* (
+  const observeItems = Effect.fn("github.observeItems")(function* (
     target: GitHubTarget,
-    owned: ReadonlyArray<OwnedItem>,
+    workItems: ReadonlyArray<WorkItem>,
   ) {
     const trusted = yield* trustedPulls(target);
-    const matches = owned.flatMap((item) => {
+    const matches = workItems.flatMap((item) => {
       const pull = linkedPull(target, item, trusted);
       return pull ? [[item.id, pull] as const] : [];
     });
@@ -246,7 +242,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
 
   const commentOnPull = Effect.fn("github.commentOnPull")(function* (
     target: GitHubTarget,
-    item: OwnedItem,
+    item: WorkItem,
     body: string,
   ) {
     const trusted = yield* trustedPulls(target);
@@ -264,11 +260,11 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   const empty: ReadonlyMap<WorkItemId, PrSignals> = new Map();
 
   return {
-    observe: (workspace, owned) =>
+    observe: (workspace, workItems) =>
       Effect.gen(function* () {
         const target = sourceControlTargetFor(workspace);
-        if (!target || owned.length === 0) return empty;
-        return yield* observeOwned(target, owned);
+        if (!target || workItems.length === 0) return empty;
+        return yield* observeItems(target, workItems);
       }),
     comment: (workspace, item, body) =>
       Effect.gen(function* () {

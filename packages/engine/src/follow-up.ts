@@ -30,6 +30,7 @@ export interface ObservedPr {
   readonly waitingSinceMillis: number;
   readonly headRef: string;
   readonly followable: boolean;
+  readonly draft: boolean;
   readonly followUp: FollowUpMarker | null;
 }
 
