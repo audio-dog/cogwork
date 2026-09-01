@@ -493,30 +493,31 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         if (!path.isAbsolute(registration.checkoutPath)) {
           return yield* registrationError("Workspace checkout path must be absolute");
         }
-        const writeRegistration = Effect.fn("WorkspaceManagement.register.write")(function* () {
-          const normalizedRegistration = {
-            ...registration,
-            checkoutPath: path.resolve(registration.checkoutPath),
-          };
-          const existing = yield* selectWorkspaceBinding(sql, normalizedRegistration.checkoutPath).pipe(
+        const normalizedRegistration = {
+          ...registration,
+          checkoutPath: path.resolve(registration.checkoutPath),
+        };
+        return yield* store.withWrite(
+          selectWorkspaceBinding(sql, normalizedRegistration.checkoutPath).pipe(
             Effect.mapError((error) => registrationError(error)),
-          );
-          if (existing) {
-            return yield* registrationError(
-              `Workspace checkout path is already registered as ${existing.id}`,
-            );
-          }
-          const id = yield* crypto.randomUUIDv7.pipe(
-            Effect.flatMap(decodeWorkspaceId),
-            Effect.mapError((error) => registrationError(error)),
-          );
-          const row = yield* insertWorkspace(sql, id, normalizedRegistration).pipe(
-            Effect.mapError((error) => registrationError(error)),
-          );
-          const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
-          return yield* commitChange(change);
-        });
-        return yield* store.withWrite(writeRegistration());
+            Effect.flatMap((existing) => {
+              if (existing) {
+                return registrationError(`Workspace checkout path is already registered as ${existing.id}`);
+              }
+              return crypto.randomUUIDv7.pipe(
+                Effect.flatMap(decodeWorkspaceId),
+                Effect.mapError((error) => registrationError(error)),
+              );
+            }),
+            Effect.flatMap((id) =>
+              insertWorkspace(sql, id, normalizedRegistration).pipe(
+                Effect.mapError((error) => registrationError(error)),
+              ),
+            ),
+            Effect.flatMap((row) => loadRegistrationChange(loadingServices, row, authoringRoots)),
+            Effect.flatMap(commitChange),
+          ),
+        );
       });
       const rebind = Effect.fn("WorkspaceManagement.rebind")(function* (
         workspace: WorkspaceId,
