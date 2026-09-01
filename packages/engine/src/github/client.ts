@@ -9,6 +9,7 @@ import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -23,7 +24,7 @@ import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
-import { IssueTrackerError } from "../issue-tracker";
+import { defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 import {
   boardMissing,
   decodeProjectPriorities,
@@ -286,8 +287,6 @@ export const parseIssues = Effect.fn("github.parseIssues")(function* (repo: GitH
   return issues.map((issue) => toRawIssue(repo, issue));
 });
 
-const defaultCooldownMillis = 60_000;
-
 const isoMillis = (millis: number) =>
   Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
 
@@ -407,7 +406,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         response.status === 429 ||
         (response.status === 403 && (remaining === "0" || response.headers["retry-after"] !== undefined));
       if (throttled) {
-        const until = resumeAt ?? now + defaultCooldownMillis;
+        const until = resumeAt ?? now + Duration.toMillis(defaultTrackerCooldown);
         yield* Ref.set(resumeAtRef, until);
         return yield* permanentAttemptError(rateLimited(until));
       }

@@ -8,6 +8,7 @@ import {
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
@@ -224,7 +225,7 @@ const matching = (account: CredentialAccount) => (credential: StoredCredential) 
   credential.issueTracker === account.issueTracker &&
   (account.organization === null || credential.organization === account.organization);
 
-export const expiryMarginMillis = 60_000;
+export const expiryMargin = Duration.minutes(1);
 
 interface StoredMatch {
   readonly credential: StoredCredential;
@@ -246,7 +247,7 @@ const matchStored = Effect.fn("CredentialStore.matchStored")(function* (
   const credential = candidates[0];
   if (!credential) return null;
   const now = yield* Clock.currentTimeMillis;
-  const live = credential.token.expiresAtMillis > now + expiryMarginMillis;
+  const live = credential.token.expiresAtMillis > now + Duration.toMillis(expiryMargin);
   return { credential, live } satisfies StoredMatch;
 });
 

@@ -1,10 +1,13 @@
 import * as Clock from "effect/Clock";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
+import * as Pull from "effect/Pull";
+import * as Schedule from "effect/Schedule";
+import * as SynchronizedRef from "effect/SynchronizedRef";
 
 interface Cooldown {
   readonly untilMillis: number;
-  readonly consecutive: number;
+  readonly step: (nowMillis: number) => Effect.Effect<Duration.Duration>;
 }
 
 interface CooldownEntry {
@@ -12,11 +15,32 @@ interface CooldownEntry {
   readonly retryAtMillis: number;
 }
 
-const baseBackoffMillis = 60_000;
-const maxBackoffMillis = 900_000;
+export const backoff = Schedule.exponential(Duration.minutes(1), 2).pipe(
+  Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.minutes(15)))),
+);
 
-const backoffMillis = (consecutive: number) =>
-  Math.min(baseBackoffMillis * 2 ** (consecutive - 1), maxBackoffMillis);
+const nextCooldown = Effect.fn("Cooldown.next")(function* (
+  current: Cooldown | undefined,
+  nowMillis: number,
+  holdMillis: number | undefined,
+) {
+  const step =
+    current?.step ??
+    (yield* Schedule.toStep(backoff).pipe(
+      Effect.map(
+        (next) => (now: number) =>
+          next(now, undefined).pipe(
+            Pull.catchDone((duration) =>
+              Effect.succeed<readonly [Duration.Duration, Duration.Duration]>([duration, duration]),
+            ),
+            Effect.map(([, duration]) => duration),
+          ),
+      ),
+    ));
+  const fallback = yield* step(nowMillis);
+  const duration = holdMillis === undefined ? fallback : Duration.millis(holdMillis);
+  return { untilMillis: nowMillis + Duration.toMillis(duration), step } satisfies Cooldown;
+});
 
 const activeAt = (cooldown: Cooldown | undefined, nowMillis: number) =>
   cooldown !== undefined && cooldown.untilMillis > nowMillis ? cooldown : null;
@@ -29,28 +53,33 @@ const withoutScope = (cooldowns: Map<string, Cooldown>, scope: string) => {
 };
 
 export const make = Effect.gen(function* () {
-  const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
+  const cooldowns = yield* SynchronizedRef.make(new Map<string, Cooldown>());
 
   const heldUntil = Effect.fn("Cooldown.heldUntil")(function* (scope: string) {
     const nowMillis = yield* Clock.currentTimeMillis;
-    return activeAt((yield* Ref.get(cooldowns)).get(scope), nowMillis)?.untilMillis ?? null;
+    return activeAt((yield* SynchronizedRef.get(cooldowns)).get(scope), nowMillis)?.untilMillis ?? null;
   });
 
   const enter = Effect.fn("Cooldown.enter")(function* (scope: string, holdMillis?: number) {
     const nowMillis = yield* Clock.currentTimeMillis;
-    return yield* Ref.modify(cooldowns, (current): readonly [CooldownEntry, Map<string, Cooldown>] => {
+    return yield* SynchronizedRef.modifyEffect(cooldowns, (current) => {
       const active = activeAt(current.get(scope), nowMillis);
-      if (active) return [{ entered: false, retryAtMillis: active.untilMillis }, current];
-      const consecutive = (current.get(scope)?.consecutive ?? 0) + 1;
-      const cooldown: Cooldown = {
-        untilMillis: nowMillis + (holdMillis ?? backoffMillis(consecutive)),
-        consecutive,
-      };
-      return [{ entered: true, retryAtMillis: cooldown.untilMillis }, new Map(current).set(scope, cooldown)];
+      if (active) {
+        const entry: CooldownEntry = { entered: false, retryAtMillis: active.untilMillis };
+        return Effect.succeed<readonly [CooldownEntry, Map<string, Cooldown>]>([entry, current]);
+      }
+      return Effect.map(nextCooldown(current.get(scope), nowMillis, holdMillis), (cooldown) => {
+        const entry: CooldownEntry = { entered: true, retryAtMillis: cooldown.untilMillis };
+        return [entry, new Map(current).set(scope, cooldown)] satisfies readonly [
+          CooldownEntry,
+          Map<string, Cooldown>,
+        ];
+      });
     });
   });
 
-  const clear = (scope: string) => Ref.update(cooldowns, (current) => withoutScope(current, scope));
+  const clear = (scope: string) =>
+    SynchronizedRef.update(cooldowns, (current) => withoutScope(current, scope));
 
   return { heldUntil, enter, clear } as const;
 });
