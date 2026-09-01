@@ -1,0 +1,28 @@
+apps/desktop/src/main/index.ts
+  s_0384338913b047::t_5be8a3caa47779 33,108,110,114-115
+  s_82e0301d24005b::t_d16d6453afbec1 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d17256ba3e38a4e4507b34584f8c7163ca776cfc",
+  "prompts": {},
+  "sessions": {
+    "s_0384338913b047": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e51-8507-7780-a257-5053eaff8553",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_82e0301d24005b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e4e-ea87-7762-a257-ad3a480a7de5",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
