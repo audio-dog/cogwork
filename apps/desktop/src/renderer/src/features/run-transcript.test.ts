@@ -1,6 +1,6 @@
 import type { RunActivity } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
-import type { TranscriptEntry } from "./run-activity";
+import { foldTranscript, type TranscriptEntry } from "./run-activity";
 import {
   commandOf,
   repoRelative,
@@ -295,7 +295,7 @@ describe("statusLine", () => {
       ),
     ];
 
-    expect(statusLine(activities, "running")).toBe("Running gh pr checks…");
+    expect(statusLine(foldTranscript(activities), "running")).toBe("Running gh pr checks…");
     expect(statusLine([], "succeeded")).toBe("Run finished.");
   });
 });

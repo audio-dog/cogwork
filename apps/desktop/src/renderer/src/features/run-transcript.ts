@@ -1,4 +1,4 @@
-import type { RunActivity, RunStatus } from "@cogwork/contracts";
+import type { RunStatus } from "@cogwork/contracts";
 import {
   RiBrainLine,
   RiCloudLine,
@@ -11,7 +11,7 @@ import {
   RiTestTubeLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
-import { foldTranscript, type TranscriptEntry } from "./run-activity";
+import type { TranscriptEntry } from "./run-activity";
 
 /**
  * A harness puts three shapes on the wire that the AG-UI types do not describe,
@@ -287,5 +287,5 @@ export const runLine = (rows: readonly TranscriptRow[], status: RunStatus) => {
   return workLine(last.steps);
 };
 
-export const statusLine = (activities: ReadonlyArray<RunActivity>, status: RunStatus) =>
-  runLine(transcriptRows(foldTranscript(activities), status !== "running"), status);
+export const statusLine = (entries: ReadonlyArray<TranscriptEntry>, status: RunStatus) =>
+  runLine(transcriptRows(entries, status !== "running"), status);
