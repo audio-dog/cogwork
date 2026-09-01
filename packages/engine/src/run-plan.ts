@@ -53,7 +53,9 @@ import {
   SettingScope as SettingScopeSchema,
   stageResultJsonSchema,
 } from "@cogwork/contracts";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 import type { EligibleWork } from "./classify";
 import type { AssembledContext } from "./context-assembler";
 import { operationPolicyProfile } from "./operation-policy";
@@ -713,6 +715,23 @@ export interface AssembleRunPlanInput {
   readonly unavailableContributionReasons?: ReadonlyMap<string, string>;
 }
 
+export class RunPlanAssemblyError extends Schema.TaggedError<RunPlanAssemblyError>()("RunPlanAssemblyError", {
+  message: Schema.String,
+  cause: Schema.Defect(),
+}) {}
+
+const schemaConstructorNameFromStack = (cause: Error) =>
+  cause.stack?.match(/\bnew (RunPlan\w+)/)?.[1] ?? "RunPlan";
+
+const formatSchemaIssue = SchemaIssue.makeFormatterDefault();
+
+const formatAssemblyError = (cause: unknown) => {
+  if (!(cause instanceof Error) || !SchemaIssue.isIssue(cause.cause)) {
+    return `RunPlan: ${cause instanceof Error ? cause.message : String(cause)}`;
+  }
+  return `${schemaConstructorNameFromStack(cause)}: ${formatSchemaIssue(cause.cause)}`;
+};
+
 export const assembleRunPlan = (input: AssembleRunPlanInput) => {
   const workContext = input.item.workContext;
   const observation = RunPlanObservation.make({ ...input.observation });
@@ -851,3 +870,10 @@ export const assembleRunPlan = (input: AssembleRunPlanInput) => {
     }),
   );
 };
+
+export const tryAssembleRunPlan = Effect.fn("RunPlan.tryAssemble")((input: AssembleRunPlanInput) =>
+  Effect.try({
+    try: () => assembleRunPlan(input),
+    catch: (cause) => new RunPlanAssemblyError({ message: formatAssemblyError(cause), cause }),
+  }),
+);

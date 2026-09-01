@@ -69,13 +69,14 @@ import {
   admittedContributions,
   admittedMcpServers,
   applicableContributionSettings,
-  assembleRunPlan,
   availabilityCauses,
   operationBindingsOf,
   type ResolvedOperation,
   type ResolvedStage,
+  type RunPlanAssemblyError,
   resolveEngineContributionEnabled,
   resolveRunPlanStage,
+  tryAssembleRunPlan,
 } from "./run-plan";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
@@ -97,6 +98,7 @@ type PrepareError =
   | CredentialError
   | ContextFsError
   | ContextAssemblerError
+  | RunPlanAssemblyError
   | RunLedgerError;
 
 interface RunAccumulator {
@@ -597,7 +599,7 @@ export const make = Effect.gen(function* () {
       preparedRequest.session ??
       (selectedOps.resumePolicy ? null : compatiblePrevious) ??
       (yield* mintSession(workspace, selectedOps, startedAtMillis));
-    const plan = assembleRunPlan({
+    const plan = yield* tryAssembleRunPlan({
       runId,
       workspace,
       item,
