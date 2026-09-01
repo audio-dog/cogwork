@@ -1,0 +1,24 @@
+packages/contracts/src/daemon.ts
+  s_77e9a3075233d4::t_651195ed4c66f0 215
+packages/engine/src/daemon.ts
+  s_77e9a3075233d4::t_651195ed4c66f0 244,252
+packages/engine/src/engine.test.ts
+  s_77e9a3075233d4::t_314782bb8aeca4 1147-1155
+  s_77e9a3075233d4::t_5ecc82b230c19d 1133-1146,1156-1160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "71482971a5b488db831cb32e5b431b77b41a8b76",
+  "prompts": {},
+  "sessions": {
+    "s_77e9a3075233d4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f42-216e-77f0-8cc4-2c17da924727",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
