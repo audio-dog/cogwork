@@ -79,7 +79,12 @@ class FakeCursorAgent {
         },
       },
     });
-    return { stopReason: "end_turn" };
+    return {
+      stopReason: "end_turn",
+      ...(process.argv.includes("--metered")
+        ? { usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 } }
+        : {}),
+    };
   }
 
   cancel() {

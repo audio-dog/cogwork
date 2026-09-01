@@ -210,11 +210,6 @@ export const cursorDiagnostics = (error: unknown) => {
 
 export const estimateTokens = (chars: number) => Math.ceil(chars / 4);
 
-const outputChars = (event: AgUiEvent) =>
-  AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
-    ? (event.delta?.length ?? 0)
-    : 0;
-
 // Cursor's `agent acp` never reports token usage — the ACP prompt response is `{stopReason}`
 // with no `usage`, and no session update carries counts (see FINDINGS.md Q2) — so without an
 // estimate a completed run records nothing.
@@ -233,19 +228,6 @@ const estimatedEvent = (promptChars: number, outputTextChars: number, event: AgU
   if (!AgUiEvent.guards.RUN_FINISHED(event) || event.usage) return event;
   return { ...event, usage: estimatedUsage(promptChars, outputTextChars) };
 };
-
-export const withEstimatedUsage = (
-  promptChars: number,
-  stream: Stream.Stream<AgUiEvent, Harness.HarnessError>,
-) =>
-  Stream.mapAccum(
-    stream,
-    () => 0,
-    (streamed: number, event: AgUiEvent): readonly [number, ReadonlyArray<AgUiEvent>] => {
-      const next = streamed + outputChars(event);
-      return [next, [estimatedEvent(promptChars, next, event)]];
-    },
-  );
 
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 

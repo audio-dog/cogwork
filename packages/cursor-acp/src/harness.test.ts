@@ -26,7 +26,6 @@ import {
   cursorRunner,
   estimatedUsage,
   interceptCursorTelemetry,
-  withEstimatedUsage,
 } from "./harness";
 import { cursorModels } from "./models.generated";
 
@@ -407,6 +406,28 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       assert.deepStrictEqual(session?.value, { sessionId: resumeHandle });
     }),
   );
+
+  it.effect("preserves metered ACP usage instead of estimating it", () =>
+    Effect.gen(function* () {
+      const checkout = yield* Effect.acquireRelease(
+        Effect.promise(() => localProcessSandbox({}).create({})),
+        (sandbox) => Effect.promise(() => sandbox.destroy()),
+      );
+      const runner = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent} --metered`,
+      });
+
+      const events = yield* Stream.runCollect(Harness.make([runner]).run(request(checkout.id)));
+      const finished = events.at(-1);
+
+      assert.deepStrictEqual(finished && agUiUsage(finished), {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+      });
+    }),
+  );
 });
 
 describe("cursorDiagnostics", () => {
@@ -467,47 +488,4 @@ describe("estimatedUsage", () => {
       estimated: true,
     });
   });
-});
-
-describe("withEstimatedUsage", () => {
-  it.effect("attaches an estimate from prompt + streamed text when the terminal event has none", () =>
-    Effect.gen(function* () {
-      const events: ReadonlyArray<AgUiEvent> = [
-        { type: "TEXT_MESSAGE_CONTENT", delta: "hello" },
-        { type: "REASONING_MESSAGE_CONTENT", delta: "abcd" },
-        { type: "RUN_FINISHED", finishReason: "stop" },
-      ];
-
-      const out = yield* Stream.runCollect(withEstimatedUsage(8, Stream.fromIterable(events)));
-      const finished = out.at(-1);
-      assert.strictEqual(finished?.type, "RUN_FINISHED");
-      assert.deepStrictEqual(finished && agUiUsage(finished), {
-        inputTokens: 2,
-        outputTokens: 3,
-        totalTokens: 5,
-        estimated: true,
-      });
-    }),
-  );
-
-  it.effect("leaves a run that already reports real usage untouched", () =>
-    Effect.gen(function* () {
-      const events: ReadonlyArray<AgUiEvent> = [
-        { type: "TEXT_MESSAGE_CONTENT", delta: "hello" },
-        {
-          type: "RUN_FINISHED",
-          finishReason: "stop",
-          usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
-        },
-      ];
-
-      const out = yield* Stream.runCollect(withEstimatedUsage(8, Stream.fromIterable(events)));
-      const finished = out.at(-1);
-      assert.deepStrictEqual(finished && agUiUsage(finished), {
-        inputTokens: 100,
-        outputTokens: 20,
-        totalTokens: 120,
-      });
-    }),
-  );
 });
