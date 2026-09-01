@@ -194,7 +194,9 @@ export const make = Effect.gen(function* () {
   });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
-    const stats = schedulerStatsOf(yield* registry.state, yield* scheduler.config, yield* scheduler.stats);
+    const config = yield* scheduler.config;
+    const state = yield* scheduler.stats;
+    const stats = schedulerStatsOf(yield* registry.state, config, state);
     const signature = encodeStats(stats);
     if ((yield* Ref.get(lastScheduler)) === signature) return stats;
     yield* Ref.set(lastScheduler, signature);
