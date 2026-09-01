@@ -1,0 +1,44 @@
+apps/cli/src/commands.ts
+  s_6394507e8d162d::t_3059c383996115 75-76,272,298-300,308-309,585,587,594
+  s_6394507e8d162d::t_58fa4c8a1ed694 301-307
+apps/cli/src/telemetry-store.ts
+  s_6394507e8d162d::t_832cb9e64dae16 276-282,288-297
+  s_6394507e8d162d::t_d12e6e48307c5c 51,65,73-74
+  s_6394507e8d162d::t_63bf15821c4785 14,213,235-237,259-261,304
+  s_6394507e8d162d::t_c4553f0e4ff4aa 336
+  s_6394507e8d162d::t_612e8b9d57c62a 310-315,321-331,333
+  s_6394507e8d162d::t_10f809339519d0 316-320
+  s_6394507e8d162d::t_da71576c810775 1-13,15-50,52-64,66-72,75-212,214-233,238-239,241-257,262-263,265-275,283-286,298-303,305-309,332,334-335
+  s_cd9a2a4babdc0a::t_69f3f2e389a891 234,240,258,264,287
+apps/cli/src/telemetry.ts
+  s_6394507e8d162d::t_da71576c810775 9,13-19,21-25,27-28,68-69,71-73,75-76,78
+  s_6394507e8d162d::t_58fa4c8a1ed694 20,26,74
+  s_6394507e8d162d::t_612e8b9d57c62a 39-58,60-63,65-67,77
+  s_6394507e8d162d::t_10bf531f0bf0ee 70
+apps/cli/src/paths.ts
+  s_6394507e8d162d::t_da71576c810775 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ed8773d73a67ddb40183d992794020b5534a507b",
+  "prompts": {},
+  "sessions": {
+    "s_6394507e8d162d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eed-5dca-7be2-9220-ab2576f5bc8c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_cd9a2a4babdc0a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05eee-86b1-72a0-a7f0-d3a37a22936d",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
