@@ -1,0 +1,21 @@
+packages/codex-cli/src/harness.ts
+  s_82e0301d24005b::t_7ee5c1adb349ec 510-511,521-525,540-543
+  s_82e0301d24005b::t_5ca214d44e4267 539,544-546
+  s_82e0301d24005b::t_ae257165b3c95b 527
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3d0d802688d066056d12f7f7a409614b5475e62b",
+  "prompts": {},
+  "sessions": {
+    "s_82e0301d24005b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e4e-ea87-7762-a257-ad3a480a7de5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
