@@ -1,5 +1,6 @@
 import { AgUiEvent } from "@cogwork/contracts";
 import { EventType, type StreamChunk } from "@tanstack/ai";
+import type { SandboxHandle, SandboxLifecycle, SandboxProvider } from "@tanstack/ai-sandbox";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -30,6 +31,61 @@ const fromThrown = (error: unknown) => {
 
 const fromRunError = (chunk: Extract<StreamChunk, { type: EventType.RUN_ERROR }>) =>
   new HarnessError({ reason: "turn", retryable: true, message: chunk.message });
+
+export const perRunSandboxLifecycle = {
+  reuse: "none",
+  snapshot: "none",
+  destroyOnComplete: true,
+} satisfies SandboxLifecycle;
+
+const completedIteration = () => ({ done: true, value: undefined }) satisfies IteratorReturnResult<undefined>;
+
+export const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abort: () => void | Promise<void>) => ({
+  [Symbol.asyncIterator]: () => {
+    const iterator = stream[Symbol.asyncIterator]();
+    return {
+      next: () => iterator.next(),
+      return: (value?: unknown) =>
+        Promise.resolve(abort()).then(() => iterator.return?.(value) ?? completedIteration()),
+    };
+  },
+});
+
+export const ownSandboxHandles = (source: SandboxProvider) => {
+  const handles = new Map<string, SandboxHandle>();
+  const track = (handle: SandboxHandle) => {
+    handles.set(handle.id, handle);
+    return handle;
+  };
+  const destroyHandle = (id: string) => {
+    const handle = handles.get(id);
+    if (!handle) return Promise.resolve(false);
+    handles.delete(id);
+    return handle.destroy().then(() => true);
+  };
+  const destroy = () => {
+    const active = [...handles.values()];
+    handles.clear();
+    return Promise.all(active.map((handle) => handle.destroy())).then(() => undefined);
+  };
+  const restoreSnapshot = source.restoreSnapshot;
+  const provider = {
+    name: source.name,
+    capabilities: () => source.capabilities(),
+    create: (input: Parameters<SandboxProvider["create"]>[0]) => source.create(input).then(track),
+    resume: (input: Parameters<SandboxProvider["resume"]>[0]) =>
+      source.resume(input).then((handle) => (handle ? track(handle) : null)),
+    ...(restoreSnapshot
+      ? {
+          restoreSnapshot: (input: Parameters<typeof restoreSnapshot>[0]) =>
+            restoreSnapshot(input).then(track),
+        }
+      : {}),
+    destroy: (input: Parameters<SandboxProvider["destroy"]>[0]) =>
+      destroyHandle(input.id).then((destroyed) => (destroyed ? undefined : source.destroy(input))),
+  } satisfies SandboxProvider;
+  return { provider, destroy };
+};
 
 export const bridgeChat = (
   stream: AsyncIterable<StreamChunk>,
