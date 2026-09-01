@@ -13,8 +13,6 @@ const workspace: RegisteredWorkspace = {
     name: "workspace",
     checkoutPath: "/repo",
     issueTracker: { type: "github", repo: "owner/repo" },
-    harness: { preferred: "codex" },
-    playbook: { implement: { enabled: true } },
   }),
 };
 
