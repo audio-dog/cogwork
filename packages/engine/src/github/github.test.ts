@@ -30,7 +30,7 @@ import {
   type RawReview,
 } from "./client";
 import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
-import { layer as providerLayer } from "./provider";
+import { makeProvider, layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -340,6 +340,41 @@ describe("github work source adapter", () => {
     ),
   );
 
+  it.effect("lists PRs once and reads details only for linked trusted PRs", () =>
+    Effect.gen(function* () {
+      const listCalls = yield* Ref.make(0);
+      const detailCalls = yield* Ref.make(0);
+      const base = yield* fakeClient({
+        issues: [],
+        pulls: [
+          pull({ number: 100, headRef: "1-linked" }),
+          pull({
+            number: 101,
+            headRef: "2-untrusted",
+            authorLogin: "outsider",
+            authorAssociation: "NONE",
+          }),
+        ],
+      });
+      const client: GitHubClientService = {
+        ...base,
+        listPulls: (_target) =>
+          Ref.update(listCalls, (count) => count + 1).pipe(Effect.andThen(base.listPulls())),
+        listCheckRuns: (target, sha) =>
+          Ref.update(detailCalls, (count) => count + 1).pipe(Effect.andThen(base.listCheckRuns(target, sha))),
+      };
+      const provider = makeProvider(client);
+      const signals = yield* provider.observe(workspace, [
+        { id: id("#1"), title: "linked" },
+        { id: id("#2"), title: "untrusted" },
+        { id: id("#3"), title: "no pull request" },
+      ]);
+      assert.deepStrictEqual([...signals.keys()], [id("#1")]);
+      assert.strictEqual(yield* Ref.get(listCalls), 1);
+      assert.strictEqual(yield* Ref.get(detailCalls), 1);
+    }),
+  );
+
   it.effect("reads a dirty mergeable_state as a conflict and routes the PR to follow-up", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
@@ -608,22 +643,22 @@ describe("github work source adapter", () => {
     ),
   );
 
-  it.effect("owns a write-access human-authored PR when the issue carries the daemon's marker", () =>
+  it.effect("attaches write-access human-authored PRs with and without coordination comments", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
-      const owned = items.find((item) => item.id === "#20");
-      const unowned = items.find((item) => item.id === "#21");
-      assert.strictEqual(owned?.pr?.review, "changes-requested");
-      assert.isNull(unowned?.pr ?? null);
+      const coordinated = items.find((item) => item.id === "#20");
+      const uncoordinated = items.find((item) => item.id === "#21");
+      assert.strictEqual(coordinated?.pr?.review, "changes-requested");
+      assert.strictEqual(uncoordinated?.pr?.review, "pending");
       const { eligible } = classify(items);
       assert.strictEqual(eligible.find((entry) => entry.id === "#20")?.stage, "follow-up");
-      assert.strictEqual(eligible.find((entry) => entry.id === "#21")?.stage, "implement");
+      assert.isUndefined(eligible.find((entry) => entry.id === "#21"));
     }).pipe(
       Effect.provide(
         withClient({
           issues: [
-            { number: 20, title: "owned", labels: ["ready-for-agent"] },
-            { number: 21, title: "unowned", labels: ["ready-for-agent"] },
+            { number: 20, title: "coordinated", labels: ["ready-for-agent"] },
+            { number: 21, title: "uncoordinated", labels: ["ready-for-agent"] },
             { number: 200, title: "human pr", labels: [], isPullRequest: true },
             { number: 201, title: "human pr", labels: [], isPullRequest: true },
           ],
@@ -632,13 +667,13 @@ describe("github work source adapter", () => {
               number: 200,
               authorLogin: "taylorfsteele",
               authorAssociation: "OWNER",
-              headRef: "20-owned",
+              headRef: "20-coordinated",
             }),
             pull({
               number: 201,
               authorLogin: "taylorfsteele",
               authorAssociation: "OWNER",
-              headRef: "21-unowned",
+              headRef: "21-uncoordinated",
             }),
           ],
           comments: [
@@ -651,6 +686,103 @@ describe("github work source adapter", () => {
             },
           ],
           reviews: [{ pull: 200, state: "CHANGES_REQUESTED" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("routes every follow-up trigger from trusted PRs without coordination comments", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      assert.deepStrictEqual(
+        classify(items).eligible.map((entry) => [entry.id, entry.stage]),
+        [
+          ["#20", "follow-up"],
+          ["#21", "follow-up"],
+          ["#22", "follow-up"],
+          ["#23", "follow-up"],
+        ],
+      );
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 20, title: "conflicting", labels: ["ready-for-agent"] },
+            { number: 21, title: "failing", labels: ["ready-for-agent"] },
+            { number: 22, title: "changes requested", labels: ["ready-for-agent"] },
+            { number: 23, title: "new comment", labels: ["ready-for-agent"] },
+          ],
+          pulls: [
+            pull({ number: 200, headRef: "20-conflicting", authorLogin: "maintainer" }),
+            pull({ number: 201, headRef: "21-failing", authorLogin: "maintainer" }),
+            pull({ number: 202, headRef: "22-changes-requested", authorLogin: "maintainer" }),
+            pull({ number: 203, headRef: "23-new-comment", authorLogin: "maintainer" }),
+          ],
+          checks: [
+            {
+              sha: "sha-201",
+              name: "test",
+              status: "completed",
+              conclusion: "failure",
+              startedAtMillis: 1,
+            },
+          ],
+          comments: [
+            {
+              issue: 203,
+              authorLogin: "maintainer",
+              authorAssociation: "MEMBER",
+              body: "Please fix this.",
+              createdAtMillis: 1,
+            },
+          ],
+          reviews: [{ pull: 202, state: "CHANGES_REQUESTED" }],
+          mergeable: [{ pull: 200, state: "dirty" }],
+        }),
+      ),
+    ),
+  );
+
+  it.effect("holds draft PRs out of follow-up for every trigger", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      assert.isEmpty(classify(items).eligible);
+      assert.isTrue(items.every((item) => item.pr !== null));
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [
+            { number: 20, title: "conflicting", labels: ["ready-for-agent"] },
+            { number: 21, title: "failing", labels: ["ready-for-agent"] },
+            { number: 22, title: "changes requested", labels: ["ready-for-agent"] },
+            { number: 23, title: "new comment", labels: ["ready-for-agent"] },
+          ],
+          pulls: [
+            pull({ number: 200, headRef: "20-conflicting", draft: true }),
+            pull({ number: 201, headRef: "21-failing", draft: true }),
+            pull({ number: 202, headRef: "22-changes-requested", draft: true }),
+            pull({ number: 203, headRef: "23-new-comment", draft: true }),
+          ],
+          checks: [
+            {
+              sha: "sha-201",
+              name: "test",
+              status: "completed",
+              conclusion: "failure",
+              startedAtMillis: 1,
+            },
+          ],
+          comments: [
+            {
+              issue: 203,
+              authorLogin: "maintainer",
+              authorAssociation: "MEMBER",
+              body: "Please fix this.",
+              createdAtMillis: 1,
+            },
+          ],
+          reviews: [{ pull: 202, state: "CHANGES_REQUESTED" }],
+          mergeable: [{ pull: 200, state: "dirty" }],
         }),
       ),
     ),
@@ -1154,9 +1286,7 @@ describe("trusted review-bot follow-up (botAllowlist)", () => {
       { number: 100, title: "bot pr", labels: [], isPullRequest: true },
     ],
     pulls: [pull({ number: 100, headRef: "5-in-review" })],
-    // The ledger comment on the item's issue is what marks it daemon-owned; without it the provider
-    // attaches no PR state and the bot feedback (on issue 100) is never observed.
-    comments: [{ issue: 5, authorLogin: bot.login, body: coordinationBody([]), createdAtMillis: 1 }, comment],
+    comments: [comment],
   });
 
   const cursorComment = (over: Partial<SeedComment> = {}): SeedComment => ({

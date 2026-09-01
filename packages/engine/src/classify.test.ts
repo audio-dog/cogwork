@@ -398,9 +398,9 @@ describe("classify", () => {
     assert.strictEqual(eligible[0]?.stage, "implement");
   });
 
-  it("drops an allowlisted workspace's unassigned item", () => {
+  it("drops an allowlisted workspace's unassigned item with a follow-up trigger", () => {
     const { eligible, claimed, needsHuman } = classify(
-      [item({ id: "1", roles: ["ready-for-agent"], assignees: [] })],
+      [item({ id: "1", roles: ["ready-for-agent"], assignees: [], pr: pr("changes-requested") })],
       ["me"],
     );
     assert.deepStrictEqual([eligible.length, claimed.length, needsHuman.length], [0, 0, 0]);
