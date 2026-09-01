@@ -27,6 +27,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -96,7 +97,7 @@ export class ControlStoreBootError extends Data.TaggedError("ControlStoreBootErr
   readonly message: string;
 }> {}
 
-const maximumRunEventAgeMillis = 1000 * 60 * 60 * 24 * 30;
+const maximumRunEventAge = Duration.days(30);
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -584,7 +585,7 @@ const expectedSchemaFingerprint = Effect.fn("ControlStore.expectedSchemaFingerpr
 const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
-  yield* sql`DELETE FROM run_events WHERE at < ${now - maximumRunEventAgeMillis}`;
+  yield* sql`DELETE FROM run_events WHERE at < ${now - Duration.toMillis(maximumRunEventAge)}`;
 });
 
 const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* () {

@@ -111,7 +111,6 @@ interface PauseTiming {
   readonly entered: boolean;
   readonly retryAtMillis: number | null;
 }
-
 const connectionIdsOf = (workspace: RegisteredWorkspace) => [
   ...new Set(
     [workspace.config.issueTracker.connectionId, workspace.config.sourceControl?.connectionId].filter(
