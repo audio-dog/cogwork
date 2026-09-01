@@ -1,0 +1,21 @@
+packages/engine/src/run-recorder.ts
+  s_20609725d0c48d::t_cbdb4a79fe1921 46
+packages/engine/src/run-recorder.test.ts
+  s_20609725d0c48d::t_4ee8a729f1ee50 136-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "fb78a28e862118374361b0c84fdb225a35d51b46",
+  "prompts": {},
+  "sessions": {
+    "s_20609725d0c48d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b82-c84b-70a0-b5e5-15bad1267a40",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
