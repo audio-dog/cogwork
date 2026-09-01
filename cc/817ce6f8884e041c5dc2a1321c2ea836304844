@@ -1,0 +1,23 @@
+packages/engine/CONTEXT.md
+  s_746973d897c991::t_fda37b929c22ed 89
+packages/codex-cli/CONTEXT.md
+  s_746973d897c991::t_fda37b929c22ed 7-9,14-17,21-22,36-39,43-48
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_746973d897c991::t_fda37b929c22ed 18,20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "cc817ce6f8884e041c5dc2a1321c2ea836304844",
+  "prompts": {},
+  "sessions": {
+    "s_746973d897c991": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05deb-78f6-7d43-9d45-b47fea83c7bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
