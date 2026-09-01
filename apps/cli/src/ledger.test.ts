@@ -12,7 +12,6 @@ import {
 } from "@cogwork/contracts";
 import { bootControlStoreLayer, RunLedger } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { assert, describe, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -29,13 +28,7 @@ class TestStorePath extends Context.Service<TestStorePath, string>()(
 ) {}
 
 const bootedLedgerLayer = (storePath: string) =>
-  ledgerLayer.pipe(
-    Layer.provideMerge(
-      bootControlStoreLayer(storePath).pipe(
-        Layer.provideMerge(SqliteClient.layer({ filename: storePath, busyTimeout: "25 millis" })),
-      ),
-    ),
-  );
+  ledgerLayer.pipe(Layer.provideMerge(bootControlStoreLayer(storePath, { busyTimeout: "25 millis" })));
 
 const runRow = (run: RunRecord) =>
   [
