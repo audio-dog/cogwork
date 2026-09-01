@@ -110,6 +110,7 @@ export const formatStatus = (status: DaemonStatus) => {
   return [
     header,
     formatScheduler(status.scheduler),
+    `event bus: ${status.eventBusDroppedEvents} dropped events`,
     "workspaces:",
     workspaces,
     ...(status.failures.length > 0 ? ["failures:", failures] : []),
