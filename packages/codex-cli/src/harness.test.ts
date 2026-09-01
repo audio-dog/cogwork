@@ -546,6 +546,24 @@ describe("codexRunner", () => {
       ),
     );
 
+    it.effect("keeps incompatible wording in emitted turn failures retryable", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const checkoutPath = yield* initializeRepository(handle);
+          const harness = Harness.make([
+            runner({ codexExecutable: fakeCodexExecutable(" --fake-turn-error=incompatible-tool-output") }),
+          ]);
+          const error = yield* harness
+            .run(makeRequest({ checkoutPath, session: null }))
+            .pipe(Stream.runDrain, Effect.flip);
+
+          assert.strictEqual(error.reason, "turn");
+          assert.isTrue(error.retryable);
+        }),
+      ),
+    );
+
     it.effect("classifies thrown native launch failures", () =>
       Effect.scoped(
         Effect.gen(function* () {

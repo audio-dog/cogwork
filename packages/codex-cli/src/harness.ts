@@ -78,16 +78,23 @@ const addRemediation = (error: Harness.HarnessError) => {
   return error;
 };
 
-const codexDiagnostics = (cause: unknown) => {
+const codexTurnDiagnostics = (cause: unknown) => {
   const message = HarnessBridge.messageFromUnknown(cause);
   if (isMissingExecutableCause(cause)) {
     return addRemediation(missingHarnessError(message));
   }
   if (missingLoginPattern.test(message)) return addRemediation(credentialError(message));
+  return harnessError("turn", true, message);
+};
+
+const codexLaunchDiagnostics = (cause: unknown) => {
+  const diagnostic = codexTurnDiagnostics(cause);
+  if (diagnostic.reason !== "turn") return diagnostic;
+  const message = diagnostic.message;
   if (incompatibleVersionPattern.test(message)) {
     return harnessError("incompatible-harness", false, message);
   }
-  return harnessError("turn", true, message);
+  return diagnostic;
 };
 
 interface CodexCommandResult {
@@ -117,7 +124,7 @@ const createReadinessSandbox = Effect.fn("CodexRunner.createReadinessSandbox")(
   (scrubEnv: ReadonlyArray<string>) =>
     Effect.tryPromise({
       try: () => localProcessSandbox({ dir: process.cwd(), scrubEnv: [...scrubEnv] }).create({}),
-      catch: codexDiagnostics,
+      catch: codexLaunchDiagnostics,
     }).pipe(
       Effect.timeout(codexReadinessDeadline),
       Effect.catchTag("TimeoutError", () => readinessTimeout("sandbox creation")),
@@ -128,7 +135,7 @@ const codexCommand = Effect.fn("CodexRunner.command")(
   (sandbox: SandboxHandle, executable: string, argument: string) =>
     Effect.tryPromise({
       try: (signal) => sandbox.process.exec(`${executable} ${argument}`, { signal }),
-      catch: codexDiagnostics,
+      catch: codexLaunchDiagnostics,
     }).pipe(
       Effect.timeout(codexReadinessDeadline),
       Effect.catchTag("TimeoutError", () => readinessTimeout(argument)),
@@ -325,7 +332,8 @@ const codexDescriptor = (
       workspaceRoot: ".",
       middleware: () => [transientCodexConfig],
     },
-    diagnostics: codexDiagnostics,
+    diagnostics: codexLaunchDiagnostics,
+    turnDiagnostics: codexTurnDiagnostics,
   };
 };
 
