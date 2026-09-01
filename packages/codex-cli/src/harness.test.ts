@@ -82,7 +82,10 @@ const credentialStore: CredentialStore.CredentialStoreService = {
   removeConnection: unexpected,
 };
 
-const fileSystem = FileSystem.makeNoop({});
+const fileSystem = FileSystem.makeNoop({
+  access: () => Effect.void,
+  stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+});
 
 const harnessRunnerLayer = Layer.mergeAll(
   Layer.succeed(SessionStore.SessionStore, sessionStore),
@@ -481,6 +484,68 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
     }),
   );
 
+  it.effect("rejects an outdated Codex version during preflight", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: fakeCodexExecutable(" --fake-version=codex-cli_0.1.0"),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+      assert.strictEqual(error.reason, "incompatible-harness");
+      assert.include(error.message, "Update Codex to >=0.149.0");
+    }),
+  );
+
+  it.effect("rejects a Run Plan without mandatory Sandbox projection", () =>
+    Effect.gen(function* () {
+      const base = makeRequest();
+      const invalid = {
+        ...base,
+        plan: new RunPlan({ ...base.plan, middleware: [] }),
+      } satisfies Harness.HarnessRequest;
+      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.reason, "sandbox");
+    }),
+  );
+
+  it.effect("rejects a missing checkout before Codex launch", () =>
+    Effect.gen(function* () {
+      const invalid = makeRequest({ checkoutPath: "/missing-codex-checkout" });
+      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "/missing-codex-checkout");
+    }),
+  );
+
+  it.effect("rejects an unreadable checkout before Codex launch", () =>
+    Effect.gen(function* () {
+      const invalid = makeRequest({ checkoutPath: "/unreadable-codex-checkout" });
+      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
+      const unreadable = FileSystem.makeNoop({
+        stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+      });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, unreadable), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "cannot read");
+    }),
+  );
+
   it.effect("keeps a timed-out preflight retryable", () =>
     Effect.gen(function* () {
       const runner = testRunner({
@@ -673,7 +738,10 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
 
   it.effect("keeps an MCP bearer out of the Codex command, events, and worktree configuration", () =>
     Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness();
+      const { envName } = testMcpProjection("linear", 0);
+      const { handle, harness } = yield* makeLiveHarness(
+        fakeCodexExecutable(` --capture-mcp-env ${envName}`),
+      );
       const events = yield* Stream.runCollect(
         harness.run(
           makeRequest({

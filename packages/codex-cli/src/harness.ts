@@ -90,6 +90,17 @@ const launchError = (message: string) =>
 const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
 const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
 const codexPreflightDeadline = "5 seconds";
+const codexVersionRequirement = ">=0.149.0";
+const minimumCodexVersion = [0, 149, 0] as const;
+
+const versionAtLeast = (actual: ReadonlyArray<number>, minimum: ReadonlyArray<number>) =>
+  (actual.map((part, index) => Math.sign(part - (minimum[index] ?? 0))).find((part) => part !== 0) ?? 0) >= 0;
+
+const codexVersionCompatible = (version: string) => {
+  const match = version.match(/\b(\d+)\.(\d+)\.(\d+)\b/);
+  if (!match) return false;
+  return versionAtLeast([Number(match[1]), Number(match[2]), Number(match[3])], minimumCodexVersion);
+};
 
 const codexPreflightError = (cause: unknown) => {
   const message = String(cause);
@@ -110,6 +121,15 @@ const codexPreflightError = (cause: unknown) => {
   return launchError(message);
 };
 
+const requireCodexSuccess = (result: {
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}) =>
+  result.exitCode === 0
+    ? Effect.succeed(result)
+    : Effect.fail(codexPreflightError(`${result.stderr}\n${result.stdout}`));
+
 const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
   Effect.scoped(
     Effect.acquireRelease(
@@ -120,15 +140,17 @@ const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =
       (sandbox) => Effect.promise(() => sandbox.destroy()),
     ).pipe(
       Effect.flatMap((sandbox) =>
-        Effect.tryPromise({
-          try: (signal) => sandbox.process.exec(`${executable} login status`, { signal }),
-          catch: codexPreflightError,
+        Effect.gen(function* () {
+          const version = yield* Effect.tryPromise({
+            try: (signal) => sandbox.process.exec(`${executable} --version`, { signal }),
+            catch: codexPreflightError,
+          }).pipe(Effect.flatMap(requireCodexSuccess));
+          yield* Effect.tryPromise({
+            try: (signal) => sandbox.process.exec(`${executable} login status`, { signal }),
+            catch: codexPreflightError,
+          }).pipe(Effect.flatMap(requireCodexSuccess));
+          return version.stdout.trim() || version.stderr.trim();
         }),
-      ),
-      Effect.flatMap((result) =>
-        result.exitCode === 0
-          ? Effect.void
-          : Effect.fail(codexPreflightError(`${result.stderr}\n${result.stdout}`)),
       ),
     ),
   ).pipe(
@@ -142,6 +164,51 @@ const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =
           message: "Codex CLI did not answer its readiness check",
         }),
     ),
+  ),
+);
+
+const codexReadiness = Effect.fn("CodexRunner.readiness")((executable: string) =>
+  codexPreflight(executable).pipe(
+    Effect.match({
+      onFailure: (error) =>
+        ({
+          operational: {
+            status: "unavailable",
+            retryable: error.retryable,
+            diagnostic: error.message,
+          },
+          installation: {
+            status: error.reason === "missing-harness" ? "missing" : "unknown",
+            version: null,
+          },
+          compatibility: { status: "unknown", requirement: null },
+          authentication: {
+            mode: "host",
+            status: error.reason === "credential" ? "unavailable" : "unknown",
+            diagnostic: error.message,
+          },
+          diagnostics: [error.message],
+        }) satisfies Harness.HarnessReadiness,
+      onSuccess: (version) => {
+        const compatible = codexVersionCompatible(version);
+        return {
+          operational: { status: "ready", retryable: false, diagnostic: "Codex is ready" },
+          installation: { status: "installed", version: version || null },
+          compatibility: {
+            status: compatible ? "compatible" : "incompatible",
+            requirement: codexVersionRequirement,
+          },
+          authentication: {
+            mode: "host",
+            status: "available",
+            diagnostic: "Codex host login is available",
+          },
+          diagnostics: compatible
+            ? []
+            : [`Codex ${version || "unknown"} is unsupported. Update Codex to ${codexVersionRequirement}.`],
+        } satisfies Harness.HarnessReadiness;
+      },
+    }),
   ),
 );
 
@@ -159,6 +226,42 @@ const classifyTurnError = (error: Harness.HarnessError) => {
 
 const codexEfforts: ReadonlyArray<CodexEffort> = ["minimal", "low", "medium", "high"];
 
+const codexLaunchPreflight = Effect.fn("CodexRunner.launchPreflight")(function* (
+  name: HarnessName,
+  request: Harness.HarnessRequest,
+) {
+  const plan = request.plan;
+  yield* Harness.validateCheckoutDirectory(name, plan.sandbox.workspace);
+  if (plan.sandbox.policy !== plan.harness.profile) {
+    return yield* new Harness.HarnessError({
+      reason: "policy",
+      retryable: false,
+      message: "Codex Sandbox policy does not match the immutable Harness profile",
+    });
+  }
+  if (!plan.middleware.includes("sandbox")) {
+    return yield* new Harness.HarnessError({
+      reason: "sandbox",
+      retryable: false,
+      message: "Codex Run Plan is missing mandatory Sandbox projection",
+    });
+  }
+  const capabilities = localProcessSandbox({ dir: plan.sandbox.workspace }).capabilities();
+  if (
+    capabilities.fs &&
+    capabilities.exec &&
+    capabilities.backgroundProcesses &&
+    capabilities.killableProcesses
+  ) {
+    return;
+  }
+  return yield* new Harness.HarnessError({
+    reason: "sandbox",
+    retryable: false,
+    message: "Codex local Sandbox provider lacks mandatory process or filesystem capabilities",
+  });
+});
+
 const gitMetadataDirectory = (checkoutPath: string) =>
   Effect.scoped(
     Effect.acquireRelease(
@@ -169,8 +272,10 @@ const gitMetadataDirectory = (checkoutPath: string) =>
         Effect.promise(() => sandbox.process.exec("git rev-parse --path-format=absolute --git-common-dir")),
       ),
       Effect.map((result) => (result.exitCode === 0 ? result.stdout.trim() : null)),
-      Effect.orElseSucceed(() => null),
     ),
+  ).pipe(
+    Effect.timeout("5 seconds"),
+    Effect.orElseSucceed(() => null),
   );
 
 const decodeEffort = (effort: string): CodexEffort | null =>
@@ -265,6 +370,13 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
   const makeAdapter = options.makeAdapter ?? codexText;
   const runChat = options.runChat ?? defaultRunChat;
   const resolveGitMetadataDirectory = options.resolveGitMetadataDirectory ?? gitMetadataDirectory;
+  const preflightPhase = Harness.HarnessPreflightInput.$match({
+    Static: () => Effect.void,
+    Launch: ({ request }) => codexLaunchPreflight(options.name, request),
+  });
+  const preflight = Effect.fn("CodexRunner.preflight")((input: Harness.HarnessPreflightInput) =>
+    preflightPhase(input),
+  );
 
   return {
     name: options.name,
@@ -286,7 +398,28 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
       worktreeConfined: true,
       profiles: ["read-only", "full"],
     },
-    preflight: () => codexPreflight(options.codexExecutable ?? "codex"),
+    capabilities: {
+      authenticationModes: ["host"],
+      session: { affinity: "runtime-host", fork: false },
+      policyFidelity: "profile-only",
+      fileEventFidelity: "sandbox",
+      usageQuality: "metered",
+      readinessDiagnostics: true,
+      journal: false,
+      takeover: false,
+    },
+    authentication: { mode: "host", reference: "Codex host login" },
+    catalogSources: {
+      fallback: Harness.staticCatalogSource(
+        {
+          models: [{ value: "gpt-5.6-sol", label: "GPT-5.6 Sol" }],
+          efforts: codexEfforts.map((effort) => ({ value: effort, label: effort })),
+        },
+        { source: "cogwork-fallback", fallbackVersion: "codex-1" },
+      ),
+    },
+    readiness: () => codexReadiness(options.codexExecutable ?? "codex"),
+    preflight,
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {

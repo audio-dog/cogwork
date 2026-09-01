@@ -1,8 +1,23 @@
 import { once } from "node:events";
 import { access, readFile, writeFile } from "node:fs/promises";
 
+if (process.argv.includes("--version")) {
+  const override = process.argv.find((argument) => argument.startsWith("--fake-version="));
+  process.stdout.write(
+    `${override?.slice("--fake-version=".length).replaceAll("_", " ") ?? "codex-cli 1.0.0"}\n`,
+  );
+  process.exit(0);
+}
+
+if (process.argv.includes("login") && process.argv.includes("status")) {
+  process.stdout.write("Logged in\n");
+  process.exit(0);
+}
+
 const prompt = Buffer.concat(await Array.fromAsync(process.stdin)).toString("utf8");
-const mcpBearer = Object.entries(process.env).find(([name]) => /^COGWORK_MCP_.*_BEARER$/.test(name))?.[1];
+const mcpEnvIndex = process.argv.indexOf("--capture-mcp-env");
+const mcpEnvName = mcpEnvIndex === -1 ? undefined : process.argv.at(mcpEnvIndex + 1);
+const mcpBearer = mcpEnvName ? process.env[mcpEnvName] : undefined;
 const hasCodexConfig = await access(`${process.cwd()}/.codex/config.toml`).then(
   () => true,
   () => false,
