@@ -158,11 +158,32 @@ const encodeRunPlan = Schema.encodeSync(Schema.fromJsonString(RunPlanSchema));
 const runPlanError = (operation: string, message: string) =>
   Effect.fail(RunLedger.RunLedgerError.make({ operation, message, retryable: false }));
 
-const decodeAll = <A, E, R>(decode: (u: unknown) => Effect.Effect<A, E, R>, rows: ReadonlyArray<unknown>) =>
+const decodeOrElse = <A, E, R, B>(
+  operation: string,
+  rowId: string,
+  decode: Effect.Effect<A, E, R>,
+  fallback: B,
+) =>
+  decode.pipe(
+    Effect.catch((error) =>
+      Effect.logWarning("run ledger stored row decode failed", { cause: String(error) }).pipe(
+        Effect.annotateLogs({ operation, rowId }),
+        Effect.map(() => fallback),
+      ),
+    ),
+  );
+
+const decodeAll = <A, E, R>(
+  operation: string,
+  decode: (u: unknown) => Effect.Effect<A, E, R>,
+  rows: ReadonlyArray<{ readonly rowId: string; readonly value: unknown }>,
+) =>
   Effect.forEach(rows, (row) =>
-    decode(row).pipe(
-      Effect.map((value) => [value] as const),
-      Effect.orElseSucceed(() => [] as const),
+    decodeOrElse(
+      operation,
+      row.rowId,
+      decode(row.value).pipe(Effect.map((value) => [value] as const)),
+      [] as const,
     ),
   ).pipe(Effect.map((chunks) => chunks.flat()));
 
@@ -210,8 +231,9 @@ const make = Effect.fn("ledger.make")(function* () {
     readRows(operation, query).pipe(
       Effect.flatMap((rows) =>
         decodeAll(
+          operation,
           decodeRunId,
-          rows.map((row) => row.id),
+          rows.map((row) => ({ rowId: row.id, value: row.id })),
         ),
       ),
     );
@@ -222,7 +244,7 @@ const make = Effect.fn("ledger.make")(function* () {
   ) =>
     swallow(operation, query, () => undefined).pipe(
       Effect.flatMap((row) =>
-        row ? decodeRun(runRecordFromRow(row)).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null),
+        row ? decodeOrElse(operation, row.id, decodeRun(runRecordFromRow(row)), null) : Effect.succeed(null),
       ),
     );
 
@@ -261,7 +283,7 @@ const make = Effect.fn("ledger.make")(function* () {
       ).pipe(
         Effect.flatMap((rows) => {
           const plan = rows[0]?.plan;
-          return plan ? decodeRunPlan(plan).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null);
+          return plan ? decodeOrElse("getRunPlan", runId, decodeRunPlan(plan), null) : Effect.succeed(null);
         }),
       ),
 
@@ -311,7 +333,7 @@ const make = Effect.fn("ledger.make")(function* () {
       ).pipe(
         Effect.flatMap((row) =>
           row
-            ? decodeSession(sessionFromRow(row)).pipe(Effect.orElseSucceed(() => null))
+            ? decodeOrElse("getSession", row.id, decodeSession(sessionFromRow(row)), null)
             : Effect.succeed(null),
         ),
       ),
@@ -324,7 +346,7 @@ const make = Effect.fn("ledger.make")(function* () {
     sessionForBranch: (workspace: string, branch: string) =>
       readRows("sessionForBranch", () =>
         db
-          .select({ session: runs.session })
+          .select({ id: runs.id, session: runs.session })
           .from(runs)
           .where(and(eq(runs.workspace, workspace), eq(runs.branch, branch), isNotNull(runs.session)))
           .orderBy(desc(runs.startedAt), desc(sql<number>`"runs".rowid`))
@@ -332,8 +354,10 @@ const make = Effect.fn("ledger.make")(function* () {
           .all(),
       ).pipe(
         Effect.flatMap((rows) => {
-          const raw = rows[0]?.session;
-          return raw ? decodeSessionId(raw).pipe(Effect.orElseSucceed(() => null)) : Effect.succeed(null);
+          const row = rows[0];
+          return row?.session
+            ? decodeOrElse("sessionForBranch", row.id, decodeSessionId(row.session), null)
+            : Effect.succeed(null);
         }),
       ),
 
@@ -341,6 +365,7 @@ const make = Effect.fn("ledger.make")(function* () {
       readRows("sessionEvents", () =>
         db
           .select({
+            runId: runs.id,
             seq: runEvents.seq,
             type: runEvents.type,
             name: runEvents.name,
@@ -355,13 +380,17 @@ const make = Effect.fn("ledger.make")(function* () {
       ).pipe(
         Effect.flatMap((rows) =>
           decodeAll(
+            "sessionEvents",
             decodeEvent,
             rows.map((row) => ({
-              seq: row.seq,
-              type: row.type,
-              name: row.name,
-              data: row.data,
-              atMillis: row.at,
+              rowId: `${row.runId}:${row.seq}`,
+              value: {
+                seq: row.seq,
+                type: row.type,
+                name: row.name,
+                data: row.data,
+                atMillis: row.at,
+              },
             })),
           ),
         ),
@@ -472,8 +501,12 @@ const make = Effect.fn("ledger.make")(function* () {
       ).pipe(
         Effect.flatMap((rows) =>
           decodeAll(
+            "listRuns",
             decodeSummary,
-            rows.map((row) => ({ ...runRecordFromRow(row), eventCount: Number(row.eventCount) })),
+            rows.map((row) => ({
+              rowId: row.id,
+              value: { ...runRecordFromRow(row), eventCount: Number(row.eventCount) },
+            })),
           ),
         ),
       ),
@@ -491,8 +524,12 @@ const make = Effect.fn("ledger.make")(function* () {
     ).pipe(
       Effect.flatMap((rows) =>
         decodeAll(
+          "runningRuns",
           decodeSummary,
-          rows.map((row) => ({ ...runRecordFromRow(row), eventCount: Number(row.eventCount) })),
+          rows.map((row) => ({
+            rowId: row.id,
+            value: { ...runRecordFromRow(row), eventCount: Number(row.eventCount) },
+          })),
         ),
       ),
     ),
@@ -517,13 +554,17 @@ const make = Effect.fn("ledger.make")(function* () {
       ).pipe(
         Effect.flatMap((rows) =>
           decodeAll(
+            "events",
             decodeEvent,
             rows.map((row) => ({
-              seq: row.seq,
-              type: row.type,
-              name: row.name,
-              data: row.data,
-              atMillis: row.at,
+              rowId: `${runId}:${row.seq}`,
+              value: {
+                seq: row.seq,
+                type: row.type,
+                name: row.name,
+                data: row.data,
+                atMillis: row.at,
+              },
             })),
           ),
         ),

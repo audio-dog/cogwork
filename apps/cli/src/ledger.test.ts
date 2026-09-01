@@ -18,7 +18,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Path from "effect/Path";
+import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import { layer as ledgerLayer } from "./ledger";
 
@@ -244,6 +246,30 @@ describe("sqlite RunLedger", () => {
           events.map((event) => event.type),
           ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
         );
+      }),
+    );
+
+    it.effect("warns with the operation and row id before ignoring a corrupt run", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const storePath = yield* TestStorePath;
+        const id = runId("corrupt-run");
+        yield* ledger.insertRun(record(id, 1000));
+        yield* Effect.acquireUseRelease(
+          Effect.sync(() => new DatabaseSync(storePath)),
+          (sqlite) =>
+            Effect.sync(() => sqlite.prepare("UPDATE runs SET status = 'unknown' WHERE id = ?").run(id)),
+          (sqlite) => Effect.sync(() => sqlite.close()),
+        );
+        const logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }> = [];
+        const logger = Logger.make<unknown, void>(({ fiber, message }) => {
+          logs.push({ message, annotations: { ...fiber.getRef(References.CurrentLogAnnotations) } });
+        });
+
+        assert.isNull(yield* ledger.getRun(id).pipe(Effect.withLogger(logger)));
+
+        const warning = logs.find(({ message }) => String(message).includes("stored row decode failed"));
+        assert.deepStrictEqual(warning?.annotations, { operation: "getRun", rowId: id });
       }),
     );
 
