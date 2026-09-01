@@ -6,6 +6,7 @@ import type {
   PollPauseReason,
   PollState,
   WorkspaceId,
+  WorkspaceRegistrationError,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -50,12 +51,14 @@ export interface ReconcileSnapshot {
   readonly workspaces: ReadonlyArray<WorkspaceReconcileState>;
 }
 
+type ReconcileReceiptDeferred = Deferred.Deferred<ReconcileReceipt, WorkspaceRegistrationError>;
+
 interface ReconcileJob {
-  readonly receipt: Deferred.Deferred<ReconcileReceipt>;
+  readonly receipt: ReconcileReceiptDeferred;
 }
 
 interface ReceiptSelection {
-  readonly receipt: Deferred.Deferred<ReconcileReceipt>;
+  readonly receipt: ReconcileReceiptDeferred;
   readonly enqueue: boolean;
 }
 
@@ -133,7 +136,7 @@ export const make = Effect.gen(function* () {
   const bus = yield* DaemonEventBus;
   const observe = observeWorkspace(issueTracker, provider);
   const queue = yield* Queue.make<ReconcileJob>();
-  const pendingReceipt = yield* Ref.make<Deferred.Deferred<ReconcileReceipt> | null>(null);
+  const pendingReceipt = yield* Ref.make<ReconcileReceiptDeferred | null>(null);
   const snapshotRef = yield* Ref.make<ReconcileSnapshot>({
     generation: 0,
     observedAtMillis: 0,
@@ -261,7 +264,7 @@ export const make = Effect.gen(function* () {
   });
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* () {
-    yield* registry.refresh.pipe(Effect.orDie);
+    yield* registry.refresh;
     const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
       concurrency: 4,
     });
@@ -279,26 +282,37 @@ export const make = Effect.gen(function* () {
     };
   });
 
-  const clearPendingReceipt = (receipt: Deferred.Deferred<ReconcileReceipt>) =>
+  const clearPendingReceipt = (receipt: ReconcileReceiptDeferred) =>
     Ref.update(pendingReceipt, (pending) => (pending === receipt ? null : pending));
 
+  const settleReceiptSuccess = (receipt: ReconcileReceiptDeferred, value: ReconcileReceipt) =>
+    clearPendingReceipt(receipt).pipe(Effect.andThen(Deferred.succeed(receipt, value)));
+
+  const settleReceiptFailure = (
+    receipt: ReconcileReceiptDeferred,
+    cause: Cause.Cause<WorkspaceRegistrationError>,
+  ) => {
+    if (Cause.hasInterruptsOnly(cause)) {
+      return clearPendingReceipt(receipt).pipe(
+        Effect.andThen(Deferred.failCause(receipt, cause)),
+        Effect.andThen(Effect.failCause(cause)),
+      );
+    }
+    return Effect.logError("reconcile job failed", { cause }).pipe(
+      Effect.andThen(clearPendingReceipt(receipt)),
+      Effect.andThen(Deferred.failCause(receipt, cause)),
+    );
+  };
+
   const runJob = (job: ReconcileJob) =>
-    reconcile().pipe(
-      Effect.flatMap((receipt) =>
-        clearPendingReceipt(job.receipt).pipe(Effect.andThen(Deferred.succeed(job.receipt, receipt))),
+    Effect.uninterruptibleMask((restore) =>
+      restore(reconcile()).pipe(
+        Effect.flatMap((receipt) => settleReceiptSuccess(job.receipt, receipt)),
+        Effect.catchCause((cause) => settleReceiptFailure(job.receipt, cause)),
       ),
-      Effect.catchCause((cause) => {
-        const interrupted = Cause.hasInterruptsOnly(cause);
-        return Effect.logError("reconcile job failed", { cause }).pipe(
-          Effect.when(Effect.succeed(!interrupted)),
-          Effect.andThen(clearPendingReceipt(job.receipt)),
-          Effect.andThen(Deferred.failCause(job.receipt, cause)),
-          Effect.andThen(Effect.failCause(cause).pipe(Effect.when(Effect.succeed(interrupted)))),
-        );
-      }),
     );
 
-  const awaitReceipt = (receipt: Deferred.Deferred<ReconcileReceipt>) =>
+  const awaitReceipt = (receipt: ReconcileReceiptDeferred) =>
     Deferred.await(receipt).pipe(
       Effect.timeout(submitTimeout),
       Effect.tapErrorTag("TimeoutError", () =>
@@ -309,10 +323,10 @@ export const make = Effect.gen(function* () {
   yield* Queue.take(queue).pipe(Effect.flatMap(runJob), Effect.forever, Effect.forkScoped);
 
   const receiptForSubmit = Effect.fn("ReconcileWorker.receiptForSubmit")(function* () {
-    const candidate = yield* Deferred.make<ReconcileReceipt>();
+    const candidate = yield* Deferred.make<ReconcileReceipt, WorkspaceRegistrationError>();
     const selection = yield* Ref.modify(
       pendingReceipt,
-      (pending): readonly [ReceiptSelection, Deferred.Deferred<ReconcileReceipt> | null] => {
+      (pending): readonly [ReceiptSelection, ReconcileReceiptDeferred | null] => {
         if (pending) return [{ receipt: pending, enqueue: false }, pending];
         return [{ receipt: candidate, enqueue: true }, candidate];
       },

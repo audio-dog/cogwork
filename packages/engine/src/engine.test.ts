@@ -8,12 +8,14 @@ import {
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
+  WorkspaceRegistrationError,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
@@ -21,6 +23,7 @@ import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as RpcTest from "effect/unstable/rpc/RpcTest";
@@ -246,6 +249,51 @@ describe("reconcile worker", () => {
       assert.strictEqual(receipt.pendingWork, 0);
       assert.strictEqual(receipt.paused, 0);
     }).pipe(Effect.provide(workerLayer), Effect.scoped),
+  );
+
+  it.effect("keeps a registry refresh failure typed", () => {
+    const failure = new WorkspaceRegistrationError({ message: "registry refresh failed" });
+    const failedRegistry = Layer.succeed(Registry.WorkspaceRegistry, {
+      ...Registry.readOnlyRegistry(sampleRegistry),
+      refresh: Effect.fail(failure),
+    });
+    const layer = reconcileLayer.pipe(
+      Layer.provide(Layer.mergeAll(failedRegistry, sources(IssueTracker.emptyLayer))),
+    );
+
+    return Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      assert.strictEqual(yield* Effect.flip(worker.submit()), failure);
+    }).pipe(Effect.provide(layer), Effect.scoped);
+  });
+
+  it.effect("settles a pending receipt when the worker scope drains", () =>
+    Effect.gen(function* () {
+      const refreshStarted = yield* Deferred.make<void>();
+      const drainingRegistry = Layer.succeed(Registry.WorkspaceRegistry, {
+        ...Registry.readOnlyRegistry(sampleRegistry),
+        refresh: Deferred.succeed(refreshStarted, undefined).pipe(Effect.andThen(Effect.never)),
+      });
+      const workerScope = yield* Scope.make();
+      const context = yield* reconcileLayer.pipe(
+        Layer.provide(Layer.mergeAll(drainingRegistry, sources(IssueTracker.emptyLayer))),
+        Layer.buildWithScope(workerScope),
+      );
+      const worker = Context.get(context, Reconcile.ReconcileWorker);
+      const submitting = yield* Effect.forkChild(worker.submit().pipe(Effect.exit));
+
+      yield* Deferred.await(refreshStarted);
+      yield* Scope.close(workerScope, Exit.void);
+      const joining = yield* Effect.forkChild(
+        Fiber.join(submitting).pipe(Effect.timeout("1 second"), Effect.exit),
+      );
+      yield* TestClock.adjust("1 second");
+      const joined = yield* Fiber.join(joining);
+      if (Exit.isFailure(joined)) return assert.fail("receipt did not settle during drain");
+      const settled = joined.value;
+      if (Exit.isSuccess(settled)) return assert.fail("expected an interrupted receipt");
+      assert.isTrue(Cause.hasInterruptsOnly(settled.cause));
+    }),
   );
 
   it.effect("settles a defective reconcile and continues with the next submission", () =>
