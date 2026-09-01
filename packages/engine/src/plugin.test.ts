@@ -186,7 +186,7 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       const plugins = yield* PluginManager;
       const first = yield* plugins.install("linear", localOwnerId);
       const second = yield* plugins.install("linear", localOwnerId);
@@ -215,8 +215,8 @@ layer(NodeServices.layer)((it) => {
           enabled: true,
         },
       ]);
-      assert.isTrue(yield* fs.exists(path.join(test.provisionRoot, "linear@1.0.0")));
-      assert.deepStrictEqual((yield* fs.readDirectory(test.provisionRoot)).sort(), ["linear@1.0.0"]);
+      assert.isTrue(yield* fs.exists(path.join(fixture.provisionRoot, "linear@1.0.0")));
+      assert.deepStrictEqual((yield* fs.readDirectory(fixture.provisionRoot)).sort(), ["linear@1.0.0"]);
     }).pipe(Effect.provide(fixtureLayer())),
   );
 
@@ -247,25 +247,25 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       yield* (yield* PluginManager).install("linear", localOwnerId);
-      yield* write(path.join(test.bundlePath, "plugin.json"), manifestDocument("2.0.0"));
-      const overview = yield* overviewFromNewManager(test);
+      yield* write(path.join(fixture.bundlePath, "plugin.json"), manifestDocument("2.0.0"));
+      const overview = yield* overviewFromNewManager(fixture);
 
       assert.strictEqual(overview.plugins[0]?.record?.resolvedIdentity, "linear@2.0.0");
-      assert.isFalse(yield* fs.exists(path.join(test.provisionRoot, "linear@1.0.0")));
-      assert.isTrue(yield* fs.exists(path.join(test.provisionRoot, "linear@2.0.0")));
+      assert.isFalse(yield* fs.exists(path.join(fixture.provisionRoot, "linear@1.0.0")));
+      assert.isTrue(yield* fs.exists(path.join(fixture.provisionRoot, "linear@2.0.0")));
     }).pipe(Effect.provide(fixtureLayer())),
   );
 
   it.effect("keeps valid files active when another pointed file becomes malformed", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       const plugins = yield* PluginManager;
       yield* plugins.install("linear", localOwnerId);
-      yield* write(path.join(test.bundlePath, "plugin.json"), manifestDocument("2.0.0"));
-      yield* write(path.join(test.bundlePath, "mcp", "linear.json"), "not json");
+      yield* write(path.join(fixture.bundlePath, "plugin.json"), manifestDocument("2.0.0"));
+      yield* write(path.join(fixture.bundlePath, "mcp", "linear.json"), "not json");
 
       const result = yield* plugins.install("linear", localOwnerId);
       const item = result.overview.plugins[0];
@@ -282,9 +282,9 @@ layer(NodeServices.layer)((it) => {
   it.effect("names a file whose MCP config contains a bare environment interpolation", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       yield* write(
-        path.join(test.bundlePath, "mcp", "linear.json"),
+        path.join(fixture.bundlePath, "mcp", "linear.json"),
         '{"endpoint":"https://mcp.linear.app/mcp","authorization":"Bearer $' + '{LINEAR_API_KEY}"}',
       );
       const overview = (yield* (yield* PluginManager).install("linear", localOwnerId)).overview;
@@ -299,8 +299,8 @@ layer(NodeServices.layer)((it) => {
   it.effect("installs nothing when the manifest is unreadable", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
-      yield* write(path.join(test.bundlePath, "plugin.json"), "not json");
+      const fixture = yield* PluginFixture;
+      yield* write(path.join(fixture.bundlePath, "plugin.json"), "not json");
       const plugins = yield* PluginManager;
       const failure = yield* Effect.flip(plugins.install("linear", localOwnerId));
       const store = yield* ControlStore;
@@ -309,7 +309,7 @@ layer(NodeServices.layer)((it) => {
       assert.include(failure.file ?? "", "plugin.json");
       assert.deepStrictEqual((yield* store.picture).pluginInstalls, []);
       assert.isFalse(
-        yield* (yield* FileSystem.FileSystem).exists(path.join(test.provisionRoot, "linear@1.0.0")),
+        yield* (yield* FileSystem.FileSystem).exists(path.join(fixture.provisionRoot, "linear@1.0.0")),
       );
     }).pipe(Effect.provide(fixtureLayer())),
   );
@@ -318,26 +318,26 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       yield* write(
-        test.catalogPath,
+        fixture.catalogPath,
         catalogDocument.replace('"pluginId":"linear"', '"pluginId":"../../escape"'),
       );
       yield* write(
-        path.join(test.bundlePath, "plugin.json"),
+        path.join(fixture.bundlePath, "plugin.json"),
         manifestDocument("1.0.0").replace('"pluginId":"linear"', '"pluginId":"../../escape"'),
       );
       const error = yield* Effect.flip((yield* PluginManager).install("../../escape", localOwnerId));
 
       assert.include(error.message, "identity escapes provision root");
-      assert.isFalse(yield* fs.exists(path.join(test.root, "escape@1.0.0")));
+      assert.isFalse(yield* fs.exists(path.join(fixture.root, "escape@1.0.0")));
     }).pipe(Effect.provide(fixtureLayer())),
   );
 
   it.effect("uninstalls owned settings and leaves required Connections to their owner", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       const plugins = yield* PluginManager;
       yield* plugins.install("linear", localOwnerId);
       const store = yield* ControlStore;
@@ -366,10 +366,10 @@ layer(NodeServices.layer)((it) => {
       assert.deepStrictEqual(picture.contributionSettings, []);
       assert.deepStrictEqual(result.notices, ["The linear Connection remains established."]);
       assert.isFalse(
-        yield* (yield* FileSystem.FileSystem).exists(path.join(test.provisionRoot, "linear@1.0.0")),
+        yield* (yield* FileSystem.FileSystem).exists(path.join(fixture.provisionRoot, "linear@1.0.0")),
       );
       const reclaimed = yield* (yield* FileSystem.FileSystem).readDirectory(
-        path.join(test.provisionRoot, ".reclaim"),
+        path.join(fixture.provisionRoot, ".reclaim"),
       );
       assert.isTrue(reclaimed[0]?.startsWith("linear@1.0.0--"));
     }).pipe(Effect.provide(fixtureLayer())),
@@ -410,18 +410,18 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       const plugins = yield* PluginManager;
       yield* plugins.install("linear", localOwnerId);
-      yield* fs.writeFileString(path.join(test.provisionRoot, ".reclaim"), "blocked");
+      yield* fs.writeFileString(path.join(fixture.provisionRoot, ".reclaim"), "blocked");
 
       yield* Effect.flip(plugins.uninstall("linear"));
       const store = yield* ControlStore;
       if (store.health === "unavailable") return assert.fail(store.message);
       assert.strictEqual((yield* store.picture).pluginInstalls.length, 1);
-      assert.isTrue(yield* fs.exists(path.join(test.provisionRoot, "linear@1.0.0")));
+      assert.isTrue(yield* fs.exists(path.join(fixture.provisionRoot, "linear@1.0.0")));
 
-      yield* fs.remove(path.join(test.provisionRoot, ".reclaim"));
+      yield* fs.remove(path.join(fixture.provisionRoot, ".reclaim"));
       yield* plugins.uninstall("linear");
       assert.deepStrictEqual((yield* store.picture).pluginInstalls, []);
     }).pipe(Effect.provide(fixtureLayer())),
@@ -431,7 +431,7 @@ layer(NodeServices.layer)((it) => {
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const test = yield* PluginFixture;
+      const fixture = yield* PluginFixture;
       const removalStarted = yield* RemovalStarted;
       const plugins = yield* PluginManager;
       yield* plugins.install("linear", localOwnerId);
@@ -444,7 +444,7 @@ layer(NodeServices.layer)((it) => {
       const store = yield* ControlStore;
       if (store.health === "unavailable") return assert.fail(store.message);
       assert.strictEqual((yield* store.picture).pluginInstalls.length, 1);
-      assert.isTrue(yield* fs.exists(path.join(test.provisionRoot, "linear@1.0.0")));
+      assert.isTrue(yield* fs.exists(path.join(fixture.provisionRoot, "linear@1.0.0")));
     }).pipe(Effect.provide(interruptedFixtureLayer())),
   );
 });
