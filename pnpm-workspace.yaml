@@ -12,17 +12,17 @@ allowBuilds:
   protobufjs: false
 
 catalog:
-  '@effect/tsgo': '0.24.3'
+  '@effect/tsgo': '0.38.0'
   # drizzle-orm@1.0.0-rc.4 calls the beta-only `Schema.TaggedErrorClass` from its Effect driver, so
   # `drizzle-orm/effect-sqlite-node` cannot be imported on the rc line at all. The rc5-tag build
   # below calls `Schema.TaggedError` and loads. Move to the release that carries that fix.
   drizzle-orm: '1.0.0-rc.5-169397b'
   drizzle-kit: '1.0.0-rc.4'
-  '@tanstack/ai': '0.46.0'
-  '@tanstack/ai-codex': '0.4.1'
-  '@tanstack/ai-sandbox': '0.3.4'
-  '@tanstack/ai-sandbox-local-process': '0.2.2'
-  '@tanstack/ai-persistence': '0.2.0'
+  '@tanstack/ai': '0.52.0'
+  '@tanstack/ai-codex': '0.5.3'
+  '@tanstack/ai-sandbox': '0.5.4'
+  '@tanstack/ai-sandbox-local-process': '0.2.4'
+  '@tanstack/ai-persistence': '0.5.4'
   '@tailwindcss/vite': '^4.3.3'
   '@types/node': '^24.13.3'
   '@types/react': '^19.2.7'
@@ -40,18 +40,3 @@ catalogs:
     '@effect/platform-node': '4.0.0-rc.112'
     '@effect/sql-sqlite-node': '4.0.0-rc.112'
     '@effect/vitest': '4.0.0-rc.112'
-
-minimumReleaseAgeExclude:
-  - '@tanstack/ai-acp@0.3.1'
-  - 'drizzle-orm@1.0.0-rc.5-169397b'
-  - 'drizzle-kit@1.0.0-rc.4'
-  - '@tanstack/ai-persistence@0.2.0'
-  - '@tanstack/ai-sandbox@0.3.4'
-  - '@tanstack/ai-anthropic@0.16.7'
-  - '@tanstack/ai-codex@0.4.1'
-  - '@tanstack/ai-event-client@0.9.0'
-  - '@tanstack/ai-gemini@0.24.1'
-  - '@tanstack/ai-openai@0.20.0'
-  - '@tanstack/ai-sandbox-local-process@0.2.2'
-  - '@tanstack/ai@0.46.0'
-  - '@tanstack/openai-base@0.9.15'
