@@ -1,0 +1,23 @@
+apps/desktop/src/main/socket-probe.ts
+  s_0052d4f9e2cd98::t_d4b316dc2a570c 2,5,8,10,15-16,18-19
+  s_0052d4f9e2cd98::t_20c353e167f1f0 4,17
+apps/desktop/src/main/socket-probe.test.ts
+  s_0052d4f9e2cd98::t_fbeb4f78e67125 5,26
+  s_0052d4f9e2cd98::t_917ee4f2f08273 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1e94aee35f920ee9bd19f2d208ef142a145c4ea9",
+  "prompts": {},
+  "sessions": {
+    "s_0052d4f9e2cd98": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05a81-79db-7883-8b79-60ac1db2bfdc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
