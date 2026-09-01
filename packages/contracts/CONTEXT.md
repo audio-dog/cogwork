@@ -335,6 +335,18 @@ _Avoid_: Model, provider, target (that word belongs to sync)
 The credentials an external CLI harness owns and resolves from its host installation, such as a Codex CLI `codex login`. Cogwork selects and launches the harness but does not copy, store, refresh, or fall back from those credentials.
 _Avoid_: Provider key, Cogwork login, harness fallback
 
+**Harness option catalog**:
+The controlled model and option choices one Harness currently offers on one Runtime host, stamped with the runtime metadata, native discovery, or versioned Cogwork fallback that produced them. An unsupported option is absent, and a saved choice missing from the current catalog is stale rather than free-form input.
+_Avoid_: Model catalog, settings, arbitrary option
+
+**Harness readiness**:
+An observation of one Harness's installation, compatible version, and selected authentication binding on the current Runtime host. It can block a Run when negative but never guarantees that a later launch will succeed, and it never selects a fallback Harness or authentication mode.
+_Avoid_: Health check, launch guarantee, availability fallback
+
+**Harness preflight**:
+The authoritative per-Run check that one registered Harness can execute the accepted Run Plan with its selected catalog values, authentication binding, policy, Workspace projection, required MCP servers, and Sandbox provider. It validates the Plan as frozen and never re-resolves settings.
+_Avoid_: Readiness, Run Plan resolution, fallback
+
 **Harness execution boundary**:
 The sandbox, approval mode, and native tools an external CLI harness enforces inside its agent loop. Cogwork chooses that boundary when it launches the harness, but its owned-tool policy cannot intercept native shell or file operations inside Cursor or Codex. An unattended harness must use a non-interactive approval mode and remain bounded to its worktree; full host access is not an unattended default.
 _Avoid_: Owned tool policy, provider sandbox, fallback

@@ -11,7 +11,7 @@ import {
   TriageStageResult,
 } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
-import { assert, describe, it, layer } from "@effect/vitest";
+import { assert, describe, it, layer, live } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -19,13 +19,11 @@ import type { SandboxHandle } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   type CodexRunChat,
@@ -83,7 +81,10 @@ const credentialStore: CredentialStore.CredentialStoreService = {
   removeConnection: unexpected,
 };
 
-const fileSystem = FileSystem.makeNoop({});
+const fileSystem = FileSystem.makeNoop({
+  access: () => Effect.void,
+  stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+});
 
 const harnessRunnerLayer = Layer.mergeAll(
   Layer.succeed(SessionStore.SessionStore, sessionStore),
@@ -172,10 +173,14 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
   };
 };
 
+const fakeCodexExecutable = (args = "") =>
+  `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${args}`;
+
 const testRunner = (options: Omit<CodexRunnerOptions, "name" | "environment">) =>
   codexRunner({
     name,
     environment: testEnvironment,
+    codexExecutable: fakeCodexExecutable(),
     resolveGitMetadataDirectory: () => Effect.succeed(null),
     ...options,
   });
@@ -236,9 +241,6 @@ const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
     ),
   );
 };
-
-const fakeCodexExecutable = (args = "") =>
-  `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}${args}`;
 
 const makeLiveHarness = (codexExecutable = fakeCodexExecutable()) =>
   Effect.acquireRelease(
@@ -315,6 +317,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
           "gpt-5.6-sol",
           {
             approvalPolicy: "never",
+            codexExecutable: fakeCodexExecutable(),
             sandboxMode: "workspace-write",
             networkAccessEnabled: true,
             modelReasoningEffort: "high",
@@ -479,7 +482,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
   it.effect("preserves unexpected preflight exit codes as launch errors", () =>
     Effect.gen(function* () {
       const runner = testRunner({
-        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(2)'`,
+        codexExecutable: fakeCodexExecutable(" --fake-version-failure"),
       });
       const harness = Harness.make([runner]);
 
@@ -487,7 +490,69 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
 
       assert.strictEqual(error.reason, "launch");
       assert.isFalse(error.retryable);
-      assert.include(error.message, "unexpected login status failure");
+      assert.include(error.message, "unexpected version failure");
+    }),
+  );
+
+  it.effect("rejects an outdated Codex version during preflight", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: fakeCodexExecutable(" --fake-version=codex-cli_0.1.0"),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+      assert.strictEqual(error.reason, "incompatible-harness");
+      assert.include(error.message, "Update Codex to >=0.149.0");
+    }),
+  );
+
+  it.effect("rejects a Run Plan without mandatory Sandbox projection", () =>
+    Effect.gen(function* () {
+      const base = makeRequest();
+      const invalid = {
+        ...base,
+        plan: new RunPlan({ ...base.plan, middleware: [] }),
+      } satisfies Harness.HarnessRequest;
+      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.reason, "sandbox");
+    }),
+  );
+
+  it.effect("rejects a missing checkout before Codex launch", () =>
+    Effect.gen(function* () {
+      const invalid = makeRequest({ checkoutPath: "/missing-codex-checkout" });
+      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "/missing-codex-checkout");
+    }),
+  );
+
+  it.effect("rejects an unreadable checkout before Codex launch", () =>
+    Effect.gen(function* () {
+      const invalid = makeRequest({ checkoutPath: "/unreadable-codex-checkout" });
+      const runner = testRunner({ codexExecutable: fakeCodexExecutable() });
+      const unreadable = FileSystem.makeNoop({
+        stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+      });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, unreadable), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "cannot read");
     }),
   );
 
@@ -505,36 +570,54 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
     }),
   );
 
-  it.effect("keeps a timed-out preflight retryable", () =>
-    Effect.gen(function* () {
-      const runner = testRunner({
-        codexExecutable: `node -e 'process.stdin.resume()'`,
-      });
-      const harness = Harness.make([runner]);
+  live(
+    "keeps a timed-out preflight retryable",
+    () =>
+      Effect.gen(function* () {
+        const runner = testRunner({
+          codexExecutable: `node -e 'process.stdin.resume()'`,
+        });
+        const harness = Harness.make([runner]);
 
-      const fiber = yield* Effect.forkChild(Effect.flip(harness.preflight(name, "full", null)));
-      yield* TestClock.adjust("6 seconds");
-      const error = yield* Fiber.join(fiber);
+        const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
-      assert.strictEqual(error.reason, "launch");
-      assert.isTrue(error.retryable);
-      assert.include(error.message, "readiness check");
-    }),
+        assert.strictEqual(error.reason, "launch");
+        assert.isTrue(error.retryable);
+        assert.include(error.message, "readiness check");
+      }).pipe(Effect.provide(harnessRunnerLayer)),
+    10_000,
   );
 
-  it.effect("adds login remediation without changing an ambiguous preflight exit classification", () =>
+  it.effect("reports a failed host login as unavailable credentials", () =>
     Effect.gen(function* () {
       const runner = testRunner({
-        codexExecutable: `node -e 'process.stderr.write("You are not logged in"); process.exit(1)'`,
+        codexExecutable: fakeCodexExecutable(" --fake-login-failure"),
       });
       const harness = Harness.make([runner]);
 
+      const readiness = yield* runner.readiness();
       const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
-      assert.strictEqual(error.reason, "launch");
+      assert.strictEqual(readiness.authentication.status, "unavailable");
+      assert.strictEqual(error.reason, "credential");
       assert.isFalse(error.retryable);
       assert.include(error.message, "codex login");
     }),
+  );
+
+  live(
+    "gives each Codex readiness command its own deadline",
+    () =>
+      Effect.gen(function* () {
+        const runner = testRunner({
+          codexExecutable: fakeCodexExecutable(" --fake-probe-delay=3000"),
+        });
+
+        const readiness = yield* runner.readiness();
+
+        assert.strictEqual(readiness.operational.status, "ready");
+      }).pipe(Effect.provide(harnessRunnerLayer)),
+    10_000,
   );
 
   it.effect("does not classify missing-executable wording as a permanent failure", () =>
@@ -763,7 +846,10 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
 
   it.effect("keeps an MCP bearer out of the Codex command, events, and worktree configuration", () =>
     Effect.gen(function* () {
-      const { handle, harness } = yield* makeLiveHarness();
+      const { envName } = testMcpProjection("linear", 0);
+      const { handle, harness } = yield* makeLiveHarness(
+        fakeCodexExecutable(` --capture-mcp-env ${envName}`),
+      );
       const events = yield* Stream.runCollect(
         harness.run(
           makeRequest({

@@ -56,7 +56,10 @@ const harnessServices = {
     configureConnection: unexpected,
     removeConnection: unexpected,
   },
-  fileSystem: FileSystem.makeNoop({}),
+  fileSystem: FileSystem.makeNoop({
+    access: () => Effect.void,
+    stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+  }),
 };
 
 const harnessRunnerLayer = Layer.mergeAll(
@@ -135,6 +138,84 @@ const runRunner = (runner: Harness.HarnessRunner) =>
       Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
       Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
     );
+
+describe("Cursor Harness registry", () => {
+  it.effect("discovers the native catalog with provenance and every supported effort", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({ name: cursorName, agentBin: `node ${fakeCursorAgent}` });
+      const catalog = yield* Harness.make([runner]).catalog(cursorName);
+
+      assert.strictEqual(catalog.provenance.source, "native-discovery");
+      assert.isTrue(catalog.models.some(({ value }) => value === "fake-native"));
+      assert.isTrue(catalog.efforts?.some(({ value }) => value === "none"));
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("reports outdated and missing native Harnesses", () =>
+    Effect.gen(function* () {
+      const outdated = cursorRunner({
+        name: cursorName,
+        agentBin: `node ${fakeCursorAgent} --fake-version=2025.01.01-old`,
+      });
+      const missing = cursorRunner({ name: cursorName, agentBin: "missing-cursor-agent-149" });
+
+      const outdatedReadiness = yield* outdated.readiness();
+      const missingReadiness = yield* missing.readiness();
+
+      assert.strictEqual(outdatedReadiness.compatibility.status, "incompatible");
+      assert.strictEqual(outdatedReadiness.compatibility.requirement, ">=2026.08.11");
+      assert.strictEqual(missingReadiness.installation.status, "missing");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects a Run Plan without mandatory Sandbox projection", () =>
+    Effect.gen(function* () {
+      const base = request("/tmp");
+      const invalid = {
+        ...base,
+        plan: new RunPlan({ ...base.plan, middleware: [] }),
+      } satisfies Harness.HarnessRequest;
+      const runner = cursorRunner({ name: cursorName });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.flip);
+
+      assert.strictEqual(error.reason, "sandbox");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects a missing checkout before Cursor launch", () =>
+    Effect.gen(function* () {
+      const invalid = request("/missing-cursor-checkout");
+      const runner = cursorRunner({ name: cursorName });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, FileSystem.makeNoop({})), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "/missing-cursor-checkout");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+
+  it.effect("rejects an unreadable checkout before Cursor launch", () =>
+    Effect.gen(function* () {
+      const invalid = request("/unreadable-cursor-checkout");
+      const runner = cursorRunner({ name: cursorName });
+      const unreadable = FileSystem.makeNoop({
+        stat: () => Effect.succeed({ type: "Directory" } as FileSystem.File.Info),
+      });
+
+      const error = yield* runner
+        .preflight(Harness.HarnessPreflightInput.Launch({ request: invalid }))
+        .pipe(Effect.provideService(FileSystem.FileSystem, unreadable), Effect.flip);
+
+      assert.strictEqual(error.reason, "workspace");
+      assert.include(error.message, "cannot read");
+    }).pipe(Effect.provide(harnessRunnerLayer)),
+  );
+});
 
 describe("interceptCursorTelemetry", () => {
   it.effect("keeps reading after a telemetry acknowledgment fails", () =>
@@ -261,7 +342,34 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
       const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
 
-      assert.strictEqual(error.reason, "launch");
+      assert.strictEqual(error.reason, "credential");
+      assert.isFalse(error.retryable);
+      assert.include(error.message, "Sign in to Cursor");
+    }),
+  );
+
+  it.effect("keeps post-launch ACP failures retryable", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: () => failedChat(RequestError.internalError({}, "temporary prompt failure")),
+      });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
+
+  it.effect("keeps permanent ACP protocol failures non-retryable", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: () => failedChat(RequestError.methodNotFound("session/prompt")),
+      });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "turn");
       assert.isFalse(error.retryable);
     }),
   );

@@ -74,15 +74,19 @@ The projection the executor hands the harness for one accepted Run Plan, plus se
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
-The engine's dispatcher — given a harness request, it routes to the registered harness runner by name and provides the runner services for session and context access. Its preflight checks that the selected runner exists and can enforce the operation's hard posture before the executor claims work. It also exposes `sessionKind(name)`: the declared kind for a harness, read straight off the runner registry (an unregistered name falls back to opaque-handle, though preflight rejects it before claim). This is the one place runner lookup lives — no separate harness-to-kind map. Knows nothing about any specific agent.
+The engine's registry and dispatcher for Harness runners. It exposes each runner's Session kind, operational profile, controlled option catalog, and readiness; performs static preflight before claim and full Plan preflight before launch; and dispatches only to the selected runner, with no Harness or authentication fallback.
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
-A pluggable implementation of one agent backend: a `name`, a declared **session kind**, and a `run` that returns a stream of harness events. The session kind says who owns the conversation: the Cursor runner declares opaque-handle (the harness keeps its own history and hands back a resume handle), the provider runner declares owned-transcript (the run ledger holds the conversation). It pulls the session's history in-process from the request's reference — a CLI runner its opaque resume handle, the owned runner the folded transcript. The runner derives the operation's root-object Standard JSON Schema, asks TanStack AI to stream against it, and emits one terminal `structured-output.complete`; the request carries no duplicate schema or selector. The executor holds triage's `RUN_FINISHED` until it decodes that terminal envelope once through the shared Effect Schema, then publishes either the original success terminal or a failed terminal. Missing, duplicate, or malformed values are retryable harness failures. `cursorRunner` (from cursor-acp) is one; the CLI registers it at startup.
+A pluggable implementation of one agent backend. Beside dispatch it declares its Session kind, operational facts, explicit authentication binding, catalog sources, observational readiness, and authoritative preflight; unavailable runners remain registered without preventing unrelated Harnesses from running.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
+**Harness capability profile**:
+The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity and fork behavior, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, structured-output behavior, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
+_Avoid_: Feature flags, adapter metadata, projection matrix
+
 **External Harness runtime**:
-The engine-owned execution module beneath external Harness runners. It resolves one Run into explicit identity, selection, authentication, policy, instructions, Operating Instructions, MCP, secret-reference, checkout, prompt, and output-schema inputs; then it composes the typed TanStack adapter, Harness Workspace, selected Sandbox provider, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate. Its descriptor holds only native differences. The trusted local-process provider binds the prepared checkout while a `none` Workspace source leaves Worktree creation, Git metadata, branch ownership, and cleanup with the engine.
+The engine-owned execution module beneath external Harness runners. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate.
 _Avoid_: Harness service (the dispatcher above it), Harness runner (the engine-facing backend seam), provider runner (the owned-transcript path)
 
 **Harness Workspace projection**:
