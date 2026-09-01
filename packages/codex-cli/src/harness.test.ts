@@ -40,6 +40,7 @@ import {
 
 const name = Schema.decodeSync(HarnessName)("codex");
 const session = Schema.decodeSync(SessionId)("session-1");
+const testEnvironment = { HOME: "/home/codex", PATH: "/usr/bin" };
 
 const assembled: ContextAssembler.AssembledContext = {
   layers: [
@@ -171,9 +172,10 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
   };
 };
 
-const testRunner = (options: Omit<CodexRunnerOptions, "name">) =>
+const testRunner = (options: Omit<CodexRunnerOptions, "name" | "environment">) =>
   codexRunner({
     name,
+    environment: testEnvironment,
     resolveGitMetadataDirectory: () => Effect.succeed(null),
     ...options,
   });
@@ -196,12 +198,19 @@ const toAsyncIterable = <A>(items: ReadonlyArray<A>): AsyncIterable<A> => ({
   },
 });
 
-const runErrorChunk = (message: string) =>
+const runErrorChunk = (
+  message: string,
+  fields: { readonly code?: string; readonly rawEvent?: unknown } = {},
+) =>
   ({
     type: EventType.RUN_ERROR,
     message,
-    error: { message },
+    ...fields,
   }) satisfies StreamChunk;
+
+const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
+  [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+});
 
 const structuredCompletions = (events: ReadonlyArray<Harness.AgUiEvent>) =>
   events.flatMap((event) => {
@@ -241,6 +250,7 @@ const makeLiveHarness = (codexExecutable = fakeCodexExecutable()) =>
       harness: Harness.make([
         codexRunner({
           name,
+          environment: process.env,
           codexExecutable,
         }),
       ]),
@@ -278,7 +288,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
   });
 
   it("declares an opaque Codex-owned session", () => {
-    assert.strictEqual(codexRunner({ name }).sessionKind, "opaque-handle");
+    assert.strictEqual(codexRunner({ name, environment: testEnvironment }).sessionKind, "opaque-handle");
   });
 
   it.effect("assembles context, applies policy, resumes Codex, and bridges every event field", () =>
@@ -308,7 +318,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
             sandboxMode: "workspace-write",
             networkAccessEnabled: true,
             modelReasoningEffort: "high",
-            env: codexChildEnvironment(),
+            env: codexChildEnvironment(testEnvironment),
           },
         ],
       ]);
@@ -385,7 +395,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
         [`mcp_servers.${projectedName}.bearer_token_env_var`]: `"${envName}"`,
       });
       assert.deepStrictEqual(config.env, {
-        ...codexChildEnvironment(),
+        ...codexChildEnvironment(testEnvironment),
         [envName]: "mcp-secret",
       });
       assert.strictEqual(config.env?.[envName], "mcp-secret");
@@ -431,7 +441,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
         [`mcp_servers.${privateName}.bearer_token_env_var`]: `"${privateEnvName}"`,
       });
       assert.deepStrictEqual(config.env, {
-        ...codexChildEnvironment(),
+        ...codexChildEnvironment(testEnvironment),
         [privateEnvName]: "rotated-secret",
       });
       const serialized = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(config.config);
@@ -466,10 +476,10 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
     }),
   );
 
-  it.effect("preserves unexpected preflight failures as launch errors", () =>
+  it.effect("preserves unexpected preflight exit codes as launch errors", () =>
     Effect.gen(function* () {
       const runner = testRunner({
-        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(1)'`,
+        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(2)'`,
       });
       const harness = Harness.make([runner]);
 
@@ -478,6 +488,20 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
       assert.strictEqual(error.reason, "launch");
       assert.isFalse(error.retryable);
       assert.include(error.message, "unexpected login status failure");
+    }),
+  );
+
+  it.effect("classifies a missing preflight executable by exit code", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: `node -e 'process.exit(127)'`,
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
     }),
   );
 
@@ -498,7 +522,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
     }),
   );
 
-  it.effect("classifies explicit preflight login failures as credential errors", () =>
+  it.effect("adds login remediation without changing an ambiguous preflight exit classification", () =>
     Effect.gen(function* () {
       const runner = testRunner({
         codexExecutable: `node -e 'process.stderr.write("You are not logged in"); process.exit(1)'`,
@@ -507,13 +531,13 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
 
       const error = yield* Effect.flip(harness.preflight(name, "full", null));
 
-      assert.strictEqual(error.reason, "credential");
+      assert.strictEqual(error.reason, "launch");
       assert.isFalse(error.retryable);
-      assert.include(error.message, "not authenticated");
+      assert.include(error.message, "codex login");
     }),
   );
 
-  it.effect("gives an actionable handoff for a missing Codex binary", () =>
+  it.effect("does not classify missing-executable wording as a permanent failure", () =>
     Effect.gen(function* () {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("spawn codex ENOENT")]),
@@ -522,13 +546,77 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
-      assert.strictEqual(error.reason, "launch");
-      assert.isFalse(error.retryable);
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
       assert.include(error.message, "Install Codex CLI");
     }),
   );
 
-  it.effect("gives an actionable handoff for a missing Codex login", () =>
+  it.effect("hands off a RUN_ERROR with a missing-executable code", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () => toAsyncIterable([runErrorChunk("Codex could not start", { code: "ENOENT" })]),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("reads a missing-executable code from the raw RUN_ERROR payload", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () =>
+          toAsyncIterable([
+            runErrorChunk("Codex could not start", { rawEvent: { error: { code: "ENOENT" } } }),
+          ]),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("finds a nested missing-executable code behind a generic RUN_ERROR code", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        runChat: () =>
+          toAsyncIterable([
+            runErrorChunk("Codex could not start", {
+              code: "unknown",
+              rawEvent: { error: { code: "ENOENT" } },
+            }),
+          ]),
+      });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("classifies a thrown missing-executable code", () =>
+    Effect.gen(function* () {
+      const failure = Object.assign(new Error("Codex could not start"), { code: "EACCES" });
+      const runner = testRunner({ runChat: () => failedChat(failure) });
+      const harness = Harness.make([runner]);
+
+      const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
+
+      assert.strictEqual(error.reason, "missing-harness");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("does not classify missing-login wording as a permanent failure", () =>
     Effect.gen(function* () {
       const runner = testRunner({
         runChat: () => toAsyncIterable([runErrorChunk("You are not logged in")]),
@@ -537,8 +625,8 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(makeRequest())));
 
-      assert.strictEqual(error.reason, "launch");
-      assert.isFalse(error.retryable);
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
       assert.include(error.message, "codex login");
     }),
   );
@@ -611,7 +699,9 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
       const { handle } = yield* makeLiveHarness();
       const { checkoutPath, commonDirectory } = yield* linkedWorktree(handle);
 
-      const harness = Harness.make([codexRunner({ name, codexExecutable: fakeCodexExecutable() })]);
+      const harness = Harness.make([
+        codexRunner({ name, environment: process.env, codexExecutable: fakeCodexExecutable() }),
+      ]);
       const events = yield* Stream.runCollect(harness.run(makeRequest({ checkoutPath, session: null })));
       const capture = yield* structuredCapture(events);
 
@@ -767,6 +857,7 @@ layer(harnessRunnerLayer)("codexRunner", (it) => {
       const resumedHarness = Harness.make([
         codexRunner({
           name,
+          environment: process.env,
           codexExecutable: `node ${new URL("./fixtures/fake-codex.mjs", import.meta.url).pathname}`,
         }),
       ]);
