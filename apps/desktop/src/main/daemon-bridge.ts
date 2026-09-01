@@ -1,4 +1,6 @@
-import * as net from "node:net";
+import { NodeSocket } from "@effect/platform-node";
+import { type Cause, Deferred, Effect, Scope } from "effect";
+import * as Socket from "effect/unstable/socket/Socket";
 import { waitForDaemonListening } from "./wait-for-socket";
 
 export interface DaemonBridgeSink {
@@ -6,69 +8,57 @@ export interface DaemonBridgeSink {
   readonly onClosed: (reason: string | null) => void;
 }
 
+type BridgeFailure = Cause.TimeoutError | Socket.SocketError;
+
 export interface DaemonBridgePort {
-  readonly connect: () => Promise<void>;
-  readonly send: (frame: string) => void;
-  readonly dispose: () => void;
+  readonly connect: Effect.Effect<void, BridgeFailure>;
+  readonly send: (frame: string) => Effect.Effect<void, Socket.SocketError>;
 }
 
-const listenTimeoutMs = 10_000;
+const connectTimeout = "10 seconds";
 
-export const createDaemonBridgePort = (socketPath: string, sink: DaemonBridgeSink): DaemonBridgePort => {
-  const state: { socket: net.Socket | null } = { socket: null };
-
-  const detach = () => {
-    const socket = state.socket;
-    if (!socket) return;
-    state.socket = null;
-    socket.removeAllListeners();
-    socket.destroy();
-  };
-
-  const openSocket = (): Promise<void> =>
-    new Promise((resolve, reject) => {
-      detach();
-
-      const socket = net.createConnection({ path: socketPath });
-      state.socket = socket;
-
-      const onError = (error: Error) => {
-        socket.removeListener("connect", onConnect);
-        if (state.socket === socket) state.socket = null;
-        socket.destroy();
-        reject(error);
-      };
-
-      const onConnect = () => {
-        socket.removeListener("error", onError);
-        socket.on("data", (chunk: Buffer) => sink.onData(chunk));
-        socket.on("error", (error: Error) => {
-          if (state.socket !== socket) return;
-          state.socket = null;
-          sink.onClosed(error.message);
-        });
-        socket.on("close", () => {
-          if (state.socket !== socket) return;
-          state.socket = null;
-          sink.onClosed(null);
-        });
-        resolve();
-      };
-
-      socket.once("connect", onConnect);
-      socket.once("error", onError);
-    });
-
-  const connect = async (): Promise<void> => {
-    if (state.socket && !state.socket.destroyed) return;
-    const listening = await waitForDaemonListening(socketPath, AbortSignal.timeout(listenTimeoutMs));
-    if (!listening) throw new Error(`Timed out waiting for the daemon socket at ${socketPath}`);
-    await openSocket();
-  };
-
-  const send = (frame: string) => {
-    state.socket?.write(frame);
-  };
-
-  return { connect, send, dispose: detach };
+const closedReason = (error: BridgeFailure) => {
+  if (!Socket.SocketError.is(error)) return error.message;
+  if (error.reason._tag !== "SocketCloseError") return error.message;
+  if (error.reason.code === 1000) return null;
+  return error.reason.closeReason ?? error.message;
 };
+
+export const createDaemonBridgePort = Effect.fn("DaemonBridge.createPort")(function* (
+  socketPath: string,
+  sink: DaemonBridgeSink,
+) {
+  const scope = yield* Effect.scope;
+  const socket = yield* NodeSocket.makeNet({ path: socketPath, openTimeout: connectTimeout });
+  const write = yield* socket.writer;
+  const connected = yield* Deferred.make<void, BridgeFailure>();
+  yield* Scope.addFinalizer(scope, Deferred.interrupt(connected));
+  yield* Effect.forkIn(
+    waitForDaemonListening(socketPath).pipe(
+      Effect.timeout(connectTimeout),
+      Effect.andThen(
+        socket.run((frame) => Effect.sync(() => sink.onData(frame)), {
+          onOpen: Deferred.succeed(connected, undefined),
+        }),
+      ),
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Deferred.isDone(connected).pipe(
+            Effect.flatMap((wasConnected) =>
+              wasConnected
+                ? Effect.sync(() => sink.onClosed(closedReason(error)))
+                : Deferred.fail(connected, error),
+            ),
+            Effect.asVoid,
+          ),
+        onSuccess: () => Effect.sync(() => sink.onClosed(null)),
+      }),
+    ),
+    scope,
+  );
+
+  return {
+    connect: Deferred.await(connected),
+    send: write,
+  } satisfies DaemonBridgePort;
+});
