@@ -176,10 +176,20 @@ describe("stepWatch", () => {
   it("ignores structural events that carry no activity", () => {
     const lines = drain([
       activity({ event: { type: "TEXT_MESSAGE_START" } }),
+      activity({ event: { type: "REASONING_MESSAGE_CONTENT", delta: "thinking" } }),
+      activity({ event: { type: "STEP_FINISHED", stepName: "done" } }),
       activity({ event: { type: "TOOL_CALL_ARGS", toolCallId: "unknown", delta: "x" } }),
       activity({ event: { type: "TOOL_CALL_END", toolCallId: "unknown" } }),
     ]);
     assert.deepStrictEqual(lines, []);
+  });
+
+  it("flushes pending text before ignoring an unnamed harness event", () => {
+    const lines = drain([
+      content("before vendor progress"),
+      activity({ event: { type: "VENDOR_PROGRESS", progress: 0.5 } }),
+    ]);
+    assert.deepStrictEqual(lines, ["triage #44 · before vendor progress"]);
   });
 });
 

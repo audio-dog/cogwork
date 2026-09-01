@@ -312,35 +312,41 @@ export const make = Effect.fn("PluginManager.make")(function* (config: PluginMan
     entry: CatalogEntry,
     record: PluginInstall | null,
   ) {
-    const source = record
-      ? path.join(config.provisionRoot, record.resolvedIdentity)
-      : yield* bundlePathOf(entry);
-    const result = yield* Effect.result(loadManifest(entry, source));
-    if (result._tag === "Failure") {
-      return {
-        pluginId: entry.pluginId,
-        name: entry.name,
-        summary: entry.summary,
-        record,
-        resolvedIdentity: record?.resolvedIdentity ?? null,
-        provenanceStamp: null,
-        requiredConnections: [],
-        contributions: [],
-        manifestFailure: result.failure.message,
-      } satisfies PluginItem;
-    }
-    const manifest = result.success;
-    return {
+    const item: Pick<PluginItem, "pluginId" | "name" | "summary" | "record"> = {
       pluginId: entry.pluginId,
       name: entry.name,
       summary: entry.summary,
       record,
-      resolvedIdentity: resolvedIdentity(manifest),
-      provenanceStamp: provenanceStamp(manifest),
-      requiredConnections: manifest.requiredConnections,
-      contributions: record ? yield* contributionsOf(manifest, source) : [],
-      manifestFailure: null,
-    } satisfies PluginItem;
+    };
+    const source = record
+      ? path.join(config.provisionRoot, record.resolvedIdentity)
+      : yield* bundlePathOf(entry);
+    return yield* loadManifest(entry, source).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.succeed({
+            ...item,
+            resolvedIdentity: record?.resolvedIdentity ?? null,
+            provenanceStamp: null,
+            requiredConnections: [],
+            contributions: [],
+            manifestFailure: error.message,
+          } satisfies PluginItem),
+        onSuccess: (manifest) =>
+          Effect.map(
+            record ? contributionsOf(manifest, source) : Effect.succeed([]),
+            (contributions) =>
+              ({
+                ...item,
+                resolvedIdentity: resolvedIdentity(manifest),
+                provenanceStamp: provenanceStamp(manifest),
+                requiredConnections: manifest.requiredConnections,
+                contributions,
+                manifestFailure: null,
+              }) satisfies PluginItem,
+          ),
+      }),
+    );
   });
 
   const overview = Effect.fn("PluginManager.overview")(function* () {
