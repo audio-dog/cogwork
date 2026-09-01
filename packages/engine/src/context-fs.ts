@@ -1,5 +1,5 @@
 import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
+import type * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 export class ContextFsError extends Schema.TaggedError<ContextFsError>()("ContextFsError", {
@@ -7,22 +7,15 @@ export class ContextFsError extends Schema.TaggedError<ContextFsError>()("Contex
   message: Schema.String,
 }) {}
 
-const unavailable = Effect.fn("ContextFs.unavailable")(function* (operation: string) {
-  return yield* new ContextFsError({ operation, message: "context fs adapter not provided" });
-});
-
-const makeUnavailable = () => ({
-  readFile: (target: string): Effect.Effect<string | null, ContextFsError> => unavailable(`read ${target}`),
-  readDirectory: (
+export interface ContextFsService {
+  readonly readFile: (target: string) => Effect.Effect<string | null, ContextFsError>;
+  readonly readDirectory: (
     target: string,
-    _options?: { readonly recursive?: boolean },
-  ): Effect.Effect<ReadonlyArray<string>, ContextFsError> => unavailable(`read directory ${target}`),
-  copyDirectory: (source: string, dest: string): Effect.Effect<void, ContextFsError> =>
-    unavailable(`copy ${source} to ${dest}`),
-  removeDirectory: (target: string): Effect.Effect<void, ContextFsError> => unavailable(`remove ${target}`),
-});
-
-export type ContextFsService = ReturnType<typeof makeUnavailable>;
+    options?: { readonly recursive?: boolean },
+  ) => Effect.Effect<ReadonlyArray<string>, ContextFsError>;
+  readonly copyDirectory: (source: string, dest: string) => Effect.Effect<void, ContextFsError>;
+  readonly removeDirectory: (target: string) => Effect.Effect<void, ContextFsError>;
+}
 
 export class ContextFs extends Context.Service<ContextFs, ContextFsService>()(
   "@cogwork/engine/context-fs/ContextFs",
