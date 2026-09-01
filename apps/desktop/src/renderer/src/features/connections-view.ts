@@ -1,4 +1,4 @@
-import type { ConnectionItem, ConnectionOverview } from "@cogwork/contracts";
+import type { ConnectionItem, ConnectionOverview, ConnectionSystem } from "@cogwork/contracts";
 
 export const readyConnections = (overview: ConnectionOverview | null | undefined) =>
   overview?.connections.flatMap((item) => {
@@ -6,9 +6,15 @@ export const readyConnections = (overview: ConnectionOverview | null | undefined
     return [item.connection];
   }) ?? [];
 
+export const connectionSystemLabel = (system: ConnectionSystem) =>
+  system === "github" ? "GitHub" : "Linear";
+
+// Tone travels with the label because the badge that renders it has to agree with the copy: every
+// caller that shows one shows the other.
 export const connectionStatus = (item: ConnectionItem) => {
-  if (!item.connection) return "Not connected";
-  return item.readiness._tag === "Ready" ? "Established" : "Needs re-connect";
+  if (!item.connection) return { label: "Not connected", tone: "neutral" } as const;
+  if (item.readiness._tag === "Ready") return { label: "Connected", tone: "positive" } as const;
+  return { label: "Needs re-connect", tone: "warning" } as const;
 };
 
 export const connectionAction = (item: ConnectionItem) => {
@@ -17,5 +23,4 @@ export const connectionAction = (item: ConnectionItem) => {
   return "re-connect";
 };
 
-export const connectionPluginLabel = (item: ConnectionItem) =>
-  item.pluginId ? `Plugin: ${item.pluginId}` : "No Plugin";
+export { pluginRequiringConnection as pluginRequiring } from "@cogwork/contracts";
