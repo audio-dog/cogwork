@@ -120,10 +120,13 @@ export type OperationSettingRow = typeof OperationSettingRow.Type;
 export const OperationSettingUpdate = Schema.Union([
   Schema.TaggedStruct("Set", { row: OperationSettingRow }),
   Schema.TaggedStruct("Clear", { cell: OperationSettingCell }),
-]);
+]).pipe(Schema.toTaggedUnion("_tag"));
 export type OperationSettingUpdate = typeof OperationSettingUpdate.Type;
 
-export const ContributionSettingScope = Schema.Union([SettingsProfileScope, PrivateWorkspaceOverlayScope]);
+export const ContributionSettingScope = Schema.Union([
+  SettingsProfileScope,
+  PrivateWorkspaceOverlayScope,
+]).pipe(Schema.toTaggedUnion("_tag"));
 export type ContributionSettingScope = typeof ContributionSettingScope.Type;
 
 export const McpContributionRef = Schema.Struct({
@@ -147,7 +150,7 @@ export type ContributionSettingValue = typeof ContributionSettingValue.Type;
 export const ContributionSettingUpdate = Schema.Union([
   Schema.TaggedStruct("Set", { row: ContributionSettingValue }),
   Schema.TaggedStruct("Clear", { cell: ContributionSettingCell }),
-]);
+]).pipe(Schema.toTaggedUnion("_tag"));
 export type ContributionSettingUpdate = typeof ContributionSettingUpdate.Type;
 
 export const ContributionSettingDiagnostic = Schema.TaggedStruct("Dangling", {
@@ -223,14 +226,12 @@ const levelRank = (level: SettingLevel, context: OperationSettingContext) =>
   });
 
 const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSettingContext) =>
-  SettingScope.matchOrElse(
-    scope,
-    {
-      PrivateWorkspaceOverlay: ({ workspace }) =>
-        context.workspace !== null && workspace === context.workspace,
-    },
-    () => true,
-  );
+  SettingScope.match(scope, {
+    SettingsProfile: () => true,
+    RuntimeHost: () => true,
+    WorkspaceInput: () => true,
+    PrivateWorkspaceOverlay: ({ workspace }) => context.workspace !== null && workspace === context.workspace,
+  });
 
 export const operationSettingRowsForContext = (
   rows: readonly OperationSettingRow[],

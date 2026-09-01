@@ -26,7 +26,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { makeInterruptStore } from "./interrupt-store";
+import { InterruptStore, layer as interruptStoreLayer } from "./interrupt-store";
 import { handleOf, RunLedger } from "./run-ledger";
 import { RunRecorder, type RunRecorderService } from "./run-recorder";
 
@@ -41,6 +41,8 @@ export interface MintSpec {
   readonly harness: HarnessName;
   readonly createdAtMillis: number;
 }
+
+type RunPromise = Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<never>>>;
 
 export interface SessionStoreService {
   // The `@tanstack/ai-persistence` adapter the provider runner runs under: a
@@ -133,10 +135,7 @@ const newSession = (spec: MintSpec, id: SessionId, kind: SessionKind): Session =
 // `loadThread` folds the session's decoded harness events (from the recorder) into model messages;
 // `saveThread` is a no-op because the executor already appends every event to the ledger, so writing
 // the transcript back would fork the one truth.
-const ledgerMessageStore = (
-  recorder: RunRecorderService,
-  runPromise: Effect.Success<ReturnType<typeof FiberSet.makeRuntimePromise<never>>>,
-): MessageStore => ({
+const ledgerMessageStore = (recorder: RunRecorderService, runPromise: RunPromise): MessageStore => ({
   loadThread: (threadId) =>
     runPromise(
       Option.match(decodeSession(threadId), {
@@ -150,13 +149,23 @@ const ledgerMessageStore = (
 export const make = Effect.gen(function* () {
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
+  const interruptStore = yield* InterruptStore;
   const counter = yield* Ref.make(0);
   const runPromise = yield* FiberSet.makeRuntimePromise();
   const persistence: ChatWithInterruptsPersistence = defineAIPersistence({
     stores: {
       messages: ledgerMessageStore(recorder, runPromise),
       runs: new InMemoryRunStore(),
-      interrupts: makeInterruptStore(),
+      interrupts: {
+        create: (record) => runPromise(interruptStore.create(record)),
+        resolve: (interruptId, response) => runPromise(interruptStore.resolve(interruptId, response)),
+        cancel: (interruptId) => runPromise(interruptStore.cancel(interruptId)),
+        get: (interruptId) => runPromise(interruptStore.get(interruptId)),
+        list: (threadId) => runPromise(interruptStore.list(threadId)),
+        listPending: (threadId) => runPromise(interruptStore.listPending(threadId)),
+        listByRun: (runId) => runPromise(interruptStore.listByRun(runId)),
+        listPendingByRun: (runId) => runPromise(interruptStore.listPendingByRun(runId)),
+      },
     },
   });
   const nextId = (createdAtMillis: number) =>
@@ -180,4 +189,4 @@ export const make = Effect.gen(function* () {
   } satisfies SessionStoreService;
 });
 
-export const layer = Layer.effect(SessionStore, make);
+export const layer = Layer.effect(SessionStore, make).pipe(Layer.provide(interruptStoreLayer));

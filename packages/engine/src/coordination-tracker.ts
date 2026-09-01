@@ -80,7 +80,6 @@ const buildItem = <CommentId>(codec: WireCodec, item: ListedItem<CommentId>): Tr
     claimedByUs: claim?.by === item.claimIdentity,
     attempts: Coordination.parseAttempts(codec, body),
     handback: Coordination.parseHandback(codec, body),
-    owned: ledger !== undefined,
     followUp: Coordination.parseFollowUp(codec, body),
     openBlockers: item.openBlockers,
     proposal: Coordination.selectTriageProposal(item.comments),

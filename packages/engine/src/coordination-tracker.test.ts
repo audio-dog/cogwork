@@ -172,7 +172,6 @@ describe("coordination tracker", () => {
       const item = yield* observed(tracker, "#7");
       assert.deepStrictEqual(item?.claim, { by: claimant, ...request });
       assert.isTrue(item?.claimedByUs);
-      assert.isTrue(item?.owned);
     }),
   );
 
