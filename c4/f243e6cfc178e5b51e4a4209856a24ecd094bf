@@ -1,0 +1,21 @@
+packages/contracts/src/plugin.ts
+  s_f5fab53336c6eb::t_744e3de7bcf135 66-71
+packages/contracts/src/plugin.test.ts
+  s_f5fab53336c6eb::t_7c4296c40e02f7 3,6-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c4f243e6cfc178e5b51e4a4209856a24ecd094bf",
+  "prompts": {},
+  "sessions": {
+    "s_f5fab53336c6eb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc25f657-525a-438d-ba08-07b670b8ac56",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
