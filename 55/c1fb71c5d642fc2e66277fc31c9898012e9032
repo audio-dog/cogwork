@@ -1,0 +1,22 @@
+configs/lint/tests/rules.test.mjs
+  s_66a676b0acd16a::t_55bed2a21f48dd 147-152,156,164,167,176
+  s_66a676b0acd16a::t_5883e701072303 2,5,154
+configs/lint/tests/rule-test-harness.mjs
+  s_66a676b0acd16a::t_55bed2a21f48dd 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "55c1fb71c5d642fc2e66277fc31c9898012e9032",
+  "prompts": {},
+  "sessions": {
+    "s_66a676b0acd16a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d9b-6a0f-7ff3-8d69-d5dd008ca252",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
