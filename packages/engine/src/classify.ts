@@ -63,7 +63,7 @@ const prFields = (item: ObservedItem) => (item.pr ? { pr: prSummaryOf(item.pr) }
 const trackerUrl = (item: ObservedItem) => ({ url: item.url });
 
 const prStage = (pr: ObservedPr) => {
-  if (pr.followable === false) return null;
+  if (pr.draft || pr.followable === false) return null;
   if (triggersFollowUp(pr)) return "follow-up";
   if (pr.review === "ready") return "verify";
   return null;
