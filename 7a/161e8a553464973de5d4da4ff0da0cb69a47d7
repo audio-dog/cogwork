@@ -1,0 +1,19 @@
+docs/spec/control-store-convergence.md
+  s_59283c64607566::t_2becb3bcdb3a42 1-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7a161e8a553464973de5d4da4ff0da0cb69a47d7",
+  "prompts": {},
+  "sessions": {
+    "s_59283c64607566": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c5dab4a-1995-4971-a517-0763c15a97b8",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
