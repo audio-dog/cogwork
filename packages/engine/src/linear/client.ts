@@ -152,7 +152,6 @@ const unavailable = (message: string) => new IssueTrackerError({ reason: "unavai
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
 
 const isAuthStatus = (status: number | undefined) => status === 401 || status === 403;
-const authErrorTypes = new Set([LinearErrorType.AuthenticationError, LinearErrorType.Forbidden]);
 const transientErrorTypes = new Set([
   LinearErrorType.NetworkError,
   LinearErrorType.InternalError,
@@ -163,7 +162,7 @@ const reasonFor = (cause: unknown): IssueTrackerError["reason"] => {
   if (cause instanceof RatelimitedLinearError) return "rate-limited";
   if (
     cause instanceof LinearError &&
-    (isAuthStatus(cause.status) || (cause.type !== undefined && authErrorTypes.has(cause.type)))
+    (isAuthStatus(cause.status) || cause.type === LinearErrorType.AuthenticationError)
   ) {
     return "auth";
   }

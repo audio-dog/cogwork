@@ -472,6 +472,19 @@ describe("linear client", () => {
     }).pipe(withToken("app-token", "client-credentials", invalidated));
   });
 
+  it.effect("keeps the credential when Linear denies access to a resource", () => {
+    const invalidated: Array<string> = [];
+    return Effect.gen(function* () {
+      stubLinear(() => ({
+        body: { errors: [{ message: "access denied", extensions: { type: "forbidden" } }] },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.observeIssues(ref, null));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.deepStrictEqual(invalidated, []);
+    }).pipe(withToken("app-token", "client-credentials", invalidated));
+  });
+
   it.effect("keeps the credential when Linear throttles rather than rejects", () => {
     const invalidated: Array<string> = [];
     return Effect.gen(function* () {
