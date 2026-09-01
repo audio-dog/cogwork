@@ -1,0 +1,28 @@
+packages/engine/src/event-publisher.test.ts
+  s_8595116364d770::t_e700f3477f7d2a 99-102,340,342,543,545
+  s_70cc8af13b124b::t_4133da8190e860 92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ad91a9b255ddb858fe10f28707a613836e77981c",
+  "prompts": {},
+  "sessions": {
+    "s_70cc8af13b124b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ae911b80cd4df3484",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8595116364d770": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d15-fd47-74b3-9639-0d340b39761c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
