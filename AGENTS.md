@@ -16,7 +16,15 @@ Use this to explore APIs, find usage examples, and understand implementations fo
 When Effect v4 behavior or types are unclear, don't guess from Effect v3 memory —
 grep the real source in `.repos/effect` (e.g. `packages/effect/src`).
 The repo also contains agent-specific rules and guidance to follow in various markdown files.
-Before changing Effect code, read the applicable patterns in `docs/agent-patterns`; use each pattern's scope to select it.
+Before changing Effect code, read the applicable patterns in `docs/agent-patterns/`; the triggers:
+
+- `effect-control-flow.md` — branching on a success value or an expected typed failure; decode-error boundaries.
+- `effect-time-bounds.md` — an Effect crosses an external boundary (subprocess, HTTP, harness stream): deadlines and retry policy.
+- `effect-fiber-lifecycle.md` — work on another fiber: forking, supervision, fiber registries, runtime re-entry.
+- `effect-test-layers.md` — writing or restructuring `@effect/vitest` tests: doubles, layers, probes, TestClock.
+- `effect-schema-unions.md` — a domain type with variants, a branded id, or decoding at a boundary.
+- `effect-observability.md` — logs, span attributes, metrics, telemetry wiring.
+- `effect-process-edges.md` — a process starts, a non-Effect host calls in, or a socket, subprocess, or emitter enters Effect.
 
 You must always invoke the /effect-ts skill when writing Effect code.
 
