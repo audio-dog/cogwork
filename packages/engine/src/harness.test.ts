@@ -342,6 +342,49 @@ describe("Harness", () => {
       }),
     );
 
+    it.effect("preserves retryable native catalog failures", () =>
+      Effect.gen(function* () {
+        const launches: Array<true> = [];
+        const runner = {
+          ...controlledRunnerDefaults,
+          name,
+          sessionKind: "opaque-handle",
+          projectedMembers: [],
+          planMiddleware: [],
+          execution: fullHarnessExecution,
+          catalogSources: {
+            native: {
+              catalog: Effect.fail(
+                new HarnessError({
+                  reason: "launch",
+                  retryable: true,
+                  message: "native catalog timed out",
+                }),
+              ),
+            },
+            fallback: controlledRunnerDefaults.catalogSources.fallback,
+          },
+          run: () => {
+            launches.push(true);
+            return Stream.empty;
+          },
+        } satisfies HarnessRunner;
+        const configured = {
+          ...request,
+          plan: new RunPlan({
+            ...request.plan,
+            harness: { ...request.plan.harness, model: "native-only" },
+          }),
+        };
+        const error = yield* make([runner]).run(configured).pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "launch");
+        assert.isTrue(error.retryable);
+        assert.strictEqual(error.message, "native catalog timed out");
+        assert.deepStrictEqual(launches, []);
+      }),
+    );
+
     it.effect("rejects unsupported effort absent from the current catalog", () =>
       Effect.gen(function* () {
         const launches: Array<true> = [];

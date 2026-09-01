@@ -276,12 +276,7 @@ const hasCatalogOptions = (options: HarnessCatalogOptions | null): options is Ha
 
 const catalogFrom = Effect.fn("Harness.catalogFrom")(function* (source: HarnessCatalogSource | undefined) {
   if (!source) return null;
-  return yield* source.catalog.pipe(
-    Effect.match({
-      onFailure: () => null,
-      onSuccess: (catalog) => (hasCatalogOptions(catalog) ? catalog : null),
-    }),
-  );
+  return yield* Effect.map(source.catalog, (catalog) => (hasCatalogOptions(catalog) ? catalog : null));
 });
 
 const resolveCatalog = Effect.fn("Harness.resolveCatalog")(function* (runner: HarnessRunner) {
