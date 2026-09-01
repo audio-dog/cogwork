@@ -8,6 +8,7 @@ import { resolveEngineCommand } from "./engine-command";
 import { EngineSupervisor } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
 import { engineLoggerLayer, mainLogger } from "./logger";
+import { installQuitHandler } from "./quit";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
 import { waitForDaemonListening } from "./wait-for-socket";
@@ -58,6 +59,7 @@ const makeSupervisorLayer = () => {
       spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),
     probe: isDaemonListening,
     awaitReachable: waitForDaemonListening,
+    terminateTimeout: command.terminateTimeoutMillis,
   });
 };
 
@@ -121,7 +123,7 @@ const bootstrap = () => {
     app.on("before-quit", () => {
       control.quitting = true;
     });
-    app.on("will-quit", () => runtime.dispose());
+    installQuitHandler(app, () => runtime.dispose());
 
     await runtime.runPromise(supervisor.start);
   });
