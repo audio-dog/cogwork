@@ -1,0 +1,25 @@
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_471ef6216cbab1::t_537484a49ab430 37,50-51,55-56,59-65,67,70
+  s_471ef6216cbab1::t_80c7e7e2929791 114,119-123
+  s_471ef6216cbab1::t_349a6bc89ada49 103-109
+  s_471ef6216cbab1::t_f915f6e68396cf 111-113,115-118,124-126
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_471ef6216cbab1::t_82a65792d09cd0 138-161,210-216,218-226
+  s_471ef6216cbab1::t_537484a49ab430 28,217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "4a74583b941ba699cda8077f57635d8577ecf060",
+  "prompts": {},
+  "sessions": {
+    "s_471ef6216cbab1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f50-46c8-71f0-ba6f-7dcd77bb416b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
