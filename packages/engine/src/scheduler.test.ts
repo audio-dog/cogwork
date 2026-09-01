@@ -19,7 +19,7 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import type { EligibleWork } from "./classify";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
@@ -582,11 +582,8 @@ describe("Scheduler.tick", () => {
         interrupt: (yield* Metric.value(interrupt)).count,
       };
       const runSchedulerToIdle = (execute: ExecuteStub) =>
-        Effect.gen(function* () {
-          const scheduler = yield* Scheduler.Scheduler;
-          yield* scheduler.tick();
-          yield* scheduler.awaitIdle;
-        }).pipe(
+        Scheduler.Scheduler.pipe(
+          Effect.flatMap((scheduler) => scheduler.tick().pipe(Effect.andThen(scheduler.awaitIdle))),
           Effect.provide(
             schedulerLayer(
               { globalLimit: 1, perWorkspaceLimit: 1, dailyBudget: 10 },
@@ -597,11 +594,10 @@ describe("Scheduler.tick", () => {
 
       yield* runSchedulerToIdle(succeed);
       yield* runSchedulerToIdle(crashIn(wsA.config.name));
-      yield* Effect.gen(function* () {
-        const scheduler = yield* Scheduler.Scheduler;
-        yield* scheduler.tick();
-        yield* scheduler.drain({ graceMillis: 10_000, abort: Effect.void });
-      }).pipe(
+      yield* Scheduler.Scheduler.pipe(
+        Effect.flatMap((scheduler) =>
+          scheduler.tick().pipe(Effect.andThen(scheduler.drain({ graceMillis: 10_000, abort: Effect.void }))),
+        ),
         Effect.provide(
           schedulerLayer(
             { globalLimit: 2, perWorkspaceLimit: 2, dailyBudget: 10 },

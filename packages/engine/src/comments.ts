@@ -1,4 +1,5 @@
 import type { LifecycleStage, WorkItemId } from "@cogwork/contracts";
+import type { HarnessHumanAttach } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
 import { checkoutPathFor } from "./worktree";
 
@@ -19,6 +20,7 @@ const maxReasonChars = 800;
 export type HandoffCause =
   | { readonly kind: "max-attempts"; readonly attempts: number }
   | { readonly kind: "non-retryable" }
+  | { readonly kind: "refused-claim" }
   | { readonly kind: "crash-loop"; readonly crashes: number };
 
 const attemptWord = (count: number) => (count === 1 ? "attempt" : "attempts");
@@ -46,7 +48,7 @@ export const parseTriageProposal = (body: string) => {
 export const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
 export const attachCommand = (checkoutPath: string, sessionId: string) =>
-  `cd ${shellQuote(checkoutPath)} && agent --resume ${shellQuote(sessionId)}`;
+  `cd ${shellQuote(checkoutPath)} && codex resume ${shellQuote(sessionId)}`;
 
 export const recoveryReason = "worker did not survive a daemon restart";
 
@@ -76,14 +78,34 @@ export const prepareFailureReason = (error: {
 
 const crashWord = (count: number) => (count === 1 ? "crash" : "crashes");
 
-const headline = (stage: LifecycleStage, cause: HandoffCause) => {
+const exhausted = (headline: string, reason: string) => ({
+  headline,
+  takeover: "Applied `ready-for-human`; a human needs to take over.",
+  failure: `Last failure: ${markdownCode(statusReason(reason))}`,
+});
+
+const handoffCopy = (stage: LifecycleStage, cause: HandoffCause, reason: string) => {
   if (cause.kind === "max-attempts") {
-    return `**Exhausted after ${cause.attempts} failed ${stage} ${attemptWord(cause.attempts)}.**`;
+    return exhausted(
+      `**Exhausted after ${cause.attempts} failed ${stage} ${attemptWord(cause.attempts)}.**`,
+      reason,
+    );
   }
   if (cause.kind === "crash-loop") {
-    return `**Exhausted after ${cause.crashes} consecutive ${stage} ${crashWord(cause.crashes)}.**`;
+    return exhausted(
+      `**Exhausted after ${cause.crashes} consecutive ${stage} ${crashWord(cause.crashes)}.**`,
+      reason,
+    );
   }
-  return `**Exhausted: ${stage} hit a non-retryable failure.**`;
+  if (cause.kind === "refused-claim") {
+    return {
+      headline: `**Could not claim this issue for ${stage}.**`,
+      takeover:
+        "Add the label named below to this work source, then move this issue back into the queue. Applied `ready-for-human` until then, because every retry gets the same refusal.",
+      failure: `Refused with: ${markdownCode(statusReason(reason))}`,
+    };
+  }
+  return exhausted(`**Exhausted: ${stage} hit a non-retryable failure.**`, reason);
 };
 
 export const handoffComment = (
@@ -92,15 +114,8 @@ export const handoffComment = (
   reason: string,
   resume: string | undefined,
 ) => {
-  const lines = [
-    attribution,
-    "",
-    headline(stage, cause),
-    "",
-    "Applied `ready-for-human`; a human needs to take over.",
-    "",
-    `Last failure: ${markdownCode(statusReason(reason))}`,
-  ];
+  const copy = handoffCopy(stage, cause, reason);
+  const lines = [attribution, "", copy.headline, "", copy.takeover, "", copy.failure];
   return resume === undefined
     ? lines.join("\n")
     : [...lines, "", "Resume the session manually:", "", "```sh", resume, "```"].join("\n");
@@ -117,12 +132,24 @@ export interface HandoffRequest {
   readonly stage: LifecycleStage;
   readonly cause: HandoffCause;
   readonly reason: string;
-  readonly session: string | null | undefined;
+  readonly session:
+    | {
+        readonly handle: string;
+        readonly access: HarnessHumanAttach | "programmatic-only";
+      }
+    | null
+    | undefined;
 }
 
 export const handoffNote = (request: HandoffRequest) => {
   const { workspace, item, stage, cause, reason, session } = request;
   const checkout = checkoutPathFor(workspace.config.checkoutPath, item, stage, workspace.config.worktrees);
-  const resume = session ? attachCommand(checkout, session) : undefined;
+  const resume = session?.access === "codex-cli" ? attachCommand(checkout, session.handle) : undefined;
   return handoffComment(stage, cause, reason, resume);
+};
+
+export const handoffSession = (handle: string | null, humanAttach: HarnessHumanAttach | undefined) => {
+  if (!handle) return null;
+  const access: HarnessHumanAttach | "programmatic-only" = humanAttach || "programmatic-only";
+  return { handle, access };
 };

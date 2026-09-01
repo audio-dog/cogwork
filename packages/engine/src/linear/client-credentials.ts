@@ -12,7 +12,7 @@ import {
   type ClientCredentialsRef,
   type CredentialAccount,
   CredentialError,
-  expiryMarginMillis,
+  expiryMargin,
 } from "../credential-store";
 import {
   clientCredentialsRequest,
@@ -93,7 +93,7 @@ const mint = (http: HttpClient.HttpClient) =>
 
 const timeToLive = (exit: Exit.Exit<MintedToken, CredentialError>) =>
   Exit.isSuccess(exit)
-    ? Duration.millis(Math.max(0, exit.value.lifetimeMillis - expiryMarginMillis))
+    ? Duration.max(Duration.zero, Duration.subtract(Duration.millis(exit.value.lifetimeMillis), expiryMargin))
     : Duration.zero;
 
 export const make = Effect.fn("linear.clientCredentials")(function* () {

@@ -1,6 +1,7 @@
 import { AvailabilityCause, type LifecycleStage, type OperationAvailability } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -12,7 +13,7 @@ interface AvailabilityEntry {
   readonly availability: OperationAvailability;
 }
 
-const failureTtlMillis = 60_000;
+const failureTtl = Duration.minutes(1);
 
 const workspaceFingerprint = (workspace: RegisteredWorkspace) =>
   JSON.stringify({ config: workspace.config, contributions: workspace.contributions });
@@ -35,7 +36,10 @@ export const make = Effect.gen(function* () {
     const fingerprint = workspaceFingerprint(workspace);
     return [...(yield* Ref.get(entries)).values()]
       .filter((entry) => entry.fingerprint === fingerprint)
-      .filter((entry) => entry.availability.available || now - entry.recordedAtMillis < failureTtlMillis)
+      .filter(
+        (entry) =>
+          entry.availability.available || now - entry.recordedAtMillis < Duration.toMillis(failureTtl),
+      )
       .map(({ availability }) => availability);
   });
 

@@ -1,14 +1,6 @@
 import { ndJsonStream, RequestError } from "@agentclientprotocol/sdk";
 import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
-import { Harness, SessionStore } from "@cogwork/engine";
-import {
-  type ChatMiddleware,
-  chat,
-  EventType,
-  type JSONSchema,
-  type ModelMessage,
-  type StreamChunk,
-} from "@tanstack/ai";
+import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
   type AcpCompatibleTextAdapter,
   type AcpHarnessContext,
@@ -17,61 +9,25 @@ import {
   acpCompatible,
   spawnHandleToAcpTransport,
 } from "@tanstack/ai-acp";
-import {
-  bearer,
-  createSecrets,
-  defineSandbox,
-  defineWorkspace,
-  mcpSkill,
-  type Secrets,
-  withSandbox,
-} from "@tanstack/ai-sandbox";
+import { createSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { cursorEfforts, cursorModelFlag, parseCursorModelList } from "./model";
-import { cursorModels } from "./models.generated";
+import { type CursorModel, cursorModels } from "./models.generated";
 
 export interface CursorRunnerOptions {
   readonly name: HarnessName;
   readonly agentBin?: string;
-  readonly defaultModel?: string;
-  readonly scrubEnv?: ReadonlyArray<string>;
-  readonly authMethodId?: string;
-  readonly runChat?: CursorRunChat;
+  readonly defaultModel?: CursorModel;
 }
 
 export type CursorModelOptions = {
   readonly sessionId?: string;
   readonly effort?: string;
 };
-
-export interface CursorRunChatOptions {
-  readonly adapter: AcpCompatibleTextAdapter<string, CursorModelOptions>;
-  readonly messages: ReadonlyArray<ModelMessage>;
-  readonly middleware: ReadonlyArray<ChatMiddleware>;
-  readonly abortController: AbortController;
-  readonly modelOptions?: CursorModelOptions;
-  readonly outputSchema?: JSONSchema;
-}
-
-export type CursorRunChat = (options: CursorRunChatOptions) => AsyncIterable<StreamChunk>;
-
-const defaultRunChat: CursorRunChat = (options) =>
-  chat({
-    adapter: options.adapter,
-    messages: [...options.messages],
-    middleware: [...options.middleware],
-    abortController: options.abortController,
-    ...(options.modelOptions ? { modelOptions: options.modelOptions } : {}),
-    outputSchema: options.outputSchema,
-    stream: true,
-  });
 
 const cursorProbeDeadline = "5 seconds";
 const missingCursorExecutable = /ENOENT|EACCES|command not found/i;
@@ -156,7 +112,7 @@ const requireCursorCommand = Effect.fn("CursorRunner.requireCommand")(function* 
   return result;
 });
 
-const cursorNativeCatalog = Effect.fn("CursorRunner.nativeCatalog")(function* (agentBin: string) {
+const cursorRuntimeVersion = Effect.fn("CursorRunner.runtimeVersion")(function* (agentBin: string) {
   const versionResult = yield* requireCursorCommand(agentBin, "--version");
   const modelResult = yield* requireCursorCommand(agentBin, "--list-models");
   const models = parseCursorModelList(modelResult.stdout);
@@ -168,15 +124,7 @@ const cursorNativeCatalog = Effect.fn("CursorRunner.nativeCatalog")(function* (a
     });
   }
   const harnessVersion = versionResult.stdout.trim() || versionResult.stderr.trim();
-  return {
-    models: models.map((model) => ({ value: model, label: model })),
-    efforts: cursorEfforts.map((effort) => ({ value: effort, label: effort })),
-    provenance: {
-      source: "native-discovery",
-      runtimeHost: `${process.platform}-${process.arch}`,
-      harnessVersion,
-    },
-  } satisfies Harness.HarnessOptionCatalog;
+  return harnessVersion;
 });
 
 const unavailableCursorReadiness = (error: Harness.HarnessError) =>
@@ -195,11 +143,10 @@ const unavailableCursorReadiness = (error: Harness.HarnessError) =>
   }) satisfies Harness.HarnessReadiness;
 
 const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =>
-  cursorNativeCatalog(agentBin).pipe(
+  cursorRuntimeVersion(agentBin).pipe(
     Effect.match({
       onFailure: unavailableCursorReadiness,
-      onSuccess: (catalog) => {
-        const version = catalog.provenance.harnessVersion;
+      onSuccess: (version) => {
         const compatible = cursorVersionCompatible(version);
         return {
           operational: { status: "ready", retryable: false, diagnostic: "Cursor is ready" },
@@ -224,73 +171,11 @@ const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =
   ),
 );
 
-const cursorLaunchPreflight = Effect.fn("CursorRunner.launchPreflight")(function* (
-  name: HarnessName,
-  request: Harness.HarnessRequest,
-) {
-  const plan = request.plan;
-  yield* Harness.validateCheckoutDirectory(name, plan.sandbox.workspace);
-  if (plan.sandbox.policy !== plan.harness.profile) {
-    return yield* new Harness.HarnessError({
-      reason: "policy",
-      retryable: false,
-      message: "Cursor Sandbox policy does not match the immutable Harness profile",
-    });
-  }
-  if (!plan.middleware.includes("sandbox")) {
-    return yield* new Harness.HarnessError({
-      reason: "sandbox",
-      retryable: false,
-      message: "Cursor Run Plan is missing mandatory Sandbox projection",
-    });
-  }
-  const capabilities = localProcessSandbox({ dir: plan.sandbox.workspace }).capabilities();
-  if (
-    capabilities.fs &&
-    capabilities.exec &&
-    capabilities.backgroundProcesses &&
-    capabilities.killableProcesses
-  ) {
-    return;
-  }
-  return yield* new Harness.HarnessError({
-    reason: "sandbox",
-    retryable: false,
-    message: "Cursor local Sandbox provider lacks mandatory process or filesystem capabilities",
-  });
-});
-
 // Cursor keeps conversation history server-side; the opaque handle is how you resume it.
 export const cursorModelOptions = (handle: string | null, effort: string | null) => ({
   ...(handle ? { sessionId: handle } : {}),
   ...(effort ? { effort } : {}),
 });
-
-const secretName = (name: string) => `MCP_${name.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_BEARER`;
-
-const skillConfig = (secrets: Secrets, skill: Harness.ResolvedMcpSkill) => {
-  const ref = skill.bearer === null ? undefined : secrets[secretName(skill.name)];
-  if (!ref) return { url: skill.endpoint };
-  return { url: skill.endpoint, headers: { Authorization: bearer(ref) } };
-};
-
-// A skill's bearer travels behind a TanStack `SecretRef`, not as a header string, so the token lands
-// in the sandbox env at projection time and never in a snapshot, the sandbox store, or the event log.
-export const mcpWorkspaceProjection = (skills: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
-  const secretValues = Object.fromEntries(
-    skills.flatMap((skill) =>
-      skill.bearer === null ? [] : [[secretName(skill.name), Redacted.value(skill.bearer)] as const],
-    ),
-  );
-  const secrets = createSecrets(secretValues);
-  const projected = skills.map((skill) => mcpSkill(skill.name, skillConfig(secrets, skill)));
-  return { skills: projected, secrets, hasSecrets: Object.keys(secretValues).length > 0 };
-};
-
-const decodeEvent = Schema.decodeUnknownOption(AgUiEvent);
-
-export const toEvent = (chunk: StreamChunk): AgUiEvent =>
-  Option.getOrElse(decodeEvent(chunk), () => ({ type: chunk.type }));
 
 const launchCodes = new Set(["ENOENT", "EACCES"]);
 
@@ -316,31 +201,14 @@ const fromRequestError = (error: RequestError) => {
   });
 };
 
-const fromThrown = (error: unknown) => {
+const cursorDiagnostics = (error: unknown) => {
   if (error instanceof RequestError) return fromRequestError(error);
-  const message = error instanceof Error ? error.message : String(error);
+  const message = HarnessBridge.messageFromUnknown(error);
   const launch = hasLaunchCode(error);
   return new Harness.HarnessError({ reason: launch ? "launch" : "turn", retryable: !launch, message });
 };
 
-const fromRunError = (chunk: Extract<StreamChunk, { type: EventType.RUN_ERROR }>): Harness.HarnessError =>
-  new Harness.HarnessError({ reason: "turn", retryable: true, message: chunk.message });
-
-const bridge = (stream: AsyncIterable<StreamChunk>) =>
-  Stream.fromAsyncIterable(stream, fromThrown).pipe(
-    Stream.flatMap((chunk) =>
-      chunk.type === EventType.RUN_ERROR
-        ? Stream.concat(Stream.succeed(toEvent(chunk)), Stream.fail(fromRunError(chunk)))
-        : Stream.succeed(toEvent(chunk)),
-    ),
-  );
-
 export const estimateTokens = (chars: number) => Math.ceil(chars / 4);
-
-const outputChars = (event: AgUiEvent) =>
-  AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
-    ? (event.delta?.length ?? 0)
-    : 0;
 
 // Cursor's `agent acp` never reports token usage — the ACP prompt response is `{stopReason}`
 // with no `usage`, and no session update carries counts (see FINDINGS.md Q2) — so without an
@@ -356,22 +224,10 @@ export const estimatedUsage = (promptChars: number, outputTextChars: number) => 
   };
 };
 
-export const withEstimatedUsage = (
-  promptChars: number,
-  stream: Stream.Stream<AgUiEvent, Harness.HarnessError>,
-) =>
-  Stream.mapAccum(
-    stream,
-    () => 0,
-    (streamed: number, event: AgUiEvent): readonly [number, ReadonlyArray<AgUiEvent>] => {
-      const next = streamed + outputChars(event);
-      const emit: AgUiEvent =
-        event.type === "RUN_FINISHED" && !event.usage
-          ? { ...event, usage: estimatedUsage(promptChars, next) }
-          : event;
-      return [next, [emit]];
-    },
-  );
+const estimatedEvent = (promptChars: number, outputTextChars: number, event: AgUiEvent) => {
+  if (!AgUiEvent.guards.RUN_FINISHED(event) || event.usage) return event;
+  return { ...event, usage: estimatedUsage(promptChars, outputTextChars) };
+};
 
 type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
@@ -447,104 +303,102 @@ const openCursorTransport =
       });
   };
 
+type CursorAdapter = AcpCompatibleTextAdapter<CursorModel, CursorModelOptions>;
+
+const generatedCatalog = Harness.staticCatalogSource(
+  {
+    models: cursorModels.map((model) => ({ value: model, label: model })),
+    efforts: cursorEfforts.map((effort) => ({ value: effort, label: effort })),
+  },
+  { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
+);
+const cursorScrubEnv: ReadonlyArray<string> = ["GITHUB_TOKEN", "GH_TOKEN", "CURSOR_API_KEY"];
+
+const selectedCursorModel = (
+  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+  fallback: CursorModel,
+) => cursorModels.find((model) => model === (request.selection.model ?? fallback)) ?? fallback;
+
+const promptCharacters = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
+  request.prompt.reduce((total, message) => total + message.content.length, 0);
+
+const cursorUsage: ExternalHarnessRuntime.ExternalHarnessUsageEstimator = (request, event, outputTextChars) =>
+  estimatedEvent(promptCharacters(request), outputTextChars, event);
+
+const hostAuthentication = () =>
+  Effect.succeed({
+    mode: "host",
+    secrets: createSecrets({}),
+  } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication);
+
+const cursorSandboxProvider = (name: HarnessName) =>
+  Effect.fn("CursorRunner.sandboxProvider")(function* (
+    request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+  ) {
+    yield* Harness.validateCheckoutDirectory(name, request.checkout.path);
+    return yield* ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({
+      scrubEnv: cursorScrubEnv,
+    })(request);
+  });
+
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {
   const agentBin = options.agentBin ?? "agent";
   const defaultModel = options.defaultModel ?? "auto";
-  const scrubEnv = [...(options.scrubEnv ?? ["GITHUB_TOKEN", "GH_TOKEN"])];
-  const authMethodId = options.authMethodId ?? "cursor_login";
-  const runChat = options.runChat ?? defaultRunChat;
-  const preflightPhase = Harness.HarnessPreflightInput.$match({
-    Static: () => Effect.void,
-    Launch: ({ request }) => cursorLaunchPreflight(options.name, request),
+  const adapter = acpCompatible<typeof cursorModels, CursorModelOptions>({
+    name: options.name,
+    models: cursorModels,
+    modelOptions: {},
+    openTransport: openCursorTransport(agentBin),
+    planEventName: `${options.name}.plan`,
+    authMode: "host",
   });
-  const preflight = Effect.fn("CursorRunner.preflight")((input: Harness.HarnessPreflightInput) =>
-    preflightPhase(input),
-  );
-  return {
+  const descriptor: ExternalHarnessRuntime.ExternalHarnessDescriptor<CursorAdapter, "host"> = {
     name: options.name,
     sessionKind: "opaque-handle",
-    projectedMembers: [
-      "Harness Adapter",
-      "Messages",
-      "MCP",
-      "Middleware",
-      "Sandbox",
-      "Structured Output",
-      "Persistence",
-      "Connections",
-    ],
-    planMiddleware: ["sandbox"],
-    execution: {
-      nonInteractive: false,
-      worktreeConfined: false,
-      profiles: [],
-    },
     capabilities: {
-      authenticationModes: ["host"],
-      session: { affinity: "runtime-host", fork: false },
-      policyFidelity: "none",
-      fileEventFidelity: "none",
-      usageQuality: "estimated",
-      readinessDiagnostics: true,
-      journal: false,
-      takeover: false,
+      execution: {
+        nonInteractive: false,
+        worktreeConfined: false,
+        profiles: [],
+      },
+      profile: {
+        authenticationModes: ["host"],
+        session: { affinity: "runtime-host", fork: false, humanAttach: false },
+        structuredOutput: "prompt-and-parse",
+        policyFidelity: "none",
+        fileEventFidelity: "none",
+        usageQuality: "estimated",
+        readinessDiagnostics: true,
+        journal: false,
+        takeover: false,
+      },
+      projectedMembers: [
+        "Harness Adapter",
+        "Instructions",
+        "Messages",
+        "MCP",
+        "Middleware",
+        "Sandbox",
+        "Structured Output",
+        "Persistence",
+        "Connections",
+      ],
+      planMiddleware: ["sandbox"],
     },
     authentication: { mode: "host", reference: "Cursor host login" },
-    catalogSources: {
-      native: { catalog: cursorNativeCatalog(agentBin) },
-      fallback: Harness.staticCatalogSource(
-        {
-          models: cursorModels.map((model) => ({ value: model, label: model })),
-          efforts: cursorEfforts.map((effort) => ({ value: effort, label: effort })),
-        },
-        { source: "cogwork-fallback", fallbackVersion: "cursor-models-generated-1" },
-      ),
-    },
+    catalogSources: { fallback: generatedCatalog },
     readiness: () => cursorReadiness(agentBin),
-    preflight,
-    run: (request) =>
-      Stream.unwrap(
-        Effect.gen(function* () {
-          const plan = request.plan;
-          const store = yield* SessionStore.SessionStore;
-          const handle = request.session ? yield* store.resumeHandle(request.session) : null;
-          const model = plan.harness.model ?? defaultModel;
-          const emptyModelOptions: CursorModelOptions = {};
-          const adapter = acpCompatible({
-            name: options.name,
-            models: [model],
-            modelOptions: emptyModelOptions,
-            openTransport: openCursorTransport(agentBin),
-            planEventName: `${options.name}.plan`,
-            authMethodId,
-          });
-          const projection = mcpWorkspaceProjection(Harness.resolvedMcpSkills(request));
-          const sandbox = defineSandbox({
-            id: `cogwork-${options.name}`,
-            fileEvents: false,
-            provider: localProcessSandbox({ dir: plan.sandbox.workspace, scrubEnv }),
-            workspace: defineWorkspace({
-              source: { type: "none" },
-              ...(projection.skills.length > 0 ? { skills: [...projection.skills] } : {}),
-              ...(projection.hasSecrets ? { secrets: projection.secrets } : {}),
-            }),
-          });
-          const effort = plan.harness.effort;
-          const modelOptions = cursorModelOptions(handle, effort);
-          const abortController = new AbortController();
-          const stream = runChat({
-            adapter: adapter(model),
-            messages: plan.messages.map(({ role, content }) => ({ role, content })),
-            middleware: plan.middleware.includes("sandbox") ? [withSandbox(sandbox)] : [],
-            abortController,
-            ...(handle || effort ? { modelOptions } : {}),
-            outputSchema: plan.structuredOutput ?? undefined,
-          });
-          const promptLength = plan.messages.reduce((total, message) => total + message.content.length, 0);
-          return withEstimatedUsage(promptLength, bridge(stream)).pipe(
-            Stream.ensuring(Effect.sync(() => abortController.abort())),
-          );
-        }),
-      ),
+    sharedGit: "none",
+    makeAdapter: ({ model }) => adapter(model),
+    projectModel: (request) => selectedCursorModel(request, defaultModel),
+    projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle, request.selection.effort),
+    projectAuthentication: () => "host",
+    transport: {},
+    diagnostics: cursorDiagnostics,
+    estimateUsage: cursorUsage,
   };
+  return ExternalHarnessRuntime.externalHarnessRunner(descriptor, {
+    authentication: hostAuthentication,
+    sandboxProvider: cursorSandboxProvider(options.name),
+  });
 };

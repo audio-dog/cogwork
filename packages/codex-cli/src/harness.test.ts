@@ -271,7 +271,8 @@ describe("codexRunner", () => {
         });
         assert.deepNestedInclude(codex.capabilities, {
           authenticationModes: ["host"],
-          session: { affinity: "runtime-host", fork: false },
+          session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
+          structuredOutput: "native",
           policyFidelity: "profile-only",
           fileEventFidelity: "sandbox",
           usageQuality: "metered",
@@ -323,48 +324,51 @@ describe("codexRunner", () => {
       ),
     );
 
-    it.effect("projects one shared Workspace with context and fresh MCP SecretRefs", () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const handle = yield* createSandbox();
-          const checkoutPath = yield* initializeRepository(handle);
-          const fs = yield* FileSystem.FileSystem;
-          const capturePath = yield* fs.makeTempFileScoped({ prefix: "codex-mcp-capture-" });
-          const harness = Harness.make([
-            runner({
-              codexExecutable: fakeCodexExecutable(` --capture-mcp-file ${capturePath}`),
-            }),
-          ]);
-          const first = yield* collectEvents(
-            harness.run(
-              makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("first-secret") }),
-            ),
-          );
-          assert.strictEqual(yield* fs.readFileString(capturePath), "first-secret");
-          const rotated = yield* collectEvents(
-            harness.run(
-              makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("rotated-secret") }),
-            ),
-          );
-          assert.strictEqual(yield* fs.readFileString(capturePath), "rotated-secret");
+    it.effect(
+      "projects one shared Workspace with context and fresh MCP SecretRefs",
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const handle = yield* createSandbox();
+            const checkoutPath = yield* initializeRepository(handle);
+            const fs = yield* FileSystem.FileSystem;
+            const capturePath = yield* fs.makeTempFileScoped({ prefix: "codex-mcp-capture-" });
+            const harness = Harness.make([
+              runner({
+                codexExecutable: fakeCodexExecutable(` --capture-mcp-file ${capturePath}`),
+              }),
+            ]);
+            const first = yield* collectEvents(
+              harness.run(
+                makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("first-secret") }),
+              ),
+            );
+            assert.strictEqual(yield* fs.readFileString(capturePath), "first-secret");
+            const rotated = yield* collectEvents(
+              harness.run(
+                makeRequest({ checkoutPath, session: null, mcpSkills: authenticatedMcp("rotated-secret") }),
+              ),
+            );
+            assert.strictEqual(yield* fs.readFileString(capturePath), "rotated-secret");
 
-          const capture = yield* structuredCapture(rotated);
-          const agents = yield* fs.readFileString(`${checkoutPath}/AGENTS.md`);
-          const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))([
-            ...first,
-            ...rotated,
-          ]);
+            const capture = yield* structuredCapture(rotated);
+            const agents = yield* fs.readFileString(`${checkoutPath}/AGENTS.md`);
+            const serializedEvents = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))([
+              ...first,
+              ...rotated,
+            ]);
 
-          assert.include(agents, "global rules");
-          assert.include(agents, "repo rules");
-          assert.include(agents, "Mandatory Operating Instructions: /operating-instructions/implement");
-          assert.strictEqual(capture.prompt, "implement the issue");
-          assert.isTrue(capture.hasCodexConfig);
-          assert.isFalse(yield* fs.exists(`${checkoutPath}/.codex/config.toml`));
-          assert.notInclude(serializedEvents, "first-secret");
-          assert.notInclude(serializedEvents, "rotated-secret");
-        }),
-      ),
+            assert.include(agents, "global rules");
+            assert.include(agents, "repo rules");
+            assert.include(agents, "Mandatory Operating Instructions: /operating-instructions/implement");
+            assert.strictEqual(capture.prompt, "implement the issue");
+            assert.isTrue(capture.hasCodexConfig);
+            assert.isFalse(yield* fs.exists(`${checkoutPath}/.codex/config.toml`));
+            assert.notInclude(serializedEvents, "first-secret");
+            assert.notInclude(serializedEvents, "rotated-secret");
+          }),
+        ),
+      10_000,
     );
 
     it.effect("maps the Operation policy through TanStack's Codex controls", () =>

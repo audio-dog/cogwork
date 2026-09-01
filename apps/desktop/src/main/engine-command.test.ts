@@ -1,10 +1,18 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { resolveEngineCommand } from "./engine-command";
+import { type EngineCommand, resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 
 const socketPath = "/home/me/.cogwork/cogwork.sock";
+const drainGraceSeconds = (command: EngineCommand) =>
+  Number(command.args[command.args.indexOf("--drain-grace") + 1]);
 
 describe("resolveEngineCommand", () => {
+  it("allows daemon drain to finish before supervisor termination", () => {
+    const budgets = resolveEngineShutdownBudgets();
+
+    expect(budgets.terminateTimeoutMillis).toBeGreaterThan(budgets.drainGraceSeconds * 1_000);
+  });
+
   it("runs the CLI daemon through the CLI's own tsx in development", () => {
     const baseDir = "/repo";
     const cliDir = join(baseDir, "apps", "cli");
@@ -58,7 +66,7 @@ describe("resolveEngineCommand", () => {
       drainGraceSeconds: 30,
     });
 
-    const graceIndex = command.args.indexOf("--drain-grace");
-    expect(command.args[graceIndex + 1]).toBe("30");
+    expect(drainGraceSeconds(command)).toBe(30);
+    expect(resolveEngineShutdownBudgets(30).terminateTimeoutMillis).toBe(35_000);
   });
 });

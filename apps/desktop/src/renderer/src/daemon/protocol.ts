@@ -96,10 +96,10 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         Effect.forever,
       );
 
-      yield* Effect.gen(function* () {
+      yield* Effect.sync(() => {
         conn.parser = serialization.makeUnsafe();
-        yield* Effect.tryPromise({ try: () => bridge.connect(), catch: openError });
       }).pipe(
+        Effect.andThen(Effect.tryPromise({ try: () => bridge.connect(), catch: openError })),
         Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
         Effect.andThen(consume),
         Effect.tapError((error) =>

@@ -45,6 +45,10 @@ _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, 
 The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when it has no run and the scheduler does not hold the work item in flight.
 _Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
 
+**Claim hold-off**:
+What the executor does with a **refused claim**: the item is held out of claiming for a growing window, keyed by workspace, item and operation, so one refusal cannot re-write coordination on every generation — the failure is not contention, so the next poll would get the same answer. A refusal the port reports as permanent also parks the item: the refusal is posted as a note *before* the role writes, since those writes can hit the very refusal being reported, then `ready-for-human` escalates it. A cleared claim clears the window, so the item recovers on its own once a person fixes the tracker.
+_Avoid_: Rate-limit cooldown (the reconcile worker's, keyed by credential scope — same mechanism, different scope), backoff, retry, exhausted (a run that gave up after trying)
+
 **Admit**:
 The narrow scheduler capability that reserves capacity for a recovered run and starts it. It always launches because recovery is resuming work this daemon already claimed; the scheduler separately exposes whether a work item is in flight so the live sweep cannot release a claim while its run starts.
 _Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue
@@ -82,7 +86,7 @@ A pluggable implementation of one agent backend. Beside dispatch it declares its
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **Harness capability profile**:
-The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity and fork behavior, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, structured-output behavior, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
+The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity, fork and human-attach behavior, structured-output reliability, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
 _Avoid_: Feature flags, adapter metadata, projection matrix
 
 **External Harness runtime**:
@@ -134,7 +138,7 @@ A command-glob rule refused in every profile, for every operation — the small 
 _Avoid_: Confinement (that keeps writes inside the worktree root; this bounds shell commands), sandbox isolation
 
 **Operating-instructions package**:
-The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills.
+The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills. The engine ships the default package, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Operation resolution**:
@@ -220,3 +224,23 @@ _Avoid_: Branch divergence (that's the branch versus its own remote, not the bas
 **Workspace registry**:
 The Control-store-backed set of registered workspaces and Workspace-input failures, held in a cell folded from workspace management acts. Register mints each `WorkspaceId`. Re-bind changes only its checkout path. Deregister removes it from the cell before the next scheduler pick, while a Run already holding its workspace value finishes normally. Each act publishes the matching workspace change or removal. The engine's view of which repos it is driving.
 _Avoid_: Config store. Distinct from the harness runner map, which is also a "registry" of sorts.
+
+**Telemetry store**:
+The dedicated local SQLite file (`~/.cogwork/telemetry.db`) holding the app's own spans and metric snapshots — observations about the process, disposable and pruned, never authoritative product records (ADR 0020). Deliberately not the Control store, so the instrument never queues behind the write lock it measures.
+_Avoid_: Control store (the authoritative store; ADR 0015's one-database rule stands for product records), run ledger (a run's harness events, which are product history), log file
+
+**Performance sensor**:
+Deterministic engine code that watches the telemetry store's health signals and, on a sustained threshold breach, files a thin evidence ticket at `needs-triage` with an `origin:selfperf` label and a fingerprint marker (ADR 0021). The proactive layer's first non-tracker sensor; it fires on transitions into alarm, dedups against the tracker itself, and never reopens a closed issue.
+_Avoid_: Detector, watchdog, monitor (a Datadog-style alert rule), triage (the stage that verifies what the sensor files)
+
+**Replay runner**:
+A harness runner that streams a recorded run's exported events at recorded speed through the whole real pipeline, giving repeatable load for before/after measurement without spawning an agent. A fixture in, the same recorder/ledger/bus/IPC path as a live run out.
+_Avoid_: Fake runner (a test double asserting behavior; this one generates load), simulator, benchmark (the measurement around it, not the runner)
+
+**Signal**:
+One health number the performance sensor watches: a named reading from the telemetry store (the daemon's event-loop delay p99, heap headroom) paired with a fixed threshold and window. The set is enumerated and deliberately small; the filing cap bounds the tickets, never how many signals may be watched (ADR 0021).
+_Avoid_: Metric (the raw telemetry reading a signal is defined over), alert (an alerting product's rule), alarm (the state a breached signal enters, not the signal itself)
+
+**Fingerprint**:
+The stable identity of one regression: a string over signal, subsystem, and direction — measured values excluded — carried as a marker in a machine-filed ticket's body, so dedup derives from the tracker itself. Many firings with different numbers share one fingerprint and therefore one open ticket (ADR 0021).
+_Avoid_: Hash (an implementation detail), signature (audiodog's word for the same idea), occurrence (one firing, which a fingerprint groups)

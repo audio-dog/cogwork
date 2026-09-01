@@ -50,13 +50,14 @@ const makeStore = () =>
           comments.map((comment) => (comment.id === id ? { ...comment, body } : comment)),
         ),
       create: (body) =>
-        Effect.gen(function* () {
-          const id = yield* Ref.getAndUpdate(seq, (value) => value + 1);
-          yield* Ref.update(commentsRef, (comments) => [
-            ...comments,
-            { id, body, isBot: true, createdAtMillis: id },
-          ]);
-        }),
+        Ref.getAndUpdate(seq, (value) => value + 1).pipe(
+          Effect.flatMap((id) =>
+            Ref.update(commentsRef, (comments) => [
+              ...comments,
+              { id, body, isBot: true, createdAtMillis: id },
+            ]),
+          ),
+        ),
     };
     const seed = (comment: CoordinationComment<number>) =>
       Ref.update(commentsRef, (comments) => [...comments, comment]);

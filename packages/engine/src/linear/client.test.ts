@@ -1,10 +1,13 @@
+import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import * as TestClock from "effect/testing/TestClock";
+import * as Ref from "effect/Ref";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { CredentialError, type CredentialSource, CredentialStore } from "../credential-store";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
@@ -95,33 +98,42 @@ const authorizationOf = (fetchStub: { readonly mock: { readonly calls: ReadonlyA
   return new Headers(init?.headers).get("authorization");
 };
 
-const stubCredentials = (token: string | null, source: CredentialSource, invalidated: Array<string>) =>
-  Layer.succeed(CredentialStore, {
-    resolveSource: () => Effect.die("unexpected credential source resolution"),
-    bearerToken: (account) =>
-      token === null
-        ? Effect.fail(
-            new CredentialError({
-              account: account.key,
-              message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
-            }),
-          )
-        : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
-    persist: () => Effect.void,
-    invalidate: (account) => Effect.sync(() => invalidated.push(account.key)),
-    providerKey: (account) =>
-      Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
-    persistProviderKey: (key) =>
-      Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
-    configureConnection: () => Effect.void,
-    removeConnection: () => Effect.void,
-  });
+class CredentialInvalidations extends Context.Service<
+  CredentialInvalidations,
+  Ref.Ref<ReadonlyArray<string>>
+>()("@cogwork/engine/linear/client.test/CredentialInvalidations") {
+  static readonly layer = Layer.effect(CredentialInvalidations, Ref.make<ReadonlyArray<string>>([]));
+}
 
-const withToken = (
-  token: string | null = "test-key",
-  source: CredentialSource = "env",
-  invalidated: Array<string> = [],
-) => Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source, invalidated))));
+const stubCredentials = (token: string | null, source: CredentialSource) =>
+  Layer.effect(
+    CredentialStore,
+    Effect.map(CredentialInvalidations, (invalidated) => ({
+      resolveSource: () => Effect.die("unexpected credential source resolution"),
+      bearerToken: (account) =>
+        token === null
+          ? Effect.fail(
+              new CredentialError({
+                account: account.key,
+                message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
+              }),
+            )
+          : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
+      persist: () => Effect.void,
+      invalidate: (account) => Ref.update(invalidated, (accounts) => [...accounts, account.key]),
+      providerKey: (account) =>
+        Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
+      persistProviderKey: (key) =>
+        Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
+      configureConnection: () => Effect.void,
+      removeConnection: () => Effect.void,
+    })),
+  ).pipe(Layer.provideMerge(CredentialInvalidations.layer));
+
+const withToken = (token: string | null = "test-key", source: CredentialSource = "env") =>
+  Effect.provide(clientLayer.pipe(Layer.provideMerge(stubCredentials(token, source))));
+
+const claimLabelName = "cogwork:claimed";
 
 const lastPage = { hasNextPage: false, endCursor: null };
 
@@ -462,38 +474,38 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("tells the store to drop the credential Linear rejected", () => {
-    const invalidated: Array<string> = [];
-    return Effect.gen(function* () {
+  it.effect("tells the store to drop the credential Linear rejected", () =>
+    Effect.gen(function* () {
+      const invalidated = yield* CredentialInvalidations;
       stubLinear(() => ({ status: 401, body: {} }));
       const client = yield* LinearClient;
       yield* Effect.flip(client.observeIssues(ref, null));
-      assert.deepStrictEqual(invalidated, ["AUD"]);
-    }).pipe(withToken("app-token", "client-credentials", invalidated));
-  });
+      assert.deepStrictEqual(yield* Ref.get(invalidated), ["AUD"]);
+    }).pipe(withToken("app-token", "client-credentials")),
+  );
 
-  it.effect("keeps the credential when Linear denies access to a resource", () => {
-    const invalidated: Array<string> = [];
-    return Effect.gen(function* () {
+  it.effect("keeps the credential when Linear denies access to a resource", () =>
+    Effect.gen(function* () {
+      const invalidated = yield* CredentialInvalidations;
       stubLinear(() => ({
         body: { errors: [{ message: "access denied", extensions: { type: "forbidden" } }] },
       }));
       const client = yield* LinearClient;
       const error = yield* Effect.flip(client.observeIssues(ref, null));
       assert.strictEqual(error.reason, "unavailable");
-      assert.deepStrictEqual(invalidated, []);
-    }).pipe(withToken("app-token", "client-credentials", invalidated));
-  });
+      assert.deepStrictEqual(yield* Ref.get(invalidated), []);
+    }).pipe(withToken("app-token", "client-credentials")),
+  );
 
-  it.effect("keeps the credential when Linear throttles rather than rejects", () => {
-    const invalidated: Array<string> = [];
-    return Effect.gen(function* () {
+  it.effect("keeps the credential when Linear throttles rather than rejects", () =>
+    Effect.gen(function* () {
+      const invalidated = yield* CredentialInvalidations;
       stubLinear(() => ({ status: 429, body: {} }));
       const client = yield* LinearClient;
       yield* Effect.flip(client.observeIssues(ref, null));
-      assert.deepStrictEqual(invalidated, []);
-    }).pipe(withToken("app-token", "client-credentials", invalidated));
-  });
+      assert.deepStrictEqual(yield* Ref.get(invalidated), []);
+    }).pipe(withToken("app-token", "client-credentials")),
+  );
 
   it.effect("retries after a hanging attempt reaches its deadline", () =>
     Effect.gen(function* () {
@@ -679,6 +691,191 @@ describe("linear client", () => {
       const error = yield* Effect.flip(client.createComment(ref, "AUD-1", "body"));
       assert.strictEqual(error.reason, "unavailable");
       assert.include(error.message, "commentCreate");
+    }).pipe(withToken()),
+  );
+
+  it.effect("resolves a team label by name rather than paging the team's labels", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return {
+            body: {
+              data: {
+                teams: {
+                  nodes: [
+                    { id: "team-uuid", labels: { nodes: [{ id: "claim-uuid", name: claimLabelName }] } },
+                  ],
+                },
+              },
+            },
+          };
+        }
+        if (document.includes("issueAddLabel")) {
+          return { body: { data: { issueAddLabel: { success: true } } } };
+        }
+        return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
+      });
+      const client = yield* LinearClient;
+      yield* client.addLabel(ref, "issue-uuid", claimLabelName);
+      const documents = sentRequests(fetchStub);
+      const lookup = documents[0];
+      assert.include(lookup?.query ?? "", "labels(filter: { name: { eq: $label } }, first: 1)");
+      assert.strictEqual(lookup?.variables.label, claimLabelName);
+      assert.isFalse(documents.some((request) => request.query.includes("issueLabelCreate")));
+    }).pipe(withToken()),
+  );
+
+  it.effect("resolves a workspace-level label that no team lists", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return {
+            body: {
+              data: { issueLabels: { nodes: [{ id: "workspace-label-uuid", name: claimLabelName }] } },
+            },
+          };
+        }
+        if (document.includes("issueAddLabel")) {
+          return { body: { data: { issueAddLabel: { success: true } } } };
+        }
+        return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
+      });
+      const client = yield* LinearClient;
+      yield* client.addLabel(ref, "issue-uuid", claimLabelName);
+      const documents = sentRequests(fetchStub);
+      assert.isTrue(documents.some((request) => request.query.includes("WorkspaceLabelByName")));
+      assert.isFalse(documents.some((request) => request.query.includes("issueLabelCreate")));
+      assert.strictEqual(
+        documents.find((request) => request.query.includes("issueAddLabel"))?.variables.labelId,
+        "workspace-label-uuid",
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("marks a refused label create permanent and does not retry it", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return {
+          body: {
+            errors: [
+              {
+                message: "Not allowed to take action - You are not allowed to create labels in this team.",
+                extensions: { type: "forbidden" },
+              },
+            ],
+          },
+        };
+      });
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName));
+      assert.strictEqual(error.retryable, false);
+      assert.strictEqual(error.reason, "unavailable");
+      assert.strictEqual(
+        sentRequests(fetchStub).filter((request) => request.query.includes("issueLabelCreate")).length,
+        1,
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("treats an untyped refusal to create a label as permanent, without retrying it", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return {
+          body: {
+            errors: [
+              { message: "Not allowed to take action - You are not allowed to create labels in this team." },
+            ],
+          },
+        };
+      });
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName));
+      assert.include(error.message, claimLabelName);
+      assert.include(error.message, "AUD");
+      assert.include(error.message, "not allowed to create labels");
+      assert.isTrue(issueTrackerErrorIsPermanent(error));
+      assert.strictEqual(
+        sentRequests(fetchStub).filter((request) => request.query.includes("issueLabelCreate")).length,
+        1,
+      );
+    }).pipe(withToken()),
+  );
+
+  it.effect("never reads a failed comment write as a permanent refusal", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({ body: { errors: [{ message: "Something went wrong" }] } }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.createComment(ref, "issue-uuid", "body"));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads a forbidden write as a permanent refusal", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({
+        body: {
+          errors: [
+            {
+              message: "Not allowed to take action - You are not allowed to do this.",
+              extensions: { type: "forbidden" },
+            },
+          ],
+        },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.createComment(ref, "issue-uuid", "body"));
+      assert.isTrue(issueTrackerErrorIsPermanent(error));
+    }).pipe(withToken()),
+  );
+
+  it.effect("never reads a rate-limited label create as a permanent refusal", () =>
+    Effect.gen(function* () {
+      stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return { status: 429, body: {} };
+      });
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.addLabel(ref, "issue-uuid", claimLabelName));
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(withToken()),
+  );
+
+  it.effect("skips the remove when neither the team nor the workspace holds the label", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) => {
+        if (document.includes("TeamsByKey")) {
+          return { body: { data: { teams: { nodes: [{ id: "team-uuid", labels: { nodes: [] } }] } } } };
+        }
+        if (document.includes("WorkspaceLabelByName")) {
+          return { body: { data: { issueLabels: { nodes: [] } } } };
+        }
+        return { body: { errors: [{ message: `unexpected document: ${document}` }] } };
+      });
+      const client = yield* LinearClient;
+      yield* client.removeLabel(ref, "issue-uuid", claimLabelName);
+      assert.isFalse(sentRequests(fetchStub).some((request) => request.query.includes("issueRemoveLabel")));
     }).pipe(withToken()),
   );
 });

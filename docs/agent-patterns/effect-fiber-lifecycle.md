@@ -103,6 +103,18 @@ What this buys:
 
 `Effect.runPromise` remains correct at true process entrypoints, where no runtime exists yet.
 
+## Effect.never holds a place, not a resource
+
+`Effect.never` is a suspended effect that only interruption can end. It holds no resources and installs no work. It cannot leak by itself; a leak needs an unowned fiber, and the fork rules above already govern fiber ownership.
+
+Sanctioned uses:
+
+- Keep a built layer alive until interruption. `Layer.launch` is exactly this: it builds the layer inside a scope and then runs `Effect.never`, so closing the scope runs every finalizer.
+- Stand in for "a task that never completes" in interruption and timeout tests. This is the canonical fixture in Effect's own test suite.
+- Park a daemon fiber that exists only for its finalizers, forked with `Effect.forkScoped` so the owning scope ends it.
+
+The one smell: a bare `Effect.never` outside any scope, used as a lazy "keep the process alive". Nothing owns it, so nothing can end it cleanly. Use `Layer.launch` for an app entrypoint, or a `Deferred` when a specific event should end the wait.
+
 ## Cogwork conventions
 
 - Fork long-lived work with `Effect.forkScoped` inside the owning layer. Never use `Effect.forkDetach` in the engine.
@@ -116,6 +128,8 @@ What this buys:
 - `.repos/effect/packages/effect/src/FiberMap.ts`: `make` is scoped, `run` replaces by key, `remove` interrupts, completed fibers self-remove.
 - `.repos/effect/packages/effect/src/FiberSet.ts`: `makeRuntimePromise` returns a context-preserving `(effect) => Promise`.
 - `.repos/effect/packages/effect/src/Effect.ts`: `forkChild`, `forkScoped`, `forkIn`, `forkDetach`; plain `fork` no longer exists in v4.
+- `.repos/effect/packages/effect/src/internal/effect.ts:1172`: `Effect.never` is `callback<never>(constVoid)` — suspended, interruptible, resource-free.
+- `.repos/effect/packages/effect/src/Layer.ts:2207`: `Layer.launch` is `scoped(andThen(build(self), never))`.
 - `packages/engine/src/scheduler.ts`: `FiberSet` with `awaitEmpty`, `clear`, and interrupt-aware crash reporting — the in-repo exemplar.
 - `packages/engine/src/reconcile.ts`: the supervised worker loop with a bounded receipt await — the in-repo exemplar of this pattern's supervision section.
 - `packages/engine/src/run-control.ts`: the in-repo `FiberMap` registry keyed by run id (`cancel` must still read-and-interrupt in one atomic step, not `has` then `remove`).

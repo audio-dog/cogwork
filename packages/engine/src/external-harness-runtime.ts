@@ -280,6 +280,20 @@ const validateExternalRequest = Effect.fn("ExternalHarnessRuntime.validateReques
   resolved: ExternalHarnessResolvedRequest,
   provider: SandboxProvider,
 ) {
+  if (request.plan.sandbox.policy !== request.plan.harness.profile) {
+    return yield* new HarnessError({
+      reason: "policy",
+      retryable: false,
+      message: `harness runner ${descriptor.name} Sandbox policy does not match its immutable Harness profile`,
+    });
+  }
+  if (!request.plan.middleware.includes("sandbox")) {
+    return yield* new HarnessError({
+      reason: "sandbox",
+      retryable: false,
+      message: `harness runner ${descriptor.name} Run Plan is missing mandatory Sandbox projection`,
+    });
+  }
   const authentication = resolved.authentication;
   if (authentication.mode !== descriptor.authentication.mode) {
     return yield* authenticationMismatch(descriptor.name, descriptor.authentication.mode, authentication);

@@ -4,6 +4,12 @@ import { access, readFile, writeFile } from "node:fs/promises";
 const probeDelayArgument = process.argv.find((argument) => argument.startsWith("--fake-probe-delay="));
 const probeDelay = Number(probeDelayArgument?.slice("--fake-probe-delay=".length) ?? 0);
 if (probeDelay > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, probeDelay);
+const ignoresSigterm = process.argv.includes("--ignore-sigterm");
+if (ignoresSigterm) {
+  const block = () => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
+  process.on("SIGHUP", block);
+  process.on("SIGTERM", block);
+}
 
 if (process.argv.includes("--version")) {
   if (process.argv.includes("--fake-version-failure")) {

@@ -31,6 +31,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
@@ -61,6 +62,7 @@ const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const wsid = Schema.decodeSync(WorkspaceId);
 const harness = Schema.decodeSync(HarnessName);
+const interruptionGate = Latch.makeUnsafe();
 const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
@@ -259,21 +261,20 @@ const concurrentPluginManagerLayer = (
       const calls = yield* Ref.make(0);
       return {
         overview: Ref.get(current),
-        install: (pluginId) =>
-          Effect.gen(function* () {
-            const call = yield* Ref.getAndUpdate(calls, (count) => count + 1);
-            const overview = {
-              plugins:
-                call === 0
-                  ? [installedPlugin(pluginId)]
-                  : [installedPlugin("github"), installedPlugin(pluginId)],
-            } satisfies PluginOverview;
-            yield* Ref.set(current, overview);
-            if (call > 0) return { overview, notices: [`${pluginId} notice`] };
-            yield* Deferred.succeed(firstReady, undefined);
-            yield* Deferred.await(releaseFirst);
-            return { overview, notices: [`${pluginId} notice`] };
-          }),
+        install: Effect.fn("test.concurrentPluginInstall")(function* (pluginId) {
+          const call = yield* Ref.getAndUpdate(calls, (count) => count + 1);
+          const overview = {
+            plugins:
+              call === 0
+                ? [installedPlugin(pluginId)]
+                : [installedPlugin("github"), installedPlugin(pluginId)],
+          } satisfies PluginOverview;
+          yield* Ref.set(current, overview);
+          if (call > 0) return { overview, notices: [`${pluginId} notice`] };
+          yield* Deferred.succeed(firstReady, undefined);
+          yield* Deferred.await(releaseFirst);
+          return { overview, notices: [`${pluginId} notice`] };
+        }),
         uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
         contributions: () => Effect.succeed([]),
       };
@@ -377,31 +378,35 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
     state: Ref.get(cell),
     refresh: Ref.get(cell),
   };
-  const register: Registry.WorkspaceManagementService["register"] = Effect.fn(function* (registration) {
-    const workspace: Registry.RegisteredWorkspace = {
-      source: "control-store:minted",
-      contributions,
-      config: {
-        name: wsid("0198f16a-21d7-7000-8000-000000000001"),
-        displayName: registration.name,
-        checkoutPath: registration.checkoutPath,
-        issueTracker: registration.issueTracker,
-        sourceControl: registration.sourceControl,
-        linearHistory: registration.linearHistory,
-      },
-      workspaceLimit: registration.concurrency,
-    };
-    yield* Ref.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
-    return { _tag: "Registered" as const, workspace };
-  });
-  const deregister: Registry.WorkspaceManagementService["deregister"] = Effect.fn(function* (workspace) {
-    yield* Ref.update(cell, (state) => ({
-      workspaces: state.workspaces.filter((entry) => entry.config.name !== workspace),
-      failures: state.failures.filter((entry) => entry.name !== workspace),
-    }));
-    return workspace;
-  });
-  const rebind: Registry.WorkspaceManagementService["rebind"] = Effect.fn(
+  const register: Registry.WorkspaceManagementService["register"] = Effect.fn("test.register")(
+    function* (registration) {
+      const workspace: Registry.RegisteredWorkspace = {
+        source: "control-store:minted",
+        contributions,
+        config: {
+          name: wsid("0198f16a-21d7-7000-8000-000000000001"),
+          displayName: registration.name,
+          checkoutPath: registration.checkoutPath,
+          issueTracker: registration.issueTracker,
+          sourceControl: registration.sourceControl,
+          linearHistory: registration.linearHistory,
+        },
+        workspaceLimit: registration.concurrency,
+      };
+      yield* Ref.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
+      return { _tag: "Registered" as const, workspace };
+    },
+  );
+  const deregister: Registry.WorkspaceManagementService["deregister"] = Effect.fn("test.deregister")(
+    function* (workspace) {
+      yield* Ref.update(cell, (state) => ({
+        workspaces: state.workspaces.filter((entry) => entry.config.name !== workspace),
+        failures: state.failures.filter((entry) => entry.name !== workspace),
+      }));
+      return workspace;
+    },
+  );
+  const rebind: Registry.WorkspaceManagementService["rebind"] = Effect.fn("test.rebind")(
     function* (workspace, checkoutPath) {
       const current = (yield* Ref.get(cell)).workspaces.find((entry) => entry.config.name === workspace);
       if (!current) return yield* Effect.die("workspace not found");
@@ -529,48 +534,47 @@ describe("CancelRun", () => {
 
   it.effect("releases the claim when a run finishes before interruption", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
-    return Effect.gen(function* () {
-      const cancelStarted = yield* Deferred.make<void>();
-      const finishCancel = yield* Deferred.make<void>();
-      const runControl = Layer.succeed(RunControl.RunControl, {
-        run: (_runId, _workspace, effect) => effect,
-        cancel: () =>
-          Deferred.succeed(cancelStarted, undefined).pipe(
-            Effect.andThen(Deferred.await(finishCancel)),
-            Effect.map(() => RunControl.RunCancellation.NotFound({})),
-          ),
-      });
-      yield* Effect.gen(function* () {
-        const ledger = yield* RunLedger.RunLedger;
-        yield* ledger.insertRun(runRecord());
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
-        const cancelling = yield* Effect.forkChild(Effect.flip(client.CancelRun({ runId: rid("run-1") })));
-        yield* Deferred.await(cancelStarted);
-        yield* ledger.updateRun(rid("run-1"), {
-          status: "succeeded",
-          usage: null,
-          endedAtMillis: 1,
-        });
-        yield* Deferred.succeed(finishCancel, undefined);
-
-        const error = yield* Fiber.join(cancelling);
-        assert.strictEqual(error._tag, "RunAlreadyFinished");
-        if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
-        assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
-      }).pipe(
-        Effect.provide(
-          daemonLayer(
-            recordingTracker([], calls),
-            schedulerStub(),
-            controlStoreStub(),
-            registryServices,
-            pluginManagerLayer,
-            connectionStoreLayer,
-            runControl,
-          ),
+    const cancelStarted = Deferred.makeUnsafe<void>();
+    const finishCancel = Deferred.makeUnsafe<void>();
+    const runControl = Layer.succeed(RunControl.RunControl, {
+      run: (_runId, _workspace, effect) => effect,
+      cancel: () =>
+        Deferred.succeed(cancelStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(finishCancel)),
+          Effect.map(() => RunControl.RunCancellation.NotFound({})),
         ),
-      );
-    }).pipe(Effect.scoped);
+    });
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const cancelling = yield* Effect.forkChild(Effect.flip(client.CancelRun({ runId: rid("run-1") })));
+      yield* Deferred.await(cancelStarted);
+      yield* ledger.updateRun(rid("run-1"), {
+        status: "succeeded",
+        usage: null,
+        endedAtMillis: 1,
+      });
+      yield* Deferred.succeed(finishCancel, undefined);
+
+      const error = yield* Fiber.join(cancelling);
+      assert.strictEqual(error._tag, "RunAlreadyFinished");
+      if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          recordingTracker([], calls),
+          schedulerStub(),
+          controlStoreStub(),
+          registryServices,
+          pluginManagerLayer,
+          connectionStoreLayer,
+          runControl,
+        ),
+      ),
+      Effect.scoped,
+    );
   });
 
   it.effect("keeps the claim while interrupted work is still draining", () => {
@@ -593,7 +597,7 @@ describe("CancelRun", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(started, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
           Effect.ignore(issueTracker.release(registered, id("AUD-1"))),
@@ -640,7 +644,7 @@ describe("CancelRun", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(started, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
@@ -915,7 +919,7 @@ describe("RunControl", () => {
       const scope = yield* Scope.make();
       const context = yield* Layer.buildWithScope(RunControl.layer, scope);
       const control = Context.get(context, RunControl.RunControl);
-      const fiber = yield* Effect.forkChild(control.run(rid("run-1"), undefined, Effect.never));
+      const fiber = yield* Effect.forkChild(control.run(rid("run-1"), undefined, interruptionGate.await));
       yield* Effect.yieldNow;
 
       yield* Scope.close(scope, Exit.void);
@@ -934,7 +938,7 @@ describe("RunControl", () => {
         control.run(
           rid("run-1"),
           registered,
-          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(interruptionGate.await)),
           Deferred.succeed(onCancel, undefined),
         ),
       );
@@ -967,7 +971,7 @@ describe("RunControl", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(started, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
@@ -1003,7 +1007,7 @@ describe("RunControl", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(firstStarted, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.ensuring(Deferred.await(finishFirstTeardown)),
           ),
         ),
@@ -1018,7 +1022,7 @@ describe("RunControl", () => {
         control.run(
           rid("run-1"),
           replacementWorkspace,
-          Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(interruptionGate.await)),
         ),
       );
       yield* Deferred.await(replacementStarted);
@@ -1514,50 +1518,48 @@ describe("Connection mutations", () => {
     );
   });
 
-  it.effect("includes a workspace registered while required Plugins uninstall", () =>
-    Effect.gen(function* () {
-      const github = connectionIdOf("github", "acme");
-      const uninstallStarted = yield* Deferred.make<void>();
-      const finishUninstall = yield* Deferred.make<void>();
-      const pluginOverview = {
-        plugins: [{ ...installedPlugin("github"), requiredConnections: ["github"] }],
-      } satisfies PluginOverview;
-      const plugins = Layer.succeed(PluginManager, {
-        overview: Effect.succeed(pluginOverview),
-        install: () => Effect.die("unexpected Plugin install"),
-        uninstall: () =>
-          Deferred.succeed(uninstallStarted, undefined).pipe(
-            Effect.andThen(Deferred.await(finishUninstall)),
-            Effect.map(() => ({ overview: { plugins: [] }, notices: [] })),
-          ),
-        contributions: () => Effect.succeed([]),
-      });
-      const registries = registrationServices();
-      yield* Effect.gen(function* () {
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
-        const removing = yield* Effect.forkChild(client.RemoveConnection({ connectionId: github }));
-        yield* Deferred.await(uninstallStarted);
-        const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
-        if (registered.name === undefined) return assert.fail("expected registration to succeed");
-        yield* Deferred.succeed(finishUninstall, undefined);
-        const result = yield* Fiber.join(removing);
-
-        assert.deepStrictEqual(result.danglingWorkspaces, [registered.name]);
-      }).pipe(
-        Effect.provide(
-          daemonLayer(
-            trackerLayer({}),
-            schedulerStub(),
-            controlStoreStub(),
-            registries,
-            plugins,
-            connectionStoreLayerWithStatus("established", null, () => Effect.void),
-          ),
+  it.effect("includes a workspace registered while required Plugins uninstall", () => {
+    const github = connectionIdOf("github", "acme");
+    const uninstallStarted = Deferred.makeUnsafe<void>();
+    const finishUninstall = Deferred.makeUnsafe<void>();
+    const pluginOverview = {
+      plugins: [{ ...installedPlugin("github"), requiredConnections: ["github"] }],
+    } satisfies PluginOverview;
+    const plugins = Layer.succeed(PluginManager, {
+      overview: Effect.succeed(pluginOverview),
+      install: () => Effect.die("unexpected Plugin install"),
+      uninstall: () =>
+        Deferred.succeed(uninstallStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(finishUninstall)),
+          Effect.map(() => ({ overview: { plugins: [] }, notices: [] })),
         ),
-        Effect.scoped,
-      );
-    }),
-  );
+      contributions: () => Effect.succeed([]),
+    });
+    const registries = registrationServices();
+    return Effect.gen(function* () {
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const removing = yield* Effect.forkChild(client.RemoveConnection({ connectionId: github }));
+      yield* Deferred.await(uninstallStarted);
+      const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+      if (registered.name === undefined) return assert.fail("expected registration to succeed");
+      yield* Deferred.succeed(finishUninstall, undefined);
+      const result = yield* Fiber.join(removing);
+
+      assert.deepStrictEqual(result.danglingWorkspaces, [registered.name]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({}),
+          schedulerStub(),
+          controlStoreStub(),
+          registries,
+          plugins,
+          connectionStoreLayerWithStatus("established", null, () => Effect.void),
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
 });
 
 describe("workspace lifecycle commands", () => {
@@ -1666,7 +1668,7 @@ describe("workspace lifecycle commands", () => {
         control.run(
           rid("run-1"),
           registeredWorkspace,
-          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(interruptionGate.await)),
           Effect.ignore(issueTracker.release(registeredWorkspace, id("AUD-1"))),
         ),
       );
@@ -1698,44 +1700,41 @@ describe("workspace lifecycle commands", () => {
 });
 
 describe("Plugin lifecycle commands", () => {
-  it.effect("never publishes an older Plugin snapshot after a newer mutation", () =>
-    Effect.gen(function* () {
-      const firstReady = yield* Deferred.make<void>();
-      const releaseFirst = yield* Deferred.make<void>();
-      const plugins = concurrentPluginManagerLayer(firstReady, releaseFirst);
+  it.effect("never publishes an older Plugin snapshot after a newer mutation", () => {
+    const firstReady = Deferred.makeUnsafe<void>();
+    const releaseFirst = Deferred.makeUnsafe<void>();
+    const plugins = concurrentPluginManagerLayer(firstReady, releaseFirst);
+    return Effect.gen(function* () {
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const first = yield* Effect.forkChild(client.InstallPlugin({ pluginId: "github" }));
 
-      return yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const subscription = yield* bus.subscribe();
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
-        const first = yield* Effect.forkChild(client.InstallPlugin({ pluginId: "github" }));
+      yield* Deferred.await(firstReady);
+      yield* client.InstallPlugin({ pluginId: "linear" });
+      yield* Deferred.succeed(releaseFirst, undefined);
+      yield* Fiber.join(first);
+      yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
 
-        yield* Deferred.await(firstReady);
-        yield* client.InstallPlugin({ pluginId: "linear" });
-        yield* Deferred.succeed(releaseFirst, undefined);
-        yield* Fiber.join(first);
-        yield* bus.publish({ _tag: "ItemRemoved", workspace: wsid("sentinel"), id: id("sentinel") });
-
-        const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => event._tag === "ItemRemoved"),
-          Stream.runCollect,
-        );
-        const snapshots = [...events]
-          .filter((event) => event._tag === "PluginsChanged")
-          .map((event) => ({
-            plugins: event.plugins.plugins.map((plugin) => plugin.pluginId),
-            notices: event.notices,
-          }));
-        assert.deepStrictEqual(snapshots, [
-          { plugins: ["github", "linear"], notices: ["linear notice"] },
-          { plugins: ["github", "linear"], notices: [] },
-        ]);
-      }).pipe(
-        Effect.provide(
-          daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registryServices, plugins),
-        ),
-        Effect.scoped,
+      const events = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
       );
-    }),
-  );
+      const snapshots = [...events]
+        .filter((event) => event._tag === "PluginsChanged")
+        .map((event) => ({
+          plugins: event.plugins.plugins.map((plugin) => plugin.pluginId),
+          notices: event.notices,
+        }));
+      assert.deepStrictEqual(snapshots, [
+        { plugins: ["github", "linear"], notices: ["linear notice"] },
+        { plugins: ["github", "linear"], notices: [] },
+      ]);
+    }).pipe(
+      Effect.provide(
+        daemonLayer(trackerLayer({}), schedulerStub(), controlStoreStub(), registryServices, plugins),
+      ),
+      Effect.scoped,
+    );
+  });
 });

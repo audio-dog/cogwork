@@ -55,7 +55,6 @@
     "./configs/lint/no-effect-sync-promise.grit",
     "./configs/lint/no-effect-sync-effect.grit",
     "./configs/lint/no-runtime-runfork.grit",
-    "./configs/lint/no-effect-never.grit",
     "./configs/lint/no-side-effect-in-state-updater.grit",
     "./configs/lint/no-switch.grit",
     "./configs/lint/no-native-button-mismatch.grit"
@@ -79,6 +78,12 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["configs/lint/tests/fixtures/**"],
+      "linter": {
+        "enabled": false
+      }
+    },
     {
       "includes": ["**/routes/**"],
       "linter": {

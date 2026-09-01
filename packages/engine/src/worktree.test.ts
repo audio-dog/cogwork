@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -19,6 +20,7 @@ import * as Worktree from "./worktree";
 import { type FileStat, WorktreeFs, type WorktreeFsService } from "./worktree-fs";
 
 const decodeConfig = Schema.decodeSync(WorkspaceConfig);
+const interruptionGate = Latch.makeUnsafe();
 const item = { id: "#13", title: "Worktree lifecycle" } satisfies Worktree.WorkItemRef;
 const worktreePath = (branch = Worktree.branchName(item)) =>
   Worktree.worktreePathFor(Worktree.worktreeRoot("/repo"), branch);
@@ -131,7 +133,8 @@ describe("Worktree.ensure", () => {
       const setupStarted = yield* Deferred.make<void>();
       const fs = {
         ...fakeFs(recorder, {}),
-        runCommand: () => Deferred.succeed(setupStarted, undefined).pipe(Effect.andThen(Effect.never)),
+        runCommand: () =>
+          Deferred.succeed(setupStarted, undefined).pipe(Effect.andThen(interruptionGate.await)),
       } satisfies WorktreeFsService;
       const manager = yield* Effect.provide(Worktree.make, provide(fakeGit(recorder, {}), fs));
       const ensuring = yield* manager
@@ -547,8 +550,7 @@ describe("Worktree.remove", () => {
         Worktree.make,
         provide(fakeGit(recorder, {}), fakeFs(recorder, {})),
       );
-      const result = yield* Effect.exit(manager.remove(workspaceWith(), "../../escape"));
-      assert.strictEqual(result._tag, "Failure");
+      yield* Effect.flip(manager.remove(workspaceWith(), "../../escape"));
       const removed = yield* Ref.get(recorder.removed);
       assert.deepStrictEqual(removed, []);
     }),

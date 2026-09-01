@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import { stopSignalTracker } from "./stop-signal";
 
 const settled = (abort: Effect.Effect<void>) =>

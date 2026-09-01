@@ -1,4 +1,5 @@
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -8,7 +9,7 @@ import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 
 export const catalogEndpoint = "https://models.dev/api.json";
 
-export const defaultTtlMillis = 5 * 60_000;
+export const defaultTtl = Duration.minutes(5);
 
 const catalogFetchDeadline = "30 seconds";
 
@@ -63,12 +64,12 @@ const modelsFor = (api: CatalogApi, providerIds: ReadonlyArray<string>) =>
 
 export const makeService = Effect.fn("ModelCatalog.make")(function* (
   source: CatalogSource,
-  ttlMillis: number = defaultTtlMillis,
+  ttl: Duration.Input = defaultTtl,
 ) {
   const stale = yield* Ref.make<CatalogApi | null>(null);
   const [cachedApi, invalidate] = yield* Effect.cachedInvalidateWithTTL(
     source.fetch.pipe(Effect.tap((api) => Ref.set(stale, api))),
-    ttlMillis,
+    ttl,
   );
 
   const serveStale = Effect.fn("ModelCatalog.serveStale")(function* (error: CatalogError) {

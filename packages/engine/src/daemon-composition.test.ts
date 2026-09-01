@@ -7,13 +7,15 @@ import { DatabaseSync } from "node:sqlite";
 import { connectionIdOf, DaemonRpcs, HarnessName, WorkspaceConfig } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as Socket from "effect/unstable/socket/Socket";
@@ -28,6 +30,8 @@ import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker } from "./reconcile";
 import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
+
+const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
@@ -44,7 +48,8 @@ const stubRunner: HarnessRunner = {
   execution: fullHarnessExecution,
   capabilities: {
     authenticationModes: ["host"],
-    session: { affinity: "runtime-host", fork: false },
+    session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
+    structuredOutput: "none",
     policyFidelity: "exact",
     fileEventFidelity: "none",
     usageQuality: "none",
@@ -85,8 +90,30 @@ const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
 const socketServerLayer = (socket: Socket.Socket) =>
   Layer.succeed(SocketServer.SocketServer, {
     address: { _tag: "UnixAddress", path: "memory" },
-    run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
+    run: (handler) =>
+      handler(socket).pipe(
+        Effect.ignore,
+        Effect.andThen(
+          interruptionGate.await.pipe(Effect.flatMap(() => Effect.die("interruption gate opened"))),
+        ),
+      ),
   });
+
+const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(function* () {
+  yield* Daemon.bootstrap;
+  const heartbeats = yield* Effect.forkChild(
+    Daemon.heartbeats({ pollIntervalMillis: 1000, drain: { graceMillis: 0, abort: Effect.void } }),
+  );
+  yield* TestClock.adjust("1 minute");
+  const worker = yield* ReconcileWorker;
+  const reconciled = yield* worker.snapshot;
+  const heartbeatsExit = heartbeats.pollUnsafe();
+  yield* Fiber.interrupt(heartbeats);
+  const rpc = yield* RpcClient.make(DaemonRpcs);
+  const runs = yield* rpc.ListRuns();
+  const status = yield* rpc.GetStatus();
+  return { runs, status, reconciled, heartbeatsExit };
+});
 
 const connectedWorkspace: RegisteredWorkspace = {
   source: "control-store:github",
@@ -114,6 +141,110 @@ const storedGitHubCredentials = Layer.succeed(CredentialStore.CredentialStore, {
   removeConnection: () => Effect.void,
 } satisfies CredentialStore.CredentialStoreService);
 
+function makeGitHubServerFixture() {
+  return Effect.gen(function* () {
+    const root = yield* Effect.acquireRelease(
+      Effect.sync(() => mkdtempSync(join(tmpdir(), "cogwork-github-credential-"))),
+      (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+    );
+    vi.stubEnv("GITHUB_TOKEN", "fallback-token");
+    const fetchStub = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(
+        new Response("[]", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchStub);
+    const toServer = new TransformStream<Uint8Array, Uint8Array>();
+    const toClient = new TransformStream<Uint8Array, Uint8Array>();
+    const server = yield* Socket.fromTransformStream(
+      Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
+    );
+    const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
+    const serverLayer = Daemon.serverLayer({
+      transport,
+      credentials: storedGitHubCredentials,
+      contextAssembler: contextAssemblerLayer,
+      runLedger: RunLedger.layerMemoryCore,
+      controlStorePath: join(root, "control.db"),
+      userAgentsDir: join(root, ".agents"),
+      worktrees: worktreeLayer,
+      harnessRunners: [stubRunner],
+    });
+    return { fetchStub, serverLayer };
+  });
+}
+
+class GitHubServerFixture extends Context.Service<
+  GitHubServerFixture,
+  Effect.Success<ReturnType<typeof makeGitHubServerFixture>>
+>()("@cogwork/engine/daemon-composition.test/GitHubServerFixture") {
+  static readonly layer = Layer.effect(GitHubServerFixture, makeGitHubServerFixture());
+}
+
+const githubServerTestLayer = () =>
+  Layer.unwrap(
+    Effect.map(GitHubServerFixture, ({ serverLayer }) => serverLayer.pipe(Layer.provide(NodeServices.layer))),
+  ).pipe(Layer.provideMerge(GitHubServerFixture.layer));
+
+function makeUnavailableServerFixture() {
+  return Effect.gen(function* () {
+    const controlStore = yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        const dir = mkdtempSync(join(tmpdir(), "cogwork-poisoned-store-"));
+        const path = join(dir, "control.db");
+        const db = new DatabaseSync(path);
+        db.exec(
+          "CREATE TABLE control_migrations (migration_id INTEGER PRIMARY KEY NOT NULL, created_at datetime NOT NULL DEFAULT current_timestamp, name VARCHAR(255) NOT NULL); INSERT INTO control_migrations (migration_id, name) VALUES (99999999999999, 'from-the-future')",
+        );
+        db.close();
+        return { dir, path };
+      }),
+      ({ dir }) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+    );
+    const toServer = new TransformStream<Uint8Array, Uint8Array>();
+    const toClient = new TransformStream<Uint8Array, Uint8Array>();
+    const client = yield* Socket.fromTransformStream(
+      Effect.succeed({ readable: toClient.readable, writable: toServer.writable }),
+    );
+    const server = yield* Socket.fromTransformStream(
+      Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
+    );
+    const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
+    const serverLayer = Daemon.serverLayer({
+      transport,
+      credentials: CredentialStore.layerEnv,
+      contextAssembler: contextAssemblerLayer,
+      runLedger: RunLedger.layerMemoryCore,
+      controlStorePath: controlStore.path,
+      userAgentsDir: join(controlStore.dir, ".agents"),
+      worktrees: worktreeLayer,
+      harnessRunners: [stubRunner],
+    });
+    const clientLayer = RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(Layer.succeed(Socket.Socket, client)),
+      Layer.provide(Daemon.serializationLayer),
+    );
+    return { clientLayer, serverLayer };
+  });
+}
+
+class UnavailableServerFixture extends Context.Service<
+  UnavailableServerFixture,
+  Effect.Success<ReturnType<typeof makeUnavailableServerFixture>>
+>()("@cogwork/engine/daemon-composition.test/UnavailableServerFixture") {
+  static readonly layer = Layer.effect(UnavailableServerFixture, makeUnavailableServerFixture());
+}
+
+const unavailableServerTestLayer = () =>
+  Layer.unwrap(
+    Effect.map(UnavailableServerFixture, ({ clientLayer, serverLayer }) =>
+      Layer.mergeAll(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer)),
+    ),
+  ).pipe(Layer.provideMerge(UnavailableServerFixture.layer));
+
 describe("daemon server composition", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -122,105 +253,16 @@ describe("daemon server composition", () => {
 
   it.effect("uses a GitHub Connection credential through the composed daemon", () =>
     Effect.gen(function* () {
-      const root = yield* Effect.acquireRelease(
-        Effect.sync(() => mkdtempSync(join(tmpdir(), "cogwork-github-credential-"))),
-        (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-      );
-      vi.stubEnv("GITHUB_TOKEN", "fallback-token");
-      const fetchStub = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
-        Promise.resolve(
-          new Response("[]", {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-        ),
-      );
-      vi.stubGlobal("fetch", fetchStub);
-      const toServer = new TransformStream<Uint8Array, Uint8Array>();
-      const toClient = new TransformStream<Uint8Array, Uint8Array>();
-      const server = yield* Socket.fromTransformStream(
-        Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
-      );
-      const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
-      const serverLayer = Daemon.serverLayer({
-        transport,
-        credentials: storedGitHubCredentials,
-        contextAssembler: contextAssemblerLayer,
-        runLedger: RunLedger.layerMemoryCore,
-        controlStorePath: join(root, "control.db"),
-        userAgentsDir: join(root, ".agents"),
-        worktrees: worktreeLayer,
-        harnessRunners: [stubRunner],
-      });
-
-      yield* Effect.gen(function* () {
-        yield* (yield* IssueTracker).observe(connectedWorkspace);
-      }).pipe(Effect.provide(serverLayer.pipe(Layer.provide(NodeServices.layer))), Effect.scoped);
-
+      const { fetchStub } = yield* GitHubServerFixture;
+      yield* (yield* IssueTracker).observe(connectedWorkspace);
       const authorization = new Headers(fetchStub.mock.calls[0]?.[1]?.headers).get("authorization");
       assert.strictEqual(authorization, "Bearer stored-token");
-    }),
+    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
   );
 
   it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
     Effect.gen(function* () {
-      const controlStore = yield* Effect.acquireRelease(
-        Effect.sync(() => {
-          const dir = mkdtempSync(join(tmpdir(), "cogwork-poisoned-store-"));
-          const path = join(dir, "control.db");
-          const db = new DatabaseSync(path);
-          db.exec(
-            "CREATE TABLE control_migrations (migration_id INTEGER PRIMARY KEY NOT NULL, created_at datetime NOT NULL DEFAULT current_timestamp, name VARCHAR(255) NOT NULL); INSERT INTO control_migrations (migration_id, name) VALUES (99999999999999, 'from-the-future')",
-          );
-          db.close();
-          return { dir, path };
-        }),
-        ({ dir }) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-      );
-      const toServer = new TransformStream<Uint8Array, Uint8Array>();
-      const toClient = new TransformStream<Uint8Array, Uint8Array>();
-      const client = yield* Socket.fromTransformStream(
-        Effect.succeed({ readable: toClient.readable, writable: toServer.writable }),
-      );
-      const server = yield* Socket.fromTransformStream(
-        Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
-      );
-      const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
-      const serverLayer = Daemon.serverLayer({
-        transport,
-        credentials: CredentialStore.layerEnv,
-        contextAssembler: contextAssemblerLayer,
-        runLedger: RunLedger.layerMemoryCore,
-        controlStorePath: controlStore.path,
-        userAgentsDir: join(controlStore.dir, ".agents"),
-        worktrees: worktreeLayer,
-        harnessRunners: [stubRunner],
-      });
-      const clientLayer = RpcClient.layerProtocolSocket().pipe(
-        Layer.provide(Layer.succeed(Socket.Socket, client)),
-        Layer.provide(Daemon.serializationLayer),
-      );
-
-      const result = yield* Effect.gen(function* () {
-        yield* Daemon.bootstrap;
-        // Dispatch is not merely idle: `bootstrap` must not submit a reconcile, and `heartbeats`
-        // must never begin polling. Both are asserted after time has had a chance to pass.
-        const heartbeats = yield* Effect.forkChild(
-          Daemon.heartbeats({ pollIntervalMillis: 1000, drain: { graceMillis: 0, abort: Effect.void } }),
-        );
-        yield* TestClock.adjust("1 minute");
-        const worker = yield* ReconcileWorker;
-        const reconciled = yield* worker.snapshot;
-        const heartbeatsExit = heartbeats.pollUnsafe();
-        yield* Fiber.interrupt(heartbeats);
-        const rpc = yield* RpcClient.make(DaemonRpcs);
-        const runs = yield* rpc.ListRuns();
-        const status = yield* rpc.GetStatus();
-        return { runs, status, reconciled, heartbeatsExit };
-      }).pipe(
-        Effect.provide(Layer.mergeAll(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer))),
-        Effect.scoped,
-      );
+      const result = yield* inspectUnavailableDaemon();
 
       assert.deepStrictEqual(result.runs, []);
       assert.strictEqual(result.status.health, "store-unavailable");
@@ -229,6 +271,6 @@ describe("daemon server composition", () => {
       assert.isUndefined(result.heartbeatsExit);
       assert.strictEqual(result.status.scheduler.globalInFlight, 0);
       assert.deepStrictEqual(result.status.workspaces, []);
-    }),
+    }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });

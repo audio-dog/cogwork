@@ -4,6 +4,7 @@
 - **Date:** 2026-08-25
 - **Amended:** 2026-08-25 — `drizzle-kit` is adopted as a development tool, see [Amendment](#amendment-2026-08-25--drizzle-kit-is-adopted-as-a-development-tool)
 - **Amended:** 2026-08-27 — pre-alpha: no migrations, see [Amendment](#amendment-2026-08-27--pre-alpha-no-migrations-no-cutover-no-backups)
+- **Amended:** 2026-09-01 — migrations return as declarative convergence, see [Amendment](#amendment-2026-09-01--migrations-return-as-declarative-convergence)
 
 ## Context
 
@@ -254,3 +255,98 @@ the signal to revisit this amendment.
 than the `rc` tag, because `rc.4` calls `Schema.TaggedErrorClass` from its Effect driver — a name that
 exists only on Effect's beta line — so `drizzle-orm/effect-sqlite-node` cannot be imported on the rc
 line at all. Move to the release carrying that fix. `effect` moved to `4.0.0-rc.112` with it.
+
+## Amendment (2026-09-01) — migrations return as declarative convergence
+
+The previous amendment named its own reversal signal: wanting to keep a store across a schema change.
+The signal arrived — more developers are joining, each with a `~/.cogwork/control.db` of their own,
+and "delete the store and start again" stops being free the moment it is somebody else's store. What
+follows keeps that amendment's schema-is-the-source-of-truth posture and withdraws its replacement
+policy. It also overturns the mechanism that amendment predicted, and the reasoning is recorded
+below.
+
+**Boot converges the store to the schema.** The exact fingerprint comparison is withdrawn. In its
+place, boot computes the difference between the schema the live store actually has and the schema
+this build declares, executes the resulting statements itself inside a transaction, then computes the
+difference again and requires it to be empty. That empty re-diff is the new boot verification — it
+checks the same thing the fingerprint checked, one level up: not "is the DDL text identical" but "is
+there anything this build would still change". An empty file is not a special case; creating the
+schema is converging from nothing, so the create path and the migrate path become one path.
+
+**The differ is drizzle-kit's, run in-process.** A survey of the alternatives found no other credible
+TypeScript implementation: the standalone packages are unmaintained or coupled to the wrong driver,
+the ORM synchronizers (TypeORM, Sequelize) are documented data-destroyers on SQLite, Prisma's diff
+engine is CLI-only, and Atlas and sqldef are Go binaries. drizzle-kit's SQLite differ is maintained,
+tested, and complete — the twelve-step table recreate, foreign keys, partial and expression indexes,
+views — and the schema it diffs against is the module this store is already authored in. It is used
+**statements-only**: the differ reports what it would run, the engine inspects the statements and
+executes them through its own `SqlClient`, and the differ's own apply path and its non-interactive
+hints are never trusted (both were verified lossy outside a TTY). Two statements-only entry points
+exist — `drizzle-kit/payload/sqlite`'s `pushSchema`, which takes the schema as an in-memory module,
+and the public SDK's `push` in explain mode, which carries the full typed hints protocol but loads
+the schema from a file. The implementation chooses between them with drizzle's own agent skills
+loaded, and records the choice; the decision here is the differ, not the entry point.
+
+**One mechanism, exercised by developers, shipped to users.** The developer loop is: edit
+`control-store-schema.ts`, restart the daemon. No command, no generated file to manage, no store to
+delete. That same converge step is what a user's store meets after an automatic desktop update — so
+the upgrade path users eventually depend on is the path developers run every day, not a separate
+mechanism first exercised in the field.
+
+**Why the prior rejections dissolve.** Push was rejected here twice, for three reasons, and each was
+about something other than push. *The exact comparison refuses ALTER'd DDL* — true, and withdrawn
+with the comparison itself; the empty re-diff accepts any store the differ has nothing left to say
+about. *Push keeps no history, so the compatibility check has nothing to read* — convergence needs no
+history; a store three releases behind is one diff away from current, which is the property ordered
+migration chains go to great lengths to approximate. On a desktop product the chain is the burden:
+every migration ever shipped must keep replaying correctly against every store shape that ever
+existed, on machines nobody can see. Stateless convergence replaces that with one invariant — any
+store, one diff, current schema. *The diff is computed at run time and can never be reviewed in a
+pull request* — the reviewed artifact is the schema change itself, which is the source of truth the
+diff is a pure function of; what runs on another machine was never going to be the SQL text in a PR,
+under any mechanism, because the store it runs against is not knowable from the repository.
+
+**Effect's `Migrator` is not adopted, reversing this ADR's own prediction.** The previous amendment
+said migrations return as "`drizzle-kit generate` for the SQL and Effect's `Migrator` to apply it."
+That is the ordered-chain model, and it loses to convergence on exactly the ground above. It also
+reintroduces everything the schema-as-truth posture removed: generated SQL files as committed
+artifacts, snapshot metadata as the generator's baseline, and a bookkeeping table rivaling the schema
+module's account of the store.
+
+**Data transforms are the named limit, and their shape is decided now, built never — until needed.**
+A differ derives structural change and cannot derive semantic change: a rename looks like a drop and
+an add, a backfill is not derivable from two schemas at all. When the first such change lands after a
+release, it ships as an ordered, one-shot transform that runs after DDL convergence and is recorded
+in a table. No transform machinery exists until that first transform does; before a release it cannot
+be needed, because pre-alpha data loss is acceptable.
+
+**Policy until the first release, and the flip after it.** Destructive statements execute without
+ceremony. A rename-shaped diff — the one case the differ refuses to resolve non-interactively — moves
+the store file aside as a timestamped backup and recreates from schema; the developer loses local
+state, never the file. Before the first release this flips, and the flip is part of shipping:
+destructive statements and rename-shaped diffs fail closed — daemon up, RPC served, store reported
+unavailable, file untouched — until a transform or an explicit resolution ships. Unexpected converge
+failures fail closed the same way today; that posture is unchanged.
+
+**drizzle-kit becomes a runtime dependency of the engine, pinned exact.** This reverses "a
+development tool that never runs on another machine." The statements-only surface is a few pure
+functions over an in-memory schema, but it rides in a ~5MB bundle, and the rc line has already
+regressed API behaviour once. The pin is exact rather than tag-following for that reason, and the
+empty re-diff bounds the blast radius of a behavioural regression: a differ that starts producing
+wrong statements fails the verification at boot instead of leaving a silently wrong store.
+
+**Likely retirements, to be confirmed in implementation.** With the schema module as the runtime
+source of truth, `control-store-create.gen.ts` and the `drizzle:schema` / `drizzle:check` scripts
+lose their reason to exist — the create statements were only ever the schema in a second notation.
+If the packaged app can feed the schema module to the differ directly, they retire.
+
+**What stands.** One SQLite database per machine at `~/.cogwork`, private directory and file. Drizzle
+as the query layer over the Effect `SqlClient`, one connection, one write lock. The run ledger's
+disposability by policy, and mandatory run-event retention. Fail-closed as the posture for anything
+unexpected. And the previous amendment's central claim survives its own reversal: the schema is the
+source of truth, and nothing a machine holds outranks it.
+
+**When this reverses.** A transform backlog that makes "one diff away from current" false in
+practice, or a differ regression the pin and the re-diff cannot contain, is the signal to revisit —
+the fallback is the ordered-chain model this amendment declined, whose ingredients (`drizzle-kit
+generate`, Effect's `Migrator.fromRecord`) remain verified and available.
