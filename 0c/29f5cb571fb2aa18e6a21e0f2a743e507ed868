@@ -1,0 +1,32 @@
+packages/engine/src/engine.test.ts
+  s_950d9dc8b8e5cb::t_139795424f9f11 742-743,778
+  s_950d9dc8b8e5cb::t_6397fd36a49a09 23,26,89-92,709-711,713-720,741,744-760,762-777
+  s_950d9dc8b8e5cb::t_3d2a24c6178aae 712,721-740
+  s_1035c9314faf21::t_336f3e922983e8 761,779-780
+packages/engine/src/reconcile.ts
+  s_950d9dc8b8e5cb::t_3d2a24c6178aae 18,34-37,210,309-319
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0c29f5cb571fb2aa18e6a21e0f2a743e507ed868",
+  "prompts": {},
+  "sessions": {
+    "s_1035c9314faf21": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cec-9697-7110-9757-0df0b6e99e8a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_950d9dc8b8e5cb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cfc-33ec-7fa1-8ffc-d8b169330393",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
