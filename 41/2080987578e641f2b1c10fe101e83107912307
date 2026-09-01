@@ -1,0 +1,20 @@
+packages/engine/CONTEXT.md
+  s_4ae61d8d70e02e::t_5581fb92ed9ca6 227-238
+  s_4ae61d8d70e02e::t_b9d7967552a5e3 239-246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "412080987578e641f2b1c10fe101e83107912307",
+  "prompts": {},
+  "sessions": {
+    "s_4ae61d8d70e02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb42e325-567c-4173-8033-8e65733e9986",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
