@@ -1,5 +1,11 @@
 import { type Priority, resolvePriority } from "@cogwork/contracts";
-import { LinearError, LinearErrorType, LinearClient as LinearSdk, RatelimitedLinearError } from "@linear/sdk";
+import {
+  LinearError,
+  LinearErrorType,
+  LinearClient as LinearSdk,
+  parseLinearError,
+  RatelimitedLinearError,
+} from "@linear/sdk";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -164,8 +170,12 @@ const reasonFor = (cause: unknown): IssueTrackerError["reason"] => {
   return "unavailable";
 };
 
+const isTransportCause = (cause: LinearError) =>
+  cause.type === LinearErrorType.Unknown && cause.raw instanceof TypeError;
+
 const isTransientCause = (cause: unknown) =>
-  !(cause instanceof LinearError) || (cause.type !== undefined && transientErrorTypes.has(cause.type));
+  cause instanceof LinearError &&
+  (isTransportCause(cause) || (cause.type !== undefined && transientErrorTypes.has(cause.type)));
 
 const finiteOrNull = (value: number | undefined) =>
   value !== undefined && Number.isFinite(value) ? value : null;
@@ -479,7 +489,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     variables: Record<string, unknown>,
   ) {
     const response = yield* call(ref, (sdk) =>
-      sdk.client.rawRequest<unknown, Record<string, unknown>>(document, variables),
+      sdk.client
+        .rawRequest<unknown, Record<string, unknown>>(document, variables)
+        .catch((cause) => Promise.reject(parseLinearError(cause))),
     );
     if (response.data === undefined) {
       return yield* unavailable("Linear response missing data");

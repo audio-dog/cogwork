@@ -507,6 +507,26 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("retries a rejected transport request", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear((document) =>
+        document.includes("TeamsByKey")
+          ? { body: { data: { teams: { nodes: [teamBundle] } } } }
+          : { body: { errors: [{ message: `unexpected document: ${document}` }] } },
+      );
+      fetchStub.mockRejectedValueOnce(new TypeError("fetch failed"));
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(client.observeIssues(ref, null));
+      yield* TestClock.adjust("5 seconds");
+      const issues = yield* Fiber.join(requestFiber);
+      assert.deepStrictEqual(
+        issues.map((issue) => issue.identifier),
+        ["AUD-1"],
+      );
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+    }).pipe(withToken()),
+  );
+
   it.effect("retries a mutation after a hanging attempt reaches its deadline", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ body: { data: { commentCreate: { success: true } } } }));
@@ -537,7 +557,7 @@ describe("linear client", () => {
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({
         body: {
-          errors: [{ message: "invalid comment", extensions: { type: "InvalidInput", userError: true } }],
+          errors: [{ message: "invalid comment", extensions: { type: "invalid input", userError: true } }],
         },
       }));
       const client = yield* LinearClient;
