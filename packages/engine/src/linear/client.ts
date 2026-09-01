@@ -133,9 +133,16 @@ const IssuesTeamNode = Schema.Struct({
 });
 
 const MetaTeamNode = Schema.Struct({
-  id: Schema.String,
   states: Schema.Struct({ nodes: Schema.Array(StateNode) }),
+});
+
+const LabelTeamNode = Schema.Struct({
+  id: Schema.String,
   labels: Schema.Struct({ nodes: Schema.Array(LabelNode) }),
+});
+
+const WorkspaceLabelsPayload = Schema.Struct({
+  issueLabels: Schema.Struct({ nodes: Schema.Array(LabelNode) }),
 });
 
 const CommentsPayload = Schema.Struct({
@@ -147,9 +154,19 @@ const CommentsPayload = Schema.Struct({
 });
 
 const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
+const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 
 const unavailable = (message: string) => new IssueTrackerError({ reason: "unavailable", message });
 const toUnavailable = (error: { readonly message: string }) => unavailable(error.message);
+
+const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTrackerError) =>
+  new IssueTrackerError({
+    reason: error.reason,
+    message: `Linear refused creating the "${name}" label in team ${ref.team}: ${error.message}`,
+    retryable: error.reason === "rate-limited",
+    retryAfterMillis: error.retryAfterMillis,
+    connectionId: error.connectionId,
+  });
 
 const isAuthStatus = (status: number | undefined) => status === 401 || status === 403;
 const transientErrorTypes = new Set([
@@ -172,6 +189,11 @@ const reasonFor = (cause: unknown): IssueTrackerError["reason"] => {
 const isTransportCause = (cause: LinearError) =>
   cause.type === LinearErrorType.Unknown && cause.raw instanceof TypeError;
 
+const permanentErrorTypes = new Set([LinearErrorType.Forbidden, LinearErrorType.FeatureNotAccessible]);
+
+const isPermanentCause = (cause: unknown) =>
+  cause instanceof LinearError && cause.type !== undefined && permanentErrorTypes.has(cause.type);
+
 const isTransientCause = (cause: unknown) =>
   cause instanceof LinearError &&
   (isTransportCause(cause) || (cause.type !== undefined && transientErrorTypes.has(cause.type)));
@@ -187,10 +209,13 @@ const retryAfterMillisOf = (cause: unknown, nowMillis: number) => {
   return resetAtMillis === null ? undefined : Math.max(0, resetAtMillis - nowMillis);
 };
 
+// Reason stays `unavailable` for a permanent refusal on purpose: `auth` makes the credential store
+// invalidate a token that is working.
 const fromSdkError = (cause: unknown, nowMillis: number) =>
   new IssueTrackerError({
     reason: reasonFor(cause),
     message: cause instanceof Error ? cause.message : String(cause),
+    ...(isPermanentCause(cause) ? { retryable: false } : {}),
     retryAfterMillis: retryAfterMillisOf(cause, nowMillis),
   });
 
@@ -289,9 +314,20 @@ const issuesFilter = (assigneeIds: ReadonlyArray<string> | null) => ({
 });
 
 const metaSelection = `
+  states { nodes { id name type } }`;
+
+// Linear caps an unpaginated connection at 50, and a team can hold more labels than that.
+const labelSelection = `
   id
-  states { nodes { id name type } }
-  labels { nodes { id name } }`;
+  labels(filter: { name: { eq: $label } }, first: 1) { nodes { id name } }`;
+
+// A workspace-level label belongs to no team, so no team-scoped connection lists it.
+const workspaceLabelQuery = `
+query WorkspaceLabelByName($label: String!) {
+  issueLabels(filter: { name: { eq: $label }, team: { null: true } }, first: 1) {
+    nodes { id name }
+  }
+}`;
 
 const commentsQuery = `
 query IssueComments($id: String!) {
@@ -347,6 +383,7 @@ const teamShape = <S extends Schema.Top & { readonly DecodingServices: never }>(
 };
 
 const metaShape = teamShape(MetaTeamNode, metaSelection);
+const labelShape = teamShape(LabelTeamNode, labelSelection, ", $label: String!");
 const issuesShape = teamShape(IssuesTeamNode, issuesSelection(""), issuesArgs);
 const coordinatedIssuesShape = teamShape(
   IssuesTeamNode,
@@ -560,11 +597,22 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     yield* requireSuccess(operation, payload);
   });
 
+  const resolveLabel = Effect.fn("linear.resolveLabel")(function* (ref: LinearTeamRef, name: string) {
+    const team = yield* loadTeam(ref, labelShape, { label: name });
+    const scoped = team.labels.nodes.at(0);
+    if (scoped) return { teamId: team.id, labelId: scoped.id };
+    const data = yield* rawData(ref, workspaceLabelQuery, { label: name });
+    const payload = yield* Effect.mapError(decodeWorkspaceLabels(data), toUnavailable);
+    return { teamId: team.id, labelId: payload.issueLabels.nodes.at(0)?.id ?? null };
+  });
+
   const ensureLabel = Effect.fn("linear.ensureLabel")(function* (ref: LinearTeamRef, name: string) {
-    const team = yield* loadTeam(ref, metaShape);
-    const existing = team.labels.nodes.find((label) => label.name === name);
-    if (existing) return existing.id;
-    const payload = yield* call(ref, (sdk) => sdk.createIssueLabel({ teamId: team.id, name }));
+    const { teamId, labelId } = yield* resolveLabel(ref, name);
+    if (labelId !== null) return labelId;
+    const payload = yield* Effect.mapError(
+      call(ref, (sdk) => sdk.createIssueLabel({ teamId, name })),
+      labelCreateRefused(ref, name),
+    );
     yield* requireSuccess("issueLabelCreate", payload);
     if (!payload.issueLabelId) {
       return yield* unavailable(`Linear issueLabelCreate returned no label for ${name}`);
@@ -589,10 +637,9 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       }),
     removeLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
-        const team = yield* loadTeam(ref, metaShape);
-        const found = team.labels.nodes.find((entry) => entry.name === label);
-        if (!found) return;
-        yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, found.id));
+        const { labelId } = yield* resolveLabel(ref, label);
+        if (labelId === null) return;
+        yield* mutate(ref, "issueRemoveLabel", (sdk) => sdk.issueRemoveLabel(issueId, labelId));
       }),
     setState: (ref: LinearTeamRef, issueId: string, stateId: string) =>
       mutate(ref, "issueUpdate", (sdk) => sdk.updateIssue(issueId, { stateId })),
