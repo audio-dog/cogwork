@@ -7,6 +7,7 @@ import {
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -17,7 +18,9 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import type * as Headers from "effect/unstable/http/Headers";
 import * as HttpClient from "effect/unstable/http/HttpClient";
+import type * as HttpClientError from "effect/unstable/http/HttpClientError";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
 import { IssueTrackerError } from "../issue-tracker";
@@ -306,13 +309,28 @@ const rateLimitResumeAt = (headers: Headers.Headers, nowMillis: number) => {
   return reset === null ? null : reset * 1000;
 };
 
-const isTransient = (error: IssueTrackerError) => error.reason === "unavailable";
+const isTransientStatus = (status: number) => status === 408 || status === 425 || status >= 500;
+
+class GitHubAttemptError extends Data.TaggedError("GitHubAttemptError")<{
+  readonly error: IssueTrackerError;
+  readonly transient: boolean;
+}> {}
+
+const transientAttemptError = (message: string) =>
+  new GitHubAttemptError({ error: unavailable(message), transient: true });
+
+const permanentAttemptError = (error: IssueTrackerError) =>
+  new GitHubAttemptError({ error, transient: false });
+
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
 const transientAttemptDeadline = "30 seconds";
 const paginationDeadline = "5 minutes";
 
-const withTransientRetry = <A, R>(attempt: Effect.Effect<A, IssueTrackerError, R>) =>
-  Effect.retry(attempt, { while: isTransient, schedule: transientBackoff, times: 3 });
+const withTransientRetry = <A, R>(attempt: Effect.Effect<A, GitHubAttemptError, R>) =>
+  attempt.pipe(
+    Effect.retry({ while: (error) => error.transient, schedule: transientBackoff, times: 3 }),
+    Effect.mapError((error) => error.error),
+  );
 
 const withPaginationDeadline = <A, R>(operation: Effect.Effect<A, IssueTrackerError, R>) =>
   operation.pipe(
@@ -326,6 +344,14 @@ interface EtagEntry {
   readonly etag: string;
   readonly body: unknown;
 }
+
+const bodyWithEtag = (body: unknown, etag: string | undefined) => ({ body, etag });
+
+type ConsumeResponse<A> = (
+  response: HttpClientResponse.HttpClientResponse,
+) => Effect.Effect<A, HttpClientError.HttpClientError>;
+
+const acceptResponse = () => Effect.void;
 
 const repoPath = (repo: GitHubRepoRef, suffix: string) =>
   `https://api.github.com/repos/${repo.owner}/${repo.name}${suffix}`;
@@ -350,49 +376,61 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
   const etags = yield* Ref.make(new Map<string, EtagEntry>());
   const resumeAtRef = yield* Ref.make<number | null>(null);
 
-  const execute = Effect.fn("github.execute")(function* (
+  const execute = Effect.fn("github.execute")(function* <A>(
     request: HttpClientRequest.HttpClientRequest,
     token: Redacted.Redacted<string>,
+    consume: ConsumeResponse<A>,
   ) {
     const now = yield* Clock.currentTimeMillis;
     const cooldownUntil = yield* Ref.get(resumeAtRef);
     if (cooldownUntil !== null && now < cooldownUntil) {
-      return yield* rateLimited(cooldownUntil);
+      return yield* permanentAttemptError(rateLimited(cooldownUntil));
     }
-    const response = yield* client
-      .execute(request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)))
-      .pipe(
-        Effect.catchTag("HttpClientError", (error) => Effect.fail(unavailable(error.message))),
-        Effect.timeout(transientAttemptDeadline),
-        Effect.catchTag("TimeoutError", () =>
-          Effect.fail(unavailable(`GitHub request timed out after ${transientAttemptDeadline}`)),
-        ),
+    return yield* Effect.gen(function* () {
+      const response = yield* client.execute(
+        request.pipe(HttpClientRequest.bearerToken(token), HttpClientRequest.setHeaders(baseHeaders)),
       );
-    const remaining = response.headers["x-ratelimit-remaining"];
-    const resumeAt = rateLimitResumeAt(response.headers, now);
-    if (remaining === "0" && resumeAt !== null) {
-      yield* Ref.set(resumeAtRef, resumeAt);
-    }
-    if (response.status === 401) {
-      return yield* new IssueTrackerError({ reason: "auth", message: "GitHub authentication failed (401)" });
-    }
-    const throttled =
-      response.status === 429 ||
-      (response.status === 403 && (remaining === "0" || response.headers["retry-after"] !== undefined));
-    if (throttled) {
-      const until = resumeAt ?? now + defaultCooldownMillis;
-      yield* Ref.set(resumeAtRef, until);
-      return yield* rateLimited(until);
-    }
-    if (response.status >= 400) {
-      return yield* unavailable(`GitHub request failed (${response.status})`);
-    }
-    return response;
+      const remaining = response.headers["x-ratelimit-remaining"];
+      const resumeAt = rateLimitResumeAt(response.headers, now);
+      if (remaining === "0" && resumeAt !== null) {
+        yield* Ref.set(resumeAtRef, resumeAt);
+      }
+      if (response.status === 401) {
+        return yield* permanentAttemptError(
+          new IssueTrackerError({
+            reason: "auth",
+            message: "GitHub authentication failed (401)",
+          }),
+        );
+      }
+      const throttled =
+        response.status === 429 ||
+        (response.status === 403 && (remaining === "0" || response.headers["retry-after"] !== undefined));
+      if (throttled) {
+        const until = resumeAt ?? now + defaultCooldownMillis;
+        yield* Ref.set(resumeAtRef, until);
+        return yield* permanentAttemptError(rateLimited(until));
+      }
+      if (isTransientStatus(response.status)) {
+        return yield* transientAttemptError(`GitHub request failed (${response.status})`);
+      }
+      if (response.status >= 400) {
+        return yield* permanentAttemptError(unavailable(`GitHub request failed (${response.status})`));
+      }
+      return yield* consume(response);
+    }).pipe(
+      Effect.catchTag("HttpClientError", (error) => Effect.fail(transientAttemptError(error.message))),
+      Effect.timeout(transientAttemptDeadline),
+      Effect.catchTag("TimeoutError", () =>
+        Effect.fail(transientAttemptError(`GitHub request timed out after ${transientAttemptDeadline}`)),
+      ),
+    );
   });
 
-  const send = Effect.fn("github.send")(function* (
+  const send = Effect.fn("github.send")(function* <A>(
     repo: GitHubRepoRef,
     request: HttpClientRequest.HttpClientRequest,
+    consume: ConsumeResponse<A>,
   ) {
     if (repo.connectionId && credentialStore) {
       const account = connectionAccountOf(repo.connectionId);
@@ -406,14 +444,19 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
           clientCredentials: null,
           oauthClientId: null,
         })
-        .pipe(Effect.mapError((error) => new IssueTrackerError({ reason: "auth", message: error.message })));
-      return yield* execute(request, credential.token);
+        .pipe(
+          Effect.mapError((error) =>
+            permanentAttemptError(new IssueTrackerError({ reason: "auth", message: error.message })),
+          ),
+        );
+      return yield* execute(request, credential.token, consume);
     }
-    const token = yield* Effect.mapError(
-      Config.redacted(repo.tokenEnv),
-      () => new IssueTrackerError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
+    const token = yield* Effect.mapError(Config.redacted(repo.tokenEnv), () =>
+      permanentAttemptError(
+        new IssueTrackerError({ reason: "auth", message: `missing GitHub token in ${repo.tokenEnv}` }),
+      ),
     );
-    return yield* execute(request, token);
+    return yield* execute(request, token, consume);
   });
 
   const fetchJson = Effect.fn("github.fetchJson")(function* (repo: GitHubRepoRef, path: string) {
@@ -421,13 +464,11 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     const base = HttpClientRequest.get(path);
     const request = cached ? HttpClientRequest.setHeader(base, "if-none-match", cached.etag) : base;
     const { body, etag } = yield* withTransientRetry(
-      Effect.gen(function* () {
-        const response = yield* send(repo, request);
-        if (response.status === 304 && cached) return { body: cached.body, etag: undefined };
-        return {
-          body: yield* Effect.mapError(response.json, toUnavailable),
-          etag: response.headers.etag,
-        };
+      send(repo, request, (response) => {
+        if (response.status === 304 && cached) {
+          return Effect.succeed(bodyWithEtag(cached.body, undefined));
+        }
+        return Effect.map(response.json, (body) => bodyWithEtag(body, response.headers.etag));
       }),
     );
     if (etag !== undefined) {
@@ -465,7 +506,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     body: unknown,
   ) {
     const withBody = yield* Effect.mapError(HttpClientRequest.bodyJson(request, body), toUnavailable);
-    yield* withTransientRetry(send(repo, withBody));
+    yield* withTransientRetry(send(repo, withBody, acceptResponse));
   });
 
   // Projects v2 can return partial data alongside per-item errors; only fail when there is nothing to decode.
@@ -479,12 +520,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       HttpClientRequest.bodyJson(request, { query, variables }),
       toUnavailable,
     );
-    const json = yield* withTransientRetry(
-      Effect.gen(function* () {
-        const response = yield* send(repo, withBody);
-        return yield* Effect.mapError(response.json, toUnavailable);
-      }),
-    );
+    const json = yield* withTransientRetry(send(repo, withBody, (response) => response.json));
     const decoded = yield* Effect.mapError(decodeGraphQl(json), toUnavailable);
     const result = graphQlData(decoded);
     if (!result.ok) return yield* unavailable(result.message);
@@ -530,7 +566,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     repo: GitHubRepoRef,
     cursor?: string | null,
   ) => Effect.Effect<ReadonlyMap<number, ReadonlyArray<number>>, IssueTrackerError> = Effect.fn(
-    "github.pullClosingReferencePage",
+    "github.collectClosingReferencePages",
   )(function* (repo: GitHubRepoRef, cursor: string | null = null) {
     const data = yield* graphql(repo, closingReferencesQuery, {
       owner: repo.owner,
@@ -608,14 +644,13 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         labels: [label],
       }),
     removeLabel: (repo: GitHubRepoRef, issueNumber: number, label: string) =>
-      Effect.asVoid(
-        withTransientRetry(
-          send(
-            repo,
-            HttpClientRequest.delete(
-              repoPath(repo, `/issues/${issueNumber}/labels/${encodeURIComponent(label)}`),
-            ),
+      withTransientRetry(
+        send(
+          repo,
+          HttpClientRequest.delete(
+            repoPath(repo, `/issues/${issueNumber}/labels/${encodeURIComponent(label)}`),
           ),
+          acceptResponse,
         ),
       ),
     createComment: (repo: GitHubRepoRef, issueNumber: number, body: string) =>
@@ -623,7 +658,9 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
     verifyCredential: (token: Redacted.Redacted<string>) =>
-      Effect.asVoid(execute(HttpClientRequest.get("https://api.github.com/user"), token)),
+      execute(HttpClientRequest.get("https://api.github.com/user"), token, acceptResponse).pipe(
+        Effect.mapError((error) => error.error),
+      ),
   };
 });
 
