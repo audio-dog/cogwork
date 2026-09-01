@@ -1,0 +1,21 @@
+packages/cursor-acp/src/harness.test.ts
+  s_ffed0fe3f37454::t_fde1e253e210f3 409-430
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_ffed0fe3f37454::t_fde1e253e210f3 82-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d1898551d085827938009c2f79af907b429e352d",
+  "prompts": {},
+  "sessions": {
+    "s_ffed0fe3f37454": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dd5-8ef9-7211-94eb-c47c2b6e29be",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
