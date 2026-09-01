@@ -553,11 +553,11 @@ describe("linear work source adapter", () => {
         title: `issue ${index + 1}`,
         labels: ["state:ready-for-agent"],
       }));
-      yield* Effect.gen(function* () {
-        const items = yield* observeItems(workspace);
-        assert.strictEqual(items.length, 60);
-        assert.strictEqual(yield* Ref.get(observeCalls), 1);
-      }).pipe(Effect.provide(withClient({ issues: backlog, observeCalls })));
+      const items = yield* observeItems(workspace).pipe(
+        Effect.provide(withClient({ issues: backlog, observeCalls })),
+      );
+      assert.strictEqual(items.length, 60);
+      assert.strictEqual(yield* Ref.get(observeCalls), 1);
     }),
   );
 

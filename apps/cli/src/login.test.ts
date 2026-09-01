@@ -6,6 +6,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
@@ -19,6 +20,7 @@ import { makeFileStore } from "./credentials";
 import { BrowserOpener, browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear } from "./login";
 
 const redirectPort = 39_642;
+const interruptionGate = Latch.makeUnsafe();
 
 const config: LinearLoginConfig = { clientId: "client-1", redirectPort };
 
@@ -152,7 +154,7 @@ describe("login linear", () => {
     Effect.gen(function* () {
       vi.stubGlobal("fetch", vi.fn(routedFetch));
       const hangingBrowser = Layer.succeed(BrowserOpener, {
-        open: (url: string) => completeCallback(url).pipe(Effect.andThen(Effect.never)),
+        open: (url: string) => completeCallback(url).pipe(Effect.andThen(interruptionGate.await)),
       });
 
       const result = yield* loginLinear(config).pipe((effect) => withLoginTest(effect, hangingBrowser));
@@ -210,7 +212,7 @@ describe("browser opener", () => {
                     stdout: Stream.empty,
                     stderr: Stream.empty,
                     all: Stream.empty,
-                    exitCode: Effect.never,
+                    exitCode: Effect.map(interruptionGate.await, () => ChildProcessSpawner.ExitCode(0)),
                     isRunning: Effect.succeed(true),
                     kill: () => Effect.void,
                     getInputFd: () => Sink.drain,

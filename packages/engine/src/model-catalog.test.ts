@@ -69,11 +69,11 @@ describe("ModelCatalog", () => {
     Effect.gen(function* () {
       const fetches = yield* Ref.make(0);
       const source: CatalogSource = {
-        fetch: Effect.gen(function* () {
-          const attempt = yield* Ref.getAndUpdate(fetches, (count) => count + 1);
-          if (attempt === 0) yield* Effect.sleep("2 seconds");
-          return api;
-        }),
+        fetch: Ref.getAndUpdate(fetches, (count) => count + 1).pipe(
+          Effect.flatMap((attempt) =>
+            attempt === 0 ? Effect.sleep("2 seconds").pipe(Effect.map(() => api)) : Effect.succeed(api),
+          ),
+        ),
       };
       const catalog = yield* makeService(source, 1_000);
       const firstRead = yield* catalog.models(["anthropic"]).pipe(Effect.forkChild);
@@ -90,12 +90,11 @@ describe("ModelCatalog", () => {
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
       const source: CatalogSource = {
-        fetch: Effect.gen(function* () {
-          yield* Ref.update(fetches, (count) => count + 1);
-          yield* Deferred.succeed(started, undefined);
-          yield* Deferred.await(release);
-          return api;
-        }),
+        fetch: Ref.update(fetches, (count) => count + 1).pipe(
+          Effect.andThen(Deferred.succeed(started, undefined)),
+          Effect.andThen(Deferred.await(release)),
+          Effect.map(() => api),
+        ),
       };
       const catalog = yield* makeService(source);
       const reads = yield* Effect.all(

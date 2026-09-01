@@ -7,6 +7,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
@@ -20,6 +21,8 @@ const write = Effect.fn("test.writePluginFile")(function* (file: string, content
   yield* fs.makeDirectory(path.dirname(file), { recursive: true });
   yield* fs.writeFileString(file, content);
 });
+
+const interruptionGate = Latch.makeUnsafe();
 
 const catalogDocument = JSON.stringify({
   plugins: [
@@ -161,13 +164,16 @@ const interruptedStoreLayer = Layer.unwrap(
     const removalStarted = yield* RemovalStarted;
     return Layer.effect(
       ControlStore,
-      Effect.gen(function* () {
-        const store = yield* ControlStore;
+      Effect.map(ControlStore, (store) => {
         if (store.health === "unavailable") return store;
         return {
           ...store,
           uninstallPlugin: () =>
-            Deferred.succeed(removalStarted, undefined).pipe(Effect.andThen(Effect.never)),
+            Deferred.succeed(removalStarted, undefined).pipe(
+              Effect.andThen(
+                interruptionGate.await.pipe(Effect.flatMap(() => Effect.die("interruption gate opened"))),
+              ),
+            ),
         };
       }),
     ).pipe(Layer.provide(storeLayerAt(fixture.storePath)));
