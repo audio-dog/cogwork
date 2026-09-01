@@ -1,0 +1,26 @@
+packages/cursor-acp/package.json
+  h_46518a29d4dd91 21
+pnpm-lock.yaml
+  s_d78ac52cb1d9bd::t_877bb56b45bcd4 371-372
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "46fa211efd3fffd62764c6ed25058beadf3c05ef",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_d78ac52cb1d9bd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b44-e664-7ea0-8eb6-3f724688f494",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
