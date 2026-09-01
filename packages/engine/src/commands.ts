@@ -167,12 +167,13 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
         trackerClaim === null
           ? Effect.void
           : releaseClaim(trackerClaim.issueTracker)(trackerClaim.workspace, run.workItem);
+      const releaseAbandonedClaim = cancellation._tag === "NotFound" ? releaseRunClaim : Effect.void;
 
       const endedAtMillis = yield* Clock.currentTimeMillis;
       const settled = yield* ledger.getRun(payload.runId);
       if (settled === null) return yield* new RunNotFound({ runId: payload.runId });
       if (settled.status !== "running") {
-        yield* releaseRunClaim;
+        yield* releaseAbandonedClaim;
         return yield* new RunAlreadyFinished({ runId: payload.runId, status: settled.status });
       }
       yield* ledger.updateRun(payload.runId, {
@@ -189,8 +190,8 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
               Effect.logWarning("run hand-off failed", { message: error.message }),
             ),
           );
-        yield* releaseRunClaim;
       }
+      yield* releaseAbandonedClaim;
 
       const item = parkedItem(observed) ?? parkedNeedsHuman(run.workItem, run.workItem);
       if (currentWorkspace !== undefined) {

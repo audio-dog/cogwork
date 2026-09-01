@@ -7,11 +7,13 @@ import * as Fiber from "effect/Fiber";
 import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
 import * as MutableHashMap from "effect/MutableHashMap";
+import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 interface Registration {
   readonly fiber: Fiber.Fiber<unknown, unknown>;
+  readonly manualCancellation: MutableRef.MutableRef<boolean>;
   readonly workspace: WorkspaceIssueTrackerBinding | undefined;
 }
 
@@ -37,23 +39,29 @@ export const make = Effect.gen(function* () {
   };
 
   return {
-    run: <A, E, R>(
+    run: <A, E, R, R2 = never>(
       runId: RunId,
       workspace: WorkspaceIssueTrackerBinding | undefined,
       effect: Effect.Effect<A, E, R>,
+      onCancel: Effect.Effect<void, never, R2> = Effect.void,
     ) =>
       Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const ready = yield* Deferred.make<void>();
+          const manualCancellation = MutableRef.make(false);
           const fiber = yield* FiberMap.run(
             fibers,
             runId,
-            restore(Deferred.await(ready).pipe(Effect.andThen(effect))),
+            restore(Deferred.await(ready).pipe(Effect.andThen(effect))).pipe(
+              Effect.onInterrupt(() =>
+                Effect.suspend(() => (MutableRef.get(manualCancellation) ? onCancel : Effect.void)),
+              ),
+            ),
           );
           yield* Effect.sync(() => {
             const current = FiberMap.getUnsafe(fibers, runId);
             if (Option.isSome(current) && current.value === fiber) {
-              MutableHashMap.set(registrations, runId, { fiber, workspace });
+              MutableHashMap.set(registrations, runId, { fiber, manualCancellation, workspace });
               fiber.addObserver(() => forget(runId, fiber));
             }
           });
@@ -66,10 +74,13 @@ export const make = Effect.gen(function* () {
         const current = FiberMap.getUnsafe(fibers, runId);
         if (Option.isNone(current)) return RunCancellation.NotFound({});
         const fiber = current.value;
-        const workspace = MutableHashMap.get(registrations, runId).pipe(
-          Option.filter((registration) => registration.fiber === fiber),
+        const registration = MutableHashMap.get(registrations, runId).pipe(
+          Option.filter((candidate) => candidate.fiber === fiber),
+        );
+        const workspace = registration.pipe(
           Option.flatMap((registration) => Option.fromNullishOr(registration.workspace)),
         );
+        if (Option.isSome(registration)) MutableRef.set(registration.value.manualCancellation, true);
         fiber.interruptUnsafe(Fiber.getCurrent()?.id);
         return RunCancellation.Interrupting({
           workspace,

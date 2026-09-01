@@ -579,7 +579,7 @@ describe("CancelRun", () => {
     }).pipe(Effect.scoped);
   });
 
-  it.effect("returns still draining after settling and releasing interrupted work", () => {
+  it.effect("keeps the claim while interrupted work is still draining", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     const claimed = trackerItem({
       claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
@@ -593,6 +593,7 @@ describe("CancelRun", () => {
       const started = yield* Deferred.make<void>();
       const finishTeardown = yield* Deferred.make<void>();
       const control = yield* RunControl.RunControl;
+      const issueTracker = yield* IssueTracker.IssueTracker;
       const running = yield* Effect.forkChild(
         control.run(
           rid("run-1"),
@@ -601,6 +602,7 @@ describe("CancelRun", () => {
             Effect.andThen(Effect.never),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
+          Effect.ignore(issueTracker.release(registered, id("AUD-1"))),
         ),
       );
       yield* Deferred.await(started);
@@ -614,11 +616,12 @@ describe("CancelRun", () => {
       assert.strictEqual(outcome._tag, "StillDraining");
       assert.strictEqual(outcome.item._tag, "NeedsHuman");
       assert.strictEqual((yield* ledger.getRun(rid("run-1")))?.status, "interrupted");
-      assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, []);
       assert.isUndefined(running.pollUnsafe());
 
       yield* Deferred.succeed(finishTeardown, undefined);
       yield* Fiber.await(running);
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
     }).pipe(Effect.provide(daemonLayer(recordingTracker([claimed], calls))), Effect.scoped);
   });
 
@@ -637,6 +640,7 @@ describe("CancelRun", () => {
       const interrupted = yield* Deferred.make<void>();
       const finishTeardown = yield* Deferred.make<void>();
       const control = yield* RunControl.RunControl;
+      const issueTracker = yield* IssueTracker.IssueTracker;
       const running = yield* Effect.forkChild(
         control.run(
           rid("run-1"),
@@ -646,6 +650,7 @@ describe("CancelRun", () => {
             Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
+          Effect.ignore(issueTracker.release(registered, id("AUD-1"))),
         ),
       );
       yield* Deferred.await(started);
@@ -665,7 +670,8 @@ describe("CancelRun", () => {
       yield* Fiber.await(cancelling);
 
       assert.strictEqual(statusAfterDisconnect, "interrupted");
-      assert.deepStrictEqual(callsAfterDisconnect.released, [id("AUD-1")]);
+      assert.deepStrictEqual(callsAfterDisconnect.released, []);
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
     }).pipe(Effect.provide(daemonLayer(recordingTracker([claimed], calls))), Effect.scoped);
   });
 
@@ -929,11 +935,13 @@ describe("RunControl", () => {
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
       const started = yield* Deferred.make<void>();
+      const onCancel = yield* Deferred.make<void>();
       const fiber = yield* Effect.forkChild(
         control.run(
           rid("run-1"),
           registered,
           Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(onCancel, undefined),
         ),
       );
       yield* Deferred.await(started);
@@ -944,6 +952,7 @@ describe("RunControl", () => {
         assert.deepStrictEqual(cancelled.workspace, Option.some(registered));
       }
       if (cancelled._tag === "Interrupting") yield* cancelled.awaitTermination;
+      yield* Deferred.await(onCancel);
       const exit = yield* Fiber.await(fiber);
       assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
 
@@ -958,6 +967,7 @@ describe("RunControl", () => {
       const started = yield* Deferred.make<void>();
       const interrupted = yield* Deferred.make<void>();
       const finishTeardown = yield* Deferred.make<void>();
+      const onCancel = MutableRef.make(false);
       const caller = yield* Effect.forkChild(
         control.run(
           rid("run-1"),
@@ -967,6 +977,7 @@ describe("RunControl", () => {
             Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
+          Effect.sync(() => MutableRef.set(onCancel, true)),
         ),
       );
       yield* Deferred.await(started);
@@ -976,10 +987,11 @@ describe("RunControl", () => {
       yield* Effect.yieldNow;
 
       const callerBeforeTeardown = caller.pollUnsafe();
-      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "Interrupting");
       yield* Deferred.succeed(finishTeardown, undefined);
       yield* Fiber.await(caller);
       assert.isUndefined(callerBeforeTeardown);
+      assert.isFalse(MutableRef.get(onCancel));
+      assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "NotFound");
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
   );
 
@@ -1610,11 +1622,13 @@ describe("workspace lifecycle commands", () => {
       yield* ledger.insertRun(runRecord({ workspace: registeredState.name }));
       const started = yield* Deferred.make<void>();
       const control = yield* RunControl.RunControl;
+      const issueTracker = yield* IssueTracker.IssueTracker;
       yield* Effect.forkChild(
         control.run(
           rid("run-1"),
           registeredWorkspace,
           Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Effect.ignore(issueTracker.release(registeredWorkspace, id("AUD-1"))),
         ),
       );
       yield* Deferred.await(started);

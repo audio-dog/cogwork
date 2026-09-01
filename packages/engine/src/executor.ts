@@ -1127,49 +1127,52 @@ export const make = Effect.gen(function* () {
       stage: item.stage,
       runId,
     };
-    return yield* Effect.gen(function* () {
-      const previous = yield* candidateSession(workspace, item, ops.branch);
-      const selectedOps: StageOps =
-        previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
-      return yield* selectedOps.prepare.pipe(
-        Effect.flatMap((prepared) =>
-          controlStore.withWrite(
-            planSession(
-              runId,
-              workspace,
-              item,
-              selectedOps,
-              prepared,
-              startedAtMillis,
-              previous,
-              observation,
-            ).pipe(
-              Effect.flatMap((planned) => acceptPlannedRun(runId, workspace, item, startedAtMillis, planned)),
+    return yield* runControl.run(
+      runId,
+      workspace,
+      Effect.gen(function* () {
+        const previous = yield* candidateSession(workspace, item, ops.branch);
+        const selectedOps: StageOps =
+          previous === item.resume?.session ? ops : freshRecoveryOps(workspace, item, ops);
+        return yield* selectedOps.prepare.pipe(
+          Effect.flatMap((prepared) =>
+            controlStore.withWrite(
+              planSession(
+                runId,
+                workspace,
+                item,
+                selectedOps,
+                prepared,
+                startedAtMillis,
+                previous,
+                observation,
+              ).pipe(
+                Effect.flatMap((planned) =>
+                  acceptPlannedRun(runId, workspace, item, startedAtMillis, planned),
+                ),
+              ),
             ),
           ),
-        ),
-        Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
-        Effect.matchEffect({
-          onFailure: (error) => {
-            if (error._tag === "PlanDeclined") return Effect.void;
-            return handleOf(ledger, previous).pipe(
-              Effect.flatMap((handle) =>
-                reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
-              ),
-            );
-          },
-          onSuccess: ({ request, selectedOps: acceptedOps, record }) =>
-            runControl.run(
-              runId,
-              workspace,
+          Effect.onInterrupt(() => releaseClaim(workspace, item.id)),
+          Effect.matchEffect({
+            onFailure: (error) => {
+              if (error._tag === "PlanDeclined") return Effect.void;
+              return handleOf(ledger, previous).pipe(
+                Effect.flatMap((handle) =>
+                  reportFailure(workspace, item, retryableOf(error), prepareFailureReason(error), handle),
+                ),
+              );
+            },
+            onSuccess: ({ request, selectedOps: acceptedOps, record }) =>
               settleOutcome(workspace, item, acceptedOps, record, runId, request),
-            ),
-        }),
-      );
-    }).pipe(
-      Effect.ensuring(cleanupRunContext(runId)),
-      Effect.annotateLogs(correlation),
-      Effect.annotateSpans(correlation),
+          }),
+        );
+      }).pipe(
+        Effect.ensuring(cleanupRunContext(runId)),
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
+      ),
+      releaseClaim(workspace, item.id),
     );
   });
 
