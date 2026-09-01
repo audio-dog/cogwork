@@ -81,7 +81,7 @@ const providerName = Schema.decodeSync(HarnessName)("provider");
 
 export const harnessRunners = [
   cursorRunner({ name: cursorName }),
-  codexRunner({ name: codexName }),
+  codexRunner({ name: codexName, environment: process.env }),
   Provider.providerRunner({ name: providerName }),
 ];
 

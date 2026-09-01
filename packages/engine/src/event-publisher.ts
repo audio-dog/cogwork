@@ -109,7 +109,7 @@ export const make = Effect.gen(function* () {
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     picture: ControlStorePicture,
   ) {
-    const published = controlStoreWithDiagnostics(picture, registry);
+    const published = controlStoreWithDiagnostics(picture, yield* registry.state);
     yield* bus.publish({ _tag: "ControlStoreChanged", controlStore: published });
     return published;
   });
@@ -128,7 +128,7 @@ export const make = Effect.gen(function* () {
 
   const publishItems = Effect.fn("DaemonEventPublisher.publishItems")(function* () {
     const snapshot = yield* worker.snapshot;
-    const signed = currentReconcileStatesOf(registry, snapshot).flatMap((state) =>
+    const signed = currentReconcileStatesOf(yield* registry.state, snapshot).flatMap((state) =>
       classifiedItemsOf(state).map(
         (item) =>
           ({
@@ -165,7 +165,7 @@ export const make = Effect.gen(function* () {
 
   const publishWorkspaces = Effect.fn("DaemonEventPublisher.publishWorkspaces")(function* () {
     const snapshot = yield* worker.snapshot;
-    const states = workspaceStatesOf(registry, snapshot);
+    const states = workspaceStatesOf(yield* registry.state, snapshot);
     const previous = yield* Ref.get(lastWorkspaces);
     const signed = states.map((state) => ({
       key: workspaceKey(state),
@@ -194,7 +194,9 @@ export const make = Effect.gen(function* () {
   });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
-    const stats = schedulerStatsOf(registry, yield* scheduler.config, yield* scheduler.stats);
+    const config = yield* scheduler.config;
+    const state = yield* scheduler.stats;
+    const stats = schedulerStatsOf(yield* registry.state, config, state);
     const signature = encodeStats(stats);
     if ((yield* Ref.get(lastScheduler)) === signature) return stats;
     yield* Ref.set(lastScheduler, signature);

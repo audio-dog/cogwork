@@ -1,17 +1,13 @@
-import type {
-  AgUiEvent,
-  HarnessName,
-  Session,
-  SessionId,
-  SessionKind,
-  WorkspaceId,
-} from "@cogwork/contracts";
 import {
-  agUiDisplayName,
-  agUiIsTerminal,
-  agUiStructuredOutputComplete,
-  agUiTextDelta,
+  type AgUiEvent,
+  AgUiEventUnion,
+  type HarnessName,
+  type Session,
+  type SessionId,
   SessionId as SessionIdSchema,
+  type SessionKind,
+  StructuredOutputCompleteValue,
+  type WorkspaceId,
 } from "@cogwork/contracts";
 import { InMemoryRunStore, type ModelMessage } from "@tanstack/ai";
 import {
@@ -74,9 +70,6 @@ const flushText = (state: FoldState): FoldState =>
     ? state
     : { ...state, messages: [...state.messages, { role: "assistant", content: state.text }], text: "" };
 
-const toolCallId = (event: AgUiEvent) =>
-  event.type.startsWith("TOOL_CALL_") ? (event.toolCallId ?? null) : null;
-
 const appendStructuredOutput = (state: FoldState, raw: string) => {
   const flushed = flushText(state);
   const previous = flushed.messages.at(-1);
@@ -87,27 +80,49 @@ const appendStructuredOutput = (state: FoldState, raw: string) => {
   } satisfies FoldState;
 };
 
-const appendTool = (state: FoldState, event: AgUiEvent, callId: string): FoldState => {
+const appendTool = (state: FoldState, callId: string | undefined, content = "", toolName = "tool") => {
+  if (!callId || state.seenTools.has(callId)) return state;
   const flushed = flushText(state);
   return {
-    messages: [
-      ...flushed.messages,
-      { role: "tool", content: event.args ?? "", toolName: agUiDisplayName(event) ?? "tool" },
-    ],
+    messages: [...flushed.messages, { role: "tool", content, toolName }],
     text: "",
     seenTools: new Set(flushed.seenTools).add(callId),
-  };
+  } satisfies FoldState;
 };
 
-const foldEvent = (state: FoldState, event: AgUiEvent): FoldState => {
-  const delta = agUiTextDelta(event);
-  if (delta.length > 0) return { ...state, text: state.text + delta };
-  const structured = agUiStructuredOutputComplete(event);
-  if (structured !== null) return appendStructuredOutput(state, structured.raw);
-  const callId = toolCallId(event);
-  if (callId && !state.seenTools.has(callId)) return appendTool(state, event, callId);
-  return agUiIsTerminal(event) ? flushText(state) : state;
+const isStructuredOutputCompleteValue = Schema.is(StructuredOutputCompleteValue);
+
+const foldUnknownToolEvent = (state: FoldState, event: AgUiEvent) => {
+  if (!event.type.startsWith("TOOL_CALL_")) return state;
+  return appendTool(
+    state,
+    event.toolCallId,
+    event.args,
+    event.toolCallName ?? event.name ?? event.stepName ?? "tool",
+  );
 };
+
+const foldEvent = (state: FoldState, event: AgUiEvent): FoldState =>
+  AgUiEventUnion.matchOrElse(
+    event,
+    {
+      TEXT_MESSAGE_CONTENT: ({ delta }) => (delta ? { ...state, text: state.text + delta } : state),
+      TOOL_CALL_START: ({ toolCallId, args, toolCallName }) =>
+        appendTool(state, toolCallId, args, toolCallName),
+      TOOL_CALL_ARGS: ({ toolCallId, args, toolCallName }) =>
+        appendTool(state, toolCallId, args, toolCallName),
+      TOOL_CALL_END: ({ toolCallId, args, toolCallName }) =>
+        appendTool(state, toolCallId, args, toolCallName),
+      TOOL_CALL_RESULT: ({ toolCallId, toolCallName }) => appendTool(state, toolCallId, "", toolCallName),
+      CUSTOM: ({ name, value }) =>
+        name === "structured-output.complete" && isStructuredOutputCompleteValue(value)
+          ? appendStructuredOutput(state, value.raw)
+          : state,
+      RUN_FINISHED: () => flushText(state),
+      RUN_ERROR: () => flushText(state),
+    },
+    () => foldUnknownToolEvent(state, event),
+  );
 
 // Takes the harness events the recorder already decoded and folds them into transcript messages.
 // The recorder owns the decode, so this never touches a run event's stored payload.

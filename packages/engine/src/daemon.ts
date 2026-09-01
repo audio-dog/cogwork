@@ -167,7 +167,6 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
 });
 
 const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
-  const registry = yield* WorkspaceRegistry;
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const controlStore = yield* ControlStore;
@@ -179,6 +178,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const config = yield* scheduler.config;
   const stats = yield* scheduler.stats;
   const running = yield* ledger.runningRuns;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const items = currentReconcileStatesOf(registry, snapshot).flatMap((state) =>
     classifiedItemsOf(state).map((item) => ({ _tag: "ItemChanged", workspace: state.name, item }) as const),
   );
@@ -234,7 +234,6 @@ const statesByName = (snapshot: ReconcileSnapshot) =>
 
 export const handlersLayer = DaemonRpcs.toLayer({
   GetStatus: Effect.fn("Daemon.GetStatus")(function* () {
-    const registry = yield* WorkspaceRegistry;
     const info = yield* DaemonInfo;
     const worker = yield* ReconcileWorker;
     const scheduler = yield* Scheduler;
@@ -243,6 +242,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
     const controlStore = yield* ControlStore;
+    const registry = yield* (yield* WorkspaceRegistry).state;
     const stateByName = statesByName(snapshot);
     return {
       health: controlStore.health === "available" ? "running" : "store-unavailable",
@@ -260,8 +260,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetControlStore: Effect.fn("Daemon.GetControlStore")(function* () {
     const store = yield* ControlStore;
-    const registry = yield* WorkspaceRegistry;
-    return controlStoreWithDiagnostics(yield* store.picture, registry);
+    const picture = yield* store.picture;
+    const registry = yield* (yield* WorkspaceRegistry).state;
+    return controlStoreWithDiagnostics(picture, registry);
   }),
   GetPlugins: Effect.fn("Daemon.GetPlugins")(function* () {
     return yield* (yield* PluginManager).overview;
@@ -428,11 +429,11 @@ const activeTicketKeys = (state: WorkspaceReconcileState) =>
   state.observed.flatMap((item) => [ticketSlug(item.id), ...(item.pr?.followable ? [item.pr.headRef] : [])]);
 
 const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
-  const registry = yield* WorkspaceRegistry;
   const manager = yield* WorktreeManager;
   const worker = yield* ReconcileWorker;
   const snapshot = yield* worker.snapshot;
   const now = yield* Clock.currentTimeMillis;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const stateByName = statesByName(snapshot);
   const reconcilable = registry.workspaces
     .map((workspace) => ({ workspace, state: stateByName.get(workspace.config.name) }))
