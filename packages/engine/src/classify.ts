@@ -16,7 +16,13 @@ import type {
 } from "@cogwork/contracts";
 import { byStageThenPriority } from "@cogwork/contracts";
 import * as Data from "effect/Data";
-import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./follow-up";
+import {
+  type FollowUpContext,
+  followUpContext,
+  isStalledFollowUp,
+  type ObservedPr,
+  triggersFollowUp,
+} from "./follow-up";
 import type { ObservedItem } from "./issue-tracker";
 
 export interface ResumeContext {
@@ -113,7 +119,10 @@ const classifyOne = (
   if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
   const failures = consecutiveFailures(item, stage);
   if (failures >= maxAttemptsPerStage) return Outcome.NeedsHuman({ reason: "ready-for-human" });
-  if (availability?.get(stage)?.available === false) return Outcome.Drop({});
+  const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
+  if (availability?.get(stage)?.available === false && !isStalledFollowUp(stage, followUp)) {
+    return Outcome.Drop({});
+  }
   return Outcome.Eligible({ stage });
 };
 

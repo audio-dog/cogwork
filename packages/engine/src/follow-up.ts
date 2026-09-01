@@ -1,4 +1,4 @@
-import type { FollowUpResultOutcome } from "@cogwork/contracts";
+import type { FollowUpResultOutcome, LifecycleStage } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { CheckState } from "./ci";
@@ -44,6 +44,9 @@ export interface FollowUpContext {
 }
 
 export const followUpNoProgressLimit = 3;
+
+export const isStalledFollowUp = (stage: LifecycleStage, context: FollowUpContext | undefined) =>
+  stage === "follow-up" && context?.stalled === true;
 
 const humanCommentAt = (pr: ObservedPr) => pr.latestHumanCommentAtMillis ?? 0;
 

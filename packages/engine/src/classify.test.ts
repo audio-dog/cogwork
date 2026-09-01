@@ -80,6 +80,31 @@ describe("classify", () => {
     assert.deepStrictEqual(result.eligible, []);
   });
 
+  it("keeps a stalled follow-up eligible when its Operation is unavailable", () => {
+    const result = classify(
+      [
+        item({
+          id: "1",
+          pr: pr("pending", {
+            checks: "failing",
+            followUp: {
+              checks: "failing",
+              humanCommentAtMillis: 0,
+              noProgress: followUpNoProgressLimit - 1,
+              baseDivergence: "none",
+              botTriggerAtMillis: 0,
+            },
+          }),
+        }),
+      ],
+      undefined,
+      unavailable("follow-up"),
+    );
+
+    assert.strictEqual(result.eligible[0]?.stage, "follow-up");
+    assert.isTrue(result.eligible[0]?.followUp?.stalled);
+  });
+
   it("reports blocked work even when its Operation is unavailable", () => {
     const result = classify(
       [item({ id: "1", roles: ["ready-for-agent"], openBlockers: 1 })],
