@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
+import { Effect, Layer, ManagedRuntime, Scope } from "effect";
 import { app, BrowserWindow } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveEngineCommand } from "./engine-command";
@@ -9,10 +10,11 @@ import { broadcastEngineStatus, registerIpc } from "./ipc";
 import { engineLogger, mainLogger } from "./logger";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
+import { waitForDaemonListening } from "./wait-for-socket";
 import { createMainWindow, type MainWindowDeps } from "./window";
 import { createWindowPreferencesStore } from "./window-preferences";
 
-const control = { quitting: false, engineStopped: false };
+const control = { quitting: false };
 
 const requestQuit = (): void => {
   control.quitting = true;
@@ -38,7 +40,7 @@ const showMainWindow = (): void => {
   window.focus();
 };
 
-const makeSupervisor = (): EngineSupervisor => {
+const makeSupervisor = (runtime: ManagedRuntime.ManagedRuntime<never, never>): EngineSupervisor => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
   const command = resolveEngineCommand({
@@ -54,7 +56,12 @@ const makeSupervisor = (): EngineSupervisor => {
     socketPath,
     spawn: (engine) =>
       spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),
-    probe: isDaemonListening,
+    probe: (path) => runtime.runPromise(isDaemonListening(path)),
+    awaitReachable: (path, signal) =>
+      runtime.runPromise(waitForDaemonListening(path), { signal }).then(
+        () => true,
+        () => false,
+      ),
     logger: engineLogger,
     onStatus: (status) => {
       engineLogger.info(`Engine status: ${status}`);
@@ -62,12 +69,16 @@ const makeSupervisor = (): EngineSupervisor => {
     },
   });
 
-  registerIpc({ socketPath, supervisor, windowPreferences });
+  runtime.runSync(
+    Scope.addFinalizer(runtime.scope, Effect.promise(() => supervisor.stop()).pipe(Effect.ignore)),
+  );
+  registerIpc({ socketPath, supervisor, windowPreferences, runtime });
   return supervisor;
 };
 
 const bootstrap = (): void => {
   app.whenReady().then(async () => {
+    const runtime = ManagedRuntime.make(Layer.empty);
     electronApp.setAppUserModelId("com.cogwork");
     app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
 
@@ -81,7 +92,7 @@ const bootstrap = (): void => {
       mainLogger.error(`Render process gone: ${details.reason} (exitCode ${details.exitCode})`);
     });
 
-    const supervisor = makeSupervisor();
+    const supervisor = makeSupervisor(runtime);
 
     createMainWindow(windowDeps);
     createTray({
@@ -94,14 +105,7 @@ const bootstrap = (): void => {
     app.on("before-quit", () => {
       control.quitting = true;
     });
-    app.on("will-quit", (event) => {
-      if (control.engineStopped) return;
-      event.preventDefault();
-      supervisor.stop().finally(() => {
-        control.engineStopped = true;
-        app.quit();
-      });
-    });
+    app.on("will-quit", () => runtime.dispose());
 
     await supervisor.start();
   });

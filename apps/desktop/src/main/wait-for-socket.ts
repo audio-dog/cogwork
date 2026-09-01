@@ -1,16 +1,12 @@
-import { scheduler } from "node:timers/promises";
+import { Effect, Schedule } from "effect";
 import { isDaemonListening } from "./socket-probe";
 
-const PROBE_INTERVAL_MILLIS = 50;
+const probeSchedule = Schedule.spaced("50 millis");
 
-export const waitForDaemonListening = async (socketPath: string, signal: AbortSignal): Promise<boolean> => {
-  if (signal.aborted) return false;
-  const listening = await isDaemonListening(socketPath);
-  if (signal.aborted) return false;
-  if (listening) return true;
-
-  return scheduler.wait(PROBE_INTERVAL_MILLIS, { signal }).then(
-    () => waitForDaemonListening(socketPath, signal),
-    () => false,
+export const waitForDaemonListening = (socketPath: string) =>
+  isDaemonListening(socketPath).pipe(
+    Effect.repeat({
+      schedule: probeSchedule,
+      until: (listening) => listening,
+    }),
   );
-};

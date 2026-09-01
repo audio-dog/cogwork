@@ -9,9 +9,11 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as ScopedRef from "effect/ScopedRef";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as Rpc from "effect/unstable/rpc/Rpc";
@@ -21,7 +23,7 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import { describe, expect, it } from "vitest";
-import { createDaemonBridgePort } from "../../../main/daemon-bridge";
+import { createDaemonBridgePort, type DaemonBridgePort } from "../../../main/daemon-bridge";
 import type { DaemonRpcBridge } from "../../../shared/ipc";
 import { layerProtocolIpc, makeProtocolIpc } from "./protocol";
 
@@ -42,20 +44,44 @@ const serverLayer = (socketPath: string) =>
     Layer.provide(RpcSerialization.layerNdjson),
   );
 
-const makeBridge = (socketPath: string): DaemonRpcBridge & { readonly dispose: () => void } => {
+const makeBridge = (socketPath: string): DaemonRpcBridge & { readonly dispose: () => Promise<void> } => {
   const dataListeners = new Set<(frame: Uint8Array) => void>();
   const closedListeners = new Set<(reason: string | null) => void>();
-  const port = createDaemonBridgePort(socketPath, {
-    onData: (frame) => {
-      for (const listener of dataListeners) listener(frame);
-    },
-    onClosed: (reason) => {
-      for (const listener of closedListeners) listener(reason);
-    },
-  });
+  const runtime = ManagedRuntime.make(Layer.empty);
+  const current = runtime.runSync(
+    ScopedRef.make<DaemonBridgePort | null>(() => null).pipe(Scope.provide(runtime.scope)),
+  );
+
+  const connect = async () => {
+    await runtime.runPromise(
+      ScopedRef.set(
+        current,
+        createDaemonBridgePort(socketPath, {
+          onData: (frame) => {
+            for (const listener of dataListeners) listener(frame);
+          },
+          onClosed: (reason) => {
+            for (const listener of closedListeners) listener(reason);
+          },
+        }),
+      ),
+    );
+    const port = await runtime.runPromise(ScopedRef.get(current));
+    if (!port) throw new Error("Bridge port was not created");
+    await runtime.runPromise(port.connect);
+  };
+
+  const send = (frame: string) =>
+    runtime.runFork(
+      ScopedRef.get(current).pipe(
+        Effect.flatMap((port) => port?.send(frame) ?? Effect.void),
+        Effect.ignore,
+      ),
+    );
+
   return {
-    connect: () => port.connect(),
-    send: (frame) => port.send(frame),
+    connect,
+    send,
     onData: (listener) => {
       dataListeners.add(listener);
       return () => dataListeners.delete(listener);
@@ -64,7 +90,7 @@ const makeBridge = (socketPath: string): DaemonRpcBridge & { readonly dispose: (
       closedListeners.add(listener);
       return () => closedListeners.delete(listener);
     },
-    dispose: port.dispose,
+    dispose: () => runtime.dispose(),
   };
 };
 
@@ -289,7 +315,7 @@ describe("IPC RPC protocol", () => {
         expect(result.pong).toBe("pong");
         expect(result.counts).toEqual([1, 2, 3]);
       } finally {
-        bridge.dispose();
+        await bridge.dispose();
       }
     }));
 
@@ -324,7 +350,7 @@ describe("IPC RPC protocol", () => {
             }).pipe(Effect.provide(layerProtocolIpc(bridge)), Effect.scoped),
           );
         } finally {
-          bridge.dispose();
+          await bridge.dispose();
         }
       }),
     20_000,

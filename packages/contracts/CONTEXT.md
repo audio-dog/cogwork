@@ -13,7 +13,7 @@ The external system that is authoritative for backlog work — its items, their 
 _Avoid_: Work source, backlog, control-plane database, internal store
 
 **Source control provider**:
-The read-only port that answers two questions about a work item — what its pull request is, and what that PR's state is (checks, reviews, mergeable / base divergence, human comments). It resolves the PR by the item's link key and never writes: coordination stays on the issue tracker, and PR writes (open, push, rebase) stay with the agent. Chosen per workspace independently of the tracker; GitHub is the only provider today, and a GitHub issue tracker doubles as its own provider by default.
+The read-only port that answers two questions about every observed work item — what its trusted pull request is, and what that PR's state is (checks, reviews, mergeable / base divergence, human comments, draft status). It resolves the PR by the item's link key. A coordination comment is not required for observation. A draft pull request remains linked but cannot trigger follow-up. The port never writes: coordination stays on the issue tracker, and PR writes (open, push, rebase) stay with the agent. Chosen per workspace independently of the tracker; GitHub is the only provider today, and a GitHub issue tracker doubles as its own provider by default.
 _Avoid_: Forge, code host, work source, git client (the HTTP client is a lower-level detail)
 
 **Work item**:

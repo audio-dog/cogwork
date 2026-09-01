@@ -463,7 +463,6 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   claimedByUs: true,
   attempts: [],
   handback: null,
-  owned: false,
   followUp: null,
   openBlockers: 0,
   proposal: null,
