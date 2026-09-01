@@ -1,0 +1,29 @@
+packages/engine/src/credential-store.test.ts
+  s_e4e69379f0236a::t_a7b03f8a57484a 613
+  s_e4e69379f0236a::t_62ffde0b755731 5,585-586,589-610,616-617,620,626,628-634,646,655,658-660,664-666,673,681,684-686,689-691
+  s_d8a25d5da1df13::t_c5fc6d147fd92a 611-612,614-615
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c04ae09d49624c1c7e6842cf4ef9088f121c3873",
+  "prompts": {},
+  "sessions": {
+    "s_d8a25d5da1df13": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e39-d340-7301-942b-250914830549",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e4e69379f0236a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e38-d3b8-7313-a143-f05b02432d79",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
