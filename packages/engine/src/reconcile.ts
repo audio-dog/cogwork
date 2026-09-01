@@ -20,6 +20,7 @@ import { Availability } from "./availability";
 import { type Classification, classify, type EligibleWork } from "./classify";
 import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
+import * as Cooldown from "./cooldown";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { Executor } from "./executor";
 
@@ -97,31 +98,10 @@ const pausedState = (workspace: RegisteredWorkspace, pause: Pause): WorkspaceRec
   availability: [],
 });
 
-interface Cooldown {
-  readonly untilMillis: number;
-  readonly consecutive: number;
-}
-
-interface CooldownEntry {
+interface PauseTiming {
   readonly entered: boolean;
   readonly retryAtMillis: number | null;
 }
-
-const baseBackoffMillis = 60_000;
-const maxBackoffMillis = 900_000;
-
-const backoffMillis = (consecutive: number) =>
-  Math.min(baseBackoffMillis * 2 ** (consecutive - 1), maxBackoffMillis);
-
-const activeAt = (cooldown: Cooldown | undefined, nowMillis: number) =>
-  cooldown !== undefined && cooldown.untilMillis > nowMillis ? cooldown : null;
-
-const withoutScope = (cooldowns: Map<string, Cooldown>, scope: string) => {
-  if (!cooldowns.has(scope)) return cooldowns;
-  const next = new Map(cooldowns);
-  next.delete(scope);
-  return next;
-};
 
 const connectionIdsOf = (workspace: RegisteredWorkspace) => [
   ...new Set(
@@ -163,34 +143,22 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
     observedAtMillis: 0,
     workspaces: [],
   });
-  const cooldowns = yield* Ref.make(new Map<string, Cooldown>());
+  const cooldowns = yield* Cooldown.make;
 
-  const heldCooldown = Effect.fn("ReconcileWorker.heldCooldown")(function* (scope: string | null) {
-    if (scope === null) return null;
-    const nowMillis = yield* Clock.currentTimeMillis;
-    return activeAt((yield* Ref.get(cooldowns)).get(scope), nowMillis);
-  });
+  const heldCooldown = (scope: string | null) =>
+    scope === null ? Effect.succeed(null) : cooldowns.heldUntil(scope);
 
   // Only the first failure into a window logs, so a pinned credential does not warn on every tick.
   const enterCooldown = (
     scope: string | null,
     nowMillis: number,
     retryAfterMillis: number | undefined,
-  ): Effect.Effect<CooldownEntry> => {
+  ): Effect.Effect<PauseTiming> => {
     if (scope === null) {
       const retryAtMillis = retryAfterMillis === undefined ? null : nowMillis + retryAfterMillis;
       return Effect.succeed({ entered: true, retryAtMillis });
     }
-    return Ref.modify(cooldowns, (current): readonly [CooldownEntry, Map<string, Cooldown>] => {
-      const held = activeAt(current.get(scope), nowMillis);
-      if (held) return [{ entered: false, retryAtMillis: held.untilMillis }, current];
-      const consecutive = (current.get(scope)?.consecutive ?? 0) + 1;
-      const cooldown: Cooldown = {
-        untilMillis: nowMillis + (retryAfterMillis ?? backoffMillis(consecutive)),
-        consecutive,
-      };
-      return [{ entered: true, retryAtMillis: cooldown.untilMillis }, new Map(current).set(scope, cooldown)];
-    });
+    return cooldowns.enter(scope, retryAfterMillis);
   };
 
   const pauseForRateLimit = Effect.fn("ReconcileWorker.pauseForRateLimit")(function* (
@@ -238,19 +206,18 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
     return pausedState(workspace, { reason: error.reason, message: error.message, retryAtMillis: null });
   });
 
-  const clearCooldown = (scope: string | null) =>
-    scope === null ? Effect.void : Ref.update(cooldowns, (current) => withoutScope(current, scope));
+  const clearCooldown = (scope: string | null) => (scope === null ? Effect.void : cooldowns.clear(scope));
 
   const pollReadyWorkspace = Effect.fn("ReconcileWorker.pollReadyWorkspace")(function* (
     workspace: RegisteredWorkspace,
   ) {
     const scope = issueTracker.rateLimitScope(workspace);
-    const held = yield* heldCooldown(scope);
-    if (held) {
+    const heldUntilMillis = yield* heldCooldown(scope);
+    if (heldUntilMillis !== null) {
       return pausedState(workspace, {
         reason: "rate-limited",
         message: `waiting out the ${scope} rate limit window`,
-        retryAtMillis: held.untilMillis,
+        retryAtMillis: heldUntilMillis,
       });
     }
     return yield* observe(workspace).pipe(
