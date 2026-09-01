@@ -22,6 +22,7 @@ import {
 } from "./classify";
 import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
 import { Executor } from "./executor";
+import { isStalledFollowUp } from "./follow-up";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
@@ -214,8 +215,9 @@ export const make = Effect.gen(function* () {
     observation: RunPlanObservation,
   ) {
     const stage = observedStage(item);
-    if (stage) {
-      const availability = yield* executor.availabilityOf(workspace, eligibleWork(item, stage));
+    const work = stage ? eligibleWork(item, stage) : null;
+    if (work && !isStalledFollowUp(work.stage, work.followUp)) {
+      const availability = yield* executor.availabilityOf(workspace, work);
       if (!availability.available) {
         return yield* rejectRecovery(workspace, item, availability.causes);
       }

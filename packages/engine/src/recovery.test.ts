@@ -347,6 +347,66 @@ describe("Recovery.recover", () => {
     }),
   );
 
+  it.effect("keeps an unavailable stalled follow-up on its recovery path", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const stalledFollowUp: ObservedItem = {
+        ...claimedByUs,
+        roles: [],
+        claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "follow-up" },
+        pr: {
+          number: 1,
+          url: "https://github.com/owner/repo/pull/1",
+          review: "pending",
+          checks: "failing",
+          latestHumanCommentAtMillis: null,
+          latestBotTriggerAtMillis: null,
+          fresh: false,
+          baseDivergence: "none",
+          waitingSinceMillis: 0,
+          headRef: "1-ours",
+          followable: true,
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 0,
+            botTriggerAtMillis: 0,
+            noProgress: 3,
+            baseDivergence: "none",
+          },
+        },
+      };
+      yield* ledger.insertRun({ ...interrupted, stage: "follow-up" });
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+
+        assert.deepStrictEqual(
+          (yield* Ref.get(admitted)).map(({ stage }) => stage),
+          ["follow-up"],
+        );
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({
+            observed: [stalledFollowUp],
+            ledger,
+            admitted,
+            issueTracker: {
+              release: (_workspace, itemId) => Ref.update(released, (items) => [...items, itemId]),
+            },
+            availability: {
+              operation: "follow-up",
+              available: false,
+              causes: [],
+            },
+          }),
+        ),
+      );
+    }),
+  );
+
   it.effect("hands the rescheduled run its persisted session and a continuation reason", () =>
     Effect.gen(function* () {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
