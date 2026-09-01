@@ -3,7 +3,6 @@ import type {
   BlockedItem,
   Claim,
   ClaimedItem,
-  ClassifiedItem,
   LifecycleStage,
   NeedsHumanItem,
   NeedsHumanReason,
@@ -13,7 +12,8 @@ import type {
   RunPlanWorkContextReference,
   SessionId,
 } from "@cogwork/contracts";
-import { byStageThenPriority } from "@cogwork/contracts";
+import { byStageThenPriority, type ClassifiedItem } from "@cogwork/contracts";
+import { Chunk, Data } from "effect";
 import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./follow-up";
 import type { ObservedItem } from "./issue-tracker";
 
@@ -42,12 +42,22 @@ export interface Classification {
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
 }
 
-type Outcome =
-  | { readonly kind: "eligible"; readonly stage: LifecycleStage }
-  | { readonly kind: "claimed"; readonly claim: Claim }
-  | { readonly kind: "blocked" }
-  | { readonly kind: "needs-human"; readonly reason: NeedsHumanReason }
-  | { readonly kind: "drop" };
+type Outcome = Data.TaggedEnum<{
+  readonly Eligible: { readonly stage: LifecycleStage };
+  readonly Claimed: { readonly claim: Claim };
+  readonly Blocked: Record<never, never>;
+  readonly NeedsHuman: { readonly reason: NeedsHumanReason };
+  readonly Drop: Record<never, never>;
+}>;
+
+const Outcome = Data.taggedEnum<Outcome>();
+
+interface ClassificationChunks {
+  readonly eligible: Chunk.Chunk<EligibleWork>;
+  readonly claimed: Chunk.Chunk<ClaimedItem>;
+  readonly blocked: Chunk.Chunk<BlockedItem>;
+  readonly needsHuman: Chunk.Chunk<NeedsHumanItem>;
+}
 
 const prSummaryOf = (pr: ObservedPr): PrSummary => ({
   number: pr.number,
@@ -61,6 +71,31 @@ const prSummaryOf = (pr: ObservedPr): PrSummary => ({
 const prFields = (item: ObservedItem) => (item.pr ? { pr: prSummaryOf(item.pr) } : {});
 
 const trackerUrl = (item: ObservedItem) => ({ url: item.url });
+
+const claimedItemOf = (item: ObservedItem, claim: Claim) => ({
+  id: item.id,
+  title: item.title,
+  claim,
+  ...trackerUrl(item),
+  ...prFields(item),
+});
+
+const blockedItemOf = (item: ObservedItem) => ({
+  id: item.id,
+  title: item.title,
+  openBlockers: item.openBlockers,
+  ...trackerUrl(item),
+  ...prFields(item),
+});
+
+const needsHumanItemOf = (item: ObservedItem, reason: NeedsHumanReason) => ({
+  id: item.id,
+  title: item.title,
+  reason,
+  proposal: item.proposal,
+  url: item.url,
+  ...prFields(item),
+});
 
 const prStage = (pr: ObservedPr) => {
   if (pr.followable === false) return null;
@@ -90,64 +125,45 @@ const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | und
   !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
 
 const classifyOne = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined): Outcome => {
-  if (!ownedByActor(item, allowlist)) return { kind: "drop" };
-  if (item.roles.includes("wontfix")) return { kind: "drop" };
-  if (item.claim) return { kind: "claimed", claim: item.claim };
-  if (item.claimLabeled) return { kind: "drop" };
-  if (item.roles.includes("needs-info")) return { kind: "needs-human", reason: "needs-info" };
-  if (item.roles.includes("ready-for-human")) return { kind: "needs-human", reason: "ready-for-human" };
+  if (!ownedByActor(item, allowlist)) return Outcome.Drop();
+  if (item.roles.includes("wontfix")) return Outcome.Drop();
+  if (item.claim) return Outcome.Claimed({ claim: item.claim });
+  if (item.claimLabeled) return Outcome.Drop();
+  if (item.roles.includes("needs-info")) return Outcome.NeedsHuman({ reason: "needs-info" });
+  if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
   const stage = stageFor(item);
-  if (!stage) return { kind: "drop" };
-  if (stage === "implement" && item.openBlockers > 0) return { kind: "blocked" };
+  if (!stage) return Outcome.Drop();
+  if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked();
   const failures = consecutiveFailures(item, stage);
-  if (failures >= maxAttemptsPerStage) return { kind: "needs-human", reason: "ready-for-human" };
-  return { kind: "eligible", stage };
+  if (failures >= maxAttemptsPerStage) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  return Outcome.Eligible({ stage });
 };
 
 export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
   const outcome = classifyOne(item, undefined);
-  if (outcome.kind === "eligible") {
-    return {
+  return Outcome.$match(outcome, {
+    Eligible: ({ stage }): ClassifiedItem => ({
       _tag: "Eligible",
       id: item.id,
       title: item.title,
-      stage: outcome.stage,
+      stage,
       ...trackerUrl(item),
       ...prFields(item),
-    };
-  }
-  if (outcome.kind === "claimed") {
-    return {
+    }),
+    Claimed: ({ claim }): ClassifiedItem => ({
       _tag: "Claimed",
-      id: item.id,
-      title: item.title,
-      claim: outcome.claim,
-      ...trackerUrl(item),
-      ...prFields(item),
-    };
-  }
-  if (outcome.kind === "blocked") {
-    return {
+      ...claimedItemOf(item, claim),
+    }),
+    Blocked: (): ClassifiedItem => ({
       _tag: "Blocked",
-      id: item.id,
-      title: item.title,
-      openBlockers: item.openBlockers,
-      ...trackerUrl(item),
-      ...prFields(item),
-    };
-  }
-  if (outcome.kind === "needs-human") {
-    return {
+      ...blockedItemOf(item),
+    }),
+    NeedsHuman: ({ reason }): ClassifiedItem => ({
       _tag: "NeedsHuman",
-      id: item.id,
-      title: item.title,
-      reason: outcome.reason,
-      proposal: item.proposal,
-      url: item.url,
-      ...prFields(item),
-    };
-  }
-  return null;
+      ...needsHumanItemOf(item, reason),
+    }),
+    Drop: () => null,
+  });
 };
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
@@ -178,41 +194,46 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
 };
 
 export const classify = (items: ReadonlyArray<ObservedItem>, allowlist?: ReadonlyArray<string>) => {
-  const outcomes = items.map((item) => ({ item, outcome: classifyOne(item, allowlist) }));
-  const eligible = outcomes
-    .flatMap(({ item, outcome }) => (outcome.kind === "eligible" ? [eligibleWork(item, outcome.stage)] : []))
-    .sort(byStageThenPriority);
-  const claimed = outcomes.flatMap(({ item, outcome }) =>
-    outcome.kind === "claimed"
-      ? [{ id: item.id, title: item.title, claim: outcome.claim, ...trackerUrl(item), ...prFields(item) }]
-      : [],
+  const classification = items.reduce<ClassificationChunks>(
+    (current, item) =>
+      Outcome.$match(classifyOne(item, allowlist), {
+        Eligible: ({ stage }) => ({
+          eligible: Chunk.append(current.eligible, eligibleWork(item, stage)),
+          claimed: current.claimed,
+          blocked: current.blocked,
+          needsHuman: current.needsHuman,
+        }),
+        Claimed: ({ claim }) => ({
+          eligible: current.eligible,
+          claimed: Chunk.append(current.claimed, claimedItemOf(item, claim)),
+          blocked: current.blocked,
+          needsHuman: current.needsHuman,
+        }),
+        Blocked: () => ({
+          eligible: current.eligible,
+          claimed: current.claimed,
+          blocked: Chunk.append(current.blocked, blockedItemOf(item)),
+          needsHuman: current.needsHuman,
+        }),
+        NeedsHuman: ({ reason }) => ({
+          eligible: current.eligible,
+          claimed: current.claimed,
+          blocked: current.blocked,
+          needsHuman: Chunk.append(current.needsHuman, needsHumanItemOf(item, reason)),
+        }),
+        Drop: () => current,
+      }),
+    {
+      eligible: Chunk.empty(),
+      claimed: Chunk.empty(),
+      blocked: Chunk.empty(),
+      needsHuman: Chunk.empty(),
+    },
   );
-  const blocked = outcomes.flatMap(({ item, outcome }) =>
-    outcome.kind === "blocked"
-      ? [
-          {
-            id: item.id,
-            title: item.title,
-            openBlockers: item.openBlockers,
-            ...trackerUrl(item),
-            ...prFields(item),
-          },
-        ]
-      : [],
-  );
-  const needsHuman = outcomes.flatMap(({ item, outcome }) =>
-    outcome.kind === "needs-human"
-      ? [
-          {
-            id: item.id,
-            title: item.title,
-            reason: outcome.reason,
-            proposal: item.proposal,
-            url: item.url,
-            ...prFields(item),
-          },
-        ]
-      : [],
-  );
-  return { eligible, claimed, blocked, needsHuman };
+  return {
+    eligible: Chunk.toArray(classification.eligible).toSorted(byStageThenPriority),
+    claimed: Chunk.toReadonlyArray(classification.claimed),
+    blocked: Chunk.toReadonlyArray(classification.blocked),
+    needsHuman: Chunk.toReadonlyArray(classification.needsHuman),
+  };
 };
