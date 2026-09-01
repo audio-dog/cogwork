@@ -63,15 +63,6 @@ export const make = Effect.gen(function* () {
           );
         }),
       ),
-    workspaceFor: (runId: RunId) =>
-      Effect.sync(() => {
-        const current = FiberMap.getUnsafe(fibers, runId);
-        if (Option.isNone(current)) return Option.none<WorkspaceIssueTrackerBinding>();
-        return MutableHashMap.get(registrations, runId).pipe(
-          Option.filter((registration) => registration.fiber === current.value),
-          Option.flatMap((registration) => Option.fromNullishOr(registration.workspace)),
-        );
-      }),
     cancel: Effect.fn("RunControl.cancel")(function* (runId: RunId) {
       return yield* Effect.sync(() => {
         const current = FiberMap.getUnsafe(fibers, runId);

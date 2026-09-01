@@ -103,9 +103,15 @@ export class WorkItemNotFound extends Schema.TaggedError<WorkItemNotFound>()("Wo
   workItem: WorkItemId,
 }) {}
 
+export const CancelRunResult = Schema.TaggedUnion({
+  Cancelled: { item: ClassifiedItem },
+  StillDraining: { item: ClassifiedItem },
+});
+export type CancelRunResult = typeof CancelRunResult.Type;
+
 export const CancelRun = Rpc.make("CancelRun", {
   payload: { runId: RunId, note: Schema.optional(TrimmedNonEmptyString) },
-  success: ClassifiedItem,
+  success: CancelRunResult,
   error: Schema.Union([RunNotFound, RunAlreadyFinished]),
 });
 

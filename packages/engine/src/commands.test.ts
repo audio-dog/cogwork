@@ -32,6 +32,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -354,6 +355,7 @@ const daemonLayer = (
   registries = registryServices,
   plugins: Layer.Layer<PluginManager> = pluginManagerLayer,
   connections = connectionStoreLayer,
+  runControl: Layer.Layer<RunControl.RunControl> = RunControl.layer,
 ) =>
   Daemon.handlersLayer.pipe(
     Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -364,7 +366,7 @@ const daemonLayer = (
     Layer.provideMerge(scheduler),
     Layer.provideMerge(runRecorder),
     Layer.provideMerge(runLedgerLayer),
-    Layer.provideMerge(RunControl.layer),
+    Layer.provideMerge(runControl),
     Layer.provideMerge(controlStore),
     Layer.provideMerge(connections),
     Layer.provideMerge(plugins),
@@ -484,8 +486,10 @@ describe("CancelRun", () => {
       const subscription = yield* bus.subscribe();
 
       const client = yield* RpcTest.makeClient(DaemonRpcs);
-      const item = yield* client.CancelRun({ runId: rid("run-1"), note: "stopping this one" });
+      const outcome = yield* client.CancelRun({ runId: rid("run-1"), note: "stopping this one" });
+      const { item } = outcome;
 
+      assert.strictEqual(outcome._tag, "Cancelled");
       assert.strictEqual(item._tag, "NeedsHuman");
       if (item._tag === "NeedsHuman") {
         assert.strictEqual(item.reason, "ready-for-human");
@@ -529,6 +533,126 @@ describe("CancelRun", () => {
     }).pipe(Effect.provide(daemonLayer(trackerLayer({}))), Effect.scoped),
   );
 
+  it.effect("does not cancel a run that finishes before interruption", () =>
+    Effect.gen(function* () {
+      const cancelStarted = yield* Deferred.make<void>();
+      const finishCancel = yield* Deferred.make<void>();
+      const runControl = Layer.succeed(RunControl.RunControl, {
+        run: (_runId, _workspace, effect) => effect,
+        cancel: () =>
+          Deferred.succeed(cancelStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(finishCancel)),
+            Effect.map(() => RunControl.RunCancellation.NotFound({})),
+          ),
+      });
+      yield* Effect.gen(function* () {
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertRun(runRecord());
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const cancelling = yield* Effect.forkChild(Effect.flip(client.CancelRun({ runId: rid("run-1") })));
+        yield* Deferred.await(cancelStarted);
+        yield* ledger.updateRun(rid("run-1"), {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 1,
+        });
+        yield* Deferred.succeed(finishCancel, undefined);
+
+        const error = yield* Fiber.join(cancelling);
+        assert.strictEqual(error._tag, "RunAlreadyFinished");
+        if (error._tag === "RunAlreadyFinished") assert.strictEqual(error.status, "succeeded");
+      }).pipe(
+        Effect.provide(
+          daemonLayer(
+            trackerLayer({}),
+            schedulerStub(),
+            controlStoreStub(),
+            registryServices,
+            pluginManagerLayer,
+            connectionStoreLayer,
+            runControl,
+          ),
+        ),
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("returns still draining after settling and releasing interrupted work", () => {
+    const calls = Ref.makeUnsafe(emptyCalls);
+    const claimed = trackerItem({
+      claim: { by: "cogwork", claimedAtMillis: 0, stage: "implement" },
+    });
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+
+      const started = yield* Deferred.make<void>();
+      const finishTeardown = yield* Deferred.make<void>();
+      const control = yield* RunControl.RunControl;
+      const running = yield* Effect.forkChild(
+        control.run(
+          rid("run-1"),
+          registered,
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Effect.never),
+            Effect.ensuring(Deferred.await(finishTeardown)),
+          ),
+        ),
+      );
+      yield* Deferred.await(started);
+
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const cancelling = yield* Effect.forkChild(client.CancelRun({ runId: rid("run-1") }));
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("5 seconds");
+      const outcome = yield* Fiber.join(cancelling);
+
+      assert.strictEqual(outcome._tag, "StillDraining");
+      assert.strictEqual(outcome.item._tag, "NeedsHuman");
+      assert.strictEqual((yield* ledger.getRun(rid("run-1")))?.status, "interrupted");
+      assert.deepStrictEqual((yield* Ref.get(calls)).released, [id("AUD-1")]);
+      assert.isUndefined(running.pollUnsafe());
+
+      yield* Deferred.succeed(finishTeardown, undefined);
+      yield* Fiber.await(running);
+    }).pipe(Effect.provide(daemonLayer(recordingTracker([claimed], calls))), Effect.scoped);
+  });
+
+  it.effect("logs tracker cleanup failures and still returns the parked item", () => {
+    const messages: string[] = [];
+    const unavailable = () =>
+      Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "tracker down" }));
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* ledger.insertRun(runRecord());
+      const worker = yield* Reconcile.ReconcileWorker;
+      yield* worker.submit();
+
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const outcome = yield* client
+        .CancelRun({ runId: rid("run-1") })
+        .pipe(Effect.withLogger(Logger.make(({ message }) => messages.push(String(message)))));
+
+      assert.strictEqual(outcome._tag, "Cancelled");
+      assert.strictEqual(outcome.item._tag, "NeedsHuman");
+      assert.isTrue(messages.some((message) => message.includes("run hand-off failed")));
+      assert.isTrue(messages.some((message) => message.includes("claim release failed")));
+    }).pipe(
+      Effect.provide(
+        daemonLayer(
+          trackerLayer({
+            observe: () => Effect.succeed([trackerItem()]),
+            handOff: unavailable,
+            release: unavailable,
+          }),
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("hands off and releases a run whose workspace input has failed", () => {
     const calls = Ref.makeUnsafe(emptyCalls);
     return Effect.gen(function* () {
@@ -536,11 +660,12 @@ describe("CancelRun", () => {
       yield* ledger.insertRun(runRecord());
       const client = yield* RpcTest.makeClient(DaemonRpcs);
 
-      const item = yield* client.CancelRun({ runId: rid("run-1") });
+      const outcome = yield* client.CancelRun({ runId: rid("run-1") });
       const run = (yield* client.ListRuns()).find(({ id }) => id === rid("run-1"));
       const recorded = yield* Ref.get(calls);
 
-      assert.strictEqual(item._tag, "NeedsHuman");
+      assert.strictEqual(outcome._tag, "Cancelled");
+      assert.strictEqual(outcome.item._tag, "NeedsHuman");
       assert.strictEqual(run?.status, "interrupted");
       assert.deepStrictEqual(recorded.handOff, [
         { workItem: id("AUD-1"), outcome: { stage: "implement", note: undefined } },

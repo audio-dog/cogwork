@@ -1,4 +1,5 @@
 import {
+  CancelRunResult,
   type ClassifiedItem,
   type Connection,
   type ConnectionEstablishment,
@@ -39,7 +40,7 @@ import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
-import { IssueTracker, type ObservedItem } from "./issue-tracker";
+import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
 import { applyHandbackBarrier } from "./observe";
 import { operationSettingRefusal } from "./operation-policy";
 import { PluginManager } from "./plugin";
@@ -127,6 +128,8 @@ const parkedItem = (observed: ObservedItem | null) => {
   });
 };
 
+const cancelDrainDeadline = "5 seconds";
+
 export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   readonly runId: RunId;
   readonly note?: string;
@@ -139,18 +142,31 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   }
 
   const runControl = yield* RunControl;
-  const controlledWorkspace = yield* runControl.workspaceFor(payload.runId);
-  yield* runControl.cancel(payload.runId);
+  const cancellation = yield* runControl.cancel(payload.runId);
+  const controlledWorkspace = cancellation._tag === "Interrupting" ? cancellation.workspace : Option.none();
+  const drained =
+    cancellation._tag === "NotFound"
+      ? true
+      : yield* cancellation.awaitTermination.pipe(
+          Effect.timeoutOption(cancelDrainDeadline),
+          Effect.map(Option.isSome),
+        );
+
+  const snapshot = yield* (yield* ReconcileWorker).snapshot;
+  const observed = observedFor(snapshot, run.workspace, run.workItem);
+  if (!drained) yield* Effect.logWarning("run cancellation still draining", { runId: payload.runId });
 
   const endedAtMillis = yield* Clock.currentTimeMillis;
   const settled = yield* ledger.getRun(payload.runId);
-  if (settled?.status === "running") {
-    yield* ledger.updateRun(payload.runId, {
-      status: "interrupted",
-      usage: run.usage,
-      endedAtMillis,
-    });
+  if (settled === null) return yield* new RunNotFound({ runId: payload.runId });
+  if (settled.status !== "running") {
+    return yield* new RunAlreadyFinished({ runId: payload.runId, status: settled.status });
   }
+  yield* ledger.updateRun(payload.runId, {
+    status: "interrupted",
+    usage: run.usage,
+    endedAtMillis,
+  });
 
   const registry = yield* WorkspaceRegistry;
   const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
@@ -159,16 +175,22 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
     const issueTracker = yield* IssueTracker;
     yield* issueTracker
       .handOff(workspace, run.workItem, { stage: run.stage, note: payload.note })
-      .pipe(Effect.andThen(issueTracker.release(workspace, run.workItem)), Effect.orDie);
+      .pipe(
+        Effect.catchTag("IssueTrackerError", (error) =>
+          Effect.logWarning("run hand-off failed", { message: error.message }),
+        ),
+      );
+    yield* releaseClaim(issueTracker)(workspace, run.workItem);
   }
 
-  const snapshot = yield* (yield* ReconcileWorker).snapshot;
-  const observed = observedFor(snapshot, run.workspace, run.workItem);
   const item = parkedItem(observed) ?? parkedNeedsHuman(run.workItem, run.workItem);
-  if (currentWorkspace === undefined) return item;
-  const bus = yield* DaemonEventBus;
-  yield* bus.publish({ _tag: "ItemChanged", workspace: run.workspace, item });
-  return item;
+  if (currentWorkspace !== undefined) {
+    const bus = yield* DaemonEventBus;
+    yield* bus.publish({ _tag: "ItemChanged", workspace: run.workspace, item });
+  }
+  return drained
+    ? CancelRunResult.cases.Cancelled.make({ item })
+    : CancelRunResult.cases.StillDraining.make({ item });
 });
 
 export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
