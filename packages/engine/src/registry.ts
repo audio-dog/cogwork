@@ -493,31 +493,30 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
         if (!path.isAbsolute(registration.checkoutPath)) {
           return yield* registrationError("Workspace checkout path must be absolute");
         }
-        return yield* store.withWrite(
-          Effect.gen(function* () {
-            const normalizedRegistration = {
-              ...registration,
-              checkoutPath: path.resolve(registration.checkoutPath),
-            };
-            const existing = yield* selectWorkspaceBinding(sql, normalizedRegistration.checkoutPath).pipe(
-              Effect.mapError((error) => registrationError(error)),
+        const writeRegistration = Effect.fn("WorkspaceManagement.register.write")(function* () {
+          const normalizedRegistration = {
+            ...registration,
+            checkoutPath: path.resolve(registration.checkoutPath),
+          };
+          const existing = yield* selectWorkspaceBinding(sql, normalizedRegistration.checkoutPath).pipe(
+            Effect.mapError((error) => registrationError(error)),
+          );
+          if (existing) {
+            return yield* registrationError(
+              `Workspace checkout path is already registered as ${existing.id}`,
             );
-            if (existing) {
-              return yield* registrationError(
-                `Workspace checkout path is already registered as ${existing.id}`,
-              );
-            }
-            const id = yield* crypto.randomUUIDv7.pipe(
-              Effect.flatMap(decodeWorkspaceId),
-              Effect.mapError((error) => registrationError(error)),
-            );
-            const row = yield* insertWorkspace(sql, id, normalizedRegistration).pipe(
-              Effect.mapError((error) => registrationError(error)),
-            );
-            const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
-            return yield* commitChange(change);
-          }),
-        );
+          }
+          const id = yield* crypto.randomUUIDv7.pipe(
+            Effect.flatMap(decodeWorkspaceId),
+            Effect.mapError((error) => registrationError(error)),
+          );
+          const row = yield* insertWorkspace(sql, id, normalizedRegistration).pipe(
+            Effect.mapError((error) => registrationError(error)),
+          );
+          const change = yield* loadRegistrationChange(loadingServices, row, authoringRoots);
+          return yield* commitChange(change);
+        });
+        return yield* store.withWrite(writeRegistration());
       });
       const rebind = Effect.fn("WorkspaceManagement.rebind")(function* (
         workspace: WorkspaceId,
@@ -535,26 +534,27 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
             message: "Workspace checkout path must be absolute",
           });
         }
+        const writeRebind = Effect.fn("WorkspaceManagement.rebind.write")(function* () {
+          const normalizedPath = path.resolve(checkoutPath);
+          const current = yield* selectWorkspaceRow(sql, workspace);
+          if (!current) return yield* new WorkspaceNotFound({ workspace });
+          const existing = yield* selectWorkspaceBinding(sql, normalizedPath);
+          if (existing && existing.id !== workspace) {
+            return yield* new WorkspaceManagementError({
+              operation: "re-bind workspace",
+              message: `Workspace checkout path is already registered as ${existing.id}`,
+            });
+          }
+          yield* sql.withTransaction(updateCheckoutPath(sql, workspace, normalizedPath));
+          const change = yield* loadRegistrationChange(
+            loadingServices,
+            { ...current, checkoutPath: normalizedPath },
+            authoringRoots,
+          );
+          return yield* commitChange(change);
+        });
         return yield* store.withWrite(
-          Effect.gen(function* () {
-            const normalizedPath = path.resolve(checkoutPath);
-            const current = yield* selectWorkspaceRow(sql, workspace);
-            if (!current) return yield* new WorkspaceNotFound({ workspace });
-            const existing = yield* selectWorkspaceBinding(sql, normalizedPath);
-            if (existing && existing.id !== workspace) {
-              return yield* new WorkspaceManagementError({
-                operation: "re-bind workspace",
-                message: `Workspace checkout path is already registered as ${existing.id}`,
-              });
-            }
-            yield* sql.withTransaction(updateCheckoutPath(sql, workspace, normalizedPath));
-            const change = yield* loadRegistrationChange(
-              loadingServices,
-              { ...current, checkoutPath: normalizedPath },
-              authoringRoots,
-            );
-            return yield* commitChange(change);
-          }).pipe(Effect.mapError(managementError("re-bind workspace"))),
+          writeRebind().pipe(Effect.mapError(managementError("re-bind workspace"))),
         );
       });
       const deregister = Effect.fn("WorkspaceManagement.deregister")(function* (workspace: WorkspaceId) {
@@ -564,27 +564,27 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
             message: store.message,
           });
         }
+        const removeSettings = Effect.fn("WorkspaceManagement.deregister.transaction")(function* () {
+          yield* sql`DELETE FROM contribution_settings
+            WHERE scope = 'private-workspace-overlay'
+              AND workspace = ${workspace}`;
+          yield* sql`DELETE FROM operation_settings
+            WHERE scope = 'private-workspace-overlay'
+              AND workspace = ${workspace}`;
+          yield* sql`DELETE FROM workspaces WHERE id = ${workspace}`;
+          yield* fs.remove(path.join(privateWorkspaceRoot, workspace), {
+            recursive: true,
+            force: true,
+          });
+        });
+        const writeDeregistration = Effect.fn("WorkspaceManagement.deregister.write")(function* () {
+          const row = yield* selectWorkspaceRow(sql, workspace);
+          if (!row) return yield* new WorkspaceNotFound({ workspace });
+          yield* sql.withTransaction(removeSettings());
+          return yield* commitRemoval(workspace);
+        });
         return yield* store.withWrite(
-          Effect.gen(function* () {
-            const row = yield* selectWorkspaceRow(sql, workspace);
-            if (!row) return yield* new WorkspaceNotFound({ workspace });
-            yield* sql.withTransaction(
-              Effect.gen(function* () {
-                yield* sql`DELETE FROM contribution_settings
-                  WHERE scope = 'private-workspace-overlay'
-                    AND workspace = ${workspace}`;
-                yield* sql`DELETE FROM operation_settings
-                  WHERE scope = 'private-workspace-overlay'
-                    AND workspace = ${workspace}`;
-                yield* sql`DELETE FROM workspaces WHERE id = ${workspace}`;
-                yield* fs.remove(path.join(privateWorkspaceRoot, workspace), {
-                  recursive: true,
-                  force: true,
-                });
-              }),
-            );
-            return yield* commitRemoval(workspace);
-          }).pipe(Effect.mapError(managementError("deregister workspace"))),
+          writeDeregistration().pipe(Effect.mapError(managementError("deregister workspace"))),
         );
       });
       return Context.make(WorkspaceRegistry, registry).pipe(

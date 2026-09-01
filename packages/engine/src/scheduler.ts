@@ -298,14 +298,10 @@ export const make = (config: SchedulerConfig) =>
       const candidates = candidatesOf(yield* registry.state, snapshot, config);
       const day = utcDay(yield* Clock.currentTimeMillis);
       const planned = yield* stateMetricsGate.withPermit(
-        Effect.gen(function* () {
-          const planned = yield* Ref.modify(stateRef, (state) => {
-            const next = plan(candidates, state, config, { day, generation: snapshot.generation });
-            return [next, next.state];
-          });
-          yield* updateStateMetrics(planned.state);
-          return planned;
-        }),
+        Ref.modify(stateRef, (state) => {
+          const next = plan(candidates, state, config, { day, generation: snapshot.generation });
+          return [next, next.state];
+        }).pipe(Effect.tap((planned) => updateStateMetrics(planned.state))),
       );
       if (isBudgetExhaustedTick(planned, candidates, config)) {
         yield* Metric.update(budgetExhaustedTicks, 1);

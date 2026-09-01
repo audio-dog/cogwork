@@ -44,8 +44,8 @@ export const make = Effect.gen(function* () {
       effect: Effect.Effect<A, E, R>,
       onCancel: Effect.Effect<void, never, R2> = Effect.void,
     ) =>
-      Effect.uninterruptibleMask((restore) =>
-        Effect.gen(function* () {
+      Effect.uninterruptibleMask((restore) => {
+        const register = Effect.fn("RunControl.run")(function* () {
           const ready = yield* Deferred.make<void>();
           const manualCancellation = yield* Deferred.make<void>();
           const fiber = yield* FiberMap.run(
@@ -66,8 +66,9 @@ export const make = Effect.gen(function* () {
           });
           yield* Deferred.succeed(ready, undefined);
           return yield* restore(Fiber.join(fiber)).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
-        }),
-      ),
+        });
+        return register();
+      }),
     cancel: Effect.fn("RunControl.cancel")((runId: RunId) =>
       Effect.sync(() => {
         const current = FiberMap.getUnsafe(fibers, runId);

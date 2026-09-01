@@ -18,6 +18,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import type * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
@@ -508,6 +509,8 @@ export interface HeartbeatOptions {
   readonly drain: DrainOptions;
 }
 
+const interruptionGate = Latch.makeUnsafe();
+
 const activeHeartbeats = (options: HeartbeatOptions) =>
   Effect.all([reconcileHeartbeat(options.pollIntervalMillis), executeHeartbeat()], {
     concurrency: "unbounded",
@@ -515,6 +518,6 @@ const activeHeartbeats = (options: HeartbeatOptions) =>
 
 export const heartbeats = (options: HeartbeatOptions) =>
   Effect.flatMap(ControlStore, (controlStore) => {
-    if (controlStore.health === "unavailable") return Effect.never;
+    if (controlStore.health === "unavailable") return interruptionGate.await;
     return activeHeartbeats(options);
   });
