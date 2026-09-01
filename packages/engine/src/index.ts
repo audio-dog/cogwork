@@ -8,6 +8,7 @@ export * as Daemon from "./daemon";
 export * as DaemonEventBus from "./daemon-event-bus";
 export * as EventPublisher from "./event-publisher";
 export * as Executor from "./executor";
+export * as ExternalHarnessRuntime from "./external-harness-runtime";
 export * as Git from "./git";
 export * as GitHub from "./github";
 export * as Harness from "./harness";
