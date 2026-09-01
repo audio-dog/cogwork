@@ -86,7 +86,7 @@ A pluggable implementation of one agent backend. Beside dispatch it declares its
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **Harness capability profile**:
-The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity and fork behavior, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, structured-output behavior, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
+The runner-declared operational facts TanStack does not expose at runtime: supported authentication modes, Session affinity, fork and human-attach behavior, structured-output reliability, policy and file-event fidelity, usage quality, readiness diagnostics, and journal/takeover support. Adapter models, provider options, modalities, middleware requirements, and Sandbox requirements stay TanStack-owned runtime facts.
 _Avoid_: Feature flags, adapter metadata, projection matrix
 
 **External Harness runtime**:
