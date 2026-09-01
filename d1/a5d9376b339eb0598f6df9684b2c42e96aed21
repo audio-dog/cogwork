@@ -1,0 +1,19 @@
+packages/contracts/CONTEXT.md
+  s_a32be0b24c76c1::t_c2df9c5a26b8bc 338-349
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d1a5d9376b339eb0598f6df9684b2c42e96aed21",
+  "prompts": {},
+  "sessions": {
+    "s_a32be0b24c76c1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ceb-76eb-7021-99e7-fac99010ebe9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
