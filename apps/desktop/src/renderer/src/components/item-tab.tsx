@@ -21,8 +21,9 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from "@remixicon/react";
 import * as Cause from "effect/Cause";
+import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useRef, useState } from "react";
-import { cancelRunAtom, reclassifyAtom } from "../daemon/atoms";
+import { cancelRunAtom, handBackAtom, handBackTargetAtom, reclassifyAtom } from "../daemon/atoms";
 import { useBoard } from "../features/activity-session";
 import { boardItem, needsHumanReasonLabel, runForItem, runsForItem } from "../features/feed";
 import { relativeTime } from "../features/format";
@@ -66,14 +67,20 @@ interface ItemTabActions {
   readonly setTriageNote: (note: string) => void;
   readonly cancel: () => void;
   readonly reclassify: (role: TriageRole, note?: string) => void;
+  readonly handBack: (role: TriageRole, note?: string) => void;
+}
+
+interface MutationStatus {
+  readonly pending: boolean;
+  readonly error: string | null;
 }
 
 interface ItemTabMeta {
   readonly now: number;
-  readonly cancelPending: boolean;
-  readonly cancelError: string | null;
-  readonly reclassifyPending: boolean;
-  readonly reclassifyError: string | null;
+  readonly cancel: MutationStatus;
+  readonly reclassify: MutationStatus;
+  readonly handBack: MutationStatus;
+  readonly roleCommandPending: boolean;
   readonly triageRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -90,6 +97,11 @@ function useItemTab(): ItemTabContextValue {
   if (!value) throw new Error("Item tab parts must render inside ItemTabProvider");
   return value;
 }
+
+const mutationStatus = <A, E>(result: AsyncResult.AsyncResult<A, E>, active = true) => ({
+  pending: active && result.waiting,
+  error: active && result._tag === "Failure" ? Cause.pretty(result.cause) : null,
+});
 
 function ItemTabProvider({
   workspace,
@@ -112,13 +124,29 @@ function ItemTabProvider({
   const [triageRole, setTriageRole] = useState<TriageRole>("ready-for-agent");
   const [triageNote, setTriageNote] = useState("");
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
-  const [reclassifyResult, reclassify] = useAtom(reclassifyAtom);
+  const [reclassifyResult, runReclassify] = useAtom(reclassifyAtom);
+  const [handBackResult, runHandBack] = useAtom(handBackAtom);
+  const [handBackTarget, setHandBackTarget] = useAtom(handBackTargetAtom);
   const triageRef = useRef<HTMLDivElement | null>(null);
   const now = useNow();
 
   const descriptor = describeItemState(item, run);
   const tabs = subTabs(item.pr !== undefined);
   const resolved = resolveSubTab(subTab, tabs);
+  const reclassifyStatus = mutationStatus(reclassifyResult);
+  const handBackOwned = handBackTarget?.workspace === workspace && handBackTarget.workItem === item.id;
+  const handBackStatus = mutationStatus(handBackResult, handBackOwned);
+  const roleCommandPayload = (role: TriageRole, note?: string) => {
+    const trimmedNote = note?.trim();
+    return {
+      payload: {
+        workspace,
+        workItem: item.id,
+        role,
+        ...(trimmedNote ? { note: trimmedNote } : {}),
+      },
+    };
+  };
 
   const actions: ItemTabActions = {
     setSubTab,
@@ -127,18 +155,21 @@ function ItemTabProvider({
     cancel: () => {
       if (run) cancelRun({ payload: { runId: run.id } });
     },
-    reclassify: (role, note) =>
-      reclassify({
-        payload: { workspace, workItem: item.id, role, ...(note ? { note } : {}) },
-      }),
+    reclassify: (role, note) => {
+      runReclassify(roleCommandPayload(role, note));
+    },
+    handBack: (role, note) => {
+      setHandBackTarget({ workspace, workItem: item.id });
+      runHandBack(roleCommandPayload(role, note));
+    },
   };
 
   const meta: ItemTabMeta = {
     now,
-    cancelPending: cancelResult.waiting,
-    cancelError: cancelResult._tag === "Failure" ? Cause.pretty(cancelResult.cause) : null,
-    reclassifyPending: reclassifyResult.waiting,
-    reclassifyError: reclassifyResult._tag === "Failure" ? Cause.pretty(reclassifyResult.cause) : null,
+    cancel: mutationStatus(cancelResult),
+    reclassify: reclassifyStatus,
+    handBack: handBackStatus,
+    roleCommandPending: reclassifyResult.waiting || handBackResult.waiting,
     triageRef,
   };
 
@@ -211,20 +242,19 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+const stateBadgeVariant = (tone: ItemStateDescriptor["tone"]) => {
+  if (tone === "attention") return "destructive";
+  if (tone === "ready") return "secondary";
+  if (tone === "muted") return "outline";
+  return "default";
+};
+
 function StateBadge({ descriptor }: { descriptor: ItemStateDescriptor }) {
   return (
-    <span
-      className={cn(
-        "inline-flex w-fit items-center gap-1.5 self-start rounded-full px-2 py-0.5 text-xs font-medium",
-        descriptor.tone === "live" && "bg-primary/15 text-primary",
-        descriptor.tone === "attention" && "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-        descriptor.tone === "ready" && "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-        descriptor.tone === "muted" && "bg-muted text-muted-foreground",
-      )}
-    >
-      {descriptor.running && <RiPulseLine className="size-3.5 animate-pulse" />}
+    <Badge variant={stateBadgeVariant(descriptor.tone)} className="self-start">
+      {descriptor.running && <RiPulseLine data-icon="inline-start" className="animate-pulse" />}
       {descriptor.label}
-    </span>
+    </Badge>
   );
 }
 
@@ -259,13 +289,13 @@ function Header() {
 function CancelParkButton() {
   const {
     state: { descriptor },
-    actions: { cancel },
-    meta: { cancelPending },
+    actions: { cancel: submitCancel },
+    meta: { cancel },
   } = useItemTab();
   if (!descriptor.running) return null;
   return (
-    <Button size="sm" variant="outline" disabled={cancelPending} onClick={cancel}>
-      {cancelPending ? <Spinner data-icon="inline-start" /> : <RiStopCircleLine data-icon="inline-start" />}
+    <Button size="sm" variant="outline" disabled={cancel.pending} onClick={submitCancel}>
+      {cancel.pending ? <Spinner data-icon="inline-start" /> : <RiStopCircleLine data-icon="inline-start" />}
       Cancel &amp; park
     </Button>
   );
@@ -275,14 +305,14 @@ function ApproveButton() {
   const {
     state: { item },
     actions: { reclassify },
-    meta: { reclassifyPending },
+    meta: { roleCommandPending },
   } = useItemTab();
   if (item._tag !== "NeedsHuman") return null;
   return (
     <Button
       size="sm"
       variant="outline"
-      disabled={reclassifyPending}
+      disabled={roleCommandPending}
       onClick={() => reclassify("ready-for-agent")}
     >
       Approve
@@ -293,13 +323,14 @@ function ApproveButton() {
 function ReclassifyButton() {
   const {
     state: { item },
-    meta: { triageRef },
+    meta: { roleCommandPending, triageRef },
   } = useItemTab();
   if (item._tag !== "NeedsHuman") return null;
   return (
     <Button
       size="sm"
       variant="outline"
+      disabled={roleCommandPending}
       onClick={() => triageRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })}
     >
       Reclassify
@@ -307,10 +338,30 @@ function ReclassifyButton() {
   );
 }
 
+function HandBackButton() {
+  const {
+    state: { item, triageRole, triageNote },
+    actions: { handBack: submitHandBack },
+    meta: { handBack, roleCommandPending },
+  } = useItemTab();
+  if (item._tag !== "NeedsHuman") return null;
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={roleCommandPending}
+      onClick={() => submitHandBack(triageRole, triageNote)}
+    >
+      {handBack.pending && <Spinner data-icon="inline-start" />}
+      Hand back
+    </Button>
+  );
+}
+
 function ActionBar() {
   const {
     state: { item, descriptor },
-    meta: { cancelError },
+    meta: { cancel, handBack },
   } = useItemTab();
   const hasActions = descriptor.running || item._tag === "NeedsHuman";
   if (!hasActions) return null;
@@ -320,8 +371,10 @@ function ActionBar() {
         <CancelParkButton />
         <ApproveButton />
         <ReclassifyButton />
+        <HandBackButton />
       </div>
-      {cancelError && <span className="text-xs text-destructive">{cancelError}</span>}
+      {cancel.error && <span className="text-xs text-destructive">{cancel.error}</span>}
+      {handBack.error && <span className="text-xs text-destructive">{handBack.error}</span>}
     </div>
   );
 }
@@ -352,21 +405,14 @@ function RunningAffordance({ run }: { run: RunSummary }) {
   );
 }
 
-const triageRoles: ReadonlyArray<{ readonly role: TriageRole; readonly label: string }> = [
-  { role: "ready-for-agent", label: "Send back to agent" },
-  { role: "needs-info", label: "Needs info" },
-  { role: "ready-for-human", label: "Ready for human" },
-  { role: "wontfix", label: "Won't fix" },
-];
-
 function TriageProposal({ proposal }: { proposal: string }) {
   const [expanded, setExpanded] = useState(false);
   const long = proposal.length > 320;
   return (
     <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-3">
-      <span className="w-fit rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-400">
+      <Badge variant="outline" className="w-fit">
         AI suggestion
-      </span>
+      </Badge>
       <div className={cn("relative", long && !expanded && "max-h-32 overflow-hidden")}>
         <Markdown className="text-muted-foreground">{proposal}</Markdown>
         {long && !expanded && (
@@ -386,11 +432,9 @@ function TriageProposal({ proposal }: { proposal: string }) {
 function TriageSection({ item }: { item: NeedsHumanItem }) {
   const {
     state: { triageRole, triageNote },
-    actions: { reclassify, setTriageRole, setTriageNote },
-    meta: { reclassifyPending, reclassifyError, triageRef },
+    actions: { reclassify: submitReclassify, setTriageRole, setTriageNote },
+    meta: { reclassify, roleCommandPending, triageRef },
   } = useItemTab();
-
-  const trimmed = triageNote.trim();
   return (
     <section ref={triageRef} className="flex flex-col gap-3">
       <SectionLabel>Triage</SectionLabel>
@@ -405,20 +449,27 @@ function TriageSection({ item }: { item: NeedsHumanItem }) {
       <FieldGroup>
         <Field>
           <FieldLabel>Decision</FieldLabel>
-          <ToggleGroup
-            className="flex-col items-stretch"
-            orientation="vertical"
-            value={[triageRole]}
-            onValueChange={(value) => {
-              const next = triageRoles.find((option) => option.role === value[0]);
-              if (next) setTriageRole(next.role);
-            }}
-          >
-            {triageRoles.map(({ role: value, label }) => (
-              <ToggleGroupItem key={value} value={value} variant="outline">
-                {label}
-              </ToggleGroupItem>
-            ))}
+          <ToggleGroup className="flex-col items-stretch" orientation="vertical" value={[triageRole]}>
+            <ToggleGroupItem
+              value="ready-for-agent"
+              variant="outline"
+              onClick={() => setTriageRole("ready-for-agent")}
+            >
+              Send back to agent
+            </ToggleGroupItem>
+            <ToggleGroupItem value="needs-info" variant="outline" onClick={() => setTriageRole("needs-info")}>
+              Needs info
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="ready-for-human"
+              variant="outline"
+              onClick={() => setTriageRole("ready-for-human")}
+            >
+              Ready for human
+            </ToggleGroupItem>
+            <ToggleGroupItem value="wontfix" variant="outline" onClick={() => setTriageRole("wontfix")}>
+              Won't fix
+            </ToggleGroupItem>
           </ToggleGroup>
         </Field>
         <Field>
@@ -434,13 +485,13 @@ function TriageSection({ item }: { item: NeedsHumanItem }) {
       <Button
         size="sm"
         className="w-fit"
-        disabled={reclassifyPending}
-        onClick={() => reclassify(triageRole, trimmed || undefined)}
+        disabled={roleCommandPending}
+        onClick={() => submitReclassify(triageRole, triageNote)}
       >
-        {reclassifyPending && <Spinner data-icon="inline-start" />}
+        {reclassify.pending && <Spinner data-icon="inline-start" />}
         Apply
       </Button>
-      {reclassifyError && <span className="text-xs text-destructive">{reclassifyError}</span>}
+      {reclassify.error && <span className="text-xs text-destructive">{reclassify.error}</span>}
     </section>
   );
 }
@@ -498,7 +549,7 @@ function PreviousAttempts() {
                     <span
                       className={cn(
                         "font-medium capitalize",
-                        tone === "succeeded" && "text-emerald-600 dark:text-emerald-400",
+                        tone === "succeeded" && "text-primary",
                         tone === "failed" && "text-destructive",
                         tone === "abandoned" && "text-muted-foreground",
                       )}
