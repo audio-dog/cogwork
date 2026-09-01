@@ -1,0 +1,31 @@
+packages/engine/src/run-recorder.ts
+  s_a3cf98a3a7a202::t_36d447e8463be3 53-58
+packages/engine/src/run-recorder.test.ts
+  s_a3cf98a3a7a202::t_1ee40fdc480b98 244,247-254,258
+  s_a3cf98a3a7a202::t_9f7831786b705f 15,17,239-243,245-246,255-257
+  s_e58acf5c13358a::t_5887727c511ffb 259-260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9469147baaef6a9034ed7a099246210e8a810c20",
+  "prompts": {},
+  "sessions": {
+    "s_a3cf98a3a7a202": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05acb-fafb-7171-96fc-d64c4bee49bb",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e58acf5c13358a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05ad9-ecd4-7e53-a68c-f0586af4bc40",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
