@@ -12,6 +12,8 @@ files:
 asarUnpack:
   - resources/**
 extraResources:
+  - from: ../../packages/engine/plugins
+    to: plugins
   - from: out/engine
     to: engine
     filter:
