@@ -21,6 +21,7 @@ const pr = (over: Partial<ObservedPr> = {}): ObservedPr => ({
   waitingSinceMillis: 0,
   headRef: "1-test",
   followable: true,
+  draft: false,
   followUp: null,
   ...over,
 });

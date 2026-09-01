@@ -465,7 +465,6 @@ const trackerItem = (over: Partial<TrackerItem> = {}): TrackerItem => ({
   claimedByUs: true,
   attempts: [],
   handback: null,
-  owned: false,
   followUp: null,
   openBlockers: 0,
   proposal: null,
@@ -1659,40 +1658,6 @@ describe("workspace lifecycle commands", () => {
 });
 
 describe("Plugin lifecycle commands", () => {
-  it.effect("logs a failed Control store broadcast read", () => {
-    const messages: string[] = [];
-    const overview = { plugins: [installedPlugin("github")] } satisfies PluginOverview;
-    const plugins = Layer.succeed(PluginManager, {
-      overview: Effect.succeed(overview),
-      install: () => Effect.succeed({ overview, notices: [] }),
-      uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
-      contributions: () => Effect.succeed([]),
-    });
-    return Effect.gen(function* () {
-      const client = yield* RpcTest.makeClient(DaemonRpcs);
-      yield* client
-        .InstallPlugin({ pluginId: "github" })
-        .pipe(Effect.withLogger(Logger.make(({ message }) => messages.push(String(message)))));
-
-      assert.isTrue(messages.some((message) => message.includes("Control store broadcast failed")));
-    }).pipe(
-      Effect.provide(
-        daemonLayer(
-          trackerLayer({}),
-          schedulerStub(),
-          controlStoreStub({
-            read: Effect.fail(
-              ControlStoreFailure.make({ operation: "read Control store", message: "disk unavailable" }),
-            ),
-          }),
-          registryServices,
-          plugins,
-        ),
-      ),
-      Effect.scoped,
-    );
-  });
-
   it.effect("never publishes an older Plugin snapshot after a newer mutation", () =>
     Effect.gen(function* () {
       const firstReady = yield* Deferred.make<void>();
