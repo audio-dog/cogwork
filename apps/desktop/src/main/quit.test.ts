@@ -1,17 +1,26 @@
-import { expect, it, vi } from "vitest";
-import { installQuitHandler, type QuitEvent, type QuitHandler } from "./quit";
+import type { Event } from "electron";
+import { beforeEach, expect, it, vi } from "vitest";
 
-const makeApp = () => {
-  const callbacks: { willQuit?: QuitHandler } = {};
+const electron = vi.hoisted(() => {
+  const callbacks: { willQuit?: (event: Event) => void } = {};
   const app = {
-    on: (_event: "will-quit", handler: QuitHandler) => {
+    on: vi.fn((_event: "will-quit", handler: (event: Event) => void) => {
       callbacks.willQuit = handler;
-    },
+    }),
     quit: vi.fn(),
   };
+  return { app, callbacks };
+});
+
+vi.mock("electron", () => ({ app: electron.app }));
+
+import { app } from "electron";
+import { installShutdownBeforeQuit } from "./quit";
+
+const makeApp = () => {
   const requestQuit = () => {
-    const event: QuitEvent = { preventDefault: vi.fn() };
-    const handler = callbacks.willQuit;
+    const event: Event = { preventDefault: vi.fn(), defaultPrevented: false };
+    const handler = electron.callbacks.willQuit;
     if (!handler) throw new Error("Quit handler was not installed");
     handler(event);
     return event;
@@ -19,11 +28,17 @@ const makeApp = () => {
   return { app, requestQuit };
 };
 
+beforeEach(() => {
+  electron.callbacks.willQuit = undefined;
+  electron.app.on.mockClear();
+  electron.app.quit.mockClear();
+});
+
 it("waits for one shutdown before permitting quit", async () => {
   const shutdown = Promise.withResolvers<void>();
   const dispose = vi.fn(() => shutdown.promise);
   const { app, requestQuit } = makeApp();
-  installQuitHandler(app, dispose);
+  installShutdownBeforeQuit(app, dispose);
 
   const first = requestQuit();
   const repeated = requestQuit();
@@ -48,7 +63,7 @@ it("waits for one shutdown before permitting quit", async () => {
 it("resumes quit when shutdown fails", async () => {
   const dispose = vi.fn(() => Promise.reject(new Error("shutdown failed")));
   const { app, requestQuit } = makeApp();
-  installQuitHandler(app, dispose);
+  installShutdownBeforeQuit(app, dispose);
 
   const event = requestQuit();
 

@@ -8,7 +8,7 @@ import { resolveEngineCommand } from "./engine-command";
 import { EngineSupervisor } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
 import { engineLoggerLayer, mainLogger } from "./logger";
-import { installQuitHandler } from "./quit";
+import { installShutdownBeforeQuit } from "./quit";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
 import { waitForDaemonListening } from "./wait-for-socket";
@@ -123,7 +123,7 @@ const bootstrap = () => {
     app.on("before-quit", () => {
       control.quitting = true;
     });
-    installQuitHandler(app, () => runtime.dispose());
+    installShutdownBeforeQuit(app, () => runtime.dispose());
 
     await runtime.runPromise(supervisor.start);
   });

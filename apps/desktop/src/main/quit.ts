@@ -1,21 +1,7 @@
-export interface QuitEvent {
-  preventDefault(): void;
-}
+import type { App } from "electron";
 
-export type QuitHandler = (event: QuitEvent) => void;
-
-interface QuitApp {
-  on(event: "will-quit", handler: QuitHandler): unknown;
-  quit(): void;
-}
-
-interface QuitState {
-  permitted: boolean;
-  shutdown?: Promise<void>;
-}
-
-export const installQuitHandler = (app: QuitApp, dispose: () => Promise<void>) => {
-  const state: QuitState = { permitted: false };
+export const installShutdownBeforeQuit = (app: App, shutdown: () => Promise<void>) => {
+  const state: { permitted: boolean; shutdown?: Promise<void> } = { permitted: false };
   const resume = () => {
     state.permitted = true;
     app.quit();
@@ -25,6 +11,6 @@ export const installQuitHandler = (app: QuitApp, dispose: () => Promise<void>) =
     if (state.permitted) return;
     event.preventDefault();
     if (state.shutdown) return;
-    state.shutdown = dispose().then(resume, resume);
+    state.shutdown = shutdown().then(resume, resume);
   });
 };
