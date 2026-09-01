@@ -10,7 +10,7 @@ export const catalogEndpoint = "https://models.dev/api.json";
 
 export const defaultTtlMillis = 5 * 60_000;
 
-export const catalogFetchDeadline = "30 seconds";
+const catalogFetchDeadline = "30 seconds";
 
 const CatalogModelEntry = Schema.Struct({
   id: Schema.String,
@@ -67,15 +67,7 @@ export const makeService = Effect.fn("ModelCatalog.make")(function* (
 ) {
   const stale = yield* Ref.make<CatalogApi | null>(null);
   const [cachedApi, invalidate] = yield* Effect.cachedInvalidateWithTTL(
-    source.fetch.pipe(
-      Effect.timeout(catalogFetchDeadline),
-      Effect.catchTag(
-        "TimeoutError",
-        () =>
-          new CatalogError({ message: `the model catalog fetch timed out after ${catalogFetchDeadline}` }),
-      ),
-      Effect.tap((api) => Ref.set(stale, api)),
-    ),
+    source.fetch.pipe(Effect.tap((api) => Ref.set(stale, api))),
     ttlMillis,
   );
 
@@ -122,7 +114,14 @@ export const httpSource = (
     return yield* decodeCatalog(body).pipe(
       Effect.mapError(() => new CatalogError({ message: "the model catalog returned an unexpected shape" })),
     );
-  }).pipe(Effect.withSpan("ModelCatalog.httpFetch")),
+  }).pipe(
+    Effect.timeout(catalogFetchDeadline),
+    Effect.catchTag(
+      "TimeoutError",
+      () => new CatalogError({ message: `the model catalog fetch timed out after ${catalogFetchDeadline}` }),
+    ),
+    Effect.withSpan("ModelCatalog.httpFetch"),
+  ),
 });
 
 export const layer = Layer.effect(
