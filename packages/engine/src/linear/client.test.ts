@@ -807,6 +807,34 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("never reads a failed comment write as a permanent refusal", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({ body: { errors: [{ message: "Something went wrong" }] } }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.createComment(ref, "issue-uuid", "body"));
+      assert.strictEqual(error.reason, "unavailable");
+      assert.isFalse(issueTrackerErrorIsPermanent(error));
+    }).pipe(withToken()),
+  );
+
+  it.effect("reads a forbidden write as a permanent refusal", () =>
+    Effect.gen(function* () {
+      stubLinear(() => ({
+        body: {
+          errors: [
+            {
+              message: "Not allowed to take action - You are not allowed to do this.",
+              extensions: { type: "forbidden" },
+            },
+          ],
+        },
+      }));
+      const client = yield* LinearClient;
+      const error = yield* Effect.flip(client.createComment(ref, "issue-uuid", "body"));
+      assert.isTrue(issueTrackerErrorIsPermanent(error));
+    }).pipe(withToken()),
+  );
+
   it.effect("never reads a rate-limited label create as a permanent refusal", () =>
     Effect.gen(function* () {
       stubLinear((document) => {

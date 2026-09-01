@@ -163,7 +163,7 @@ const labelCreateRefused = (ref: LinearTeamRef, name: string) => (error: IssueTr
   new IssueTrackerError({
     reason: error.reason,
     message: `Linear refused creating the "${name}" label in team ${ref.team}: ${error.message}`,
-    retryable: error.retryable,
+    retryable: error.reason === "rate-limited",
     retryAfterMillis: error.retryAfterMillis,
     connectionId: error.connectionId,
   });
@@ -189,6 +189,11 @@ const reasonFor = (cause: unknown): IssueTrackerError["reason"] => {
 const isTransportCause = (cause: LinearError) =>
   cause.type === LinearErrorType.Unknown && cause.raw instanceof TypeError;
 
+const permanentErrorTypes = new Set([LinearErrorType.Forbidden, LinearErrorType.FeatureNotAccessible]);
+
+const isPermanentCause = (cause: unknown) =>
+  cause instanceof LinearError && cause.type !== undefined && permanentErrorTypes.has(cause.type);
+
 const isTransientCause = (cause: unknown) =>
   cause instanceof LinearError &&
   (isTransportCause(cause) || (cause.type !== undefined && transientErrorTypes.has(cause.type)));
@@ -210,6 +215,7 @@ const fromSdkError = (cause: unknown, nowMillis: number) =>
   new IssueTrackerError({
     reason: reasonFor(cause),
     message: cause instanceof Error ? cause.message : String(cause),
+    ...(isPermanentCause(cause) ? { retryable: false } : {}),
     retryAfterMillis: retryAfterMillisOf(cause, nowMillis),
   });
 
@@ -223,15 +229,6 @@ const fromSdkFailure = (cause: unknown, nowMillis: number) =>
 
 const nonRetryableFailure = (error: IssueTrackerError) =>
   new LinearRequestFailure({ error, retryable: false });
-
-const settledError = (failure: LinearRequestFailure) =>
-  new IssueTrackerError({
-    reason: failure.error.reason,
-    message: failure.error.message,
-    retryable: failure.retryable,
-    retryAfterMillis: failure.error.retryAfterMillis,
-    connectionId: failure.error.connectionId,
-  });
 
 const isoMillis = (millis: number) =>
   Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
@@ -462,7 +459,7 @@ export const verifyCredential = Effect.fn("linear.verifyCredential")(function* (
       try: (signal) => new LinearSdk({ ...sdkAuth(credential), signal }).viewer,
       catch: (cause) => fromSdkFailure(cause, nowMillis),
     }),
-  ).pipe(Effect.mapError(settledError));
+  ).pipe(Effect.mapError((failure) => failure.error));
 });
 
 const make = Effect.fn("linear.client.make")(function* (credentials: CredentialStoreService) {
@@ -515,7 +512,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       }),
       { while: isTransient, schedule: transientBackoff, times: 3 },
     ).pipe(
-      Effect.mapError(settledError),
+      Effect.mapError((failure) => failure.error),
       Effect.tapError((error) =>
         Effect.flatMap(Clock.currentTimeMillis, (nowMillis) => noteFailure(ref, nowMillis, error)),
       ),
