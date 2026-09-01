@@ -18,7 +18,6 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import type * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
@@ -514,8 +513,10 @@ const activeHeartbeats = (options: HeartbeatOptions) =>
     concurrency: "unbounded",
   }).pipe(Effect.onInterrupt(() => Effect.flatMap(Scheduler, (scheduler) => scheduler.drain(options.drain))));
 
+const awaitHeartbeatInterruption = () => Effect.callback<never>(() => Effect.void);
+
 export const heartbeats = (options: HeartbeatOptions) =>
   Effect.flatMap(ControlStore, (controlStore) => {
-    if (controlStore.health === "unavailable") return Latch.makeUnsafe().await;
+    if (controlStore.health === "unavailable") return awaitHeartbeatInterruption();
     return activeHeartbeats(options);
   });
