@@ -1,5 +1,5 @@
 import {
-  ClassifiedItem,
+  type ClassifiedItem,
   DaemonRpcs,
   type IssueTrackerError,
   type TriageRole,
@@ -19,8 +19,11 @@ import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import { formatClassifiedItem } from "./classified-item";
 import { defaultSocketPath } from "./paths";
 import { clientLayer } from "./rpc";
+import { terminalLine } from "./terminal-text";
+import { workspaceFlag } from "./workspace-commands";
 
 interface HandBackOptions {
   readonly workspace: string;
@@ -50,57 +53,34 @@ const decodeWorkspace = decodeInput(WorkspaceId);
 const decodeWorkItem = decodeInput(WorkItemId);
 const decodeNote = decodeInput(TrimmedNonEmptyString);
 
-const requestFor = Effect.fn("handBack.requestFor")(function* (options: HandBackOptions) {
+export const makeHandBackRequest = Effect.fn("handBack.makeRequest")(function* (options: HandBackOptions) {
   const workspace = yield* decodeWorkspace(options.workspace);
   const workItem = yield* decodeWorkItem(options.item);
   const note = options.note === undefined ? undefined : yield* decodeNote(options.note);
   return { workspace, workItem, role: options.role, ...(note ? { note } : {}) };
 });
 
-const formatItem = (item: ClassifiedItem) =>
-  ClassifiedItem.match(item, {
-    Eligible: ({ stage, id, title }) => `${stage} ${id} ${title}`,
-    Claimed: ({ id, title, claim }) => `claimed ${id} ${title} (by ${claim.by})`,
-    Blocked: ({ id, title, openBlockers }) =>
-      `blocked ${id} ${title} (${openBlockers} open blocker${openBlockers === 1 ? "" : "s"})`,
-    NeedsHuman: ({ reason, id, title }) => `needs-human ${reason} ${id} ${title}`,
-  });
+export const handBackError = (error: WorkItemNotFound | IssueTrackerError | RpcClientError) => {
+  if (error._tag === "WorkItemNotFound") {
+    return inputError(
+      terminalLine(`No parked work item "${error.workItem}" was found in workspace "${error.workspace}".`),
+      error,
+    );
+  }
+  return inputError(terminalLine(`Could not hand back the work item: ${error.message}`), error);
+};
 
-const notFoundError = (error: WorkItemNotFound) =>
-  inputError(`No parked work item "${error.workItem}" was found in workspace "${error.workspace}".`, error);
-
-const trackerError = (error: IssueTrackerError) =>
-  inputError(`Could not hand back the work item: ${error.message}`, error);
-
-const clientError = (error: RpcClientError) =>
-  inputError(`Could not hand back the work item: ${error.message}`, error);
-
-const missingResult = () =>
-  inputError("The daemon did not return the classified work item after handing it back.", "missing item");
-
-export const handBackItem = Effect.fn("handBack.item")(function* (
-  options: HandBackOptions,
-  send: (
-    request: HandBackRequest,
-  ) => Effect.Effect<ClassifiedItem | null, WorkItemNotFound | IssueTrackerError | RpcClientError>,
-) {
-  const request = yield* requestFor(options);
-  const item = yield* send(request).pipe(
-    Effect.catchTags({
-      WorkItemNotFound: (error) => Effect.fail(notFoundError(error)),
-      IssueTrackerError: (error) => Effect.fail(trackerError(error)),
-      RpcClientError: (error) => Effect.fail(clientError(error)),
-    }),
-  );
-  if (item === null) return yield* missingResult();
-  return `Handed back ${formatItem(item)}`;
-});
+export const formatHandBackResult = (item: ClassifiedItem | null, request: HandBackRequest) => {
+  if (item === null) return terminalLine(`Handed back ${request.workItem} as ${request.role}`);
+  return `Handed back ${formatClassifiedItem(item)}`;
+};
 
 const runHandBack = Effect.fn("handBack.run")(
   function* (options: HandBackOptions & { readonly socket: string }) {
+    const request = yield* makeHandBackRequest(options);
     const client = yield* RpcClient.make(DaemonRpcs);
-    const output = yield* handBackItem(options, (request) => client.HandBack(request));
-    yield* Console.log(output);
+    const item = yield* client.HandBack(request).pipe(Effect.mapError(handBackError));
+    yield* Console.log(formatHandBackResult(item, request));
   },
   (effect, options) => effect.pipe(Effect.scoped, Effect.provide(clientLayer(options.socket))),
 );
@@ -108,10 +88,6 @@ const runHandBack = Effect.fn("handBack.run")(
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
-);
-
-const workspaceFlag = Flag.string("workspace").pipe(
-  Flag.withDescription("Workspace containing the parked work item"),
 );
 
 const itemArgument = Argument.string("item").pipe(Argument.withDescription("Parked work item to hand back"));

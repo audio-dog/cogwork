@@ -1,9 +1,20 @@
-import { ClassifiedItem, WorkItemId, WorkItemNotFound, WorkspaceId } from "@cogwork/contracts";
+import {
+  ClassifiedItem,
+  IssueTrackerError,
+  WorkItemId,
+  WorkItemNotFound,
+  WorkspaceId,
+} from "@cogwork/contracts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Ref from "effect/Ref";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { handBackCommand, handBackItem } from "./hand-back-command";
+import { TestConsole } from "effect/testing";
+import * as Command from "effect/unstable/cli/Command";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { cli } from "./cli";
+import { formatHandBackResult, handBackError, makeHandBackRequest } from "./hand-back-command";
 
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
@@ -17,73 +28,106 @@ const eligible = classifiedItem({
 });
 
 describe("hand-back command", () => {
-  it.effect("sends the named item, role, and note and reports its new classification", () =>
+  it.effect("builds the daemon request with the named item, role, and note", () =>
     Effect.gen(function* () {
-      const requests = yield* Ref.make<ReadonlyArray<unknown>>([]);
-      const output = yield* handBackItem(
-        {
-          workspace: "cogwork",
-          item: "284",
-          role: "ready-for-agent",
-          note: "worktree setup repaired",
-        },
-        (request) =>
-          Ref.update(requests, (current) => [...current, request]).pipe(Effect.map(() => eligible)),
-      );
+      const request = yield* makeHandBackRequest({
+        workspace: "cogwork",
+        item: "284",
+        role: "ready-for-agent",
+        note: "worktree setup repaired",
+      });
 
-      assert.deepStrictEqual(yield* Ref.get(requests), [
-        {
-          workspace: workspaceId("cogwork"),
-          workItem: workItemId("284"),
-          role: "ready-for-agent",
-          note: "worktree setup repaired",
-        },
-      ]);
-      assert.strictEqual(output, "Handed back implement 284 Hand back from the CLI");
+      assert.deepStrictEqual(request, {
+        workspace: workspaceId("cogwork"),
+        workItem: workItemId("284"),
+        role: "ready-for-agent",
+        note: "worktree setup repaired",
+      });
+      assert.strictEqual(
+        formatHandBackResult(eligible, request),
+        "Handed back implement 284 Hand back from the CLI",
+      );
     }),
   );
 
   it.effect("omits the note when none is given", () =>
     Effect.gen(function* () {
-      const requests = yield* Ref.make<ReadonlyArray<unknown>>([]);
-      yield* handBackItem({ workspace: "cogwork", item: "284", role: "ready-for-agent" }, (request) =>
-        Ref.update(requests, (current) => [...current, request]).pipe(Effect.map(() => eligible)),
-      );
+      const request = yield* makeHandBackRequest({
+        workspace: "cogwork",
+        item: "284",
+        role: "ready-for-agent",
+      });
 
-      assert.deepStrictEqual(yield* Ref.get(requests), [
-        {
-          workspace: workspaceId("cogwork"),
-          workItem: workItemId("284"),
-          role: "ready-for-agent",
-        },
-      ]);
+      assert.deepStrictEqual(request, {
+        workspace: workspaceId("cogwork"),
+        workItem: workItemId("284"),
+        role: "ready-for-agent",
+      });
     }),
   );
 
-  it.effect("turns an unknown workspace or item into a clear CLI error", () =>
+  it.effect("rejects an empty workspace as a clear CLI error", () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
-        handBackItem(
-          { workspace: "missing-workspace", item: "missing-item", role: "ready-for-agent" },
-          (request) =>
-            Effect.fail(
-              new WorkItemNotFound({
-                workspace: request.workspace,
-                workItem: request.workItem,
-              }),
-            ),
-        ),
+        makeHandBackRequest({ workspace: "", item: "284", role: "ready-for-agent" }),
       );
 
       assert.strictEqual(error._tag, "UserError");
-      assert.strictEqual(
-        error.message,
-        'No parked work item "missing-item" was found in workspace "missing-workspace".',
-      );
+      assert.include(error.message, "Invalid hand-back input");
     }),
   );
 
-  it("is available as a root command", () => {
-    assert.isDefined(handBackCommand);
+  it("turns an unknown workspace or item into a clear CLI error", () => {
+    const error = handBackError(
+      new WorkItemNotFound({
+        workspace: workspaceId("missing-workspace"),
+        workItem: workItemId("missing-item"),
+      }),
+    );
+
+    assert.strictEqual(error._tag, "UserError");
+    assert.strictEqual(
+      error.message,
+      'No parked work item "missing-item" was found in workspace "missing-workspace".',
+    );
   });
+
+  it("turns an issue tracker failure into a clear CLI error", () => {
+    const error = handBackError(
+      new IssueTrackerError({ reason: "unavailable", message: "tracker unavailable" }),
+    );
+
+    assert.strictEqual(error._tag, "UserError");
+    assert.strictEqual(error.message, "Could not hand back the work item: tracker unavailable");
+  });
+
+  it("removes terminal controls from daemon errors", () => {
+    const error = handBackError(
+      new IssueTrackerError({ reason: "unavailable", message: "safe\u001b[2Jmessage\nINJECTED" }),
+    );
+
+    assert.strictEqual(error.message, "Could not hand back the work item: safe[2Jmessage INJECTED");
+  });
+
+  it.effect("reports a successful handback that removes the item from classification", () =>
+    Effect.gen(function* () {
+      const request = yield* makeHandBackRequest({
+        workspace: "cogwork",
+        item: "284",
+        role: "wontfix",
+      });
+
+      assert.strictEqual(formatHandBackResult(null, request), "Handed back 284 as wontfix");
+    }),
+  );
+
+  it.effect("appears in root help", () =>
+    Effect.gen(function* () {
+      yield* Command.runWith(cli, { version: "0.0.1" })(["--help"]).pipe(
+        Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer)),
+      );
+
+      assert.include((yield* TestConsole.logLines).join("\n"), "hand-back");
+    }),
+  );
 });

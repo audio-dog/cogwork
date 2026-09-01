@@ -18,7 +18,7 @@ const socketFlag = Flag.string("socket").pipe(
 );
 
 const inputFlag = Flag.string("input").pipe(Flag.withDescription("One-time JSON registration input"));
-const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("WorkspaceId to manage"));
+export const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("WorkspaceId to manage"));
 const checkoutFlag = Flag.string("checkout").pipe(Flag.withDescription("New absolute checkout path"));
 
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceRegistration));
