@@ -282,8 +282,9 @@ const make = Effect.fn("ledger.make")(function* () {
         db.select({ plan: runPlans.plan }).from(runPlans).where(eq(runPlans.runId, runId)).limit(1).all(),
       ).pipe(
         Effect.flatMap((rows) => {
-          const plan = rows[0]?.plan;
-          return plan ? decodeOrElse("getRunPlan", runId, decodeRunPlan(plan), null) : Effect.succeed(null);
+          const row = rows[0];
+          if (!row) return Effect.succeed(null);
+          return decodeOrElse("getRunPlan", runId, decodeRunPlan(row.plan), null);
         }),
       ),
 
@@ -355,9 +356,8 @@ const make = Effect.fn("ledger.make")(function* () {
       ).pipe(
         Effect.flatMap((rows) => {
           const row = rows[0];
-          return row?.session
-            ? decodeOrElse("sessionForBranch", row.id, decodeSessionId(row.session), null)
-            : Effect.succeed(null);
+          if (!row || row.session === null) return Effect.succeed(null);
+          return decodeOrElse("sessionForBranch", row.id, decodeSessionId(row.session), null);
         }),
       ),
 

@@ -249,16 +249,26 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect("warns with the operation and row id before ignoring a corrupt run", () =>
+    it.effect("warns with the operation and row id before ignoring corrupt stored values", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
         const storePath = yield* TestStorePath;
-        const id = runId("corrupt-run");
-        yield* ledger.insertRun(record(id, 1000));
+        const run = runId("corrupt-run");
+        const plan = runId("corrupt-plan");
+        const sessionReference = runId("corrupt-session-reference");
+        yield* ledger.insertRun(record(run, 1000));
+        yield* ledger.acceptRun(record(plan, 2000), runPlan(plan));
+        yield* ledger.insertRun(
+          record(sessionReference, 3000, { branch: "corrupt-session-branch", session }),
+        );
         yield* Effect.acquireUseRelease(
           Effect.sync(() => new DatabaseSync(storePath)),
           (sqlite) =>
-            Effect.sync(() => sqlite.prepare("UPDATE runs SET status = 'unknown' WHERE id = ?").run(id)),
+            Effect.sync(() => {
+              sqlite.prepare("UPDATE runs SET status = 'unknown' WHERE id = ?").run(run);
+              sqlite.prepare("UPDATE run_plans SET plan = '' WHERE run_id = ?").run(plan);
+              sqlite.prepare("UPDATE runs SET session = '' WHERE id = ?").run(sessionReference);
+            }),
           (sqlite) => Effect.sync(() => sqlite.close()),
         );
         const logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }> = [];
@@ -266,10 +276,20 @@ describe("sqlite RunLedger", () => {
           logs.push({ message, annotations: { ...fiber.getRef(References.CurrentLogAnnotations) } });
         });
 
-        assert.isNull(yield* ledger.getRun(id).pipe(Effect.withLogger(logger)));
+        yield* Effect.gen(function* () {
+          assert.isNull(yield* ledger.getRun(run));
+          assert.isNull(yield* ledger.getRunPlan(plan));
+          assert.isNull(yield* ledger.sessionForBranch(workspace, "corrupt-session-branch"));
+        }).pipe(Effect.withLogger(logger));
 
-        const warning = logs.find(({ message }) => String(message).includes("stored row decode failed"));
-        assert.deepStrictEqual(warning?.annotations, { operation: "getRun", rowId: id });
+        const warnings = logs
+          .filter(({ message }) => String(message).includes("stored row decode failed"))
+          .map(({ annotations }) => annotations);
+        assert.deepStrictEqual(warnings, [
+          { operation: "getRun", rowId: run },
+          { operation: "getRunPlan", rowId: plan },
+          { operation: "sessionForBranch", rowId: sessionReference },
+        ]);
       }),
     );
 
