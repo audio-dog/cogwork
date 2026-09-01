@@ -4,6 +4,7 @@ import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema 
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
+import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
@@ -19,10 +20,13 @@ import {
   cursorModelOptions,
   cursorRunner,
   estimatedUsage,
+  interceptCursorTelemetry,
   mcpWorkspaceProjection,
   toEvent,
   withEstimatedUsage,
 } from "./harness";
+
+type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
 const collect = (stream: Stream.Stream<AgUiEvent, Harness.HarnessError>) =>
   Effect.runPromise(Stream.runCollect(stream));
@@ -121,6 +125,34 @@ const runRunner = (runner: Harness.HarnessRunner) =>
       Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
       Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
     );
+
+describe("interceptCursorTelemetry", () => {
+  it.effect("keeps reading after a telemetry acknowledgment fails", () =>
+    Effect.gen(function* () {
+      const telemetryRequest = { jsonrpc: "2.0", id: 1, method: "cursor/task" } satisfies AcpMessage;
+      const sessionNotification = { jsonrpc: "2.0", method: "session/update" } satisfies AcpMessage;
+      const base = {
+        readable: new ReadableStream<AcpMessage>({
+          start: (controller) => {
+            controller.enqueue(telemetryRequest);
+            controller.enqueue(sessionNotification);
+            controller.close();
+          },
+        }),
+        writable: new WritableStream<AcpMessage>({
+          write: () => Promise.reject(new Error("transport closed")),
+        }),
+      } satisfies AcpJsonRpcStream;
+
+      const messages = yield* Stream.fromReadableStream({
+        evaluate: () => interceptCursorTelemetry(base).readable,
+        onError: String,
+      }).pipe(Stream.runCollect);
+
+      assert.deepStrictEqual(Array.from(messages), [sessionNotification]);
+    }),
+  );
+});
 
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {

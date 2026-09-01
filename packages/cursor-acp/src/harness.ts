@@ -186,7 +186,7 @@ class CursorTransportError extends Data.TaggedError("CursorTransportError")<{
 const transportError = (cause: unknown) =>
   new CursorTransportError({ cause, message: cause instanceof Error ? cause.message : String(cause) });
 
-const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
+export const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
   const outbound = Semaphore.makeUnsafe(1);
   const withWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
     outbound.withPermit(
@@ -209,6 +209,7 @@ const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
           return Effect.succeed(true);
         }
         return withWriter((writer) => writer.write({ jsonrpc: "2.0", id: message.id, result: {} })).pipe(
+          Effect.ignore,
           Effect.map(() => false),
         );
       }),
