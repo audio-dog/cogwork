@@ -612,7 +612,7 @@ describe("Recovery.recover", () => {
     }),
   );
 
-  it.effect("rejects an unavailable resume before the crash cap", () =>
+  it.effect("releases an unavailable resume when its note fails", () =>
     Effect.gen(function* () {
       const probe = yield* UnavailableRecoveryProbe;
       const recovery = yield* Recovery.Recovery;
@@ -640,7 +640,12 @@ describe("Recovery.recover", () => {
                 attemptFailed: (_workspace, itemId) =>
                   Ref.update(probe.attempts, (items) => [...items, itemId]),
                 handOff: (_workspace, itemId) => Ref.update(probe.handoffs, (items) => [...items, itemId]),
-                note: (_workspace, _itemId, detail) => Ref.update(probe.notes, (items) => [...items, detail]),
+                note: (_workspace, _itemId, detail) =>
+                  Ref.update(probe.notes, (items) => [...items, detail]).pipe(
+                    Effect.andThen(
+                      Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "note failed" })),
+                    ),
+                  ),
               },
               availability: {
                 operation: "implement",

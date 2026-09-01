@@ -192,17 +192,19 @@ export const make = Effect.gen(function* () {
     const endedAtMillis = yield* Clock.currentTimeMillis;
     yield* ledger.closeRunning(workspace.config.name, item.id, endedAtMillis);
     const detail = causes.map((cause) => `- ${availabilityCauseSummary(cause)}`).join("\n");
-    yield* issueTracker.note(
-      workspace,
-      item.id,
-      [
-        "> *This was posted by cogwork.*",
-        "",
-        "**Released a stale claim because the Operation is unavailable.**",
-        "",
-        detail,
-      ].join("\n"),
-    );
+    yield* issueTracker
+      .note(
+        workspace,
+        item.id,
+        [
+          "> *This was posted by cogwork.*",
+          "",
+          "**Released a stale claim because the Operation is unavailable.**",
+          "",
+          detail,
+        ].join("\n"),
+      )
+      .pipe(Effect.ignore);
     yield* releaseClaim(workspace, item.id);
   });
 
