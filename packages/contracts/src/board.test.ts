@@ -26,7 +26,6 @@ const registered = (name: string) =>
     name,
     checkoutPath: `/repos/${name}`,
     issueTracker: "github",
-    harness: "cursor",
     poll: { status: "ok" },
     contributions: [],
   });
@@ -381,7 +380,6 @@ describe("applyDaemonEvent", () => {
           name: "acme",
           checkoutPath: "/repos/acme",
           issueTracker: "linear",
-          harness: "cursor",
           poll: { status: "ok" },
           contributions: [],
         }),

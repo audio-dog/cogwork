@@ -629,7 +629,6 @@ function WorkspaceRow({ workspace }: { readonly workspace: WorkspaceState }) {
           <Badge variant="secondary">{workspace.issueTracker}</Badge>
         </ItemTitle>
         <ItemDescription>{workspace.checkoutPath}</ItemDescription>
-        <span className="text-xs text-muted-foreground">Harness: {workspace.harness}</span>
       </ItemContent>
       <WorkspaceActions workspace={workspace.name} label={label} className="flex-col items-end" />
     </Item>

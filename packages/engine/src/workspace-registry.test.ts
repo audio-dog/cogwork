@@ -16,8 +16,6 @@ import { controlStoreClientLayer } from "./control-store";
 import * as Registry from "./registry";
 
 const workspaceInput = Schema.decodeSync(WorkspaceInput)({
-  harness: { preferred: "codex" },
-  playbook: { implement: { enabled: true } },
   worktrees: { setup: ["pnpm install"], linkPaths: [".env"] },
 });
 const changedWorkspaceInput = Schema.decodeSync(WorkspaceInput)({
@@ -127,6 +125,42 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("registers a workspace whose checkout ships no Workspace input", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-bare-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = path.join(root, "bare");
+      yield* fs.makeDirectory(checkoutPath, { recursive: true });
+      const context = yield* Layer.build(Registry.layerAt(storePath));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+
+      const change = yield* management.register(githubRegistration("bare", checkoutPath));
+
+      if (change._tag === "Failed")
+        return assert.fail(`expected registration to succeed: ${change.failure.message}`);
+      assert.isUndefined(change.workspace.config.playbook);
+    }),
+  );
+
+  it.effect("reports a diagnostic when the Workspace input path is not a readable file", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-unreadable-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = path.join(root, "shadowed");
+      yield* fs.makeDirectory(path.join(checkoutPath, ".agents", "workspace.json"), { recursive: true });
+      const context = yield* Layer.build(Registry.layerAt(storePath));
+      const management = Context.get(context, Registry.WorkspaceManagement);
+
+      const change = yield* management.register(githubRegistration("shadowed", checkoutPath));
+
+      assert.strictEqual(change._tag, "Failed");
+    }),
+  );
+
   it.effect("keeps a registration made while refresh is loading", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -233,7 +267,8 @@ layer(NodeServices.layer)((it) => {
       const firstCheckout = yield* makeCheckout(root, "first");
       const secondCheckout = yield* makeCheckout(root, "second");
       const missingCheckout = path.join(root, "missing");
-      yield* fs.makeDirectory(missingCheckout);
+      yield* fs.makeDirectory(path.join(missingCheckout, ".agents"), { recursive: true });
+      yield* fs.writeFileString(path.join(missingCheckout, ".agents", "workspace.json"), "{ not json");
 
       const registryContext = yield* Layer.build(Registry.layerAt(storePath));
       const management = Context.get(registryContext, Registry.WorkspaceManagement);
@@ -261,7 +296,7 @@ layer(NodeServices.layer)((it) => {
       );
       const missingChange = yield* management.register(
         registration({
-          name: "missing input",
+          name: "unreadable input",
           checkoutPath: missingCheckout,
           issueTracker: { type: "github", repo: "acme/repo" },
           linearHistory: false,
@@ -288,10 +323,10 @@ layer(NodeServices.layer)((it) => {
         linkPaths: [".env"],
       });
       assert.strictEqual(missingChange._tag, "Failed");
-      if (missingChange._tag !== "Failed") return assert.fail("expected missing input diagnostic");
+      if (missingChange._tag !== "Failed") return assert.fail("expected unreadable input diagnostic");
       if (missingChange.failure.name === undefined) return assert.fail("expected minted workspace identity");
       const missingName = missingChange.failure.name;
-      assert.strictEqual(missingChange.failure.displayName, "missing input");
+      assert.strictEqual(missingChange.failure.displayName, "unreadable input");
       assert.strictEqual(missingChange.failure.workspaceLimit, 3);
       const liveIssueTracker = Registry.findWorkspaceIssueTracker(liveRegistry, missingName);
       assert.strictEqual(liveIssueTracker?.type, "github");
@@ -313,7 +348,7 @@ layer(NodeServices.layer)((it) => {
 
       assert.strictEqual(reloaded.workspaces.length, 2);
       assert.strictEqual(reloaded.failures.length, 1);
-      assert.strictEqual(reloaded.failures[0]?.displayName, "missing input");
+      assert.strictEqual(reloaded.failures[0]?.displayName, "unreadable input");
       assert.strictEqual(reloaded.failures[0]?.workspaceLimit, 3);
       const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloaded, missingName);
       assert.strictEqual(reloadedIssueTracker?.type, "github");

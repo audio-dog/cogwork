@@ -38,7 +38,6 @@ export const workspaceInfoOf = (
   ...(workspace.config.displayName ? { displayName: workspace.config.displayName } : {}),
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
-  harness: workspace.config.harness.preferred,
   poll: state?.poll ?? pendingPoll,
   contributions: workspace.contributions,
   eligible: (state?.eligible ?? []).map(actionableOf),

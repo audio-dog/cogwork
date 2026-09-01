@@ -50,7 +50,6 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
-  type ResolvedStage,
 } from "./playbook";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
@@ -63,6 +62,7 @@ import {
   admittedMcpServers,
   assembleRunPlan,
   type ResolvedOperation,
+  type ResolvedStage,
   resolveRunPlanStage,
 } from "./run-plan";
 import { RunRecorder } from "./run-recorder";

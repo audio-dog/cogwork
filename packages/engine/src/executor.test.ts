@@ -122,8 +122,6 @@ const workspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
-    playbook: { triage: { enabled: true } },
   }),
 };
 
@@ -169,16 +167,13 @@ const implementWorkspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
-    playbook: { implement: { enabled: true } },
   }),
 };
 
-const codexImplementWorkspace: RegisteredWorkspace = {
+const _codexImplementWorkspace: RegisteredWorkspace = {
   ...implementWorkspace,
   config: Schema.decodeSync(WorkspaceConfig)({
     ...implementWorkspace.config,
-    playbook: { implement: { enabled: true, harness: "codex" } },
   }),
 };
 
@@ -189,9 +184,7 @@ const mcpWorkspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
     mcpSkills: [{ name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly" }],
-    playbook: { implement: { enabled: true } },
   }),
 };
 
@@ -202,11 +195,9 @@ const mcpAuthWorkspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
     mcpSkills: [
       { name: "linear", endpoint: "https://mcp.linear.app/mcp/readonly", auth: { type: "credential-store" } },
     ],
-    playbook: { implement: { enabled: true } },
   }),
 };
 
@@ -357,16 +348,13 @@ const followUpWorkspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
-    harness: { preferred: "cursor" },
-    playbook: { "follow-up": { enabled: true } },
   }),
 };
 
-const codexFollowUpWorkspace: RegisteredWorkspace = {
+const _codexFollowUpWorkspace: RegisteredWorkspace = {
   ...followUpWorkspace,
   config: Schema.decodeSync(WorkspaceConfig)({
     ...followUpWorkspace.config,
-    harness: { preferred: "codex" },
   }),
 };
 
@@ -458,7 +446,6 @@ const disabledWorkspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo" },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -974,6 +961,68 @@ const connectionStoreStub = Layer.succeed(ConnectionStore, {
   remove: () => Effect.die(new Error("unexpected Connection removal")),
 } satisfies ConnectionStoreService);
 
+const stagesEnabled: OperationSettingRow = {
+  setting: "enabled",
+  level: { _tag: "Default" },
+  scope: { _tag: "SettingsProfile" },
+  value: true,
+};
+
+const cursorHarness: OperationSettingRow = {
+  setting: "harness",
+  level: { _tag: "Default" },
+  scope: { _tag: "SettingsProfile" },
+  value: "cursor",
+};
+
+const codexHarness: OperationSettingRow = {
+  setting: "harness",
+  level: { _tag: "Default" },
+  scope: { _tag: "SettingsProfile" },
+  value: "codex",
+};
+
+const runnableStages = [stagesEnabled, cursorHarness];
+const runnableCodexStages = [stagesEnabled, codexHarness];
+
+class SelectedHarness extends Context.Service<SelectedHarness, Ref.Ref<ReadonlyArray<OperationSettingRow>>>()(
+  "@cogwork/engine/executor.test/SelectedHarness",
+) {
+  static readonly layer = Layer.effect(
+    SelectedHarness,
+    Ref.make<ReadonlyArray<OperationSettingRow>>(runnableStages),
+  );
+  static readonly controlStoreLayer = Layer.effect(
+    ControlStore,
+    Effect.gen(function* () {
+      const selected = yield* SelectedHarness;
+      const gate = Semaphore.makeUnsafe(1);
+      const pictureOf = (operationSettings: ReadonlyArray<OperationSettingRow>) => ({
+        ...defaultControlStore,
+        operationSettings,
+        contributionSettings: [],
+      });
+      return {
+        health: "available" as const,
+        seed: pictureOf(runnableStages),
+        picture: Effect.map(Ref.get(selected), pictureOf),
+        setDaemonLimit: () => Effect.die(new Error("unexpected daemon limit update")),
+        establishConnection: () => Effect.die(new Error("unexpected Connection establishment")),
+        revokeConnection: () => Effect.die(new Error("unexpected Connection revocation")),
+        removeConnection: () => Effect.die(new Error("unexpected Connection removal")),
+        updateOperationSetting: () => Effect.die(new Error("unexpected operation setting update")),
+        installPlugin: () => Effect.die(new Error("unexpected Plugin install")),
+        uninstallPlugin: () => Effect.die(new Error("unexpected Plugin uninstall")),
+        updateContributionSetting: () => Effect.die(new Error("unexpected contribution setting update")),
+        withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
+      } satisfies ControlStoreService;
+    }),
+  ).pipe(Layer.provideMerge(SelectedHarness.layer));
+}
+
+const selectHarness = (rows: ReadonlyArray<OperationSettingRow>) =>
+  Effect.flatMap(SelectedHarness, (selected) => Ref.set(selected, rows));
+
 const controlStoreLayer = (
   operationSettings: ReadonlyArray<OperationSettingRow>,
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
@@ -1088,14 +1137,13 @@ function provide(
   worktree: Layer.Layer<WorktreeManager | WorktreeProbe> = worktreeStubLayer,
   sourceControl: Layer.Layer<SourceControlProvider | PostedComments> = noopProviderLayer,
   issueTracker: Layer.Layer<IssueTracker | TrackerCalls> = trackerRecorder(),
-  operationSettings: ReadonlyArray<OperationSettingRow> = [],
+  operationSettings: ReadonlyArray<OperationSettingRow> = runnableStages,
   contextAssembler: Layer.Layer<ContextAssembler.ContextAssembler> = ContextCleanupCalls.contextAssemblerLayer,
   plugins: Layer.Layer<PluginManager> = pluginManagerStub,
   contributionSettings: ReadonlyArray<ContributionSettingRow> = [],
-  controlStore: ReturnType<typeof controlStoreLayer> = controlStoreLayer(
-    operationSettings,
-    contributionSettings,
-  ),
+  controlStore:
+    | ReturnType<typeof controlStoreLayer>
+    | typeof SelectedHarness.controlStoreLayer = controlStoreLayer(operationSettings, contributionSettings),
   transformRunLedger: (
     layer: Layer.Layer<RunLedger.RunLedger>,
   ) => Layer.Layer<RunLedger.RunLedger> = runLedgerIdentity,
@@ -1133,6 +1181,22 @@ function provide(
     ),
   );
 }
+
+const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
+  provide(
+    [
+      capturingRunner(implementEvents),
+      ...alternates.map((name) => capturingRunner(implementEvents, Stream.empty, "opaque-handle", name)),
+    ],
+    worktreeStubLayer,
+    noopProviderLayer,
+    trackerRecorder(),
+    runnableStages,
+    ContextCleanupCalls.contextAssemblerLayer,
+    pluginManagerStub,
+    [],
+    SelectedHarness.controlStoreLayer,
+  );
 
 describe("Executor.execute", () => {
   it.effect("triages an eligible item into a proposal note, label advance, and ledgered run", () => {
@@ -1418,6 +1482,7 @@ describe("Executor.execute", () => {
     }).pipe(
       Effect.provide(
         provide([readOnlyRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), [
+          ...runnableStages,
           permissionProfile,
         ]),
       ),
@@ -1431,7 +1496,7 @@ describe("Executor.execute", () => {
       scope: { _tag: "PrivateWorkspaceOverlay", workspace: implementWorkspace.config.name },
       value: "refreshed-model",
     };
-    const refreshedStore = changingControlStoreLayer([], [refreshedModel]);
+    const refreshedStore = changingControlStoreLayer(runnableStages, [...runnableStages, refreshedModel]);
 
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
@@ -1449,7 +1514,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           pluginManagerStub,
           [],
@@ -1483,7 +1548,7 @@ describe("Executor.execute", () => {
       enabled: true,
     };
     const disabled = { ...enabled, enabled: false };
-    const refreshedStore = changingControlStoreLayer([], [], [enabled], [disabled]);
+    const refreshedStore = changingControlStoreLayer(runnableStages, runnableStages, [enabled], [disabled]);
 
     return Effect.gen(function* () {
       const requests = yield* HarnessRequests;
@@ -1499,7 +1564,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           missingPluginCredentialLayer,
           [],
@@ -1540,7 +1605,11 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       assert.deepStrictEqual(yield* ledger.listRuns(10), []);
-    }).pipe(Effect.provide(provide([runner(successEvents)])));
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(), []),
+      ),
+    );
   });
 
   it.effect("releases an interrupted claim when its operation is now disabled", () => {
@@ -1554,7 +1623,11 @@ describe("Executor.execute", () => {
       const executor = yield* Executor.Executor;
       assert.isFalse(yield* execute(executor, disabledWorkspace, resumed));
       assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: resumed.id }]);
-    }).pipe(Effect.provide(provide([runner(successEvents)])));
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(), []),
+      ),
+    );
   });
 
   it.effect("releases a sessionless interrupted claim when its operation is now disabled", () => {
@@ -1568,7 +1641,11 @@ describe("Executor.execute", () => {
       const executor = yield* Executor.Executor;
       assert.isFalse(yield* execute(executor, disabledWorkspace, recovered));
       assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: recovered.id }]);
-    }).pipe(Effect.provide(provide([runner(successEvents)])));
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(), []),
+      ),
+    );
   });
 
   it.effect("runs an implement job in the worktree and ledgers the run keyed by branch", () => {
@@ -1678,7 +1755,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           failingCleanupContext,
         ),
       ),
@@ -1745,7 +1822,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           contributionContext,
           missingPluginCredentialLayer,
         ),
@@ -1761,7 +1838,7 @@ describe("Executor.execute", () => {
 
       const [request] = yield* Ref.get(requests);
       const [skill] = request ? resolvedMcpSkills(request) : [];
-      assert.match(skill?.name ?? "", /^cogwork_/);
+      assert.strictEqual(skill?.name, projectedContributionName("plugin:linear/mcp/linear"));
       assert.strictEqual(skill?.endpoint, "https://mcp.linear.app/mcp");
       assert.strictEqual(skill?.bearer ? Redacted.value(skill.bearer) : null, "connection-token");
       assert.deepStrictEqual(
@@ -1779,7 +1856,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           availablePluginMcpLayer,
         ),
@@ -1807,7 +1884,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           availablePluginMcpLayer,
           [
@@ -1843,7 +1920,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           unavailablePluginLayer,
         ),
@@ -1999,7 +2076,9 @@ describe("Executor.execute", () => {
       const requests = yield* HarnessRequests;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
-      yield* execute(executor, codexImplementWorkspace, implementItem);
+      yield* selectHarness(runnableCodexStages);
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* selectHarness(runnableStages);
       yield* execute(executor, implementWorkspace, implementItem);
 
       const captured = yield* Ref.get(requests);
@@ -2015,14 +2094,7 @@ describe("Executor.execute", () => {
           .slice(1)
           .every((request) => !request.plan.messages[0]?.content.includes("just been resumed")),
       );
-    }).pipe(
-      Effect.provide(
-        provide([
-          capturingRunner(implementEvents),
-          capturingRunner(implementEvents, Stream.empty, "opaque-handle", codex),
-        ]),
-      ),
-    );
+    }).pipe(Effect.provide(harnessSwitchLayer([codex])));
   });
 
   it.effect("does not resurrect an older implement session after an interrupted harness switch", () => {
@@ -2031,25 +2103,19 @@ describe("Executor.execute", () => {
       const executor = yield* Executor.Executor;
       const ledger = yield* RunLedger.RunLedger;
       yield* execute(executor, implementWorkspace, implementItem);
-      yield* execute(executor, codexImplementWorkspace, implementItem);
+      yield* selectHarness(runnableCodexStages);
+      yield* execute(executor, implementWorkspace, implementItem);
       const [latest] = yield* ledger.listRuns(1);
       assert.isDefined(latest);
       yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
 
+      yield* selectHarness(runnableStages);
       yield* execute(executor, implementWorkspace, implementItem);
 
       const captured = yield* Ref.get(requests);
       assert.strictEqual(captured.length, 3);
       assert.notStrictEqual(captured[2]?.session, captured[0]?.session);
-    }).pipe(
-      Effect.provide(
-        provide([
-          capturingRunner(implementEvents),
-          capturingRunner(implementEvents, Stream.empty, "opaque-handle", codex),
-          capturingRunner(implementEvents),
-        ]),
-      ),
-    );
+    }).pipe(Effect.provide(harnessSwitchLayer([codex])));
   });
 
   it.effect("resumes an interrupted run with a continuation nudge and its persisted session", () => {
@@ -2095,7 +2161,7 @@ describe("Executor.execute", () => {
       const { ensured } = yield* WorktreeProbe;
       yield* seedResumeSession();
       const executor = yield* Executor.Executor;
-      yield* execute(executor, codexImplementWorkspace, resumeItem);
+      yield* execute(executor, implementWorkspace, resumeItem);
 
       const [request] = yield* Ref.get(requests);
       assert.strictEqual(request?.plan.harness.name, codex);
@@ -2118,6 +2184,9 @@ describe("Executor.execute", () => {
             capturingRunner(implementEvents, Stream.empty, "opaque-handle", codex),
           ],
           resumeRecordingWorktree,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableCodexStages,
         ),
       ),
     );
@@ -2289,7 +2358,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           missingOperatingInstructionsContext,
         ),
       ),
@@ -2329,11 +2398,11 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           pluginManagerStub,
           [],
-          controlStoreLayer([]),
+          controlStoreLayer(runnableStages),
           failRunAcceptance(false),
         ),
       ),
@@ -2660,11 +2729,13 @@ describe("Executor.execute", () => {
       const executor = yield* Executor.Executor;
       const ledger = yield* RunLedger.RunLedger;
       yield* execute(executor, followUpWorkspace, followUpItem);
-      yield* execute(executor, codexFollowUpWorkspace, followUpItem);
+      yield* selectHarness(runnableCodexStages);
+      yield* execute(executor, followUpWorkspace, followUpItem);
       const [latest] = yield* ledger.listRuns(1);
       assert.isDefined(latest);
       yield* ledger.updateRun(latest.id, { status: "interrupted", usage: null, endedAtMillis: 1 });
 
+      yield* selectHarness(runnableStages);
       yield* execute(executor, followUpWorkspace, followUpItem);
 
       const captured = yield* Ref.get(requests);
@@ -2679,6 +2750,13 @@ describe("Executor.execute", () => {
             capturingRunner(followUpEvents),
           ],
           existingWorktree,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          SelectedHarness.controlStoreLayer,
         ),
       ),
     );
@@ -2778,7 +2856,7 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [],
+          runnableStages,
           ContextCleanupCalls.contextAssemblerLayer,
           missingPluginCredentialLayer,
         ),

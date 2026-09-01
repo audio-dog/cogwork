@@ -17,63 +17,32 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded> = {}) =>
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo" },
-    harness: { preferred: "cursor" },
     ...over,
   });
 
 describe("resolveTriage", () => {
-  it("falls back to the workspace harness and default skill/prompt when the stage is unset", () => {
+  it("falls back to the default skill and prompt when the stage is unset", () => {
     const resolved = resolveTriage(config());
-    assert.strictEqual(resolved.enabled, false);
-    assert.strictEqual(resolved.harness, "cursor");
     assert.strictEqual(resolved.skill, "triage-agent");
-    assert.strictEqual(resolved.model, null);
-    assert.strictEqual(resolved.effort, null);
+    assert.isNull(resolved.resumeMaxAgeMillis);
   });
 
-  it("prefers per-stage harness, model, effort, skill, and prompt overrides", () => {
+  it("prefers per-stage skill and prompt overrides", () => {
     const resolved = resolveTriage(
-      config({
-        harness: { preferred: "cursor" },
-        playbook: {
-          triage: {
-            enabled: true,
-            harness: "claude",
-            model: "opus",
-            effort: "high",
-            skill: "my-triage",
-            prompt: "Do the thing",
-          },
-        },
-      }),
+      config({ playbook: { triage: { skill: "my-triage", prompt: "Do the thing" } } }),
     );
-    assert.strictEqual(resolved.enabled, true);
-    assert.strictEqual(resolved.harness, "claude");
-    assert.strictEqual(resolved.model, "opus");
-    assert.strictEqual(resolved.effort, "high");
     assert.strictEqual(resolved.skill, "my-triage");
     assert.strictEqual(resolved.promptTemplate, "Do the thing");
   });
 });
 
 describe("resolveImplement", () => {
-  it("defaults to the implement-agent skill and workspace harness when the stage is unset", () => {
-    const resolved = resolveImplement(config());
-    assert.strictEqual(resolved.enabled, false);
-    assert.strictEqual(resolved.harness, "cursor");
-    assert.strictEqual(resolved.skill, "implement-agent");
-    assert.strictEqual(resolved.model, null);
+  it("defaults to the implement-agent skill when the stage is unset", () => {
+    assert.strictEqual(resolveImplement(config()).skill, "implement-agent");
   });
 
-  it("prefers per-stage overrides", () => {
-    const resolved = resolveImplement(
-      config({
-        playbook: { implement: { enabled: true, harness: "claude", model: "opus", skill: "my-impl" } },
-      }),
-    );
-    assert.strictEqual(resolved.enabled, true);
-    assert.strictEqual(resolved.harness, "claude");
-    assert.strictEqual(resolved.model, "opus");
+  it("prefers a per-stage skill override", () => {
+    const resolved = resolveImplement(config({ playbook: { implement: { skill: "my-impl" } } }));
     assert.strictEqual(resolved.skill, "my-impl");
   });
 });
@@ -81,7 +50,6 @@ describe("resolveImplement", () => {
 describe("resolveFollowUp", () => {
   it("defaults to the follow-up-agent skill and a one-day resume age with no token cap", () => {
     const resolved = resolveFollowUp(config());
-    assert.strictEqual(resolved.enabled, false);
     assert.strictEqual(resolved.skill, "follow-up-agent");
     assert.strictEqual(resolved.resumeMaxAgeMillis, 86_400_000);
     assert.isNull(resolved.resumeMaxTokens);
@@ -89,11 +57,8 @@ describe("resolveFollowUp", () => {
 
   it("prefers per-stage resume overrides", () => {
     const resolved = resolveFollowUp(
-      config({
-        playbook: { "follow-up": { enabled: true, resumeMaxAgeMillis: 5_000, resumeMaxTokens: 42 } },
-      }),
+      config({ playbook: { "follow-up": { resumeMaxAgeMillis: 5_000, resumeMaxTokens: 42 } } }),
     );
-    assert.strictEqual(resolved.enabled, true);
     assert.strictEqual(resolved.resumeMaxAgeMillis, 5_000);
     assert.strictEqual(resolved.resumeMaxTokens, 42);
   });
@@ -101,12 +66,10 @@ describe("resolveFollowUp", () => {
 
 describe("resolveStage", () => {
   it("resolves triage, implement, and follow-up, and returns null for unsupported stages", () => {
-    const cfg = config({
-      playbook: { triage: { enabled: true }, implement: { enabled: true }, "follow-up": { enabled: true } },
-    });
-    assert.strictEqual(resolveStage(cfg, "triage")?.enabled, true);
-    assert.strictEqual(resolveStage(cfg, "implement")?.enabled, true);
-    assert.strictEqual(resolveStage(cfg, "follow-up")?.enabled, true);
+    const cfg = config();
+    assert.strictEqual(resolveStage(cfg, "triage")?.skill, "triage-agent");
+    assert.strictEqual(resolveStage(cfg, "implement")?.skill, "implement-agent");
+    assert.strictEqual(resolveStage(cfg, "follow-up")?.skill, "follow-up-agent");
     assert.isNull(resolveStage(cfg, "verify"));
   });
 });
@@ -198,7 +161,7 @@ describe("buildImplementPrompt", () => {
     const prompt = buildImplementPrompt(
       resolveImplement(
         config({
-          playbook: { implement: { enabled: true, prompt: "Implement the requested change." } },
+          playbook: { implement: { prompt: "Implement the requested change." } },
         }),
       ),
       { id: "#15", title: "Implement playbook" },
