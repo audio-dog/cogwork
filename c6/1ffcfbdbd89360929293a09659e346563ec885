@@ -1,0 +1,21 @@
+packages/engine/src/linear/client.ts
+  s_613373c69b0923::t_c484f1131ec124 165
+packages/engine/src/linear/client.test.ts
+  s_613373c69b0923::t_adaaf92f82214f 475-487
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c61ffcfbdbd89360929293a09659e346563ec885",
+  "prompts": {},
+  "sessions": {
+    "s_613373c69b0923": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05aeb-ef99-7300-be21-491679d01c88",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
