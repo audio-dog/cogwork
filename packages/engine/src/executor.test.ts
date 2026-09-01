@@ -36,6 +36,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { EligibleWork } from "./classify";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import * as ContextAssembler from "./context-assembler";
@@ -582,6 +583,7 @@ class HarnessGate extends Context.Service<HarnessGate, Deferred.Deferred<void>>(
 interface HarnessObservationState {
   readonly span: Ref.Ref<Tracer.Span | null>;
   readonly preflightEntered: Deferred.Deferred<void>;
+  readonly released: Ref.Ref<boolean>;
   readonly logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }>;
 }
 
@@ -593,6 +595,7 @@ class HarnessObservation extends Context.Service<HarnessObservation, HarnessObse
     Effect.all({
       span: Ref.make<Tracer.Span | null>(null),
       preflightEntered: Deferred.make<void>(),
+      released: Ref.make(false),
       logs: Effect.succeed([]),
     }),
   );
@@ -703,6 +706,22 @@ const observingRunner: TestRunner = {
           yield* Effect.logInfo("library log", { session: "sess-42" });
           return Stream.fromArray(implementEvents);
         }),
+      ),
+  }),
+};
+
+const resourceRunner: TestRunner = {
+  make: (_requests, _gate, observation) => ({
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    run: () =>
+      Stream.unwrap(
+        Effect.acquireRelease(Effect.succeed(Stream.fromArray(implementEvents)), () =>
+          Ref.set(observation.released, true),
+        ),
       ),
   }),
 };
@@ -1274,6 +1293,7 @@ function provide(
     contextAssembler,
     CredentialStore.layerEnv,
     FileSystem.layerNoop({}),
+    FetchHttpClient.layer,
   );
   return Executor.layer.pipe(
     Layer.provideMerge(
@@ -1281,7 +1301,8 @@ function provide(
         issueTracker,
         sourceControl,
         sessionStore,
-        testHarness(runners).pipe(Layer.provide(runnerServices)),
+        testHarness(runners),
+        runnerServices,
         runLedger,
         runRecorder,
         bus,
@@ -1439,6 +1460,42 @@ describe("Executor.execute", () => {
       assert.include(log.find((call) => call.method === "attemptFailed")?.reason ?? "", "structured");
     }).pipe(Effect.provide(provide([runner([text("I could not produce a result."), finished])])));
   });
+
+  it.effect("settles a run when an event cannot be encoded", () =>
+    Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "exhausted");
+      assert.strictEqual(run?.eventCount, 1);
+      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+    }).pipe(
+      Effect.provide(provide([runner([{ type: "CUSTOM", content: 1n } satisfies AgUiEvent, finished])])),
+    ),
+  );
+
+  it.effect("settles a run when its deferred terminal event cannot be encoded", () =>
+    Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "exhausted");
+      assert.strictEqual(run?.eventCount, successEvents.length);
+      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
+    }).pipe(
+      Effect.provide(
+        provide([
+          runner(
+            successEvents.map((event) => (event.type === "RUN_FINISHED" ? { ...event, content: 1n } : event)),
+          ),
+        ]),
+      ),
+    ),
+  );
 
   it.effect("retries a triage run that emits more than one structured result", () => {
     const result = {
@@ -2041,6 +2098,15 @@ describe("Executor.execute", () => {
       assert.deepStrictEqual(Object.fromEntries(librarySpan.attributes), correlation);
     }).pipe(Effect.provide(provide([observingRunner])));
   });
+
+  it.effect("releases runner resources when the run ends", () =>
+    Effect.gen(function* () {
+      const observation = yield* HarnessObservation;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+      assert.isTrue(yield* Ref.get(observation.released));
+    }).pipe(Effect.provide(provide([resourceRunner]))),
+  );
 
   it.effect("logs cleanup failures without repeating claimed-run annotations", () => {
     return Effect.gen(function* () {

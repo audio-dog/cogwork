@@ -38,6 +38,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 import { Availability, availabilityCauseSummary } from "./availability";
 import { type EligibleWork, maxAttemptsPerStage } from "./classify";
 import { followUpNoteBody, handoffNote, prepareFailureReason, triageProposalBody } from "./comments";
@@ -45,10 +46,10 @@ import { ConnectionStore } from "./connection";
 import { ContextAssembler, type ContextAssemblerError } from "./context-assembler";
 import type { ContextFsError } from "./context-fs";
 import { ControlStore } from "./control-store";
-import type { CredentialError } from "./credential-store";
+import { type CredentialError, CredentialStore } from "./credential-store";
 import { type FollowUpContext, isStalledFollowUp, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
-import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
+import { type AgUiEvent, Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
 import {
@@ -174,12 +175,18 @@ interface CommonStageOps {
 
 interface TriageStageOps extends CommonStageOps {
   readonly kind: "triage";
-  readonly complete: (record: RunRecord, acc: TriageAccumulator) => Effect.Effect<void, IssueTrackerError>;
+  readonly complete: (
+    record: RunRecord,
+    acc: TriageAccumulator,
+  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
 }
 
 interface TextStageOps extends CommonStageOps {
   readonly kind: "text";
-  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
+  readonly complete: (
+    runId: RunId,
+    acc: RunAccumulator,
+  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
 }
 
 type StageOps = TriageStageOps | TextStageOps;
@@ -224,7 +231,7 @@ const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed"
 const successfulTerminal = (event: AgUiEvent) =>
   event.type === "RUN_FINISHED" && event.finishReason !== "failed";
 
-const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
+const withFailureTerminal = <R>(stream: Stream.Stream<AgUiEvent, HarnessError, R>) =>
   Stream.catchCause(stream, (cause) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
@@ -357,6 +364,17 @@ export const make = Effect.gen(function* () {
   const contextAssembler = yield* ContextAssembler;
   const availability = yield* Availability;
   const fs = yield* FileSystem.FileSystem;
+  const harnessRunnerContext = yield* Effect.context<HarnessRunnerEnv>().pipe(
+    Effect.map(
+      Context.pick(
+        SessionStore,
+        ContextAssembler,
+        CredentialStore,
+        FileSystem.FileSystem,
+        HttpClient.HttpClient,
+      ),
+    ),
+  );
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
@@ -679,7 +697,11 @@ export const make = Effect.gen(function* () {
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
   ) => {
     const budget = defaultRunBudget(request.plan.operation);
-    return Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
+    return Stream.runFoldEffect(
+      withFailureTerminal(harness.run(request)).pipe(Stream.provideContext(harnessRunnerContext)),
+      () => initial,
+      step,
+    ).pipe(
       Effect.timeout(budget),
       Effect.catchTag("TimeoutError", () =>
         recorder.record(record, failedTerminal).pipe(
@@ -1166,6 +1188,7 @@ export const make = Effect.gen(function* () {
     resolved: ResolvedOperation,
   ) {
     return yield* harness.preflight(resolved.stage.harness, resolved.profile, resolved.stage.model).pipe(
+      Effect.provide(harnessRunnerContext),
       Effect.match({
         onFailure: (error) => {
           if (error.retryable) return null;
@@ -1354,19 +1377,34 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     request: HarnessRequest,
   ) {
-    const settle = <A>(
-      attempt: Effect.Effect<A, PrepareError | HarnessError>,
-      complete: (acc: A) => Effect.Effect<void, IssueTrackerError>,
+    const recordEncodingFailureTerminal = (error: PrepareError | HarnessError) => {
+      if (error._tag !== "RunLedgerError" || error.operation !== "encode run event") {
+        return Effect.succeed(null);
+      }
+      return recorder.record(record, failedTerminal);
+    };
+
+    const settleFailure = (error: PrepareError | HarnessError) =>
+      recordEncodingFailureTerminal(error).pipe(
+        Effect.andThen(handleOf(ledger, record.session)),
+        Effect.flatMap((handle) =>
+          applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
+        ),
+      );
+
+    const settleCompletionFailure = (error: RunLedgerError) => {
+      if (error.operation === "encode run event") return settleFailure(error);
+      return Effect.fail(error);
+    };
+
+    const settle = <A, R>(
+      attempt: Effect.Effect<A, PrepareError | HarnessError, R>,
+      complete: (acc: A) => Effect.Effect<void, IssueTrackerError | RunLedgerError>,
     ) =>
       attempt.pipe(
         Effect.matchEffect({
-          onFailure: (error) =>
-            handleOf(ledger, record.session).pipe(
-              Effect.flatMap((handle) =>
-                applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
-              ),
-            ),
-          onSuccess: complete,
+          onFailure: settleFailure,
+          onSuccess: (acc) => complete(acc).pipe(Effect.catchTag("RunLedgerError", settleCompletionFailure)),
         }),
       );
 
