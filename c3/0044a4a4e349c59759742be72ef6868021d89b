@@ -1,0 +1,29 @@
+apps/desktop/src/main/engine-supervisor.ts
+  s_d854c2cf54a3d0::t_19c0e4c1cd8b68 27,42
+apps/desktop/src/main/index.ts
+  s_4e860f76a3d2be::t_150d9b85b8ee67 4,13,17,43,59-64,72-75,81,95,108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c30044a4a4e349c59759742be72ef6868021d89b",
+  "prompts": {},
+  "sessions": {
+    "s_4e860f76a3d2be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05a75-214e-71c2-8693-638c162b8646",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d854c2cf54a3d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05a75-7dc7-7c03-aebc-33e860f1e660",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
