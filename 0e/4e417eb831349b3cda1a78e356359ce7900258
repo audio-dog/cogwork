@@ -1,0 +1,21 @@
+apps/cli/src/worktree-commands.ts
+  s_d60add10ef316b::t_98d2a425b21004 33
+apps/cli/src/commands.ts
+  s_d60add10ef316b::t_98d2a425b21004 268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "0e4e417eb831349b3cda1a78e356359ce7900258",
+  "prompts": {},
+  "sessions": {
+    "s_d60add10ef316b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b81-997b-7400-8ef3-4f1e13588938",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
