@@ -548,7 +548,7 @@ describe("Recovery.recover", () => {
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
-        assert.notInclude((yield* Ref.get(notes))[0] ?? "", "agent --resume");
+        assert.notInclude((yield* Ref.get(notes))[0] ?? "", "codex resume");
       }).pipe(
         Effect.provide(
           recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),

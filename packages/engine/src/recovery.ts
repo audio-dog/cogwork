@@ -22,7 +22,7 @@ import {
   maxAttemptsPerStage,
   observedStage,
 } from "./classify";
-import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
+import { type HandoffCause, handoffNote, handoffSession, recoveryReason } from "./comments";
 import { Executor } from "./executor";
 import { isStalledFollowUp } from "./follow-up";
 import { Harness } from "./harness";
@@ -67,10 +67,9 @@ export const make = Effect.gen(function* () {
   ) {
     const storedSession = session ? yield* ledger.getSession(session) : null;
     const handle = sessionHandle(storedSession);
-    const access =
-      storedSession && harness.capabilities(storedSession.harness)?.session.humanAttach
-        ? "human-attach"
-        : "programmatic-only";
+    const humanAttach = storedSession
+      ? harness.capabilities(storedSession.harness)?.session.humanAttach
+      : undefined;
     yield* issueTracker.handOff(workspace, item.id, {
       stage,
       note: handoffNote({
@@ -79,7 +78,7 @@ export const make = Effect.gen(function* () {
         stage,
         cause,
         reason: recoveryReason,
-        session: handle ? { handle, access } : null,
+        session: handoffSession(handle, humanAttach),
       }),
     });
   });
