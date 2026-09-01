@@ -1,4 +1,10 @@
-import { type AgUiEvent, agUiTextDelta, type RunActivity, type RunId } from "@cogwork/contracts";
+import {
+  type AgUiEvent,
+  AgUiEventUnion,
+  agUiTextDelta,
+  type RunActivity,
+  type RunId,
+} from "@cogwork/contracts";
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -18,13 +24,14 @@ const oneLine = (value: string) => value.replace(/\s+/g, " ").trim();
 const clip = (value: string) =>
   value.length > maxTextLength ? `${value.slice(0, maxTextLength - 1)}…` : value;
 
-const compact = (value: unknown) => {
+const firstString = (...values: ReadonlyArray<unknown>) =>
+  values.find((value): value is string => typeof value === "string") ?? "";
+
+const customDetailText = (value: unknown) => {
   if (typeof value === "string") return value;
   if (value === undefined || value === null) return "";
   return JSON.stringify(value) ?? "";
 };
-
-const resultText = (event: AgUiEvent) => compact(event.result ?? event.content);
 
 interface TextBuffer {
   readonly messageId: string | null;
@@ -44,73 +51,75 @@ const toolKey = (runId: string, event: AgUiEvent) => `${runId}:${event.toolCallI
 const entryFor = (state: RunPreviewState, runId: string): PreviewEntry =>
   state.get(runId) ?? { preview: { label: "starting", text: "" }, text: null, tools: new Map() };
 
-const setPreview = (
-  state: RunPreviewState,
-  runId: string,
-  entry: PreviewEntry,
-  label: string,
-  text: string,
-) => new Map(state).set(runId, { ...entry, preview: { label, text: clip(oneLine(text)) } });
+const withPreview = (entry: PreviewEntry, label: string, text: string) => ({
+  ...entry,
+  preview: { label, text: clip(oneLine(text)) },
+});
+
+const setEntry = (state: RunPreviewState, runId: string, update: (entry: PreviewEntry) => PreviewEntry) =>
+  new Map(state).set(runId, update(entryFor(state, runId)));
 
 const onRunStarted = (state: RunPreviewState, { runId }: RunActivity) =>
-  setPreview(state, runId, entryFor(state, runId), "starting", "");
+  setEntry(state, runId, (entry) => withPreview(entry, "starting", ""));
 
-const onText = (state: RunPreviewState, { runId, event, correlation }: RunActivity) => {
-  const entry = entryFor(state, runId);
-  const messageId = event.messageId ?? correlation.messageId ?? null;
-  const previous = entry.text;
-  const base = previous?.messageId === messageId ? previous.text : "";
-  const text = base.length >= maxTextLength ? base : base + agUiTextDelta(event);
-  const next = setPreview(state, runId, entry, "responding", text);
-  return new Map(next).set(runId, { ...entryFor(next, runId), text: { messageId, text } });
-};
-
-const onToolStart = (state: RunPreviewState, { runId, event }: RunActivity) => {
-  const entry = entryFor(state, runId);
-  const name = event.toolCallName ?? "tool";
-  const next = setPreview(state, runId, entry, name, "");
-  return new Map(next).set(runId, {
-    ...entryFor(next, runId),
-    tools: new Map(entry.tools).set(toolKey(runId, event), name),
+const onText = (state: RunPreviewState, { runId, event, correlation }: RunActivity) =>
+  setEntry(state, runId, (entry) => {
+    const messageId = event.messageId ?? correlation.messageId ?? null;
+    const previous = entry.text;
+    const base = previous?.messageId === messageId ? previous.text : "";
+    const text = base.length >= maxTextLength ? base : base + agUiTextDelta(event);
+    return { ...withPreview(entry, "responding", text), text: { messageId, text } };
   });
-};
 
-const onToolEnd = (state: RunPreviewState, { runId, event }: RunActivity) => {
-  const entry = entryFor(state, runId);
-  const name = entry.tools.get(toolKey(runId, event)) ?? event.toolCallName ?? "tool";
-  return setPreview(state, runId, entry, name, resultText(event));
-};
+const onToolStart = (state: RunPreviewState, { runId, event }: RunActivity) =>
+  setEntry(state, runId, (entry) => {
+    const name = event.toolCallName ?? "tool";
+    return {
+      ...withPreview(entry, name, ""),
+      tools: new Map(entry.tools).set(toolKey(runId, event), name),
+    };
+  });
+
+const onToolEnd = (state: RunPreviewState, { runId, event }: RunActivity, result: string) =>
+  setEntry(state, runId, (entry) =>
+    withPreview(entry, entry.tools.get(toolKey(runId, event)) ?? event.toolCallName ?? "tool", result),
+  );
 
 const onStep = (state: RunPreviewState, { runId, event }: RunActivity) => {
   if (!event.stepName) return state;
-  return setPreview(state, runId, entryFor(state, runId), "step", event.stepName);
+  const stepName = event.stepName;
+  return setEntry(state, runId, (entry) => withPreview(entry, "step", stepName));
 };
 
 const onCustom = (state: RunPreviewState, { runId, event }: RunActivity) => {
   if (event.name?.endsWith(".session-id")) return state;
-  return setPreview(state, runId, entryFor(state, runId), event.name ?? "custom", compact(event.value));
+  return setEntry(state, runId, (entry) =>
+    withPreview(entry, event.name ?? "custom", customDetailText(event.value)),
+  );
 };
 
 const onRunFinished = (state: RunPreviewState, { runId, event }: RunActivity) =>
-  setPreview(state, runId, entryFor(state, runId), "finished", event.finishReason ?? "");
+  setEntry(state, runId, (entry) => withPreview(entry, "finished", event.finishReason ?? ""));
 
 const onRunError = (state: RunPreviewState, { runId, event }: RunActivity) =>
-  setPreview(state, runId, entryFor(state, runId), "error", event.message ?? "run error");
-
-const previewHandlers = new Map<string, (state: RunPreviewState, activity: RunActivity) => RunPreviewState>([
-  ["RUN_STARTED", onRunStarted],
-  ["TEXT_MESSAGE_CONTENT", onText],
-  ["TOOL_CALL_START", onToolStart],
-  ["TOOL_CALL_END", onToolEnd],
-  ["TOOL_CALL_RESULT", onToolEnd],
-  ["STEP_STARTED", onStep],
-  ["CUSTOM", onCustom],
-  ["RUN_FINISHED", onRunFinished],
-  ["RUN_ERROR", onRunError],
-]);
+  setEntry(state, runId, (entry) => withPreview(entry, "error", event.message ?? "run error"));
 
 export const applyRunPreview = (state: RunPreviewState, activity: RunActivity) =>
-  previewHandlers.get(activity.event.type)?.(state, activity) ?? state;
+  AgUiEventUnion.matchOrElse(
+    activity.event,
+    {
+      RUN_STARTED: () => onRunStarted(state, activity),
+      TEXT_MESSAGE_CONTENT: () => onText(state, activity),
+      TOOL_CALL_START: () => onToolStart(state, activity),
+      TOOL_CALL_END: ({ result, content }) => onToolEnd(state, activity, firstString(result, content)),
+      TOOL_CALL_RESULT: ({ result, content }) => onToolEnd(state, activity, firstString(result, content)),
+      STEP_STARTED: () => onStep(state, activity),
+      CUSTOM: () => onCustom(state, activity),
+      RUN_FINISHED: () => onRunFinished(state, activity),
+      RUN_ERROR: () => onRunError(state, activity),
+    },
+    () => state,
+  );
 
 export const previewMap = (state: RunPreviewState): ReadonlyMap<string, RunActivityPreview> =>
   new Map([...state].map(([runId, entry]) => [runId, entry.preview]));
@@ -146,11 +155,9 @@ interface TranscriptFold {
   readonly byKey: Map<string, TranscriptEntry>;
 }
 
-const stringify = (value: unknown) => {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return value;
-  return JSON.stringify(value) ?? "";
-};
+const transcriptToolKey = (toolCallId: string | null | undefined) => `tool:${toolCallId ?? ""}`;
+
+const transcriptDiffKey = (path: string) => `diff:${path}`;
 
 const append = (state: TranscriptFold, kind: "text" | "reasoning", key: string, delta: string) => {
   const existing = state.byKey.get(key);
@@ -163,70 +170,82 @@ const append = (state: TranscriptFold, kind: "text" | "reasoning", key: string, 
   state.entries.push(entry);
 };
 
-type TranscriptHandler = (state: TranscriptFold, event: AgUiEvent, activity: RunActivity) => void;
-
-const transcriptHandlers: Record<string, TranscriptHandler> = {
-  TEXT_MESSAGE_CONTENT: (state, event) =>
-    append(state, "text", `text:${event.messageId ?? "0"}`, event.delta ?? ""),
-  REASONING_MESSAGE_CONTENT: (state, event) =>
-    append(state, "reasoning", `reason:${event.messageId ?? "0"}`, event.delta ?? ""),
-  TOOL_CALL_START: (state, event) => {
-    const key = `tool:${event.toolCallId ?? ""}`;
-    if (state.byKey.has(key)) return;
-    const entry: TranscriptEntry = {
-      kind: "tool",
-      key,
-      name: event.toolCallName ?? "tool",
-      args: "",
-      result: null,
-      complete: false,
-    };
-    state.byKey.set(key, entry);
-    state.entries.push(entry);
-  },
-  TOOL_CALL_ARGS: (state, event) => {
-    const entry = state.byKey.get(`tool:${event.toolCallId ?? ""}`);
-    if (entry?.kind === "tool") entry.args += event.delta ?? "";
-  },
-  TOOL_CALL_END: (state, event) => {
-    const entry = state.byKey.get(`tool:${event.toolCallId ?? ""}`);
-    if (entry?.kind !== "tool") return;
-    if (entry.args === "" && event.args) entry.args = event.args;
-    entry.complete = true;
-  },
-  TOOL_CALL_RESULT: (state, event) => {
-    const entry = state.byKey.get(`tool:${event.toolCallId ?? ""}`);
-    if (entry?.kind === "tool") {
-      entry.result = stringify(event.result ?? event.content);
-      entry.complete = true;
-    }
-  },
-  CUSTOM: (state, event) => {
-    if (event.name !== FILE_DIFF_EVENT) return;
-    const diff = Option.getOrNull(decodeFileDiff(event.value));
-    if (!diff) return;
-    const key = `diff:${diff.path}`;
-    const existing = state.byKey.get(key);
-    if (existing?.kind === "diff") {
-      existing.diff = diff.diff;
-      return;
-    }
-    const entry: TranscriptEntry = { kind: "diff", key, path: diff.path, diff: diff.diff };
-    state.byKey.set(key, entry);
-    state.entries.push(entry);
-  },
-  RUN_ERROR: (state, event, activity) =>
-    state.entries.push({
-      kind: "error",
-      key: `error:${activity.seq}`,
-      message: event.message ?? "run error",
-    }),
+const toolEntryFor = (state: TranscriptFold, toolCallId: string | null | undefined) => {
+  const entry = state.byKey.get(transcriptToolKey(toolCallId));
+  return entry?.kind === "tool" ? entry : null;
 };
+
+const setDiffEntry = (state: TranscriptFold, path: string, diff: string) => {
+  const key = transcriptDiffKey(path);
+  const existing = state.byKey.get(key);
+  if (existing?.kind === "diff") {
+    existing.diff = diff;
+    return;
+  }
+  const entry: TranscriptEntry = { kind: "diff", key, path, diff };
+  state.byKey.set(key, entry);
+  state.entries.push(entry);
+};
+
+const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
+  AgUiEventUnion.matchOrElse(
+    activity.event,
+    {
+      TEXT_MESSAGE_CONTENT: ({ messageId, delta }) =>
+        append(state, "text", `text:${messageId ?? "0"}`, delta ?? ""),
+      REASONING_MESSAGE_CONTENT: ({ messageId, delta }) =>
+        append(state, "reasoning", `reason:${messageId ?? "0"}`, delta ?? ""),
+      TOOL_CALL_START: ({ toolCallId, toolCallName }) => {
+        const key = transcriptToolKey(toolCallId);
+        if (state.byKey.has(key)) return;
+        const entry: TranscriptEntry = {
+          kind: "tool",
+          key,
+          name: toolCallName ?? "tool",
+          args: "",
+          result: null,
+          complete: false,
+        };
+        state.byKey.set(key, entry);
+        state.entries.push(entry);
+      },
+      TOOL_CALL_ARGS: ({ toolCallId, delta }) => {
+        const entry = toolEntryFor(state, toolCallId);
+        if (!entry) return;
+        entry.args += delta ?? "";
+      },
+      TOOL_CALL_END: ({ toolCallId, args }) => {
+        const entry = toolEntryFor(state, toolCallId);
+        if (!entry) return;
+        if (entry.args === "" && args) entry.args = args;
+        entry.complete = true;
+      },
+      TOOL_CALL_RESULT: ({ toolCallId, result, content }) => {
+        const entry = toolEntryFor(state, toolCallId);
+        if (!entry) return;
+        entry.result = firstString(result, content);
+        entry.complete = true;
+      },
+      CUSTOM: ({ name, value }) => {
+        if (name !== FILE_DIFF_EVENT) return;
+        const diff = Option.getOrNull(decodeFileDiff(value));
+        if (!diff) return;
+        setDiffEntry(state, diff.path, diff.diff);
+      },
+      RUN_ERROR: ({ message }) => {
+        state.entries.push({
+          kind: "error",
+          key: `error:${activity.seq}`,
+          message: message ?? "run error",
+        });
+      },
+    },
+    () => undefined,
+  );
 
 export const foldTranscript = (activities: ReadonlyArray<RunActivity>) => {
   const state: TranscriptFold = { entries: [], byKey: new Map() };
-  for (const activity of activities)
-    transcriptHandlers[activity.event.type]?.(state, activity.event, activity);
+  for (const activity of activities) foldTranscriptActivity(state, activity);
   return state.entries;
 };
 

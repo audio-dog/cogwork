@@ -1,4 +1,6 @@
+import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
@@ -7,6 +9,7 @@ import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { RpcClientDefect, RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import type { FromServerEncoded } from "effect/unstable/rpc/RpcMessage";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
+import { SocketCloseError, SocketOpenError } from "effect/unstable/socket/Socket";
 import type { DaemonRpcBridge } from "../../../shared/ipc";
 
 type Incoming =
@@ -15,6 +18,27 @@ type Incoming =
 
 const defectError = (message: string, cause: unknown): RpcClientError =>
   new RpcClientError({ reason: new RpcClientDefect({ message, cause }) });
+
+const openError = (cause: unknown) =>
+  new RpcClientError({ reason: new SocketOpenError({ kind: "Unknown", cause }) });
+
+const closeError = (reason: string | null) =>
+  new RpcClientError({
+    reason: new SocketCloseError({ code: 1006, ...(reason === null ? {} : { closeReason: reason }) }),
+  });
+
+const timeoutError = (cause: unknown) =>
+  new RpcClientError({ reason: new SocketOpenError({ kind: "Timeout", cause }) });
+
+const isReconnectable = (error: RpcClientError) =>
+  error.reason._tag === "SocketOpenError" || error.reason._tag === "SocketCloseError";
+
+const connectionGateTimeout = "30 seconds";
+const reconnectSchedule = () =>
+  Schedule.exponential("500 millis", 2).pipe(
+    Schedule.jittered,
+    Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.seconds(5)))),
+  );
 
 export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
   RpcClient.Protocol.make((writeResponse, clientIds) =>
@@ -67,24 +91,17 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
 
       const consume: Effect.Effect<never, RpcClientError> = Queue.take(inbox).pipe(
         Effect.flatMap((message) =>
-          message._tag === "closed"
-            ? Effect.fail(defectError(message.reason ?? "The daemon connection closed", message.reason))
-            : processFrame(message.frame),
+          message._tag === "closed" ? Effect.fail(closeError(message.reason)) : processFrame(message.frame),
         ),
         Effect.forever,
       );
 
       yield* Effect.gen(function* () {
         conn.parser = serialization.makeUnsafe();
-        yield* Effect.tryPromise({
-          try: () => bridge.connect(),
-          catch: (cause) => defectError("Could not reach the daemon", cause),
-        }).pipe(
-          Effect.tapError((error) => Deferred.fail(conn.gate, error)),
-          Effect.tap(() => Deferred.succeed(conn.gate, undefined)),
-        );
-        return yield* consume;
+        yield* Effect.tryPromise({ try: () => bridge.connect(), catch: openError });
       }).pipe(
+        Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
+        Effect.andThen(consume),
         Effect.tapError((error) =>
           broadcast({ _tag: "ClientProtocolError", error }).pipe(
             Effect.andThen(Deferred.make<void, RpcClientError>()),
@@ -96,7 +113,15 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
             ),
           ),
         ),
-        Effect.retry(Schedule.spaced("1 second")),
+        Effect.retry({
+          while: isReconnectable,
+          schedule: reconnectSchedule(),
+        }),
+        Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) => Effect.logError("daemon connection fiber crashed", { cause }),
+        ),
         Effect.forkScoped,
       );
 
@@ -106,7 +131,11 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
           const encoded = conn.parser.encode(request);
           if (encoded === undefined) return Effect.void;
           const frame = typeof encoded === "string" ? encoded : new TextDecoder().decode(encoded);
-          return Deferred.await(conn.gate).pipe(Effect.andThen(Effect.sync(() => bridge.send(frame))));
+          return Deferred.await(conn.gate).pipe(
+            Effect.timeout(connectionGateTimeout),
+            Effect.catchTag("TimeoutError", (cause) => Effect.fail(timeoutError(cause))),
+            Effect.andThen(Effect.sync(() => bridge.send(frame))),
+          );
         },
         supportsAck: true,
         supportsTransferables: false,

@@ -9,6 +9,7 @@ import type { ModelAdapterFactory } from "./provider-adapter";
 import { resolveModelAdapter } from "./provider-resolve";
 
 export const defaultUtilityModel = "anthropic/claude-haiku-4-5";
+const utilityCallDeadline = "2 minutes";
 
 export interface UtilityCall {
   readonly model?: string;
@@ -18,6 +19,7 @@ export interface UtilityCall {
 
 export class UtilityCallError extends Schema.TaggedError<UtilityCallError>()("UtilityCallError", {
   model: Schema.String,
+  reason: Schema.Literals(["call-failed", "timeout"]),
   message: Schema.String,
 }) {}
 
@@ -63,17 +65,35 @@ export const make = (
     complete: Effect.fn("UtilityModel.complete")(function* (call: UtilityCall) {
       const reference = call.model ?? defaultUtilityModel;
       const adapter = yield* resolveModelAdapter(credentialStore, reference, options.makeAdapter).pipe(
-        Effect.mapError((error) => new UtilityCallError({ model: reference, message: error.message })),
+        Effect.mapError(
+          (error) =>
+            new UtilityCallError({ model: reference, reason: "call-failed", message: error.message }),
+        ),
       );
-      return yield* Effect.callback<string, UtilityCallError>((resume) => {
-        const abortController = new AbortController();
-        runChat({ adapter, system: call.system, prompt: call.prompt, abortController })
-          .then((text) => resume(Effect.succeed(text)))
-          .catch((error) =>
-            resume(Effect.fail(new UtilityCallError({ model: reference, message: errorMessage(error) }))),
+      return yield* Effect.tryPromise({
+        try: (signal) => {
+          const abortController = new AbortController();
+          const abort = () => abortController.abort(signal.reason);
+          signal.addEventListener("abort", abort, { once: true });
+          return runChat({ adapter, system: call.system, prompt: call.prompt, abortController }).finally(() =>
+            signal.removeEventListener("abort", abort),
           );
-        return Effect.sync(() => abortController.abort());
-      });
+        },
+        catch: (error) =>
+          new UtilityCallError({ model: reference, reason: "call-failed", message: errorMessage(error) }),
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: utilityCallDeadline,
+          orElse: () =>
+            Effect.fail(
+              new UtilityCallError({
+                model: reference,
+                reason: "timeout",
+                message: `utility call timed out after ${utilityCallDeadline}`,
+              }),
+            ),
+        }),
+      );
     }),
   };
 };

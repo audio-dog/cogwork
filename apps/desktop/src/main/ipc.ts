@@ -85,6 +85,8 @@ export const registerIpc = (deps: IpcDeps) => {
     );
     sessions.set(sender, { scope });
     yield* port.connect.pipe(Effect.onError(() => closeSessionScope(scope)));
+    // The port never crosses IPC: the renderer contract is `Promise<void>`, and Electron cannot
+    // structured-clone an object of Effects. `rpcSend` reads the port from `sessions` instead.
     sessions.set(sender, { scope, port });
   });
 

@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
@@ -67,6 +68,14 @@ class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<str
 const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
   Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer)),
 );
+
+const denied = (method: string, target: string) =>
+  PlatformError.systemError({
+    _tag: "PermissionDenied",
+    module: "FileSystem",
+    method,
+    pathOrDescriptor: target,
+  });
 
 const shell = Effect.fn("test.shell")(function* (cwd: string, script: string) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -149,6 +158,85 @@ describe("subprocess deadlines", () => {
 
       assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
     }),
+  );
+});
+
+describe("platform read failures", () => {
+  it.effect("keeps a stat permission failure typed", () =>
+    Effect.gen(function* () {
+      const fs = yield* WorktreeFs.WorktreeFs;
+      const error = yield* Effect.flip(fs.stat("/private/repo"));
+
+      assert.strictEqual(error._tag, "WorktreeFsError");
+      assert.strictEqual(error.operation, "stat /private/repo");
+    }).pipe(
+      Effect.provide(
+        worktreeFsLayer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              hangingSpawnerLayer,
+              FileSystem.layerNoop({ stat: (target) => Effect.fail(denied("stat", target)) }),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("keeps a file-read permission failure typed", () =>
+    Effect.gen(function* () {
+      const fs = yield* ContextFs.ContextFs;
+      const error = yield* Effect.flip(fs.readFile("/private/AGENTS.md"));
+
+      assert.strictEqual(error._tag, "ContextFsError");
+      assert.strictEqual(error.operation, "read /private/AGENTS.md");
+    }).pipe(
+      Effect.provide(
+        contextFsLayer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              FileSystem.layerNoop({
+                readFileString: (target) => Effect.fail(denied("readFileString", target)),
+              }),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("keeps an existence-check permission failure typed", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const error = yield* Effect.flip(git.operationInProgress("/private/repo"));
+
+      assert.strictEqual(error._tag, "GitError");
+      assert.strictEqual(error.command, "git rev-parse --git-path MERGE_HEAD");
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              Layer.succeed(
+                ChildProcessSpawner.ChildProcessSpawner,
+                ChildProcessSpawner.make(() =>
+                  Effect.succeed(
+                    processHandle(
+                      Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+                      Stream.make(new TextEncoder().encode(".git/MERGE_HEAD\n")),
+                    ),
+                  ),
+                ),
+              ),
+              FileSystem.layerNoop({ exists: (target) => Effect.fail(denied("exists", target)) }),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 });
 

@@ -15,7 +15,6 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpClient from "effect/unstable/http/HttpClient";
 import { CredentialStore } from "./credential-store";
 import { fullHarnessExecution, HarnessError, type HarnessRunner } from "./harness";
@@ -159,10 +158,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const sandbox = yield* openWorktreeSandbox(plan.sandbox.workspace).pipe(
             Effect.mapError((error) => launchError(true, error.message)),
           );
-          const baseSha = yield* resolveBaseSha(sandbox);
-          const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>().pipe(
-            Effect.provide(FetchHttpClient.layer),
+          const baseSha = yield* resolveBaseSha(sandbox).pipe(
+            Effect.mapError((error) => launchError(true, error.message)),
           );
+          const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>();
           const toolSet = makeOwnedToolSet(sandbox, runPromise, policyForProfile(plan.harness.profile));
           const toolsByName: ReadonlyMap<string, AnyTool> = new Map(Object.entries(toolSet));
           const tools = plan.tools.flatMap((name) => {
