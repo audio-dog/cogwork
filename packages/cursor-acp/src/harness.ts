@@ -1,4 +1,4 @@
-import { ndJsonStream } from "@agentclientprotocol/sdk";
+import { ndJsonStream, RequestError } from "@agentclientprotocol/sdk";
 import { AgUiEvent, type HarnessName } from "@cogwork/contracts";
 import { Harness, SessionStore } from "@cogwork/engine";
 import {
@@ -27,10 +27,12 @@ import {
   withSandbox,
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { cursorModelFlag } from "./model";
 
@@ -102,11 +104,18 @@ const decodeEvent = Schema.decodeUnknownOption(AgUiEvent);
 export const toEvent = (chunk: StreamChunk): AgUiEvent =>
   Option.getOrElse(decodeEvent(chunk), () => ({ type: chunk.type }));
 
-const launchPattern = /ENOENT|EACCES|spawn|not found|command not found/i;
+const launchCodes = new Set(["ENOENT", "EACCES"]);
+
+const hasLaunchCode = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  typeof error.code === "string" &&
+  launchCodes.has(error.code);
 
 const fromThrown = (error: unknown): Harness.HarnessError => {
   const message = error instanceof Error ? error.message : String(error);
-  const launch = launchPattern.test(message);
+  const launch = error instanceof RequestError || hasLaunchCode(error);
   return new Harness.HarnessError({ reason: launch ? "launch" : "turn", retryable: !launch, message });
 };
 
@@ -169,66 +178,69 @@ type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Mess
 // noise stops without touching the package.
 const swallowedCursorMethods = new Set<string>(["cursor/task", "cursor/update_todos"]);
 
-const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
-  const writer = base.writable.getWriter();
-  const outbound = { tail: Promise.resolve() };
-  const send = (message: AcpMessage) => {
-    const write = outbound.tail.then(() => writer.write(message));
-    outbound.tail = write.then(
-      () => undefined,
-      () => undefined,
+class CursorTransportError extends Data.TaggedError("CursorTransportError")<{
+  readonly cause: unknown;
+  readonly message: string;
+}> {}
+
+const transportError = (cause: unknown) =>
+  new CursorTransportError({ cause, message: cause instanceof Error ? cause.message : String(cause) });
+
+export const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
+  const outbound = Semaphore.makeUnsafe(1);
+  const withWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
+    outbound.withPermit(
+      Effect.acquireUseRelease(
+        Effect.sync(() => base.writable.getWriter()),
+        (writer) => Effect.tryPromise({ try: () => use(writer), catch: transportError }),
+        (writer) => Effect.sync(() => writer.releaseLock()),
+      ),
     );
-    return write;
-  };
+  const runWithWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
+    Effect.runPromise(withWriter(use));
 
-  const readable = new ReadableStream<AcpMessage>({
-    // @effect-diagnostics-next-line asyncFunction:off
-    async start(controller) {
-      const reader = base.readable.getReader();
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if ("method" in value && "id" in value && swallowedCursorMethods.has(value.method)) {
-            void send({ jsonrpc: "2.0", id: value.id, result: {} });
-            continue;
-          }
-          controller.enqueue(value);
+  return {
+    readable: Stream.fromReadableStream({
+      evaluate: () => base.readable,
+      onError: transportError,
+    }).pipe(
+      Stream.filterEffect((message) => {
+        if (!("method" in message && "id" in message && swallowedCursorMethods.has(message.method))) {
+          return Effect.succeed(true);
         }
-        controller.close();
-      } catch (error) {
-        controller.error(error);
-      } finally {
-        reader.releaseLock();
-      }
-    },
-  });
-
-  const writable = new WritableStream<AcpMessage>({
-    write: (message) => send(message),
-    close: () => writer.close(),
-    abort: (reason) => writer.abort(reason),
-  });
-
-  return { readable, writable };
+        return withWriter((writer) => writer.write({ jsonrpc: "2.0", id: message.id, result: {} })).pipe(
+          Effect.ignore,
+          Effect.map(() => false),
+        );
+      }),
+      Stream.toReadableStream(),
+    ),
+    writable: new WritableStream<AcpMessage>({
+      write: (message) => runWithWriter((writer) => writer.write(message)),
+      close: () => runWithWriter((writer) => writer.close()),
+      abort: (reason) => runWithWriter((writer) => writer.abort(reason)),
+    }),
+  };
 };
 
 const openCursorTransport =
   (agentBin: string) =>
-  // @effect-diagnostics-next-line asyncFunction:off
-  async (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
+  (ctx: AcpHarnessContext<CursorModelOptions>): Promise<AcpSessionTransport> => {
     const flag = cursorModelFlag(ctx.model, ctx.modelOptions?.effort);
-    const handle = await ctx.sandbox.process.spawn(`${agentBin} --model ${flag} acp`, {
-      cwd: ctx.cwd,
-      ...(ctx.signal ? { signal: ctx.signal } : {}),
-    });
-    const bytes = spawnHandleToAcpTransport(handle);
-    return {
-      kind: "stream",
-      stream: interceptCursorTelemetry(ndJsonStream(bytes.writable, bytes.readable)),
-      dispose: () => bytes.kill(),
-      stderrTail: bytes.stderrTail,
-    };
+    return ctx.sandbox.process
+      .spawn(`${agentBin} --model ${flag} acp`, {
+        cwd: ctx.cwd,
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+      })
+      .then((handle) => {
+        const bytes = spawnHandleToAcpTransport(handle);
+        return {
+          kind: "stream",
+          stream: interceptCursorTelemetry(ndJsonStream(bytes.writable, bytes.readable)),
+          dispose: () => bytes.kill(),
+          stderrTail: bytes.stderrTail,
+        };
+      });
   };
 
 export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunner => {

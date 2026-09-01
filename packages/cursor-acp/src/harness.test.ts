@@ -1,8 +1,10 @@
 import { once } from "node:events";
+import { RequestError } from "@agentclientprotocol/sdk";
 import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
+import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
@@ -18,10 +20,13 @@ import {
   cursorModelOptions,
   cursorRunner,
   estimatedUsage,
+  interceptCursorTelemetry,
   mcpWorkspaceProjection,
   toEvent,
   withEstimatedUsage,
 } from "./harness";
+
+type AcpMessage = AcpJsonRpcStream extends { readable: ReadableStream<infer Message> } ? Message : never;
 
 const collect = (stream: Stream.Stream<AgUiEvent, Harness.HarnessError>) =>
   Effect.runPromise(Stream.runCollect(stream));
@@ -107,6 +112,48 @@ const stalledChat = (signal: AbortSignal) => ({
   },
 });
 
+const failedChat = (error: unknown) => ({
+  [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
+});
+
+const runRunner = (runner: Harness.HarnessRunner) =>
+  runner
+    .run(request("/tmp"))
+    .pipe(
+      Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
+      Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
+      Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
+      Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
+    );
+
+describe("interceptCursorTelemetry", () => {
+  it.effect("keeps reading after a telemetry acknowledgment fails", () =>
+    Effect.gen(function* () {
+      const telemetryRequest = { jsonrpc: "2.0", id: 1, method: "cursor/task" } satisfies AcpMessage;
+      const sessionNotification = { jsonrpc: "2.0", method: "session/update" } satisfies AcpMessage;
+      const base = {
+        readable: new ReadableStream<AcpMessage>({
+          start: (controller) => {
+            controller.enqueue(telemetryRequest);
+            controller.enqueue(sessionNotification);
+            controller.close();
+          },
+        }),
+        writable: new WritableStream<AcpMessage>({
+          write: () => Promise.reject(new Error("transport closed")),
+        }),
+      } satisfies AcpJsonRpcStream;
+
+      const messages = yield* Stream.fromReadableStream({
+        evaluate: () => interceptCursorTelemetry(base).readable,
+        onError: String,
+      }).pipe(Stream.runCollect);
+
+      assert.deepStrictEqual(Array.from(messages), [sessionNotification]);
+    }),
+  );
+});
+
 describe("mcpWorkspaceProjection", () => {
   it("returns nothing and no secrets when the run declares no MCP skills", () => {
     const projection = mcpWorkspaceProjection([]);
@@ -180,6 +227,41 @@ describe("cursorRunner", () => {
 
       assert.strictEqual(error._tag, "TimeoutError");
       assert.isTrue(abortController.signal.aborted);
+    }),
+  );
+
+  it.effect("keeps unrecognized failures retryable without reading their message", () =>
+    Effect.gen(function* () {
+      const runner = cursorRunner({
+        name: cursorName,
+        runChat: () => failedChat(new Error("model output says command not found")),
+      });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "turn");
+      assert.isTrue(error.retryable);
+    }),
+  );
+
+  it.effect("hands off failures with a missing-executable code", () =>
+    Effect.gen(function* () {
+      const failure = Object.assign(new Error("Cursor could not start"), { code: "ENOENT" });
+      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+    }),
+  );
+
+  it.effect("hands off ACP request failures", () =>
+    Effect.gen(function* () {
+      const failure = RequestError.authRequired();
+      const runner = cursorRunner({ name: cursorName, runChat: () => failedChat(failure) });
+      const error = yield* Effect.flip(Stream.runDrain(runRunner(runner)));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
     }),
   );
 
