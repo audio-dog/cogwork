@@ -1,0 +1,38 @@
+apps/cli/src/main.ts
+  s_6b67f784924dd6::t_f196ef3351607b 20,39
+apps/cli/src/hand-back-command.ts
+  s_6b67f784924dd6::t_5e9b19bbc10ae6 75-77,81,85,92
+  s_6b67f784924dd6::t_c2adf48de1ec77 44-47,137-142
+  s_6b67f784924dd6::t_f196ef3351607b 1-6,8-20,22-43,48-74,78-80,82-84,86-91,93-136,143-144
+  s_4e860f76a3d2be::t_a14d363004990b 7,21
+apps/cli/src/hand-back-command.test.ts
+  s_6b67f784924dd6::t_c0690e87b288c2 2-5,7-29,32-49,51-68,71-72,75-89
+  s_6b67f784924dd6::t_c2adf48de1ec77 1,69-70,74
+  s_6b67f784924dd6::t_97c54668a3ca97 30-31,50
+  s_6b67f784924dd6::t_1616c3d8aadb1b 6
+  s_6b67f784924dd6::t_ad864b806690c2 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c11ab91016d8afc31bfe05df8f2c9eb4a6df5722",
+  "prompts": {},
+  "sessions": {
+    "s_4e860f76a3d2be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05a75-214e-71c2-8693-638c162b8646",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_6b67f784924dd6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b03-4d7c-7e80-8524-69da3602e3e7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
