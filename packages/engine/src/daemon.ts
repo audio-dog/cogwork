@@ -241,6 +241,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const config = yield* scheduler.config;
     const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
+    const bus = yield* DaemonEventBus;
     const controlStore = yield* ControlStore;
     const registry = yield* (yield* WorkspaceRegistry).state;
     const stateByName = statesByName(snapshot);
@@ -248,6 +249,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
       health: controlStore.health === "available" ? "running" : "store-unavailable",
       startedAtMillis: info.startedAtMillis,
       uptimeMillis: now - info.startedAtMillis,
+      eventBusDroppedEvents: yield* bus.droppedEvents,
       scheduler: schedulerStatsOf(registry, config, stats),
       workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
       failures: registry.failures.map(({ name, displayName, source, message }) => ({
