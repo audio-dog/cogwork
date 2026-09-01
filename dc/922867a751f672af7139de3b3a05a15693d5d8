@@ -1,0 +1,23 @@
+apps/cli/src/stop-signal.test.ts
+  s_e4e69379f0236a::t_b99543bf3bc2ea 5
+apps/cli/src/platform.test.ts
+  s_e4e69379f0236a::t_a7b03f8a57484a 76-92,94-97,99,222
+  s_e4e69379f0236a::t_b99543bf3bc2ea 14
+  s_e4e69379f0236a::t_a2d004c1779459 93,98,100,214-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dc922867a751f672af7139de3b3a05a15693d5d8",
+  "prompts": {},
+  "sessions": {
+    "s_e4e69379f0236a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e38-d3b8-7313-a143-f05b02432d79",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
