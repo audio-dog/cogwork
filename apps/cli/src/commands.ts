@@ -42,6 +42,9 @@ import { secondStopSignal } from "./stop-signal";
 import { telemetryLayer } from "./telemetry";
 import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
 
+const defaultPollInterval = Duration.minutes(1);
+const defaultDrainGrace = Duration.minutes(5);
+
 const socketFlag = Flag.string("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
@@ -59,14 +62,14 @@ const credentialsFlag = Flag.string("credentials").pipe(
 
 const pollIntervalFlag = Flag.integer("poll-interval").pipe(
   Flag.withDescription("Seconds between issue-tracker polls (higher values conserve GitHub API quota)"),
-  Flag.withDefault(60),
+  Flag.withDefault(Duration.toSeconds(defaultPollInterval)),
 );
 
 const drainGraceFlag = Flag.integer("drain-grace").pipe(
   Flag.withDescription(
     "Seconds in-flight runs get to finish after a stop signal (a second signal ends the wait)",
   ),
-  Flag.withDefault(300),
+  Flag.withDefault(Duration.toSeconds(defaultDrainGrace)),
 );
 
 const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
@@ -572,8 +575,8 @@ export const daemonCommand = Command.make("daemon", {
       socketPath: socket,
       controlStorePath: controlStore,
       credentialsPath: credentials,
-      pollIntervalMillis: pollInterval * 1000,
-      drainGraceMillis: drainGrace * 1000,
+      pollIntervalMillis: Duration.toMillis(Duration.seconds(pollInterval)),
+      drainGraceMillis: Duration.toMillis(Duration.seconds(drainGrace)),
     }),
   ),
 );
