@@ -1333,10 +1333,8 @@ describe("Executor.execute", () => {
         }),
       };
 
-      yield* Effect.gen(function* () {
-        const executor = yield* Executor.Executor;
-        yield* executor.refreshAvailability(workspace);
-      }).pipe(
+      yield* Executor.Executor.pipe(
+        Effect.flatMap((executor) => executor.refreshAvailability(workspace)),
         Effect.provide(
           provide([probeRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), operationSettings),
         ),

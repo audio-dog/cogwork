@@ -24,6 +24,8 @@ import {
   transportLayer,
 } from "./rpc";
 
+const interruptionGate = Latch.makeUnsafe();
+
 const assertDeadlineError = (error: unknown, tag: string) => {
   assert.isTrue(Schema.is(DaemonRpcTimeout)(error));
   if (!Schema.is(DaemonRpcTimeout)(error)) return;
@@ -65,7 +67,7 @@ class SentMessages extends Context.Service<SentMessages, Ref.Ref<ReadonlyArray<F
             return {
               send: (_clientId, message) =>
                 Ref.update(messages, (current) => [...current, message]).pipe(
-                  Effect.andThen(message._tag === "Request" ? Effect.never : Effect.void),
+                  Effect.andThen(message._tag === "Request" ? interruptionGate.await : Effect.void),
                 ),
               supportsAck: true,
               supportsTransferables: false,

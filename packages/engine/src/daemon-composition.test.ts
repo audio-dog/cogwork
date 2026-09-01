@@ -10,6 +10,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -29,6 +30,8 @@ import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker } from "./reconcile";
 import * as RunLedger from "./run-ledger";
 import { WorktreeManager } from "./worktree";
+
+const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   ensure: () => Effect.die("unused"),
@@ -86,8 +89,30 @@ const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
 const socketServerLayer = (socket: Socket.Socket) =>
   Layer.succeed(SocketServer.SocketServer, {
     address: { _tag: "UnixAddress", path: "memory" },
-    run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
+    run: (handler) =>
+      handler(socket).pipe(
+        Effect.ignore,
+        Effect.andThen(
+          interruptionGate.await.pipe(Effect.flatMap(() => Effect.die("interruption gate opened"))),
+        ),
+      ),
   });
+
+const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(function* () {
+  yield* Daemon.bootstrap;
+  const heartbeats = yield* Effect.forkChild(
+    Daemon.heartbeats({ pollIntervalMillis: 1000, drain: { graceMillis: 0, abort: Effect.void } }),
+  );
+  yield* TestClock.adjust("1 minute");
+  const worker = yield* ReconcileWorker;
+  const reconciled = yield* worker.snapshot;
+  const heartbeatsExit = heartbeats.pollUnsafe();
+  yield* Fiber.interrupt(heartbeats);
+  const rpc = yield* RpcClient.make(DaemonRpcs);
+  const runs = yield* rpc.ListRuns();
+  const status = yield* rpc.GetStatus();
+  return { runs, status, reconciled, heartbeatsExit };
+});
 
 const connectedWorkspace: RegisteredWorkspace = {
   source: "control-store:github",
@@ -236,28 +261,15 @@ describe("daemon server composition", () => {
 
   it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
     Effect.gen(function* () {
-      yield* Daemon.bootstrap;
-      // Dispatch is not merely idle: `bootstrap` must not submit a reconcile, and `heartbeats`
-      // must never begin polling. Both are asserted after time has had a chance to pass.
-      const heartbeats = yield* Effect.forkChild(
-        Daemon.heartbeats({ pollIntervalMillis: 1000, drain: { graceMillis: 0, abort: Effect.void } }),
-      );
-      yield* TestClock.adjust("1 minute");
-      const worker = yield* ReconcileWorker;
-      const reconciled = yield* worker.snapshot;
-      const heartbeatsExit = heartbeats.pollUnsafe();
-      yield* Fiber.interrupt(heartbeats);
-      const rpc = yield* RpcClient.make(DaemonRpcs);
-      const runs = yield* rpc.ListRuns();
-      const status = yield* rpc.GetStatus();
+      const result = yield* inspectUnavailableDaemon();
 
-      assert.deepStrictEqual(runs, []);
-      assert.strictEqual(status.health, "store-unavailable");
-      assert.strictEqual(reconciled.generation, 0);
-      assert.deepStrictEqual(reconciled.workspaces, []);
-      assert.isUndefined(heartbeatsExit);
-      assert.strictEqual(status.scheduler.globalInFlight, 0);
-      assert.deepStrictEqual(status.workspaces, []);
+      assert.deepStrictEqual(result.runs, []);
+      assert.strictEqual(result.status.health, "store-unavailable");
+      assert.strictEqual(result.reconciled.generation, 0);
+      assert.deepStrictEqual(result.reconciled.workspaces, []);
+      assert.isUndefined(result.heartbeatsExit);
+      assert.strictEqual(result.status.scheduler.globalInFlight, 0);
+      assert.deepStrictEqual(result.status.workspaces, []);
     }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });

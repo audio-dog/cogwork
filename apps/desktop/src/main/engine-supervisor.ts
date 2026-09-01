@@ -197,17 +197,18 @@ const make = (options: EngineSupervisorOptions) =>
         releaseChild(child, terminateTimeout, forceKillTimeout),
       );
       const pid = owned.child.pid ?? null;
-      return yield* Effect.gen(function* () {
-        yield* Effect.logInfo("Engine started");
-        const awaitExit = Deferred.await(owned.exit);
-        const exit = yield* Effect.raceFirst(
-          awaitExit,
-          options
-            .awaitReachable(options.socketPath)
-            .pipe(Effect.andThen(setRunning(status)), Effect.andThen(awaitExit)),
-        );
-        return exit;
-      }).pipe(Effect.annotateLogs({ pid }), Effect.annotateSpans({ pid }));
+      const annotations = { pid };
+      yield* Effect.logInfo("Engine started").pipe(
+        Effect.annotateLogs(annotations),
+        Effect.annotateSpans(annotations),
+      );
+      const awaitExit = Deferred.await(owned.exit);
+      return yield* Effect.raceFirst(
+        awaitExit,
+        options
+          .awaitReachable(options.socketPath)
+          .pipe(Effect.andThen(setRunning(status)), Effect.andThen(awaitExit)),
+      ).pipe(Effect.annotateLogs(annotations), Effect.annotateSpans(annotations));
     });
 
     const supervise = Effect.fn("EngineSupervisor.supervise")(function* (launched: Deferred.Deferred<void>) {

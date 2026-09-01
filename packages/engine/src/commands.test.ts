@@ -31,6 +31,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
@@ -61,6 +62,7 @@ const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
 const wsid = Schema.decodeSync(WorkspaceId);
 const harness = Schema.decodeSync(HarnessName);
+const interruptionGate = Latch.makeUnsafe();
 const acmeRegistration = Schema.decodeSync(WorkspaceRegistration)({
   name: "acme",
   checkoutPath: "/repos/acme",
@@ -259,21 +261,20 @@ const concurrentPluginManagerLayer = (
       const calls = yield* Ref.make(0);
       return {
         overview: Ref.get(current),
-        install: (pluginId) =>
-          Effect.gen(function* () {
-            const call = yield* Ref.getAndUpdate(calls, (count) => count + 1);
-            const overview = {
-              plugins:
-                call === 0
-                  ? [installedPlugin(pluginId)]
-                  : [installedPlugin("github"), installedPlugin(pluginId)],
-            } satisfies PluginOverview;
-            yield* Ref.set(current, overview);
-            if (call > 0) return { overview, notices: [`${pluginId} notice`] };
-            yield* Deferred.succeed(firstReady, undefined);
-            yield* Deferred.await(releaseFirst);
-            return { overview, notices: [`${pluginId} notice`] };
-          }),
+        install: Effect.fn("test.concurrentPluginInstall")(function* (pluginId) {
+          const call = yield* Ref.getAndUpdate(calls, (count) => count + 1);
+          const overview = {
+            plugins:
+              call === 0
+                ? [installedPlugin(pluginId)]
+                : [installedPlugin("github"), installedPlugin(pluginId)],
+          } satisfies PluginOverview;
+          yield* Ref.set(current, overview);
+          if (call > 0) return { overview, notices: [`${pluginId} notice`] };
+          yield* Deferred.succeed(firstReady, undefined);
+          yield* Deferred.await(releaseFirst);
+          return { overview, notices: [`${pluginId} notice`] };
+        }),
         uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
         contributions: () => Effect.succeed([]),
       };
@@ -377,31 +378,35 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
     state: Ref.get(cell),
     refresh: Ref.get(cell),
   };
-  const register: Registry.WorkspaceManagementService["register"] = Effect.fn(function* (registration) {
-    const workspace: Registry.RegisteredWorkspace = {
-      source: "control-store:minted",
-      contributions,
-      config: {
-        name: wsid("0198f16a-21d7-7000-8000-000000000001"),
-        displayName: registration.name,
-        checkoutPath: registration.checkoutPath,
-        issueTracker: registration.issueTracker,
-        sourceControl: registration.sourceControl,
-        linearHistory: registration.linearHistory,
-      },
-      workspaceLimit: registration.concurrency,
-    };
-    yield* Ref.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
-    return { _tag: "Registered" as const, workspace };
-  });
-  const deregister: Registry.WorkspaceManagementService["deregister"] = Effect.fn(function* (workspace) {
-    yield* Ref.update(cell, (state) => ({
-      workspaces: state.workspaces.filter((entry) => entry.config.name !== workspace),
-      failures: state.failures.filter((entry) => entry.name !== workspace),
-    }));
-    return workspace;
-  });
-  const rebind: Registry.WorkspaceManagementService["rebind"] = Effect.fn(
+  const register: Registry.WorkspaceManagementService["register"] = Effect.fn("test.register")(
+    function* (registration) {
+      const workspace: Registry.RegisteredWorkspace = {
+        source: "control-store:minted",
+        contributions,
+        config: {
+          name: wsid("0198f16a-21d7-7000-8000-000000000001"),
+          displayName: registration.name,
+          checkoutPath: registration.checkoutPath,
+          issueTracker: registration.issueTracker,
+          sourceControl: registration.sourceControl,
+          linearHistory: registration.linearHistory,
+        },
+        workspaceLimit: registration.concurrency,
+      };
+      yield* Ref.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
+      return { _tag: "Registered" as const, workspace };
+    },
+  );
+  const deregister: Registry.WorkspaceManagementService["deregister"] = Effect.fn("test.deregister")(
+    function* (workspace) {
+      yield* Ref.update(cell, (state) => ({
+        workspaces: state.workspaces.filter((entry) => entry.config.name !== workspace),
+        failures: state.failures.filter((entry) => entry.name !== workspace),
+      }));
+      return workspace;
+    },
+  );
+  const rebind: Registry.WorkspaceManagementService["rebind"] = Effect.fn("test.rebind")(
     function* (workspace, checkoutPath) {
       const current = (yield* Ref.get(cell)).workspaces.find((entry) => entry.config.name === workspace);
       if (!current) return yield* Effect.die("workspace not found");
@@ -592,7 +597,7 @@ describe("CancelRun", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(started, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
           Effect.ignore(issueTracker.release(registered, id("AUD-1"))),
@@ -639,7 +644,7 @@ describe("CancelRun", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(started, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
@@ -914,7 +919,7 @@ describe("RunControl", () => {
       const scope = yield* Scope.make();
       const context = yield* Layer.buildWithScope(RunControl.layer, scope);
       const control = Context.get(context, RunControl.RunControl);
-      const fiber = yield* Effect.forkChild(control.run(rid("run-1"), undefined, Effect.never));
+      const fiber = yield* Effect.forkChild(control.run(rid("run-1"), undefined, interruptionGate.await));
       yield* Effect.yieldNow;
 
       yield* Scope.close(scope, Exit.void);
@@ -933,7 +938,7 @@ describe("RunControl", () => {
         control.run(
           rid("run-1"),
           registered,
-          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(interruptionGate.await)),
           Deferred.succeed(onCancel, undefined),
         ),
       );
@@ -966,7 +971,7 @@ describe("RunControl", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(started, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
             Effect.ensuring(Deferred.await(finishTeardown)),
           ),
@@ -1002,7 +1007,7 @@ describe("RunControl", () => {
           rid("run-1"),
           registered,
           Deferred.succeed(firstStarted, undefined).pipe(
-            Effect.andThen(Effect.never),
+            Effect.andThen(interruptionGate.await),
             Effect.ensuring(Deferred.await(finishFirstTeardown)),
           ),
         ),
@@ -1017,7 +1022,7 @@ describe("RunControl", () => {
         control.run(
           rid("run-1"),
           replacementWorkspace,
-          Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(interruptionGate.await)),
         ),
       );
       yield* Deferred.await(replacementStarted);
@@ -1663,7 +1668,7 @@ describe("workspace lifecycle commands", () => {
         control.run(
           rid("run-1"),
           registeredWorkspace,
-          Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(started, undefined).pipe(Effect.andThen(interruptionGate.await)),
           Effect.ignore(issueTracker.release(registeredWorkspace, id("AUD-1"))),
         ),
       );

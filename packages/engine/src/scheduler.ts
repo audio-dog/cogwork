@@ -9,6 +9,7 @@ import { byStageThenPriority as byStageThenPriorityOf } from "@cogwork/contracts
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FiberSet from "effect/FiberSet";
@@ -23,6 +24,7 @@ import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
+import { day } from "./time";
 import { branchName, ticketSlug } from "./worktree";
 
 const runsInFlight = Metric.gauge("cogwork_scheduler_runs_in_flight", {
@@ -95,9 +97,7 @@ export interface DrainOutcome {
   readonly interrupted: number;
 }
 
-const millisPerDay = 86_400_000;
-
-const utcDay = (millis: number) => Math.floor(millis / millisPerDay);
+const utcDay = (millis: number) => Math.floor(millis / Duration.toMillis(day));
 
 export interface Candidate {
   readonly workspace: RegisteredWorkspace;
@@ -298,14 +298,10 @@ export const make = (config: SchedulerConfig) =>
       const candidates = candidatesOf(yield* registry.state, snapshot, config);
       const day = utcDay(yield* Clock.currentTimeMillis);
       const planned = yield* stateMetricsGate.withPermit(
-        Effect.gen(function* () {
-          const planned = yield* Ref.modify(stateRef, (state) => {
-            const next = plan(candidates, state, config, { day, generation: snapshot.generation });
-            return [next, next.state];
-          });
-          yield* updateStateMetrics(planned.state);
-          return planned;
-        }),
+        Ref.modify(stateRef, (state) => {
+          const next = plan(candidates, state, config, { day, generation: snapshot.generation });
+          return [next, next.state];
+        }).pipe(Effect.tap((planned) => updateStateMetrics(planned.state))),
       );
       if (isBudgetExhaustedTick(planned, candidates, config)) {
         yield* Metric.update(budgetExhaustedTicks, 1);

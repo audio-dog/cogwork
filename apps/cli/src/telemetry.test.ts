@@ -38,18 +38,19 @@ describe("telemetryLayer", () => {
         yield* HttpRouter.add(
           "*",
           "*",
-          Effect.gen(function* () {
-            const request = yield* HttpServerRequest.HttpServerRequest;
-            yield* Ref.update(paths, (seen) => new Set([...seen, request.url]));
-            return HttpServerResponse.empty({ status: 200 });
-          }),
+          HttpServerRequest.HttpServerRequest.pipe(
+            Effect.flatMap((request) =>
+              Ref.update(paths, (seen) => new Set([...seen, request.url])).pipe(
+                Effect.map(() => HttpServerResponse.empty({ status: 200 })),
+              ),
+            ),
+          ),
         ).pipe(HttpRouter.serve, Layer.build);
         const server = yield* HttpServer.HttpServer;
         const endpoint = yield* collectorEndpoint(server.address);
         const tracesEndpoint = `${endpoint}/custom/traces`;
-        yield* Effect.gen(function* () {
-          yield* Effect.logInfo("telemetry test");
-          yield* Metric.update(requests, 1);
+        yield* Effect.all([Effect.logInfo("telemetry test"), Metric.update(requests, 1)], {
+          discard: true,
         }).pipe(
           Effect.withSpan("telemetry test"),
           Effect.provide(
