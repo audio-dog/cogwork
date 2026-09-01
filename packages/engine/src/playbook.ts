@@ -1,4 +1,4 @@
-import type { LifecycleStage, McpSkill, PlaybookStageConfig, WorkspaceConfig } from "@cogwork/contracts";
+import type { LifecycleStage, McpSkill, OperationNeed, WorkspaceConfig } from "@cogwork/contracts";
 
 export interface OperationDefinition {
   readonly skill: string;
@@ -6,7 +6,7 @@ export interface OperationDefinition {
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
   readonly mcpSkills: ReadonlyArray<McpSkill>;
-  readonly needs: NonNullable<PlaybookStageConfig["needs"]>;
+  readonly needs: ReadonlyArray<OperationNeed>;
 }
 
 const dayMillis = 86_400_000;
@@ -38,43 +38,39 @@ interface StageDefaults {
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
+  readonly needs: ReadonlyArray<OperationNeed>;
 }
 
-const resolveStageConfig = (
-  config: WorkspaceConfig,
-  stage: PlaybookStageConfig | undefined,
-  defaults: StageDefaults,
-): OperationDefinition => ({
-  skill: stage?.skill ?? defaults.skill,
-  promptTemplate: stage?.prompt?.trim() || defaults.promptTemplate,
-  resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
-  resumeMaxTokens: stage?.resumeMaxTokens ?? defaults.resumeMaxTokens,
+const resolveStageConfig = (config: WorkspaceConfig, defaults: StageDefaults) => ({
+  ...defaults,
   mcpSkills: config.mcpSkills ?? [],
-  needs: stage?.needs ?? [],
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, config.playbook?.triage, {
+  resolveStageConfig(config, {
     skill: "triage-agent",
     promptTemplate: defaultTriagePrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
+    needs: [],
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, config.playbook?.implement, {
+  resolveStageConfig(config, {
     skill: "implement-agent",
     promptTemplate: defaultImplementPrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
+    needs: [],
   });
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, config.playbook?.["follow-up"], {
+  resolveStageConfig(config, {
     skill: "follow-up-agent",
     promptTemplate: defaultFollowUpPrompt,
     resumeMaxAgeMillis: dayMillis,
     resumeMaxTokens: null,
+    needs: [],
   });
 
 const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) => OperationDefinition>> = {
