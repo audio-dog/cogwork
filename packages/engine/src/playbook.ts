@@ -1,4 +1,6 @@
 import type { LifecycleStage, McpSkill, PlaybookStageConfig, WorkspaceConfig } from "@cogwork/contracts";
+import * as Duration from "effect/Duration";
+import { day } from "./time";
 
 export interface OperationDefinition {
   readonly skill: string;
@@ -8,8 +10,6 @@ export interface OperationDefinition {
   readonly mcpSkills: ReadonlyArray<McpSkill>;
   readonly needs: NonNullable<PlaybookStageConfig["needs"]>;
 }
-
-const dayMillis = 86_400_000;
 
 const defaultTriagePrompt = [
   'You are running the triage playbook for work item {id} ("{title}") in this repository checkout.',
@@ -73,7 +73,7 @@ export const resolveFollowUp = (config: WorkspaceConfig) =>
   resolveStageConfig(config, config.playbook?.["follow-up"], {
     skill: "follow-up-agent",
     promptTemplate: defaultFollowUpPrompt,
-    resumeMaxAgeMillis: dayMillis,
+    resumeMaxAgeMillis: Duration.toMillis(day),
     resumeMaxTokens: null,
   });
 
