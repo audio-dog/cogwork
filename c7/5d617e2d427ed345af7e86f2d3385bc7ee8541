@@ -1,0 +1,21 @@
+configs/lint/tests/fixtures/no-effect-sync-effect/valid-example.ts
+  s_66a676b0acd16a::t_df0cfc5f8c7e46 1-3
+configs/lint/tests/fixtures/no-effect-sync-effect/invalid-example.ts
+  s_66a676b0acd16a::t_df0cfc5f8c7e46 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c75d617e2d427ed345af7e86f2d3385bc7ee8541",
+  "prompts": {},
+  "sessions": {
+    "s_66a676b0acd16a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d9b-6a0f-7ff3-8d69-d5dd008ca252",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
