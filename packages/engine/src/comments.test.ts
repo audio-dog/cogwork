@@ -90,7 +90,7 @@ describe("comments", () => {
     assert.include(body, "ready-for-human");
     assert.include(body, "Last failure: `network blip`");
     assert.include(body, "```sh");
-    assert.include(body, "cd '/wt/15-feature' && agent --resume 'sess-1'");
+    assert.include(body, "cd '/wt/15-feature' && codex resume 'sess-1'");
   });
 
   it("builds a crash-loop handoff note capturing the crash count", () => {
@@ -129,7 +129,7 @@ describe("comments", () => {
   it("shell-quotes paths and session ids", () => {
     assert.strictEqual(shellQuote("/home/me/my wt"), "'/home/me/my wt'");
     assert.strictEqual(shellQuote("a'b"), `'a'\\''b'`);
-    assert.include(attachCommand("/wt", "sess; curl evil"), "agent --resume 'sess; curl evil'");
+    assert.include(attachCommand("/wt", "sess; curl evil"), "codex resume 'sess; curl evil'");
   });
 
   it("exposes a stable recovery reason for daemon restarts", () => {
@@ -169,11 +169,11 @@ describe("comments", () => {
       stage: "implement",
       cause: { kind: "max-attempts", attempts: 3 },
       reason: "boom",
-      session: { handle: "sess-1", access: "human-attach" },
+      session: { handle: "sess-1", access: "codex-cli" },
     });
     assert.include(note, "Exhausted after 3 failed implement attempts.");
     assert.include(note, "Last failure: `boom`");
-    assert.include(note, "agent --resume 'sess-1'");
+    assert.include(note, "codex resume 'sess-1'");
   });
 
   it("omits the resume block when the run left no session", () => {
@@ -199,6 +199,6 @@ describe("comments", () => {
       session: { handle: "cursor-acp-session", access: "programmatic-only" },
     });
     assert.notInclude(note, "Resume the session");
-    assert.notInclude(note, "agent --resume");
+    assert.notInclude(note, "codex resume");
   });
 });
