@@ -17,6 +17,7 @@ import {
   watchCommand,
 } from "./commands";
 import { connectionCommand } from "./connection-commands";
+import { handBackCommand } from "./hand-back-command";
 import { loginCommand } from "./login-commands";
 import { modelsCommand } from "./models-commands";
 import { defaultEnvFilePath } from "./paths";
@@ -35,6 +36,7 @@ const cli = Command.make("cogwork").pipe(
     runsCommand,
     runEventsCommand,
     watchCommand,
+    handBackCommand,
     worktreeCommand,
     workspaceCommand,
     loginCommand,
