@@ -18,10 +18,9 @@ const resolveBiomeBin = () => {
   return path.resolve(path.dirname(packagePath), bin);
 };
 
-export const lintWithRule = (ruleName, fixturePath) => {
+export const lintWithRule = (rulePath, fixturePath) => {
   const tempDirectory = mkdtempSync(path.join(tmpdir(), "cogwork-lint-rule-"));
   const configPath = path.join(tempDirectory, "biome.json");
-  const rulePath = path.join(lintRoot, `${ruleName}.grit`);
   writeFileSync(configPath, `${JSON.stringify({ plugins: [rulePath] }, null, 2)}\n`, "utf8");
 
   try {

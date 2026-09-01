@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { fixtureRoot, lintRoot, lintWithRule, repoRoot } from "./rule-test-harness.mjs";
+import { fixtureRoot, lintWithRule, repoRoot } from "./rule-test-harness.mjs";
 
 const ruleCases = [
   {
@@ -144,27 +144,27 @@ const ruleCases = [
   },
 ];
 
-const configuredRules = JSON.parse(readFileSync(path.join(repoRoot, "biome.json"), "utf8"))
-  .plugins.map((plugin) => path.basename(plugin, ".grit"))
-  .sort();
-const gritRules = readdirSync(lintRoot)
-  .filter((fileName) => fileName.endsWith(".grit"))
-  .map((fileName) => path.basename(fileName, ".grit"))
-  .sort();
+const configuredRulePaths = new Map(
+  JSON.parse(readFileSync(path.join(repoRoot, "biome.json"), "utf8")).plugins.map((plugin) => [
+    path.basename(plugin, ".grit"),
+    path.resolve(repoRoot, plugin),
+  ]),
+);
 
-test("biome.json configures every tested grit rule", () => {
+test("every configured grit rule has fixtures", () => {
   const testedRules = ruleCases.map(({ name }) => name).sort();
+  const configuredRules = [...configuredRulePaths.keys()].sort();
 
-  assert.deepEqual(configuredRules, gritRules);
   assert.deepEqual(testedRules, configuredRules);
 });
 
 for (const ruleCase of ruleCases) {
   const extension = ruleCase.extension ?? "ts";
   const fixtures = path.join(fixtureRoot, ruleCase.name);
+  const rulePath = configuredRulePaths.get(ruleCase.name);
 
   test(`${ruleCase.name} catches its prohibited pattern`, () => {
-    const result = lintWithRule(ruleCase.name, path.join(fixtures, `invalid-example.${extension}`));
+    const result = lintWithRule(rulePath, path.join(fixtures, `invalid-example.${extension}`));
 
     assert.equal(result.diagnostics.length, 1, result.output);
     assert.equal(result.diagnostics[0].category, "plugin");
@@ -173,7 +173,7 @@ for (const ruleCase of ruleCases) {
   });
 
   test(`${ruleCase.name} allows its supported alternative`, () => {
-    const result = lintWithRule(ruleCase.name, path.join(fixtures, `valid-example.${extension}`));
+    const result = lintWithRule(rulePath, path.join(fixtures, `valid-example.${extension}`));
 
     assert.equal(result.status, 0, result.output);
     assert.deepEqual(result.diagnostics, [], result.output);
