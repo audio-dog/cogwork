@@ -66,16 +66,19 @@ const AgUiNamedEvent = Schema.Union([
   }),
   eventVariant("TOOL_CALL_ARGS", {
     toolCallId: Schema.optional(Schema.String),
+    toolCallName: Schema.optional(Schema.String),
     delta: Schema.optional(Schema.String),
     args: Schema.optional(Schema.String),
   }),
   eventVariant("TOOL_CALL_END", {
     toolCallId: Schema.optional(Schema.String),
+    toolCallName: Schema.optional(Schema.String),
     args: Schema.optional(Schema.String),
     result: Schema.optional(Schema.Unknown),
   }),
   eventVariant("TOOL_CALL_RESULT", {
     toolCallId: Schema.optional(Schema.String),
+    toolCallName: Schema.optional(Schema.String),
     content: Schema.optional(Schema.Unknown),
     result: Schema.optional(Schema.Unknown),
   }),
