@@ -43,7 +43,7 @@ const displayName = (event: AgUiEvent) =>
       STEP_STARTED: ({ stepName }) => stepName ?? null,
       STEP_FINISHED: ({ stepName }) => stepName ?? null,
     },
-    () => null,
+    () => event.toolCallName ?? event.name ?? event.stepName ?? null,
   );
 
 interface RunTrack {

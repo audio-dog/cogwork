@@ -133,6 +133,22 @@ describe("RunRecorder", () => {
       }),
     );
 
+    it.effect("keeps display names from accepted event fields", () =>
+      Effect.gen(function* () {
+        const record = run("run-names");
+        yield* recordAll(record, [
+          { type: "TOOL_CALL_END", toolCallId: "t1", toolCallName: "shell" },
+          { type: "VENDOR_STATUS", name: "phase" },
+        ]);
+
+        const ledger = yield* RunLedger.RunLedger;
+        assert.deepStrictEqual(
+          (yield* ledger.events(record.id)).map(({ name }) => name),
+          ["shell", "phase"],
+        );
+      }),
+    );
+
     it.effect("counts each run's sequence on its own", () =>
       Effect.gen(function* () {
         const first = run("run-count-a");
