@@ -25,6 +25,7 @@ import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
+import * as Harness from "./harness";
 import type { ObservedItem } from "./issue-tracker";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -257,6 +258,7 @@ const recoveryLayer = (deps: RecoveryDeps) => {
     Layer.provideMerge(
       Layer.mergeAll(
         engineServices,
+        Harness.layer([]),
         registryLayer,
         deps.snapshot ? workerSnapshotLayer(deps.snapshot) : workerLayer(deps.observed, deps.poll ?? okPoll),
         schedulerStub(deps.admitted, deps.paused, deps.inFlight),
@@ -526,7 +528,7 @@ describe("Recovery.recover", () => {
     }),
   );
 
-  it.effect("hands an exhausted recovery the resume handle its session kept before the daemon died", () =>
+  it.effect("does not publish an attach command for a programmatic-only recovered session", () =>
     Effect.gen(function* () {
       const notes = yield* Ref.make<ReadonlyArray<string>>([]);
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
@@ -546,7 +548,7 @@ describe("Recovery.recover", () => {
       yield* Effect.gen(function* () {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
-        assert.include((yield* Ref.get(notes))[0] ?? "", "agent --resume 'cursor-abc'");
+        assert.notInclude((yield* Ref.get(notes))[0] ?? "", "agent --resume");
       }).pipe(
         Effect.provide(
           recoveryLayer({ observed: [withAttempts(claimedByUs, 2)], issueTracker, ledger, admitted }),
