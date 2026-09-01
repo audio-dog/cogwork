@@ -1306,6 +1306,47 @@ const harnessSwitchLayer = (alternates: ReadonlyArray<HarnessName>) =>
   );
 
 describe("Executor.execute", () => {
+  it.effect("projects availability only for executable Operations", () => {
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      const availability = yield* executor.refreshAvailability(workspace);
+
+      assert.deepStrictEqual(
+        availability.map(({ operation }) => operation),
+        ["triage", "implement", "follow-up"],
+      );
+    }).pipe(Effect.provide(provide([runner(successEvents)])));
+  });
+
+  it.effect("keeps transient Harness preflight failures out of availability", () => {
+    const transientPreflight: TestRunner = {
+      make: () => ({
+        name: cursor,
+        sessionKind: "opaque-handle",
+        projectedMembers: [],
+        planMiddleware: [],
+        execution: fullHarnessExecution,
+        preflight: () =>
+          Effect.fail(
+            new HarnessError({
+              reason: "launch",
+              retryable: true,
+              message: "readiness check timed out",
+            }),
+          ),
+        run: () => Stream.fromArray(implementEvents),
+      }),
+    };
+
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      const availability = yield* executor.availabilityOf(implementWorkspace, implementItem);
+
+      assert.isTrue(availability.available);
+      assert.deepStrictEqual(availability.causes, []);
+    }).pipe(Effect.provide(provide([transientPreflight])));
+  });
+
   it.effect("triages an eligible item into a proposal note, label advance, and ledgered run", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;

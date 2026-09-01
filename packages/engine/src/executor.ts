@@ -3,6 +3,7 @@ import type {
   ControlStoreFailure,
   FileContribution,
   HarnessName,
+  LifecycleStage,
   OperationAvailability,
   PluginContribution,
   PluginMcpServer,
@@ -20,7 +21,6 @@ import {
   type FollowUpStageResult,
   FollowUpStageResultCompletion,
   ImplementStageResultCompletion,
-  LifecycleStage,
   PluginContributionLoad,
   RunId,
   sessionHandle,
@@ -56,6 +56,7 @@ import {
   buildFollowUpPrompt,
   buildImplementPrompt,
   buildTriagePrompt,
+  operationStages,
 } from "./playbook";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
@@ -243,8 +244,6 @@ const handoffCause = (retryable: boolean, attempts: number) =>
 
 const decodeRunId = Schema.decodeUnknownEffect(RunId);
 const noPlugins = { plugins: [] } satisfies PluginOverview;
-const lifecycleStages: ReadonlyArray<LifecycleStage> = LifecycleStage.literals;
-
 const enabledContribution = (
   resolved: ResolvedOperation,
   workspace: RegisteredWorkspace,
@@ -1159,6 +1158,7 @@ export const make = Effect.gen(function* () {
     return yield* harness.preflight(resolved.stage.harness, resolved.profile, resolved.stage.model).pipe(
       Effect.match({
         onFailure: (error) => {
+          if (error.retryable) return null;
           if (error.reason === "credential") return hostFailure("credential", error.message);
           if (error.reason === "policy") {
             return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
@@ -1269,7 +1269,7 @@ export const make = Effect.gen(function* () {
   const refreshAvailability = Effect.fn("Executor.refreshAvailability")(function* (
     workspace: RegisteredWorkspace,
   ) {
-    return yield* Effect.forEach(lifecycleStages, (operation) =>
+    return yield* Effect.forEach(operationStages, (operation) =>
       evaluateAvailability(workspace, operation).pipe(Effect.map(({ availability }) => availability)),
     );
   });
