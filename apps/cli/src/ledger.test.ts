@@ -18,7 +18,9 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Path from "effect/Path";
+import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import { layer as ledgerLayer } from "./ledger";
 
@@ -244,6 +246,50 @@ describe("sqlite RunLedger", () => {
           events.map((event) => event.type),
           ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
         );
+      }),
+    );
+
+    it.effect("warns with the operation and row id before ignoring corrupt stored values", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const storePath = yield* TestStorePath;
+        const run = runId("corrupt-run");
+        const plan = runId("corrupt-plan");
+        const sessionReference = runId("corrupt-session-reference");
+        yield* ledger.insertRun(record(run, 1000));
+        yield* ledger.acceptRun(record(plan, 2000), runPlan(plan));
+        yield* ledger.insertRun(
+          record(sessionReference, 3000, { branch: "corrupt-session-branch", session }),
+        );
+        yield* Effect.acquireUseRelease(
+          Effect.sync(() => new DatabaseSync(storePath)),
+          (sqlite) =>
+            Effect.sync(() => {
+              sqlite.prepare("UPDATE runs SET status = 'unknown' WHERE id = ?").run(run);
+              sqlite.prepare("UPDATE run_plans SET plan = '' WHERE run_id = ?").run(plan);
+              sqlite.prepare("UPDATE runs SET session = '' WHERE id = ?").run(sessionReference);
+            }),
+          (sqlite) => Effect.sync(() => sqlite.close()),
+        );
+        const logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }> = [];
+        const logger = Logger.make<unknown, void>(({ fiber, message }) => {
+          logs.push({ message, annotations: { ...fiber.getRef(References.CurrentLogAnnotations) } });
+        });
+
+        yield* Effect.gen(function* () {
+          assert.isNull(yield* ledger.getRun(run));
+          assert.isNull(yield* ledger.getRunPlan(plan));
+          assert.isNull(yield* ledger.sessionForBranch(workspace, "corrupt-session-branch"));
+        }).pipe(Effect.withLogger(logger));
+
+        const warnings = logs
+          .filter(({ message }) => String(message).includes("stored row decode failed"))
+          .map(({ annotations }) => annotations);
+        assert.deepStrictEqual(warnings, [
+          { operation: "getRun", rowId: run },
+          { operation: "getRunPlan", rowId: plan },
+          { operation: "sessionForBranch", rowId: sessionReference },
+        ]);
       }),
     );
 
