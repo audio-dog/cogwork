@@ -88,7 +88,7 @@ const outcome = Exit.isSuccess(exit)
     : "failure";
 ```
 
-The scheduler already makes this distinction for its crash log (`Effect.catchCauseIf((cause) => !Cause.hasInterruptsOnly(cause), ...)`); metrics must make the same one. Drain interrupts every in-flight run on purpose — a failure counter that includes them is wrong every time the daemon restarts.
+The interruption-is-not-a-crash rule belongs to the fiber-lifecycle pattern; this is its metrics application. The scheduler already makes the distinction for its crash log (`Effect.catchCauseIf((cause) => !Cause.hasInterruptsOnly(cause), ...)`); metrics must make the same one. Drain interrupts every in-flight run on purpose — a failure counter that includes them is wrong every time the daemon restarts.
 
 ## Silence noise deliberately
 

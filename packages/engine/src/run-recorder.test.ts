@@ -13,14 +13,14 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { activityOf } from "./daemon-event-bus";
 import * as RunLedger from "./run-ledger";
-import { RunRecorder, layer as runRecorderLayer } from "./run-recorder";
+import { RunRecorder } from "./run-recorder";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const runId = Schema.decodeSync(RunId);
 const sessionId = Schema.decodeSync(SessionId);
@@ -28,10 +28,7 @@ const workspace = Schema.decodeSync(WorkspaceId)("gh");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
 const cursor = Schema.decodeSync(HarnessName)("cursor");
 
-const bus = DaemonEventBus.layer;
-const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
-const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
-const testLayer = Layer.mergeAll(runRecorder, runLedger, bus);
+const testLayer = engineTestLayer();
 
 const run = (id: string, over: Partial<RunRecord> = {}): RunRecord => ({
   id: runId(id),
@@ -62,7 +59,7 @@ const text = (delta: string) => ({ type: "TEXT_MESSAGE_CONTENT", delta }) satisf
 const ledgerEvent = (seq: number, agUi: AgUiEvent, atMillis = 1000 + seq): RunEvent => ({
   seq,
   type: agUi.type,
-  name: agUi.name ?? null,
+  name: typeof agUi.name === "string" ? agUi.name : null,
   data: JSON.stringify(agUi),
   atMillis,
 });

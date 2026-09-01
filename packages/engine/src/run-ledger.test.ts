@@ -14,17 +14,41 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as DaemonEventBus from "./daemon-event-bus";
-import { layerMemory as memoryLedgerLayer, RunLedger } from "./run-ledger";
+import { layerMemory as memoryLedgerLayer, RunLedger, type RunLedgerService } from "./run-ledger";
 
 const layerMemory = memoryLedgerLayer.pipe(Layer.provide(DaemonEventBus.layer));
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
+const otherWorkspace = Schema.decodeSync(WorkspaceId)("other");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
+const bareWorkItem = Schema.decodeSync(WorkItemId)("7");
 const otherWorkItem = Schema.decodeSync(WorkItemId)("#8");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const laterSession = Schema.decodeSync(SessionId)("sess-later");
 const harness = Schema.decodeSync(HarnessName)("cursor");
+
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+type Expect<T extends true> = T;
+
+type _CrashRunningArgs = Expect<
+  Equal<Parameters<RunLedgerService["crashRunning"]>, [WorkspaceId, WorkItemId, number]>
+>;
+type _CloseRunningArgs = Expect<
+  Equal<Parameters<RunLedgerService["closeRunning"]>, [WorkspaceId, WorkItemId, number]>
+>;
+type _LatestRunForItemArgs = Expect<
+  Equal<Parameters<RunLedgerService["latestRunForItem"]>, [WorkspaceId, WorkItemId]>
+>;
+type _LatestRunByBranchArgs = Expect<
+  Equal<Parameters<RunLedgerService["latestRunByBranch"]>, [WorkspaceId, string]>
+>;
+type _SessionForBranchArgs = Expect<
+  Equal<Parameters<RunLedgerService["sessionForBranch"]>, [WorkspaceId, string]>
+>;
+type _ResolveWatchTargetArgs = Expect<
+  Equal<Parameters<RunLedgerService["resolveWatchTarget"]>, [WorkItemId]>
+>;
 
 const runPlan = (id: string) =>
   Schema.decodeSync(RunPlan)({
@@ -194,7 +218,7 @@ describe("RunLedger (memory)", () => {
     it.effect("returns the most recent resumable run's session for a branch", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
-        const sessionByBranch = (workspace: string, branch: string) =>
+        const sessionByBranch = (workspace: WorkspaceId, branch: string) =>
           Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
         yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export", session }));
@@ -204,9 +228,9 @@ describe("RunLedger (memory)", () => {
           usage: null,
           endedAtMillis: 1500,
         });
-        assert.strictEqual(yield* sessionByBranch("gh", "7-fix-export"), "sess-abc");
-        assert.isNull(yield* sessionByBranch("gh", "9-other"));
-        assert.isNull(yield* sessionByBranch("other", "7-fix-export"));
+        assert.strictEqual(yield* sessionByBranch(workspace, "7-fix-export"), "sess-abc");
+        assert.isNull(yield* sessionByBranch(workspace, "9-other"));
+        assert.isNull(yield* sessionByBranch(otherWorkspace, "7-fix-export"));
       }),
     );
   });
@@ -220,7 +244,7 @@ describe("RunLedger (memory)", () => {
         yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export", session }));
         yield* ledger.insertRun(record("run-2", 1000, { branch: "7-fix-export", session: laterSession }));
 
-        assert.strictEqual(yield* ledger.sessionForBranch("gh", "7-fix-export"), laterSession);
+        assert.strictEqual(yield* ledger.sessionForBranch(workspace, "7-fix-export"), laterSession);
       }),
     );
   });
@@ -237,7 +261,7 @@ describe("RunLedger (memory)", () => {
           createdAtMillis: 0,
         });
         yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export", session }));
-        const run = yield* ledger.latestRunByBranch("gh", "7-fix-export");
+        const run = yield* ledger.latestRunByBranch(workspace, "7-fix-export");
         assert.strictEqual(run?.session, session);
         assert.isNull(sessionHandle(yield* ledger.getSession(session)));
       }),
@@ -249,7 +273,7 @@ describe("RunLedger (memory)", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
         const sessionByBranch = (branch: string) =>
-          Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
+          Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
         yield* ledger.insertRun(
           record("interrupted", 5000, { branch: "7-fix-export", session, status: "interrupted" }),
@@ -269,7 +293,7 @@ describe("RunLedger (memory)", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
         const sessionByBranch = (branch: string) =>
-          Effect.map(ledger.latestRunByBranch("gh", branch), (run) => run?.session ?? null);
+          Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
         yield* ledger.insertRun(
           record("crashed", 5000, { branch: "7-fix-export", session, status: "crashed" }),
@@ -296,7 +320,7 @@ describe("RunLedger (memory)", () => {
           endedAtMillis: 4200,
         });
 
-        yield* ledger.crashRunning("gh", "#7", 5000);
+        yield* ledger.crashRunning(workspace, workItem, 5000);
 
         const statuses = yield* Effect.forEach(["crash-running", "crash-done"], (id) =>
           Effect.map(ledger.getRun(runId(id)), (run) => [run?.status, run?.endedAtMillis]),
@@ -324,7 +348,7 @@ describe("RunLedger (memory)", () => {
             endedAtMillis: 4200,
           });
 
-          yield* ledger.closeRunning("gh", "#7", 5000);
+          yield* ledger.closeRunning(workspace, workItem, 5000);
 
           const state = yield* Effect.forEach(["running", "other-running", "done"], (id) =>
             Effect.map(ledger.getRun(runId(id)), (run) => [
@@ -449,7 +473,7 @@ describe("RunLedger (memory)", () => {
         yield* ledger.insertSession(sessionRecord({ handle: null }));
         yield* ledger.insertRun(record("run-1", 1000, { branch: "7-fix-export", session }));
 
-        assert.isNull(yield* ledger.latestRunByBranch("gh", "7-fix-export"));
+        assert.isNull(yield* ledger.latestRunByBranch(workspace, "7-fix-export"));
 
         yield* ledger.recordSessionHandle(session, "cursor-abc");
         assert.strictEqual(sessionHandle(yield* ledger.getSession(session)), "cursor-abc");
@@ -459,7 +483,7 @@ describe("RunLedger (memory)", () => {
         assert.strictEqual(inFlight?.status, "running");
         assert.isNull(inFlight?.endedAtMillis);
 
-        const byBranch = yield* ledger.latestRunByBranch("gh", "7-fix-export");
+        const byBranch = yield* ledger.latestRunByBranch(workspace, "7-fix-export");
         assert.strictEqual(byBranch?.id, id);
       }),
     );
@@ -487,7 +511,7 @@ describe("RunLedger (memory)", () => {
           atMillis: 1100,
         });
 
-        assert.strictEqual(yield* ledger.sessionForBranch("gh", "b"), session);
+        assert.strictEqual(yield* ledger.sessionForBranch(workspace, "b"), session);
         const events = yield* ledger.sessionEvents(session);
         assert.deepStrictEqual(
           events.map((event) => event.type),
@@ -520,7 +544,7 @@ describe("RunLedger (memory)", () => {
         yield* ledger.insertRun(record("failed-latest", 5000, { status: "failed", endedAtMillis: 5500 }));
         yield* ledger.insertRun(record("other-newest", 6000, { workItem: otherWorkItem, status: "running" }));
 
-        const latest = yield* ledger.latestRunForItem("gh", "#7");
+        const latest = yield* ledger.latestRunForItem(workspace, workItem);
         assert.strictEqual(latest?.id, "failed-latest");
       }),
     );
@@ -531,7 +555,7 @@ describe("RunLedger (memory)", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
         yield* ledger.insertRun(record("other", 1000, { workItem: otherWorkItem }));
-        assert.isNull(yield* ledger.latestRunForItem("gh", "#7"));
+        assert.isNull(yield* ledger.latestRunForItem(workspace, workItem));
       }),
     );
   });
@@ -539,7 +563,7 @@ describe("RunLedger (memory)", () => {
 
 describe("RunLedger resolveWatchTarget (memory)", () => {
   const otherItem = Schema.decodeSync(WorkItemId)("#999");
-  const targetId = (workItem: string) =>
+  const targetId = (workItem: WorkItemId) =>
     Effect.flatMap(RunLedger, (ledger) => ledger.resolveWatchTarget(workItem)).pipe(
       Effect.map((run) => run?.id ?? null),
     );
@@ -550,7 +574,7 @@ describe("RunLedger resolveWatchTarget (memory)", () => {
         const ledger = yield* RunLedger;
         yield* ledger.insertRun(record("running", 1000, { status: "running" }));
         yield* ledger.insertRun(record("newer-done", 5000, { status: "succeeded", endedAtMillis: 5500 }));
-        assert.strictEqual(yield* targetId("#7"), "running");
+        assert.strictEqual(yield* targetId(workItem), "running");
       }),
     );
   });
@@ -561,7 +585,7 @@ describe("RunLedger resolveWatchTarget (memory)", () => {
         const ledger = yield* RunLedger;
         yield* ledger.insertRun(record("old-done", 1000, { status: "failed", endedAtMillis: 1500 }));
         yield* ledger.insertRun(record("new-done", 5000, { status: "succeeded", endedAtMillis: 5500 }));
-        assert.strictEqual(yield* targetId("#7"), "new-done");
+        assert.strictEqual(yield* targetId(workItem), "new-done");
       }),
     );
   });
@@ -582,7 +606,7 @@ describe("RunLedger resolveWatchTarget (memory)", () => {
               }),
             ),
         );
-        assert.strictEqual(yield* targetId("#7"), "target");
+        assert.strictEqual(yield* targetId(workItem), "target");
       }),
     );
   });
@@ -592,8 +616,8 @@ describe("RunLedger resolveWatchTarget (memory)", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
         yield* ledger.insertRun(record("only", 1000, { status: "running" }));
-        assert.strictEqual(yield* targetId("#7"), "only");
-        assert.strictEqual(yield* targetId("7"), "only");
+        assert.strictEqual(yield* targetId(workItem), "only");
+        assert.strictEqual(yield* targetId(bareWorkItem), "only");
       }),
     );
   });
@@ -603,7 +627,7 @@ describe("RunLedger resolveWatchTarget (memory)", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
         yield* ledger.insertRun(record("other", 1000, { workItem: otherItem }));
-        assert.isNull(yield* targetId("#7"));
+        assert.isNull(yield* targetId(workItem));
       }),
     );
   });

@@ -1,12 +1,11 @@
 import {
-  type AgUiEvent,
-  AgUiEventUnion,
+  AgUiEvent,
+  agUiIsStructuredOutputComplete,
   type HarnessName,
   type Session,
   type SessionId,
   SessionId as SessionIdSchema,
   type SessionKind,
-  StructuredOutputCompleteValue,
   type WorkspaceId,
 } from "@cogwork/contracts";
 import { InMemoryRunStore, type ModelMessage } from "@tanstack/ai";
@@ -90,20 +89,23 @@ const appendTool = (state: FoldState, callId: string | undefined, content = "", 
   } satisfies FoldState;
 };
 
-const isStructuredOutputCompleteValue = Schema.is(StructuredOutputCompleteValue);
+const optionalString = (value: unknown) => (typeof value === "string" ? value : undefined);
 
 const foldUnknownToolEvent = (state: FoldState, event: AgUiEvent) => {
   if (!event.type.startsWith("TOOL_CALL_")) return state;
   return appendTool(
     state,
-    event.toolCallId,
-    event.args,
-    event.toolCallName ?? event.name ?? event.stepName ?? "tool",
+    optionalString(event.toolCallId),
+    optionalString(event.args),
+    optionalString(event.toolCallName) ??
+      optionalString(event.name) ??
+      optionalString(event.stepName) ??
+      "tool",
   );
 };
 
 const foldEvent = (state: FoldState, event: AgUiEvent): FoldState =>
-  AgUiEventUnion.matchOrElse(
+  AgUiEvent.matchOrElse(
     event,
     {
       TEXT_MESSAGE_CONTENT: ({ delta }) => (delta ? { ...state, text: state.text + delta } : state),
@@ -114,10 +116,8 @@ const foldEvent = (state: FoldState, event: AgUiEvent): FoldState =>
       TOOL_CALL_END: ({ toolCallId, args, toolCallName }) =>
         appendTool(state, toolCallId, args, toolCallName),
       TOOL_CALL_RESULT: ({ toolCallId, toolCallName }) => appendTool(state, toolCallId, "", toolCallName),
-      CUSTOM: ({ name, value }) =>
-        name === "structured-output.complete" && isStructuredOutputCompleteValue(value)
-          ? appendStructuredOutput(state, value.raw)
-          : state,
+      CUSTOM: (event) =>
+        agUiIsStructuredOutputComplete(event) ? appendStructuredOutput(state, event.value.raw) : state,
       RUN_FINISHED: () => flushText(state),
       RUN_ERROR: () => flushText(state),
     },

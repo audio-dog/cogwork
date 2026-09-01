@@ -1,8 +1,9 @@
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import type { TokenUsage } from "./run";
 
 const anyExtraKeys = Schema.Record(Schema.String, Schema.Unknown);
+const SessionHandleValue = Schema.Struct({ sessionId: Schema.String });
+const SessionHandleEventName = Schema.TemplateLiteral([Schema.String, ".session-id"]);
 
 const AgUiUsage = Schema.StructWithRest(
   Schema.Struct({
@@ -18,28 +19,6 @@ const eventVariant = <const Type extends string, const Fields extends Schema.Str
   type: Type,
   fields: Fields,
 ) => Schema.StructWithRest(Schema.Struct({ type: Schema.tag(type), ...fields }), [anyExtraKeys]);
-
-export const AgUiEvent = Schema.StructWithRest(
-  Schema.Struct({
-    type: Schema.String,
-    delta: Schema.optional(Schema.String),
-    toolCallId: Schema.optional(Schema.String),
-    toolCallName: Schema.optional(Schema.String),
-    args: Schema.optional(Schema.String),
-    result: Schema.optional(Schema.Unknown),
-    content: Schema.optional(Schema.Unknown),
-    name: Schema.optional(Schema.String),
-    value: Schema.optional(Schema.Unknown),
-    message: Schema.optional(Schema.String),
-    stepName: Schema.optional(Schema.String),
-    messageId: Schema.optional(Schema.String),
-    threadId: Schema.optional(Schema.String),
-    finishReason: Schema.optional(Schema.NullOr(Schema.String)),
-    usage: Schema.optional(AgUiUsage),
-  }),
-  [anyExtraKeys],
-);
-export type AgUiEvent = typeof AgUiEvent.Type;
 
 const AgUiNamedEvent = Schema.Union([
   eventVariant("RUN_STARTED", {
@@ -115,8 +94,8 @@ const AgUiUnknownEvent = Schema.StructWithRest(
   [anyExtraKeys],
 );
 
-const AgUiEventUnionSchema = Schema.Union([AgUiNamedEvent, AgUiUnknownEvent]);
-type AgUiEventUnionSchema = typeof AgUiEventUnionSchema.Type;
+const AgUiEventSchema = Schema.Union([AgUiNamedEvent, AgUiUnknownEvent]);
+type AgUiEventSchema = typeof AgUiEventSchema.Type;
 type AgUiNamedEvent = typeof AgUiNamedEvent.Type;
 type AgUiEventCases<Output> = {
   readonly [Type in AgUiNamedEvent["type"]]?: (
@@ -124,24 +103,24 @@ type AgUiEventCases<Output> = {
   ) => Output;
 };
 
-const isAgUiNamedEvent = (event: AgUiEventUnionSchema): event is AgUiNamedEvent =>
+const isAgUiNamedEvent = (event: AgUiEventSchema): event is AgUiNamedEvent =>
   agUiNamedEventTypes.has(event.type);
 
 const matchOrElse = <Output>(
-  event: AgUiEventUnionSchema,
+  event: AgUiEventSchema,
   cases: AgUiEventCases<Output>,
-  orElse: (event: AgUiEventUnionSchema) => Output,
+  orElse: (event: AgUiEventSchema) => Output,
 ) => {
   if (!isAgUiNamedEvent(event)) return orElse(event);
   return AgUiNamedEvent.matchOrElse(event, cases, orElse);
 };
 
-export const AgUiEventUnion = Object.assign(AgUiEventUnionSchema, {
+export const AgUiEvent = Object.assign(AgUiEventSchema, {
   guards: AgUiNamedEvent.guards,
   match: AgUiNamedEvent.match,
   matchOrElse,
 });
-export type AgUiEventUnion = typeof AgUiEventUnion.Type;
+export type AgUiEvent = typeof AgUiEvent.Type;
 
 export const StructuredOutputCompleteValue = Schema.Struct({
   object: Schema.Unknown,
@@ -149,15 +128,15 @@ export const StructuredOutputCompleteValue = Schema.Struct({
 });
 export type StructuredOutputCompleteValue = typeof StructuredOutputCompleteValue.Type;
 
-const decodeStructuredOutputCompleteValue = Schema.decodeUnknownOption(StructuredOutputCompleteValue);
+const AgUiStructuredOutputCompleteEvent = eventVariant("CUSTOM", {
+  name: Schema.Literal("structured-output.complete"),
+  value: StructuredOutputCompleteValue,
+});
 
-export const agUiIsStructuredOutputComplete = (event: AgUiEvent) =>
-  AgUiEventUnion.guards.CUSTOM(event) && event.name === "structured-output.complete";
-
-export const agUiStructuredOutputComplete = (event: AgUiEvent) => {
-  if (!agUiIsStructuredOutputComplete(event)) return null;
-  return Option.getOrNull(decodeStructuredOutputCompleteValue(event.value));
-};
+const AgUiSessionHandleEvent = eventVariant("CUSTOM", {
+  name: SessionHandleEventName,
+  value: SessionHandleValue,
+});
 
 export const AgUiCorrelation = Schema.Struct({
   threadId: Schema.NullOr(Schema.String),
@@ -166,34 +145,29 @@ export const AgUiCorrelation = Schema.Struct({
 });
 export type AgUiCorrelation = typeof AgUiCorrelation.Type;
 
-export const agUiCorrelation = (event: AgUiEvent) => ({
-  threadId: event.threadId ?? null,
-  messageId: event.messageId ?? null,
-  toolCallId: event.toolCallId ?? null,
-});
-
-const SessionIdValue = Schema.StructWithRest(Schema.Struct({ sessionId: Schema.String }), [anyExtraKeys]);
-
-const AgUiSessionIdEvent = eventVariant("CUSTOM", {
-  name: Schema.String.check(Schema.isPattern(/\.session-id$/)),
-  value: SessionIdValue,
-});
-
-const isAgUiSessionIdEvent = Schema.is(AgUiSessionIdEvent);
-
-export const agUiIsTerminal = (event: AgUiEvent) =>
-  AgUiEventUnion.guards.RUN_FINISHED(event) || AgUiEventUnion.guards.RUN_ERROR(event);
-
-export const agUiTextDelta = (event: AgUiEvent) =>
-  AgUiEventUnion.guards.TEXT_MESSAGE_CONTENT(event) ? (event.delta ?? "") : "";
-
-export const agUiSessionId = (event: AgUiEvent) => {
-  if (!isAgUiSessionIdEvent(event)) return null;
-  return event.value.sessionId;
+const stringField = (event: AgUiEvent, key: string) => {
+  const value = event[key];
+  return typeof value === "string" ? value : null;
 };
 
+export const agUiCorrelation = (event: AgUiEvent) => ({
+  threadId: stringField(event, "threadId"),
+  messageId: stringField(event, "messageId"),
+  toolCallId: stringField(event, "toolCallId"),
+});
+
+export const agUiIsTerminal = (event: AgUiEvent) =>
+  AgUiEvent.guards.RUN_FINISHED(event) || AgUiEvent.guards.RUN_ERROR(event);
+
+export const agUiTextDelta = (event: AgUiEvent) =>
+  AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) ? (event.delta ?? "") : "";
+
+export const agUiIsStructuredOutputComplete = Schema.is(AgUiStructuredOutputCompleteEvent);
+
+export const agUiIsSessionHandleEvent = Schema.is(AgUiSessionHandleEvent);
+
 export const agUiUsage = (event: AgUiEvent): TokenUsage | null => {
-  if (!AgUiEventUnion.guards.RUN_FINISHED(event) || !event.usage) return null;
+  if (!AgUiEvent.guards.RUN_FINISHED(event) || !event.usage) return null;
   return {
     inputTokens: event.usage.promptTokens,
     outputTokens: event.usage.completionTokens,
@@ -203,4 +177,4 @@ export const agUiUsage = (event: AgUiEvent): TokenUsage | null => {
 };
 
 export const agUiDisplayName = (event: AgUiEvent) =>
-  event.toolCallName ?? event.name ?? event.stepName ?? null;
+  stringField(event, "toolCallName") ?? stringField(event, "name") ?? stringField(event, "stepName");

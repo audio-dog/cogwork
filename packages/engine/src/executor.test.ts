@@ -60,9 +60,8 @@ import { defaultRunBudget } from "./provider-runner";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import { projectedContributionName } from "./run-plan";
-import { layer as runRecorderLayer } from "./run-recorder";
-import * as SessionStore from "./session-store";
 import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
+import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   branchName,
   WorktreeDivergedError,
@@ -1195,12 +1194,9 @@ function provide(
   connections = connectionStoreStub,
   runControl: Layer.Layer<RunControl.RunControl> = runControlStub,
 ) {
-  const bus = DaemonEventBus.layer;
-  const runLedger = transformRunLedger(RunLedger.layerMemory.pipe(Layer.provide(bus)));
-  const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
-  const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
+  const engineServices = engineTestLayer({ transformRunLedger });
   const runnerServices = Layer.mergeAll(
-    sessionStore,
+    engineServices,
     contextAssembler,
     CredentialStore.layerEnv,
     FileSystem.layerNoop({}),
@@ -1211,12 +1207,8 @@ function provide(
       Layer.mergeAll(
         issueTracker,
         sourceControl,
-        sessionStore,
         testHarness(runners),
         runnerServices,
-        runLedger,
-        runRecorder,
-        bus,
         ContextCleanupCalls.layer,
         runControl,
         worktree,

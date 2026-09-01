@@ -10,6 +10,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import { availabilityCauseSummary } from "./availability";
@@ -31,6 +32,15 @@ import { handleOf, RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
 
 const maxCrashesPerItem = 3;
+const crashLoopsCapped = Metric.counter("cogwork_recovery_crash_loops_capped_total", {
+  description: "Recovery crash loops capped before another resume.",
+});
+
+const correlationOf = (item: ObservedItem) => {
+  const correlation = { item: item.id };
+  const stage = observedStage(item);
+  return stage ? { ...correlation, stage } : correlation;
+};
 
 export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
@@ -69,10 +79,7 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: ObservedItem,
   ) {
-    yield* Effect.logInfo("recovered stale claim", {
-      workspace: workspace.config.name,
-      item: item.id,
-    });
+    yield* Effect.logInfo("recovered stale claim");
     yield* issueTracker.note(
       workspace,
       item.id,
@@ -96,9 +103,6 @@ export const make = Effect.gen(function* () {
     const attempts = consecutiveFailures(item, stage) + 1;
     const exhausted = attempts >= maxAttemptsPerStage;
     yield* Effect.logWarning("recovered stale claim", {
-      workspace: workspace.config.name,
-      item: item.id,
-      stage,
       reason: recoveryReason,
       attempts,
       exhausted,
@@ -140,9 +144,6 @@ export const make = Effect.gen(function* () {
       ? { ...observed, recovery: reason, resume: { session, reason } }
       : { ...observed, recovery: reason };
     yield* Effect.logInfo("rescheduled resumable run", {
-      workspace: workspace.config.name,
-      item: item.id,
-      stage,
       reason,
     });
     yield* scheduler.admit(workspace, work, observation);
@@ -155,10 +156,8 @@ export const make = Effect.gen(function* () {
     crashes: number,
     session: SessionId | null,
   ) {
+    yield* Metric.update(Metric.withAttributes(crashLoopsCapped, { stage }), 1);
     yield* Effect.logWarning("crash loop capped", {
-      workspace: workspace.config.name,
-      item: item.id,
-      stage,
       crashes,
     });
     yield* handOffExhausted(workspace, item, stage, { kind: "crash-loop", crashes }, session);
@@ -238,7 +237,17 @@ export const make = Effect.gen(function* () {
     observation: RunPlanObservation,
   ) {
     const ours = observed.filter((item) => item.claimedByUs);
-    yield* Effect.forEach(ours, (item) => recoverItem(workspace, item, observation), { discard: true });
+    yield* Effect.forEach(
+      ours,
+      (item) => {
+        const correlation = correlationOf(item);
+        return recoverItem(workspace, item, observation).pipe(
+          Effect.annotateLogs(correlation),
+          Effect.annotateSpans(correlation),
+        );
+      },
+      { discard: true },
+    );
   });
 
   const pollDetail = (poll: PollState) =>
@@ -260,7 +269,13 @@ export const make = Effect.gen(function* () {
   ) {
     yield* Effect.forEach(
       observed.filter((item) => item.claimedByUs),
-      (item) => recoverOrphan(workspace, item),
+      (item) => {
+        const correlation = correlationOf(item);
+        return recoverOrphan(workspace, item).pipe(
+          Effect.annotateLogs(correlation),
+          Effect.annotateSpans(correlation),
+        );
+      },
       { discard: true },
     );
   });
@@ -273,7 +288,6 @@ export const make = Effect.gen(function* () {
   ) => {
     if (state.poll.status !== "ok") {
       return Effect.logWarning("claim recovery deferred; workspace poll is not ok", {
-        workspace: workspace.config.name,
         ...pollDetail(state.poll),
       }).pipe(Effect.map(() => null));
     }
@@ -281,7 +295,6 @@ export const make = Effect.gen(function* () {
       Effect.map(() => workspace.config.name),
       Effect.catchTag("IssueTrackerError", (error) =>
         Effect.logWarning("claim recovery skipped", {
-          workspace: workspace.config.name,
           message: error.message,
         }).pipe(Effect.map(() => null)),
       ),
@@ -304,7 +317,11 @@ export const make = Effect.gen(function* () {
       const workspace = byName.get(state.name);
       if (!workspace) return Effect.succeed(null);
       const recoverObserved = completed.has(state.name) ? recoverOrphans : recoverWorkspace;
-      return recoverState(workspace, state, recoverObserved, observation);
+      const correlation = { workspace: workspace.config.name };
+      return recoverState(workspace, state, recoverObserved, observation).pipe(
+        Effect.annotateLogs(correlation),
+        Effect.annotateSpans(correlation),
+      );
     });
     return results.filter((workspace): workspace is WorkspaceId => workspace !== null);
   });

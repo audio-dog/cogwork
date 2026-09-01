@@ -27,6 +27,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
@@ -48,12 +49,11 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { SourceControlProvider } from "./source-control";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
-const runLedgerTestLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
-const runRecorderTestLayer = runRecorderLayer.pipe(Layer.provide(runLedgerTestLayer));
+const engineServices = engineTestLayer();
 const controlStoreService = {
   health: "available",
   seed: defaultControlStore,
@@ -80,23 +80,29 @@ const reconcileLayer = Reconcile.layer.pipe(
   Layer.provide(pluginManagerLayer),
 );
 
-interface SeedFailureProbeService {
+interface EventPublisherProbeService {
   readonly items: Ref.Ref<ReadonlyArray<TrackerItem>>;
   readonly stats: Ref.Ref<Scheduler.SchedulerState>;
+  readonly registry: Ref.Ref<Registry.RegistryState>;
 }
 
-class SeedFailureProbe extends Context.Service<SeedFailureProbe, SeedFailureProbeService>()(
-  "@cogwork/engine/event-publisher.test/SeedFailureProbe",
+class EventPublisherProbe extends Context.Service<EventPublisherProbe, EventPublisherProbeService>()(
+  "@cogwork/engine/event-publisher.test/EventPublisherProbe",
 ) {
-  static readonly layer = Layer.effect(
-    SeedFailureProbe,
-    Effect.gen(function* () {
-      return {
-        items: yield* Ref.make<ReadonlyArray<TrackerItem>>([]),
-        stats: yield* Ref.make(schedulerState(0)),
-      };
-    }),
-  );
+  static readonly layer = (items: ReadonlyArray<TrackerItem> = [], globalInFlight = 0) =>
+    Layer.effect(
+      EventPublisherProbe,
+      Effect.gen(function* () {
+        return {
+          items: yield* Ref.make(items),
+          stats: yield* Ref.make(schedulerState(globalInFlight)),
+          registry: yield* Ref.make<Registry.RegistryState>({
+            workspaces: [registeredWorkspace],
+            failures: [],
+          }),
+        };
+      }),
+    );
 }
 
 interface ControlStoreProbeService {
@@ -118,6 +124,17 @@ class ControlStoreProbe extends Context.Service<ControlStoreProbe, ControlStoreP
       };
     }),
   );
+}
+
+class LogMessages extends Context.Service<LogMessages, MutableRef.MutableRef<ReadonlyArray<string>>>()(
+  "@cogwork/engine/event-publisher.test/LogMessages",
+) {
+  static readonly layer = Layer.sync(LogMessages, () => MutableRef.make<ReadonlyArray<string>>([]));
+  static readonly captureLayer = Logger.layer([
+    Effect.map(LogMessages, (messages) =>
+      Logger.make(({ message }) => MutableRef.update(messages, (current) => [...current, String(message)])),
+    ),
+  ]).pipe(Layer.provideMerge(LogMessages.layer));
 }
 
 const id = Schema.decodeSync(WorkItemId);
@@ -194,11 +211,13 @@ describe("controlStoreWithDiagnostics", () => {
   });
 });
 
-const mutableRegistryLayer = (state: Ref.Ref<Registry.RegistryState>) =>
-  Layer.succeed(Registry.WorkspaceRegistry, {
-    state: Ref.get(state),
-    refresh: Ref.get(state),
-  });
+const mutableRegistryLayer = Layer.effect(
+  Registry.WorkspaceRegistry,
+  Effect.map(EventPublisherProbe, (probe) => ({
+    state: Ref.get(probe.registry),
+    refresh: Ref.get(probe.registry),
+  })),
+);
 
 const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerService => ({
   rateLimitScope: () => null,
@@ -221,14 +240,13 @@ const providerStub = Layer.succeed(SourceControlProvider, {
   comment: () => Effect.void,
 });
 
-const observing = (itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>) =>
-  Layer.mergeAll(
-    Layer.succeed(
-      IssueTracker,
-      trackerStub(() => Ref.get(itemsRef)),
-    ),
-    providerStub,
-  );
+const observing = Layer.mergeAll(
+  Layer.effect(
+    IssueTracker,
+    Effect.map(EventPublisherProbe, (probe) => trackerStub(() => Ref.get(probe.items))),
+  ),
+  providerStub,
+);
 
 const schedulerState = (global: number): Scheduler.SchedulerState => ({
   ...Scheduler.initialState,
@@ -238,18 +256,20 @@ const schedulerState = (global: number): Scheduler.SchedulerState => ({
   budgetUsed: 0,
 });
 
-const schedulerStub = (statsRef: Ref.Ref<Scheduler.SchedulerState>) =>
-  Layer.succeed(Scheduler.Scheduler, {
+const schedulerStub = Layer.effect(
+  Scheduler.Scheduler,
+  Effect.map(EventPublisherProbe, (probe) => ({
     tick: () => Effect.succeed(0),
     awaitIdle: Effect.void,
     drain: () => Effect.succeed({ inFlight: 0, interrupted: 0 }),
     admit: () => Effect.void,
     isInFlight: () => Effect.succeed(false),
-    setScheduling: () => Ref.get(statsRef),
+    setScheduling: () => Ref.get(probe.stats),
     setLimit: () => Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
     config: Effect.succeed({ globalLimit: 4, perWorkspaceLimit: 4, dailyBudget: 50 }),
-    stats: Ref.get(statsRef),
-  });
+    stats: Ref.get(probe.stats),
+  })),
+);
 
 const eligibleItem = (title: string): TrackerItem => ({
   id: id("AUD-1"),
@@ -303,61 +323,51 @@ const itemSentinelEvent = {
   item: classifiedItem({ _tag: "Eligible", id: "AUD-marker", title: "marker", url: null, stage: "triage" }),
 } as const;
 
-const publisherLayer = (
-  itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
-  statsRef: Ref.Ref<Scheduler.SchedulerState>,
-  workspaces = registryLayer,
-  store = controlStoreLayer,
-) =>
+const publisherLayer = (workspaces = mutableRegistryLayer, store = controlStoreLayer) =>
   eventPublisherLayer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        reconcileLayer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
+        reconcileLayer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing))),
         workspaces,
-        schedulerStub(statsRef),
+        schedulerStub,
         store,
         DaemonEventBus.layer,
       ),
     ),
   );
 
+const publisherTestLayer = (items: ReadonlyArray<TrackerItem> = [], globalInFlight = 0) =>
+  publisherLayer().pipe(Layer.provideMerge(EventPublisherProbe.layer(items, globalInFlight)));
+
 describe("DaemonEventPublisher", () => {
   it.layer(
-    Layer.unwrap(
-      Effect.gen(function* () {
-        const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([]);
-        const statsRef = yield* Ref.make(schedulerState(0));
-        return publisherLayer(
-          itemsRef,
-          statsRef,
-          registryLayer,
-          Layer.effect(
-            ControlStore,
-            Effect.gen(function* () {
-              const probe = yield* ControlStoreProbe;
-              const gate = Semaphore.makeUnsafe(1);
-              return {
-                health: "available",
-                seed: defaultControlStore,
-                picture: Ref.get(probe.current).pipe(
-                  Effect.tap(() => Deferred.succeed(probe.readStarted, undefined)),
-                  Effect.tap(() => Deferred.await(probe.releaseRead)),
-                ),
-                setDaemonLimit: () => Ref.get(probe.current),
-                establishConnection: () => Ref.get(probe.current),
-                revokeConnection: () => Ref.get(probe.current),
-                removeConnection: () => Ref.get(probe.current),
-                updateOperationSetting: () => Ref.get(probe.current),
-                installPlugin: () => Ref.get(probe.current),
-                uninstallPlugin: () => Ref.get(probe.current),
-                updateContributionSetting: () => Ref.get(probe.current),
-                withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
-              } satisfies ControlStoreService;
-            }),
-          ).pipe(Layer.provideMerge(ControlStoreProbe.layer)),
-        ).pipe(Layer.provideMerge(ControlStoreProbe.layer));
-      }),
-    ),
+    publisherLayer(
+      registryLayer,
+      Layer.effect(
+        ControlStore,
+        Effect.gen(function* () {
+          const probe = yield* ControlStoreProbe;
+          const gate = Semaphore.makeUnsafe(1);
+          return {
+            health: "available",
+            seed: defaultControlStore,
+            picture: Ref.get(probe.current).pipe(
+              Effect.tap(() => Deferred.succeed(probe.readStarted, undefined)),
+              Effect.tap(() => Deferred.await(probe.releaseRead)),
+            ),
+            setDaemonLimit: () => Ref.get(probe.current),
+            establishConnection: () => Ref.get(probe.current),
+            revokeConnection: () => Ref.get(probe.current),
+            removeConnection: () => Ref.get(probe.current),
+            updateOperationSetting: () => Ref.get(probe.current),
+            installPlugin: () => Ref.get(probe.current),
+            uninstallPlugin: () => Ref.get(probe.current),
+            updateContributionSetting: () => Ref.get(probe.current),
+            withWrite: <A, E, R>(effect: Effect.Effect<A, E, R>) => gate.withPermits(1)(effect),
+          } satisfies ControlStoreService;
+        }),
+      ).pipe(Layer.provideMerge(ControlStoreProbe.layer)),
+    ).pipe(Layer.provideMerge(EventPublisherProbe.layer()), Layer.provideMerge(ControlStoreProbe.layer)),
   )("Control store refresh", (it) => {
     it.effect("keeps a concurrent write newer than a workspace refresh", () =>
       Effect.gen(function* () {
@@ -401,127 +411,108 @@ describe("DaemonEventPublisher", () => {
 
   it.effect("does not publish stale items after their workspace leaves the registry", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("stale")]);
-      const statsRef = yield* Ref.make(schedulerState(0));
-      const registryState = yield* Ref.make<Registry.RegistryState>({
-        workspaces: [registeredWorkspace],
-        failures: [],
-      });
-      const workspaces = mutableRegistryLayer(registryState);
-      yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const worker = yield* Reconcile.ReconcileWorker;
-        const publisher = yield* DaemonEventPublisher;
-        const subscription = yield* bus.subscribe();
+      const probe = yield* EventPublisherProbe;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const publisher = yield* DaemonEventPublisher;
+      const subscription = yield* bus.subscribe();
 
-        yield* worker.submit();
-        yield* Ref.set(registryState, Registry.emptyRegistry);
-        yield* publisher.publishWorkspaceRemoved(registeredWorkspace.config.name);
-        yield* publisher.publishItems();
-        yield* bus.publish(schedulerSentinel);
+      yield* worker.submit();
+      yield* Ref.set(probe.registry, Registry.emptyRegistry);
+      yield* publisher.publishWorkspaceRemoved(registeredWorkspace.config.name);
+      yield* publisher.publishItems();
+      yield* bus.publish(schedulerSentinel);
 
-        const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
-        assert.deepStrictEqual(
-          [...events].map((event) => event._tag),
-          ["WorkspaceRemoved", "SchedulerChanged"],
-        );
-      }).pipe(Effect.provide(publisherLayer(itemsRef, statsRef, workspaces)), Effect.scoped);
-    }),
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(2), Stream.runCollect);
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["WorkspaceRemoved", "SchedulerChanged"],
+      );
+    }).pipe(Effect.provide(publisherTestLayer([eligibleItem("stale")])), Effect.scoped),
   );
 
   it.effect("emits ItemChanged only for items whose classified read model changed", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
-      const statsRef = yield* Ref.make(schedulerState(0));
-      yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const worker = yield* Reconcile.ReconcileWorker;
-        const publisher = yield* DaemonEventPublisher;
-        const subscription = yield* bus.subscribe();
+      const probe = yield* EventPublisherProbe;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const publisher = yield* DaemonEventPublisher;
+      const subscription = yield* bus.subscribe();
 
-        yield* worker.submit();
-        yield* publisher.publishItems();
-        yield* publisher.publishItems();
+      yield* worker.submit();
+      yield* publisher.publishItems();
+      yield* publisher.publishItems();
 
-        yield* Ref.set(itemsRef, [eligibleItem("second")]);
-        yield* worker.submit();
-        yield* publisher.publishItems();
+      yield* Ref.set(probe.items, [eligibleItem("second")]);
+      yield* worker.submit();
+      yield* publisher.publishItems();
 
-        yield* bus.publish(schedulerSentinel);
-        const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect);
-        assert.deepStrictEqual(
-          [...events].map((event) => event._tag),
-          ["ItemChanged", "ItemChanged", "SchedulerChanged"],
-        );
-      }).pipe(Effect.provide(publisherLayer(itemsRef, statsRef)), Effect.scoped);
-    }),
+      yield* bus.publish(schedulerSentinel);
+      const events = yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect);
+      assert.deepStrictEqual(
+        [...events].map((event) => event._tag),
+        ["ItemChanged", "ItemChanged", "SchedulerChanged"],
+      );
+    }).pipe(Effect.provide(publisherTestLayer([eligibleItem("first")])), Effect.scoped),
   );
 
   it.effect("emits SchedulerChanged only when the scheduler read model changes", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([]);
-      const statsRef = yield* Ref.make(schedulerState(1));
-      yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const publisher = yield* DaemonEventPublisher;
-        const subscription = yield* bus.subscribe();
+      const probe = yield* EventPublisherProbe;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const publisher = yield* DaemonEventPublisher;
+      const subscription = yield* bus.subscribe();
 
-        yield* publisher.publishScheduler();
-        yield* publisher.publishScheduler();
-        yield* Ref.set(statsRef, schedulerState(2));
-        yield* publisher.publishScheduler();
+      yield* publisher.publishScheduler();
+      yield* publisher.publishScheduler();
+      yield* Ref.set(probe.stats, schedulerState(2));
+      yield* publisher.publishScheduler();
 
-        yield* bus.publish(itemSentinelEvent);
-        const events = [
-          ...(yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect)),
-        ];
-        const inFlight = events.flatMap((event) =>
-          event._tag === "SchedulerChanged" ? [event.scheduler.globalInFlight] : [],
-        );
-        assert.deepStrictEqual(inFlight, [1, 2]);
-        assert.strictEqual(events.at(-1)?._tag, "ItemChanged");
-      }).pipe(Effect.provide(publisherLayer(itemsRef, statsRef)), Effect.scoped);
-    }),
+      yield* bus.publish(itemSentinelEvent);
+      const events = [
+        ...(yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect)),
+      ];
+      const inFlight = events.flatMap((event) =>
+        event._tag === "SchedulerChanged" ? [event.scheduler.globalInFlight] : [],
+      );
+      assert.deepStrictEqual(inFlight, [1, 2]);
+      assert.strictEqual(events.at(-1)?._tag, "ItemChanged");
+    }).pipe(Effect.provide(publisherTestLayer([], 1)), Effect.scoped),
   );
 
   it.effect("emits ItemRemoved so a board folded through churn drops the closed item", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
-      const statsRef = yield* Ref.make(schedulerState(0));
-      yield* Effect.gen(function* () {
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const worker = yield* Reconcile.ReconcileWorker;
-        const publisher = yield* DaemonEventPublisher;
-        const subscription = yield* bus.subscribe();
+      const probe = yield* EventPublisherProbe;
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const publisher = yield* DaemonEventPublisher;
+      const subscription = yield* bus.subscribe();
 
-        yield* worker.submit();
-        yield* publisher.publishItems();
+      yield* worker.submit();
+      yield* publisher.publishItems();
 
-        yield* Ref.set(itemsRef, [parkedItem("first")]);
-        yield* worker.submit();
-        yield* publisher.publishItems();
+      yield* Ref.set(probe.items, [parkedItem("first")]);
+      yield* worker.submit();
+      yield* publisher.publishItems();
 
-        yield* Ref.set(itemsRef, []);
-        yield* worker.submit();
-        yield* publisher.publishItems();
+      yield* Ref.set(probe.items, []);
+      yield* worker.submit();
+      yield* publisher.publishItems();
 
-        const events = [
-          ...(yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect)),
-        ];
-        assert.deepStrictEqual(
-          events.map((event) => event._tag),
-          ["ItemChanged", "ItemChanged", "ItemRemoved"],
-        );
-        const board = events.reduce(applyDaemonEvent, initialBoard);
-        assert.strictEqual(board.items.size, 0);
-      }).pipe(Effect.provide(publisherLayer(itemsRef, statsRef)), Effect.scoped);
-    }),
+      const events = [
+        ...(yield* Stream.fromSubscription(subscription).pipe(Stream.take(3), Stream.runCollect)),
+      ];
+      assert.deepStrictEqual(
+        events.map((event) => event._tag),
+        ["ItemChanged", "ItemChanged", "ItemRemoved"],
+      );
+      const board = events.reduce(applyDaemonEvent, initialBoard);
+      assert.strictEqual(board.items.size, 0);
+    }).pipe(Effect.provide(publisherTestLayer([eligibleItem("first")])), Effect.scoped),
   );
 
   const daemonLayer = (
-    itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
-    statsRef: Ref.Ref<Scheduler.SchedulerState>,
-    workspaces = registryLayer,
+    workspaces = mutableRegistryLayer,
     store = controlStoreLayer,
     plugins = pluginManagerLayer,
   ) =>
@@ -529,19 +520,19 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
       Layer.provideMerge(Daemon.daemonInfoLayer),
       Layer.provideMerge(eventPublisherLayer),
-      Layer.provideMerge(
-        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing(itemsRef)))),
-      ),
+      Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(workspaces, observing)))),
       Layer.provideMerge(workspaces),
       Layer.provideMerge(Registry.managementReadOnlyLayer),
-      Layer.provideMerge(schedulerStub(statsRef)),
-      Layer.provideMerge(runRecorderTestLayer),
-      Layer.provideMerge(runLedgerTestLayer),
+      Layer.provideMerge(schedulerStub),
+      Layer.provideMerge(engineServices),
       Layer.provideMerge(RunControl.layer),
       Layer.provideMerge(store),
       Layer.provideMerge(plugins),
-      Layer.provideMerge(observing(itemsRef)),
+      Layer.provideMerge(observing),
     );
+
+  const daemonTestLayer = (items: ReadonlyArray<TrackerItem> = [], globalInFlight = 0) =>
+    daemonLayer().pipe(Layer.provideMerge(EventPublisherProbe.layer(items, globalInFlight)));
 
   const storeFailure = new ControlStoreFailure({
     operation: "read Control store",
@@ -565,31 +556,27 @@ describe("DaemonEventPublisher", () => {
   });
   it.effect("logs Control store and Plugin seed failures before omitting their seed events", () =>
     Effect.gen(function* () {
-      const messages: Array<string> = [];
+      const messages = yield* LogMessages;
       const client = yield* RpcTest.makeClient(DaemonRpcs);
       const seed = yield* client.WatchEvents().pipe(
         Stream.takeUntil((event) => event._tag === "SeedEnd"),
         Stream.runCollect,
         Effect.timeout("1 second"),
-        Effect.withLogger(
-          Logger.make(({ message }) => {
-            messages.push(String(message));
-          }),
-        ),
       );
 
       assert.isFalse(
         [...seed].some((event) => event._tag === "ControlStoreChanged" || event._tag === "PluginsChanged"),
       );
-      assert.isTrue(messages.some((message) => message.includes("Control store seed failed")));
-      assert.isTrue(messages.some((message) => message.includes("Plugin seed failed")));
+      assert.isTrue(
+        MutableRef.get(messages).some((message) => message.includes("Control store seed failed")),
+      );
+      assert.isTrue(MutableRef.get(messages).some((message) => message.includes("Plugin seed failed")));
     }).pipe(
       Effect.provide(
-        Layer.unwrap(
-          Effect.map(SeedFailureProbe, (probe) =>
-            daemonLayer(probe.items, probe.stats, registryLayer, failingStore, failingPlugins),
-          ),
-        ).pipe(Layer.provideMerge(SeedFailureProbe.layer)),
+        daemonLayer(registryLayer, failingStore, failingPlugins).pipe(
+          Layer.provideMerge(EventPublisherProbe.layer()),
+          Layer.provideMerge(LogMessages.captureLayer),
+        ),
       ),
       Effect.scoped,
     ),
@@ -597,158 +584,137 @@ describe("DaemonEventPublisher", () => {
 
   it.effect("lets a client track the board live from WatchEvents, matching GetStatus", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
-      const statsRef = yield* Ref.make(schedulerState(0));
-      yield* Effect.gen(function* () {
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const worker = yield* Reconcile.ReconcileWorker;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const worker = yield* Reconcile.ReconcileWorker;
 
-        yield* worker.submit();
-        const state = (yield* worker.snapshot).workspaces[0];
-        if (state === undefined) return assert.fail("expected a reconciled workspace");
-        const [item] = classifiedItemsOf(state);
-        if (item === undefined) return assert.fail("expected a classified item");
-        const changed = { _tag: "ItemChanged", workspace: state.name, item } as const;
+      yield* worker.submit();
+      const state = (yield* worker.snapshot).workspaces[0];
+      if (state === undefined) return assert.fail("expected a reconciled workspace");
+      const [item] = classifiedItemsOf(state);
+      if (item === undefined) return assert.fail("expected a classified item");
+      const changed = { _tag: "ItemChanged", workspace: state.name, item } as const;
 
-        const watcher = yield* client.WatchEvents().pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
-        yield* bus.publish(changed).pipe(Effect.andThen(Effect.yieldNow), Effect.repeat(Schedule.recurs(50)));
-        const received = yield* Fiber.join(watcher);
+      const watcher = yield* client.WatchEvents().pipe(Stream.take(1), Stream.runCollect, Effect.forkChild);
+      yield* bus.publish(changed).pipe(Effect.andThen(Effect.yieldNow), Effect.repeat(Schedule.recurs(50)));
+      const received = yield* Fiber.join(watcher);
 
-        const trackedIds = [...received].flatMap((event) =>
-          event._tag === "ItemChanged" && event.item._tag === "Eligible" ? [event.item.id] : [],
-        );
-        assert.deepStrictEqual(trackedIds, [id("AUD-1")]);
+      const trackedIds = [...received].flatMap((event) =>
+        event._tag === "ItemChanged" && event.item._tag === "Eligible" ? [event.item.id] : [],
+      );
+      assert.deepStrictEqual(trackedIds, [id("AUD-1")]);
 
-        const status = yield* client.GetStatus();
-        assert.strictEqual(status.workspaces[0]?.eligible[0]?.id, id("AUD-1"));
-      }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
-    }),
+      const status = yield* client.GetStatus();
+      assert.strictEqual(status.workspaces[0]?.eligible[0]?.id, id("AUD-1"));
+    }).pipe(Effect.provide(daemonTestLayer([eligibleItem("first")])), Effect.scoped),
   );
 
   it.effect("self-seeds WatchEvents so folding the seed equals the daemon's read models", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
-      const statsRef = yield* Ref.make(schedulerState(1));
-      yield* Effect.gen(function* () {
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
-        const worker = yield* Reconcile.ReconcileWorker;
-        const ledger = yield* RunLedger.RunLedger;
-        const scheduler = yield* Scheduler.Scheduler;
-        const registry = yield* Registry.WorkspaceRegistry;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const worker = yield* Reconcile.ReconcileWorker;
+      const ledger = yield* RunLedger.RunLedger;
+      const scheduler = yield* Scheduler.Scheduler;
+      const registry = yield* Registry.WorkspaceRegistry;
 
-        yield* worker.submit();
-        yield* ledger.insertRun(runningRun);
+      yield* worker.submit();
+      yield* ledger.insertRun(runningRun);
 
-        const seed = [
-          ...(yield* client.WatchEvents().pipe(
-            Stream.takeUntil((event) => event._tag === "SeedEnd"),
-            Stream.runCollect,
-          )),
-        ];
-        const board = seed.reduce(applyDaemonEvent, initialBoard);
+      const seed = [
+        ...(yield* client.WatchEvents().pipe(
+          Stream.takeUntil((event) => event._tag === "SeedEnd"),
+          Stream.runCollect,
+        )),
+      ];
+      const board = seed.reduce(applyDaemonEvent, initialBoard);
 
-        const state = (yield* worker.snapshot).workspaces[0];
-        if (state === undefined) return assert.fail("expected a reconciled workspace");
-        const expectedItems = new Map(
-          classifiedItemsOf(state).map(
-            (item) => [itemKey(state.name, item.id), { workspace: state.name, item }] as const,
-          ),
-        );
-        const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
-        const expectedScheduler = schedulerStatsOf(
-          yield* registry.state,
-          yield* scheduler.config,
-          yield* scheduler.stats,
-        );
+      const state = (yield* worker.snapshot).workspaces[0];
+      if (state === undefined) return assert.fail("expected a reconciled workspace");
+      const expectedItems = new Map(
+        classifiedItemsOf(state).map(
+          (item) => [itemKey(state.name, item.id), { workspace: state.name, item }] as const,
+        ),
+      );
+      const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
+      const expectedScheduler = schedulerStatsOf(
+        yield* registry.state,
+        yield* scheduler.config,
+        yield* scheduler.stats,
+      );
 
-        const status = yield* client.GetStatus();
-        const expectedWorkspaces = new Map(
-          [
-            ...status.workspaces.map(workspaceStateFromInfo),
-            ...status.failures.map(workspaceFailureState),
-          ].map((workspace) => [workspaceKey(workspace), workspace] as const),
-        );
+      const status = yield* client.GetStatus();
+      const expectedWorkspaces = new Map(
+        [...status.workspaces.map(workspaceStateFromInfo), ...status.failures.map(workspaceFailureState)].map(
+          (workspace) => [workspaceKey(workspace), workspace] as const,
+        ),
+      );
 
-        assert.deepStrictEqual(board.items, expectedItems);
-        assert.deepStrictEqual(board.runs, expectedRuns);
-        assert.deepStrictEqual(board.workspaces, expectedWorkspaces);
-        assert.deepStrictEqual(board.scheduler, expectedScheduler);
-        assert.deepStrictEqual(board.controlStore, defaultControlStore);
-      }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
-    }),
+      assert.deepStrictEqual(board.items, expectedItems);
+      assert.deepStrictEqual(board.runs, expectedRuns);
+      assert.deepStrictEqual(board.workspaces, expectedWorkspaces);
+      assert.deepStrictEqual(board.scheduler, expectedScheduler);
+      assert.deepStrictEqual(board.controlStore, defaultControlStore);
+    }).pipe(Effect.provide(daemonTestLayer([eligibleItem("first")], 1)), Effect.scoped),
   );
 
   it.effect("does not seed stale items after their workspace leaves the registry", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("stale")]);
-      const statsRef = yield* Ref.make(schedulerState(0));
-      const registryState = yield* Ref.make<Registry.RegistryState>({
-        workspaces: [registeredWorkspace],
-        failures: [],
-      });
-      const workspaces = mutableRegistryLayer(registryState);
-      yield* Effect.gen(function* () {
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
-        const worker = yield* Reconcile.ReconcileWorker;
+      const probe = yield* EventPublisherProbe;
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const worker = yield* Reconcile.ReconcileWorker;
 
-        yield* worker.submit();
-        yield* Ref.set(registryState, Registry.emptyRegistry);
-        const seed = yield* client.WatchEvents().pipe(
-          Stream.takeUntil((event) => event._tag === "SeedEnd"),
-          Stream.runCollect,
-        );
+      yield* worker.submit();
+      yield* Ref.set(probe.registry, Registry.emptyRegistry);
+      const seed = yield* client.WatchEvents().pipe(
+        Stream.takeUntil((event) => event._tag === "SeedEnd"),
+        Stream.runCollect,
+      );
 
-        assert.isFalse([...seed].some((event) => event._tag === "ItemChanged"));
-      }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef, workspaces)), Effect.scoped);
-    }),
+      assert.isFalse([...seed].some((event) => event._tag === "ItemChanged"));
+    }).pipe(Effect.provide(daemonTestLayer([eligibleItem("stale")])), Effect.scoped),
   );
 
   it.effect("places one SeedEnd after the stamped seed and keeps it out of the event bus", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("first")]);
-      const statsRef = yield* Ref.make(schedulerState(1));
-      yield* Effect.gen(function* () {
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
-        const bus = yield* DaemonEventBus.DaemonEventBus;
-        const worker = yield* Reconcile.ReconcileWorker;
-        const subscription = yield* bus.subscribe();
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const bus = yield* DaemonEventBus.DaemonEventBus;
+      const worker = yield* Reconcile.ReconcileWorker;
+      const subscription = yield* bus.subscribe();
 
-        yield* worker.submit();
-        const state = (yield* worker.snapshot).workspaces[0];
-        if (state === undefined) return assert.fail("expected a reconciled workspace");
-        const [item] = classifiedItemsOf(state);
-        if (item === undefined) return assert.fail("expected a classified item");
-        const live = { _tag: "ItemRemoved", workspace: state.name, id: item.id } as const;
+      yield* worker.submit();
+      const state = (yield* worker.snapshot).workspaces[0];
+      if (state === undefined) return assert.fail("expected a reconciled workspace");
+      const [item] = classifiedItemsOf(state);
+      if (item === undefined) return assert.fail("expected a classified item");
+      const live = { _tag: "ItemRemoved", workspace: state.name, id: item.id } as const;
 
-        const watcher = yield* client.WatchEvents().pipe(
-          Stream.takeUntil((event) => event._tag === "ItemRemoved"),
-          Stream.runCollect,
-          Effect.forkChild,
-        );
-        const busEvent = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.take(1),
-          Stream.runCollect,
-          Effect.forkChild,
-        );
-        yield* bus.publish(live).pipe(Effect.andThen(Effect.yieldNow), Effect.repeat(Schedule.recurs(50)));
+      const watcher = yield* client.WatchEvents().pipe(
+        Stream.takeUntil((event) => event._tag === "ItemRemoved"),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      const busEvent = yield* Stream.fromSubscription(subscription).pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+      yield* bus.publish(live).pipe(Effect.andThen(Effect.yieldNow), Effect.repeat(Schedule.recurs(50)));
 
-        const received = [...(yield* Fiber.join(watcher))];
-        const observedByBus = [...(yield* Fiber.join(busEvent))];
-        const boundary = received.filter((event) => event._tag === "SeedEnd");
-        const boundaryIndex = received.findIndex((event) => event._tag === "SeedEnd");
-        const seed = received.slice(0, boundaryIndex);
+      const received = [...(yield* Fiber.join(watcher))];
+      const observedByBus = [...(yield* Fiber.join(busEvent))];
+      const boundary = received.filter((event) => event._tag === "SeedEnd");
+      const boundaryIndex = received.findIndex((event) => event._tag === "SeedEnd");
+      const seed = received.slice(0, boundaryIndex);
 
-        assert.strictEqual(boundary.length, 1);
-        assert.strictEqual(received[boundaryIndex + 1]?._tag, "ItemRemoved");
-        assert.strictEqual(new Set(seed.map((event) => event.emittedAtMillis)).size, 1);
-        assert.strictEqual(typeof boundary[0]?.emittedAtMillis, "number");
-        assert.deepStrictEqual(
-          observedByBus.map((event) => event._tag),
-          ["ItemRemoved"],
-        );
-      }).pipe(Effect.provide(daemonLayer(itemsRef, statsRef)), Effect.scoped);
-    }),
+      assert.strictEqual(boundary.length, 1);
+      assert.strictEqual(received[boundaryIndex + 1]?._tag, "ItemRemoved");
+      assert.strictEqual(new Set(seed.map((event) => event.emittedAtMillis)).size, 1);
+      assert.strictEqual(typeof boundary[0]?.emittedAtMillis, "number");
+      assert.deepStrictEqual(
+        observedByBus.map((event) => event._tag),
+        ["ItemRemoved"],
+      );
+    }).pipe(Effect.provide(daemonTestLayer([eligibleItem("first")], 1)), Effect.scoped),
   );
 
   const failingRegistryLayer = Layer.succeed(
@@ -759,50 +725,27 @@ describe("DaemonEventPublisher", () => {
     }),
   );
 
-  const failedLoadDaemonLayer = (
-    itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
-    statsRef: Ref.Ref<Scheduler.SchedulerState>,
-  ) =>
-    Daemon.handlersLayer.pipe(
-      Layer.provideMerge(Daemon.principalMiddlewareLayer),
-      Layer.provideMerge(Daemon.daemonInfoLayer),
-      Layer.provideMerge(eventPublisherLayer),
-      Layer.provideMerge(
-        Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(failingRegistryLayer, observing(itemsRef)))),
-      ),
-      Layer.provideMerge(failingRegistryLayer),
-      Layer.provideMerge(Registry.managementReadOnlyLayer),
-      Layer.provideMerge(schedulerStub(statsRef)),
-      Layer.provideMerge(runRecorderTestLayer),
-      Layer.provideMerge(runLedgerTestLayer),
-      Layer.provideMerge(RunControl.layer),
-      Layer.provideMerge(controlStoreLayer),
-      Layer.provideMerge(pluginManagerLayer),
-      Layer.provideMerge(observing(itemsRef)),
-    );
-
   it.effect("seeds a failed-to-load workspace onto the board with its failure", () =>
     Effect.gen(function* () {
-      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([]);
-      const statsRef = yield* Ref.make(schedulerState(0));
-      yield* Effect.gen(function* () {
-        const client = yield* RpcTest.makeClient(DaemonRpcs);
+      const client = yield* RpcTest.makeClient(DaemonRpcs);
 
-        const seed = [
-          ...(yield* client.WatchEvents().pipe(
-            Stream.takeUntil((event) => event._tag === "SchedulerChanged"),
-            Stream.runCollect,
-          )),
-        ];
-        const board = seed.reduce(applyDaemonEvent, initialBoard);
+      const seed = [
+        ...(yield* client.WatchEvents().pipe(
+          Stream.takeUntil((event) => event._tag === "SchedulerChanged"),
+          Stream.runCollect,
+        )),
+      ];
+      const board = seed.reduce(applyDaemonEvent, initialBoard);
 
-        const failed = board.workspaces.get("broken.workspace.ts");
-        assert.strictEqual(failed?._tag, "Failed");
-        assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "config threw at import");
+      const failed = board.workspaces.get("broken.workspace.ts");
+      assert.strictEqual(failed?._tag, "Failed");
+      assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "config threw at import");
 
-        const status = yield* client.GetStatus();
-        assert.strictEqual(status.failures[0]?.source, "broken.workspace.ts");
-      }).pipe(Effect.provide(failedLoadDaemonLayer(itemsRef, statsRef)), Effect.scoped);
-    }),
+      const status = yield* client.GetStatus();
+      assert.strictEqual(status.failures[0]?.source, "broken.workspace.ts");
+    }).pipe(
+      Effect.provide(daemonLayer(failingRegistryLayer).pipe(Layer.provideMerge(EventPublisherProbe.layer()))),
+      Effect.scoped,
+    ),
   );
 });

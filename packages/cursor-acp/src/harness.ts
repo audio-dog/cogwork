@@ -134,7 +134,7 @@ const bridge = (stream: AsyncIterable<StreamChunk>) =>
 export const estimateTokens = (chars: number) => Math.ceil(chars / 4);
 
 const outputChars = (event: AgUiEvent) =>
-  event.type === "TEXT_MESSAGE_CONTENT" || event.type === "REASONING_MESSAGE_CONTENT"
+  AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
     ? (event.delta?.length ?? 0)
     : 0;
 

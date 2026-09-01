@@ -11,13 +11,11 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
-import * as DaemonEventBus from "./daemon-event-bus";
-import { layerMemory, RunLedger } from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
-import { foldThread, SessionStore, layer as sessionStoreLayer } from "./session-store";
+import { RunLedger } from "./run-ledger";
+import { foldThread, SessionStore } from "./session-store";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
@@ -28,15 +26,12 @@ const harness = Schema.decodeSync(HarnessName)("cursor");
 const event = (seq: number, value: AgUiEvent): RunEvent => ({
   seq,
   type: value.type,
-  name: value.name ?? null,
+  name: typeof value.name === "string" ? value.name : null,
   data: JSON.stringify(value),
   atMillis: 1000 + seq,
 });
 
-const bus = DaemonEventBus.layer;
-const runLedger = layerMemory.pipe(Layer.provide(bus));
-const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
-const layer = sessionStoreLayer.pipe(Layer.provideMerge(Layer.mergeAll(runLedger, runRecorder)));
+const layer = engineTestLayer();
 
 describe("foldThread", () => {
   it("splits assistant text on a tool call and keeps the tool's name and args", () => {
