@@ -297,7 +297,7 @@ const descriptor = (
     execution: fullHarnessExecution,
     profile: {
       authenticationModes: ["host"],
-      session: { affinity: "runtime-host", fork: false, humanAttach: true },
+      session: { affinity: "runtime-host", fork: false, humanAttach: false },
       structuredOutput: "native",
       policyFidelity: "exact",
       fileEventFidelity: "sandbox",

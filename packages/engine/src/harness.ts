@@ -90,6 +90,7 @@ export interface HarnessCatalogSources {
 }
 
 export type HarnessAuthenticationMode = "host" | "byok";
+export type HarnessHumanAttach = "codex-cli" | false;
 
 export interface HarnessAuthenticationBinding {
   readonly mode: HarnessAuthenticationMode;
@@ -101,7 +102,7 @@ export interface HarnessCapabilityProfile {
   readonly session: {
     readonly affinity: "runtime-host" | "sandbox-lineage" | "portable";
     readonly fork: boolean;
-    readonly humanAttach: boolean;
+    readonly humanAttach: HarnessHumanAttach;
   };
   readonly structuredOutput: "native" | "prompt-and-parse" | "none";
   readonly policyFidelity: "exact" | "profile-only" | "none";
