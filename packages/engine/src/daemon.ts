@@ -167,7 +167,7 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
 });
 
 const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
-  const registry = yield* WorkspaceRegistry;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const controlStore = yield* ControlStore;
@@ -234,7 +234,7 @@ const statesByName = (snapshot: ReconcileSnapshot) =>
 
 export const handlersLayer = DaemonRpcs.toLayer({
   GetStatus: Effect.fn("Daemon.GetStatus")(function* () {
-    const registry = yield* WorkspaceRegistry;
+    const registry = yield* (yield* WorkspaceRegistry).state;
     const info = yield* DaemonInfo;
     const worker = yield* ReconcileWorker;
     const scheduler = yield* Scheduler;
@@ -260,7 +260,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetControlStore: Effect.fn("Daemon.GetControlStore")(function* () {
     const store = yield* ControlStore;
-    const registry = yield* WorkspaceRegistry;
+    const registry = yield* (yield* WorkspaceRegistry).state;
     return controlStoreWithDiagnostics(yield* store.picture, registry);
   }),
   GetPlugins: Effect.fn("Daemon.GetPlugins")(function* () {
@@ -428,7 +428,7 @@ const activeTicketKeys = (state: WorkspaceReconcileState) =>
   state.observed.flatMap((item) => [ticketSlug(item.id), ...(item.pr?.followable ? [item.pr.headRef] : [])]);
 
 const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
-  const registry = yield* WorkspaceRegistry;
+  const registry = yield* (yield* WorkspaceRegistry).state;
   const manager = yield* WorktreeManager;
   const worker = yield* ReconcileWorker;
   const snapshot = yield* worker.snapshot;

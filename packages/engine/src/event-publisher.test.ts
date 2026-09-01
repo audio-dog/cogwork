@@ -27,7 +27,6 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
-import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
@@ -195,15 +194,10 @@ describe("controlStoreWithDiagnostics", () => {
   });
 });
 
-const mutableRegistryLayer = (state: MutableRef.MutableRef<Registry.RegistryState>) =>
+const mutableRegistryLayer = (state: Ref.Ref<Registry.RegistryState>) =>
   Layer.succeed(Registry.WorkspaceRegistry, {
-    get workspaces() {
-      return MutableRef.get(state).workspaces;
-    },
-    get failures() {
-      return MutableRef.get(state).failures;
-    },
-    refresh: Effect.sync(() => MutableRef.get(state)),
+    state: Ref.get(state),
+    refresh: Ref.get(state),
   });
 
 const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerService => ({
@@ -409,7 +403,7 @@ describe("DaemonEventPublisher", () => {
     Effect.gen(function* () {
       const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("stale")]);
       const statsRef = yield* Ref.make(schedulerState(0));
-      const registryState = MutableRef.make<Registry.RegistryState>({
+      const registryState = yield* Ref.make<Registry.RegistryState>({
         workspaces: [registeredWorkspace],
         failures: [],
       });
@@ -421,7 +415,7 @@ describe("DaemonEventPublisher", () => {
         const subscription = yield* bus.subscribe();
 
         yield* worker.submit();
-        MutableRef.set(registryState, Registry.emptyRegistry);
+        yield* Ref.set(registryState, Registry.emptyRegistry);
         yield* publisher.publishWorkspaceRemoved(registeredWorkspace.config.name);
         yield* publisher.publishItems();
         yield* bus.publish(schedulerSentinel);
@@ -662,7 +656,11 @@ describe("DaemonEventPublisher", () => {
           ),
         );
         const expectedRuns = new Map((yield* ledger.runningRuns).map((run) => [run.id, run] as const));
-        const expectedScheduler = schedulerStatsOf(registry, yield* scheduler.config, yield* scheduler.stats);
+        const expectedScheduler = schedulerStatsOf(
+          yield* registry.state,
+          yield* scheduler.config,
+          yield* scheduler.stats,
+        );
 
         const status = yield* client.GetStatus();
         const expectedWorkspaces = new Map(
@@ -685,7 +683,7 @@ describe("DaemonEventPublisher", () => {
     Effect.gen(function* () {
       const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([eligibleItem("stale")]);
       const statsRef = yield* Ref.make(schedulerState(0));
-      const registryState = MutableRef.make<Registry.RegistryState>({
+      const registryState = yield* Ref.make<Registry.RegistryState>({
         workspaces: [registeredWorkspace],
         failures: [],
       });
@@ -695,7 +693,7 @@ describe("DaemonEventPublisher", () => {
         const worker = yield* Reconcile.ReconcileWorker;
 
         yield* worker.submit();
-        MutableRef.set(registryState, Registry.emptyRegistry);
+        yield* Ref.set(registryState, Registry.emptyRegistry);
         const seed = yield* client.WatchEvents().pipe(
           Stream.takeUntil((event) => event._tag === "SeedEnd"),
           Stream.runCollect,
