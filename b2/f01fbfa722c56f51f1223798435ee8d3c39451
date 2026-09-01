@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_471ef6216cbab1::t_537484a49ab430 41,388-390
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_471ef6216cbab1::t_537484a49ab430 1,14,290-291
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_471ef6216cbab1::t_537484a49ab430 3,298
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_471ef6216cbab1::t_80c7e7e2929791 325,356,370
+  s_471ef6216cbab1::t_f915f6e68396cf 64,103,233,250,282
+  s_471ef6216cbab1::t_537484a49ab430 25,28,71,75-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b2f01fbfa722c56f51f1223798435ee8d3c39451",
+  "prompts": {},
+  "sessions": {
+    "s_471ef6216cbab1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f50-46c8-71f0-ba6f-7dcd77bb416b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
