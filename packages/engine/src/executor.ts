@@ -209,7 +209,7 @@ const resumeWorktreeOptions = (item: EligibleWork) => {
   return { resume: true };
 };
 
-const withHandle = (acc: RunAccumulator, handle: string | null): RunAccumulator => ({ ...acc, handle });
+const withHandle = (acc: RunAccumulator, handle: string | null) => ({ ...acc, handle });
 
 const mergeEvent = (acc: RunAccumulator, event: AgUiEvent, handle: string | null): RunAccumulator =>
   AgUiEventUnion.matchOrElse(
