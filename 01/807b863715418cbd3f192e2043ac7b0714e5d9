@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_a2be459ac722c0::t_fc29b5063bbed4 230-235,253-257
+apps/desktop/src/main/engine-supervisor.ts
+  s_a2be459ac722c0::t_6548950543e685 200-211
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_a2be459ac722c0::t_fc29b5063bbed4 99,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "01807b863715418cbd3f192e2043ac7b0714e5d9",
+  "prompts": {},
+  "sessions": {
+    "s_a2be459ac722c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05da3-95c9-7111-8295-de6ed47a57c7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

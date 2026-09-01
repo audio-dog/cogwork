@@ -1,0 +1,39 @@
+configs/lint/no-nested-effect-call.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-match-void-branch.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-effect-bind.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-effect-fn-generator.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-runtime-runfork.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-option-as.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-effect-do.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-nested-effect-gen.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-effect-never.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-iife-wrapper.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+configs/lint/no-arrow-ladder.grit
+  s_a2be459ac722c0::t_8969b6f2d4556b 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "86ed828d496c7e6e1193ee0d36b25ec08224793d",
+  "prompts": {},
+  "sessions": {
+    "s_a2be459ac722c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05da3-95c9-7111-8295-de6ed47a57c7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
