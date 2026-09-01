@@ -98,12 +98,20 @@ export type ControlStoreService =
 export class ControlStoreBootError extends Data.TaggedError("ControlStoreBootError")<{
   readonly message: string;
 }> {}
+class RenameShapedControlStoreDiff extends Data.TaggedError("RenameShapedControlStoreDiff")<{
+  readonly message: string;
+}> {}
 
 type ControlStoreSchemaStatements = Effect.Effect<
   ReadonlyArray<string>,
-  ControlStoreBootError,
+  ControlStoreBootError | RenameShapedControlStoreDiff,
   SqlClient.SqlClient
 >;
+type ControlStoreSchemaChange = {
+  readonly classification: "additive" | "destructive";
+  readonly statement: string;
+};
+type ControlStoreClientOptions = Omit<SqliteClient.SqliteClientConfig, "filename">;
 
 const maximumRunEventAge = Duration.days(30);
 const additiveSchemaStatementPatterns = [
@@ -114,8 +122,25 @@ const additiveSchemaStatementPatterns = [
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const isAdditiveSchemaStatement = (statement: string) =>
-  additiveSchemaStatementPatterns.some((pattern) => pattern.test(statement.trim()));
+const schemaDiffError = (error: unknown) => {
+  const message = messageOf(error);
+  if (/resolver\([^)]*\) was called without a HintsHandler/.test(message))
+    return new RenameShapedControlStoreDiff({ message });
+  return new ControlStoreBootError({ message: `Control store schema diff failed: ${message}` });
+};
+
+const classifySchemaStatement = (statement: string) =>
+  ({
+    classification: additiveSchemaStatementPatterns.some((pattern) => pattern.test(statement.trim()))
+      ? "additive"
+      : "destructive",
+    statement,
+  }) satisfies ControlStoreSchemaChange;
+
+const isForeignKeysPragma = (statement: string) => /^PRAGMA\s+foreign_keys\s*=/i.test(statement.trim());
+
+const disablesForeignKeys = (statement: string) =>
+  /^PRAGMA\s+foreign_keys\s*=\s*OFF\s*;?$/i.test(statement.trim());
 
 const storeFailure = (operation: string) => (error: unknown) =>
   ControlStoreFailure.make({ operation, message: messageOf(error) });
@@ -594,10 +619,7 @@ const controlStoreSchemaStatements = Effect.fn("ControlStore.schemaStatements")(
       };
       const result = yield* Effect.tryPromise({
         try: () => DrizzleSqlite.pushSchema(controlStoreSchema, database),
-        catch: (error) =>
-          new ControlStoreBootError({
-            message: `Control store schema diff failed: ${messageOf(error)}`,
-          }),
+        catch: schemaDiffError,
       });
       return result.sqlStatements;
     }),
@@ -610,20 +632,27 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
   const sql = yield* SqlClient.SqlClient;
   const statements = yield* schemaStatements;
   if (statements.length === 0) return;
-  const nonAdditiveStatements = statements.filter((statement) => !isAdditiveSchemaStatement(statement));
-  if (nonAdditiveStatements.length > 0)
-    return yield* new ControlStoreBootError({
-      message: `Control store schema requires non-additive changes:\n${nonAdditiveStatements.join("\n")}`,
-    });
-  yield* Effect.logInfo("converging Control store schema", { statements });
-  yield* sql.withTransaction(
-    Effect.forEach(statements, (statement) => sql.unsafe(statement), { discard: true }),
+  const changes = statements.map(classifySchemaStatement);
+  const transactionStatements = statements.filter((statement) => !isForeignKeysPragma(statement));
+  const transaction = sql.withTransaction(
+    Effect.gen(function* () {
+      yield* Effect.forEach(transactionStatements, (statement) => sql.unsafe(statement), {
+        discard: true,
+      });
+      const remaining = yield* schemaStatements;
+      if (remaining.length === 0) return;
+      return yield* new ControlStoreBootError({
+        message: `Control store schema did not converge. Remaining statements:\n${remaining.join("\n")}`,
+      });
+    }),
   );
-  const remaining = yield* schemaStatements;
-  if (remaining.length === 0) return;
-  return yield* new ControlStoreBootError({
-    message: `Control store schema did not converge. Remaining statements:\n${remaining.join("\n")}`,
-  });
+  yield* Effect.logInfo("converging Control store schema", { changes });
+  if (!statements.some(disablesForeignKeys)) return yield* transaction;
+  return yield* Effect.acquireUseRelease(
+    sql.unsafe("PRAGMA foreign_keys=OFF;"),
+    () => transaction,
+    () => sql.unsafe("PRAGMA foreign_keys=ON;").pipe(Effect.orDie),
+  );
 });
 
 const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
@@ -668,10 +697,41 @@ const prepareStoreDirectory = Effect.fn("ControlStore.prepareStoreDirectory")(fu
   yield* fs.chmod(path.dirname(storePath), 0o700);
 });
 
-export const controlStoreClientLayer = (storePath: string) =>
+export const controlStoreClientLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
   Layer.unwrap(
-    Effect.map(prepareStoreDirectory(storePath), () => SqliteClient.layer({ filename: storePath })),
+    Effect.map(prepareStoreDirectory(storePath), () =>
+      SqliteClient.layer({ filename: storePath, ...options }),
+    ),
   );
+
+const backupRenameShapedStore = Effect.fn("ControlStore.backupRenameShapedStore")(function* (
+  storePath: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const timestamp = yield* Clock.currentTimeMillis;
+  const backupPath = `${storePath}.${timestamp}.backup`;
+  yield* fs.rename(storePath, backupPath);
+  yield* Effect.logWarning("backed up rename-shaped Control store", { backupPath });
+});
+
+const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
+  (storePath: string, options: ControlStoreClientOptions) =>
+    Effect.scoped(
+      controlStoreSchemaStatements().pipe(Effect.provide(controlStoreClientLayer(storePath, options))),
+    ).pipe(
+      Effect.as<ControlStoreBootError | null>(null),
+      Effect.catchTag("RenameShapedControlStoreDiff", () =>
+        backupRenameShapedStore(storePath).pipe(Effect.as<ControlStoreBootError | null>(null)),
+      ),
+      Effect.catch((error) =>
+        Effect.succeed(
+          new ControlStoreBootError({
+            message: `Control store schema preflight failed: ${messageOf(error)}`,
+          }),
+        ),
+      ),
+    ),
+);
 
 const unavailable = (message: string): ControlStoreService => {
   const failure = ControlStoreFailure.make({ operation: "open Control store", message });
@@ -697,18 +757,23 @@ export const ControlStore = Context.Reference<ControlStoreService>(
   { defaultValue: () => unavailable("Control store did not boot") },
 );
 
-export const bootControlStoreLayer = (storePath: string) =>
-  Layer.effect(
-    ControlStore,
-    Effect.andThen(boot(storePath), makeAvailableControlStore).pipe(
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
-        return Effect.andThen(
-          Effect.logError("control store boot failed", { cause: Cause.pretty(cause) }),
-          Effect.succeed(
-            unavailable(Cause.hasFails(cause) ? messageOf(Cause.squash(cause)) : Cause.pretty(cause)),
-          ),
-        );
-      }),
-    ),
+export const bootControlStoreLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
+  Layer.unwrap(
+    Effect.map(prepareSchemaFallback(storePath, options), (preflightError) => {
+      const client = controlStoreClientLayer(storePath, options);
+      const service = preflightError
+        ? Effect.succeed(unavailable(preflightError.message))
+        : Effect.andThen(boot(storePath), makeAvailableControlStore).pipe(
+            Effect.catchCause((cause) => {
+              if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt;
+              return Effect.andThen(
+                Effect.logError("control store boot failed", { cause: Cause.pretty(cause) }),
+                Effect.succeed(
+                  unavailable(Cause.hasFails(cause) ? messageOf(Cause.squash(cause)) : Cause.pretty(cause)),
+                ),
+              );
+            }),
+          );
+      return Layer.effect(ControlStore, service).pipe(Layer.provideMerge(client));
+    }),
   );

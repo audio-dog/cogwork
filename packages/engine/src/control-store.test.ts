@@ -11,7 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
-import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
@@ -20,7 +20,6 @@ import {
   bootControlStoreLayer,
   ControlStore,
   type ControlStoreService,
-  controlStoreClientLayer,
   readControlStore,
 } from "./control-store";
 import { createStatements } from "./control-store-create.gen";
@@ -36,8 +35,7 @@ vi.mock("drizzle-kit/payload/sqlite", () =>
     }),
 );
 
-const storeLayerAt = (storePath: string) =>
-  bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath)));
+const storeLayerAt = (storePath: string) => bootControlStoreLayer(storePath);
 
 const interruptionGate = Latch.makeUnsafe();
 
@@ -132,6 +130,16 @@ const schemaDiff = (sqlStatements: ReadonlyArray<string>) => ({
   hints: [],
   apply: () => Promise.resolve(),
 });
+const LoggedSchemaChanges = Schema.Array(
+  Schema.Struct({
+    classification: Schema.Literals(["additive", "destructive"]),
+    statement: Schema.String,
+  }),
+);
+const LoggedSchemaConvergence = Schema.Tuple([
+  Schema.Literal("converging Control store schema"),
+  Schema.Struct({ changes: LoggedSchemaChanges }),
+]);
 
 afterEach(() => pushSchemaMock.mockClear());
 
@@ -180,21 +188,52 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("changes a column type while preserving existing rows", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* poke(
+        storePath,
+        `${createStatements
+          .join("\n")
+          .replace("`linear_history` integer NOT NULL", "`linear_history` text NOT NULL")}
+         INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history)
+         VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', '0');`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id, name, linear_history FROM workspaces"), [
+        { id: "workspace-1", name: "kept", linear_history: 0 },
+      ]);
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
+          (column) => column.name === "linear_history" && column.type === "INTEGER",
+        ),
+      );
+    }),
+  );
+
   it.effect("produces zero diff statements on the second boot after convergence", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      assert.strictEqual(pushSchemaMock.mock.calls.length, 3);
+      assert.strictEqual(pushSchemaMock.mock.calls.length, 5);
     }),
   );
 
   it.effect("fails closed when the verification re-diff is not empty", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
+      yield* poke(
+        storePath,
+        `${createStatements.join("\n")}
+         CREATE TABLE extra_data (value TEXT NOT NULL);
+         INSERT INTO extra_data VALUES ('kept');`,
+      );
       pushSchemaMock
-        .mockResolvedValueOnce(schemaDiff(["CREATE TABLE convergence_probe (id INTEGER)"]))
+        .mockResolvedValueOnce(schemaDiff(["DROP TABLE extra_data"]))
+        .mockResolvedValueOnce(schemaDiff(["DROP TABLE extra_data"]))
         .mockResolvedValueOnce(schemaDiff(["ALTER TABLE convergence_probe ADD remaining TEXT"]));
 
       const store = yield* storeAt(storePath);
@@ -203,6 +242,70 @@ layer(NodeServices.layer)((it) => {
       assert.isTrue(
         store.health === "unavailable" &&
           store.message.includes("ALTER TABLE convergence_probe ADD remaining TEXT"),
+      );
+      assert.deepStrictEqual(yield* query(storePath, "SELECT value FROM extra_data"), [{ value: "kept" }]);
+    }),
+  );
+
+  it.effect("fails closed on an unexpected schema diff error and leaves the store untouched", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { dir, storePath } = yield* temporaryStore();
+      yield* poke(
+        storePath,
+        `${createStatements.join("\n")}
+         CREATE TABLE extra_data (value TEXT NOT NULL);
+         INSERT INTO extra_data VALUES ('kept');`,
+      );
+      pushSchemaMock.mockRejectedValueOnce(new Error("unexpected converge failure"));
+
+      const store = yield* storeAt(storePath);
+      const backups = (yield* fs.readDirectory(dir)).filter(
+        (name) => name.startsWith("control.db.") && name.endsWith(".backup"),
+      );
+
+      assert.strictEqual(store.health, "unavailable");
+      assert.isTrue(store.health === "unavailable" && store.message.includes("unexpected converge failure"));
+      assert.deepStrictEqual(yield* query(storePath, "SELECT value FROM extra_data"), [{ value: "kept" }]);
+      assert.deepStrictEqual(
+        yield* query(
+          storePath,
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'extra_data'",
+        ),
+        [{ name: "extra_data" }],
+      );
+      assert.strictEqual(backups.length, 0);
+    }),
+  );
+
+  it.effect("backs up a rename-shaped store and converges a fresh store", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { dir, storePath } = yield* temporaryStore();
+      yield* poke(
+        storePath,
+        `${createStatements.join("\n").replace("`source_control` text", "`source_control_old` text")}
+         INSERT INTO workspaces (
+           id, name, checkout_path, issue_tracker, source_control_old, linear_history
+         ) VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 'original', 0);`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      const backups = (yield* fs.readDirectory(dir)).filter(
+        (name) => name.startsWith("control.db.") && name.endsWith(".backup"),
+      );
+      assert.strictEqual(backups.length, 1);
+      const backupPath = path.join(dir, backups[0] ?? "missing");
+      assert.deepStrictEqual(
+        yield* query(backupPath, "SELECT id, name, source_control_old FROM workspaces"),
+        [{ id: "workspace-1", name: "kept", source_control_old: "original" }],
+      );
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id FROM workspaces"), []);
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
+          (column) => column.name === "source_control",
+        ),
       );
     }),
   );
@@ -423,22 +526,45 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("preserves rows when the schema diff is non-additive", () =>
+  it.effect("drops a column and table while preserving surviving rows", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
       const { storePath } = yield* temporaryStore();
+      const logs: ReturnType<typeof Logger.formatStructured.log>[] = [];
+      const logger = Logger.make((options) => logs.push(Logger.formatStructured.log(options)));
       yield* poke(
         storePath,
         `${createStatements.join("\n")}
+         ALTER TABLE workspaces ADD COLUMN legacy TEXT;
+         INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history, legacy)
+         VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0, 'removed');
          CREATE TABLE extra_data (value TEXT NOT NULL);
          INSERT INTO extra_data (value) VALUES ('kept');`,
       );
 
-      const store = yield* storeAt(storePath);
-      assert.strictEqual(store.health, "unavailable");
-      assert.isTrue(store.health === "unavailable" && store.message.includes("DROP TABLE `extra_data`;"));
-      assert.deepStrictEqual(yield* query(storePath, "SELECT value FROM extra_data"), [{ value: "kept" }]);
-      assert.isTrue(yield* fs.exists(storePath));
+      assert.deepStrictEqual(yield* storeAt(storePath).pipe(Effect.withLogger(logger)), {
+        health: "available",
+      });
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
+        { id: "workspace-1", name: "kept" },
+      ]);
+      assert.isFalse(
+        (yield* query(storePath, "PRAGMA table_info(workspaces)")).some((column) => column.name === "legacy"),
+      );
+      assert.deepStrictEqual(
+        yield* query(
+          storePath,
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'extra_data'",
+        ),
+        [],
+      );
+      const convergenceLog = logs.map((entry) => entry.message).find(Schema.is(LoggedSchemaConvergence));
+      if (!convergenceLog) return assert.fail("expected convergence log");
+      const changes = convergenceLog[1].changes;
+      assert.isTrue(
+        changes.some(
+          (change) => change.classification === "destructive" && change.statement.includes("extra_data"),
+        ),
+      );
     }),
   );
 
