@@ -10,6 +10,7 @@ import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -24,7 +25,7 @@ import {
   CredentialStore,
   type CredentialStoreService,
 } from "../credential-store";
-import { IssueTrackerError } from "../issue-tracker";
+import { defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 
 export interface LinearTeamRef {
   readonly team: string;
@@ -207,8 +208,6 @@ const nonRetryableFailure = (error: IssueTrackerError) =>
 
 const isoMillis = (millis: number) =>
   Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
-
-const defaultCooldownMillis = 60_000;
 
 const isTransient = (failure: LinearRequestFailure) => failure.retryable;
 const transientBackoff = Schedule.exponential("500 millis", 2).pipe(Schedule.jittered);
@@ -442,7 +441,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     Ref.update(resumeAt, (entries) =>
       new Map(entries).set(
         rateLimitScopeOf(ref.account.tokenEnv),
-        nowMillis + (error.retryAfterMillis ?? defaultCooldownMillis),
+        nowMillis + (error.retryAfterMillis ?? Duration.toMillis(defaultTrackerCooldown)),
       ),
     );
 
