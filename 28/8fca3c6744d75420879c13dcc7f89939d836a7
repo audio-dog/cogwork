@@ -1,0 +1,21 @@
+packages/engine/src/daemon.ts
+  s_d60add10ef316b::t_5d23c02df55ae4 181,245,263,265,436
+packages/engine/src/event-publisher.ts
+  s_d60add10ef316b::t_5d23c02df55ae4 197-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "288fca3c6744d75420879c13dcc7f89939d836a7",
+  "prompts": {},
+  "sessions": {
+    "s_d60add10ef316b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b81-997b-7400-8ef3-4f1e13588938",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
