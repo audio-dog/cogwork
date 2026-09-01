@@ -1,0 +1,70 @@
+packages/cursor-acp/src/harness.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 137
+packages/engine/CONTEXT.md
+  s_2d2cf04803c3d3::t_23a3a7585d775c 88-91
+packages/engine/src/recovery.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 19,22,49-52
+  s_2d2cf04803c3d3::t_c717b9a8de7e5f 255-259,274,293,572-573,591-601,654
+  s_2d2cf04803c3d3::t_a5db3e5eeec92b 260-267,578,651
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_2d2cf04803c3d3::t_23a3a7585d775c 3-4,28
+packages/engine/src/run-recorder.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 62
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_2d2cf04803c3d3::t_23a3a7585d775c 5
+packages/codex-cli/src/harness.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 2-3,216-219,854
+packages/contracts/src/ag-ui.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 5-6,97-98,106,110,112,118,123,131-134,136-139,148-151,153-156,160,163,165-167,170,180
+packages/engine/src/run-recorder.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 2,22,24,26,29,37
+packages/engine/src/session-store.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 29
+AGENTS.md
+  s_2d2cf04803c3d3::t_23a3a7585d775c 19-27
+packages/engine/src/reconcile.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 18,21,35-38,211,310-321
+packages/engine/src/external-harness-runtime.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 1-10,23-24,27,37,40,150,156-227,257,325,333-334,358,360-361
+docs/agent-patterns/effect-observability.md
+  s_2d2cf04803c3d3::t_23a3a7585d775c 91
+packages/engine/src/session-store.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 2-3,92,98-103,108,119-120
+packages/contracts/src/ag-ui.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 5,12,14,24,27,51-52,64,67,88-96
+packages/engine/src/event-publisher.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 30,83,86,89-90,92-105,129-139,214-220,243-249,259-261,267,270-272,326,330,332,339-341,344-370,414-431,436-456,461-480,485-511,515,523,526,531,534-536,559,570-573,576-579,587-605,607-609,614-618,620-621,623-643,645-657,662-664,666-671,673-674,679-717,730-749
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 2-3,49-52,68-72,81,90-95,100,106-107,113,116,120,124-133,205
+packages/engine/src/external-harness-runtime.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 1-2,13-20,24,30,36,66-68,91,94-111,155,180-198,226,230-231,287,302-308,327,332,336-345,348-645
+apps/cli/src/watch.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 2-3,78-80,87,91,94,96-99,101,107,114,116-117,121,128-131,133-134,141,144-147,149,154,162,167-168,171-186
+packages/engine/src/executor.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 19-20,52,216,219,221-223,249
+packages/engine/src/recovery.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 13,35-43,82,159,240-250,272-278,320-324
+packages/engine/src/scheduler.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 18,37-49,549,553-554,558,574-621
+  s_2d2cf04803c3d3::t_9a805ebf428cfc 622-623
+packages/engine/src/scheduler.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 13,16,18,28-40,169-193,260,271-278,283-289,300-312,357-361
+packages/engine/src/engine.test.ts
+  s_2d2cf04803c3d3::t_23a3a7585d775c 23,26,88-91,142-178,284-316,410-413,415-416,418-423,425-428,430-432,435,437,441-443,565-607,628-630,632,637-643,645-646,653,656,658,660-672,674-676,680,682-683,686-689,692-706,710-723,726-758,760,762,764-779,782-791,797-806,809-812,815-816,823,827-833,837-845,847,970-1007,1043-1048,1050-1051,1053-1054
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b4c990dc80cc4fee5ddbaabdd0d4df9409530eba",
+  "prompts": {},
+  "sessions": {
+    "s_2d2cf04803c3d3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d16-0f0e-70d3-b6ed-a88ba2f2cfd5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
