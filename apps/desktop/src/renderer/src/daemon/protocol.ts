@@ -34,6 +34,11 @@ const isReconnectable = (error: RpcClientError) =>
   error.reason._tag === "SocketOpenError" || error.reason._tag === "SocketCloseError";
 
 const connectionGateTimeout = "30 seconds";
+const reconnectSchedule = () =>
+  Schedule.exponential("500 millis", 2).pipe(
+    Schedule.jittered,
+    Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, Duration.seconds(5)))),
+  );
 
 export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
   RpcClient.Protocol.make((writeResponse, clientIds) =>
@@ -110,13 +115,9 @@ export const makeProtocolIpc = (bridge: DaemonRpcBridge) =>
         ),
         Effect.retry({
           while: isReconnectable,
-          schedule: Schedule.exponential("500 millis", 2).pipe(
-            Schedule.jittered,
-            Schedule.modifyDelay(({ duration }) =>
-              Effect.succeed(Duration.min(duration, Duration.seconds(5))),
-            ),
-          ),
+          schedule: reconnectSchedule(),
         }),
+        Effect.onExit((exit) => Deferred.done(conn.gate, exit)),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
           (cause) => Effect.logError("daemon connection fiber crashed", { cause }),

@@ -95,17 +95,65 @@ const failingBridge = (cause: Error): DaemonRpcBridge => ({
   onClosed: () => () => undefined,
 });
 
+const makeObservedFailingBridge = (cause: Error) => {
+  const attempted = Promise.withResolvers<void>();
+  return {
+    bridge: {
+      ...failingBridge(cause),
+      connect: () => {
+        attempted.resolve();
+        return Promise.reject(cause);
+      },
+    },
+    attempted: attempted.promise,
+  };
+};
+
 const serializationThatDefectsOnReset = (defect: Error) => {
   const serialization = RpcSerialization.makeNdjson();
-  const parsers = [serialization.makeUnsafe(), defect][Symbol.iterator]();
+  const parsers = [serialization.makeUnsafe()][Symbol.iterator]();
   return RpcSerialization.RpcSerialization.of({
     ...serialization,
     makeUnsafe: () => {
       const next = parsers.next();
-      if (next.done || next.value instanceof Error) throw defect;
+      if (next.done) throw defect;
       return next.value;
     },
   });
+};
+
+const pollAfterOneMinute = <A, E>(request: Fiber.Fiber<Exit.Exit<A, E>>) =>
+  Effect.gen(function* () {
+    yield* Effect.yieldNow;
+    yield* TestClock.adjust("1 minute");
+    const completed = request.pollUnsafe();
+    return completed !== undefined && Exit.isSuccess(completed) ? completed.value : undefined;
+  });
+
+const socketOpenErrorFrom = (exit: Exit.Exit<unknown, unknown> | undefined) => {
+  expect(exit).toBeDefined();
+  if (exit === undefined || Exit.isSuccess(exit)) throw new Error("expected the send to fail");
+  const error = Cause.squash(exit.cause);
+  expect(error).toBeInstanceOf(RpcClientError);
+  if (!(error instanceof RpcClientError)) throw new Error("expected an RPC client error");
+  expect(error.reason._tag).toBe("SocketOpenError");
+  if (error.reason._tag !== "SocketOpenError") throw new Error("expected a socket open error");
+  return error.reason;
+};
+
+const buildProtocol = (bridge: DaemonRpcBridge) =>
+  Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    const context = yield* Layer.buildWithScope(layerProtocolIpc(bridge), scope);
+    return { protocol: Context.get(context, RpcClient.Protocol), scope };
+  });
+
+const makeLogCapture = () => {
+  const messages: Array<string> = [];
+  const logger = Logger.make<unknown, void>(({ message }) => {
+    messages.push(String(message));
+  });
+  return { logger, messages };
 };
 
 describe("IPC RPC protocol", () => {
@@ -118,15 +166,9 @@ describe("IPC RPC protocol", () => {
       }).pipe(Effect.provide(layerProtocolIpc(failingBridge(cause))), Effect.scoped),
     );
 
-    expect(Exit.isFailure(exit)).toBe(true);
-    if (Exit.isSuccess(exit)) throw new Error("expected the send to fail");
-    const error = Cause.squash(exit.cause);
-    expect(error).toBeInstanceOf(RpcClientError);
-    if (!(error instanceof RpcClientError)) throw new Error("expected an RPC client error");
-    expect(error.reason._tag).toBe("SocketOpenError");
-    if (error.reason._tag !== "SocketOpenError") throw new Error("expected a socket open error");
-    expect(error.reason.kind).toBe("Unknown");
-    expect(error.reason.cause).toBe(cause);
+    const error = socketOpenErrorFrom(exit);
+    expect(error.kind).toBe("Unknown");
+    expect(error.cause).toBe(cause);
   });
 
   it("fails a send when the daemon connection never returns", async () => {
@@ -135,10 +177,7 @@ describe("IPC RPC protocol", () => {
       Effect.gen(function* () {
         const client = yield* RpcClient.make(TestRpcs);
         const request = yield* Effect.forkChild(Effect.exit(client.Ping()));
-        yield* Effect.yieldNow;
-        yield* TestClock.adjust("1 minute");
-        const completed = request.pollUnsafe();
-        const result = completed !== undefined && Exit.isSuccess(completed) ? completed.value : undefined;
+        const result = yield* pollAfterOneMinute(request);
         connection.resolve();
         return result;
       }).pipe(
@@ -148,31 +187,17 @@ describe("IPC RPC protocol", () => {
       ),
     );
 
-    expect(exit).toBeDefined();
-    if (exit === undefined || Exit.isSuccess(exit)) throw new Error("expected the send to fail");
-    const error = Cause.squash(exit.cause);
-    expect(error).toBeInstanceOf(RpcClientError);
-    if (!(error instanceof RpcClientError)) throw new Error("expected an RPC client error");
-    expect(error.reason._tag).toBe("SocketOpenError");
-    if (error.reason._tag !== "SocketOpenError") throw new Error("expected a socket open error");
-    expect(error.reason.kind).toBe("Timeout");
+    const error = socketOpenErrorFrom(exit);
+    expect(error.kind).toBe("Timeout");
   });
 
   it("settles the connection gate when the connection fiber is interrupted", async () => {
     const connection = makeStalledBridge();
-    const messages: Array<string> = [];
-    const logger = Logger.make<unknown, void>(({ message }) => {
-      messages.push(String(message));
-    });
+    const capture = makeLogCapture();
     const exit = await Effect.runPromise(
       Effect.gen(function* () {
-        const protocolScope = yield* Scope.make();
-        const protocolContext = yield* Layer.buildWithScope(
-          layerProtocolIpc(connection.bridge),
-          protocolScope,
-        );
-        const protocol = Context.get(protocolContext, RpcClient.Protocol);
-        const closing = yield* Effect.forkChild(Scope.close(protocolScope, Exit.void));
+        const { protocol, scope } = yield* buildProtocol(connection.bridge);
+        const closing = yield* Effect.forkChild(Scope.close(scope, Exit.void));
         yield* Effect.yieldNow;
         connection.resolve();
         yield* Fiber.join(closing);
@@ -180,21 +205,43 @@ describe("IPC RPC protocol", () => {
           const client = yield* RpcClient.make(TestRpcs);
           return yield* client.Ping();
         }).pipe(Effect.provideService(RpcClient.Protocol, protocol), Effect.scoped, Effect.exit);
-      }).pipe(Effect.withLogger(logger)),
+      }).pipe(Effect.withLogger(capture.logger)),
     );
 
     expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(true);
-    expect(messages.some((message) => message.includes("daemon connection fiber crashed"))).toBe(false);
+    expect(capture.messages.some((message) => message.includes("daemon connection fiber crashed"))).toBe(
+      false,
+    );
+  });
+
+  it("settles the connection gate when interrupted during reconnect backoff", async () => {
+    const connection = makeObservedFailingBridge(new Error("connection refused"));
+    const exit = await Effect.runPromise(
+      Effect.gen(function* () {
+        const { protocol, scope } = yield* buildProtocol(connection.bridge);
+        yield* Effect.promise(() => connection.attempted);
+        yield* Effect.yieldNow;
+        const request = yield* Effect.forkChild(
+          Effect.gen(function* () {
+            const client = yield* RpcClient.make(TestRpcs);
+            return yield* client.Ping();
+          }).pipe(Effect.provideService(RpcClient.Protocol, protocol), Effect.scoped),
+        );
+        yield* Effect.yieldNow;
+        yield* Scope.close(scope, Exit.void);
+        yield* Effect.yieldNow;
+        return request.pollUnsafe();
+      }),
+    );
+
+    expect(exit !== undefined && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(true);
   });
 
   it("settles the connection gate and logs when the connection fiber defects", async () => {
     const connection = makeStalledBridge();
     connection.resolve();
     const defect = new Error("parser reset failed");
-    const messages: Array<string> = [];
-    const logger = Logger.make<unknown, void>(({ message }) => {
-      messages.push(String(message));
-    });
+    const capture = makeLogCapture();
     const protocolLayer = Layer.effect(RpcClient.Protocol)(makeProtocolIpc(connection.bridge)).pipe(
       Layer.provide(
         Layer.succeed(RpcSerialization.RpcSerialization, serializationThatDefectsOnReset(defect)),
@@ -205,14 +252,11 @@ describe("IPC RPC protocol", () => {
       Effect.gen(function* () {
         const client = yield* RpcClient.make(TestRpcs);
         const request = yield* Effect.forkChild(Effect.exit(client.Ping()));
-        yield* Effect.yieldNow;
-        yield* TestClock.adjust("1 minute");
-        const completed = request.pollUnsafe();
-        return completed !== undefined && Exit.isSuccess(completed) ? completed.value : undefined;
+        return yield* pollAfterOneMinute(request);
       }).pipe(
         Effect.provide(protocolLayer),
         Effect.provide(TestClock.layer()),
-        Effect.withLogger(logger),
+        Effect.withLogger(capture.logger),
         Effect.scoped,
       ),
     );
@@ -220,7 +264,9 @@ describe("IPC RPC protocol", () => {
     expect(exit).toBeDefined();
     if (exit === undefined || Exit.isSuccess(exit)) throw new Error("expected the send to fail");
     expect(Cause.squash(exit.cause)).toBe(defect);
-    expect(messages.some((message) => message.includes("daemon connection fiber crashed"))).toBe(true);
+    expect(capture.messages.some((message) => message.includes("daemon connection fiber crashed"))).toBe(
+      true,
+    );
   });
 
   it("carries a query and a stream over the relay to a real RPC server", () =>
@@ -262,12 +308,14 @@ describe("IPC RPC protocol", () => {
               yield* Layer.buildWithScope(serverLayer(socketPath), first);
               expect(yield* client.Ping()).toBe("pong");
 
+              // Close before unlinking so the next server can bind the same socket path.
               yield* Scope.close(first, Exit.succeed(undefined));
               yield* Effect.sync(() => rmSync(socketPath, { force: true }));
 
               const second = yield* Scope.make();
               yield* Layer.buildWithScope(serverLayer(socketPath), second);
 
+              // Retry across teardown because one call can still target the closing socket.
               const pong = yield* client
                 .Ping()
                 .pipe(Effect.retry(Schedule.spaced("100 millis")), Effect.timeout("10 seconds"));
