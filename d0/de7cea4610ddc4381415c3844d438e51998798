@@ -1,0 +1,42 @@
+packages/engine/src/recovery.test.ts
+  s_414ea7088b270c::t_c25b0f87f1047c 155,160,171-174,177-178,180-181,190-191,471
+  s_414ea7088b270c::t_50f59a98eafe41 157,161,165
+  s_414ea7088b270c::t_ef5c076db2fb82 523-548
+  s_414ea7088b270c::t_eff876e83cd4c8 195,200-204,206,388-390,442,448-449,451-458,472-493,549-561
+  s_414ea7088b270c::t_57e4c1f723a8b5 179,416-430,436,440-441,443-447,450,459-470
+  s_414ea7088b270c::t_16cca5fe0cb510 494-522
+  s_414ea7088b270c::t_200089fe20370f 156,411-415,431-435,437-438,563-564
+  s_951045df135260::t_9ac2515e209574 439
+  s_414ea7088b270c::t_3b214fbae95b6f 194,562
+  s_414ea7088b270c::t_1b765b1902056c 158-159,162-164,166-170
+packages/engine/src/classify.ts
+  s_414ea7088b270c::t_c25b0f87f1047c 119,148
+packages/engine/src/recovery.ts
+  s_414ea7088b270c::t_1c6af3ac9756b1 231
+  s_414ea7088b270c::t_ef5c076db2fb82 226-228,230,233-234
+  s_414ea7088b270c::t_52266231f5d755 170-171,183,185,217-218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d0de7cea4610ddc4381415c3844d438e51998798",
+  "prompts": {},
+  "sessions": {
+    "s_414ea7088b270c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e4e-3cd1-7f13-b59a-423c07f9c97d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    },
+    "s_951045df135260": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e3e-9a08-7ba3-a4ff-68bce3753949",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
