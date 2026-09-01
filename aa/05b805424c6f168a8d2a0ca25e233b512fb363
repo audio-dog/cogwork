@@ -1,0 +1,21 @@
+packages/engine/CONTEXT.md
+  s_1035c9314faf21::t_564fa457b0f7ef 88-91
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_1035c9314faf21::t_548a6b09641286 3-4,28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "aa05b805424c6f168a8d2a0ca25e233b512fb363",
+  "prompts": {},
+  "sessions": {
+    "s_1035c9314faf21": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cec-9697-7110-9757-0df0b6e99e8a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
