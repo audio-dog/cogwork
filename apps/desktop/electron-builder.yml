@@ -11,6 +11,13 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+extraResources:
+  - from: out/engine
+    to: engine
+    filter:
+      - '!node_modules{,/**/*}'
+  - from: out/engine/node_modules
+    to: engine/node_modules
 electronFuses:
   runAsNode: false
   enableNodeCliInspectArguments: false
