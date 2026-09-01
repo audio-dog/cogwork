@@ -509,8 +509,6 @@ export interface HeartbeatOptions {
   readonly drain: DrainOptions;
 }
 
-const interruptionGate = Latch.makeUnsafe();
-
 const activeHeartbeats = (options: HeartbeatOptions) =>
   Effect.all([reconcileHeartbeat(options.pollIntervalMillis), executeHeartbeat()], {
     concurrency: "unbounded",
@@ -518,6 +516,6 @@ const activeHeartbeats = (options: HeartbeatOptions) =>
 
 export const heartbeats = (options: HeartbeatOptions) =>
   Effect.flatMap(ControlStore, (controlStore) => {
-    if (controlStore.health === "unavailable") return interruptionGate.await;
+    if (controlStore.health === "unavailable") return Latch.makeUnsafe().await;
     return activeHeartbeats(options);
   });
