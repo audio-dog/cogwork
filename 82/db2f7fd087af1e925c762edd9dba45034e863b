@@ -1,0 +1,30 @@
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_0052d4f9e2cd98::t_c2e28738e277fb 41,43
+  s_0052d4f9e2cd98::t_9e327c7f0252b6 42,44,46
+  s_0052d4f9e2cd98::t_29af6c9a72ad0f 52,54-58
+  s_0052d4f9e2cd98::t_c0f5a06d06c3c5 5,32
+apps/desktop/src/main/socket-probe.test.ts
+  s_0052d4f9e2cd98::t_917ee4f2f08273 34
+  s_0052d4f9e2cd98::t_fbeb4f78e67125 5,26
+apps/desktop/src/main/socket-probe.ts
+  s_0052d4f9e2cd98::t_d4b316dc2a570c 2,5,8,10,15-16,18-19
+  s_0052d4f9e2cd98::t_20c353e167f1f0 4,17
+apps/desktop/src/main/wait-for-socket.ts
+  s_0052d4f9e2cd98::t_fce1b467ed0e11 1,4,6-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "82db2f7fd087af1e925c762edd9dba45034e863b",
+  "prompts": {},
+  "sessions": {
+    "s_0052d4f9e2cd98": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05a81-79db-7883-8b79-60ac1db2bfdc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
