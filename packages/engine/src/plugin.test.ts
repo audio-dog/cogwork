@@ -97,7 +97,7 @@ interface PluginFixtureState {
 }
 
 const storeLayerAt = (storePath: string) =>
-  bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath)));
+  bootControlStoreLayer(storePath).pipe(Layer.provide(controlStoreClientLayer(storePath)));
 
 class PluginFixture extends Context.Service<PluginFixture, PluginFixtureState>()(
   "@cogwork/engine/plugin.test/PluginFixture",
@@ -170,7 +170,7 @@ const interruptedStoreLayer = Layer.unwrap(
             Deferred.succeed(removalStarted, undefined).pipe(Effect.andThen(Effect.never)),
         };
       }),
-    ).pipe(Layer.provideMerge(storeLayerAt(fixture.storePath)));
+    ).pipe(Layer.provide(storeLayerAt(fixture.storePath)));
   }),
 );
 
