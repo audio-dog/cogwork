@@ -1,0 +1,32 @@
+packages/engine/src/registry.ts
+  s_d60add10ef316b::t_f8a65cf8a7bc5d 59-60,69
+  s_d60add10ef316b::t_cfa261b127435a 20,443-464,466-468,471,505,543,573
+packages/engine/src/workspace-registry.test.ts
+  s_d60add10ef316b::t_45793e698122a6 101,124,254-256,315-318,333,336,344,350,352-356,359-360,440,505,551-553,560
+  s_d60add10ef316b::t_270409525160dc 209
+  s_92e498f2fe872f::t_1468dce1ae051e 361-362
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "617f97254af919109f305aafb1b7cb94fd981c3d",
+  "prompts": {},
+  "sessions": {
+    "s_92e498f2fe872f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b83-c5c0-7750-b5fe-9e00852428e3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d60add10ef316b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b81-997b-7400-8ef3-4f1e13588938",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
