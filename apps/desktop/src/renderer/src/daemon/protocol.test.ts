@@ -227,10 +227,12 @@ describe("IPC RPC protocol", () => {
         yield* Effect.yieldNow;
         connection.resolve();
         yield* Fiber.join(closing);
-        return yield* Effect.gen(function* () {
-          const client = yield* RpcClient.make(TestRpcs);
-          return yield* client.Ping();
-        }).pipe(Effect.provideService(RpcClient.Protocol, protocol), Effect.scoped, Effect.exit);
+        return yield* RpcClient.make(TestRpcs).pipe(
+          Effect.flatMap((client) => client.Ping()),
+          Effect.provideService(RpcClient.Protocol, protocol),
+          Effect.scoped,
+          Effect.exit,
+        );
       }).pipe(Effect.withLogger(capture.logger)),
     );
 
@@ -248,10 +250,11 @@ describe("IPC RPC protocol", () => {
         yield* Effect.promise(() => connection.attempted);
         yield* Effect.yieldNow;
         const request = yield* Effect.forkChild(
-          Effect.gen(function* () {
-            const client = yield* RpcClient.make(TestRpcs);
-            return yield* client.Ping();
-          }).pipe(Effect.provideService(RpcClient.Protocol, protocol), Effect.scoped),
+          RpcClient.make(TestRpcs).pipe(
+            Effect.flatMap((client) => client.Ping()),
+            Effect.provideService(RpcClient.Protocol, protocol),
+            Effect.scoped,
+          ),
         );
         yield* Effect.yieldNow;
         yield* Scope.close(scope, Exit.void);
