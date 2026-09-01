@@ -471,7 +471,7 @@ describe("reconcile worker", () => {
         Registry.readOnlyRegistry({ workspaces: [connectedGithubWorkspace], failures: [] }),
       );
       const connectionStore = Layer.succeed(ConnectionStore, {
-        overview: () => Effect.succeed({ connections: [] }),
+        overview: Effect.succeed({ connections: [] }),
         find: () => Effect.succeed(null),
         findSystem: () => Effect.succeed(null),
         bearer: () => Effect.die("unexpected Connection bearer"),
@@ -499,21 +499,20 @@ describe("reconcile worker", () => {
     Effect.gen(function* () {
       const revoked = yield* Ref.make(false);
       const connectionStore = Layer.succeed(ConnectionStore, {
-        overview: (plugins) =>
-          Ref.get(revoked).pipe(
-            Effect.map((isRevoked) => {
-              const connection = Connection.make({
-                id: connectionIdOf("github", "acme"),
-                system: "github",
-                account: "acme",
-                status: isRevoked ? "revoked" : "established",
-              });
-              const readiness = isRevoked
-                ? ({ _tag: "NotReady", reason: "Connection needs re-connect" } satisfies ConnectionReadiness)
-                : ({ _tag: "Ready" } satisfies ConnectionReadiness);
-              return connectionOverview([connection], plugins, new Map([[connection.id, readiness]]));
-            }),
-          ),
+        overview: Ref.get(revoked).pipe(
+          Effect.map((isRevoked) => {
+            const connection = Connection.make({
+              id: connectionIdOf("github", "acme"),
+              system: "github",
+              account: "acme",
+              status: isRevoked ? "revoked" : "established",
+            });
+            const readiness = isRevoked
+              ? ({ _tag: "NotReady", reason: "Connection needs re-connect" } satisfies ConnectionReadiness)
+              : ({ _tag: "Ready" } satisfies ConnectionReadiness);
+            return connectionOverview([connection], new Map([[connection.id, readiness]]));
+          }),
+        ),
         find: () => Effect.succeed(null),
         findSystem: () => Effect.succeed(null),
         bearer: () => Effect.die("unexpected Connection bearer"),

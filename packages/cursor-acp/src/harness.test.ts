@@ -41,6 +41,7 @@ const harnessServices: Harness.HarnessRunnerServices = {
   contextAssembler: { assemble: unexpected, cleanup: unexpected },
   credentialStore: {
     bearerToken: unexpected,
+    resolveSource: unexpected,
     persist: unexpected,
     invalidate: unexpected,
     providerKey: unexpected,

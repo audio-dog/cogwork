@@ -33,6 +33,7 @@ const minted: Credential = {
 };
 
 const storeStub = (calls: Ref.Ref<ReadonlyArray<string>>): CredentialStoreService => ({
+  resolveSource: () => Effect.die("unexpected credential source resolution"),
   bearerToken: (account) => Ref.update(calls, (xs) => [...xs, account.key]).pipe(Effect.map(() => minted)),
   persist: () => Effect.void,
   invalidate: () => Effect.void,

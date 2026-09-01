@@ -97,6 +97,7 @@ const authorizationOf = (fetchStub: { readonly mock: { readonly calls: ReadonlyA
 
 const stubCredentials = (token: string | null, source: CredentialSource, invalidated: Array<string>) =>
   Layer.succeed(CredentialStore, {
+    resolveSource: () => Effect.die("unexpected credential source resolution"),
     bearerToken: (account) =>
       token === null
         ? Effect.fail(

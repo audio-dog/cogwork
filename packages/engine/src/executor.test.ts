@@ -960,7 +960,7 @@ const unavailablePluginLayer = Layer.succeed(PluginManager, {
 });
 
 const connectionStoreStub = Layer.succeed(ConnectionStore, {
-  overview: () => Effect.succeed({ connections: [] }),
+  overview: Effect.succeed({ connections: [] }),
   find: () => Effect.succeed(null),
   findSystem: () => Effect.succeed(null),
   bearer: () =>

@@ -78,6 +78,7 @@ const connectedWorkspace: RegisteredWorkspace = {
 };
 
 const storedGitHubCredentials = Layer.succeed(CredentialStore.CredentialStore, {
+  resolveSource: () => Effect.die("unexpected credential source resolution"),
   bearerToken: () =>
     Effect.succeed({ source: "stored-key", token: Redacted.make("stored-token"), identity: null }),
   persist: () => Effect.void,
