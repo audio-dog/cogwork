@@ -1262,6 +1262,40 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([runner([text("I could not produce a result."), finished])])));
   });
 
+  it.effect("settles a run when an event cannot be encoded", () =>
+    Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "exhausted");
+      assert.strictEqual(run?.eventCount, 0);
+    }).pipe(
+      Effect.provide(provide([runner([{ type: "CUSTOM", content: 1n } satisfies AgUiEvent, finished])])),
+    ),
+  );
+
+  it.effect("settles a run when its deferred terminal event cannot be encoded", () =>
+    Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, workspace, triageItem);
+
+      const ledger = yield* RunLedger.RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(run?.status, "exhausted");
+      assert.strictEqual(run?.eventCount, successEvents.length - 1);
+    }).pipe(
+      Effect.provide(
+        provide([
+          runner(
+            successEvents.map((event) => (event.type === "RUN_FINISHED" ? { ...event, content: 1n } : event)),
+          ),
+        ]),
+      ),
+    ),
+  );
+
   it.effect("retries a triage run that emits more than one structured result", () => {
     const result = {
       _tag: "triage",

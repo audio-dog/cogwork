@@ -161,12 +161,18 @@ interface CommonStageOps {
 
 interface TriageStageOps extends CommonStageOps {
   readonly kind: "triage";
-  readonly complete: (record: RunRecord, acc: TriageAccumulator) => Effect.Effect<void, IssueTrackerError>;
+  readonly complete: (
+    record: RunRecord,
+    acc: TriageAccumulator,
+  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
 }
 
 interface TextStageOps extends CommonStageOps {
   readonly kind: "text";
-  readonly complete: (runId: RunId, acc: RunAccumulator) => Effect.Effect<void, IssueTrackerError>;
+  readonly complete: (
+    runId: RunId,
+    acc: RunAccumulator,
+  ) => Effect.Effect<void, IssueTrackerError | RunLedgerError>;
 }
 
 type StageOps = TriageStageOps | TextStageOps;
@@ -1072,19 +1078,21 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     request: HarnessRequest,
   ) {
+    const settleFailure = (error: PrepareError | HarnessError) =>
+      handleOf(ledger, record.session).pipe(
+        Effect.flatMap((handle) =>
+          applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
+        ),
+      );
+
     const settle = <A, R>(
       attempt: Effect.Effect<A, PrepareError | HarnessError, R>,
-      complete: (acc: A) => Effect.Effect<void, IssueTrackerError>,
+      complete: (acc: A) => Effect.Effect<void, IssueTrackerError | RunLedgerError>,
     ) =>
       attempt.pipe(
         Effect.matchEffect({
-          onFailure: (error) =>
-            handleOf(ledger, record.session).pipe(
-              Effect.flatMap((handle) =>
-                applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
-              ),
-            ),
-          onSuccess: complete,
+          onFailure: settleFailure,
+          onSuccess: (acc) => complete(acc).pipe(Effect.catchTag("RunLedgerError", settleFailure)),
         }),
       );
 

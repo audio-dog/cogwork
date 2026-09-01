@@ -8,7 +8,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { activityOf, DaemonEventBus } from "./daemon-event-bus";
-import { RunLedger } from "./run-ledger";
+import { RunLedger, RunLedgerError } from "./run-ledger";
 
 // The harness hands back a session handle as untrusted output, and it is later echoed verbatim into a
 // fenced shell block in the human handoff comment. Whitespace or a backtick would break out of that
@@ -51,10 +51,16 @@ export const make = Effect.gen(function* () {
 
   const record = Effect.fn("RunRecorder.record")(function* (run: RunRecord, event: AgUiEvent) {
     const data = yield* encodeJson(event).pipe(
+      Effect.mapError((error) =>
+        RunLedgerError.make({
+          operation: "encode run event",
+          message: String(error),
+          retryable: false,
+        }),
+      ),
       Effect.tapError((error) =>
         Effect.logError("run event encoding failed", { runId: run.id, type: event.type, error }),
       ),
-      Effect.orDie,
     );
     const atMillis = yield* Clock.currentTimeMillis;
     const previous = yield* trackOf(run.id);
