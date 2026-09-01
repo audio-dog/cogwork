@@ -224,3 +224,23 @@ _Avoid_: Branch divergence (that's the branch versus its own remote, not the bas
 **Workspace registry**:
 The Control-store-backed set of registered workspaces and Workspace-input failures, held in a cell folded from workspace management acts. Register mints each `WorkspaceId`. Re-bind changes only its checkout path. Deregister removes it from the cell before the next scheduler pick, while a Run already holding its workspace value finishes normally. Each act publishes the matching workspace change or removal. The engine's view of which repos it is driving.
 _Avoid_: Config store. Distinct from the harness runner map, which is also a "registry" of sorts.
+
+**Telemetry store**:
+The dedicated local SQLite file (`~/.cogwork/telemetry.db`) holding the app's own spans and metric snapshots — observations about the process, disposable and pruned, never authoritative product records (ADR 0020). Deliberately not the Control store, so the instrument never queues behind the write lock it measures.
+_Avoid_: Control store (the authoritative store; ADR 0015's one-database rule stands for product records), run ledger (a run's harness events, which are product history), log file
+
+**Performance sensor**:
+Deterministic engine code that watches the telemetry store's health signals and, on a sustained threshold breach, files a thin evidence ticket at `needs-triage` with an `origin:selfperf` label and a fingerprint marker (ADR 0021). The proactive layer's first non-tracker sensor; it fires on transitions into alarm, dedups against the tracker itself, and never reopens a closed issue.
+_Avoid_: Detector, watchdog, monitor (a Datadog-style alert rule), triage (the stage that verifies what the sensor files)
+
+**Replay runner**:
+A harness runner that streams a recorded run's exported events at recorded speed through the whole real pipeline, giving repeatable load for before/after measurement without spawning an agent. A fixture in, the same recorder/ledger/bus/IPC path as a live run out.
+_Avoid_: Fake runner (a test double asserting behavior; this one generates load), simulator, benchmark (the measurement around it, not the runner)
+
+**Signal**:
+One health number the performance sensor watches: a named reading from the telemetry store (the daemon's event-loop delay p99, heap headroom) paired with a fixed threshold and window. The set is enumerated and deliberately small; the filing cap bounds the tickets, never how many signals may be watched (ADR 0021).
+_Avoid_: Metric (the raw telemetry reading a signal is defined over), alert (an alerting product's rule), alarm (the state a breached signal enters, not the signal itself)
+
+**Fingerprint**:
+The stable identity of one regression: a string over signal, subsystem, and direction — measured values excluded — carried as a marker in a machine-filed ticket's body, so dedup derives from the tracker itself. Many firings with different numbers share one fingerprint and therefore one open ticket (ADR 0021).
+_Avoid_: Hash (an implementation detail), signature (audiodog's word for the same idea), occurrence (one firing, which a fingerprint groups)
