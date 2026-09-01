@@ -1,0 +1,19 @@
+packages/engine/src/connection-verify.test.ts
+  s_b9380e20b80941::t_b771a7d9a1abf4 28-41,43-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "23e55e303193be59a11ac5b4e5e5459ed0364cf4",
+  "prompts": {},
+  "sessions": {
+    "s_b9380e20b80941": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e3f3b1c-9955-4b3c-b685-3da0d2c95c1c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
