@@ -36,6 +36,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -90,6 +91,11 @@ import {
   WorktreeManager,
   type WorktreeOperationInProgressError,
 } from "./worktree";
+
+export const harnessEventFoldDuration = Metric.timer("cogwork_harness_event_fold_duration", {
+  description: "Time to fold one harness event into Run state.",
+});
+
 import type { WorktreeFsError } from "./worktree-fs";
 
 type PrepareError =
@@ -781,7 +787,7 @@ export const make = Effect.gen(function* () {
     return Stream.runFoldEffect(
       withFailureTerminal(harness.run(request)).pipe(Stream.provideContext(harnessRunnerContext)),
       () => initial,
-      step,
+      (acc, event) => step(acc, event).pipe(Effect.trackDuration(harnessEventFoldDuration)),
     ).pipe(
       Effect.timeout(budget),
       Effect.catchTag("TimeoutError", () =>
