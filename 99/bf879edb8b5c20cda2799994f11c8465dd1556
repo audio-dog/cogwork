@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_6e9e628a99a807::t_6df65f9f82d262 246-247,413,552
+apps/desktop/src/renderer/src/components/item-tab-actions.test.tsx
+  s_6e9e628a99a807::t_3b4c87c0b96433 99-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "99bf879edb8b5c20cda2799994f11c8465dd1556",
+  "prompts": {},
+  "sessions": {
+    "s_6e9e628a99a807": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05af9-3f07-7b21-984f-de336e55702c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
