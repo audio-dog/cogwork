@@ -58,9 +58,7 @@ export const make = Effect.gen(function* () {
           retryable: false,
         }),
       ),
-      Effect.tapError((error) =>
-        Effect.logError("run event encoding failed", { runId: run.id, type: event.type, error }),
-      ),
+      Effect.tapError((error) => Effect.logError("run event encoding failed", { type: event.type, error })),
     );
     const atMillis = yield* Clock.currentTimeMillis;
     const previous = yield* trackOf(run.id);

@@ -1078,8 +1078,16 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     request: HarnessRequest,
   ) {
+    const recordEncodingFailureTerminal = (error: PrepareError | HarnessError) => {
+      if (error._tag !== "RunLedgerError" || error.operation !== "encode run event") {
+        return Effect.succeed(null);
+      }
+      return recorder.record(record, failedTerminal);
+    };
+
     const settleFailure = (error: PrepareError | HarnessError) =>
-      handleOf(ledger, record.session).pipe(
+      recordEncodingFailureTerminal(error).pipe(
+        Effect.andThen(handleOf(ledger, record.session)),
         Effect.flatMap((handle) =>
           applyFailure(workspace, item, runId, retryableOf(error), prepareFailureReason(error), handle),
         ),

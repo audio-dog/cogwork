@@ -1270,7 +1270,8 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
-      assert.strictEqual(run?.eventCount, 0);
+      assert.strictEqual(run?.eventCount, 1);
+      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
     }).pipe(
       Effect.provide(provide([runner([{ type: "CUSTOM", content: 1n } satisfies AgUiEvent, finished])])),
     ),
@@ -1284,7 +1285,8 @@ describe("Executor.execute", () => {
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
       assert.strictEqual(run?.status, "exhausted");
-      assert.strictEqual(run?.eventCount, successEvents.length - 1);
+      assert.strictEqual(run?.eventCount, successEvents.length);
+      assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
     }).pipe(
       Effect.provide(
         provide([
