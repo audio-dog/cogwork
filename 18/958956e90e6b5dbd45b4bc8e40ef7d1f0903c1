@@ -1,0 +1,19 @@
+apps/desktop/electron-builder.yml
+  s_5cf84fa7f14674::t_dfb0e913d1787e 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "18958956e90e6b5dbd45b4bc8e40ef7d1f0903c1",
+  "prompts": {},
+  "sessions": {
+    "s_5cf84fa7f14674": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e8f-e6d5-7001-84b2-e8275f6fc77d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
