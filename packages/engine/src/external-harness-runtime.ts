@@ -148,6 +148,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter, Nativ
   readonly projectAuthentication: (authentication: ExternalHarnessAuthentication) => NativeAuthentication;
   readonly transport: ExternalHarnessTransport<Adapter>;
   readonly diagnostics: (cause: unknown) => HarnessError;
+  readonly turnDiagnostics?: (cause: unknown) => HarnessError;
   readonly estimateUsage?: ExternalHarnessUsageEstimator;
 }
 
@@ -500,8 +501,8 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                   descriptor.estimateUsage ?? preserveUsage,
                   bridgeChat(
                     abortOnReturn(opened.stream, opened.abortController),
-                    descriptor.diagnostics,
-                    descriptor.diagnostics,
+                    descriptor.turnDiagnostics ?? descriptor.diagnostics,
+                    descriptor.turnDiagnostics ?? descriptor.diagnostics,
                   ).pipe(Stream.ensuring(Effect.sync(() => opened.abortController.abort()))),
                 ),
               ),
