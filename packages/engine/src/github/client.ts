@@ -614,6 +614,8 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       sendJson(repo, HttpClientRequest.post(repoPath(repo, `/issues/${issueNumber}/comments`)), { body }),
     editComment: (repo: GitHubRepoRef, commentId: number, body: string) =>
       sendJson(repo, HttpClientRequest.patch(repoPath(repo, `/issues/comments/${commentId}`)), { body }),
+    verifyCredential: (token: Redacted.Redacted<string>) =>
+      Effect.asVoid(execute(HttpClientRequest.get("https://api.github.com/user"), token)),
   };
 });
 

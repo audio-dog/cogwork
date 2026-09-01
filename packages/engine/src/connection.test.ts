@@ -4,6 +4,7 @@ import {
   type ConnectionReadiness,
   connectionIdOf,
   defaultControlStore,
+  IssueTrackerError,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -11,7 +12,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
-import { ConnectionStore, connectionOverview, layer, requiringPluginId } from "./connection";
+import { ConnectionStore, connectionOverview, layer } from "./connection";
+import { acceptingLayer as acceptingVerifierLayer, ConnectionVerifier } from "./connection-verify";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import { CredentialStore, type CredentialStoreService } from "./credential-store";
 
@@ -28,7 +30,21 @@ class RemovedConnections extends Context.Service<RemovedConnections, Ref.Ref<Rea
   static readonly layer = Layer.effect(RemovedConnections, Ref.make<ReadonlyArray<ConnectionId>>([]));
 }
 
-const controlStoreLayer = Layer.succeed(ControlStore, {
+class ConfiguredCredentials extends Context.Service<
+  ConfiguredCredentials,
+  Ref.Ref<ReadonlyArray<ConnectionId>>
+>()("@cogwork/engine/connection.test/ConfiguredCredentials") {
+  static readonly layer = Layer.effect(ConfiguredCredentials, Ref.make<ReadonlyArray<ConnectionId>>([]));
+}
+
+class EstablishedConnections extends Context.Service<
+  EstablishedConnections,
+  Ref.Ref<ReadonlyArray<ConnectionId>>
+>()("@cogwork/engine/connection.test/EstablishedConnections") {
+  static readonly layer = Layer.effect(EstablishedConnections, Ref.make<ReadonlyArray<ConnectionId>>([]));
+}
+
+const controlStoreService = {
   health: "available",
   seed: defaultControlStore,
   picture: Effect.succeed(defaultControlStore),
@@ -41,43 +57,32 @@ const controlStoreLayer = Layer.succeed(ControlStore, {
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
-} satisfies ControlStoreService);
+} satisfies ControlStoreService;
+
+const controlStoreLayer = Layer.succeed(ControlStore, controlStoreService);
+
+// Every method a credential-store stub must carry but these tests never reach.
+const unusedCredentialStore = {
+  bearerToken: () => Effect.die("unexpected credential read"),
+  resolveSource: () => Effect.die("unexpected credential source resolution"),
+  persist: () => Effect.die("unexpected credential persist"),
+  invalidate: () => Effect.void,
+  providerKey: () => Effect.die("unexpected provider key"),
+  persistProviderKey: () => Effect.die("unexpected provider key persist"),
+  configureConnection: () => Effect.die("unexpected credential configure"),
+  removeConnection: () => Effect.die("unexpected credential removal"),
+} satisfies CredentialStoreService;
 
 describe("Connection overview", () => {
-  it("renders an established Connection with no Plugin as ready", () => {
+  it("renders an established Connection as ready", () => {
     const overview = connectionOverview(
       [github],
-      { plugins: [] },
       new Map([[github.id, { _tag: "Ready" } satisfies ConnectionReadiness]]),
     );
 
     const card = overview.connections.find((item) => item.system === "github");
     assert.strictEqual(card?.connection?.id, "github/default");
     assert.strictEqual(card?.readiness._tag, "Ready");
-    assert.isNull(card?.pluginId ?? null);
-  });
-
-  it("derives the one Plugin requiring a system", () => {
-    assert.strictEqual(
-      requiringPluginId(
-        {
-          plugins: [
-            {
-              pluginId: "linear",
-              name: "Linear",
-              summary: "Linear tools",
-              record: null,
-              resolvedIdentity: "linear@1",
-              requiredConnections: ["linear"],
-              contributions: [],
-              manifestFailure: null,
-            },
-          ],
-        },
-        "linear",
-      ),
-      "linear",
-    );
   });
 });
 
@@ -97,6 +102,7 @@ describe("Connection establishment", () => {
       Effect.provide(
         layer.pipe(
           Layer.provide(controlStoreLayer),
+          Layer.provide(acceptingVerifierLayer),
           Layer.provideMerge(
             Layer.effect(
               CredentialStore,
@@ -104,6 +110,12 @@ describe("Connection establishment", () => {
                 const removed = yield* RemovedConnections;
                 return {
                   bearerToken: () => Effect.die("unexpected credential read"),
+                  resolveSource: () =>
+                    Effect.succeed({
+                      source: "stored-key" as const,
+                      token: Redacted.make("valid"),
+                      identity: null,
+                    }),
                   persist: () => Effect.die("unexpected credential persist"),
                   invalidate: () => Effect.void,
                   providerKey: () => Effect.die("unexpected provider key"),
@@ -114,6 +126,75 @@ describe("Connection establishment", () => {
                 } satisfies CredentialStoreService;
               }),
             ).pipe(Layer.provideMerge(RemovedConnections.layer)),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
+// The bug this covers: `GITHUB_TOKEN=Hello` resolves to a non-empty string, so the old establish
+// path stamped the Connection "established" and the card went green. Nothing asked GitHub.
+const rejectingVerifier = Layer.succeed(ConnectionVerifier, {
+  verify: () =>
+    Effect.fail(new IssueTrackerError({ reason: "auth", message: "GitHub authentication failed (401)" })),
+});
+
+describe("Connection verification", () => {
+  it.effect("refuses a credential the system rejects, and writes nothing", () =>
+    Effect.gen(function* () {
+      const connections = yield* ConnectionStore;
+      const outcome = yield* Effect.flip(
+        connections.establish({
+          system: "github",
+          account: "acme",
+          source: { _tag: "ApiKey", key: Redacted.make("Hello") },
+        }),
+      );
+
+      assert.strictEqual(outcome._tag, "ConnectionNotReady");
+      assert.include(outcome.message, "401");
+      // Neither store was touched: a re-connect that fails verification must leave the credential
+      // it was replacing exactly as it was.
+      assert.deepStrictEqual(yield* Ref.get(yield* ConfiguredCredentials), []);
+      assert.deepStrictEqual(yield* Ref.get(yield* EstablishedConnections), []);
+    }).pipe(
+      Effect.provide(
+        layer.pipe(
+          Layer.provide(rejectingVerifier),
+          Layer.provideMerge(
+            Layer.effect(
+              CredentialStore,
+              Effect.gen(function* () {
+                const configured = yield* ConfiguredCredentials;
+                return {
+                  ...unusedCredentialStore,
+                  resolveSource: () =>
+                    Effect.succeed({
+                      source: "stored-key" as const,
+                      token: Redacted.make("Hello"),
+                      identity: null,
+                    }),
+                  configureConnection: (connectionId) =>
+                    Ref.update(configured, (current) => [...current, connectionId]),
+                } satisfies CredentialStoreService;
+              }),
+            ).pipe(Layer.provideMerge(ConfiguredCredentials.layer)),
+          ),
+          Layer.provideMerge(
+            Layer.effect(
+              ControlStore,
+              Effect.gen(function* () {
+                const established = yield* EstablishedConnections;
+                return {
+                  ...controlStoreService,
+                  establishConnection: (connection) =>
+                    Ref.update(established, (current) => [...current, connection.id]).pipe(
+                      Effect.map(() => defaultControlStore),
+                    ),
+                } satisfies ControlStoreService;
+              }),
+            ).pipe(Layer.provideMerge(EstablishedConnections.layer)),
           ),
         ),
       ),
