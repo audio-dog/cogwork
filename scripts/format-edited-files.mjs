@@ -35,9 +35,9 @@ const within = (path, root) => {
   return fromRoot !== ".." && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot);
 };
 
-const eligibleFile = async (path, root) => {
+const eligibleFile = async (path, root, workingDirectory) => {
   try {
-    const canonical = await realpath(resolve(root, path));
+    const canonical = await realpath(resolve(workingDirectory, path));
     if (!within(canonical, root)) return null;
     const info = await stat(canonical);
     return info.isFile() && info.nlink === 1 ? canonical : null;
@@ -46,9 +46,9 @@ const eligibleFile = async (path, root) => {
   }
 };
 
-export const eligibleFiles = async (paths, checkout) => {
+export const eligibleFiles = async (paths, checkout, workingDirectory = checkout) => {
   const root = await realpath(checkout);
-  const candidates = await Promise.all(paths.map((path) => eligibleFile(path, root)));
+  const candidates = await Promise.all(paths.map((path) => eligibleFile(path, root, workingDirectory)));
   return [...new Set(candidates.filter((path) => path !== null))];
 };
 
@@ -72,44 +72,51 @@ const formatWorkspace = (checkout) => {
   process.exitCode = result.status ?? 1;
 };
 
-const formatEditedFile = async (checkout, path) => {
-  if (typeof constants.O_NOFOLLOW !== "number") return 0;
-
+const openEditedFile = async (path) => {
+  if (typeof constants.O_NOFOLLOW !== "number") return null;
   try {
-    const file = await open(path, constants.O_RDWR | constants.O_NOFOLLOW);
-    try {
-      const info = await file.stat();
-      if (!info.isFile() || info.nlink !== 1) return 0;
-      const input = await file.readFile("utf8");
-      const result = spawnSync(
-        "pnpm",
-        [
-          "exec",
-          "biome",
-          "check",
-          "--write",
-          "--no-errors-on-unmatched",
-          "--files-ignore-unknown=true",
-          `--stdin-file-path=${path}`,
-        ],
-        { cwd: checkout, encoding: "utf8", input },
-      );
-      if (result.stderr) process.stderr.write(result.stderr);
-      if (result.error) {
-        console.error(result.error.message);
-        return 1;
-      }
-      const canWrite = typeof result.stdout === "string" && (result.status === 0 || result.stdout.length > 0);
-      if (canWrite && result.stdout !== input) {
-        await file.truncate(0);
-        await file.write(result.stdout, 0, "utf8");
-      }
-      return result.status ?? 1;
-    } finally {
-      await file.close();
-    }
+    return await open(path, constants.O_RDWR | constants.O_NOFOLLOW);
   } catch {
-    return 0;
+    return null;
+  }
+};
+
+const formatEditedFile = async (checkout, path) => {
+  const file = await openEditedFile(path);
+  if (!file) return 0;
+  try {
+    const info = await file.stat();
+    if (!info.isFile() || info.nlink !== 1) return 0;
+    const input = await file.readFile("utf8");
+    const result = spawnSync(
+      "pnpm",
+      [
+        "exec",
+        "biome",
+        "check",
+        "--write",
+        "--no-errors-on-unmatched",
+        "--files-ignore-unknown=true",
+        `--stdin-file-path=${path}`,
+      ],
+      { cwd: checkout, encoding: "utf8", input },
+    );
+    if (result.stderr) process.stderr.write(result.stderr);
+    if (result.error) {
+      console.error(result.error.message);
+      return 1;
+    }
+    const canWrite = typeof result.stdout === "string" && (result.status === 0 || result.stdout.length > 0);
+    if (canWrite && result.stdout !== input) {
+      await file.write(result.stdout, 0, "utf8");
+      await file.truncate(Buffer.byteLength(result.stdout));
+    }
+    return result.status ?? 1;
+  } catch (error) {
+    console.error(error);
+    return 1;
+  } finally {
+    await file.close();
   }
 };
 
@@ -129,7 +136,8 @@ const run = async () => {
     return;
   }
 
-  const files = await eligibleFiles(paths, checkout);
+  const workingDirectory = isRecord(payload) && typeof payload.cwd === "string" ? payload.cwd : checkout;
+  const files = await eligibleFiles(paths, checkout, workingDirectory);
   if (files.length === 0) return;
   await formatEditedFiles(checkout, files);
 };
