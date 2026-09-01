@@ -1,0 +1,34 @@
+packages/engine/src/linear/client.test.ts
+  s_a76d1edf065141::t_991d05f4e61724 683,685,701-705,709-731
+  s_a76d1edf065141::t_610b9bcc2d1fb1 598-602,630-632,693-697
+  s_a76d1edf065141::t_b9bf6859397fe0 126-127,590-597,603-629,633-651,684,686-692,698-700,706-708,733-751
+  s_a76d1edf065141::t_e99447b7863f3f 652-682
+  s_a76d1edf065141::t_9f3abd32df369a 732
+packages/engine/src/linear/client.ts
+  s_a76d1edf065141::t_086e399948e77f 274,279
+  s_a76d1edf065141::t_07226e37e4ef21 136-139,143-146,156,272-273,275,277-278,280-285,341
+  s_a76d1edf065141::t_b7c9e42727a9bd 1
+  s_a76d1edf065141::t_46466bdf555311 161-162,165-166
+  s_a76d1edf065141::t_814f7474ca589e 205-206
+  s_a76d1edf065141::t_f22fd9f1e9dccb 548-556,558-559,567,592-594
+  s_a76d1edf065141::t_acf47118b66246 163,177-178,190-191,560-566
+  s_a76d1edf065141::t_f08c4813dff786 2-8,176,196
+  s_a76d1edf065141::t_9f3abd32df369a 164
+  s_a76d1edf065141::t_b76ec161f69aa6 167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "cc7d33d2c8a3db70a3dca1a951484b9b15e191a4",
+  "prompts": {},
+  "sessions": {
+    "s_a76d1edf065141": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89829111-87a1-4711-b21a-2d1d6a0f8330",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
