@@ -91,6 +91,32 @@ it("closes a renderer's socket when the renderer is destroyed", async () => {
   }
 });
 
+// Real `ipcMain.handle` structured-clones the resolved value to send it to the renderer; the
+// mocked one above does not, so a non-cloneable value (an Effect port, a function) passes every
+// other test here yet rejects at runtime with "An object could not be cloned".
+it("resolves connect with a value Electron can clone across IPC", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
+  const socketPath = join(dir, "daemon.sock");
+  const server = net.createServer();
+  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  const runtime = ManagedRuntime.make(Layer.empty);
+  const sender = new FakeSender();
+
+  try {
+    registerIpc({ socketPath, supervisor, windowPreferences, runtime });
+    const connect = ipc.handlers.get(IpcChannel.rpcConnect);
+    if (!connect) throw new Error("RPC connect handler was not registered");
+
+    const resolved = await connect({ sender });
+
+    expect(() => structuredClone(resolved)).not.toThrow();
+  } finally {
+    await runtime.dispose();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 it("replaces a renderer's socket when it connects again", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
   const socketPath = join(dir, "daemon.sock");
