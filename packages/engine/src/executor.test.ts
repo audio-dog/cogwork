@@ -51,6 +51,7 @@ import {
   type HarnessRunner,
   layer as harnessLayer,
   resolvedMcpSkills,
+  staticCatalogSource,
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
@@ -494,7 +495,7 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
           return recorded.pipe(Effect.andThen(Effect.fail(claimFailure)));
         },
         release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
-        note: () => Effect.void,
+        note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, note: detail }),
         triaged: (_workspace, itemId, outcome) =>
           record(calls, { method: "triaged", item: itemId, role: outcome.role, proposal: outcome.proposal }),
         implemented: (_workspace, itemId) => record(calls, { method: "implemented", item: itemId }),
@@ -570,8 +571,50 @@ interface TestRunner {
   ) => HarnessRunner;
 }
 
+const testRunnerDefaults = {
+  capabilities: {
+    authenticationModes: ["host"],
+    session: { affinity: "runtime-host", fork: false },
+    policyFidelity: "exact",
+    fileEventFidelity: "none",
+    usageQuality: "none",
+    readinessDiagnostics: true,
+    journal: false,
+    takeover: false,
+  },
+  authentication: { mode: "host", reference: "test login" },
+  catalogSources: {
+    fallback: staticCatalogSource(
+      {
+        models: [
+          { value: "test", label: "Test" },
+          { value: "refreshed-model", label: "Refreshed model" },
+        ],
+        efforts: [
+          { value: "low", label: "Low" },
+          { value: "high", label: "High" },
+        ],
+      },
+      { source: "cogwork-fallback", fallbackVersion: "test-1" },
+    ),
+  },
+  readiness: () =>
+    Effect.succeed({
+      operational: { status: "ready", retryable: false, diagnostic: "Test runner is ready" },
+      installation: { status: "installed", version: "1" },
+      compatibility: { status: "compatible", requirement: ">=1" },
+      authentication: { mode: "host", status: "available", diagnostic: "test login available" },
+      diagnostics: [],
+    }),
+  preflight: () => Effect.void,
+} satisfies Pick<
+  HarnessRunner,
+  "authentication" | "capabilities" | "catalogSources" | "preflight" | "readiness"
+>;
+
 const runner = (events: ReadonlyArray<AgUiEvent>, execution = fullHarnessExecution): TestRunner => ({
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -588,6 +631,7 @@ const capturingRunner = (
   name: HarnessName = cursor,
 ): TestRunner => ({
   make: (requests) => ({
+    ...testRunnerDefaults,
     name,
     sessionKind,
     projectedMembers: [],
@@ -604,6 +648,7 @@ const capturingRunner = (
 
 const blockedPreflightRunner: TestRunner = {
   make: (_requests, gate, observation) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -617,6 +662,7 @@ const blockedPreflightRunner: TestRunner = {
 
 const gatedRunner: TestRunner = {
   make: (_requests, gate) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -632,6 +678,7 @@ const gatedRunner: TestRunner = {
 
 const observingRunner: TestRunner = {
   make: (_requests, _gate, observation) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -651,6 +698,7 @@ const observingRunner: TestRunner = {
 
 const resourceRunner: TestRunner = {
   make: (_requests, _gate, observation) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -808,6 +856,7 @@ const branchRecordingWorktree = (branch: string) =>
 
 const failingRunner = (error: HarnessError): TestRunner => ({
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -819,6 +868,7 @@ const failingRunner = (error: HarnessError): TestRunner => ({
 
 const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): TestRunner => ({
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "owned-transcript",
     projectedMembers: [],
@@ -1255,8 +1305,24 @@ describe("Executor.execute", () => {
   it.effect("preflights each distinct Harness configuration once per availability refresh", () =>
     Effect.gen(function* () {
       const preflights = yield* Ref.make(0);
+      const operationSettings: ReadonlyArray<OperationSettingRow> = [
+        ...runnableStages,
+        {
+          setting: "effort",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "high",
+        },
+        {
+          setting: "effort",
+          level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
+          scope: { _tag: "SettingsProfile" },
+          value: "low",
+        },
+      ];
       const probeRunner: TestRunner = {
         make: () => ({
+          ...testRunnerDefaults,
           name: cursor,
           sessionKind: "opaque-handle",
           projectedMembers: [],
@@ -1270,15 +1336,20 @@ describe("Executor.execute", () => {
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
         yield* executor.refreshAvailability(workspace);
-      }).pipe(Effect.provide(provide([probeRunner])));
+      }).pipe(
+        Effect.provide(
+          provide([probeRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), operationSettings),
+        ),
+      );
 
-      assert.strictEqual(yield* Ref.get(preflights), 2);
+      assert.strictEqual(yield* Ref.get(preflights), 3);
     }),
   );
 
   it.effect("keeps transient Harness preflight failures out of availability", () => {
     const transientPreflight: TestRunner = {
       make: () => ({
+        ...testRunnerDefaults,
         name: cursor,
         sessionKind: "opaque-handle",
         projectedMembers: [],
@@ -1520,6 +1591,7 @@ describe("Executor.execute", () => {
   it.effect("settles a silent harness run as a retryable failure after its stage budget", () => {
     const silentRunner: TestRunner = {
       make: () => ({
+        ...testRunnerDefaults,
         name: cursor,
         sessionKind: "opaque-handle",
         projectedMembers: [],
@@ -1767,6 +1839,103 @@ describe("Executor.execute", () => {
     );
   });
 
+  it.effect("stops re-attempting a refused claim on every following generation", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: 'Linear refused creating the "cogwork:claimed" label in team REC',
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "claim", item: triageItem.id }]);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
+  it.effect("retries a refused claim once its hold-off window expires", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: 'Linear refused creating the "cogwork:claimed" label in team REC',
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      yield* TestClock.adjust("2 minutes");
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: triageItem.id },
+        { method: "claim", item: triageItem.id },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
+  it.effect("parks an item the work source will never let it claim, with the refusal", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      retryable: false,
+      message: 'Linear refused creating the "cogwork:claimed" label in team REC: not allowed',
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+
+      const written = yield* Ref.get(calls);
+      assert.deepStrictEqual(
+        written.map((call) => call.method),
+        ["claim", "note", "handOff"],
+      );
+      const note = written.find((call) => call.method === "note")?.note ?? "";
+      assert.include(note, "Could not claim this issue for triage");
+      assert.include(note, "cogwork:claimed");
+      assert.include(note, "Add the label named below");
+      assert.include(note, "ready-for-human");
+      assert.strictEqual(written.find((call) => call.method === "handOff")?.stage, "triage");
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
+  it.effect("leaves a claim the work source may yet accept unparked", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: "coordination marker write failed",
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "claim", item: triageItem.id }]);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
   it.effect("does nothing when triage is disabled in the Operation Definition", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -1793,7 +1962,10 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
       assert.isFalse(yield* execute(executor, disabledWorkspace, resumed));
-      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: resumed.id }]);
+      assert.deepStrictEqual(
+        (yield* Ref.get(calls)).map((call) => call.method),
+        ["note", "release"],
+      );
     }).pipe(
       Effect.provide(
         provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(), []),
@@ -1811,7 +1983,10 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
       assert.isFalse(yield* execute(executor, disabledWorkspace, recovered));
-      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: recovered.id }]);
+      assert.deepStrictEqual(
+        (yield* Ref.get(calls)).map((call) => call.method),
+        ["note", "release"],
+      );
     }).pipe(
       Effect.provide(
         provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(), []),

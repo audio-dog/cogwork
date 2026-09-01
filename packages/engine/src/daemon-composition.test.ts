@@ -22,7 +22,7 @@ import { afterEach, vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
-import { fullHarnessExecution, type HarnessRunner } from "./harness";
+import { fullHarnessExecution, type HarnessRunner, staticCatalogSource } from "./harness";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { ReconcileWorker } from "./reconcile";
@@ -42,6 +42,32 @@ const stubRunner: HarnessRunner = {
   projectedMembers: [],
   planMiddleware: [],
   execution: fullHarnessExecution,
+  capabilities: {
+    authenticationModes: ["host"],
+    session: { affinity: "runtime-host", fork: false },
+    policyFidelity: "exact",
+    fileEventFidelity: "none",
+    usageQuality: "none",
+    readinessDiagnostics: false,
+    journal: false,
+    takeover: false,
+  },
+  authentication: { mode: "host", reference: "test login" },
+  catalogSources: {
+    fallback: staticCatalogSource(
+      { models: [{ value: "test", label: "Test" }] },
+      { source: "cogwork-fallback", fallbackVersion: "test-1" },
+    ),
+  },
+  readiness: () =>
+    Effect.succeed({
+      operational: { status: "ready", retryable: false, diagnostic: "Test runner is ready" },
+      installation: { status: "installed", version: "1" },
+      compatibility: { status: "compatible", requirement: ">=1" },
+      authentication: { mode: "host", status: "available", diagnostic: "test login available" },
+      diagnostics: [],
+    }),
+  preflight: () => Effect.void,
   run: () => Stream.empty,
 };
 
