@@ -1,6 +1,7 @@
 import {
   applyDaemonEvent,
   ClassifiedItem,
+  ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   DaemonRpcs,
   defaultControlStore,
@@ -8,6 +9,7 @@ import {
   initialBoard,
   itemKey,
   localOwnerId,
+  PluginFailure,
   RunId,
   type RunRecord,
   SchedulerStats,
@@ -24,6 +26,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
@@ -52,7 +55,7 @@ import { SourceControlProvider } from "./source-control";
 
 const runLedgerTestLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
 const runRecorderTestLayer = runRecorderLayer.pipe(Layer.provide(runLedgerTestLayer));
-const controlStoreLayer = Layer.succeed(ControlStore, {
+const controlStoreService = {
   health: "available",
   seed: defaultControlStore,
   picture: Effect.succeed(defaultControlStore),
@@ -65,7 +68,8 @@ const controlStoreLayer = Layer.succeed(ControlStore, {
   uninstallPlugin: () => Effect.succeed(defaultControlStore),
   updateContributionSetting: () => Effect.succeed(defaultControlStore),
   withWrite: (effect) => effect,
-});
+} satisfies ControlStoreService;
+const controlStoreLayer = Layer.succeed(ControlStore, controlStoreService);
 const pluginManagerLayer = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -506,6 +510,8 @@ describe("DaemonEventPublisher", () => {
     itemsRef: Ref.Ref<ReadonlyArray<TrackerItem>>,
     statsRef: Ref.Ref<Scheduler.SchedulerState>,
     workspaces = registryLayer,
+    store = controlStoreLayer,
+    plugins = pluginManagerLayer,
   ) =>
     Daemon.handlersLayer.pipe(
       Layer.provideMerge(Daemon.principalMiddlewareLayer),
@@ -520,10 +526,58 @@ describe("DaemonEventPublisher", () => {
       Layer.provideMerge(runRecorderTestLayer),
       Layer.provideMerge(runLedgerTestLayer),
       Layer.provideMerge(RunControl.layer),
-      Layer.provideMerge(controlStoreLayer),
-      Layer.provideMerge(pluginManagerLayer),
+      Layer.provideMerge(store),
+      Layer.provideMerge(plugins),
       Layer.provideMerge(observing(itemsRef)),
     );
+
+  it.effect("logs Control store and Plugin seed failures before omitting their seed events", () =>
+    Effect.gen(function* () {
+      const itemsRef = yield* Ref.make<ReadonlyArray<TrackerItem>>([]);
+      const statsRef = yield* Ref.make(schedulerState(0));
+      const storeFailure = new ControlStoreFailure({
+        operation: "read Control store",
+        message: "store read failed",
+      });
+      const pluginFailure = new PluginFailure({
+        operation: "read Plugin catalog",
+        pluginId: null,
+        file: null,
+        message: "catalog read failed",
+      });
+      const failingStore = Layer.succeed(ControlStore, {
+        ...controlStoreService,
+        picture: Effect.fail(storeFailure),
+      });
+      const failingPlugins = Layer.succeed(PluginManager, {
+        overview: Effect.fail(pluginFailure),
+        install: () => Effect.die(new Error("unexpected Plugin install")),
+        uninstall: () => Effect.die(new Error("unexpected Plugin uninstall")),
+        contributions: () => Effect.succeed([]),
+      });
+      const layer = daemonLayer(itemsRef, statsRef, registryLayer, failingStore, failingPlugins);
+      const messages: Array<string> = [];
+
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const seed = yield* client.WatchEvents().pipe(
+          Stream.takeUntil((event) => event._tag === "SeedEnd"),
+          Stream.runCollect,
+          Effect.withLogger(
+            Logger.make(({ message }) => {
+              messages.push(String(message));
+            }),
+          ),
+        );
+
+        assert.isFalse(
+          [...seed].some((event) => event._tag === "ControlStoreChanged" || event._tag === "PluginsChanged"),
+        );
+        assert.isTrue(messages.some((message) => message.includes("Control store seed failed")));
+        assert.isTrue(messages.some((message) => message.includes("Plugin seed failed")));
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
 
   it.effect("lets a client track the board live from WatchEvents, matching GetStatus", () =>
     Effect.gen(function* () {

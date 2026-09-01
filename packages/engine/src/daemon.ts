@@ -111,21 +111,27 @@ type ControlStoreSeedEvent = Omit<
   Extract<DaemonEvent, { readonly _tag: "ControlStoreChanged" }>,
   "emittedAtMillis"
 >;
+type PluginSeedEvent = Omit<Extract<DaemonEvent, { readonly _tag: "PluginsChanged" }>, "emittedAtMillis">;
 
 const controlStoreSeedEvents = Effect.fn("Daemon.controlStoreSeedEvents")(function* (
   store: ControlStoreService,
   registry: RegistryState,
 ) {
-  if (store.health === "unavailable") return [];
+  if (store.health === "unavailable") {
+    yield* Effect.logError("Control store seed unavailable", { message: store.message });
+    return [];
+  }
   return yield* store.picture.pipe(
-    Effect.match({
-      onFailure: () => [],
-      onSuccess: (controlStore) => [
-        {
-          _tag: "ControlStoreChanged",
-          controlStore: controlStoreWithDiagnostics(controlStore, registry),
-        } satisfies ControlStoreSeedEvent,
-      ],
+    Effect.matchEffect({
+      onFailure: (error) =>
+        Effect.logError("Control store seed failed", { error }).pipe(Effect.map(() => [])),
+      onSuccess: (controlStore) =>
+        Effect.succeed([
+          {
+            _tag: "ControlStoreChanged",
+            controlStore: controlStoreWithDiagnostics(controlStore, registry),
+          } satisfies ControlStoreSeedEvent,
+        ]),
     }),
   );
 });
@@ -136,6 +142,9 @@ const connectionSeedEvent = (connections: ConnectionOverview) =>
     connections,
     danglingWorkspaces: [],
   }) satisfies Omit<Extract<DaemonEvent, { readonly _tag: "ConnectionsChanged" }>, "emittedAtMillis">;
+
+const pluginSeedEvent = (plugins: PluginSeedEvent["plugins"]) =>
+  ({ _tag: "PluginsChanged", plugins, notices: [] }) satisfies PluginSeedEvent;
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
   const bus = yield* DaemonEventBus;
@@ -182,9 +191,9 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   } as const;
   const controlStoreEvents = yield* controlStoreSeedEvents(controlStore, registry);
   const pluginEvents = yield* plugins.overview.pipe(
-    Effect.match({
-      onFailure: () => [],
-      onSuccess: (overview) => [{ _tag: "PluginsChanged" as const, plugins: overview, notices: [] }],
+    Effect.matchEffect({
+      onFailure: (error) => Effect.logError("Plugin seed failed", { error }).pipe(Effect.map(() => [])),
+      onSuccess: (overview) => Effect.succeed([pluginSeedEvent(overview)]),
     }),
   );
   const connectionEvents = yield* connections.overview.pipe(
