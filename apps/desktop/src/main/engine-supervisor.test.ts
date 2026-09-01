@@ -36,12 +36,7 @@ class ShutdownOutputChild extends FakeChild {
   }
 }
 
-const command: EngineCommand = {
-  command: "tsx",
-  args: ["daemon"],
-  cwd: "/repo",
-  terminateTimeoutMillis: 10_000,
-};
+const command: EngineCommand = { command: "tsx", args: ["daemon"], cwd: "/repo" };
 
 const options = (
   overrides: Partial<EngineSupervisorOptions> & Pick<EngineSupervisorOptions, "spawn">,

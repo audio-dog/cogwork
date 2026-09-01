@@ -4,7 +4,7 @@ import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { app, BrowserWindow } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
-import { resolveEngineCommand } from "./engine-command";
+import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 import { EngineSupervisor } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
 import { engineLoggerLayer, mainLogger } from "./logger";
@@ -44,10 +44,12 @@ const showMainWindow = () => {
 const makeSupervisorLayer = () => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
+  const shutdown = resolveEngineShutdownBudgets();
   const command = resolveEngineCommand({
     socketPath,
     packaged: app.isPackaged,
     baseDir,
+    drainGraceSeconds: shutdown.drainGraceSeconds,
     nodeBinary: process.env.COGWORK_NODE,
     engineEntry: process.env.COGWORK_ENGINE_ENTRY,
   });
@@ -59,7 +61,7 @@ const makeSupervisorLayer = () => {
       spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),
     probe: isDaemonListening,
     awaitReachable: waitForDaemonListening,
-    terminateTimeout: command.terminateTimeoutMillis,
+    terminateTimeout: shutdown.terminateTimeoutMillis,
   });
 };
 
