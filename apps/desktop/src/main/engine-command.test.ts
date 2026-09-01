@@ -22,11 +22,12 @@ describe("resolveEngineCommand", () => {
     expect(command.cwd).toBe(cliDir);
   });
 
-  it("runs a bundled engine entry with node when packaged", () => {
+  it("runs a bundled engine entry with the packaged Node runtime", () => {
     const baseDir = "/Applications/cogwork.app/Contents/Resources";
     const command = resolveEngineCommand({ socketPath, packaged: true, baseDir });
+    const executable = process.platform === "win32" ? "node.exe" : "node";
 
-    expect(command.command).toBe("node");
+    expect(command.command).toBe(join(baseDir, "engine", "bin", executable));
     expect(command.args[0]).toBe(join(baseDir, "engine", "index.js"));
     expect(command.args).toContain(socketPath);
   });

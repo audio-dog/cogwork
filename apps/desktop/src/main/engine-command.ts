@@ -15,7 +15,7 @@ export interface ResolveEngineCommandInput {
   readonly engineEntry?: string;
 }
 
-const daemonArgs = (socketPath: string, drainGraceSeconds: number): readonly string[] => [
+const daemonArgs = (socketPath: string, drainGraceSeconds: number) => [
   "daemon",
   "--socket",
   socketPath,
@@ -23,13 +23,16 @@ const daemonArgs = (socketPath: string, drainGraceSeconds: number): readonly str
   String(drainGraceSeconds),
 ];
 
-export const resolveEngineCommand = (input: ResolveEngineCommandInput): EngineCommand => {
+const nodeExecutableName = process.platform === "win32" ? "node.exe" : "node";
+
+export const resolveEngineCommand = (input: ResolveEngineCommandInput) => {
   const drainGraceSeconds = input.drainGraceSeconds ?? 5;
   const args = daemonArgs(input.socketPath, drainGraceSeconds);
 
   if (input.packaged) {
     const entry = input.engineEntry ?? join(input.baseDir, "engine", "index.js");
-    return { command: input.nodeBinary ?? "node", args: [entry, ...args], cwd: input.baseDir };
+    const node = input.nodeBinary ?? join(input.baseDir, "engine", "bin", nodeExecutableName);
+    return { command: node, args: [entry, ...args], cwd: input.baseDir };
   }
 
   const cliDir = join(input.baseDir, "apps", "cli");
