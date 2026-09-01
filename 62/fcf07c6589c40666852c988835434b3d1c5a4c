@@ -1,0 +1,143 @@
+apps/desktop/src/main/engine-supervisor.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1-16,24,35,37-58,61-224,226-274
+packages/engine/src/run-control.ts
+  s_1035c9314faf21::t_4c594f627d7adc 15,50,56,71-72,82-84,90-91
+apps/cli/src/ledger.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 79,83,85,343,353-355,368-369,384,446,461,482,492,518,591-592,601
+packages/engine/src/registry.ts
+  s_1035c9314faf21::t_4c594f627d7adc 20,59-60,69,443-466,468-470,473,507,545,575
+packages/engine/src/engine.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 45,991,1003
+apps/desktop/src/main/logger.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1,14-18,21-24,28-30,37
+apps/cli/src/watch.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 179-180,186-192
+  s_1035c9314faf21::t_d7f61cb95fbe48 193
+packages/engine/src/session-store.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 16-18,29,34,61-87,105-117
+packages/engine/src/workspace-registry.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 101,124,209,254-256,315-318,333,336,344,350,352-356,359-362,440,505,551-553,560
+packages/engine/src/control-store.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 35,74-84,88-103,165-172,186-207,209,220-221,228-229,254,261,265,279-281,307-314
+apps/cli/src/watch.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1,3-8,78-80,87,91,94,96-99,101,107,114,116-117,121,128-131,133-134,141,144-147,149,154,162,167-187
+apps/desktop/src/renderer/src/components/item-tab-actions.test.tsx
+  s_1035c9314faf21::t_4c594f627d7adc 1-179
+packages/engine/src/run-recorder.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 22-23,31,62,133-148,198-212,214-215
+  s_1035c9314faf21::t_14064874ed8080 213,216
+apps/cli/src/rpc.ts
+  s_1035c9314faf21::t_4c594f627d7adc 84
+packages/engine/src/scheduler.ts
+  s_1035c9314faf21::t_4c594f627d7adc 243
+packages/engine/src/session-store.ts
+  s_1035c9314faf21::t_4c594f627d7adc 2-6,8-9,82-83,86,89,92-104,107-125
+  s_1035c9314faf21::t_bb3c85bda77504 126
+apps/cli/src/platform.ts
+  s_1035c9314faf21::t_4c594f627d7adc 225-232,248-249
+apps/desktop/src/main/index.ts
+  s_1035c9314faf21::t_4c594f627d7adc 4,10,19,32-33,43,54,59-60,62-83,85-89,91,94,96,110-111,126
+packages/engine/src/event-publisher.ts
+  s_1035c9314faf21::t_4c594f627d7adc 112,131,168,197-199
+packages/engine/src/testing/engine-test-layer.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1-27
+packages/engine/src/run-recorder.ts
+  s_1035c9314faf21::t_4c594f627d7adc 2,24-39,62,87
+apps/cli/src/rpc.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 119-155,261-265,271-274,280-284,289-290
+packages/engine/src/executor.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 67,1286,1288
+apps/cli/src/worktree-commands.ts
+  s_1035c9314faf21::t_4c594f627d7adc 33
+packages/engine/src/provider-bridge.ts
+  s_1035c9314faf21::t_4c594f627d7adc 13-25,27
+packages/codex-cli/src/harness.ts
+  s_1035c9314faf21::t_4c594f627d7adc 27,93-94,96-111,114-141,143-147,149,168,182,191-195,198-202,206-208,239,273-276,283,295,300,307-309,353,361-367,381-382
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1,29-36
+  s_1035c9314faf21::t_0647a27ecaff0d 37
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_1035c9314faf21::t_4c594f627d7adc 5
+packages/engine/src/recovery.ts
+  s_1035c9314faf21::t_4c594f627d7adc 296-297
+packages/engine/src/event-publisher.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 53,55,196,198-199,405,417,537,657-661,684,694,774
+apps/cli/src/ledger.ts
+  s_1035c9314faf21::t_4c594f627d7adc 347,399,409,457,476,479
+packages/engine/src/run-plan.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 315-348,386-449
+  s_1035c9314faf21::t_01ee9cda58fcc4 450
+packages/contracts/src/ag-ui.ts
+  s_1035c9314faf21::t_4c594f627d7adc 5-6,48,54,60,97-98,106,110,112,118,123,131-134,136-139,148-151,153-156,160,163,165-167,170,180
+packages/engine/src/external-harness-runtime.ts
+  s_1035c9314faf21::t_4c594f627d7adc 2-10,257
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_1035c9314faf21::t_4c594f627d7adc 24,26,70-75,80-83,101-105,127-129,136-149,158-164,169-172,247-248,250-254,257,259,294-295,299-300,310,317,328,335,343-362,366,376,378-379,415,417,437-438,454-474,490-491,493,496,554
+packages/engine/src/daemon.ts
+  s_1035c9314faf21::t_4c594f627d7adc 181,245,263-265,436
+packages/engine/src/testing/engine-test-layer.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1-60
+packages/engine/src/watch-activity.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 13-14,21
+packages/engine/src/scheduler.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 30,427,429,436,440,605,607-608,640
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_1035c9314faf21::t_4c594f627d7adc 2-3,49-52,68-72,81,90-95,100,106-107,113,116,120,124-133,205
+packages/engine/src/executor.ts
+  s_1035c9314faf21::t_4c594f627d7adc 19,52,213-239,249
+packages/engine/src/playbook.ts
+  s_1035c9314faf21::t_4c594f627d7adc 49
+packages/engine/src/commands.ts
+  s_1035c9314faf21::t_4c594f627d7adc 93,163,372,631
+packages/engine/src/run-ledger.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 17,23,25,31-52,221,231-233,247,264,276,296,323,351,476,486,514,547,558,566,577,588,609,619-620,630
+packages/engine/src/commands.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 58,200,366,375,377-378,380,394-398,402-415,1516-1560,1657
+packages/contracts/src/ag-ui.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 5,12,14,24,27,51-52,64,67,88-96
+apps/cli/src/platform.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 26,32,47-54,60-64,67-69,80-123,216-237
+  s_1035c9314faf21::t_25e31335ec5a8a 238-239
+packages/engine/src/plugin.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1,5,68,71-72,91-124,127-182,188-219,222,224-235,237-256,258-278,285-288,291-293,299-314,320,322,325,331,337-349,356,358,362,365,368-369,375-386,388-410,415,418,422-441,448-462,469-483
+packages/engine/src/run-ledger.ts
+  s_1035c9314faf21::t_4c594f627d7adc 65-67,104,116-120,122,228,230,244,255,257-258,261,275,277,326,328
+packages/engine/src/reconcile.ts
+  s_1035c9314faf21::t_4c594f627d7adc 304-305,315-316
+apps/cli/src/commands.ts
+  s_1035c9314faf21::t_4c594f627d7adc 268
+packages/engine/src/recovery.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 34,246-251,253,267
+packages/engine/src/run-plan.ts
+  s_1035c9314faf21::t_4c594f627d7adc 228-232,239-244,257-258,304-307,363-364,683-685,688,690,783-785,805,834
+packages/engine/src/playbook.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 48-61
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 2-3,7-12,16-18,20-26,31-37,39,41-51,53-67,70-112,119-122,124-127,130-132,134,136-137,140-141,143-150,152-153,155,157-158,160-162,164-173,175-177,180,188-196,198-200,203-204,206-209,211-213,219-282,284-320
+apps/desktop/src/main/ipc.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 6,8-9,41-45,52-58,73-74,90,102-103,116,128-129,160,167,196,207,215
+apps/desktop/src/main/ipc.ts
+  s_1035c9314faf21::t_4c594f627d7adc 1,11,17,19,41-42,44-53,62-67,69,76,87
+packages/cursor-acp/src/harness.ts
+  s_1035c9314faf21::t_4c594f627d7adc 137
+packages/codex-cli/src/harness.test.ts
+  s_1035c9314faf21::t_4c594f627d7adc 2-3,43,175,178,201-204,208,211-214,216-219,253,291,321,398,444,479,482,494-507,525,534,536,540,549-550,555,558,564-581,583-629,702-704,854,860
+packages/engine/src/plugin.ts
+  s_1035c9314faf21::t_4c594f627d7adc 26,29,51-57,60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "62fcf07c6589c40666852c988835434b3d1c5a4c",
+  "prompts": {},
+  "sessions": {
+    "s_1035c9314faf21": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05cec-9697-7110-9757-0df0b6e99e8a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
