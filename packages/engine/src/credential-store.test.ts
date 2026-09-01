@@ -2,6 +2,7 @@ import { ConnectionId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
@@ -581,46 +582,56 @@ const requesting = {
 };
 
 interface GrantCalls {
-  readonly minted: ReadonlyArray<string>;
-  readonly forgotten: ReadonlyArray<string>;
+  readonly minted: Ref.Ref<ReadonlyArray<string>>;
+  readonly forgotten: Ref.Ref<ReadonlyArray<string>>;
 }
 
-const recordingGrant = (secret: string | null) => {
-  const minted: Array<string> = [];
-  const forgotten: Array<string> = [];
-  const grant: ClientCredentialsGrant = {
-    token: (account) => {
-      if (!account.clientCredentials) return Effect.succeed(null);
-      if (secret === null) {
-        return Effect.fail(
-          new CredentialError({
-            account: account.key,
-            message: `client credentials for ${account.key} need ${account.clientCredentials.secretEnv}, which is unset or empty`,
-          }),
-        );
-      }
-      minted.push(account.key);
-      return Effect.succeed(Redacted.make(secret));
-    },
-    forget: (account) => Effect.sync(() => forgotten.push(account.key)),
-  };
-  return { grant, calls: { minted, forgotten } as GrantCalls };
-};
+class ClientCredentialsGrantCalls extends Context.Service<ClientCredentialsGrantCalls, GrantCalls>()(
+  "@cogwork/engine/credential-store.test/ClientCredentialsGrantCalls",
+) {
+  static readonly layer = Layer.effect(
+    ClientCredentialsGrantCalls,
+    Effect.all({
+      minted: Ref.make<ReadonlyArray<string>>([]),
+      forgotten: Ref.make<ReadonlyArray<string>>([]),
+    }),
+  );
+}
+
+const recordingGrant = (secret: string | null, calls: GrantCalls): ClientCredentialsGrant => ({
+  token: (account) => {
+    if (!account.clientCredentials) return Effect.succeed(null);
+    if (secret === null) {
+      return Effect.fail(
+        new CredentialError({
+          account: account.key,
+          message: `client credentials for ${account.key} need ${account.clientCredentials.secretEnv}, which is unset or empty`,
+        }),
+      );
+    }
+    return Ref.update(calls.minted, (accounts) => [...accounts, account.key]).pipe(
+      Effect.map(() => Redacted.make(secret)),
+    );
+  },
+  forget: (account) => Ref.update(calls.forgotten, (accounts) => [...accounts, account.key]),
+});
 
 const withGrant = (
-  grant: ClientCredentialsGrant,
+  secret: string | null,
   credentials: ReadonlyArray<StoredCredential> = [],
   env: Record<string, string> = { LINEAR_API_KEY: "env-key" },
 ) =>
   Effect.provide(
     Layer.mergeAll(
-      Layer.succeed(
+      Layer.effect(
         CredentialStore,
-        make({
-          stored: { load: Effect.succeed(credentials), save: () => Effect.void },
-          clientCredentials: grant,
-        }),
-      ),
+        Effect.map(ClientCredentialsGrantCalls, (calls) =>
+          make({
+            stored: { load: Effect.succeed(credentials), save: () => Effect.void },
+            clientCredentials: recordingGrant(secret, calls),
+          }),
+        ),
+      ).pipe(Layer.provideMerge(ClientCredentialsGrantCalls.layer)),
       ConfigProvider.layer(ConfigProvider.fromEnv({ env })),
     ),
   );
@@ -632,7 +643,7 @@ describe("CredentialStore (client credentials)", () => {
       const credential = yield* store.bearerToken(requesting);
       assert.strictEqual(credential.source, "client-credentials");
       assert.strictEqual(Redacted.value(credential.token), "app-token");
-    }).pipe(withGrant(recordingGrant("app-token").grant)),
+    }).pipe(withGrant("app-token")),
   );
 
   it.effect("keeps using the env key for an account that never asked for client credentials", () =>
@@ -641,25 +652,25 @@ describe("CredentialStore (client credentials)", () => {
       const credential = yield* store.bearerToken(account);
       assert.strictEqual(credential.source, "env");
       assert.strictEqual(Redacted.value(credential.token), "env-key");
-    }).pipe(withGrant(recordingGrant("app-token").grant)),
+    }).pipe(withGrant("app-token")),
   );
 
-  it.effect("lets a live stored token win over client credentials", () => {
-    const { grant, calls } = recordingGrant("app-token");
-    return Effect.gen(function* () {
+  it.effect("lets a live stored token win over client credentials", () =>
+    Effect.gen(function* () {
+      const calls = yield* ClientCredentialsGrantCalls;
       const store = yield* CredentialStore;
       const credential = yield* store.bearerToken(requesting);
       assert.strictEqual(credential.source, "stored-oauth");
-      assert.deepStrictEqual(calls.minted, []);
-    }).pipe(withGrant(grant, [stored("acme", storedToken(far))]));
-  });
+      assert.deepStrictEqual(yield* Ref.get(calls.minted), []);
+    }).pipe(withGrant("app-token", [stored("acme", storedToken(far))])),
+  );
 
   it.effect("surfaces the missing-secret error instead of quietly using the env key", () =>
     Effect.gen(function* () {
       const store = yield* CredentialStore;
       const error = yield* Effect.flip(store.bearerToken(requesting));
       assert.include(error.message, "LINEAR_CLIENT_SECRET");
-    }).pipe(withGrant(recordingGrant(null).grant)),
+    }).pipe(withGrant(null)),
   );
 
   it.effect("logs that it resolved from client credentials", () =>
@@ -667,17 +678,17 @@ describe("CredentialStore (client credentials)", () => {
       const store = yield* CredentialStore;
       const lines = yield* capturingLogs(store.bearerToken(requesting));
       assert.isTrue(lines.some((line) => line.includes("client-credentials")));
-    }).pipe(withGrant(recordingGrant("app-token").grant)),
+    }).pipe(withGrant("app-token")),
   );
 
-  it.effect("asks the grant to forget a rejected token", () => {
-    const { grant, calls } = recordingGrant("app-token");
-    return Effect.gen(function* () {
+  it.effect("asks the grant to forget a rejected token", () =>
+    Effect.gen(function* () {
+      const calls = yield* ClientCredentialsGrantCalls;
       const store = yield* CredentialStore;
       yield* store.invalidate(requesting);
-      assert.deepStrictEqual(calls.forgotten, ["AUD"]);
-    }).pipe(withGrant(grant));
-  });
+      assert.deepStrictEqual(yield* Ref.get(calls.forgotten), ["AUD"]);
+    }).pipe(withGrant("app-token")),
+  );
 
   it.effect("has nothing to forget when no client-credentials source is wired", () =>
     Effect.gen(function* () {

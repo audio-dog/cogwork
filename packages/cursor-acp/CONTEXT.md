@@ -10,11 +10,11 @@ events.
 ## Language
 
 **cursorRunner**:
-The factory that produces the engine's harness runner for Cursor. Maps harness-request `model` / `effort` onto Cursor CLI `--model` (including bracket `effort=` overrides) via TanStack `acpCompatible` `modelOptions`. When the request references a session, it pulls that session's opaque handle from the engine's `SessionStore` and hands it to Cursor as the resume `sessionId` — Cursor keeps its own history, so the handle is all it needs. The package also exports `cursorModels` / `cursorEfforts` for typed playbook config.
+The Cursor descriptor passed to the engine's shared External Harness runtime. It retains only Cursor's ACP transport, model and effort projection, telemetry acknowledgments, diagnostics, and optional token estimate. The shared runtime owns Workspace and MCP projection, host authentication, Sandbox lifecycle, chat streaming, event bridging, and cancellation. When a request references a Session, the descriptor hands its stored opaque handle to Cursor as `modelOptions.sessionId`. Cursor sessions support programmatic resume but no human attach command.
 _Avoid_: Harness, driver
 
 **Cursor model / effort**:
-Harness-native strings for Cursor. The live Harness catalog comes from `agent --list-models`; `cursorModels` is its generated, versioned fallback (`models:sync` → `models.generated.ts`), never hand-written. `models:check` fails when that fallback has drifted from the local CLI. Config authors get autocomplete via `satisfies CursorModel`, while runtime accepts any id the CLI takes. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override for parameterized base ids; the listed preset ids already embed their effort.
+Harness-native strings for Cursor. The picker and adapter share the generated, versioned `cursorModels` tuple (`models:sync` → `models.generated.ts`), never a second live catalog. `models:check` detects drift from the local CLI. Runtime readiness still probes the installed CLI and its model command without changing the picker source. Config authors get autocomplete via `satisfies CursorModel`. Effort is optional (`none` | `low` | `medium` | `high` | `xhigh` | `max`) and becomes a bracket `--model` override for parameterized base ids; the listed preset ids already embed their effort.
 _Avoid_: Sync's semantic model tiers (`fast` / `default` / `powerful`); hand-maintaining the model catalog
 
 **ACP (Agent Client Protocol)**:
@@ -22,13 +22,17 @@ The stdio JSON-RPC protocol the Cursor CLI exposes via `agent acp`. The wire for
 _Avoid_: API, transport (generically)
 
 **Adapter**:
-The TanStack `acpCompatible()` bridge that turns the ACP stream into TanStack AI stream chunks, which are then mapped to harness events. Local to this package.
+The TanStack `acpCompatible()` bridge that turns Cursor's ACP stream into TanStack AI stream chunks. The shared External Harness runtime maps those chunks to Harness events.
 _Avoid_: Work source adapter (unrelated), harness runner
+
+**Structured result**:
+Cursor has no native structured-output contract in ACP. The shared runtime supplies the operation schema through prompt-and-parse, so Cursor declares lower structured-output reliability than native adapters.
+_Avoid_: Native structured output, guaranteed JSON mode
 
 **Sandbox**:
 The scoped local-process environment — working directory set to the run's checkout, with env scrubbed — the Cursor CLI is launched inside.
 _Avoid_: Container, worktree
 
 **Token-usage estimate**:
-The best-guess `usage` this adapter attaches to a run's terminal event because Cursor's ACP mode reports no real token counts (see [FINDINGS.md](./FINDINGS.md) Q2 — the prompt response is `{stopReason}`, no `usage`; the counts exist only in the CLI's non-ACP `--print --output-format json` mode). `withEstimatedUsage` folds the streamed assistant + reasoning text and, when the real `RUN_FINISHED` carries no `usage`, fills one in at `chars/4` over the prompt plus that streamed text, flagged `estimated`. The flag rides the whole ledger and both surfaces (`cogwork runs` prints `tokens=~N`; the desktop drill-in marks it with a tooltip) so a rough number is never mistaken for a metered one. Because it undercounts, the follow-up resume policy ignores it — only metered usage can trip the resume token cap. It undercounts the system prompt, tools, and resumed server-side context the harness can't see; the day Cursor adds `usage` to the ACP response the real counts flow through untouched (`@tanstack/ai-acp` already forwards them) and this estimate steps aside.
+The best-guess `usage` this adapter attaches to a run's terminal event because Cursor's ACP mode reports no real token counts (see [FINDINGS.md](./FINDINGS.md) Q2 — the prompt response is `{stopReason}`, no `usage`; the counts exist only in the CLI's non-ACP `--print --output-format json` mode). The descriptor's usage estimator folds the streamed assistant + reasoning text and, when the real `RUN_FINISHED` carries no `usage`, fills one in at `chars/4` over the prompt plus that streamed text, flagged `estimated`. The flag rides the whole ledger and both surfaces (`cogwork runs` prints `tokens=~N`; the desktop drill-in marks it with a tooltip) so a rough number is never mistaken for a metered one. Because it undercounts, the follow-up resume policy ignores it — only metered usage can trip the resume token cap. It undercounts the system prompt, tools, and resumed server-side context the harness can't see; the day Cursor adds `usage` to the ACP response the real counts flow through untouched (`@tanstack/ai-acp` already forwards them) and this estimate steps aside.
 _Avoid_: Metered usage, billing tokens, exact cost

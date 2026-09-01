@@ -23,8 +23,16 @@ const daemonArgs = (socketPath: string, drainGraceSeconds: number): readonly str
   String(drainGraceSeconds),
 ];
 
+const defaultDrainGraceSeconds = 5;
+const terminateMarginMillis = 5_000;
+
+export const resolveEngineShutdownBudgets = (drainGraceSeconds = defaultDrainGraceSeconds) => ({
+  drainGraceSeconds,
+  terminateTimeoutMillis: drainGraceSeconds * 1_000 + terminateMarginMillis,
+});
+
 export const resolveEngineCommand = (input: ResolveEngineCommandInput): EngineCommand => {
-  const drainGraceSeconds = input.drainGraceSeconds ?? 5;
+  const drainGraceSeconds = input.drainGraceSeconds ?? defaultDrainGraceSeconds;
   const args = daemonArgs(input.socketPath, drainGraceSeconds);
 
   if (input.packaged) {

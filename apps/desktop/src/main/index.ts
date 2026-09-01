@@ -1,17 +1,18 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
-import { Cause, Effect, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
+import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { app, BrowserWindow } from "electron";
 import { defaultSocketPath } from "./daemon-paths";
-import { resolveEngineCommand } from "./engine-command";
+import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 import { EngineSupervisor } from "./engine-supervisor";
 import { broadcastEngineStatus, registerIpc } from "./ipc";
 import { engineLoggerLayer, mainLogger } from "./logger";
+import { installShutdownBeforeQuit } from "./quit";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
 import { waitForDaemonListening } from "./wait-for-socket";
-import { createMainWindow, type MainWindowDeps } from "./window";
+import { type MainWindowDeps, showMainWindow } from "./window";
 import { createWindowPreferencesStore } from "./window-preferences";
 
 const control = { quitting: false };
@@ -29,24 +30,17 @@ const windowDeps: MainWindowDeps = {
   requestQuit,
 };
 
-const showMainWindow = () => {
-  const window = BrowserWindow.getAllWindows()[0];
-  if (!window) {
-    createMainWindow(windowDeps);
-    return;
-  }
-  if (window.isMinimized()) window.restore();
-  window.show();
-  window.focus();
-};
+const showWindow = () => showMainWindow(windowDeps);
 
 const makeSupervisorLayer = () => {
   const socketPath = defaultSocketPath;
   const baseDir = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), "..", "..");
+  const shutdown = resolveEngineShutdownBudgets();
   const command = resolveEngineCommand({
     socketPath,
     packaged: app.isPackaged,
     baseDir,
+    drainGraceSeconds: shutdown.drainGraceSeconds,
     nodeBinary: process.env.COGWORK_NODE,
     engineEntry: process.env.COGWORK_ENGINE_ENTRY,
   });
@@ -58,6 +52,7 @@ const makeSupervisorLayer = () => {
       spawn(engine.command, [...engine.args], { cwd: engine.cwd, stdio: ["ignore", "pipe", "pipe"] }),
     probe: isDaemonListening,
     awaitReachable: waitForDaemonListening,
+    terminateTimeout: shutdown.terminateTimeoutMillis,
   });
 };
 
@@ -110,20 +105,22 @@ const bootstrap = () => {
     const supervisor = runtime.runSync(EngineSupervisor);
     registerIpc({ socketPath: defaultSocketPath, supervisor, windowPreferences, runtime });
 
-    createMainWindow(windowDeps);
+    showWindow();
     createTray({
-      onShow: showMainWindow,
+      onShow: showWindow,
       onQuit: requestQuit,
     });
 
-    app.on("activate", showMainWindow);
-    app.on("second-instance", showMainWindow);
+    app.on("activate", showWindow);
+    app.on("second-instance", showWindow);
     app.on("before-quit", () => {
       control.quitting = true;
     });
-    app.on("will-quit", () => runtime.dispose());
+    installShutdownBeforeQuit(app, () => runtime.dispose());
 
-    await runtime.runPromise(supervisor.start);
+    const startExit = await runtime.runPromiseExit(supervisor.start);
+    if (Exit.isSuccess(startExit) || Cause.hasInterruptsOnly(startExit.cause)) return;
+    mainLogger.error("Engine startup failed", startExit.cause);
   });
 };
 
