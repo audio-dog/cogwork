@@ -7,6 +7,8 @@ import type {
   Session,
   SessionId,
   TokenUsage,
+  WorkItemId,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import {
   RunPlan as RunPlanSchema,
@@ -99,8 +101,10 @@ const unresumableStatuses = new Set<RunRecord["status"]>(["interrupted", "crashe
 const forItem = (workspace: string, workItem: string) => (run: RunRecord) =>
   run.workspace === workspace && run.workItem === workItem;
 
-const consecutiveCrashesOf = (runs: ReadonlyArray<RunRecord>) => {
-  const ordered = [...runs].sort((a, b) => a.startedAtMillis - b.startedAtMillis);
+const consecutiveCrashesOf = (runs: ReadonlyArray<RunRecord>, sinceMillis: number) => {
+  const ordered = runs
+    .filter((run) => run.startedAtMillis > sinceMillis)
+    .toSorted((a, b) => a.startedAtMillis - b.startedAtMillis);
   const lastNonCrash = ordered.findLastIndex((run) => run.status !== "crashed");
   return ordered.length - (lastNonCrash + 1);
 };
@@ -226,8 +230,10 @@ export const makeMemory = Effect.gen(function* () {
           (run) => crashed(run, endedAtMillis),
         ),
       ),
-    consecutiveCrashes: (workspace: string, workItem: string) =>
-      Effect.map(Ref.get(runsRef), (runs) => consecutiveCrashesOf(runs.filter(forItem(workspace, workItem)))),
+    consecutiveCrashes: (workspace: WorkspaceId, workItem: WorkItemId, sinceMillis: number) =>
+      Effect.map(Ref.get(runsRef), (runs) =>
+        consecutiveCrashesOf(runs.filter(forItem(workspace, workItem)), sinceMillis),
+      ),
     insertSession: (session: Session) =>
       Ref.update(sessionsRef, (sessions) => new Map(sessions).set(session.id, session)),
     getSession,

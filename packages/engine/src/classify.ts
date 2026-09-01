@@ -3,18 +3,27 @@ import type {
   BlockedItem,
   Claim,
   ClaimedItem,
+  ClassifiedItem,
   LifecycleStage,
   NeedsHumanItem,
   NeedsHumanReason,
+  OperationAvailability,
   Priority,
   PrSummary,
   RunPlanWorkContextFacts,
   RunPlanWorkContextReference,
   SessionId,
 } from "@cogwork/contracts";
-import { byStageThenPriority, type ClassifiedItem } from "@cogwork/contracts";
-import { Chunk, Data } from "effect";
-import { type FollowUpContext, followUpContext, type ObservedPr, triggersFollowUp } from "./follow-up";
+import { byStageThenPriority } from "@cogwork/contracts";
+import * as Chunk from "effect/Chunk";
+import * as Data from "effect/Data";
+import {
+  type FollowUpContext,
+  followUpContext,
+  isStalledFollowUp,
+  type ObservedPr,
+  triggersFollowUp,
+} from "./follow-up";
 import type { ObservedItem } from "./issue-tracker";
 
 export interface ResumeContext {
@@ -42,12 +51,15 @@ export interface Classification {
   readonly needsHuman: ReadonlyArray<NeedsHumanItem>;
 }
 
+declare const emptyOutcome: unique symbol;
+type EmptyOutcome = { readonly [emptyOutcome]?: never };
+
 type Outcome = Data.TaggedEnum<{
-  readonly Eligible: { readonly stage: LifecycleStage };
-  readonly Claimed: { readonly claim: Claim };
-  readonly Blocked: Record<never, never>;
-  readonly NeedsHuman: { readonly reason: NeedsHumanReason };
-  readonly Drop: Record<never, never>;
+  Eligible: { readonly stage: LifecycleStage };
+  Claimed: { readonly claim: Claim };
+  Blocked: EmptyOutcome;
+  NeedsHuman: { readonly reason: NeedsHumanReason };
+  Drop: EmptyOutcome;
 }>;
 
 const Outcome = Data.taggedEnum<Outcome>();
@@ -98,7 +110,7 @@ const needsHumanItemOf = (item: ObservedItem, reason: NeedsHumanReason) => ({
 });
 
 const prStage = (pr: ObservedPr) => {
-  if (pr.followable === false) return null;
+  if (pr.draft || pr.followable === false) return null;
   if (triggersFollowUp(pr)) return "follow-up";
   if (pr.review === "ready") return "verify";
   return null;
@@ -124,47 +136,57 @@ export const consecutiveFailures = (item: ObservedItem, stage: LifecycleStage) =
 const ownedByActor = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined) =>
   !allowlist || item.assignees.some((assignee) => allowlist.includes(assignee));
 
-const classifyOne = (item: ObservedItem, allowlist: ReadonlyArray<string> | undefined): Outcome => {
-  if (!ownedByActor(item, allowlist)) return Outcome.Drop();
-  if (item.roles.includes("wontfix")) return Outcome.Drop();
+const classifyOne = (
+  item: ObservedItem,
+  allowlist: ReadonlyArray<string> | undefined,
+  availability: ReadonlyMap<LifecycleStage, OperationAvailability> | undefined,
+): Outcome => {
+  if (!ownedByActor(item, allowlist)) return Outcome.Drop({});
+  if (item.roles.includes("wontfix")) return Outcome.Drop({});
   if (item.claim) return Outcome.Claimed({ claim: item.claim });
-  if (item.claimLabeled) return Outcome.Drop();
+  if (item.claimLabeled) return Outcome.Drop({});
   if (item.roles.includes("needs-info")) return Outcome.NeedsHuman({ reason: "needs-info" });
   if (item.roles.includes("ready-for-human")) return Outcome.NeedsHuman({ reason: "ready-for-human" });
   const stage = stageFor(item);
-  if (!stage) return Outcome.Drop();
-  if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked();
+  if (!stage) return Outcome.Drop({});
+  if (stage === "implement" && item.openBlockers > 0) return Outcome.Blocked({});
   const failures = consecutiveFailures(item, stage);
   if (failures >= maxAttemptsPerStage) return Outcome.NeedsHuman({ reason: "ready-for-human" });
+  const followUp = stage === "follow-up" && item.pr ? followUpContext(item.pr) : undefined;
+  if (availability?.get(stage)?.available === false && !isStalledFollowUp(stage, followUp)) {
+    return Outcome.Drop({});
+  }
   return Outcome.Eligible({ stage });
 };
 
-export const classifiedItemOf = (item: ObservedItem): ClassifiedItem | null => {
-  const outcome = classifyOne(item, undefined);
-  return Outcome.$match(outcome, {
-    Eligible: ({ stage }): ClassifiedItem => ({
-      _tag: "Eligible",
-      id: item.id,
-      title: item.title,
-      stage,
-      ...trackerUrl(item),
-      ...prFields(item),
-    }),
-    Claimed: ({ claim }): ClassifiedItem => ({
-      _tag: "Claimed",
-      ...claimedItemOf(item, claim),
-    }),
-    Blocked: (): ClassifiedItem => ({
-      _tag: "Blocked",
-      ...blockedItemOf(item),
-    }),
-    NeedsHuman: ({ reason }): ClassifiedItem => ({
-      _tag: "NeedsHuman",
-      ...needsHumanItemOf(item, reason),
-    }),
+export const classifiedItemOf = (item: ObservedItem) =>
+  Outcome.$match(classifyOne(item, undefined, undefined), {
+    Eligible: ({ stage }) =>
+      ({
+        _tag: "Eligible",
+        id: item.id,
+        title: item.title,
+        stage,
+        ...trackerUrl(item),
+        ...prFields(item),
+      }) satisfies ClassifiedItem,
+    Claimed: ({ claim }) =>
+      ({
+        _tag: "Claimed",
+        ...claimedItemOf(item, claim),
+      }) satisfies ClassifiedItem,
+    Blocked: () =>
+      ({
+        _tag: "Blocked",
+        ...blockedItemOf(item),
+      }) satisfies ClassifiedItem,
+    NeedsHuman: ({ reason }) =>
+      ({
+        _tag: "NeedsHuman",
+        ...needsHumanItemOf(item, reason),
+      }) satisfies ClassifiedItem,
     Drop: () => null,
   });
-};
 
 export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   const priorFailures = consecutiveFailures(item, stage);
@@ -193,10 +215,14 @@ export const eligibleWork = (item: ObservedItem, stage: LifecycleStage) => {
   };
 };
 
-export const classify = (items: ReadonlyArray<ObservedItem>, allowlist?: ReadonlyArray<string>) => {
+export const classify = (
+  items: ReadonlyArray<ObservedItem>,
+  allowlist?: ReadonlyArray<string>,
+  availability?: ReadonlyMap<LifecycleStage, OperationAvailability>,
+) => {
   const classification = items.reduce<ClassificationChunks>(
     (current, item) =>
-      Outcome.$match(classifyOne(item, allowlist), {
+      Outcome.$match(classifyOne(item, allowlist, availability), {
         Eligible: ({ stage }) => ({
           eligible: Chunk.append(current.eligible, eligibleWork(item, stage)),
           claimed: current.claimed,

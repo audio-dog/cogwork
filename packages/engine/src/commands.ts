@@ -7,7 +7,8 @@ import {
   type ConnectionMutationResult,
   type ConnectionSystem,
   ContributionSettingRefused,
-  type ContributionSettingUpdate,
+  ContributionSettingScope,
+  ContributionSettingUpdate,
   type DaemonLimitUpdate,
   type OperationSettingUpdate,
   type PluginFailure,
@@ -40,6 +41,7 @@ import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { IssueTracker, type ObservedItem } from "./issue-tracker";
+import { applyHandbackBarrier } from "./observe";
 import { operationSettingRefusal } from "./operation-policy";
 import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
@@ -77,6 +79,33 @@ const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workIt
   snapshot.workspaces
     .find((state) => state.name === workspace)
     ?.observed.find((item) => item.id === workItem) ?? null;
+
+const roleChanges = (roles: ReadonlyArray<TriageRole>, role: TriageRole) => ({
+  remove: roles.filter((current) => current !== role),
+  add: roles.includes(role) ? [] : [role],
+});
+
+const resolveObserved = Effect.fn("Daemon.resolveObserved")(function* (
+  workspaceId: WorkspaceId,
+  workItem: WorkItemId,
+) {
+  const registry = yield* WorkspaceRegistry;
+  const workspace = workspaceById(registry, workspaceId);
+  if (workspace === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
+  const snapshot = yield* (yield* ReconcileWorker).snapshot;
+  const observed = observedFor(snapshot, workspaceId, workItem);
+  if (observed === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
+  return { workspace, observed };
+});
+
+const publishChangedItem = Effect.fn("Daemon.publishChangedItem")(function* (
+  workspace: WorkspaceId,
+  item: ClassifiedItem | null,
+) {
+  if (item === null) return;
+  const bus = yield* DaemonEventBus;
+  yield* bus.publish({ _tag: "ItemChanged", workspace, item });
+});
 
 const parkedNeedsHuman = (id: WorkItemId, title: string): ClassifiedItem => ({
   _tag: "NeedsHuman",
@@ -149,31 +178,39 @@ export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
   readonly role: TriageRole;
   readonly note?: string;
 }) {
-  const registry = yield* WorkspaceRegistry;
-  const workspace = workspaceById(registry, payload.workspace);
-  if (workspace === null) {
-    return yield* new WorkItemNotFound({ workspace: payload.workspace, workItem: payload.workItem });
-  }
-
-  const snapshot = yield* (yield* ReconcileWorker).snapshot;
-  const observed = observedFor(snapshot, payload.workspace, payload.workItem);
-  if (observed === null) {
-    return yield* new WorkItemNotFound({ workspace: payload.workspace, workItem: payload.workItem });
-  }
+  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
 
   const issueTracker = yield* IssueTracker;
-  const remove = observed.roles.filter((role) => role !== payload.role);
-  const add = observed.roles.includes(payload.role) ? [] : [payload.role];
   yield* issueTracker.reclassify(workspace, payload.workItem, {
-    changes: { remove, add },
+    changes: roleChanges(observed.roles, payload.role),
     note: payload.note,
   });
 
   const item = classifiedItemWithPr({ ...observed, roles: [payload.role] });
-  if (item !== null) {
-    const bus = yield* DaemonEventBus;
-    yield* bus.publish({ _tag: "ItemChanged", workspace: payload.workspace, item });
-  }
+  yield* publishChangedItem(payload.workspace, item);
+  return item;
+});
+
+export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
+  readonly workspace: WorkspaceId;
+  readonly workItem: WorkItemId;
+  readonly role: TriageRole;
+  readonly note?: string;
+}) {
+  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
+  const principal = yield* Principal;
+  const record = { by: principal.id, atMillis: yield* Clock.currentTimeMillis };
+  const issueTracker = yield* IssueTracker;
+  yield* issueTracker.handBack(workspace, payload.workItem, {
+    record,
+    changes: roleChanges(observed.roles, payload.role),
+    note: payload.note,
+  });
+
+  const item = classifiedItemWithPr(
+    applyHandbackBarrier({ ...observed, roles: [payload.role], handback: record }),
+  );
+  yield* publishChangedItem(payload.workspace, item);
   return item;
 });
 
@@ -210,11 +247,18 @@ export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(funct
   if (refusal !== null) return yield* refusal;
   const store = yield* ControlStore;
   const publisher = yield* DaemonEventPublisher;
-  return yield* store.withWrite(
-    Effect.flatMap(store.updateOperationSetting(payload.update), (controlStore) =>
-      publisher.publishControlStore(controlStore),
-    ),
+  const worker = yield* ReconcileWorker;
+  const controlStore = yield* store.withWrite(
+    Effect.gen(function* () {
+      const updated = yield* store.updateOperationSetting(payload.update);
+      yield* worker.invalidateAvailability();
+      return updated;
+    }),
   );
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  const published = yield* publisher.publishControlStore(controlStore);
+  yield* publisher.publishWorkspaces();
+  return published;
 });
 
 const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
@@ -270,8 +314,14 @@ const requireConfiguredBinding = Effect.fn("Daemon.requireConfiguredConnectionBi
 });
 
 const contributionSettingRefusal = (update: ContributionSettingUpdate, registry: RegistryState) => {
-  const cell = update._tag === "Set" ? update.row : update.cell;
-  const overlayWorkspace = cell.scope._tag === "PrivateWorkspaceOverlay" ? cell.scope.workspace : null;
+  const cell = ContributionSettingUpdate.match(update, {
+    Set: ({ row }) => row,
+    Clear: ({ cell }) => cell,
+  });
+  const overlayWorkspace = ContributionSettingScope.match(cell.scope, {
+    SettingsProfile: () => null,
+    PrivateWorkspaceOverlay: ({ workspace }) => workspace,
+  });
   if (overlayWorkspace && !workspaceIsRegistered(registry, overlayWorkspace)) {
     return ContributionSettingRefused.make({
       contribution: cell.contribution.id,
@@ -290,11 +340,18 @@ export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")
   if (refusal) return yield* refusal;
   const store = yield* ControlStore;
   const publisher = yield* DaemonEventPublisher;
-  return yield* store.withWrite(
-    Effect.flatMap(store.updateContributionSetting(payload.update), (controlStore) =>
-      publisher.publishControlStore(controlStore),
-    ),
+  const worker = yield* ReconcileWorker;
+  const controlStore = yield* store.withWrite(
+    Effect.gen(function* () {
+      const updated = yield* store.updateContributionSetting(payload.update);
+      yield* worker.invalidateAvailability();
+      return updated;
+    }),
   );
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  const published = yield* publisher.publishControlStore(controlStore);
+  yield* publisher.publishWorkspaces();
+  return published;
 });
 
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
@@ -352,16 +409,21 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
   const publisher = yield* DaemonEventPublisher;
   const plugins = yield* PluginManager;
   const store = yield* ControlStore;
+  const worker = yield* ReconcileWorker;
   const completed = yield* mutation;
-  return yield* store.withWrite(
+  const result = yield* store.withWrite(
     Effect.gen(function* () {
       const overview = yield* plugins.overview;
       const notices = samePluginMembership(completed.overview, overview) ? completed.notices : [];
-      yield* publisher.publishPlugins(overview, notices);
-      yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+      yield* worker.invalidateAvailability();
       return { overview, notices };
     }),
   );
+  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
+  yield* publisher.publishPlugins(result.overview, result.notices);
+  yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+  yield* publisher.publishWorkspaces();
+  return result;
 });
 
 export const installPlugin = Effect.fn("Daemon.InstallPlugin")(function* (payload: {

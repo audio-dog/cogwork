@@ -15,7 +15,6 @@ const workspace: RegisteredWorkspace = {
     name: "a",
     checkoutPath: "/repos/a",
     issueTracker: { type: "github", repo: "owner/a" },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -31,6 +30,7 @@ const stub = (over: Partial<IssueTrackerService>): IssueTrackerService =>
     followedUp: () => Effect.void,
     attemptFailed: () => Effect.void,
     handOff: () => Effect.void,
+    handBack: () => Effect.void,
     stalled: () => Effect.void,
     reclassify: () => Effect.void,
     ...over,

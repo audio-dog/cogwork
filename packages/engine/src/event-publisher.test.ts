@@ -112,7 +112,6 @@ const registeredWorkspace: Registry.RegisteredWorkspace = {
     name: "example",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -195,6 +194,7 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
   followedUp: () => Effect.void,
   attemptFailed: () => Effect.void,
   handOff: () => Effect.void,
+  handBack: () => Effect.void,
   stalled: () => Effect.void,
   reclassify: () => Effect.void,
 });
@@ -244,7 +244,7 @@ const eligibleItem = (title: string): TrackerItem => ({
   claim: null,
   claimedByUs: false,
   attempts: [],
-  owned: false,
+  handback: null,
   followUp: null,
   openBlockers: 0,
   proposal: null,

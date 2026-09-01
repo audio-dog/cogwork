@@ -16,7 +16,6 @@ const config = (over: Partial<typeof WorkspaceConfig.Encoded>) =>
       type: "linear",
       teams: ["ENG"],
     },
-    harness: { preferred: "cursor" },
     ...over,
   });
 
@@ -74,7 +73,14 @@ describe("McpSkillAssembler.assemble", () => {
       );
       assert.deepStrictEqual(
         [...resolved],
-        [{ name: "linear", endpoint: "https://mcp.linear.app/mcp", bearer: null }],
+        [
+          {
+            name: "linear",
+            endpoint: "https://mcp.linear.app/mcp",
+            bearer: null,
+            unavailableReason: null,
+          },
+        ],
       );
       assert.deepStrictEqual(yield* Ref.get(calls), []);
     }),
@@ -91,13 +97,13 @@ describe("McpSkillAssembler.assemble", () => {
     }),
   );
 
-  it.effect("fails when an authed skill has no credential account to source from", () =>
+  it.effect("records why an authed skill has no credential account", () =>
     Effect.gen(function* () {
       const calls = yield* Ref.make<ReadonlyArray<string>>([]);
       const assembler = make(storeStub(calls), () => null);
-      const error = yield* Effect.flip(assembler.assemble(config({ mcpSkills: [readonlySkill] })));
-      assert.strictEqual(error._tag, "CredentialError");
-      assert.include(error.message, "no credential account");
+      const [resolved] = yield* assembler.assemble(config({ mcpSkills: [readonlySkill] }));
+      assert.include(resolved?.unavailableReason ?? "", "no credential account");
+      assert.isNull(resolved?.bearer ?? null);
     }),
   );
 });

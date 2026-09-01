@@ -247,7 +247,6 @@ const workspace: RegisteredWorkspace = {
       teams: ["AUD"],
       actorUserId: bot.id,
     },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -273,7 +272,6 @@ const multiTeamWorkspace: RegisteredWorkspace = {
       teams: ["GRO", "BIL"],
       actorUserId: bot.id,
     },
-    harness: { preferred: "cursor" },
   }),
 };
 

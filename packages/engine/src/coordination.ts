@@ -1,10 +1,10 @@
-import { AttemptRecord, Claim, type LifecycleStage } from "@cogwork/contracts";
+import { AttemptRecord, Claim, HandbackRecord, type LifecycleStage } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { markdownCode, parseTriageProposal, statusReason } from "./comments";
 import { FollowUpMarker } from "./follow-up";
-import type { IssueTrackerError } from "./issue-tracker";
+import { IssueTrackerError } from "./issue-tracker";
 
 export interface MarkerSpan {
   readonly name: string;
@@ -70,6 +70,11 @@ export const attemptStatus = (attempt: AttemptRecord, reason?: string | null) =>
   return `Last ${attempt.stage} attempt failed.`;
 };
 
+export const handbackStatus = (handback: HandbackRecord, note?: string) => {
+  const detail = note ? statusReason(note) : "";
+  return detail ? `Handed back by ${handback.by}: ${detail}` : `Handed back by ${handback.by}.`;
+};
+
 const okToArray = <A>(result: Result.Result<A, unknown>): ReadonlyArray<A> =>
   Result.isSuccess(result) ? [result.success] : [];
 
@@ -112,6 +117,7 @@ const pairsNamed = (codec: WireCodec, body: string, name: string) =>
 
 const decodeClaim = Schema.decodeUnknownResult(Claim);
 const decodeAttempt = Schema.decodeUnknownResult(AttemptRecord);
+const decodeHandback = Schema.decodeUnknownResult(HandbackRecord);
 const decodeFollowUp = Schema.decodeUnknownResult(FollowUpMarker);
 
 export const parseClaim = (codec: WireCodec, body: string) => {
@@ -131,6 +137,13 @@ export const parseAttempts = (codec: WireCodec, body: string) =>
   pairsNamed(codec, body, "attempt").flatMap((pairs) =>
     okToArray(decodeAttempt({ stage: pairs.stage, outcome: pairs.outcome, atMillis: Number(pairs.at) })),
   );
+
+export const parseHandback = (codec: WireCodec, body: string) => {
+  const candidates = pairsNamed(codec, body, "handback").flatMap((pairs) =>
+    okToArray(decodeHandback({ by: pairs.by, atMillis: Number(pairs.at) })),
+  );
+  return candidates.at(-1) ?? null;
+};
 
 export const parseFollowUp = (codec: WireCodec, body: string) => {
   const candidates = pairsNamed(codec, body, "follow-up").flatMap((pairs) =>
@@ -190,6 +203,12 @@ export const serializeAttempt = (codec: WireCodec, attempt: AttemptRecord) =>
     pairs: `stage=${attempt.stage} outcome=${attempt.outcome} at=${attempt.atMillis}`,
   });
 
+export const serializeHandback = (codec: WireCodec, handback: HandbackRecord) =>
+  codec.encode({
+    name: "handback",
+    pairs: `by=${handback.by} at=${handback.atMillis}`,
+  });
+
 export const serializeFollowUp = (codec: WireCodec, marker: FollowUpMarker) =>
   codec.encode({
     name: "follow-up",
@@ -229,12 +248,11 @@ const nextDetail = (codec: WireCodec, update: CoordinationUpdate, previous: stri
   return update.detail ?? null;
 };
 
-export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(function* <Id>(
+const coordinationUpdate = <Id>(
   codec: WireCodec,
-  host: CommentHost<Id>,
+  comments: ReadonlyArray<CoordinationComment<Id>>,
   update: CoordinationUpdate,
-) {
-  const comments = yield* host.comments;
+) => {
   const ledger = selectLedger(codec, comments);
   const previous = ledger?.body ?? "";
   const markers = coordinationMarkers(codec, previous);
@@ -243,11 +261,37 @@ export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(f
     markers: update.marker === undefined ? markers : [...markers, update.marker],
     detail: nextDetail(codec, update, previous),
   });
+  return { ledger, body };
+};
+
+export const upsertCoordination = Effect.fn("coordination.upsertCoordination")(function* <Id>(
+  codec: WireCodec,
+  host: CommentHost<Id>,
+  update: CoordinationUpdate,
+) {
+  const comments = yield* host.comments;
+  const { ledger, body } = coordinationUpdate(codec, comments, update);
   if (ledger) {
     yield* host.edit(ledger.id, body);
     return;
   }
   yield* host.create(body);
+});
+
+export const editCoordination = Effect.fn("coordination.editCoordination")(function* <Id>(
+  codec: WireCodec,
+  host: CommentHost<Id>,
+  update: CoordinationUpdate,
+) {
+  const comments = yield* host.comments;
+  const { ledger, body } = coordinationUpdate(codec, comments, update);
+  if (!ledger) {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: "Cannot hand back a work item without a coordination comment",
+    });
+  }
+  yield* host.edit(ledger.id, body);
 });
 
 export const postNote = Effect.fn("coordination.postNote")(function* <Id>(

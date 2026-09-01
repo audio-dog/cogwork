@@ -65,9 +65,9 @@ export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
   ...(info.displayName ? { displayName: info.displayName } : {}),
   checkoutPath: info.checkoutPath,
   issueTracker: info.issueTracker,
-  harness: info.harness,
   poll: info.poll,
   contributions: info.contributions,
+  availability: info.availability,
 });
 
 export const workspaceFailureState = (failure: WorkspaceFailureInfo) => ({
@@ -120,4 +120,4 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
   });
 
 export const liveOnly = <E, R>(events: Stream.Stream<DaemonEvent, E, R>) =>
-  events.pipe(Stream.dropUntil((event) => event._tag === "SeedEnd"));
+  events.pipe(Stream.dropUntil(DaemonEvent.guards.SeedEnd));

@@ -26,9 +26,9 @@ const registered = (name: string) =>
     name,
     checkoutPath: `/repos/${name}`,
     issueTracker: "github",
-    harness: "cursor",
     poll: { status: "ok" },
     contributions: [],
+    availability: [],
   });
 
 type Stage = "triage" | "implement" | "follow-up" | "verify";
@@ -46,9 +46,11 @@ const needsHuman = (id: string, url: string | null) =>
     url,
   });
 
-const stageOf = (item: ClassifiedItem | undefined) => (item?._tag === "Eligible" ? item.stage : null);
+const stageOf = (item: ClassifiedItem | undefined) =>
+  item && ClassifiedItem.guards.Eligible(item) ? item.stage : null;
 
-const urlOf = (item: ClassifiedItem | undefined) => (item?._tag === "NeedsHuman" ? item.url : null);
+const urlOf = (item: ClassifiedItem | undefined) =>
+  item && ClassifiedItem.guards.NeedsHuman(item) ? item.url : null;
 
 const fold = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
@@ -63,7 +65,7 @@ describe("applyDaemonEvent", () => {
       }),
     );
 
-    assert.strictEqual(state._tag === "Failed" ? state.displayName : undefined, "Cogwork");
+    assert.strictEqual(WorkspaceState.guards.Failed(state) ? state.displayName : undefined, "Cogwork");
   });
 
   it("requires emittedAtMillis on daemon events", () => {
@@ -381,9 +383,9 @@ describe("applyDaemonEvent", () => {
           name: "acme",
           checkoutPath: "/repos/acme",
           issueTracker: "linear",
-          harness: "cursor",
           poll: { status: "ok" },
           contributions: [],
+          availability: [],
         }),
       }),
     ]);
@@ -391,7 +393,7 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(board.workspaces.size, 1);
     const acme = board.workspaces.get("acme");
     assert.strictEqual(acme?._tag, "Registered");
-    assert.strictEqual(acme?._tag === "Registered" ? acme.issueTracker : null, "linear");
+    assert.strictEqual(acme && WorkspaceState.guards.Registered(acme) ? acme.issueTracker : null, "linear");
   });
 
   it("folds Workspace input contribution offers into the registered workspace", () => {
@@ -413,7 +415,9 @@ describe("applyDaemonEvent", () => {
     ]);
 
     const acme = board.workspaces.get("acme");
-    assert.deepStrictEqual(acme?._tag === "Registered" ? acme.contributions : [], [contribution]);
+    assert.deepStrictEqual(acme && WorkspaceState.guards.Registered(acme) ? acme.contributions : [], [
+      contribution,
+    ]);
   });
 
   it("folds a failed workspace onto the board keyed by its source", () => {
@@ -428,7 +432,7 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(board.workspaces.size, 2);
     const failed = board.workspaces.get("broken.workspace.ts");
     assert.strictEqual(failed?._tag, "Failed");
-    assert.strictEqual(failed?._tag === "Failed" ? failed.message : null, "boom");
+    assert.strictEqual(failed && WorkspaceState.guards.Failed(failed) ? failed.message : null, "boom");
   });
 
   it("replaces workspace states under their minted identity", () => {
