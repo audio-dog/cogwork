@@ -1,5 +1,6 @@
 import {
   type AgUiEvent,
+  AgUiEventUnion,
   type Board,
   type BoardItem,
   ClassifiedItem,
@@ -148,30 +149,37 @@ const runError: Handler = ({ state, label, event }) => [
 
 const ignore: Handler = ({ state }) => [state, []];
 
-const handlers: Record<string, Handler> = {
-  RUN_STARTED: runStarted,
-  TOOL_CALL_START: toolStart,
-  TOOL_CALL_ARGS: toolArgs,
-  TOOL_CALL_END: toolEnd,
-  TOOL_CALL_RESULT: toolResult,
-  CUSTOM: custom,
-  STEP_STARTED: step,
-  RUN_FINISHED: runFinished,
-  RUN_ERROR: runError,
-};
-
 export const stepWatch = (
   state: WatchState,
   activity: RunActivity,
 ): readonly [WatchState, ReadonlyArray<string>] => {
   const { runId, event } = activity;
   const label = sanitize(`${activity.stage} ${activity.workItem}`);
-  if (event.type === "TEXT_MESSAGE_CONTENT") {
+  if (AgUiEventUnion.guards.TEXT_MESSAGE_CONTENT(event)) {
     const text = (state.text.get(runId)?.text ?? "") + (event.delta ?? "");
     return [setText(state, runId, { label, text }), []];
   }
   const [flushed, flushedLines] = flushText(state, runId);
-  const handle = handlers[event.type] ?? ignore;
+  const handle = AgUiEventUnion.matchOrElse(
+    event,
+    {
+      RUN_STARTED: () => runStarted,
+      TEXT_MESSAGE_START: () => ignore,
+      TEXT_MESSAGE_CONTENT: () => ignore,
+      TEXT_MESSAGE_END: () => ignore,
+      REASONING_MESSAGE_CONTENT: () => ignore,
+      TOOL_CALL_START: () => toolStart,
+      TOOL_CALL_ARGS: () => toolArgs,
+      TOOL_CALL_END: () => toolEnd,
+      TOOL_CALL_RESULT: () => toolResult,
+      CUSTOM: () => custom,
+      STEP_STARTED: () => step,
+      STEP_FINISHED: () => ignore,
+      RUN_FINISHED: () => runFinished,
+      RUN_ERROR: () => runError,
+    } satisfies Record<keyof typeof AgUiEventUnion.guards, unknown>,
+    () => ignore,
+  );
   const [next, lines] = handle({ state: flushed, runId, label, event });
   return [next, [...flushedLines, ...lines]];
 };
