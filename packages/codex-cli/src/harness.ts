@@ -89,6 +89,61 @@ const launchError = (message: string) =>
 
 const missingExecutablePattern = /ENOENT|EACCES|command not found/i;
 const missingLoginPattern = /codex login|not (?:logged|signed) in/i;
+const codexPreflightDeadline = "5 seconds";
+
+const codexPreflightError = (cause: unknown) => {
+  const message = String(cause);
+  if (missingExecutablePattern.test(message)) {
+    return new Harness.HarnessError({
+      reason: "missing-harness",
+      retryable: false,
+      message: "Codex CLI is not installed or executable",
+    });
+  }
+  if (missingLoginPattern.test(message)) {
+    return new Harness.HarnessError({
+      reason: "credential",
+      retryable: false,
+      message: "Codex CLI is not authenticated",
+    });
+  }
+  return launchError(message);
+};
+
+const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
+  Effect.scoped(
+    Effect.acquireRelease(
+      Effect.tryPromise({
+        try: () => localProcessSandbox({ dir: process.cwd() }).create({}),
+        catch: codexPreflightError,
+      }),
+      (sandbox) => Effect.promise(() => sandbox.destroy()),
+    ).pipe(
+      Effect.flatMap((sandbox) =>
+        Effect.tryPromise({
+          try: (signal) => sandbox.process.exec(`${executable} login status`, { signal }),
+          catch: codexPreflightError,
+        }),
+      ),
+      Effect.flatMap((result) =>
+        result.exitCode === 0
+          ? Effect.void
+          : Effect.fail(codexPreflightError(`${result.stderr}\n${result.stdout}`)),
+      ),
+    ),
+  ).pipe(
+    Effect.timeout(codexPreflightDeadline),
+    Effect.catchTag(
+      "TimeoutError",
+      () =>
+        new Harness.HarnessError({
+          reason: "launch",
+          retryable: true,
+          message: "Codex CLI did not answer its readiness check",
+        }),
+    ),
+  ),
+);
 
 const classifyTurnError = (error: Harness.HarnessError) => {
   if (missingExecutablePattern.test(error.message)) {
@@ -231,6 +286,7 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
       worktreeConfined: true,
       profiles: ["read-only", "full"],
     },
+    preflight: () => codexPreflight(options.codexExecutable ?? "codex"),
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {

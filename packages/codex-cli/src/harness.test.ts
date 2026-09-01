@@ -113,6 +113,7 @@ const makeRequest = (overrides: RequestOverrides = {}): Harness.HarnessRequest =
     projectedName: testMcpIdentity(server.name, index),
     endpoint: server.endpoint,
     authenticated: server.bearer !== null,
+    unavailableReason: null,
   }));
   return {
     plan: Schema.decodeSync(RunPlan)({
@@ -453,6 +454,59 @@ describe("codexRunner", () => {
       const { envName } = testMcpProjection("linear", 0);
       assert.strictEqual(firstConfig.env?.[envName], "first-secret");
       assert.strictEqual(rotatedConfig.env?.[envName], "rotated-secret");
+    }),
+  );
+
+  it.live("preserves unexpected preflight failures as launch errors", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: `node -e 'process.stderr.write("unexpected login status failure"); process.exit(1)'`,
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+      assert.strictEqual(error.reason, "launch");
+      assert.isFalse(error.retryable);
+      assert.include(error.message, "unexpected login status failure");
+    }),
+  );
+
+  it.live(
+    "keeps a timed-out preflight retryable",
+    () =>
+      Effect.gen(function* () {
+        const runner = testRunner({
+          codexExecutable: `node -e 'process.stdin.resume()'`,
+        });
+        const harness = Harness.make([runner], {
+          sessionStore,
+          contextAssembler,
+          credentialStore,
+          fileSystem,
+        });
+
+        const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+        assert.strictEqual(error.reason, "launch");
+        assert.isTrue(error.retryable);
+        assert.include(error.message, "readiness check");
+      }),
+    10_000,
+  );
+
+  it.live("classifies explicit preflight login failures as credential errors", () =>
+    Effect.gen(function* () {
+      const runner = testRunner({
+        codexExecutable: `node -e 'process.stderr.write("You are not logged in"); process.exit(1)'`,
+      });
+      const harness = Harness.make([runner], { sessionStore, contextAssembler, credentialStore, fileSystem });
+
+      const error = yield* Effect.flip(harness.preflight(name, "full", null));
+
+      assert.strictEqual(error.reason, "credential");
+      assert.isFalse(error.retryable);
+      assert.include(error.message, "not authenticated");
     }),
   );
 
