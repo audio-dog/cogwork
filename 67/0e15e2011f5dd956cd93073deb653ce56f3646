@@ -1,0 +1,21 @@
+docs/research/effect-never-lint-rule.md
+  s_457143d6fd1eb2::t_3da4314e61fdf5 127-128
+  s_457143d6fd1eb2::t_24ef5f44e57474 1-113,115-126,129-168
+  s_457143d6fd1eb2::t_79ad9759d6ef8b 114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "670e15e2011f5dd956cd93073deb653ce56f3646",
+  "prompts": {},
+  "sessions": {
+    "s_457143d6fd1eb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c6daa2f-8d09-4729-a7e5-4681491aef90",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
