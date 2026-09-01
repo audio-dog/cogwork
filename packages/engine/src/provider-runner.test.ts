@@ -194,6 +194,18 @@ const scratchCheckout = Effect.fn("runner.test.scratchCheckout")(function* () {
   return handle.id;
 });
 
+const providerRunnerLayer = (
+  credentials = credentialLayer(keyProvider),
+  httpClient = FetchHttpClient.layer,
+) =>
+  Layer.mergeAll(
+    contextLayer([sampleLayer]),
+    credentials,
+    sessionLayer([]),
+    NodeFileSystem.layer,
+    httpClient,
+  );
+
 describe("providerRunner", () => {
   it("projects Operating Instructions resources into provider context", () => {
     assert.deepStrictEqual(
@@ -229,11 +241,8 @@ describe("providerRunner", () => {
         ).pipe(
           Effect.provide(
             Layer.mergeAll(
-              contextLayer([sampleLayer]),
-              credentialLayer(keyProvider),
+              providerRunnerLayer(),
               sessionLayer([{ role: "assistant", content: "earlier turn" }]),
-              NodeFileSystem.layer,
-              FetchHttpClient.layer,
             ),
           ),
         );
@@ -289,14 +298,9 @@ describe("providerRunner", () => {
 
       yield* Stream.runDrain(runner.run(request({ checkoutPath }))).pipe(
         Effect.provide(
-          Layer.mergeAll(
-            contextLayer([sampleLayer]),
-            credentialLayer(keyProvider),
-            sessionLayer([]),
-            NodeFileSystem.layer,
-            Layer.succeed(HttpClient.HttpClient, httpClient),
-          ),
+          providerRunnerLayer(credentialLayer(keyProvider), Layer.succeed(HttpClient.HttpClient, httpClient)),
         ),
+        Effect.timeout("5 seconds"),
       );
     }),
   );
@@ -310,15 +314,7 @@ describe("providerRunner", () => {
       });
 
       const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            contextLayer([sampleLayer]),
-            credentialLayer(keyProvider),
-            sessionLayer([]),
-            NodeFileSystem.layer,
-            FetchHttpClient.layer,
-          ),
-        ),
+        Effect.provide(providerRunnerLayer()),
       );
 
       assert.strictEqual(
@@ -339,15 +335,7 @@ describe("providerRunner", () => {
       });
       const error = yield* Effect.flip(
         Stream.runDrain(runner.run(request({ model: "unknown-provider/whatever" }))).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              contextLayer([sampleLayer]),
-              credentialLayer(keyProvider),
-              sessionLayer([]),
-              NodeFileSystem.layer,
-              FetchHttpClient.layer,
-            ),
-          ),
+          Effect.provide(providerRunnerLayer()),
         ),
       );
       assert.strictEqual(error._tag, "HarnessError");
@@ -363,15 +351,7 @@ describe("providerRunner", () => {
       });
       const error = yield* Effect.flip(
         Stream.runDrain(runner.run(request({}))).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              contextLayer([sampleLayer]),
-              credentialLayer(missingKeyProvider),
-              sessionLayer([]),
-              NodeFileSystem.layer,
-              FetchHttpClient.layer,
-            ),
-          ),
+          Effect.provide(providerRunnerLayer(credentialLayer(missingKeyProvider))),
         ),
       );
       assert.strictEqual(error._tag, "HarnessError");

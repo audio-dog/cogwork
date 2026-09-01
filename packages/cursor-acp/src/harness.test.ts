@@ -172,16 +172,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
       };
       const runner = cursorRunner({ name: cursorName, runChat });
       const execution = yield* Effect.forkChild(
-        Stream.runDrain(
-          runner
-            .run(request("/tmp"))
-            .pipe(
-              Stream.provideService(SessionStore.SessionStore, harnessServices.sessionStore),
-              Stream.provideService(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
-              Stream.provideService(CredentialStore.CredentialStore, harnessServices.credentialStore),
-              Stream.provideService(FileSystem.FileSystem, harnessServices.fileSystem),
-            ),
-        ).pipe(Effect.timeout("1 second")),
+        Stream.runDrain(runner.run(request("/tmp"))).pipe(Effect.timeout("1 second")),
       );
       const abortController = yield* Effect.promise(() => captured.promise);
 
