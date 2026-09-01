@@ -69,9 +69,9 @@
     "electron-vite": "^5.0.0",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "tsx": "^4.19.2",
+    "tsx": "^4.23.13",
     "typescript": "catalog:",
-    "vite": "^8.2.1",
+    "vite": "^8.2.2",
     "vitest": "catalog:"
   }
 }
