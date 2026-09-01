@@ -1,0 +1,31 @@
+packages/cursor-acp/src/harness.ts
+  s_ffed0fe3f37454::t_5457173081d62e 115,146,204,315,359-363
+packages/engine/src/harness.ts
+  s_ffed0fe3f37454::t_7c540ab4915c53 412-413
+packages/cursor-acp/src/harness.test.ts
+  s_ffed0fe3f37454::t_6e8f49f2b10714 428-431,446-449,473-476
+  s_ffed0fe3f37454::t_740afef21c7d23 22,426-427,432-435,437,439-442,444-445,450-467
+  s_ffed0fe3f37454::t_7c540ab4915c53 471,481-482
+  s_ffed0fe3f37454::t_35e8b66ccf95d1 289-291
+  s_ffed0fe3f37454::t_47e8bba86397fe 331,360,394,415,468-469,472,477-479,483-484
+  s_ffed0fe3f37454::t_f638f915688a9e 470
+  s_ffed0fe3f37454::t_bb50af02e774d6 480
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_ffed0fe3f37454::t_740afef21c7d23 71-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "591c73198359dc3a07a1bb1aee0384c8babaa0fb",
+  "prompts": {},
+  "sessions": {
+    "s_ffed0fe3f37454": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05dd5-8ef9-7211-94eb-c47c2b6e29be",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
