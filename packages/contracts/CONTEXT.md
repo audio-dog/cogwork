@@ -57,7 +57,7 @@ The execution environment that binds portable configuration to machine-specific 
 _Avoid_: Device, machine config, workspace
 
 **Workspace input**:
-Versioned configuration and agent context read from `.agents/workspace.json` and the Authoring tree committed to a registered workspace's repository. Worktree setup commands and linked paths live here.
+The committed contribution Scope represented solely by a registered repository's `.agents/` Authoring tree. It has no settings file. Workspace bindings, including worktree setup, linked paths, and MCP skills, live in the Control store and enter through `register`.
 _Avoid_: Repo settings, private workspace overlay
 
 **Private workspace overlay**:
@@ -127,7 +127,7 @@ _Avoid_: Integration, connector, Customize, Plugins, setup wizard, *paired insta
 
 **Workspaces**:
 The surface that owns what the daemon operates over and under on this machine: register and deregister a **Workspace**, re-bind its checkout path, set the daemon's runtime limits, and restore the **Control store**'s pre-migration copy. Named for its dominant subject; the limits and restore live here because none of its five acts touches a Scope-held setting — the workspace record's columns, the limits, and the store are machine facts (ADR 0016).
-**Register is the trust act.** Registering admits the repository's Workspace input and its Authoring tree — see **Scope** and ADR 0018. There is no settings file behind this surface: `*.workspace.ts` and its loader are retired, and `register` writes the workspace record instead.
+**Register is the trust act.** Registering admits the repository's Workspace input Authoring tree — see **Scope** and ADR 0018. There is no repository settings file behind this surface: `register` writes the workspace record instead.
 _Avoid_: Settings (already on Customize's _Avoid_ line), Engine (the machinery being managed, not a pane), Daemon, Workspace (the singular is the registered repo, not the surface), machine config
 
 **Contribution kind**:
