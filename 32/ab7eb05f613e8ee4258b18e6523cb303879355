@@ -1,0 +1,36 @@
+configs/lint/no-flatmap-ladder.grit
+  s_1ffaa2973c6998::t_e7dbfe35f4f7a0 10,18
+configs/lint/no-effect-sync-throw.grit
+  s_1ffaa2973c6998::t_737b22a27cf694 1-11
+biome.json
+  s_1ffaa2973c6998::t_e7dbfe35f4f7a0 2
+  s_1ffaa2973c6998::t_5236a8c9f80084 54-56
+configs/lint/no-effect-sync-effect.grit
+  s_1ffaa2973c6998::t_60f97abc4dd229 1-4,7-11,13-15,17
+  s_1ffaa2973c6998::t_d9d68dfd26602c 5-6
+configs/lint/no-effect-sync-promise.grit
+  s_1ffaa2973c6998::t_f435f1d3b80aec 1-11
+apps/desktop/src/main/daemon-bridge.ts
+  s_1ffaa2973c6998::t_78afe10ee36fd4 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "32ab7eb05f613e8ee4258b18e6523cb303879355",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_1ffaa2973c6998": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03d83829-eff3-46e6-ac40-c57850b4d2b4",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
