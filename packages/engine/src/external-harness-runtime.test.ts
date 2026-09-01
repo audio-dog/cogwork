@@ -19,11 +19,18 @@ import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
+  type ExternalHarnessAuthentication,
   type ExternalHarnessDescriptor,
   externalHarnessRunner,
   preparedCheckoutWorkspace,
 } from "./external-harness-runtime";
-import { fullHarnessExecution, HarnessError, make } from "./harness";
+import {
+  fullHarnessExecution,
+  HarnessError,
+  HarnessPreflightInput,
+  make,
+  staticCatalogSource,
+} from "./harness";
 import { SessionStore } from "./session-store";
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
@@ -250,10 +257,37 @@ const descriptor = (
   sessionKind: "opaque-handle",
   capabilities: {
     execution: fullHarnessExecution,
+    profile: {
+      authenticationModes: ["host"],
+      session: { affinity: "runtime-host", fork: false },
+      policyFidelity: "exact",
+      fileEventFidelity: "sandbox",
+      usageQuality: "estimated",
+      readinessDiagnostics: true,
+      journal: false,
+      takeover: false,
+    },
     projectedMembers: ["Harness Adapter", "Sandbox", "Structured Output"],
     planMiddleware: ["sandbox"],
   },
-  optionCatalogSource: { kind: "controlled", version: "1" },
+  authentication: { mode: "host", reference: "controlled host login" },
+  catalogSources: {
+    fallback: staticCatalogSource(
+      {
+        models: [{ value: "controlled", label: "Controlled" }],
+        efforts: [{ value: "high", label: "High" }],
+      },
+      { source: "cogwork-fallback", fallbackVersion: "controlled-1" },
+    ),
+  },
+  readiness: () =>
+    Effect.succeed({
+      operational: { status: "ready", retryable: false, diagnostic: "Controlled runner is ready" },
+      installation: { status: "installed", version: "1.0.0" },
+      compatibility: { status: "compatible", requirement: ">=1" },
+      authentication: { mode: "host", status: "available", diagnostic: "controlled login is available" },
+      diagnostics: [],
+    }),
   makeAdapter: (resolved) => {
     probe.resolved.push(resolved);
     return new ControlledAdapter(() => toAsyncIterable(chunks), probe);
@@ -287,11 +321,16 @@ const makeHarness = (
   controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string>,
   created: Array<string>,
   destructions: Array<true> = [],
+  authentication: Effect.Effect<ExternalHarnessAuthentication> = Effect.succeed({
+    mode: "host",
+    secrets: {},
+  }),
+  provider: SandboxProvider = controlledProvider(created, destructions),
 ) =>
   make([
     externalHarnessRunner(controlledDescriptor, {
-      authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
-      sandboxProvider: () => Effect.succeed(controlledProvider(created, destructions)),
+      authentication: () => authentication,
+      sandboxProvider: () => Effect.succeed(provider),
       workspace: preparedCheckoutWorkspace(),
       sandboxPolicy: () => Effect.succeed(undefined),
     }),
@@ -452,6 +491,80 @@ describe("external Harness runtime", () => {
         assert.strictEqual(error.reason, "launch");
         assert.strictEqual(error.retryable, false);
         assert.strictEqual(error.message, nativeFailure.message);
+      }),
+    );
+
+    it.effect("refuses authentication mismatch without trying another mode", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const created: Array<string> = [];
+        const harness = makeHarness(
+          descriptor([], probe),
+          created,
+          [],
+          Effect.succeed({ mode: "byok", secrets: {} }),
+        );
+        const error = yield* harness
+          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "credential");
+        assert.include(error.message, "requires host authentication, received byok");
+        assert.deepStrictEqual(probe.resolved, []);
+        assert.deepStrictEqual(created, []);
+      }),
+    );
+
+    it.effect("refuses an incompatible Sandbox provider before adapter launch", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const created: Array<string> = [];
+        const provider = {
+          ...controlledProvider(created, []),
+          capabilities: () => ({ ...capabilities, killableProcesses: false }),
+        } satisfies SandboxProvider;
+        const harness = makeHarness(
+          descriptor([], probe),
+          created,
+          [],
+          Effect.succeed({ mode: "host", secrets: {} }),
+          provider,
+        );
+        const error = yield* harness
+          .run({ plan: request, session: null, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "sandbox");
+        assert.include(error.message, "killable processes");
+        assert.deepStrictEqual(probe.resolved, []);
+      }),
+    );
+
+    it.effect("resolves the Workspace and policy during launch preflight", () =>
+      Effect.gen(function* () {
+        const probe = new ControlledProbe();
+        const failure = new HarnessError({
+          reason: "workspace",
+          retryable: false,
+          message: "Workspace projection failed",
+        });
+        const runner = externalHarnessRunner(descriptor([], probe), {
+          authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
+          sandboxProvider: () => Effect.succeed(controlledProvider([], [])),
+          workspace: () => Effect.fail(failure),
+          sandboxPolicy: () => Effect.die(new Error("policy resolution must follow Workspace resolution")),
+        });
+
+        const error = yield* runner
+          .preflight(
+            HarnessPreflightInput.Launch({
+              request: { plan: request, session: null, mcpCredentials: new Map() },
+            }),
+          )
+          .pipe(Effect.flip);
+
+        assert.strictEqual(error, failure);
+        assert.deepStrictEqual(probe.resolved, []);
       }),
     );
 

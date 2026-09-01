@@ -33,8 +33,14 @@ import type * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import {
   type AgUiEvent,
-  type HarnessError,
+  type HarnessAuthenticationBinding,
+  type HarnessAuthenticationMode,
+  type HarnessCapabilityProfile,
+  type HarnessCatalogSources,
+  HarnessError,
   type HarnessExecution,
+  HarnessPreflightInput,
+  type HarnessReadiness,
   type HarnessRequest,
   type HarnessRunner,
   type HarnessRunnerEnv,
@@ -56,7 +62,7 @@ type AdapterMessage<Adapter extends AnyTextAdapter> = ConstrainedModelMessage<{
 }>;
 
 export interface ExternalHarnessAuthentication {
-  readonly mode: string;
+  readonly mode: HarnessAuthenticationMode;
   readonly secrets: Secrets;
 }
 
@@ -95,13 +101,9 @@ export interface ExternalHarnessResolvedRequest {
 
 export interface ExternalHarnessCapabilities {
   readonly execution: HarnessExecution;
+  readonly profile: HarnessCapabilityProfile;
   readonly projectedMembers: HarnessRunner["projectedMembers"];
   readonly planMiddleware: HarnessRunner["planMiddleware"];
-}
-
-export interface ExternalHarnessOptionCatalogSource {
-  readonly kind: string;
-  readonly version: string;
 }
 
 export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
@@ -124,7 +126,9 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter, Nativ
   readonly name: HarnessName;
   readonly sessionKind: SessionKind;
   readonly capabilities: ExternalHarnessCapabilities;
-  readonly optionCatalogSource: ExternalHarnessOptionCatalogSource;
+  readonly authentication: HarnessAuthenticationBinding;
+  readonly catalogSources: HarnessCatalogSources;
+  readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly makeAdapter: (input: {
     readonly model: AdapterModel<Adapter>;
     readonly authentication: NativeAuthentication;
@@ -152,6 +156,84 @@ export interface ExternalHarnessRuntimeInputs {
 
 const preparedWorkspace = { source: { type: "none" } } satisfies WorkspaceDefinition;
 
+const authenticationMismatch = (
+  name: HarnessName,
+  expected: HarnessAuthenticationMode,
+  actual: ExternalHarnessAuthentication,
+) =>
+  new HarnessError({
+    reason: "credential",
+    retryable: false,
+    message: `harness runner ${name} requires ${expected} authentication, received ${actual.mode}`,
+  });
+
+const incompatibleSandbox = (name: HarnessName, capability: string) =>
+  new HarnessError({
+    reason: "sandbox",
+    retryable: false,
+    message: `Sandbox provider for harness runner ${name} does not support ${capability}`,
+  });
+
+const missingProjectedMember = (name: HarnessName, member: "Sandbox" | "MCP") =>
+  new HarnessError({
+    reason: "workspace",
+    retryable: false,
+    message:
+      member === "Sandbox"
+        ? `harness runner ${name} cannot project the mandatory Harness Workspace`
+        : `harness runner ${name} cannot project required MCP servers`,
+  });
+
+const requireProjectedMember = <Adapter extends AnyTextAdapter, NativeAuthentication>(
+  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  member: "Sandbox" | "MCP",
+) =>
+  descriptor.capabilities.projectedMembers.includes(member)
+    ? Effect.void
+    : Effect.fail(missingProjectedMember(descriptor.name, member));
+
+const validateProjectedMembers = <Adapter extends AnyTextAdapter, NativeAuthentication>(
+  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  request: HarnessRequest,
+) =>
+  requireProjectedMember(descriptor, "Sandbox").pipe(
+    Effect.andThen(
+      resolvedMcpSkills(request).length > 0 ? requireProjectedMember(descriptor, "MCP") : Effect.void,
+    ),
+  );
+
+const validateSandboxProvider = <Adapter extends AnyTextAdapter, NativeAuthentication>(
+  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  provider: SandboxProvider,
+) => {
+  const capabilities = provider.capabilities();
+  const missingCapability = [
+    { supported: capabilities.fs, label: "filesystem access" },
+    { supported: capabilities.exec, label: "command execution" },
+    { supported: capabilities.backgroundProcesses, label: "background processes" },
+    { supported: capabilities.killableProcesses, label: "killable processes" },
+  ].find(({ supported }) => !supported);
+  return missingCapability
+    ? Effect.fail(incompatibleSandbox(descriptor.name, missingCapability.label))
+    : Effect.void;
+};
+
+const validateExternalRequest = <Adapter extends AnyTextAdapter, NativeAuthentication>(
+  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  request: HarnessRequest,
+  authentication: ExternalHarnessAuthentication,
+  provider: SandboxProvider,
+) => {
+  if (authentication.mode !== descriptor.authentication.mode) {
+    return Effect.fail(
+      authenticationMismatch(descriptor.name, descriptor.authentication.mode, authentication),
+    );
+  }
+  return validateProjectedMembers(descriptor, request).pipe(
+    Effect.andThen(validateSandboxProvider(descriptor, provider)),
+  );
+};
+
 const resolveResumeHandle = Effect.fn("ExternalHarnessRuntime.resolveResumeHandle")(function* (
   session: SessionId | null,
 ) {
@@ -178,6 +260,23 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     prompt: request.plan.messages,
     outputSchema: request.plan.structuredOutput,
   } satisfies ExternalHarnessResolvedRequest;
+});
+
+const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(function* <
+  Adapter extends AnyTextAdapter,
+  NativeAuthentication,
+>(
+  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  inputs: ExternalHarnessRuntimeInputs,
+  request: HarnessRequest,
+) {
+  const authentication = yield* inputs.authentication(request);
+  const resolved = yield* resolvedRequest(request, authentication);
+  const provider = yield* inputs.sandboxProvider(resolved);
+  yield* validateExternalRequest(descriptor, request, authentication, provider);
+  const workspaceDefinition = yield* inputs.workspace(resolved);
+  const policy = yield* inputs.sandboxPolicy(resolved);
+  return { resolved, provider, workspaceDefinition, policy };
 });
 
 const outputCharacters = (event: AgUiEvent) =>
@@ -271,36 +370,51 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
 export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
   inputs: ExternalHarnessRuntimeInputs,
-): HarnessRunner => ({
-  name: descriptor.name,
-  sessionKind: descriptor.sessionKind,
-  execution: descriptor.capabilities.execution,
-  projectedMembers: descriptor.capabilities.projectedMembers,
-  planMiddleware: descriptor.capabilities.planMiddleware,
-  run: (request) =>
-    Stream.unwrap(
-      Effect.gen(function* () {
-        const authentication = yield* inputs.authentication(request);
-        const resolved = yield* resolvedRequest(request, authentication);
-        const provider = yield* inputs.sandboxProvider(resolved);
-        const workspaceDefinition = yield* inputs.workspace(resolved);
-        const policy = yield* inputs.sandboxPolicy(resolved);
-        const opened = yield* Effect.try({
-          try: () => openChat(descriptor, inputs, resolved, provider, workspaceDefinition, policy),
-          catch: descriptor.diagnostics,
-        });
-        return withUsage(
-          resolved,
-          descriptor.estimateUsage ?? preserveUsage,
-          bridgeChat(
-            abortOnReturn(opened.stream, opened.abortController),
-            descriptor.diagnostics,
-            descriptor.diagnostics,
-          ).pipe(Stream.ensuring(Effect.sync(() => opened.abortController.abort()))),
-        );
-      }).pipe(Effect.withSpan("ExternalHarnessRuntime.run")),
-    ),
-});
+): HarnessRunner => {
+  const preflightPhase = HarnessPreflightInput.$match({
+    Static: () => Effect.void,
+    Launch: ({ request }) => resolveExternalLaunch(descriptor, inputs, request).pipe(Effect.asVoid),
+  });
+  const preflight = Effect.fn("ExternalHarnessRuntime.preflight")((input: HarnessPreflightInput) =>
+    preflightPhase(input),
+  );
+  return {
+    name: descriptor.name,
+    sessionKind: descriptor.sessionKind,
+    execution: descriptor.capabilities.execution,
+    capabilities: descriptor.capabilities.profile,
+    authentication: descriptor.authentication,
+    catalogSources: descriptor.catalogSources,
+    readiness: descriptor.readiness,
+    projectedMembers: descriptor.capabilities.projectedMembers,
+    planMiddleware: descriptor.capabilities.planMiddleware,
+    preflight,
+    run: (request) =>
+      Stream.unwrap(
+        resolveExternalLaunch(descriptor, inputs, request).pipe(
+          Effect.flatMap(({ resolved, provider, workspaceDefinition, policy }) =>
+            Effect.try({
+              try: () => openChat(descriptor, inputs, resolved, provider, workspaceDefinition, policy),
+              catch: descriptor.diagnostics,
+            }).pipe(
+              Effect.map((opened) =>
+                withUsage(
+                  resolved,
+                  descriptor.estimateUsage ?? preserveUsage,
+                  bridgeChat(
+                    abortOnReturn(opened.stream, opened.abortController),
+                    descriptor.diagnostics,
+                    descriptor.diagnostics,
+                  ).pipe(Stream.ensuring(Effect.sync(() => opened.abortController.abort()))),
+                ),
+              ),
+            ),
+          ),
+          Effect.withSpan("ExternalHarnessRuntime.run"),
+        ),
+      ),
+  };
+};
 
 export const preparedCheckoutWorkspace = () => (_request: ExternalHarnessResolvedRequest) =>
   Effect.succeed(preparedWorkspace);
