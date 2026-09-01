@@ -18,6 +18,7 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
+import * as References from "effect/References";
 import { Availability } from "./availability";
 import { type Classification, classify, type EligibleWork } from "./classify";
 import { ConnectionStore } from "./connection";
@@ -313,6 +314,7 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
         return pollWorkspace(workspace).pipe(
           Effect.annotateLogs(correlation),
           Effect.annotateSpans(correlation),
+          Effect.provideService(References.TracerEnabled, false),
         );
       },
       { concurrency: 4 },
