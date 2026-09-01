@@ -96,6 +96,19 @@ describe("ItemTab Hand back", () => {
     expect(renderItem(eligible)).not.toContain("Hand back");
   });
 
+  it("keeps attention state and AI suggestion in the warning palette", () => {
+    const item = classifiedItem({
+      _tag: "NeedsHuman",
+      id: "42",
+      title: "Repair the worktree",
+      reason: "ready-for-human",
+      proposal: "Return this item to the agent.",
+      url: null,
+    });
+
+    expect(renderItem(item).match(/bg-warning\/15/g)).toHaveLength(2);
+  });
+
   it("dispatches HandBack for the selected item and default role", () => {
     const item = classifiedItem({
       _tag: "NeedsHuman",

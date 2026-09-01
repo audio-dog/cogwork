@@ -243,8 +243,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 const stateBadgeVariant = (tone: ItemStateDescriptor["tone"]) => {
-  if (tone === "attention") return "destructive";
-  if (tone === "ready") return "secondary";
+  if (tone === "attention") return "warning";
+  if (tone === "ready") return "success";
   if (tone === "muted") return "outline";
   return "default";
 };
@@ -410,7 +410,7 @@ function TriageProposal({ proposal }: { proposal: string }) {
   const long = proposal.length > 320;
   return (
     <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-3">
-      <Badge variant="outline" className="w-fit">
+      <Badge variant="warning" className="w-fit">
         AI suggestion
       </Badge>
       <div className={cn("relative", long && !expanded && "max-h-32 overflow-hidden")}>
@@ -549,7 +549,7 @@ function PreviousAttempts() {
                     <span
                       className={cn(
                         "font-medium capitalize",
-                        tone === "succeeded" && "text-primary",
+                        tone === "succeeded" && "text-success",
                         tone === "failed" && "text-destructive",
                         tone === "abandoned" && "text-muted-foreground",
                       )}
