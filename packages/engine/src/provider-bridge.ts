@@ -7,24 +7,26 @@ import { HarnessError } from "./harness";
 
 const decodeEvent = Schema.decodeUnknownOption(AgUiEvent);
 
-export const toEvent = (chunk: StreamChunk): AgUiEvent =>
+export const toEvent = (chunk: StreamChunk) =>
   Option.getOrElse(decodeEvent(chunk), () => ({ type: chunk.type }));
 
-const fromThrown = (error: unknown): HarnessError => {
+const fromThrown = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   return new HarnessError({ reason: "turn", retryable: true, message });
 };
 
-const fromRunError = (chunk: Extract<StreamChunk, { type: EventType.RUN_ERROR }>): HarnessError =>
+const fromRunError = (chunk: Extract<StreamChunk, { type: EventType.RUN_ERROR }>) =>
   new HarnessError({ reason: "turn", retryable: true, message: chunk.message });
 
-// RUN_ERROR is surfaced as an event before failing the stream, so the UI shows
-// what happened.
-export const bridgeChat = (stream: AsyncIterable<StreamChunk>): Stream.Stream<AgUiEvent, HarnessError> =>
-  Stream.fromAsyncIterable(stream, fromThrown).pipe(
+export const bridgeChat = (
+  stream: AsyncIterable<StreamChunk>,
+  onThrown: (error: unknown) => HarnessError = fromThrown,
+  onRunError: (event: Extract<StreamChunk, { type: EventType.RUN_ERROR }>) => HarnessError = fromRunError,
+) =>
+  Stream.fromAsyncIterable(stream, onThrown).pipe(
     Stream.flatMap((chunk) =>
       chunk.type === EventType.RUN_ERROR
-        ? Stream.concat(Stream.succeed(toEvent(chunk)), Stream.fail(fromRunError(chunk)))
+        ? Stream.concat(Stream.succeed(toEvent(chunk)), Stream.fail(onRunError(chunk)))
         : Stream.succeed(toEvent(chunk)),
     ),
   );
