@@ -8,7 +8,8 @@ import {
 import { useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import type * as Atom from "effect/unstable/reactivity/Atom";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import * as Atom from "effect/unstable/reactivity/Atom";
 import { useCallback } from "react";
 import { runActivityAtom } from "../daemon/atoms";
 
@@ -167,7 +168,16 @@ export type TranscriptEntry =
 interface TranscriptFold {
   readonly entries: TranscriptEntry[];
   readonly byKey: Map<string, TranscriptEntry>;
+  appliedEventCount: number;
+  lastSeq: number | null;
 }
+
+export const makeTranscriptFold = (): TranscriptFold => ({
+  entries: [],
+  byKey: new Map(),
+  appliedEventCount: 0,
+  lastSeq: null,
+});
 
 const transcriptToolKey = (toolCallId: string | null | undefined) => `tool:${toolCallId ?? ""}`;
 
@@ -257,22 +267,86 @@ const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
     () => undefined,
   );
 
+export const applyTranscriptActivities = (state: TranscriptFold, activities: ReadonlyArray<RunActivity>) => {
+  for (const activity of activities) {
+    if (state.lastSeq !== null && activity.seq <= state.lastSeq) continue;
+    foldTranscriptActivity(state, activity);
+    state.lastSeq = activity.seq;
+    state.appliedEventCount += 1;
+  }
+  return state;
+};
+
 export const foldTranscript = (activities: ReadonlyArray<RunActivity>) => {
-  const state: TranscriptFold = { entries: [], byKey: new Map() };
-  for (const activity of activities) foldTranscriptActivity(state, activity);
+  const state = applyTranscriptActivities(makeTranscriptFold(), activities);
   return state.entries;
 };
 
 type ActivityResult = typeof runActivityAtom extends (id: RunId) => Atom.Atom<infer V> ? V : never;
+type ActivityError = ActivityResult extends AsyncResult.AsyncResult<unknown, infer E> ? E : never;
 
-export function useRunActivity(runId: RunId) {
-  const atom = runActivityAtom(runId);
+interface TranscriptSnapshot {
+  readonly done: boolean;
+  readonly entries: ReadonlyArray<TranscriptEntry>;
+  readonly appliedEventCount: number;
+}
+
+type TranscriptResult = AsyncResult.AsyncResult<TranscriptSnapshot, ActivityError>;
+
+interface TranscriptCell {
+  fold: TranscriptFold;
+  source: ActivityResult | null;
+  result: TranscriptResult;
+}
+
+const resetTranscriptCell = (cell: TranscriptCell, result: TranscriptResult) => {
+  cell.fold = makeTranscriptFold();
+  cell.result = result;
+  return result;
+};
+
+const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
+  if (current === cell.source) return cell.result;
+  cell.source = current;
+  if (current._tag === "Initial") {
+    return resetTranscriptCell(cell, AsyncResult.initial<TranscriptSnapshot, ActivityError>(current.waiting));
+  }
+  if (current._tag === "Failure") {
+    return resetTranscriptCell(
+      cell,
+      AsyncResult.failure<TranscriptSnapshot, ActivityError>(current.cause, {
+        waiting: current.waiting,
+      }),
+    );
+  }
+  applyTranscriptActivities(cell.fold, current.value.items);
+  cell.result = AsyncResult.success(
+    {
+      done: current.value.done,
+      entries: cell.fold.entries,
+      appliedEventCount: cell.fold.appliedEventCount,
+    },
+    current,
+  );
+  return cell.result;
+};
+
+const runTranscriptAtom = Atom.family((runId: RunId) => {
+  const cell: TranscriptCell = {
+    fold: makeTranscriptFold(),
+    source: null,
+    result: AsyncResult.initial(),
+  };
+  return Atom.map(runActivityAtom(runId), (result) => applyActivityResult(cell, result));
+});
+
+export function useRunTranscript(runId: RunId) {
+  const atom = runTranscriptAtom(runId);
   const result = useAtomValue(atom);
   const pull = useAtomSet(atom);
 
-  // Mirrors use-live-events: a stable callback keeps useAtomSubscribe from re-subscribing each pull.
   const pump = useCallback(
-    (current: ActivityResult) => {
+    (current: TranscriptResult) => {
       if (current._tag === "Success" && !current.waiting && !current.value.done) pull();
     },
     [pull],

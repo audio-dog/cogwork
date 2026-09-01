@@ -1,7 +1,14 @@
 import { type AgUiEvent, DaemonEvent, type RunActivity } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { applyRunPreview, foldTranscript, previewMap, type RunPreviewState } from "./run-activity";
+import {
+  applyRunPreview,
+  applyTranscriptActivities,
+  foldTranscript,
+  makeTranscriptFold,
+  previewMap,
+  type RunPreviewState,
+} from "./run-activity";
 
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
@@ -134,6 +141,36 @@ describe("applyRunPreview", () => {
 });
 
 describe("foldTranscript", () => {
+  it("replays chunks once and matches a one-pass transcript", () => {
+    const activities = [
+      runActivity(0, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "hello " }),
+      runActivity(1, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "world" }),
+      runActivity(2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
+      runActivity(3, { type: "TOOL_CALL_RESULT", toolCallId: "t1", result: "contents" }),
+    ];
+    const incremental = makeTranscriptFold();
+
+    for (const next of activities) applyTranscriptActivities(incremental, [next]);
+
+    expect(incremental.entries).toEqual(foldTranscript(activities));
+    expect(incremental.appliedEventCount).toBe(activities.length);
+  });
+
+  it("ignores already-folded history when a later chunk overlaps it", () => {
+    const activities = [
+      runActivity(0, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "hello " }),
+      runActivity(1, { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "world" }),
+      runActivity(2, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
+    ];
+    const incremental = makeTranscriptFold();
+
+    applyTranscriptActivities(incremental, activities.slice(0, 2));
+    applyTranscriptActivities(incremental, activities.slice(1));
+
+    expect(incremental.entries).toEqual(foldTranscript(activities));
+    expect(incremental.appliedEventCount).toBe(activities.length);
+  });
+
   it("marks a tool call done when its result arrives", () => {
     const entries = foldTranscript([
       runActivity(0, { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "read" }),
