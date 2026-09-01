@@ -45,6 +45,20 @@ describe("resolveImplement", () => {
     const resolved = resolveImplement(config({ playbook: { implement: { skill: "my-impl" } } }));
     assert.strictEqual(resolved.skill, "my-impl");
   });
+
+  it("trims a custom Operation prompt", () => {
+    const workspace: WorkspaceConfig = {
+      ...config(),
+      playbook: { implement: { prompt: "  Implement the requested change.\n" } },
+    };
+    const blank: WorkspaceConfig = {
+      ...config(),
+      playbook: { implement: { prompt: " \n" } },
+    };
+
+    assert.strictEqual(resolveImplement(workspace).promptTemplate, "Implement the requested change.");
+    assert.strictEqual(resolveImplement(blank).promptTemplate, resolveImplement(config()).promptTemplate);
+  });
 });
 
 describe("resolveFollowUp", () => {

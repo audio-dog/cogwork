@@ -344,7 +344,7 @@ const make = Effect.fn("ledger.make")(function* () {
         db.update(sessions).set({ handle }).where(eq(sessions.id, id)).run(),
       ),
 
-    sessionForBranch: (workspace: string, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
       readRows("sessionForBranch", () =>
         db
           .select({ id: runs.id, session: runs.session })
@@ -396,7 +396,7 @@ const make = Effect.fn("ledger.make")(function* () {
         ),
       ),
 
-    closeRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+    closeRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
       writeIds("closeRunning", () =>
         db
           .update(runs)
@@ -406,7 +406,7 @@ const make = Effect.fn("ledger.make")(function* () {
           .all(),
       ),
 
-    crashRunning: (workspace: string, workItem: string, endedAtMillis: number) =>
+    crashRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
       writeIds("crashRunning", () =>
         db
           .update(runs)
@@ -454,7 +454,7 @@ const make = Effect.fn("ledger.make")(function* () {
       );
     },
 
-    latestRunByBranch: (workspace: string, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
       readRun("latestRunByBranch", () =>
         db
           .select(runRecordSelection)
@@ -473,10 +473,10 @@ const make = Effect.fn("ledger.make")(function* () {
           .get(),
       ),
 
-    latestRunForItem: (workspace: string, workItem: string) =>
+    latestRunForItem: (workspace: WorkspaceId, workItem: WorkItemId) =>
       latestRunWhere("latestRunForItem", and(eq(runs.workspace, workspace), eq(runs.workItem, workItem))),
 
-    resolveWatchTarget: (workItem: string) =>
+    resolveWatchTarget: (workItem: WorkItemId) =>
       readRun("resolveWatchTarget", () =>
         db
           .select(runRecordSelection)

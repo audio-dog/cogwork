@@ -11,13 +11,11 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
-import * as DaemonEventBus from "./daemon-event-bus";
-import { layerMemory, RunLedger } from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
-import { foldThread, SessionStore, layer as sessionStoreLayer } from "./session-store";
+import { RunLedger } from "./run-ledger";
+import { foldThread, SessionStore } from "./session-store";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
@@ -28,15 +26,12 @@ const harness = Schema.decodeSync(HarnessName)("cursor");
 const event = (seq: number, value: AgUiEvent): RunEvent => ({
   seq,
   type: value.type,
-  name: value.name ?? null,
+  name: typeof value.name === "string" ? value.name : null,
   data: JSON.stringify(value),
   atMillis: 1000 + seq,
 });
 
-const bus = DaemonEventBus.layer;
-const runLedger = layerMemory.pipe(Layer.provide(bus));
-const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
-const layer = sessionStoreLayer.pipe(Layer.provideMerge(Layer.mergeAll(runLedger, runRecorder)));
+const layer = engineTestLayer();
 
 describe("foldThread", () => {
   it("splits assistant text on a tool call and keeps the tool's name and args", () => {
@@ -63,6 +58,33 @@ describe("foldThread", () => {
     assert.deepStrictEqual(foldThread(events), [{ role: "tool", content: "a.ts", toolName: "read" }]);
   });
 
+  it("keeps the tool name when a later tool event arrives first", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "TOOL_CALL_ARGS", toolCallId: "t1", toolCallName: "read", args: "a.ts" },
+      { type: "TOOL_CALL_END", toolCallId: "t2", toolCallName: "write", args: "b.ts" },
+      { type: "TOOL_CALL_RESULT", toolCallId: "t3", toolCallName: "shell" },
+    ];
+
+    assert.deepStrictEqual(foldThread(events), [
+      { role: "tool", content: "a.ts", toolName: "read" },
+      { role: "tool", content: "b.ts", toolName: "write" },
+      { role: "tool", content: "", toolName: "shell" },
+    ]);
+  });
+
+  it("folds a forward-compatible tool call event", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      {
+        type: "TOOL_CALL_CHUNK",
+        toolCallId: "t1",
+        toolCallName: "bash",
+        args: "ls",
+      },
+    ];
+
+    assert.deepStrictEqual(foldThread(events), [{ role: "tool", content: "ls", toolName: "bash" }]);
+  });
+
   it("preserves a structured result as an assistant turn", () => {
     const raw = '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}';
     const events: ReadonlyArray<AgUiEvent> = [
@@ -79,6 +101,19 @@ describe("foldThread", () => {
     ];
 
     assert.deepStrictEqual(foldThread(events), [{ role: "assistant", content: raw }]);
+  });
+
+  it("ignores a malformed structured result envelope", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      {
+        type: "CUSTOM",
+        name: "structured-output.complete",
+        value: { object: { _tag: "triage" } },
+      },
+      { type: "RUN_FINISHED", finishReason: "stop" },
+    ];
+
+    assert.deepStrictEqual(foldThread(events), []);
   });
 });
 

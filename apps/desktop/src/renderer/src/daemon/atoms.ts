@@ -1,4 +1,4 @@
-import { DaemonRpcs, type RunId } from "@cogwork/contracts";
+import { DaemonRpcs, type RunId, type WorkItemId, type WorkspaceId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import * as Atom from "effect/unstable/reactivity/Atom";
@@ -25,6 +25,15 @@ export const runActivityAtom = Atom.family((runId: RunId) =>
 export const cancelRunAtom = DaemonAtomRpc.mutation("CancelRun");
 
 export const reclassifyAtom = DaemonAtomRpc.mutation("Reclassify");
+
+export const handBackAtom = Atom.keepAlive(DaemonAtomRpc.mutation("HandBack"));
+
+export const handBackTargetAtom = Atom.keepAlive(
+  Atom.make<{
+    readonly workspace: WorkspaceId;
+    readonly workItem: WorkItemId;
+  } | null>(null),
+);
 
 export const setSchedulingAtom = DaemonAtomRpc.mutation("SetScheduling");
 

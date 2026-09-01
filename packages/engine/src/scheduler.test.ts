@@ -15,7 +15,6 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
-import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -28,6 +27,7 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -424,25 +424,20 @@ const providedRegistryLayer = (deps: SchedulerLayerDependencies) => {
 };
 
 const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerDependencies) => {
-  const bus = DaemonEventBus.layer;
-  const runLedger = RunLedger.publishingLayer.pipe(
-    Layer.provide(RunLedger.layerMemoryCore),
-    Layer.provide(bus),
-  );
+  const engineServices = engineTestLayer();
   const probe = probeLayer(deps.snapshots);
-  const executor = executorStubLayer(deps.execute).pipe(Layer.provide(Layer.merge(probe, runLedger)));
+  const executor = executorStubLayer(deps.execute).pipe(Layer.provide(Layer.merge(probe, engineServices)));
   return Scheduler.layer(config).pipe(
     Layer.provide(
       Layer.mergeAll(
         providedRegistryLayer(deps),
         workerLayer.pipe(Layer.provide(probe)),
         executor,
-        runLedger,
+        engineServices,
       ),
     ),
     Layer.provideMerge(probe),
-    Layer.provideMerge(runLedger),
-    Layer.provideMerge(bus),
+    Layer.provideMerge(engineServices),
   );
 };
 
@@ -607,15 +602,10 @@ describe("Scheduler.tick", () => {
   );
 
   it.effect("lets an in-flight Run settle after its workspace leaves the registry", () => {
-    const state = MutableRef.make<Registry.RegistryState>({ workspaces: [wsA], failures: [] });
+    const state = Ref.makeUnsafe<Registry.RegistryState>({ workspaces: [wsA], failures: [] });
     const registry: Registry.WorkspaceRegistryService = {
-      get workspaces() {
-        return MutableRef.get(state).workspaces;
-      },
-      get failures() {
-        return MutableRef.get(state).failures;
-      },
-      refresh: Effect.sync(() => MutableRef.get(state)),
+      state: Ref.get(state),
+      refresh: Ref.get(state),
     };
     const runId = Schema.decodeSync(RunId)("deregistered-workspace");
     const harness = Schema.decodeSync(HarnessName)("cursor");
@@ -647,7 +637,7 @@ describe("Scheduler.tick", () => {
       assert.strictEqual(yield* scheduler.tick(), 1);
       yield* Effect.yieldNow;
 
-      MutableRef.set(state, Registry.emptyRegistry);
+      yield* Ref.set(state, Registry.emptyRegistry);
       yield* republish(probe);
       assert.strictEqual(yield* scheduler.tick(), 0);
 

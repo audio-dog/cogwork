@@ -23,12 +23,13 @@ const isolated = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null
 const processHandle = (
   exitCode: Effect.Effect<ChildProcessSpawner.ExitCode>,
   stdout: Stream.Stream<Uint8Array> = Stream.empty,
+  stderr: Stream.Stream<Uint8Array> = Stream.empty,
 ) =>
   ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1),
     stdin: Sink.drain,
     stdout,
-    stderr: Stream.empty,
+    stderr,
     all: Stream.empty,
     exitCode,
     isRunning: Effect.succeed(true),
@@ -43,21 +44,28 @@ const commandText = (command: ChildProcess.Command) => {
   return [command.command, ...command.args].join(" ");
 };
 
+const textOutput = (value: string) => Stream.make(new TextEncoder().encode(value));
+const exitedProcess = (exitCode: number, stdout = "", stderr = "") =>
+  processHandle(
+    Effect.succeed(ChildProcessSpawner.ExitCode(exitCode)),
+    stdout ? textOutput(stdout) : Stream.empty,
+    stderr ? textOutput(stderr) : Stream.empty,
+  );
+
 const hangingSpawnerLayer = Layer.succeed(
   ChildProcessSpawner.ChildProcessSpawner,
   ChildProcessSpawner.make(() => Effect.succeed(processHandle(Effect.never))),
 );
 
-const gitLayerWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
-  gitLayer.pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
-        FileSystem.layerNoop({}),
-        Path.layer,
-      ),
-    ),
+const platformDependenciesWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
+  Layer.mergeAll(
+    Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, spawner),
+    FileSystem.layerNoop({}),
+    Path.layer,
   );
+
+const gitLayerWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
+  gitLayer.pipe(Layer.provide(platformDependenciesWithSpawner(spawner)));
 
 class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<string>>>()(
   "@cogwork/cli/platform.test/GitCommands",
@@ -67,6 +75,50 @@ class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<str
 
 const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
   Layer.provide(Layer.mergeAll(hangingSpawnerLayer, FileSystem.layerNoop({}), Path.layer)),
+);
+
+const worktreeFsLayerWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
+  worktreeFsLayer.pipe(Layer.provide(platformDependenciesWithSpawner(spawner)));
+
+const setupEnvironmentLayer = worktreeFsLayerWithSpawner(
+  ChildProcessSpawner.make((command) => {
+    if (!ChildProcess.isStandardCommand(command)) return Effect.die("unsupported command");
+    assert.deepStrictEqual(command.options.env, { CI: "true" });
+    assert.isTrue(command.options.extendEnv);
+    return Effect.succeed(exitedProcess(0));
+  }),
+);
+
+const setupCommandFailures: ReadonlyArray<{
+  readonly command: string;
+  readonly exitCode: number;
+  readonly expectedMessage: string;
+  readonly stderr?: string;
+  readonly stdout?: string;
+}> = [
+  {
+    command: "fail-with-stderr",
+    exitCode: 1,
+    expectedMessage: "stderr diagnostic",
+    stderr: "  stderr diagnostic  \n",
+    stdout: "stdout diagnostic\n",
+  },
+  {
+    command: "fail-with-stdout",
+    exitCode: 1,
+    expectedMessage: "stdout diagnostic",
+    stdout: "  stdout diagnostic  \n",
+  },
+  { command: "fail-silently", exitCode: 17, expectedMessage: "exited with code 17" },
+];
+
+const setupFailureLayer = worktreeFsLayerWithSpawner(
+  ChildProcessSpawner.make((command) => {
+    if (!ChildProcess.isStandardCommand(command)) return Effect.die("unsupported command");
+    const failure = setupCommandFailures.find(({ command: expected }) => command.command === expected);
+    if (!failure) return Effect.die(`unexpected command: ${command.command}`);
+    return Effect.succeed(exitedProcess(failure.exitCode, failure.stdout, failure.stderr));
+  }),
 );
 
 const denied = (method: string, target: string) =>
@@ -159,6 +211,30 @@ describe("subprocess deadlines", () => {
       assert.deepStrictEqual(yield* Ref.get(commands), ["git rebase origin/main main", "git rebase --abort"]);
     }),
   );
+});
+
+describe("worktree setup commands", () => {
+  it.layer(setupEnvironmentLayer)((it) => {
+    it.effect("marks the command as CI while retaining the host environment", () =>
+      Effect.gen(function* () {
+        const fs = yield* WorktreeFs.WorktreeFs;
+        yield* fs.runCommand("/repo", "pnpm install");
+      }),
+    );
+  });
+
+  layer(setupFailureLayer)((it) => {
+    it.effect.each(setupCommandFailures)(
+      "reports $expectedMessage when $command fails",
+      ({ command, expectedMessage }) =>
+        Effect.gen(function* () {
+          const fs = yield* WorktreeFs.WorktreeFs;
+          const error = yield* Effect.flip(fs.runCommand("/repo", command));
+
+          assert.strictEqual(error.message, expectedMessage);
+        }),
+    );
+  });
 });
 
 describe("platform read failures", () => {

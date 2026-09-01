@@ -10,8 +10,21 @@ const decodeEvent = Schema.decodeUnknownOption(AgUiEvent);
 export const toEvent = (chunk: StreamChunk) =>
   Option.getOrElse(decodeEvent(chunk), () => ({ type: chunk.type }));
 
+export const messageFromUnknown = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return String(error);
+};
+
 const fromThrown = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = messageFromUnknown(error);
   return new HarnessError({ reason: "turn", retryable: true, message });
 };
 

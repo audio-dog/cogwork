@@ -32,7 +32,7 @@ const storeAt = (storePath: string) =>
       : { health: store.health, message: store.message },
   ).pipe(Effect.provide(storeLayerAt(storePath)));
 
-const useStoreAt = <A, E, R>(
+const withStore = <A, E, R>(
   storePath: string,
   use: (store: Extract<ControlStoreService, { readonly health: "available" }>) => Effect.Effect<A, E, R>,
 ) =>
@@ -71,36 +71,36 @@ const temporaryStore = Effect.fn("test.temporaryStore")(function* (name = "contr
 const connectionId = Schema.decodeSync(ConnectionId);
 
 const persistConnectionState = Effect.fn("test.persistConnectionState")((storePath: string) =>
-  Effect.gen(function* () {
-    const store = yield* ControlStore;
-    if (store.health === "unavailable") return assert.fail(store.message);
-    yield* store.establishConnection({
-      id: connectionId("linear/acme"),
-      system: "linear",
-      account: "acme",
-      status: "established",
-    });
-    yield* store.revokeConnection(connectionId("linear/acme"));
-  }).pipe(Effect.provide(storeLayerAt(storePath))),
+  withStore(storePath, (store) =>
+    Effect.gen(function* () {
+      yield* store.establishConnection({
+        id: connectionId("linear/acme"),
+        system: "linear",
+        account: "acme",
+        status: "established",
+      });
+      yield* store.revokeConnection(connectionId("linear/acme"));
+    }),
+  ),
 );
 
 const establishSecondAccount = Effect.fn("test.establishSecondAccount")((storePath: string) =>
-  Effect.gen(function* () {
-    const store = yield* ControlStore;
-    if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
-    yield* store.establishConnection({
-      id: connectionId("linear/acme"),
-      system: "linear",
-      account: "acme",
-      status: "established",
-    });
-    yield* store.establishConnection({
-      id: connectionId("linear/other"),
-      system: "linear",
-      account: "other",
-      status: "established",
-    });
-  }).pipe(Effect.provide(storeLayerAt(storePath))),
+  withStore(storePath, (store) =>
+    Effect.gen(function* () {
+      yield* store.establishConnection({
+        id: connectionId("linear/acme"),
+        system: "linear",
+        account: "acme",
+        status: "established",
+      });
+      yield* store.establishConnection({
+        id: connectionId("linear/other"),
+        system: "linear",
+        account: "other",
+        status: "established",
+      });
+    }),
+  ),
 );
 
 const retentionWindowMillis = 1000 * 60 * 60 * 24 * 30;
@@ -162,18 +162,14 @@ layer(NodeServices.layer)((it) => {
   it.effect("persists every limit column and reads them after restart", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      yield* Effect.gen(function* () {
-        const store = yield* ControlStore;
-        if (store.health === "unavailable") return assert.fail(store.message);
-        yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
-        yield* store.setDaemonLimit({ key: "per-workspace-concurrency", value: 3, expectedRevision: 1 });
-        yield* store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 2 });
-      }).pipe(Effect.provide(storeLayerAt(storePath)));
-      const seed = yield* Effect.gen(function* () {
-        const store = yield* ControlStore;
-        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
-        return store.seed;
-      }).pipe(Effect.provide(storeLayerAt(storePath)));
+      yield* withStore(storePath, (store) =>
+        Effect.gen(function* () {
+          yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
+          yield* store.setDaemonLimit({ key: "per-workspace-concurrency", value: 3, expectedRevision: 1 });
+          yield* store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 2 });
+        }),
+      );
+      const seed = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
 
       assert.deepStrictEqual(seed.daemonLimits, {
         globalConcurrency: 8,
@@ -187,34 +183,30 @@ layer(NodeServices.layer)((it) => {
   it.effect("sets, clears, and reloads raw Operation setting rows", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      yield* Effect.gen(function* () {
-        const store = yield* ControlStore;
-        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
-        yield* store.updateOperationSetting({
-          _tag: "Set",
-          row: {
-            setting: "model",
-            level: { _tag: "Default" },
-            scope: { _tag: "PrivateWorkspaceOverlay", workspace },
-            value: "overlay-default",
-          },
-        });
-        yield* store.updateOperationSetting({
-          _tag: "Set",
-          row: {
-            setting: "model",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-            scope: { _tag: "SettingsProfile" },
-            value: "profile-operation",
-          },
-        });
-      }).pipe(Effect.provide(storeLayerAt(storePath)));
+      yield* withStore(storePath, (store) =>
+        Effect.gen(function* () {
+          yield* store.updateOperationSetting({
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Default" },
+              scope: { _tag: "PrivateWorkspaceOverlay", workspace },
+              value: "overlay-default",
+            },
+          });
+          yield* store.updateOperationSetting({
+            _tag: "Set",
+            row: {
+              setting: "model",
+              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              scope: { _tag: "SettingsProfile" },
+              value: "profile-operation",
+            },
+          });
+        }),
+      );
 
-      const reloaded = yield* Effect.gen(function* () {
-        const store = yield* ControlStore;
-        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
-        return store.seed;
-      }).pipe(Effect.provide(storeLayerAt(storePath)));
+      const reloaded = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
 
       assert.strictEqual(
         resolveOperationSetting(reloaded.operationSettings, "model", {
@@ -225,18 +217,16 @@ layer(NodeServices.layer)((it) => {
         "profile-operation",
       );
 
-      const cleared = yield* Effect.gen(function* () {
-        const store = yield* ControlStore;
-        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
-        return yield* store.updateOperationSetting({
+      const cleared = yield* withStore(storePath, (store) =>
+        store.updateOperationSetting({
           _tag: "Clear",
           cell: {
             setting: "model",
             level: { _tag: "Operation", workflow: "coding", operation: "implement" },
             scope: { _tag: "SettingsProfile" },
           },
-        });
-      }).pipe(Effect.provide(storeLayerAt(storePath)));
+        }),
+      );
 
       assert.strictEqual(
         resolveOperationSetting(cleared.operationSettings, "model", {
@@ -261,18 +251,18 @@ layer(NodeServices.layer)((it) => {
         workspace,
       } satisfies ContributionSettingCell["scope"];
 
-      yield* useStoreAt(storePath, (store) =>
+      yield* withStore(storePath, (store) =>
         store.updateContributionSetting({
           _tag: "Set",
           row: { contribution, scope, enabled: true },
         }),
       );
 
-      const reloaded = yield* useStoreAt(storePath, (store) => Effect.succeed(store.seed));
+      const reloaded = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
 
       assert.deepStrictEqual(reloaded.contributionSettings, [{ contribution, scope, enabled: true }]);
 
-      const cleared = yield* useStoreAt(storePath, (store) =>
+      const cleared = yield* withStore(storePath, (store) =>
         store.updateContributionSetting({
           _tag: "Clear",
           cell: { contribution, scope },
@@ -286,11 +276,9 @@ layer(NodeServices.layer)((it) => {
   it.effect("reads the whole picture without booting or writing the store", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      yield* Effect.gen(function* () {
-        const store = yield* ControlStore;
-        if (store.health === "unavailable") return assert.fail(store.message);
-        yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
-      }).pipe(Effect.provide(storeLayerAt(storePath)));
+      yield* withStore(storePath, (store) =>
+        store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 }),
+      );
 
       assert.deepStrictEqual((yield* readControlStore(storePath)).daemonLimits, {
         globalConcurrency: 8,
@@ -316,14 +304,14 @@ layer(NodeServices.layer)((it) => {
   it.effect("rejects a stale revision without changing the durable row", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
-      const stale = yield* Effect.gen(function* () {
-        const store = yield* ControlStore;
-        if (store.health === "unavailable") return yield* Effect.die(new Error(store.message));
-        yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
-        return yield* Effect.flip(
-          store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 0 }),
-        );
-      }).pipe(Effect.provide(storeLayerAt(storePath)));
+      const stale = yield* withStore(storePath, (store) =>
+        Effect.gen(function* () {
+          yield* store.setDaemonLimit({ key: "global-concurrency", value: 8, expectedRevision: 0 });
+          return yield* Effect.flip(
+            store.setDaemonLimit({ key: "daily-budget", value: 20, expectedRevision: 0 }),
+          );
+        }),
+      );
 
       assert.strictEqual(stale._tag, "StaleControlStoreWrite");
       if (stale._tag !== "StaleControlStoreWrite") return assert.fail("expected stale write");

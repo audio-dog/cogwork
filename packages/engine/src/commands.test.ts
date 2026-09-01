@@ -53,9 +53,9 @@ import * as Reconcile from "./reconcile";
 import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
-import { layer as runRecorderLayer } from "./run-recorder";
 import * as Scheduler from "./scheduler";
 import { type PrSignals, SourceControlProvider } from "./source-control";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
@@ -197,8 +197,7 @@ const recordingTracker = (items: ReadonlyArray<TrackerItem>, calls: Ref.Ref<Trac
       Ref.update(calls, (c) => ({ ...c, released: [...c.released, workItem] })),
   });
 
-const runLedgerLayer = RunLedger.layerMemory.pipe(Layer.provideMerge(DaemonEventBus.layer));
-const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedgerLayer));
+const engineServices = engineTestLayer();
 const pluginManagerLayer = Layer.succeed(PluginManager, {
   overview: Effect.succeed({ plugins: [] }),
   install: () => Effect.die(new Error("unexpected Plugin install")),
@@ -364,8 +363,7 @@ const daemonLayer = (
     Layer.provideMerge(Reconcile.layer.pipe(Layer.provide(Layer.mergeAll(registries, source)))),
     Layer.provideMerge(registries),
     Layer.provideMerge(scheduler),
-    Layer.provideMerge(runRecorder),
-    Layer.provideMerge(runLedgerLayer),
+    Layer.provideMerge(engineServices),
     Layer.provideMerge(runControl),
     Layer.provideMerge(controlStore),
     Layer.provideMerge(connections),
@@ -374,17 +372,12 @@ const daemonLayer = (
   );
 
 const registrationServices = (contributions: readonly LocalContribution[] = []) => {
-  const cell = MutableRef.make<Registry.RegistryState>(Registry.emptyRegistry);
+  const cell = Ref.makeUnsafe<Registry.RegistryState>(Registry.emptyRegistry);
   const registry: Registry.WorkspaceRegistryService = {
-    get workspaces() {
-      return MutableRef.get(cell).workspaces;
-    },
-    get failures() {
-      return MutableRef.get(cell).failures;
-    },
-    refresh: Effect.sync(() => MutableRef.get(cell)),
+    state: Ref.get(cell),
+    refresh: Ref.get(cell),
   };
-  const register: Registry.WorkspaceManagementService["register"] = (registration) => {
+  const register: Registry.WorkspaceManagementService["register"] = Effect.fn(function* (registration) {
     const workspace: Registry.RegisteredWorkspace = {
       source: "control-store:minted",
       contributions,
@@ -398,26 +391,28 @@ const registrationServices = (contributions: readonly LocalContribution[] = []) 
       },
       workspaceLimit: registration.concurrency,
     };
-    MutableRef.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
-    return Effect.succeed({ _tag: "Registered" as const, workspace });
-  };
-  const deregister: Registry.WorkspaceManagementService["deregister"] = (workspace) => {
-    MutableRef.update(cell, (state) => ({
+    yield* Ref.update(cell, (state) => ({ ...state, workspaces: [...state.workspaces, workspace] }));
+    return { _tag: "Registered" as const, workspace };
+  });
+  const deregister: Registry.WorkspaceManagementService["deregister"] = Effect.fn(function* (workspace) {
+    yield* Ref.update(cell, (state) => ({
       workspaces: state.workspaces.filter((entry) => entry.config.name !== workspace),
       failures: state.failures.filter((entry) => entry.name !== workspace),
     }));
-    return Effect.succeed(workspace);
-  };
-  const rebind: Registry.WorkspaceManagementService["rebind"] = (workspace, checkoutPath) => {
-    const current = MutableRef.get(cell).workspaces.find((entry) => entry.config.name === workspace);
-    if (!current) return Effect.die("workspace not found");
-    const rebound = { ...current, config: { ...current.config, checkoutPath } };
-    MutableRef.update(cell, (state) => ({
-      ...state,
-      workspaces: state.workspaces.map((entry) => (entry.config.name === workspace ? rebound : entry)),
-    }));
-    return Effect.succeed({ _tag: "Registered" as const, workspace: rebound });
-  };
+    return workspace;
+  });
+  const rebind: Registry.WorkspaceManagementService["rebind"] = Effect.fn(
+    function* (workspace, checkoutPath) {
+      const current = (yield* Ref.get(cell)).workspaces.find((entry) => entry.config.name === workspace);
+      if (!current) return yield* Effect.die("workspace not found");
+      const rebound = { ...current, config: { ...current.config, checkoutPath } };
+      yield* Ref.update(cell, (state) => ({
+        ...state,
+        workspaces: state.workspaces.map((entry) => (entry.config.name === workspace ? rebound : entry)),
+      }));
+      return { _tag: "Registered" as const, workspace: rebound };
+    },
+  );
   return Layer.mergeAll(
     Layer.succeed(Registry.WorkspaceRegistry, registry),
     Layer.succeed(Registry.WorkspaceManagement, { register, deregister, rebind }),
@@ -1518,6 +1513,51 @@ describe("Connection mutations", () => {
       Effect.scoped,
     );
   });
+
+  it.effect("includes a workspace registered while required Plugins uninstall", () =>
+    Effect.gen(function* () {
+      const github = connectionIdOf("github", "acme");
+      const uninstallStarted = yield* Deferred.make<void>();
+      const finishUninstall = yield* Deferred.make<void>();
+      const pluginOverview = {
+        plugins: [{ ...installedPlugin("github"), requiredConnections: ["github"] }],
+      } satisfies PluginOverview;
+      const plugins = Layer.succeed(PluginManager, {
+        overview: Effect.succeed(pluginOverview),
+        install: () => Effect.die("unexpected Plugin install"),
+        uninstall: () =>
+          Deferred.succeed(uninstallStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(finishUninstall)),
+            Effect.map(() => ({ overview: { plugins: [] }, notices: [] })),
+          ),
+        contributions: () => Effect.succeed([]),
+      });
+      const registries = registrationServices();
+      yield* Effect.gen(function* () {
+        const client = yield* RpcTest.makeClient(DaemonRpcs);
+        const removing = yield* Effect.forkChild(client.RemoveConnection({ connectionId: github }));
+        yield* Deferred.await(uninstallStarted);
+        const registered = yield* client.RegisterWorkspace({ registration: acmeRegistration });
+        if (registered.name === undefined) return assert.fail("expected registration to succeed");
+        yield* Deferred.succeed(finishUninstall, undefined);
+        const result = yield* Fiber.join(removing);
+
+        assert.deepStrictEqual(result.danglingWorkspaces, [registered.name]);
+      }).pipe(
+        Effect.provide(
+          daemonLayer(
+            trackerLayer({}),
+            schedulerStub(),
+            controlStoreStub(),
+            registries,
+            plugins,
+            connectionStoreLayerWithStatus("established", null, () => Effect.void),
+          ),
+        ),
+        Effect.scoped,
+      );
+    }),
+  );
 });
 
 describe("workspace lifecycle commands", () => {
@@ -1614,7 +1654,7 @@ describe("workspace lifecycle commands", () => {
       if (registeredState._tag !== "Registered") return assert.fail("expected registration");
 
       const registry = yield* Registry.WorkspaceRegistry;
-      const registeredWorkspace = registry.workspaces.at(0);
+      const registeredWorkspace = (yield* registry.state).workspaces.at(0);
       if (!registeredWorkspace) return assert.fail("expected registered workspace");
 
       const ledger = yield* RunLedger.RunLedger;

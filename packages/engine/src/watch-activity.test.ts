@@ -4,24 +4,21 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
-import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { activityOf } from "./daemon-event-bus";
 import * as RunLedger from "./run-ledger";
-import { RunRecorder, type RunRecorderService, layer as runRecorderLayer } from "./run-recorder";
+import { RunRecorder, type RunRecorderService } from "./run-recorder";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("example");
 const workItem = Schema.decodeSync(WorkItemId)("#49");
 const harness = Schema.decodeSync(HarnessName)("cursor");
 
-const bus = DaemonEventBus.layer;
-const runLedger = RunLedger.layerMemory.pipe(Layer.provide(bus));
-const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(bus));
-const layer = Layer.mergeAll(runLedger, runRecorder, bus);
+const layer = engineTestLayer();
 
 const record = (id: string, status: "running" | "succeeded" = "running"): RunRecord => ({
   id: runId(id),
