@@ -1,0 +1,21 @@
+packages/engine/CONTEXT.md
+  s_0b2a07c72076ba::t_89ca53ef5630a7 84-87
+packages/engine/src/index.ts
+  s_0b2a07c72076ba::t_4f1f27596f0452 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1fb0e8b7812cff15671a00101fc43c7885743dd2",
+  "prompts": {},
+  "sessions": {
+    "s_0b2a07c72076ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b67-61fa-74e2-b18b-c6a97b52045e",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
