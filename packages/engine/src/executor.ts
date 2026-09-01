@@ -1187,20 +1187,22 @@ export const make = Effect.gen(function* () {
   const harnessAvailability = Effect.fn("Executor.harnessAvailability")(function* (
     resolved: ResolvedOperation,
   ) {
-    return yield* harness.preflight(resolved.stage.harness, resolved.profile, resolved.stage.model).pipe(
-      Effect.provide(harnessRunnerContext),
-      Effect.match({
-        onFailure: (error) => {
-          if (error.retryable) return null;
-          if (error.reason === "credential") return hostFailure("credential", error.message);
-          if (error.reason === "policy") {
-            return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
-          }
-          return hostFailure("harness", error.message);
-        },
-        onSuccess: () => null,
-      }),
-    );
+    return yield* harness
+      .preflight(resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort)
+      .pipe(
+        Effect.provide(harnessRunnerContext),
+        Effect.match({
+          onFailure: (error) => {
+            if (error.retryable) return null;
+            if (error.reason === "credential") return hostFailure("credential", error.message);
+            if (error.reason === "policy") {
+              return policyRefusal(`Harness ${resolved.stage.harness}`, error.message);
+            }
+            return hostFailure("harness", error.message);
+          },
+          onSuccess: () => null,
+        }),
+      );
   });
 
   const connectionAvailability = Effect.fn("Executor.connectionAvailability")(function* () {
@@ -1226,7 +1228,7 @@ export const make = Effect.gen(function* () {
   });
 
   const harnessProbeKey = (resolved: ResolvedOperation) =>
-    JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model]);
+    JSON.stringify([resolved.stage.harness, resolved.profile, resolved.stage.model, resolved.stage.effort]);
 
   const loadAvailabilityFacts = Effect.fn("Executor.loadAvailabilityFacts")(function* (
     workspace: RegisteredWorkspace,

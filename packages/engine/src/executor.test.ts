@@ -54,6 +54,7 @@ import {
   type HarnessRunner,
   layer as harnessLayer,
   resolvedMcpSkills,
+  staticCatalogSource,
 } from "./harness";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { McpSkillAssembler } from "./mcp-skill";
@@ -609,8 +610,50 @@ interface TestRunner {
   ) => HarnessRunner;
 }
 
+const testRunnerDefaults = {
+  capabilities: {
+    authenticationModes: ["host"],
+    session: { affinity: "runtime-host", fork: false },
+    policyFidelity: "exact",
+    fileEventFidelity: "none",
+    usageQuality: "none",
+    readinessDiagnostics: true,
+    journal: false,
+    takeover: false,
+  },
+  authentication: { mode: "host", reference: "test login" },
+  catalogSources: {
+    fallback: staticCatalogSource(
+      {
+        models: [
+          { value: "test", label: "Test" },
+          { value: "refreshed-model", label: "Refreshed model" },
+        ],
+        efforts: [
+          { value: "low", label: "Low" },
+          { value: "high", label: "High" },
+        ],
+      },
+      { source: "cogwork-fallback", fallbackVersion: "test-1" },
+    ),
+  },
+  readiness: () =>
+    Effect.succeed({
+      operational: { status: "ready", retryable: false, diagnostic: "Test runner is ready" },
+      installation: { status: "installed", version: "1" },
+      compatibility: { status: "compatible", requirement: ">=1" },
+      authentication: { mode: "host", status: "available", diagnostic: "test login available" },
+      diagnostics: [],
+    }),
+  preflight: () => Effect.void,
+} satisfies Pick<
+  HarnessRunner,
+  "authentication" | "capabilities" | "catalogSources" | "preflight" | "readiness"
+>;
+
 const runner = (events: ReadonlyArray<AgUiEvent>, execution = fullHarnessExecution): TestRunner => ({
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -627,6 +670,7 @@ const capturingRunner = (
   name: HarnessName = cursor,
 ): TestRunner => ({
   make: (requests) => ({
+    ...testRunnerDefaults,
     name,
     sessionKind,
     projectedMembers: [],
@@ -643,6 +687,7 @@ const capturingRunner = (
 
 const connectionProjectingRunner: TestRunner = {
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: ["Connections"],
@@ -654,6 +699,7 @@ const connectionProjectingRunner: TestRunner = {
 
 const mcpProjectingRunner: TestRunner = {
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: ["MCP"],
@@ -665,6 +711,7 @@ const mcpProjectingRunner: TestRunner = {
 
 const blockedPreflightRunner: TestRunner = {
   make: (_requests, gate, observation) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -678,6 +725,7 @@ const blockedPreflightRunner: TestRunner = {
 
 const gatedRunner: TestRunner = {
   make: (_requests, gate) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -693,6 +741,7 @@ const gatedRunner: TestRunner = {
 
 const observingRunner: TestRunner = {
   make: (_requests, _gate, observation) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -712,6 +761,7 @@ const observingRunner: TestRunner = {
 
 const resourceRunner: TestRunner = {
   make: (_requests, _gate, observation) => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -869,6 +919,7 @@ const branchRecordingWorktree = (branch: string) =>
 
 const failingRunner = (error: HarnessError): TestRunner => ({
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "opaque-handle",
     projectedMembers: [],
@@ -880,6 +931,7 @@ const failingRunner = (error: HarnessError): TestRunner => ({
 
 const ownedTranscriptRunner = (events: ReadonlyArray<AgUiEvent>): TestRunner => ({
   make: () => ({
+    ...testRunnerDefaults,
     name: cursor,
     sessionKind: "owned-transcript",
     projectedMembers: [],
@@ -1352,8 +1404,24 @@ describe("Executor.execute", () => {
   it.effect("preflights each distinct Harness configuration once per availability refresh", () =>
     Effect.gen(function* () {
       const preflights = yield* Ref.make(0);
+      const operationSettings: ReadonlyArray<OperationSettingRow> = [
+        ...runnableStages,
+        {
+          setting: "effort",
+          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          scope: { _tag: "SettingsProfile" },
+          value: "high",
+        },
+        {
+          setting: "effort",
+          level: { _tag: "Operation", workflow: "coding", operation: "follow-up" },
+          scope: { _tag: "SettingsProfile" },
+          value: "low",
+        },
+      ];
       const probeRunner: TestRunner = {
         make: () => ({
+          ...testRunnerDefaults,
           name: cursor,
           sessionKind: "opaque-handle",
           projectedMembers: [],
@@ -1367,15 +1435,20 @@ describe("Executor.execute", () => {
       yield* Effect.gen(function* () {
         const executor = yield* Executor.Executor;
         yield* executor.refreshAvailability(workspace);
-      }).pipe(Effect.provide(provide([probeRunner])));
+      }).pipe(
+        Effect.provide(
+          provide([probeRunner], worktreeStubLayer, noopProviderLayer, trackerRecorder(), operationSettings),
+        ),
+      );
 
-      assert.strictEqual(yield* Ref.get(preflights), 2);
+      assert.strictEqual(yield* Ref.get(preflights), 3);
     }),
   );
 
   it.effect("keeps transient Harness preflight failures out of availability", () => {
     const transientPreflight: TestRunner = {
       make: () => ({
+        ...testRunnerDefaults,
         name: cursor,
         sessionKind: "opaque-handle",
         projectedMembers: [],
@@ -1617,6 +1690,7 @@ describe("Executor.execute", () => {
   it.effect("settles a silent harness run as a retryable failure after its stage budget", () => {
     const silentRunner: TestRunner = {
       make: () => ({
+        ...testRunnerDefaults,
         name: cursor,
         sessionKind: "opaque-handle",
         projectedMembers: [],
