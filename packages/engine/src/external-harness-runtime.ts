@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   HarnessName,
   RunId,
@@ -18,8 +19,11 @@ import {
   type SystemPrompt,
 } from "@tanstack/ai";
 import {
+  bearer,
+  createSecrets,
   defineSandbox,
   defineWorkspace,
+  mcpSkill,
   type SandboxHooks,
   type SandboxPolicy,
   type SandboxProvider,
@@ -29,11 +33,11 @@ import {
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
-import type * as Redacted from "effect/Redacted";
+import * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import {
   type AgUiEvent,
-  type HarnessError,
+  HarnessError,
   type HarnessExecution,
   type HarnessRequest,
   type HarnessRunner,
@@ -143,14 +147,83 @@ type ExternalInputEffect<Value> = Effect.Effect<Value, HarnessError, HarnessRunn
 export interface ExternalHarnessRuntimeInputs {
   readonly authentication: (request: HarnessRequest) => ExternalInputEffect<ExternalHarnessAuthentication>;
   readonly sandboxProvider: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxProvider>;
-  readonly workspace: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<WorkspaceDefinition>;
-  readonly sandboxPolicy: (
-    request: ExternalHarnessResolvedRequest,
-  ) => ExternalInputEffect<SandboxPolicy | undefined>;
+  readonly sandboxPolicy?: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxPolicy>;
   readonly fileHooks?: SandboxHooks;
 }
 
 const preparedWorkspace = { source: { type: "none" } } satisfies WorkspaceDefinition;
+
+const mcpSecretName = (name: string) =>
+  `COGWORK_MCP_${createHash("sha256").update(name).digest("hex").toUpperCase()}_BEARER`;
+
+const workspaceInstructions = (request: ExternalHarnessResolvedRequest) =>
+  [
+    ...request.instructions.map(({ content }) => content),
+    `Mandatory Operating Instructions: ${request.operatingInstructions.path}`,
+  ].join("\n\n");
+
+const mcpSkillConfig = (secrets: Secrets, server: ResolvedMcpSkill) => {
+  const secret = server.bearer === null ? undefined : secrets[mcpSecretName(server.name)];
+  if (!secret) return { url: server.endpoint };
+  return { url: server.endpoint, headers: { Authorization: bearer(secret) } };
+};
+
+const mcpSecretEntry = ({ name, bearer: secret }: ResolvedMcpSkill) => {
+  if (secret === null) return [];
+  return [[mcpSecretName(name), Redacted.value(secret)] satisfies readonly [string, string]];
+};
+
+const mcpWorkspaceProjection = (request: ExternalHarnessResolvedRequest) => {
+  const secretValues = Object.fromEntries(request.mcp.flatMap(mcpSecretEntry));
+  const secrets = createSecrets(secretValues);
+  const skills = request.mcp.map((server) => mcpSkill(server.name, mcpSkillConfig(secrets, server)));
+  return { secrets, skills, hasSecrets: Object.keys(secretValues).length > 0 };
+};
+
+const harnessWorkspace = (request: ExternalHarnessResolvedRequest) => {
+  const mcp = mcpWorkspaceProjection(request);
+  return {
+    ...preparedWorkspace,
+    instructions: workspaceInstructions(request),
+    ...(mcp.skills.length > 0 ? { skills: mcp.skills } : {}),
+    ...(mcp.hasSecrets ? { secrets: mcp.secrets } : {}),
+  } satisfies WorkspaceDefinition;
+};
+
+const requiredWorkspaceMembers = (request: ExternalHarnessResolvedRequest) => {
+  const base = ["Instructions", "Messages", "Sandbox"] satisfies HarnessRunner["projectedMembers"];
+  if (request.mcp.length === 0) return base;
+  return [...base, "MCP" satisfies HarnessRunner["projectedMembers"][number]];
+};
+
+const validateWorkspaceProjection = Effect.fn("ExternalHarnessRuntime.validateWorkspaceProjection")(
+  function* <Adapter extends AnyTextAdapter, NativeAuthentication>(
+    descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+    request: HarnessRequest,
+    resolved: ExternalHarnessResolvedRequest,
+  ) {
+    const missingCredentials = request.plan.mcp.flatMap((server) =>
+      "endpoint" in server && server.authenticated && !request.mcpCredentials.has(server.identity)
+        ? [server.projectedName]
+        : [],
+    );
+    if (missingCredentials.length > 0) {
+      return yield* new HarnessError({
+        reason: "credential",
+        retryable: false,
+        message: `authenticated MCP servers have no live credential: ${missingCredentials.join(", ")}`,
+      });
+    }
+    const projected = new Set<string>(descriptor.capabilities.projectedMembers);
+    const missing = requiredWorkspaceMembers(resolved).filter((member) => !projected.has(member));
+    if (missing.length === 0) return;
+    return yield* new HarnessError({
+      reason: "launch",
+      retryable: false,
+      message: `harness runner ${descriptor.name} cannot project required Harness Workspace members: ${missing.join(", ")}`,
+    });
+  },
+);
 
 const resolveResumeHandle = Effect.fn("ExternalHarnessRuntime.resolveResumeHandle")(function* (
   session: SessionId | null,
@@ -249,16 +322,16 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   request: ExternalHarnessResolvedRequest,
   provider: SandboxProvider,
   workspaceDefinition: WorkspaceDefinition,
-  policy: SandboxPolicy | undefined,
+  policy: SandboxPolicy | null,
 ) => {
-  const workspace = defineWorkspace(workspaceDefinition);
   const model = descriptor.projectModel(request);
   const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
   const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,
-    workspace,
+    workspace: defineWorkspace(workspaceDefinition),
+    lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
     ...(policy ? { policy } : {}),
     fileEvents: inputs.fileHooks !== undefined,
     ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
@@ -282,9 +355,10 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
       Effect.gen(function* () {
         const authentication = yield* inputs.authentication(request);
         const resolved = yield* resolvedRequest(request, authentication);
+        yield* validateWorkspaceProjection(descriptor, request, resolved);
         const provider = yield* inputs.sandboxProvider(resolved);
-        const workspaceDefinition = yield* inputs.workspace(resolved);
-        const policy = yield* inputs.sandboxPolicy(resolved);
+        const workspaceDefinition = harnessWorkspace(resolved);
+        const policy = yield* inputs.sandboxPolicy?.(resolved) ?? Effect.succeed(null);
         const opened = yield* Effect.try({
           try: () => openChat(descriptor, inputs, resolved, provider, workspaceDefinition, policy),
           catch: descriptor.diagnostics,
@@ -301,9 +375,6 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
       }).pipe(Effect.withSpan("ExternalHarnessRuntime.run")),
     ),
 });
-
-export const preparedCheckoutWorkspace = () => (_request: ExternalHarnessResolvedRequest) =>
-  Effect.succeed(preparedWorkspace);
 
 export const trustedLocalProcessSandboxProvider =
   (options: { readonly scrubEnv: ReadonlyArray<string> }) => (request: ExternalHarnessResolvedRequest) =>
