@@ -6,6 +6,7 @@ import {
   WorkspaceConfig,
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
@@ -30,7 +31,7 @@ import {
   type RawReview,
 } from "./client";
 import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
-import { makeProvider, layer as providerLayer } from "./provider";
+import { layer as providerLayer } from "./provider";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -79,6 +80,23 @@ interface Seed {
   readonly mergeable?: ReadonlyArray<{ readonly pull: number; readonly state: string | null }>;
   readonly priorities?: ReadonlyArray<{ readonly issue: number; readonly priority: Priority }>;
   readonly priorityError?: boolean;
+}
+
+class ProviderCalls extends Context.Service<
+  ProviderCalls,
+  {
+    readonly listPulls: Ref.Ref<number>;
+    readonly details: Ref.Ref<number>;
+  }
+>()("@cogwork/engine/github/github.test/ProviderCalls") {
+  static readonly layer = Layer.effect(
+    ProviderCalls,
+    Effect.gen(function* () {
+      const listPulls = yield* Ref.make(0);
+      const details = yield* Ref.make(0);
+      return { listPulls, details };
+    }),
+  );
 }
 
 const bot = { login: "cogwork[bot]" } as const;
@@ -196,7 +214,6 @@ const workspace: RegisteredWorkspace = {
   }),
 };
 
-// A workspace that never names a bot login, so the adapter falls back to "cogwork" on write.
 const noBotWorkspace: RegisteredWorkspace = {
   source: "gh.workspace.ts",
   contributions: [],
@@ -238,7 +255,28 @@ const withClient = (seed: Seed) =>
     Layer.provideMerge(Layer.effect(GitHubClient, fakeClient(seed))),
   );
 
-// Mirrors the reconcile poll: the tracker yields items, the provider attaches PR state.
+const countingProviderLayer = (seed: Seed) =>
+  providerLayer.pipe(
+    Layer.provideMerge(
+      Layer.effect(
+        GitHubClient,
+        Effect.gen(function* () {
+          const calls = yield* ProviderCalls;
+          const baseClient = yield* fakeClient(seed);
+          return {
+            ...baseClient,
+            listPulls: (_target) =>
+              Ref.update(calls.listPulls, (count) => count + 1).pipe(Effect.andThen(baseClient.listPulls())),
+            listCheckRuns: (target, sha) =>
+              Ref.update(calls.details, (count) => count + 1).pipe(
+                Effect.andThen(baseClient.listCheckRuns(target, sha)),
+              ),
+          } satisfies GitHubClientService;
+        }),
+      ).pipe(Layer.provideMerge(ProviderCalls.layer)),
+    ),
+  );
+
 const observeItems = (workspace: RegisteredWorkspace) =>
   Effect.gen(function* () {
     const tracker = yield* IssueTracker;
@@ -256,6 +294,41 @@ const pull = (over: Partial<RawPull> & { readonly number: number; readonly headR
   closingIssueNumbers: [],
   updatedAtMillis: 0,
   ...over,
+});
+
+const followUpTriggerSeed = (over: Pick<RawPull, "authorLogin" | "draft">) => ({
+  issues: [
+    { number: 20, title: "conflicting", labels: ["ready-for-agent"] },
+    { number: 21, title: "failing", labels: ["ready-for-agent"] },
+    { number: 22, title: "changes requested", labels: ["ready-for-agent"] },
+    { number: 23, title: "new comment", labels: ["ready-for-agent"] },
+  ],
+  pulls: [
+    pull({ number: 200, headRef: "20-conflicting", ...over }),
+    pull({ number: 201, headRef: "21-failing", ...over }),
+    pull({ number: 202, headRef: "22-changes-requested", ...over }),
+    pull({ number: 203, headRef: "23-new-comment", ...over }),
+  ],
+  checks: [
+    {
+      sha: "sha-201",
+      name: "test",
+      status: "completed",
+      conclusion: "failure",
+      startedAtMillis: 1,
+    },
+  ],
+  comments: [
+    {
+      issue: 203,
+      authorLogin: "maintainer",
+      authorAssociation: "MEMBER",
+      body: "Please fix this.",
+      createdAtMillis: 1,
+    },
+  ],
+  reviews: [{ pull: 202, state: "CHANGES_REQUESTED" }],
+  mergeable: [{ pull: 200, state: "dirty" }],
 });
 
 describe("github work source adapter", () => {
@@ -312,7 +385,6 @@ describe("github work source adapter", () => {
       const [posted] = comments;
       assert.include(posted?.body ?? "", "Fixed the flaky check.");
       assert.include(posted?.body ?? "", agentNoteMarker);
-      // The marker is what keeps the daemon's own comment out of the human-feedback signal.
       assert.isTrue(hasCogworkMarker(posted?.body ?? ""));
     }).pipe(
       Effect.provide(
@@ -342,37 +414,32 @@ describe("github work source adapter", () => {
 
   it.effect("lists PRs once and reads details only for linked trusted PRs", () =>
     Effect.gen(function* () {
-      const listCalls = yield* Ref.make(0);
-      const detailCalls = yield* Ref.make(0);
-      const base = yield* fakeClient({
-        issues: [],
-        pulls: [
-          pull({ number: 100, headRef: "1-linked" }),
-          pull({
-            number: 101,
-            headRef: "2-untrusted",
-            authorLogin: "outsider",
-            authorAssociation: "NONE",
-          }),
-        ],
-      });
-      const client: GitHubClientService = {
-        ...base,
-        listPulls: (_target) =>
-          Ref.update(listCalls, (count) => count + 1).pipe(Effect.andThen(base.listPulls())),
-        listCheckRuns: (target, sha) =>
-          Ref.update(detailCalls, (count) => count + 1).pipe(Effect.andThen(base.listCheckRuns(target, sha))),
-      };
-      const provider = makeProvider(client);
+      const provider = yield* SourceControlProvider;
+      const calls = yield* ProviderCalls;
       const signals = yield* provider.observe(workspace, [
         { id: id("#1"), title: "linked" },
         { id: id("#2"), title: "untrusted" },
         { id: id("#3"), title: "no pull request" },
       ]);
       assert.deepStrictEqual([...signals.keys()], [id("#1")]);
-      assert.strictEqual(yield* Ref.get(listCalls), 1);
-      assert.strictEqual(yield* Ref.get(detailCalls), 1);
-    }),
+      assert.strictEqual(yield* Ref.get(calls.listPulls), 1);
+      assert.strictEqual(yield* Ref.get(calls.details), 1);
+    }).pipe(
+      Effect.provide(
+        countingProviderLayer({
+          issues: [],
+          pulls: [
+            pull({ number: 100, headRef: "1-linked" }),
+            pull({
+              number: 101,
+              headRef: "2-untrusted",
+              authorLogin: "outsider",
+              authorAssociation: "NONE",
+            }),
+          ],
+        }),
+      ),
+    ),
   );
 
   it.effect("reads a dirty mergeable_state as a conflict and routes the PR to follow-up", () =>
@@ -703,44 +770,7 @@ describe("github work source adapter", () => {
           ["#23", "follow-up"],
         ],
       );
-    }).pipe(
-      Effect.provide(
-        withClient({
-          issues: [
-            { number: 20, title: "conflicting", labels: ["ready-for-agent"] },
-            { number: 21, title: "failing", labels: ["ready-for-agent"] },
-            { number: 22, title: "changes requested", labels: ["ready-for-agent"] },
-            { number: 23, title: "new comment", labels: ["ready-for-agent"] },
-          ],
-          pulls: [
-            pull({ number: 200, headRef: "20-conflicting", authorLogin: "maintainer" }),
-            pull({ number: 201, headRef: "21-failing", authorLogin: "maintainer" }),
-            pull({ number: 202, headRef: "22-changes-requested", authorLogin: "maintainer" }),
-            pull({ number: 203, headRef: "23-new-comment", authorLogin: "maintainer" }),
-          ],
-          checks: [
-            {
-              sha: "sha-201",
-              name: "test",
-              status: "completed",
-              conclusion: "failure",
-              startedAtMillis: 1,
-            },
-          ],
-          comments: [
-            {
-              issue: 203,
-              authorLogin: "maintainer",
-              authorAssociation: "MEMBER",
-              body: "Please fix this.",
-              createdAtMillis: 1,
-            },
-          ],
-          reviews: [{ pull: 202, state: "CHANGES_REQUESTED" }],
-          mergeable: [{ pull: 200, state: "dirty" }],
-        }),
-      ),
-    ),
+    }).pipe(Effect.provide(withClient(followUpTriggerSeed({ authorLogin: "maintainer", draft: false })))),
   );
 
   it.effect("holds draft PRs out of follow-up for every trigger", () =>
@@ -748,41 +778,32 @@ describe("github work source adapter", () => {
       const items = yield* observeItems(workspace);
       assert.isEmpty(classify(items).eligible);
       assert.isTrue(items.every((item) => item.pr !== null));
+    }).pipe(Effect.provide(withClient(followUpTriggerSeed({ authorLogin: bot.login, draft: true })))),
+  );
+
+  it.effect("prefers a linked non-draft PR over a draft PR", () =>
+    Effect.gen(function* () {
+      const items = yield* observeItems(workspace);
+      const observed = items.find((item) => item.id === "#46");
+      assert.strictEqual(observed?.pr?.number, 360);
+      assert.strictEqual(classify(items).eligible[0]?.stage, "follow-up");
     }).pipe(
       Effect.provide(
         withClient({
-          issues: [
-            { number: 20, title: "conflicting", labels: ["ready-for-agent"] },
-            { number: 21, title: "failing", labels: ["ready-for-agent"] },
-            { number: 22, title: "changes requested", labels: ["ready-for-agent"] },
-            { number: 23, title: "new comment", labels: ["ready-for-agent"] },
-          ],
+          issues: [{ number: 46, title: "two pull requests", labels: ["ready-for-agent"] }],
           pulls: [
-            pull({ number: 200, headRef: "20-conflicting", draft: true }),
-            pull({ number: 201, headRef: "21-failing", draft: true }),
-            pull({ number: 202, headRef: "22-changes-requested", draft: true }),
-            pull({ number: 203, headRef: "23-new-comment", draft: true }),
+            pull({ number: 360, headRef: "46-ready" }),
+            pull({ number: 361, headRef: "46-draft", draft: true, closingIssueNumbers: [46] }),
           ],
           checks: [
             {
-              sha: "sha-201",
+              sha: "sha-360",
               name: "test",
               status: "completed",
               conclusion: "failure",
               startedAtMillis: 1,
             },
           ],
-          comments: [
-            {
-              issue: 203,
-              authorLogin: "maintainer",
-              authorAssociation: "MEMBER",
-              body: "Please fix this.",
-              createdAtMillis: 1,
-            },
-          ],
-          reviews: [{ pull: 202, state: "CHANGES_REQUESTED" }],
-          mergeable: [{ pull: 200, state: "dirty" }],
         }),
       ),
     ),
@@ -791,8 +812,6 @@ describe("github work source adapter", () => {
   it.effect("resolves the PR by the branch prefix, preferring exact branch, then bot, then newest", () =>
     Effect.gen(function* () {
       const items = yield* observeItems(workspace);
-      // On each item only the branch the tie-break should pick carries a changes-requested review;
-      // the rest are approved. So a changes-requested result proves we picked the intended branch.
       assert.strictEqual(items.find((item) => item.id === "#40")?.pr?.review, "changes-requested");
       assert.strictEqual(items.find((item) => item.id === "#41")?.pr?.review, "changes-requested");
       assert.strictEqual(items.find((item) => item.id === "#42")?.pr?.review, "changes-requested");
@@ -1241,8 +1260,6 @@ describe("github work source adapter", () => {
 
   it.effect("reads no priority board when none is configured, defaulting every item to medium", () =>
     Effect.gen(function* () {
-      // The default workspace names no priority board, so the board is never consulted even though
-      // one is seeded — every item lands on the default.
       const items = yield* observeItems(workspace);
       assert.strictEqual(items.find((item) => item.id === "#5")?.priority, "medium");
     }).pipe(

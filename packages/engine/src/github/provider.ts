@@ -42,8 +42,6 @@ const targetFromRepo = (
   };
 };
 
-// A workspace's source control provider is its own `sourceControl` block when set, and otherwise its
-// GitHub tracker's settings. A Linear tracker with no block resolves to nothing, so it observes no PR.
 export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTarget | null => {
   const explicit = workspace.config.sourceControl;
   if (explicit) {
@@ -186,6 +184,7 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
   const rank = (target: GitHubTarget, item: WorkItem, branch: string, pull: RawPull) =>
     [
       sameRepositoryHead(target, pull) ? 1 : 0,
+      pull.draft ? 0 : 1,
       closesItem(item, pull) ? 1 : 0,
       pull.headRef === branch ? 1 : 0,
       pull.authorLogin === target.actorLogin ? 1 : 0,
@@ -193,9 +192,10 @@ const make = (client: GitHubClientService): SourceControlProviderService => {
     ] as const;
 
   const outranks = (target: GitHubTarget, item: WorkItem, branch: string, a: RawPull, b: RawPull) => {
-    const [aSameRepository, aClosing, aExact, aBot, aNumber] = rank(target, item, branch, a);
-    const [bSameRepository, bClosing, bExact, bBot, bNumber] = rank(target, item, branch, b);
+    const [aSameRepository, aNonDraft, aClosing, aExact, aBot, aNumber] = rank(target, item, branch, a);
+    const [bSameRepository, bNonDraft, bClosing, bExact, bBot, bNumber] = rank(target, item, branch, b);
     if (aSameRepository !== bSameRepository) return aSameRepository > bSameRepository;
+    if (aNonDraft !== bNonDraft) return aNonDraft > bNonDraft;
     if (aClosing !== bClosing) return aClosing > bClosing;
     if (aExact !== bExact) return aExact > bExact;
     if (aBot !== bBot) return aBot > bBot;
