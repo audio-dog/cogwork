@@ -31,6 +31,7 @@ import * as Recovery from "./recovery";
 import * as Registry from "./registry";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
+import { engineTestLayer } from "./testing/engine-test-layer";
 
 const id = Schema.decodeSync(WorkItemId);
 const rid = Schema.decodeSync(RunId);
@@ -242,10 +243,14 @@ interface RecoveryDeps {
   readonly availability?: OperationAvailability;
 }
 
-const recoveryLayer = (deps: RecoveryDeps) =>
-  Recovery.layer.pipe(
-    Layer.provide(
+const recoveryLayer = (deps: RecoveryDeps) => {
+  const engineServices = engineTestLayer({
+    coreRunLedger: Layer.succeed(RunLedger.CoreRunLedger, deps.ledger),
+  });
+  return Recovery.layer.pipe(
+    Layer.provideMerge(
       Layer.mergeAll(
+        engineServices,
         registryLayer,
         deps.snapshot ? workerSnapshotLayer(deps.snapshot) : workerLayer(deps.observed, deps.poll ?? okPoll),
         schedulerStub(deps.admitted, deps.paused, deps.inFlight),
@@ -256,14 +261,10 @@ const recoveryLayer = (deps: RecoveryDeps) =>
           execute: () => Effect.succeed(false),
         }),
         issueTrackerStub(deps.issueTracker ?? {}),
-        RunLedger.publishingLayer.pipe(
-          Layer.provide(Layer.succeed(RunLedger.CoreRunLedger, deps.ledger)),
-          Layer.provide(DaemonEventBus.layer),
-        ),
       ),
     ),
-    Layer.provideMerge(DaemonEventBus.layer),
   );
+};
 
 interface LiveRecoveryProbeState {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
