@@ -182,6 +182,25 @@ describe("RunRecorder", () => {
       }),
     );
 
+    it.effect("ignores a malformed session-id payload", () =>
+      Effect.gen(function* () {
+        const session = sessionId("sess-malformed");
+        const record = run("run-malformed", { session });
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertSession(opaqueSession(session));
+
+        const recorder = yield* RunRecorder;
+        const captured = yield* recorder.record(record, {
+          type: "CUSTOM",
+          name: "cursor.session-id",
+          value: { wrong: "shape" },
+        });
+
+        assert.isNull(captured);
+        assert.isNull(sessionHandle(yield* ledger.getSession(session)));
+      }),
+    );
+
     it.effect("keeps a handle off a run with no session", () =>
       Effect.gen(function* () {
         const record = run("run-nosession");
