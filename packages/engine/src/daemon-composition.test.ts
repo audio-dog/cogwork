@@ -44,7 +44,8 @@ const stubRunner: HarnessRunner = {
   execution: fullHarnessExecution,
   capabilities: {
     authenticationModes: ["host"],
-    session: { affinity: "runtime-host", fork: false },
+    session: { affinity: "runtime-host", fork: false, humanAttach: true },
+    structuredOutput: "none",
     policyFidelity: "exact",
     fileEventFidelity: "none",
     usageQuality: "none",

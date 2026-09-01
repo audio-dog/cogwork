@@ -137,7 +137,8 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
     execution: fullHarnessExecution,
     capabilities: {
       authenticationModes: ["byok"],
-      session: { affinity: "portable", fork: false },
+      session: { affinity: "portable", fork: false, humanAttach: true },
+      structuredOutput: "native",
       policyFidelity: "exact",
       fileEventFidelity: "native",
       usageQuality: "metered",

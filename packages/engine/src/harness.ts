@@ -101,7 +101,9 @@ export interface HarnessCapabilityProfile {
   readonly session: {
     readonly affinity: "runtime-host" | "sandbox-lineage" | "portable";
     readonly fork: boolean;
+    readonly humanAttach: boolean;
   };
+  readonly structuredOutput: "native" | "prompt-and-parse" | "none";
   readonly policyFidelity: "exact" | "profile-only" | "none";
   readonly fileEventFidelity: "native" | "sandbox" | "none";
   readonly usageQuality: "metered" | "estimated" | "none";
