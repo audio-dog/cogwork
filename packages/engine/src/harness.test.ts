@@ -3,9 +3,14 @@ import { assert, describe, it } from "@effect/vitest";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import { ContextAssembler } from "./context-assembler";
+import { CredentialStore } from "./credential-store";
 import { type HarnessExecution, make, stageResultSchema } from "./harness";
+import { SessionStore } from "./session-store";
 
 const name = Schema.decodeSync(HarnessName)("unsupported");
 
@@ -30,6 +35,61 @@ const harnessServices = {
     removeConnection: () => Effect.die("unexpected Connection removal"),
   },
   fileSystem: FileSystem.makeNoop({}),
+};
+
+const harnessRunnerLayer = Layer.mergeAll(
+  Layer.succeed(SessionStore, harnessServices.sessionStore),
+  Layer.succeed(ContextAssembler, harnessServices.contextAssembler),
+  Layer.succeed(CredentialStore, harnessServices.credentialStore),
+  Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  FetchHttpClient.layer,
+);
+
+const request = {
+  plan: Schema.decodeSync(RunPlan)({
+    id: "run-harness-test",
+    operation: "triage",
+    harness: { name, model: null, effort: null, profile: "read-only" },
+    instructions: [],
+    operatingInstructions: {
+      name: "triage-agent",
+      path: "/operating-instructions/triage-agent",
+      resources: [],
+    },
+    tools: [],
+    skills: [],
+    mcp: [],
+    subagents: [],
+    commands: [],
+    hooks: [],
+    middleware: [],
+    structuredOutput: null,
+    connections: [],
+    messages: [{ role: "user", content: "triage the issue" }],
+    workContext: {
+      reference: { workItem: "#1", url: null },
+      facts: {
+        roles: [],
+        assignees: [],
+        openBlockers: 0,
+        claim: null,
+        priority: "medium",
+        pr: null,
+      },
+      observation: { generation: 1, observedAtMillis: 1 },
+    },
+    sandbox: { workspace: "/repo", policy: "read-only" },
+    persistence: { sessionKind: "opaque-handle" },
+    provenance: {
+      resolution: [],
+      stamps: [],
+      projectedNames: [],
+      projection: [],
+      observation: { generation: 1, observedAtMillis: 1 },
+    },
+  }),
+  session: null,
+  mcpCredentials: new Map(),
 };
 
 describe("stageResultSchema", () => {
@@ -137,26 +197,26 @@ describe("stageResultSchema", () => {
 });
 
 describe("Harness", () => {
-  it.effect("refuses every unsupported hard posture before runner launch", () =>
-    Effect.gen(function* () {
-      const postures = [
-        {
-          expected: "non-interactive",
-          execution: { nonInteractive: false, worktreeConfined: true, profiles: ["read-only"] },
-        },
-        {
-          expected: "worktree confinement",
-          execution: { nonInteractive: true, worktreeConfined: false, profiles: ["read-only"] },
-        },
-        {
-          expected: "read-only operation posture",
-          execution: { nonInteractive: true, worktreeConfined: true, profiles: [] },
-        },
-      ] satisfies ReadonlyArray<{ readonly expected: string; readonly execution: HarnessExecution }>;
+  it.layer(harnessRunnerLayer)((it) => {
+    it.effect("refuses every unsupported hard posture before runner launch", () =>
+      Effect.gen(function* () {
+        const postures = [
+          {
+            expected: "non-interactive",
+            execution: { nonInteractive: false, worktreeConfined: true, profiles: ["read-only"] },
+          },
+          {
+            expected: "worktree confinement",
+            execution: { nonInteractive: true, worktreeConfined: false, profiles: ["read-only"] },
+          },
+          {
+            expected: "read-only operation posture",
+            execution: { nonInteractive: true, worktreeConfined: true, profiles: [] },
+          },
+        ] satisfies ReadonlyArray<{ readonly expected: string; readonly execution: HarnessExecution }>;
 
-      for (const posture of postures) {
-        const harness = make(
-          [
+        for (const posture of postures) {
+          const harness = make([
             {
               name,
               sessionKind: "opaque-handle",
@@ -165,60 +225,40 @@ describe("Harness", () => {
               execution: posture.execution,
               run: () => Stream.succeed({ type: "RUN_STARTED" }),
             },
-          ],
-          harnessServices,
-        );
-        const error = yield* harness
-          .run({
-            plan: yield* Schema.decodeEffect(RunPlan)({
-              id: "run-harness-test",
-              operation: "triage",
-              harness: { name, model: null, effort: null, profile: "read-only" },
-              instructions: [],
-              operatingInstructions: {
-                name: "triage-agent",
-                path: "/operating-instructions/triage-agent",
-                resources: [],
-              },
-              tools: [],
-              skills: [],
-              mcp: [],
-              subagents: [],
-              commands: [],
-              hooks: [],
-              middleware: [],
-              structuredOutput: null,
-              connections: [],
-              messages: [{ role: "user", content: "triage the issue" }],
-              workContext: {
-                reference: { workItem: "#1", url: null },
-                facts: {
-                  roles: [],
-                  assignees: [],
-                  openBlockers: 0,
-                  claim: null,
-                  priority: "medium",
-                  pr: null,
-                },
-                observation: { generation: 1, observedAtMillis: 1 },
-              },
-              sandbox: { workspace: "/repo", policy: "read-only" },
-              persistence: { sessionKind: "opaque-handle" },
-              provenance: {
-                resolution: [],
-                stamps: [],
-                projectedNames: [],
-                projection: [],
-                observation: { generation: 1, observedAtMillis: 1 },
-              },
-            }),
-            session: null,
-            mcpCredentials: new Map(),
-          })
-          .pipe(Stream.runDrain, Effect.flip);
+          ]);
+          const error = yield* harness.run(request).pipe(Stream.runDrain, Effect.flip);
 
-        assert.match(error.message, new RegExp(`unsupported.*${posture.expected}`));
-      }
-    }),
-  );
+          assert.match(error.message, new RegExp(`unsupported.*${posture.expected}`));
+        }
+      }),
+    );
+
+    it.effect("uses runner services from the caller context", () => {
+      const providedCredentialStore = { ...harnessServices.credentialStore };
+      const harness = make([
+        {
+          name,
+          sessionKind: "opaque-handle",
+          projectedMembers: [],
+          planMiddleware: [],
+          execution: {
+            nonInteractive: true,
+            worktreeConfined: true,
+            profiles: ["read-only"],
+          },
+          run: () =>
+            Stream.fromEffect(
+              Effect.map(CredentialStore, (credentials) => {
+                assert.strictEqual(credentials, providedCredentialStore);
+                return { type: "RUN_STARTED" };
+              }),
+            ),
+        },
+      ]);
+
+      return harness
+        .run(request)
+        .pipe(Stream.runDrain, Effect.provideService(CredentialStore, providedCredentialStore));
+    });
+  });
 });

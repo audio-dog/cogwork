@@ -35,6 +35,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import type * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type { EligibleWork } from "./classify";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import * as ContextAssembler from "./context-assembler";
@@ -1159,6 +1160,7 @@ function provide(
     contextAssembler,
     CredentialStore.layerEnv,
     FileSystem.layerNoop({}),
+    FetchHttpClient.layer,
   );
   return Executor.layer.pipe(
     Layer.provideMerge(
@@ -1166,7 +1168,8 @@ function provide(
         issueTracker,
         sourceControl,
         sessionStore,
-        testHarness(runners).pipe(Layer.provide(runnerServices)),
+        testHarness(runners),
+        runnerServices,
         runLedger,
         runRecorder,
         bus,

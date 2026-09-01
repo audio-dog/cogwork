@@ -1,7 +1,7 @@
 import { once } from "node:events";
 import { type AgUiEvent, agUiUsage, HarnessName, RunPlan, stageResultJsonSchema } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it, layer } from "@effect/vitest";
 import { EventType, type StreamChunk } from "@tanstack/ai";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import { resolveAllSecrets } from "@tanstack/ai-sandbox";
@@ -9,10 +9,12 @@ import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import {
   type CursorRunChat,
   cursorModelOptions,
@@ -36,7 +38,7 @@ const sessionStore: SessionStore.SessionStoreService = {
 
 const unexpected = () => Effect.die(new Error("unexpected service access"));
 
-const harnessServices: Harness.HarnessRunnerServices = {
+const harnessServices = {
   sessionStore,
   contextAssembler: { assemble: unexpected, cleanup: unexpected },
   credentialStore: {
@@ -51,6 +53,14 @@ const harnessServices: Harness.HarnessRunnerServices = {
   },
   fileSystem: FileSystem.makeNoop({}),
 };
+
+const harnessRunnerLayer = Layer.mergeAll(
+  Layer.succeed(SessionStore.SessionStore, harnessServices.sessionStore),
+  Layer.succeed(ContextAssembler.ContextAssembler, harnessServices.contextAssembler),
+  Layer.succeed(CredentialStore.CredentialStore, harnessServices.credentialStore),
+  Layer.succeed(FileSystem.FileSystem, harnessServices.fileSystem),
+  FetchHttpClient.layer,
+);
 
 const request = (checkoutPath: string) =>
   ({
@@ -147,7 +157,7 @@ describe("mcpWorkspaceProjection", () => {
   });
 });
 
-describe("cursorRunner", () => {
+layer(harnessRunnerLayer)("cursorRunner", (it) => {
   it("declares the opaque-handle session kind", () => {
     const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
@@ -183,7 +193,7 @@ describe("cursorRunner", () => {
     }),
   );
 
-  it.live("refuses a Cursor triage run before native launch", () =>
+  it.effect("refuses a Cursor triage run before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -193,7 +203,7 @@ describe("cursorRunner", () => {
         name: cursorName,
         agentBin: `node ${fakeCursorAgent}`,
       });
-      const harness = Harness.make([runner], harnessServices);
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 
@@ -203,7 +213,7 @@ describe("cursorRunner", () => {
     }),
   );
 
-  it.live("refuses malformed Cursor input before native launch", () =>
+  it.effect("refuses malformed Cursor input before native launch", () =>
     Effect.gen(function* () {
       const checkout = yield* Effect.acquireRelease(
         Effect.promise(() => localProcessSandbox({}).create({})),
@@ -213,7 +223,7 @@ describe("cursorRunner", () => {
         name: cursorName,
         agentBin: `node ${fakeCursorAgent} --malformed`,
       });
-      const harness = Harness.make([runner], harnessServices);
+      const harness = Harness.make([runner]);
 
       const error = yield* Effect.flip(Stream.runDrain(harness.run(request(checkout.id))));
 

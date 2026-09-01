@@ -17,14 +17,14 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import type * as FileSystem from "effect/FileSystem";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import type * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import {
@@ -352,24 +352,26 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     );
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
+  const runnerRequirements = Layer.mergeAll(
+    Layer.effect(FileSystem.FileSystem, FileSystem.FileSystem),
+    Layer.effect(HttpClient.HttpClient, HttpClient.HttpClient),
+  );
   const base = Layer.mergeAll(
     registry,
     controlStore,
     plugins,
     connections,
+    credentials,
     daemonInfoLayer,
     issueTracker,
     runLedger,
     runRecorder,
+    runnerRequirements,
     // The executor mints through the session store, so it is exposed here too;
     // layer memoization keeps it the same instance the harness runners pull from.
     sessionStore,
     adapters.contextAssembler,
-    Harness.layer(adapters.harnessRunners).pipe(
-      Layer.provide(sessionStore),
-      Layer.provide(adapters.contextAssembler),
-      Layer.provide(credentials),
-    ),
+    Harness.layer(adapters.harnessRunners),
     McpSkill.layer.pipe(Layer.provide(credentials)),
     daemonEventBusLayer,
     runControlLayer,

@@ -42,7 +42,7 @@ import { ControlStore } from "./control-store";
 import { CredentialError } from "./credential-store";
 import { type FollowUpContext, noProgressAfterRound } from "./follow-up";
 import type { GitError } from "./git";
-import { type AgUiEvent, Harness, HarnessError, type HarnessRequest } from "./harness";
+import { type AgUiEvent, Harness, HarnessError, type HarnessRequest, type HarnessRunnerEnv } from "./harness";
 import { IssueTracker, type IssueTrackerError, releaseClaim as makeReleaseClaim } from "./issue-tracker";
 import { McpSkillAssembler, type ResolvedMcpSkill } from "./mcp-skill";
 import {
@@ -211,7 +211,7 @@ const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed"
 const successfulTerminal = (event: AgUiEvent) =>
   event.type === "RUN_FINISHED" && event.finishReason !== "failed";
 
-const withFailureTerminal = (stream: Stream.Stream<AgUiEvent, HarnessError>) =>
+const withFailureTerminal = <R>(stream: Stream.Stream<AgUiEvent, HarnessError, R>) =>
   Stream.catchCause(stream, (cause) =>
     Stream.concat(Stream.succeed(failedTerminal), Stream.failCause(cause)),
   );
@@ -262,6 +262,7 @@ export const make = Effect.gen(function* () {
   const sourceControl = yield* SourceControlProvider;
   const controlStore = yield* ControlStore;
   const contextAssembler = yield* ContextAssembler;
+  const harnessRunnerContext = yield* Effect.context<HarnessRunnerEnv>();
   const releaseClaim = makeReleaseClaim(issueTracker);
   const runCounter = yield* Ref.make(0);
 
@@ -547,7 +548,11 @@ export const make = Effect.gen(function* () {
     step: (acc: A, event: AgUiEvent) => Effect.Effect<A, E, R>,
   ) => {
     const budget = defaultRunBudget(request.plan.operation);
-    return Stream.runFoldEffect(withFailureTerminal(harness.run(request)), () => initial, step).pipe(
+    return Stream.runFoldEffect(
+      withFailureTerminal(harness.run(request)).pipe(Stream.provideContext(harnessRunnerContext)),
+      () => initial,
+      step,
+    ).pipe(
       Effect.timeout(budget),
       Effect.catchTag("TimeoutError", () =>
         recorder.record(record, failedTerminal).pipe(
@@ -1067,8 +1072,8 @@ export const make = Effect.gen(function* () {
     runId: RunId,
     request: HarnessRequest,
   ) {
-    const settle = <A>(
-      attempt: Effect.Effect<A, PrepareError | HarnessError>,
+    const settle = <A, R>(
+      attempt: Effect.Effect<A, PrepareError | HarnessError, R>,
       complete: (acc: A) => Effect.Effect<void, IssueTrackerError>,
     ) =>
       attempt.pipe(
