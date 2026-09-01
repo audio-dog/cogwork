@@ -12,6 +12,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
@@ -21,6 +22,7 @@ import {
   ControlStore,
   type ControlStoreService,
   controlStoreClientLayer,
+  controlStoreWriteGateWaitDuration,
   readControlStore,
 } from "./control-store";
 import { createStatements } from "./control-store-create.gen";
@@ -229,6 +231,15 @@ layer(NodeServices.layer)((it) => {
         "linear/acme",
         "linear/other",
       ]);
+    }),
+  );
+
+  it.effect("measures time waiting for the write gate", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      const before = (yield* Metric.value(controlStoreWriteGateWaitDuration)).count;
+      yield* withStore(storePath, (store) => store.withWrite(Effect.void));
+      assert.strictEqual((yield* Metric.value(controlStoreWriteGateWaitDuration)).count, before + 1);
     }),
   );
 
