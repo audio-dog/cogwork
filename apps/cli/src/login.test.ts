@@ -60,15 +60,17 @@ const routedFetch: typeof globalThis.fetch = (input, init) => {
   return Promise.resolve(jsonResponse(data));
 };
 
+const completeCallback = (url: string) =>
+  Effect.promise(() => {
+    const authorize = new URL(url);
+    const state = authorize.searchParams.get("state") ?? "";
+    const redirectUri = authorize.searchParams.get("redirect_uri") ?? "";
+    const callback = `${redirectUri}?code=canned-code&state=${encodeURIComponent(state)}`;
+    return realFetch(callback).then(() => undefined);
+  });
+
 const fakeBrowser = Layer.succeed(BrowserOpener, {
-  open: (url) =>
-    Effect.promise(() => {
-      const authorize = new URL(url);
-      const state = authorize.searchParams.get("state") ?? "";
-      const redirectUri = authorize.searchParams.get("redirect_uri") ?? "";
-      const callback = `${redirectUri}?code=canned-code&state=${encodeURIComponent(state)}`;
-      return realFetch(callback).then(() => undefined);
-    }),
+  open: completeCallback,
 });
 
 class LoginCredentialFile extends Context.Service<LoginCredentialFile, string>()(
@@ -144,6 +146,19 @@ describe("login linear", () => {
       assert.include(error.message, "other");
       assert.deepStrictEqual(yield* (yield* makeFileStore(filePath)).load, []);
     }).pipe(withLoginTest),
+  );
+
+  it.live("completes when the callback arrives before the browser opener returns", () =>
+    Effect.gen(function* () {
+      vi.stubGlobal("fetch", vi.fn(routedFetch));
+      const hangingBrowser = Layer.succeed(BrowserOpener, {
+        open: (url: string) => completeCallback(url).pipe(Effect.andThen(Effect.never)),
+      });
+
+      const result = yield* loginLinear(config).pipe((effect) => withLoginTest(effect, hangingBrowser));
+
+      assert.deepStrictEqual(result, { organization: "acme", actorUserId: "bot-user" });
+    }),
   );
 
   it.effect("times out waiting for the callback and releases the loopback port", () =>

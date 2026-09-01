@@ -107,7 +107,6 @@ const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
     const result = yield* Deferred.make<CallbackParams>();
     yield* HttpServer.serveEffect(callbackApp(result));
     const opener = yield* BrowserOpener;
-    yield* opener.open(authorizeUrl);
     const callback = yield* Deferred.await(result).pipe(
       Effect.timeout(callbackDeadline),
       Effect.catchTag(
@@ -117,6 +116,7 @@ const awaitAuthorization = Effect.fn("cli.login.awaitAuthorization")(
             message: `Linear login timed out waiting for the browser callback after ${callbackDeadline}; retry cogwork login linear.`,
           }),
       ),
+      Effect.raceFirst(opener.open(authorizeUrl).pipe(Effect.andThen(Effect.never))),
     );
     if (callback.error !== null) {
       return yield* new LinearOAuthError({
