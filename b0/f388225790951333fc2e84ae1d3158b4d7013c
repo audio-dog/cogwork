@@ -1,0 +1,54 @@
+packages/engine/src/control-store.test.ts
+  s_3c98e16f02dd05::t_0f18710a57e92f 378-381,383-384,388,390-416,443
+  s_3c98e16f02dd05::t_709df84d51f88c 281-290
+  s_3c98e16f02dd05::t_31215eaa577d45 476-500
+  s_3c98e16f02dd05::t_24a0f45747da80 10,16,18,59,68,156-177,332,362,724-727,733-767
+  s_3c98e16f02dd05::t_e1692431bdcabc 432-433
+  s_3c98e16f02dd05::t_ffe8478e12ba9f 195,197-199,202
+  s_3c98e16f02dd05::t_61aefebe1fee6b 206-208,243-245,720-722,768-770
+  s_3c98e16f02dd05::t_0152b64ebc7c84 11
+  s_3c98e16f02dd05::t_ab1d1e4e6b6eac 444,448-452,457,463
+  s_3c98e16f02dd05::t_e23120263d9d23 445-447,453-456,458-462,464-475
+  s_3c98e16f02dd05::t_2943704b790270 19,22,24,46-52,209,292,417-431,434-435,437-440,442,502,723
+  s_3c98e16f02dd05::t_0e46154905a4ae 382,385-387,389
+  s_3c98e16f02dd05::t_466c67bffd34b6 436,441
+  s_3c98e16f02dd05::t_dd981542406815 210-242
+  s_5067386033cae7::t_d639da8dfa1f84 178,246,291,293,501,503
+packages/engine/src/control-store.ts
+  s_3c98e16f02dd05::t_10e59d29be7b2e 726,729-731
+  s_3c98e16f02dd05::t_16b9ba87841fa9 733
+  s_3c98e16f02dd05::t_3e2884b2ce2313 41,120-128,131,738-739,773,779-785,789-797
+  s_3c98e16f02dd05::t_b9ee5c77223e27 119,777-778,788
+  s_3c98e16f02dd05::t_10aca4fe073b9b 757-760
+  s_3c98e16f02dd05::t_1729dbf0077d9b 116
+  s_3c98e16f02dd05::t_60de76499527cd 766,768,770,772
+  s_3c98e16f02dd05::t_48c388609b40bd 728,732
+  s_3c98e16f02dd05::t_24a0f45747da80 826-845,850-852
+  s_3c98e16f02dd05::t_05eebdea72ac2f 767
+  s_3c98e16f02dd05::t_f0a67fdff323ac 31,129-130,740-756,761-765
+  s_5067386033cae7::t_0e90dac3b66344 774-776,786-787
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b0f388225790951333fc2e84ae1d3158b4d7013c",
+  "prompts": {},
+  "sessions": {
+    "s_3c98e16f02dd05": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e9a-057f-71b2-add2-bed2e5b42a68",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_5067386033cae7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e39-8652-7fb2-9378-cd62557515f8",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
