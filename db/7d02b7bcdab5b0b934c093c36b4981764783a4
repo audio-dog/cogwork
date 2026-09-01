@@ -1,0 +1,23 @@
+packages/engine/src/event-publisher.test.ts
+  s_d60add10ef316b::t_752866f6920f65 197,199-200,406,418,659-663,686,696
+packages/engine/src/daemon.ts
+  s_d60add10ef316b::t_3f3578c23588b5 170,237,263,431
+packages/engine/src/event-publisher.ts
+  s_d60add10ef316b::t_16475a479f8f0b 112,131,168,197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "db7d02b7bcdab5b0b934c093c36b4981764783a4",
+  "prompts": {},
+  "sessions": {
+    "s_d60add10ef316b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05b81-997b-7400-8ef3-4f1e13588938",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
