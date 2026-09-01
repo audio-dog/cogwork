@@ -1,0 +1,19 @@
+biome.json
+  s_66a676b0acd16a::t_5883e701072303 10,82-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c85592f9b3b3b02581d43a39b261b31c4ff9d048",
+  "prompts": {},
+  "sessions": {
+    "s_66a676b0acd16a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d9b-6a0f-7ff3-8d69-d5dd008ca252",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
