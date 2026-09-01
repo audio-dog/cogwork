@@ -26,6 +26,7 @@ import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
 import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
+import * as Harness from "./harness";
 import type { ObservedItem } from "./issue-tracker";
 import {
   type AttemptFailedOutcome,
@@ -378,6 +379,7 @@ const makeRecoveryLayer = (options: RecoveryOptions, makeIssueTracker: MakeIssue
         Layer.provideMerge(
           Layer.mergeAll(
             engineServices,
+            Harness.layer([]),
             registryLayer,
             seedSnapshot,
             workerSnapshotLayer(probe.snapshot),
@@ -659,7 +661,7 @@ describe("Recovery.recover", () => {
     }).pipe(Effect.provide(recoveryLayer({ observed: [staleNoStage] }))),
   );
 
-  it.effect("hands an exhausted recovery the resume handle its session kept before the daemon died", () =>
+  it.effect("omits human attachment for a recovered programmatic-only session", () =>
     Effect.gen(function* () {
       const probe = yield* RecoveryProbe;
       const recovery = yield* Recovery.Recovery;
@@ -673,7 +675,7 @@ describe("Recovery.recover", () => {
       });
       yield* probe.ledger.insertRun({ ...interruptedRun, status: "failed", endedAtMillis: 2, session });
       yield* recovery.recover();
-      assert.include((yield* Ref.get(probe.handoffs))[0]?.outcome.note ?? "", "agent --resume 'cursor-abc'");
+      assert.notInclude((yield* Ref.get(probe.handoffs))[0]?.outcome.note ?? "", "codex resume");
     }).pipe(Effect.provide(recoveryLayer({ observed: [withAttempts(claimedByUs, 2)] }))),
   );
 

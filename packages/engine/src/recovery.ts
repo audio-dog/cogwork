@@ -6,6 +6,7 @@ import type {
   SessionId,
   WorkspaceId,
 } from "@cogwork/contracts";
+import { sessionHandle } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -21,14 +22,15 @@ import {
   maxAttemptsPerStage,
   observedStage,
 } from "./classify";
-import { type HandoffCause, handoffNote, recoveryReason } from "./comments";
+import { type HandoffCause, handoffNote, handoffSession, recoveryReason } from "./comments";
 import { Executor } from "./executor";
 import { isStalledFollowUp } from "./follow-up";
+import { Harness } from "./harness";
 import { IssueTracker, releaseClaim as makeReleaseClaim, type ObservedItem } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { type ReconcileSnapshot, ReconcileWorker, type WorkspaceReconcileState } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
-import { handleOf, RunLedger } from "./run-ledger";
+import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
 
 const maxCrashesPerItem = 3;
@@ -47,6 +49,7 @@ export const make = Effect.gen(function* () {
   const worker = yield* ReconcileWorker;
   const issueTracker = yield* IssueTracker;
   const ledger = yield* RunLedger;
+  const harness = yield* Harness;
   const scheduler = yield* Scheduler;
   const executor = yield* Executor;
   const releaseClaim = makeReleaseClaim(issueTracker);
@@ -62,6 +65,11 @@ export const make = Effect.gen(function* () {
     cause: HandoffCause,
     session: SessionId | null,
   ) {
+    const storedSession = session ? yield* ledger.getSession(session) : null;
+    const handle = sessionHandle(storedSession);
+    const humanAttach = storedSession
+      ? harness.capabilities(storedSession.harness)?.session.humanAttach
+      : undefined;
     yield* issueTracker.handOff(workspace, item.id, {
       stage,
       note: handoffNote({
@@ -70,7 +78,7 @@ export const make = Effect.gen(function* () {
         stage,
         cause,
         reason: recoveryReason,
-        session: yield* handleOf(ledger, session),
+        session: handoffSession(handle, humanAttach),
       }),
     });
   });

@@ -90,6 +90,7 @@ export interface HarnessCatalogSources {
 }
 
 export type HarnessAuthenticationMode = "host" | "byok";
+export type HarnessHumanAttach = "codex-cli" | false;
 
 export interface HarnessAuthenticationBinding {
   readonly mode: HarnessAuthenticationMode;
@@ -101,7 +102,9 @@ export interface HarnessCapabilityProfile {
   readonly session: {
     readonly affinity: "runtime-host" | "sandbox-lineage" | "portable";
     readonly fork: boolean;
+    readonly humanAttach: HarnessHumanAttach;
   };
+  readonly structuredOutput: "native" | "prompt-and-parse" | "none";
   readonly policyFidelity: "exact" | "profile-only" | "none";
   readonly fileEventFidelity: "native" | "sandbox" | "none";
   readonly usageQuality: "metered" | "estimated" | "none";
@@ -404,10 +407,10 @@ const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
 ) {
   const selection = selectionOfPreflightInput(input);
   const runner = yield* runnerFor(registry, selection.name);
-  const posture = unsupportedPosture(runner, selection.profile);
-  if (posture) return yield* unsupportedRunnerPosture(runner, selection.profile, posture);
   const catalog = yield* resolveCatalog(runner);
   yield* validateSelection(runner, catalog, selection);
+  const posture = unsupportedPosture(runner, selection.profile);
+  if (posture) return yield* unsupportedRunnerPosture(runner, selection.profile, posture);
   yield* validateAuthenticationMode(runner);
   yield* validateReadiness(runner, yield* runner.readiness());
   yield* runner.preflight(input);

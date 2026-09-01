@@ -1,11 +1,13 @@
 import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import * as TestClock from "effect/testing/TestClock";
+import * as Ref from "effect/Ref";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { CredentialError, type CredentialSource, CredentialStore } from "../credential-store";
 import { layer as clientLayer, LinearClient, type LinearTeamRef } from "./client";
@@ -96,33 +98,40 @@ const authorizationOf = (fetchStub: { readonly mock: { readonly calls: ReadonlyA
   return new Headers(init?.headers).get("authorization");
 };
 
-const stubCredentials = (token: string | null, source: CredentialSource, invalidated: Array<string>) =>
-  Layer.succeed(CredentialStore, {
-    resolveSource: () => Effect.die("unexpected credential source resolution"),
-    bearerToken: (account) =>
-      token === null
-        ? Effect.fail(
-            new CredentialError({
-              account: account.key,
-              message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
-            }),
-          )
-        : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
-    persist: () => Effect.void,
-    invalidate: (account) => Effect.sync(() => invalidated.push(account.key)),
-    providerKey: (account) =>
-      Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
-    persistProviderKey: (key) =>
-      Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
-    configureConnection: () => Effect.void,
-    removeConnection: () => Effect.void,
-  });
+class CredentialInvalidations extends Context.Service<
+  CredentialInvalidations,
+  Ref.Ref<ReadonlyArray<string>>
+>()("@cogwork/engine/linear/client.test/CredentialInvalidations") {
+  static readonly layer = Layer.effect(CredentialInvalidations, Ref.make<ReadonlyArray<string>>([]));
+}
 
-const withToken = (
-  token: string | null = "test-key",
-  source: CredentialSource = "env",
-  invalidated: Array<string> = [],
-) => Effect.provide(clientLayer.pipe(Layer.provide(stubCredentials(token, source, invalidated))));
+const stubCredentials = (token: string | null, source: CredentialSource) =>
+  Layer.effect(
+    CredentialStore,
+    Effect.map(CredentialInvalidations, (invalidated) => ({
+      resolveSource: () => Effect.die("unexpected credential source resolution"),
+      bearerToken: (account) =>
+        token === null
+          ? Effect.fail(
+              new CredentialError({
+                account: account.key,
+                message: `no credential for ${account.key}: ${account.tokenEnv} is unset or empty`,
+              }),
+            )
+          : Effect.succeed({ source, token: Redacted.make(token), identity: null }),
+      persist: () => Effect.void,
+      invalidate: (account) => Ref.update(invalidated, (accounts) => [...accounts, account.key]),
+      providerKey: (account) =>
+        Effect.fail(new CredentialError({ account: account.provider, message: "unused in this test" })),
+      persistProviderKey: (key) =>
+        Effect.fail(new CredentialError({ account: key.provider, message: "unused in this test" })),
+      configureConnection: () => Effect.void,
+      removeConnection: () => Effect.void,
+    })),
+  ).pipe(Layer.provideMerge(CredentialInvalidations.layer));
+
+const withToken = (token: string | null = "test-key", source: CredentialSource = "env") =>
+  Effect.provide(clientLayer.pipe(Layer.provideMerge(stubCredentials(token, source))));
 
 const claimLabelName = "cogwork:claimed";
 
@@ -465,38 +474,38 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
-  it.effect("tells the store to drop the credential Linear rejected", () => {
-    const invalidated: Array<string> = [];
-    return Effect.gen(function* () {
+  it.effect("tells the store to drop the credential Linear rejected", () =>
+    Effect.gen(function* () {
+      const invalidated = yield* CredentialInvalidations;
       stubLinear(() => ({ status: 401, body: {} }));
       const client = yield* LinearClient;
       yield* Effect.flip(client.observeIssues(ref, null));
-      assert.deepStrictEqual(invalidated, ["AUD"]);
-    }).pipe(withToken("app-token", "client-credentials", invalidated));
-  });
+      assert.deepStrictEqual(yield* Ref.get(invalidated), ["AUD"]);
+    }).pipe(withToken("app-token", "client-credentials")),
+  );
 
-  it.effect("keeps the credential when Linear denies access to a resource", () => {
-    const invalidated: Array<string> = [];
-    return Effect.gen(function* () {
+  it.effect("keeps the credential when Linear denies access to a resource", () =>
+    Effect.gen(function* () {
+      const invalidated = yield* CredentialInvalidations;
       stubLinear(() => ({
         body: { errors: [{ message: "access denied", extensions: { type: "forbidden" } }] },
       }));
       const client = yield* LinearClient;
       const error = yield* Effect.flip(client.observeIssues(ref, null));
       assert.strictEqual(error.reason, "unavailable");
-      assert.deepStrictEqual(invalidated, []);
-    }).pipe(withToken("app-token", "client-credentials", invalidated));
-  });
+      assert.deepStrictEqual(yield* Ref.get(invalidated), []);
+    }).pipe(withToken("app-token", "client-credentials")),
+  );
 
-  it.effect("keeps the credential when Linear throttles rather than rejects", () => {
-    const invalidated: Array<string> = [];
-    return Effect.gen(function* () {
+  it.effect("keeps the credential when Linear throttles rather than rejects", () =>
+    Effect.gen(function* () {
+      const invalidated = yield* CredentialInvalidations;
       stubLinear(() => ({ status: 429, body: {} }));
       const client = yield* LinearClient;
       yield* Effect.flip(client.observeIssues(ref, null));
-      assert.deepStrictEqual(invalidated, []);
-    }).pipe(withToken("app-token", "client-credentials", invalidated));
-  });
+      assert.deepStrictEqual(yield* Ref.get(invalidated), []);
+    }).pipe(withToken("app-token", "client-credentials")),
+  );
 
   it.effect("retries after a hanging attempt reaches its deadline", () =>
     Effect.gen(function* () {
