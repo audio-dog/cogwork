@@ -616,6 +616,21 @@ describe("linear client", () => {
     }).pipe(withToken()),
   );
 
+  it.effect("rechecks a shared rate-limit cooldown before retrying", () =>
+    Effect.gen(function* () {
+      const fetchStub = stubLinear(() => ({ status: 429, body: {} }));
+      fetchStub.mockImplementationOnce(() => Promise.withResolvers<Response>().promise);
+      const client = yield* LinearClient;
+      const requestFiber = yield* Effect.forkChild(Effect.flip(client.observeIssues(ref, null)));
+      yield* Effect.yieldNow;
+      yield* Effect.flip(client.observeIssues(ref, null));
+      yield* TestClock.adjust("31 seconds");
+      const error = yield* Fiber.join(requestFiber);
+      assert.strictEqual(error.reason, "rate-limited");
+      assert.strictEqual(fetchStub.mock.calls.length, 2);
+    }).pipe(withToken()),
+  );
+
   it.effect("fails fast without calling Linear while the credential is in a cooldown window", () =>
     Effect.gen(function* () {
       const fetchStub = stubLinear(() => ({ status: 429, body: {}, headers: { "retry-after": "30" } }));

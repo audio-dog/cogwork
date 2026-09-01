@@ -203,6 +203,9 @@ class LinearRequestFailure extends Data.TaggedError("LinearRequestFailure")<{
 const fromSdkFailure = (cause: unknown, nowMillis: number) =>
   new LinearRequestFailure({ error: fromSdkError(cause, nowMillis), retryable: isTransientCause(cause) });
 
+const nonRetryableFailure = (error: IssueTrackerError) =>
+  new LinearRequestFailure({ error, retryable: false });
+
 const isoMillis = (millis: number) =>
   Option.match(DateTime.make(millis), { onNone: () => String(millis), onSome: DateTime.formatIso });
 
@@ -456,22 +459,21 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     ref: LinearTeamRef,
     run: (sdk: LinearSdk) => PromiseLike<A>,
   ) {
-    const requestedAt = yield* Clock.currentTimeMillis;
-    yield* holdOff(ref, requestedAt);
     const credential = yield* Effect.mapError(
       credentials.bearerToken(ref.account),
       (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
     );
     return yield* Effect.retry(
-      withTransientAttemptDeadline(
-        Effect.gen(function* () {
-          const attemptStartedAt = yield* Clock.currentTimeMillis;
-          return yield* Effect.tryPromise({
+      Effect.gen(function* () {
+        const attemptStartedAt = yield* Clock.currentTimeMillis;
+        yield* Effect.mapError(holdOff(ref, attemptStartedAt), nonRetryableFailure);
+        return yield* withTransientAttemptDeadline(
+          Effect.tryPromise({
             try: (signal) => run(new LinearSdk({ ...sdkAuth(credential), signal })),
             catch: (cause) => fromSdkFailure(cause, attemptStartedAt),
-          });
-        }),
-      ),
+          }),
+        );
+      }),
       { while: isTransient, schedule: transientBackoff, times: 3 },
     ).pipe(
       Effect.mapError((failure) => failure.error),
