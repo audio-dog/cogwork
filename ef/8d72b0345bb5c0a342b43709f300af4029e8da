@@ -1,0 +1,22 @@
+packages/engine/src/classify.test.ts
+  s_5609bcd3867bea::t_3207c869b4bcb5 39,75-80
+  s_5609bcd3867bea::t_08840f7dc13f8a 81-82
+packages/engine/src/classify.ts
+  s_5609bcd3867bea::t_766c27d899e582 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ef8d72b0345bb5c0a342b43709f300af4029e8da",
+  "prompts": {},
+  "sessions": {
+    "s_5609bcd3867bea": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05aa2-b042-7331-8e8c-55191c7eb9f5",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
