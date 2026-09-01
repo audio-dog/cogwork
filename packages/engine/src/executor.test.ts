@@ -1,4 +1,5 @@
 import {
+  AgUiEvent,
   ConnectionId,
   type ContributionSettingRow,
   DeclaredVersion,
@@ -44,8 +45,8 @@ import * as DaemonEventBus from "./daemon-event-bus";
 import * as Executor from "./executor";
 import { GitError } from "./git";
 import {
-  type AgUiEvent,
   fullHarnessExecution,
+  type HarnessCapabilityProfile,
   HarnessError,
   type HarnessRequest,
   type HarnessRunner,
@@ -314,6 +315,11 @@ const implementFinished: AgUiEvent = finished;
 
 const implementEvents: ReadonlyArray<AgUiEvent> = [...implementStreamEvents, implementFinished];
 
+const replaceSessionHandle = (event: AgUiEvent, handle: string) => {
+  if (AgUiEvent.guards.CUSTOM(event) && event.name === "cursor.session-id") return sessionEvent(handle);
+  return event;
+};
+
 const resumedImplementEvents: ReadonlyArray<AgUiEvent> = [
   runStarted,
   sessionEvent("sess-prev"),
@@ -574,7 +580,8 @@ interface TestRunner {
 const testRunnerDefaults = {
   capabilities: {
     authenticationModes: ["host"],
-    session: { affinity: "runtime-host", fork: false },
+    session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
+    structuredOutput: "none",
     policyFidelity: "exact",
     fileEventFidelity: "none",
     usageQuality: "none",
@@ -629,9 +636,14 @@ const capturingRunner = (
   tail: Stream.Stream<AgUiEvent, HarnessError> = Stream.empty,
   sessionKind: SessionKind = "opaque-handle",
   name: HarnessName = cursor,
+  humanAttach: HarnessCapabilityProfile["session"]["humanAttach"] = "codex-cli",
 ): TestRunner => ({
   make: (requests) => ({
     ...testRunnerDefaults,
+    capabilities: {
+      ...testRunnerDefaults.capabilities,
+      session: { ...testRunnerDefaults.capabilities.session, humanAttach },
+    },
     name,
     sessionKind,
     projectedMembers: [],
@@ -642,6 +654,24 @@ const capturingRunner = (
         Ref.update(requests, (xs) => [...xs, request]).pipe(
           Effect.map(() => Stream.concat(Stream.fromArray(events), tail)),
         ),
+      ),
+  }),
+});
+
+const sequenceRunner = (streams: ReadonlyArray<Stream.Stream<AgUiEvent, HarnessError>>): TestRunner => ({
+  make: (requests) => ({
+    ...testRunnerDefaults,
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    run: (request) =>
+      Stream.unwrap(
+        Ref.modify(requests, (captured) => [
+          streams[captured.length] ?? Stream.empty,
+          [...captured, request],
+        ]),
       ),
   }),
 });
@@ -2629,7 +2659,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
-      assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-42");
+      assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
       assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
     }).pipe(Effect.provide(provide([capturingRunner(implementEvents)])));
@@ -2661,6 +2691,7 @@ describe("Executor.execute", () => {
 
       const ledger = yield* RunLedger.RunLedger;
       const [run] = yield* ledger.listRuns(10);
+      assert.strictEqual(yield* handleOf(ledger, run?.session), "sess-prev");
       assert.strictEqual(run?.status, "failed");
       assert.strictEqual(run ? (yield* ledger.events(run.id)).at(-1)?.type : null, "RUN_FINISHED");
     }).pipe(Effect.provide(provide([capturingRunner(successEvents)])));
@@ -2686,6 +2717,29 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([capturingRunner(implementStreamEvents, Stream.fail(error))])));
   });
 
+  it.effect("rejects a different handle during an ordinary same-Harness retry", () => {
+    const error = new HarnessError({ reason: "turn", retryable: true, message: "network blip" });
+    const first = Stream.concat(Stream.fromArray(implementStreamEvents), Stream.fail(error));
+    const restarted = Stream.fromArray(
+      implementEvents.map((event) => replaceSessionHandle(event, "sess-restarted")),
+    );
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const requests = yield* HarnessRequests;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const captured = yield* Ref.get(requests);
+      assert.strictEqual(captured[1]?.session, captured[0]?.session);
+
+      const ledger = yield* RunLedger.RunLedger;
+      assert.strictEqual(yield* handleOf(ledger, captured[1]?.session), "sess-42");
+      assert.isTrue((yield* Ref.get(calls)).some((call) => call.method === "attemptFailed"));
+    }).pipe(Effect.provide(provide([sequenceRunner([first, restarted])])));
+  });
+
   it.effect("exhausts a failed implement job and hands the issue back to a human", () => {
     const error = new HarnessError({ reason: "launch", retryable: false, message: "no cli" });
 
@@ -2705,6 +2759,32 @@ describe("Executor.execute", () => {
       assert.strictEqual(run?.stage, "implement");
       assert.strictEqual(run?.status, "exhausted");
     }).pipe(Effect.provide(provide([failingRunner(error)])));
+  });
+
+  it.effect("does not publish a human attach command for a programmatic-only session", () => {
+    const error = new HarnessError({ reason: "turn", retryable: false, message: "resume failed" });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      yield* execute(executor, implementWorkspace, implementItem);
+
+      const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
+      assert.notInclude(handOff?.note ?? "", "Resume the session");
+      assert.notInclude(handOff?.note ?? "", "codex resume");
+    }).pipe(
+      Effect.provide(
+        provide([
+          capturingRunner(
+            [runStarted, sessionEvent("cursor-acp-session")],
+            Stream.fail(error),
+            "opaque-handle",
+            cursor,
+            false,
+          ),
+        ]),
+      ),
+    );
   });
 
   it.effect("hands a diverged worktree to a human on the first attempt without retrying", () => {
@@ -2883,7 +2963,7 @@ describe("Executor.execute", () => {
     );
   });
 
-  it.effect("keeps an opaque resume handle when prepare hands a run off", () => {
+  it.effect("uses the stored session attach capability when switched prepare fails", () => {
     const worktree = failSecondPrepareWorktree(
       new WorktreeDivergedError({
         remote: "origin",
@@ -2896,6 +2976,7 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
       yield* execute(executor, implementWorkspace, implementItem);
+      yield* selectHarness(runnableCodexStages);
       yield* execute(executor, implementWorkspace, implementItem);
 
       const ledger = yield* RunLedger.RunLedger;
@@ -2904,8 +2985,25 @@ describe("Executor.execute", () => {
       const handOff = (yield* Ref.get(calls)).find((call) => call.method === "handOff");
       assert.strictEqual(runs.length, 1);
       assert.strictEqual(runs[0]?.session, succeeded?.session);
-      assert.include(handOff?.note ?? "", "agent --resume 'sess-42'");
-    }).pipe(Effect.provide(provide([runner(implementEvents)], worktree)));
+      assert.notInclude(handOff?.note ?? "", "codex resume");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [
+            capturingRunner(implementEvents, Stream.empty, "opaque-handle", cursor, false),
+            capturingRunner(implementEvents, Stream.empty, "opaque-handle", codex, "codex-cli"),
+          ],
+          worktree,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          SelectedHarness.controlStoreLayer,
+        ),
+      ),
+    );
   });
 
   it.effect("hands a self-reported stuck implement run to a human without retrying", () => {

@@ -15,6 +15,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
+import { afterEach, vi } from "vitest";
 import {
   bootControlStoreLayer,
   ControlStore,
@@ -22,6 +23,18 @@ import {
   controlStoreClientLayer,
   readControlStore,
 } from "./control-store";
+import { createStatements } from "./control-store-create.gen";
+
+const pushSchemaMock = vi.hoisted(() => vi.fn());
+
+vi.mock("drizzle-kit/payload/sqlite", () =>
+  vi
+    .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")
+    .then((actual) => {
+      pushSchemaMock.mockImplementation(actual.pushSchema);
+      return { ...actual, pushSchema: pushSchemaMock };
+    }),
+);
 
 const storeLayerAt = (storePath: string) =>
   bootControlStoreLayer(storePath).pipe(Layer.provideMerge(controlStoreClientLayer(storePath)));
@@ -56,6 +69,12 @@ const query = (storePath: string, sql: string) =>
     Effect.sync(() => new DatabaseSync(storePath)),
     (db) => Effect.sync(() => db.prepare(sql).all()),
     (db) => Effect.sync(() => db.close()),
+  );
+
+const schemaOf = (storePath: string) =>
+  query(
+    storePath,
+    "SELECT type, name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' OR name LIKE 'sqlite_autoindex_%' ORDER BY type, name",
   );
 
 const modeOf = (path: string) =>
@@ -108,32 +127,83 @@ const establishSecondAccount = Effect.fn("test.establishSecondAccount")((storePa
 
 const retentionWindowMillis = 1000 * 60 * 60 * 24 * 30;
 const workspace = Schema.decodeSync(WorkspaceId)("example");
+const schemaDiff = (sqlStatements: ReadonlyArray<string>) => ({
+  sqlStatements: [...sqlStatements],
+  hints: [],
+  apply: () => Promise.resolve(),
+});
+
+afterEach(() => pushSchemaMock.mockClear());
 
 layer(NodeServices.layer)((it) => {
-  it.effect("creates the schema once and boots again unchanged", () =>
+  it.effect("converges an empty store to the generated create schema", () =>
+    Effect.gen(function* () {
+      const { dir, storePath } = yield* temporaryStore();
+      const path = yield* Path.Path;
+      const generatedPath = path.join(dir, "generated.db");
+      yield* poke(generatedPath, createStatements.join("\n"));
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* schemaOf(storePath), yield* schemaOf(generatedPath));
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+    }),
+  );
+
+  it.effect("adds a column and table while preserving existing rows", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* poke(
+        storePath,
+        `${createStatements.join("\n")}
+         INSERT INTO workspaces (id, name, checkout_path, issue_tracker, linear_history)
+         VALUES ('workspace-1', 'kept', '/tmp/kept', '{}', 0);
+         ALTER TABLE workspaces DROP COLUMN source_control;
+         DROP TABLE connections;`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.deepStrictEqual(yield* query(storePath, "SELECT id, name FROM workspaces"), [
+        { id: "workspace-1", name: "kept" },
+      ]);
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(workspaces)")).some(
+          (column) => column.name === "source_control",
+        ),
+      );
+      assert.deepStrictEqual(
+        yield* query(
+          storePath,
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'connections'",
+        ),
+        [{ name: "connections" }],
+      );
+    }),
+  );
+
+  it.effect("produces zero diff statements on the second boot after convergence", () =>
     Effect.gen(function* () {
       const { storePath } = yield* temporaryStore();
 
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-      assert.deepStrictEqual(
-        yield* query(
-          storePath,
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-        ),
-        [
-          { name: "connections" },
-          { name: "contribution_settings" },
-          { name: "daemon_limits" },
-          { name: "operation_settings" },
-          { name: "plugin_installs" },
-          { name: "run_events" },
-          { name: "run_plans" },
-          { name: "runs" },
-          { name: "sessions" },
-          { name: "workspaces" },
-        ],
-      );
       assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.strictEqual(pushSchemaMock.mock.calls.length, 3);
+    }),
+  );
+
+  it.effect("fails closed when the verification re-diff is not empty", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      pushSchemaMock
+        .mockResolvedValueOnce(schemaDiff(["CREATE TABLE convergence_probe (id INTEGER)"]))
+        .mockResolvedValueOnce(schemaDiff(["ALTER TABLE convergence_probe ADD remaining TEXT"]));
+
+      const store = yield* storeAt(storePath);
+
+      assert.strictEqual(store.health, "unavailable");
+      assert.isTrue(
+        store.health === "unavailable" &&
+          store.message.includes("ALTER TABLE convergence_probe ADD remaining TEXT"),
+      );
     }),
   );
 
@@ -353,28 +423,40 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
-  it.effect("refuses a store built by another schema and says how to clear it", () =>
+  it.effect("preserves rows when the schema diff is non-additive", () =>
     Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
       const { storePath } = yield* temporaryStore();
-      yield* poke(storePath, "CREATE TABLE runs (id TEXT PRIMARY KEY, note TEXT)");
+      yield* poke(
+        storePath,
+        `${createStatements.join("\n")}
+         CREATE TABLE extra_data (value TEXT NOT NULL);
+         INSERT INTO extra_data (value) VALUES ('kept');`,
+      );
 
       const store = yield* storeAt(storePath);
       assert.strictEqual(store.health, "unavailable");
-      assert.isTrue(store.health === "unavailable" && store.message.includes(storePath));
+      assert.isTrue(store.health === "unavailable" && store.message.includes("DROP TABLE `extra_data`;"));
+      assert.deepStrictEqual(yield* query(storePath, "SELECT value FROM extra_data"), [{ value: "kept" }]);
+      assert.isTrue(yield* fs.exists(storePath));
     }),
   );
 
-  it.effect("refuses a store whose schema drifted under it", () =>
+  it.effect("restores a missing index without replacing the store", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const { storePath } = yield* temporaryStore();
       yield* storeAt(storePath);
-      yield* poke(
-        storePath,
-        "DROP INDEX run_events_at; CREATE UNIQUE INDEX run_events_at ON run_events (at)",
-      );
+      yield* poke(storePath, "DROP INDEX run_events_at");
 
-      assert.strictEqual((yield* storeAt(storePath)).health, "unavailable");
+      assert.strictEqual((yield* storeAt(storePath)).health, "available");
+      assert.deepStrictEqual(
+        yield* query(
+          storePath,
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'run_events_at'",
+        ),
+        [{ name: "run_events_at" }],
+      );
       assert.isTrue(yield* fs.exists(storePath));
     }),
   );
