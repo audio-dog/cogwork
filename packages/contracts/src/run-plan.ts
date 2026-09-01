@@ -1,3 +1,4 @@
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
 import { Claim } from "./coordination";
@@ -42,6 +43,9 @@ export class RunPlanMcpServer extends Schema.Class<RunPlanMcpServer>("RunPlanMcp
   projectedName: TrimmedNonEmptyString,
   endpoint: TrimmedNonEmptyString,
   authenticated: Schema.Boolean,
+  unavailableReason: Schema.NullOr(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
 }) {}
 
 export class RunPlanContributionMember extends Schema.Class<RunPlanContributionMember>(
@@ -50,6 +54,7 @@ export class RunPlanContributionMember extends Schema.Class<RunPlanContributionM
   identity: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
   source: TrimmedNonEmptyString,
+  unavailableReason: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
 }) {}
 
 export class RunPlanMessage extends Schema.Class<RunPlanMessage>("RunPlanMessage")({

@@ -105,6 +105,10 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
   const defaultModel = options.defaultModel ?? "anthropic/claude-sonnet-4-5";
   const makeAdapter = options.makeAdapter ?? defaultModelAdapterFactory;
   const runChat = options.runChat ?? defaultRunChat;
+  const preflight = Effect.fn("ProviderRunner.preflight")(function* (model: string | null) {
+    const credentials = yield* CredentialStore;
+    yield* resolveModelAdapter(credentials, model ?? defaultModel, makeAdapter);
+  });
 
   return {
     name: options.name,
@@ -121,6 +125,17 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
     ],
     planMiddleware: ["persistence", "instruction-context"],
     execution: fullHarnessExecution,
+    preflight: (model) =>
+      preflight(model).pipe(
+        Effect.mapError(
+          (error) =>
+            new HarnessError({
+              reason: error.reason === "no-key" ? "credential" : "policy",
+              retryable: false,
+              message: error.message,
+            }),
+        ),
+      ),
     run: (request) =>
       Stream.unwrap(
         Effect.gen(function* () {
