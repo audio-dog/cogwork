@@ -441,6 +441,62 @@ describe("coordination outcomes", () => {
     }),
   );
 
+  it.effect("handBack appends its record, applies one role, and keeps its note in the ledger", () =>
+    Effect.gen(function* () {
+      const failed: AttemptRecord = { stage: "implement", outcome: "failed", atMillis: 2 };
+      const { host, itemAt, roleLog } = yield* makeFakeHost([
+        {
+          number: 17,
+          labels: ["ready-for-human"],
+          comments: [
+            {
+              id: 1,
+              isBot: true,
+              createdAtMillis: 1,
+              body: coordinationBody([Coordination.serializeAttempt(codec, failed)]),
+            },
+          ],
+        },
+      ]);
+      const tracker = makeCoordinationTracker(host);
+      const changes: RoleChanges = { remove: ["ready-for-human"], add: ["ready-for-agent"] };
+      yield* tracker.handBack(workspace, decodeId("#17"), {
+        record: { by: "local-owner", atMillis: 5 },
+        changes,
+        note: "Try the repaired worktree setup.",
+      });
+
+      const item = yield* observed(tracker, "#17");
+      assert.deepStrictEqual(item?.roles, ["ready-for-agent"]);
+      assert.deepStrictEqual(item?.attempts, [failed]);
+      assert.deepStrictEqual(item?.handback, { by: "local-owner", atMillis: 5 });
+      assert.deepStrictEqual(yield* roleLog, [{ number: 17, changes }]);
+
+      const stored = yield* itemAt(17);
+      assert.strictEqual(stored?.comments.length, 1);
+      assert.strictEqual(
+        Coordination.coordinationStatus(codec, ledgerBody(stored?.comments ?? [])),
+        "Handed back by local-owner: Try the repaired worktree setup.",
+      );
+    }),
+  );
+
+  it.effect("handBack never creates a coordination comment", () =>
+    Effect.gen(function* () {
+      const { host, itemAt } = yield* makeFakeHost([{ number: 18, labels: ["ready-for-human"] }]);
+      const tracker = makeCoordinationTracker(host);
+      const error = yield* Effect.flip(
+        tracker.handBack(workspace, decodeId("#18"), {
+          record: { by: "local-owner", atMillis: 5 },
+          changes: { remove: ["ready-for-human"], add: ["ready-for-agent"] },
+        }),
+      );
+
+      assert.strictEqual(error._tag, "IssueTrackerError");
+      assert.strictEqual((yield* itemAt(18))?.comments.length, 0);
+    }),
+  );
+
   it.effect("stalled records the abandonment, carries the detail, and adds ready-for-human", () =>
     Effect.gen(function* () {
       const { host, itemAt } = yield* makeFakeHost([{ number: 15, labels: ["ready-for-agent"] }]);

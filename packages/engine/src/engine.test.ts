@@ -92,6 +92,7 @@ const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.
   followedUp: () => Effect.void,
   attemptFailed: () => Effect.void,
   handOff: () => Effect.void,
+  handBack: () => Effect.void,
   stalled: () => Effect.void,
   reclassify: () => Effect.void,
   ...service,
@@ -322,6 +323,39 @@ describe("reconcile worker", () => {
     }),
   );
 
+  it.effect("runs a post-current submission after an in-flight reconcile", () => {
+    const firstStarted = Latch.makeUnsafe(false);
+    const releaseFirst = Latch.makeUnsafe(false);
+    const observes = Ref.makeUnsafe(0);
+    const source = sources(
+      Layer.succeed(
+        IssueTracker.IssueTracker,
+        stub({
+          observe: Effect.fn(function* () {
+            const count = yield* Ref.getAndUpdate(observes, (current) => current + 1);
+            if (count > 0) return [];
+            yield* firstStarted.open;
+            yield* releaseFirst.await;
+            return [];
+          }),
+        }),
+      ),
+    );
+    const layer = reconcileLayer.pipe(Layer.provide(Layer.mergeAll(registryLayer, source)));
+
+    return Effect.gen(function* () {
+      const worker = yield* Reconcile.ReconcileWorker;
+      const current = yield* Effect.forkChild(worker.submit());
+      yield* firstStarted.await;
+      const next = yield* Effect.forkChild(worker.submitAfterCurrent());
+      yield* releaseFirst.open;
+      yield* Fiber.join(current);
+      yield* Fiber.join(next);
+
+      assert.strictEqual(yield* Ref.get(observes), 2);
+    }).pipe(Effect.provide(layer), Effect.scoped);
+  });
+
   const eligibleItem: TrackerItem = {
     id: id("AUD-1"),
     title: "first ticket",
@@ -333,6 +367,7 @@ describe("reconcile worker", () => {
     claim: null,
     claimedByUs: false,
     attempts: [],
+    handback: null,
     owned: false,
     followUp: null,
     openBlockers: 0,
@@ -375,6 +410,7 @@ describe("reconcile worker", () => {
     claim: null,
     claimedByUs: false,
     attempts: [],
+    handback: null,
     owned: true,
     followUp: null,
     openBlockers: 0,
@@ -964,6 +1000,7 @@ describe("daemon status over rpc", () => {
     claim: null,
     claimedByUs: false,
     attempts: [],
+    handback: null,
     owned: false,
     followUp: null,
     openBlockers: 0,
@@ -1001,6 +1038,7 @@ describe("daemon status over rpc", () => {
     claim: null,
     claimedByUs: false,
     attempts: [],
+    handback: null,
     owned: false,
     followUp: null,
     openBlockers: 2,
@@ -1037,6 +1075,7 @@ describe("daemon status over rpc", () => {
     claim: null,
     claimedByUs: false,
     attempts: [],
+    handback: null,
     owned: true,
     followUp: null,
     openBlockers: 0,

@@ -1,4 +1,4 @@
-import type { LifecycleStage, McpSkill, WorkspaceConfig } from "@cogwork/contracts";
+import type { LifecycleStage, McpSkill, OperationNeed, WorkspaceConfig } from "@cogwork/contracts";
 
 export interface OperationDefinition {
   readonly skill: string;
@@ -6,6 +6,7 @@ export interface OperationDefinition {
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
   readonly mcpSkills: ReadonlyArray<McpSkill>;
+  readonly needs: ReadonlyArray<OperationNeed>;
 }
 
 const dayMillis = 86_400_000;
@@ -37,6 +38,7 @@ interface StageDefaults {
   readonly promptTemplate: string;
   readonly resumeMaxAgeMillis: number | null;
   readonly resumeMaxTokens: number | null;
+  readonly needs: ReadonlyArray<OperationNeed>;
 }
 
 const resolveStageConfig = (config: WorkspaceConfig, defaults: StageDefaults) => ({
@@ -50,6 +52,7 @@ export const resolveTriage = (config: WorkspaceConfig) =>
     promptTemplate: defaultTriagePrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
+    needs: [],
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
@@ -58,6 +61,7 @@ export const resolveImplement = (config: WorkspaceConfig) =>
     promptTemplate: defaultImplementPrompt,
     resumeMaxAgeMillis: null,
     resumeMaxTokens: null,
+    needs: [],
   });
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
@@ -66,6 +70,7 @@ export const resolveFollowUp = (config: WorkspaceConfig) =>
     promptTemplate: defaultFollowUpPrompt,
     resumeMaxAgeMillis: dayMillis,
     resumeMaxTokens: null,
+    needs: [],
   });
 
 const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) => OperationDefinition>> = {
@@ -73,6 +78,8 @@ const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) =
   implement: resolveImplement,
   "follow-up": resolveFollowUp,
 };
+
+export const operationStages = ["triage", "implement", "follow-up"] satisfies ReadonlyArray<LifecycleStage>;
 
 export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
   stageResolvers[stage]?.(config) ?? null;

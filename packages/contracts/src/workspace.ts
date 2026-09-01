@@ -55,6 +55,22 @@ export const SourceControlConfig = Schema.Struct({
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
 
+export const OperationNeedKind = Schema.Literals([
+  "mcp-server",
+  "skill",
+  "subagent",
+  "command",
+  "hook",
+  "connection",
+]);
+export type OperationNeedKind = typeof OperationNeedKind.Type;
+
+export const OperationNeed = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  kind: OperationNeedKind,
+});
+export type OperationNeed = typeof OperationNeed.Type;
+
 export const WorktreeConfig = Schema.Struct({
   root: Schema.optional(TrimmedNonEmptyString),
   remote: Schema.optional(TrimmedNonEmptyString),

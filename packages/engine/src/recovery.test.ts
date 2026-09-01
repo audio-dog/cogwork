@@ -1,6 +1,8 @@
 import {
   type AttemptRecord,
+  DaemonEvent,
   HarnessName,
+  type OperationAvailability,
   type PollState,
   RunId,
   type RunRecord,
@@ -20,6 +22,7 @@ import * as Stream from "effect/Stream";
 import type { EligibleWork } from "./classify";
 import { recoveryReason } from "./comments";
 import * as DaemonEventBus from "./daemon-event-bus";
+import * as Executor from "./executor";
 import type { ObservedItem } from "./issue-tracker";
 import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -77,6 +80,7 @@ const claimedByUs: ObservedItem = {
   claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "implement" },
   claimedByUs: true,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -93,6 +97,7 @@ const claimedByOther: ObservedItem = {
   claim: { by: "someone-else", claimedAtMillis: 1 },
   claimedByUs: false,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -109,6 +114,7 @@ const unclaimed: ObservedItem = {
   claim: null,
   claimedByUs: false,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -125,6 +131,7 @@ const staleNoStage: ObservedItem = {
   claim: { by: "cogwork-bot", claimedAtMillis: 1 },
   claimedByUs: true,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -159,6 +166,7 @@ const snapshotOf = (
       blocked: [],
       needsHuman: [],
       observed,
+      availability: [],
     },
   ],
 });
@@ -166,13 +174,17 @@ const snapshotOf = (
 const workerLayer = (observed: ReadonlyArray<ObservedItem>, poll: PollState = okPoll) =>
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
     snapshot: Effect.succeed(snapshotOf(observed, poll)),
+    invalidateAvailability: () => Effect.void,
   });
 
 const workerSnapshotLayer = (snapshot: Ref.Ref<Reconcile.ReconcileSnapshot>) =>
   Layer.succeed(Reconcile.ReconcileWorker, {
     submit: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
+    submitAfterCurrent: () => Effect.succeed({ workspaces: 0, failures: 0, pendingWork: 0, paused: 0 }),
     snapshot: Ref.get(snapshot),
+    invalidateAvailability: () => Effect.void,
   });
 
 const registryLayer = Layer.succeed(
@@ -192,6 +204,7 @@ const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
     followedUp: () => Effect.void,
     attemptFailed: () => Effect.void,
     handOff: () => Effect.void,
+    handBack: () => Effect.void,
     stalled: () => Effect.void,
     reclassify: () => Effect.void,
     ...service,
@@ -226,31 +239,36 @@ interface RecoveryDeps {
   readonly paused?: Ref.Ref<boolean>;
   readonly inFlight?: Ref.Ref<ReadonlySet<WorkItemIdType>>;
   readonly snapshot?: Ref.Ref<Reconcile.ReconcileSnapshot>;
+  readonly availability?: OperationAvailability;
 }
 
-const recoveryLayer = (deps: RecoveryDeps) => {
-  const bus = DaemonEventBus.layer;
-  const runLedger = RunLedger.publishingLayer.pipe(
-    Layer.provide(Layer.succeed(RunLedger.CoreRunLedger, deps.ledger)),
-    Layer.provide(bus),
-  );
-  return Recovery.layer.pipe(
+const recoveryLayer = (deps: RecoveryDeps) =>
+  Recovery.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
         registryLayer,
         deps.snapshot ? workerSnapshotLayer(deps.snapshot) : workerLayer(deps.observed, deps.poll ?? okPoll),
         schedulerStub(deps.admitted, deps.paused, deps.inFlight),
+        Layer.succeed(Executor.Executor, {
+          availabilityOf: (_workspace, item) =>
+            Effect.succeed(deps.availability ?? { operation: item.stage, available: true, causes: [] }),
+          refreshAvailability: () => Effect.succeed([]),
+          execute: () => Effect.succeed(false),
+        }),
         issueTrackerStub(deps.issueTracker ?? {}),
-        runLedger,
+        RunLedger.publishingLayer.pipe(
+          Layer.provide(Layer.succeed(RunLedger.CoreRunLedger, deps.ledger)),
+          Layer.provide(DaemonEventBus.layer),
+        ),
       ),
     ),
-    Layer.provideMerge(bus),
+    Layer.provideMerge(DaemonEventBus.layer),
   );
-};
 
 interface LiveRecoveryProbeState {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
   readonly attempts: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+  readonly handoffs: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
   readonly inFlight: Ref.Ref<ReadonlySet<WorkItemIdType>>;
   readonly ledger: RunLedger.RunLedgerService;
   readonly released: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
@@ -266,10 +284,39 @@ class LiveRecoveryProbe extends Context.Service<LiveRecoveryProbe, LiveRecoveryP
       return {
         admitted: yield* Ref.make<ReadonlyArray<EligibleWork>>([]),
         attempts: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
+        handoffs: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
         inFlight: yield* Ref.make<ReadonlySet<WorkItemIdType>>(new Set()),
         ledger: yield* RunLedger.makeMemory,
         released: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
         snapshot: yield* Ref.make<Reconcile.ReconcileSnapshot>(snapshotOf([])),
+      };
+    }),
+  );
+}
+
+interface UnavailableRecoveryProbeState {
+  readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
+  readonly attempts: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+  readonly handoffs: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+  readonly ledger: RunLedger.RunLedgerService;
+  readonly notes: Ref.Ref<ReadonlyArray<string>>;
+  readonly released: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+}
+
+class UnavailableRecoveryProbe extends Context.Service<
+  UnavailableRecoveryProbe,
+  UnavailableRecoveryProbeState
+>()("@cogwork/engine/recovery.test/UnavailableRecoveryProbe") {
+  static readonly layer = Layer.effect(
+    UnavailableRecoveryProbe,
+    Effect.gen(function* () {
+      return {
+        admitted: yield* Ref.make<ReadonlyArray<EligibleWork>>([]),
+        attempts: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
+        handoffs: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
+        ledger: yield* RunLedger.makeMemory,
+        notes: yield* Ref.make<ReadonlyArray<string>>([]),
+        released: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
       };
     }),
   );
@@ -297,6 +344,66 @@ describe("Recovery.recover", () => {
           [id("#1")],
         );
       }).pipe(Effect.provide(recoveryLayer({ observed: [claimedByUs], issueTracker, ledger, admitted })));
+    }),
+  );
+
+  it.effect("keeps an unavailable stalled follow-up on its recovery path", () =>
+    Effect.gen(function* () {
+      const released = yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]);
+      const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
+      const ledger = yield* RunLedger.makeMemory;
+      const stalledFollowUp: ObservedItem = {
+        ...claimedByUs,
+        roles: [],
+        claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "follow-up" },
+        pr: {
+          number: 1,
+          url: "https://github.com/owner/repo/pull/1",
+          review: "pending",
+          checks: "failing",
+          latestHumanCommentAtMillis: null,
+          latestBotTriggerAtMillis: null,
+          fresh: false,
+          baseDivergence: "none",
+          waitingSinceMillis: 0,
+          headRef: "1-ours",
+          followable: true,
+          followUp: {
+            checks: "failing",
+            humanCommentAtMillis: 0,
+            botTriggerAtMillis: 0,
+            noProgress: 3,
+            baseDivergence: "none",
+          },
+        },
+      };
+      yield* ledger.insertRun({ ...interrupted, stage: "follow-up" });
+      yield* Effect.gen(function* () {
+        const recovery = yield* Recovery.Recovery;
+        yield* recovery.recover();
+
+        assert.deepStrictEqual(
+          (yield* Ref.get(admitted)).map(({ stage }) => stage),
+          ["follow-up"],
+        );
+        assert.deepStrictEqual(yield* Ref.get(released), []);
+      }).pipe(
+        Effect.provide(
+          recoveryLayer({
+            observed: [stalledFollowUp],
+            ledger,
+            admitted,
+            issueTracker: {
+              release: (_workspace, itemId) => Ref.update(released, (items) => [...items, itemId]),
+            },
+            availability: {
+              operation: "follow-up",
+              available: false,
+              causes: [],
+            },
+          }),
+        ),
+      );
     }),
   );
 
@@ -567,6 +674,62 @@ describe("Recovery.recover", () => {
     }),
   );
 
+  it.effect("releases an unavailable resume when its note fails", () =>
+    Effect.gen(function* () {
+      const probe = yield* UnavailableRecoveryProbe;
+      const recovery = yield* Recovery.Recovery;
+      yield* probe.ledger.insertRun(crashedRun("crash-a", 1, "crashed"));
+      yield* probe.ledger.insertRun(crashedRun("crash-b", 2, "crashed"));
+      yield* probe.ledger.insertRun(crashedRun("crash-c", 3, "running"));
+      yield* recovery.recover();
+      assert.deepStrictEqual(yield* Ref.get(probe.released), [id("#1")]);
+      assert.deepStrictEqual(yield* Ref.get(probe.attempts), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);
+      assert.deepStrictEqual(yield* Ref.get(probe.admitted), []);
+      const note = (yield* Ref.get(probe.notes))[0] ?? "";
+      assert.include(note, "Required skill need is unbound.");
+      assert.notInclude(note, "@security-team");
+    }).pipe(
+      Effect.provide(
+        Layer.unwrap(
+          Effect.map(UnavailableRecoveryProbe, (probe) =>
+            recoveryLayer({
+              observed: [claimedByUs],
+              ledger: probe.ledger,
+              admitted: probe.admitted,
+              issueTracker: {
+                release: (_workspace, itemId) => Ref.update(probe.released, (items) => [...items, itemId]),
+                attemptFailed: (_workspace, itemId) =>
+                  Ref.update(probe.attempts, (items) => [...items, itemId]),
+                handOff: (_workspace, itemId) => Ref.update(probe.handoffs, (items) => [...items, itemId]),
+                note: (_workspace, _itemId, detail) =>
+                  Ref.update(probe.notes, (items) => [...items, detail]).pipe(
+                    Effect.andThen(
+                      Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "note failed" })),
+                    ),
+                  ),
+              },
+              availability: {
+                operation: "implement",
+                available: false,
+                causes: [
+                  {
+                    _tag: "UnsatisfiedNeed",
+                    need: "review",
+                    kind: "skill",
+                    reason: "unbound",
+                    contribution: null,
+                    message: "@security-team [click](https://attacker.invalid)",
+                  },
+                ],
+              },
+            }),
+          ),
+        ).pipe(Layer.provideMerge(UnavailableRecoveryProbe.layer)),
+      ),
+    ),
+  );
+
   it.effect("defers recovery for a workspace whose bootstrap poll is paused", () =>
     Effect.gen(function* () {
       const admitted = yield* Ref.make<ReadonlyArray<EligibleWork>>([]);
@@ -622,10 +785,12 @@ describe("Recovery.recover", () => {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
         const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "crashed"),
+          Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "crashed"),
           Stream.runCollect,
         );
-        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        const changed = [...events].flatMap((event) =>
+          DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
+        );
         assert.deepStrictEqual(
           changed.map((run) => run.status),
           ["crashed"],
@@ -647,10 +812,12 @@ describe("Recovery.recover", () => {
         const recovery = yield* Recovery.Recovery;
         yield* recovery.recover();
         const events = yield* Stream.fromSubscription(subscription).pipe(
-          Stream.takeUntil((event) => event._tag === "RunChanged" && event.run.status === "failed"),
+          Stream.takeUntil((event) => DaemonEvent.guards.RunChanged(event) && event.run.status === "failed"),
           Stream.runCollect,
         );
-        const changed = [...events].flatMap((event) => (event._tag === "RunChanged" ? [event.run] : []));
+        const changed = [...events].flatMap((event) =>
+          DaemonEvent.guards.RunChanged(event) ? [event.run] : [],
+        );
         assert.deepStrictEqual(
           changed.map((run) => run.status),
           ["failed"],
@@ -755,6 +922,7 @@ describe("Recovery.recoverWhenLive", () => {
           issueTracker: {
             release: (_workspace, itemId) => Ref.update(probe.released, (items) => [...items, itemId]),
             attemptFailed: (_workspace, itemId) => Ref.update(probe.attempts, (items) => [...items, itemId]),
+            handOff: (_workspace, itemId) => Ref.update(probe.handoffs, (items) => [...items, itemId]),
           },
         }),
       ),
@@ -789,6 +957,34 @@ describe("Recovery.recoverWhenLive", () => {
             [prior.id],
           );
         }),
+    );
+
+    it.effect("retries after a handback without counting earlier crashes", () =>
+      Effect.gen(function* () {
+        const probe = yield* LiveRecoveryProbe;
+        const recovery = yield* Recovery.Recovery;
+        yield* Effect.all(
+          [
+            Ref.set(probe.admitted, []),
+            Ref.set(probe.handoffs, []),
+            Ref.set(
+              probe.snapshot,
+              snapshotOf([{ ...claimedByUs, handback: { by: "local-owner", atMillis: 2 } }]),
+            ),
+          ],
+          { discard: true },
+        );
+        yield* probe.ledger.insertRun(crashedRun("handback-crash-a", 1, "crashed"));
+        yield* probe.ledger.insertRun(crashedRun("handback-crash-b", 2, "crashed"));
+        yield* probe.ledger.insertRun(crashedRun("handback-crash-c", 3, "running"));
+        yield* recovery.recover();
+
+        assert.deepStrictEqual(
+          (yield* Ref.get(probe.admitted)).map((work) => work.id),
+          [id("#1")],
+        );
+        assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);
+      }),
     );
 
     it.effect("holds an orphan claim while its work item is in flight", () =>

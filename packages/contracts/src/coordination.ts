@@ -18,3 +18,9 @@ export const AttemptRecord = Schema.Struct({
   atMillis: Schema.Natural,
 });
 export type AttemptRecord = typeof AttemptRecord.Type;
+
+export const HandbackRecord = Schema.Struct({
+  by: TrimmedNonEmptyString,
+  atMillis: Schema.Natural,
+});
+export type HandbackRecord = typeof HandbackRecord.Type;

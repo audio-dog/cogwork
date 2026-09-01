@@ -1,6 +1,7 @@
 import {
   type AttemptRecord,
   type Claim,
+  type HandbackRecord,
   IssueTrackerError,
   type LifecycleStage,
   linearTeams,
@@ -29,6 +30,7 @@ interface ObservedItemBase {
   readonly claim: Claim | null;
   readonly claimedByUs: boolean;
   readonly attempts: ReadonlyArray<AttemptRecord>;
+  readonly handback: HandbackRecord | null;
   readonly openBlockers: number;
   readonly proposal: string | null;
   readonly priority: Priority;
@@ -89,6 +91,12 @@ export interface ReclassifyOutcome {
   readonly note?: string;
 }
 
+export interface HandBackOutcome {
+  readonly record: HandbackRecord;
+  readonly changes: RoleChanges;
+  readonly note?: string;
+}
+
 const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
@@ -134,6 +142,8 @@ export const makeEmpty = Effect.succeed({
     _outcome: AttemptFailedOutcome,
   ) => failWhenRemote(workspace),
   handOff: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: HandOffOutcome) =>
+    failWhenRemote(workspace),
+  handBack: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: HandBackOutcome) =>
     failWhenRemote(workspace),
   stalled: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: StalledOutcome) =>
     failWhenRemote(workspace),
