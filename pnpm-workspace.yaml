@@ -19,6 +19,7 @@ catalog:
   drizzle-orm: '1.0.0-rc.5-169397b'
   drizzle-kit: '1.0.0-rc.4'
   '@tanstack/ai': '0.52.0'
+  '@tanstack/ai-claude-code': '0.6.3'
   '@tanstack/ai-codex': '0.5.3'
   '@tanstack/ai-sandbox': '0.5.4'
   '@tanstack/ai-sandbox-local-process': '0.2.4'
