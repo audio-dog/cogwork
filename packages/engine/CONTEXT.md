@@ -89,6 +89,10 @@ _Avoid_: Feature flags, adapter metadata, projection matrix
 The engine-owned execution module beneath external Harness runners. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, file hooks, and optional usage estimate.
 _Avoid_: Harness service (the dispatcher above it), Harness runner (the engine-facing backend seam), provider runner (the owned-transcript path)
 
+**Harness Workspace projection**:
+The one portable TanStack Workspace definition the external Harness runtime creates for each Run. It carries the Context assembler's ordered mandatory Instructions, the host-provisioned Operating Instructions package path, resolved MCP servers, and fresh per-Run `SecretRef`s. TanStack renders that definition into each native Harness form. The work-specific Message remains the user turn, public MCP servers get no invented secret, and authenticated MCP secrets are resolved only into the live Sandbox environment. Its source is `none` and snapshots are off: the selected Sandbox provider binds the prepared checkout, while the Worktree manager continues to own checkout, branch, Git metadata, and cleanup. A missing required projection is a launch refusal, never ambient discovery.
+_Avoid_: Workspace (the registered repository), Workspace registry, Worktree, native Harness config
+
 **MCP server assembler**:
 Turns a Workspace's configured MCP servers into the resolved set a Run gets, filling in authentication and checking MCP server readiness before dispatch. Registry identity/version remains provenance and runtime `serverInfo` remains observed metadata; secret values travel on the Harness Request only, never into the ledger or event log.
 _Avoid_: MCP skill assembler, credential store (it delegates to that, it is not that), context assembler (that builds instruction layers)

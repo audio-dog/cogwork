@@ -7,13 +7,12 @@ import * as Fiber from "effect/Fiber";
 import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
 import * as MutableHashMap from "effect/MutableHashMap";
-import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 interface Registration {
   readonly fiber: Fiber.Fiber<unknown, unknown>;
-  readonly manualCancellation: MutableRef.MutableRef<boolean>;
+  readonly manualCancellation: Deferred.Deferred<void>;
   readonly workspace: WorkspaceIssueTrackerBinding | undefined;
 }
 
@@ -48,13 +47,13 @@ export const make = Effect.gen(function* () {
       Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const ready = yield* Deferred.make<void>();
-          const manualCancellation = MutableRef.make(false);
+          const manualCancellation = yield* Deferred.make<void>();
           const fiber = yield* FiberMap.run(
             fibers,
             runId,
             restore(Deferred.await(ready).pipe(Effect.andThen(effect))).pipe(
               Effect.onInterrupt(() =>
-                Effect.suspend(() => (MutableRef.get(manualCancellation) ? onCancel : Effect.void)),
+                Effect.suspend(() => (Deferred.isDoneUnsafe(manualCancellation) ? onCancel : Effect.void)),
               ),
             ),
           );
@@ -69,8 +68,8 @@ export const make = Effect.gen(function* () {
           return yield* restore(Fiber.join(fiber)).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
         }),
       ),
-    cancel: Effect.fn("RunControl.cancel")(function* (runId: RunId) {
-      return yield* Effect.sync(() => {
+    cancel: Effect.fn("RunControl.cancel")((runId: RunId) =>
+      Effect.sync(() => {
         const current = FiberMap.getUnsafe(fibers, runId);
         if (Option.isNone(current)) return RunCancellation.NotFound({});
         const fiber = current.value;
@@ -80,14 +79,16 @@ export const make = Effect.gen(function* () {
         const workspace = registration.pipe(
           Option.flatMap((registration) => Option.fromNullishOr(registration.workspace)),
         );
-        if (Option.isSome(registration)) MutableRef.set(registration.value.manualCancellation, true);
+        if (Option.isSome(registration)) {
+          Deferred.doneUnsafe(registration.value.manualCancellation, Effect.void);
+        }
         fiber.interruptUnsafe(Fiber.getCurrent()?.id);
         return RunCancellation.Interrupting({
           workspace,
           awaitTermination: Fiber.await(fiber).pipe(Effect.asVoid),
         });
-      });
-    }),
+      }),
+    ),
   };
 });
 

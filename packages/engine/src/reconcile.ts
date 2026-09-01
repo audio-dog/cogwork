@@ -15,8 +15,10 @@ import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
+import * as References from "effect/References";
 import { Availability } from "./availability";
 import { type Classification, classify, type EligibleWork } from "./classify";
 import { ConnectionStore } from "./connection";
@@ -29,6 +31,10 @@ import { observeWorkspace } from "./observe";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { SourceControlProvider } from "./source-control";
+
+const rateLimitHits = Metric.counter("cogwork_reconcile_rate_limit_hits_total", {
+  description: "Rate-limit responses observed while polling issue trackers.",
+});
 
 const submitTimeout = "30 seconds";
 
@@ -202,10 +208,10 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
     error: IssueTrackerError,
   ) {
     const nowMillis = yield* Clock.currentTimeMillis;
+    yield* Metric.update(Metric.withAttributes(rateLimitHits, { scope: scope ?? "global" }), 1);
     const { entered, retryAtMillis } = yield* enterCooldown(scope, nowMillis, error.retryAfterMillis);
     if (entered) {
       yield* Effect.logWarning("work source rate limited; backing off", {
-        workspace: workspace.config.name,
         scope,
         message: error.message,
         retryAtMillis,
@@ -234,7 +240,6 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
       }).pipe(Effect.ignore);
     }
     yield* Effect.logWarning("work source polling paused", {
-      workspace: workspace.config.name,
       reason: error.reason,
       message: error.message,
     });
@@ -301,10 +306,19 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
   });
 
   const reconcile = Effect.fn("ReconcileWorker.reconcile")(function* () {
-    yield* registry.refresh;
-    const states = yield* Effect.forEach(registry.workspaces, pollWorkspace, {
-      concurrency: 4,
-    });
+    const state = yield* registry.refresh;
+    const states = yield* Effect.forEach(
+      state.workspaces,
+      (workspace) => {
+        const correlation = { workspace: workspace.config.name };
+        return pollWorkspace(workspace).pipe(
+          Effect.annotateLogs(correlation),
+          Effect.annotateSpans(correlation),
+          Effect.provideService(References.TracerEnabled, false),
+        );
+      },
+      { concurrency: 4 },
+    );
     const observedAtMillis = yield* Clock.currentTimeMillis;
     yield* Ref.update(snapshotRef, (previous) => ({
       generation: previous.generation + 1,
@@ -312,8 +326,8 @@ const makeWithRefresh = Effect.fn("ReconcileWorker.make")(function* <E>(
       workspaces: states,
     }));
     return {
-      workspaces: registry.workspaces.length,
-      failures: registry.failures.length,
+      workspaces: state.workspaces.length,
+      failures: state.failures.length,
       pendingWork: states.reduce((total, state) => total + state.eligible.length, 0),
       paused: states.filter((state) => state.poll.status === "paused").length,
     };

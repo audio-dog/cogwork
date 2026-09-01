@@ -1,5 +1,5 @@
 import type { RunId, SessionId } from "@cogwork/contracts";
-import { AgUiEvent, agUiDisplayName, agUiSessionId, type RunRecord } from "@cogwork/contracts";
+import { AgUiEvent, agUiIsSessionHandleEvent, type RunRecord } from "@cogwork/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -20,6 +20,22 @@ const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : n
 // ever agree.
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const decodeEvent = Schema.decodeUnknownEffect(Schema.fromJsonString(AgUiEvent));
+
+const optionalString = (value: unknown) => (typeof value === "string" ? value : null);
+
+const sessionHandle = (event: AgUiEvent) => (agUiIsSessionHandleEvent(event) ? event.value.sessionId : null);
+
+const displayName = (event: AgUiEvent) =>
+  AgUiEvent.matchOrElse(
+    event,
+    {
+      TOOL_CALL_START: ({ toolCallName }) => toolCallName ?? null,
+      CUSTOM: ({ name }) => name ?? null,
+      STEP_STARTED: ({ stepName }) => stepName ?? null,
+      STEP_FINISHED: ({ stepName }) => stepName ?? null,
+    },
+    () => optionalString(event.toolCallName) ?? optionalString(event.name) ?? optionalString(event.stepName),
+  );
 
 interface RunTrack {
   readonly seq: number;
@@ -43,7 +59,7 @@ export const make = Effect.gen(function* () {
     track: RunTrack,
     event: AgUiEvent,
   ) {
-    const handle = cleanHandle(agUiSessionId(event));
+    const handle = cleanHandle(sessionHandle(event));
     if (handle === null || handle === track.handle || run.session === null) return track.handle;
     yield* ledger.recordSessionHandle(run.session, handle);
     return handle;
@@ -68,7 +84,7 @@ export const make = Effect.gen(function* () {
     yield* ledger.appendEvent(run.id, {
       seq,
       type: event.type,
-      name: agUiDisplayName(event),
+      name: displayName(event),
       data,
       atMillis,
     });
