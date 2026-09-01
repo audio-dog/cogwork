@@ -83,6 +83,8 @@ const stageResolvers: Partial<Record<LifecycleStage, (config: WorkspaceConfig) =
   "follow-up": resolveFollowUp,
 };
 
+export const operationStages = ["triage", "implement", "follow-up"] satisfies ReadonlyArray<LifecycleStage>;
+
 export const resolveStage = (config: WorkspaceConfig, stage: LifecycleStage) =>
   stageResolvers[stage]?.(config) ?? null;
 
