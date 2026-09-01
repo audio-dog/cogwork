@@ -1,8 +1,5 @@
 import {
-  AvailabilityCause,
-  Connection,
   ConnectionId,
-  ConnectionNotReady,
   type ContributionSettingRow,
   DeclaredVersion,
   defaultControlStore,
@@ -169,41 +166,6 @@ const implementWorkspace: RegisteredWorkspace = {
     name: "gh",
     checkoutPath: "/repos/gh",
     issueTracker: { type: "github", repo: "owner/repo", actorLogin: "cogwork-bot" },
-  }),
-};
-
-const requiredNeedsWorkspace: RegisteredWorkspace = {
-  ...implementWorkspace,
-  config: Schema.decodeSync(WorkspaceConfig)({
-    ...implementWorkspace.config,
-    playbook: {
-      implement: {
-        needs: [
-          { name: "tracker", kind: "mcp-server" },
-          { name: "review", kind: "skill" },
-        ],
-      },
-    },
-  }),
-};
-
-const requiredConnectionWorkspace: RegisteredWorkspace = {
-  ...implementWorkspace,
-  config: Schema.decodeSync(WorkspaceConfig)({
-    ...implementWorkspace.config,
-    playbook: {
-      implement: { needs: [{ name: "tracker", kind: "connection" }] },
-    },
-  }),
-};
-
-const requiredMcpWorkspace: RegisteredWorkspace = {
-  ...implementWorkspace,
-  config: Schema.decodeSync(WorkspaceConfig)({
-    ...implementWorkspace.config,
-    playbook: {
-      implement: { needs: [{ name: "tracker", kind: "mcp-server" }] },
-    },
   }),
 };
 
@@ -684,30 +646,6 @@ const capturingRunner = (
   }),
 });
 
-const connectionProjectingRunner: TestRunner = {
-  make: () => ({
-    ...testRunnerDefaults,
-    name: cursor,
-    sessionKind: "opaque-handle",
-    projectedMembers: ["Connections"],
-    planMiddleware: [],
-    execution: fullHarnessExecution,
-    run: () => Stream.fromArray(implementEvents),
-  }),
-};
-
-const mcpProjectingRunner: TestRunner = {
-  make: () => ({
-    ...testRunnerDefaults,
-    name: cursor,
-    sessionKind: "opaque-handle",
-    projectedMembers: ["MCP"],
-    planMiddleware: [],
-    execution: fullHarnessExecution,
-    run: () => Stream.fromArray(implementEvents),
-  }),
-};
-
 const blockedPreflightRunner: TestRunner = {
   make: (_requests, gate, observation) => ({
     ...testRunnerDefaults,
@@ -1124,35 +1062,6 @@ const connectionStoreService = {
 } satisfies ConnectionStoreService;
 
 const connectionStoreStub = Layer.succeed(ConnectionStore, connectionStoreService);
-
-const readyConnectionStore = Layer.succeed(ConnectionStore, {
-  ...connectionStoreService,
-  overview: Effect.succeed({
-    connections: [
-      {
-        system: "linear",
-        connection: Connection.make({
-          id: linearConnectionId,
-          system: "linear",
-          account: "acme",
-          status: "established",
-        }),
-        readiness: { _tag: "Ready" },
-      },
-    ],
-  }),
-} satisfies ConnectionStoreService);
-
-const rejectedLiveCredentialStore = Layer.succeed(ConnectionStore, {
-  ...connectionStoreService,
-  bearer: () =>
-    Effect.fail(
-      new ConnectionNotReady({
-        connectionId: linearConnectionId,
-        message: "Linear rejected the credential",
-      }),
-    ),
-} satisfies ConnectionStoreService);
 
 const stagesEnabled: OperationSettingRow = {
   setting: "enabled",
@@ -1926,116 +1835,6 @@ describe("Executor.execute", () => {
     }).pipe(
       Effect.provide(
         provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
-      ),
-    );
-  });
-
-  it.effect("declines every unsatisfied required need before claiming", () => {
-    const bindings: OperationSettingRow = {
-      setting: "bindings",
-      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-      scope: { _tag: "SettingsProfile" },
-      value: [{ need: "tracker", contribution: "plugin:linear/mcp/linear" }],
-    };
-
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const executor = yield* Executor.Executor;
-      const started = yield* execute(executor, requiredNeedsWorkspace, implementItem);
-      const availability = yield* executor.availabilityOf(requiredNeedsWorkspace, implementItem);
-      const ledger = yield* RunLedger.RunLedger;
-
-      assert.isFalse(started);
-      assert.deepStrictEqual(yield* Ref.get(calls), []);
-      assert.deepStrictEqual(yield* ledger.listRuns(10), []);
-      assert.deepStrictEqual(
-        availability.causes.flatMap((cause) =>
-          AvailabilityCause.guards.UnsatisfiedNeed(cause) ? [[cause.need, cause.reason]] : [],
-        ),
-        [
-          ["tracker", "not-ready"],
-          ["review", "unbound"],
-        ],
-      );
-    }).pipe(
-      Effect.provide(
-        provide(
-          [runner(implementEvents)],
-          worktreeStubLayer,
-          noopProviderLayer,
-          trackerRecorder(),
-          [...runnableStages, bindings],
-          ContextCleanupCalls.contextAssemblerLayer,
-          missingPluginCredentialLayer,
-        ),
-      ),
-    );
-  });
-
-  it.effect("accepts a ready required Connection", () => {
-    const binding: OperationSettingRow = {
-      setting: "bindings",
-      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-      scope: { _tag: "SettingsProfile" },
-      value: [{ need: "tracker", contribution: linearConnectionId }],
-    };
-
-    return Effect.gen(function* () {
-      const executor = yield* Executor.Executor;
-      assert.isTrue(yield* execute(executor, requiredConnectionWorkspace, implementItem));
-    }).pipe(
-      Effect.provide(
-        provide(
-          [connectionProjectingRunner],
-          worktreeStubLayer,
-          noopProviderLayer,
-          trackerRecorder(),
-          [...runnableStages, binding],
-          ContextCleanupCalls.contextAssemblerLayer,
-          pluginManagerStub,
-          [],
-          controlStoreLayer([...runnableStages, binding]),
-          runLedgerIdentity,
-          readyConnectionStore,
-        ),
-      ),
-    );
-  });
-
-  it.effect("declines a required Plugin MCP server when its live credential is rejected", () => {
-    const binding: OperationSettingRow = {
-      setting: "bindings",
-      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-      scope: { _tag: "SettingsProfile" },
-      value: [{ need: "tracker", contribution: "plugin:linear/mcp/linear" }],
-    };
-
-    return Effect.gen(function* () {
-      const calls = yield* TrackerCalls;
-      const executor = yield* Executor.Executor;
-      const started = yield* execute(executor, requiredMcpWorkspace, implementItem);
-      const current = yield* executor.availabilityOf(requiredMcpWorkspace, implementItem);
-
-      assert.isFalse(started);
-      assert.deepStrictEqual(yield* Ref.get(calls), []);
-      const cause = current.causes.find((candidate) => AvailabilityCause.guards.UnsatisfiedNeed(candidate));
-      assert.isDefined(cause);
-      assert.include(cause?.message ?? "", "rejected the credential");
-    }).pipe(
-      Effect.provide(
-        provide(
-          [mcpProjectingRunner],
-          worktreeStubLayer,
-          noopProviderLayer,
-          trackerRecorder(),
-          [...runnableStages, binding],
-          ContextCleanupCalls.contextAssemblerLayer,
-          availablePluginMcpLayer,
-          [],
-          controlStoreLayer([...runnableStages, binding]),
-          runLedgerIdentity,
-          rejectedLiveCredentialStore,
-        ),
       ),
     );
   });

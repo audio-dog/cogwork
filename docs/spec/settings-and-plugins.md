@@ -452,8 +452,8 @@ what the daemon is doing now, not what it is configured to be.
 
 **The settings picture is one whole value on two carriers.** Everything the Control store owns
 rides one new `DaemonEvent` member — **`ControlStoreChanged`** — published whole; the committed
-Workspace input's decoded offers and diagnostics ride `WorkspaceState.Registered`, recomputed on
-the reconcile tick, because a committed file is canonical and the store may never hold a competing
+Workspace input's scanned contributions and diagnostics ride `WorkspaceState.Registered`, recomputed on
+the reconcile tick, because the Authoring tree is canonical and the store may never hold a competing
 copy. The picture carries **rows, not effective values**: the ladder-rendering resolver is authored
 once in the shared kernel and runs on each client. Named cost: two resolvers — the engine's (builds
 the Run Plan, embeds the trace) and the kernel's (renders the ladder) — tested against the same
@@ -512,6 +512,10 @@ No `…` row menu exists — the act list is closed and none of its members is "
 
 ### The cutover ([#127](https://github.com/colonylabs/cogwork/issues/127), ADR 0018)
 
+Amended by [#332](https://github.com/colonylabs/cogwork/issues/332): the Workspace input is only an
+Authoring tree. It has no settings file. `worktrees.setup`, `worktrees.linkPaths`, and `mcpSkills`
+move through `register` into the workspace record in the Control store.
+
 By hand: **no importer** (two files load, on one machine), **no compatibility window** (the loader
 dies in the same change that lands `register` — a window only creates the drift this work exists to
 end), **no rollback** (fix forward). Exactly one ordered pair: the personal rules must be in
@@ -520,7 +524,7 @@ implement skill. Everything else lands in any order.
 
 | Source | Disposition |
 |---|---|
-| `*.workspace.ts` and their loader | **Retired.** `issueTracker`, `sourceControl`, `linearHistory`, and the machine half of `worktrees` become columns on the workspace record, off the Scope axis; `worktrees.setup` and `linkPaths` move to the Workspace input. Credentials become Connection references — an env-var token is already a valid establishment source. |
+| `*.workspace.ts` and their loader | **Retired.** `issueTracker`, `sourceControl`, `linearHistory`, `mcpSkills`, and all of `worktrees` become columns on the workspace record, off the Scope axis. Credentials become Connection references — an env-var token is already a valid establishment source. |
 | Engine Operating Instructions | **Kept as is** — engine Authority, ships with the binary, in no tree. |
 | `~/.agents/skills` | **Becomes the Settings profile tree.** Referenced where it lies, never copied. |
 | Repository `.agents` inputs | **Becomes the Workspace input tree.** |
