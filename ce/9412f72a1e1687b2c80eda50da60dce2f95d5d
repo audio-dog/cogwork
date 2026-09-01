@@ -1,0 +1,350 @@
+configs/lint/no-runtime-runfork.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+packages/engine/src/control-store.ts
+  s_746973d897c991::t_287ae83b6ae76e 26,31,33,40,102-113,117-119,579,581-604,607-609,611-626,632,657
+configs/lint/no-effect-do.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+pnpm-workspace.yaml
+  s_746973d897c991::t_287ae83b6ae76e 44-46
+configs/lint/tests/fixtures/no-option-as/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/engine/src/scheduler.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 22,585-586,597-600
+packages/engine/src/executor.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 2,49,318-322,504,583-584,639,643-646,661-678,1366-1367,1870-1966,1993-1996,2014-2017,2662,2694,2720-2742,2764-2789,2966,2979,2988-3006
+configs/lint/tests/fixtures/no-runtime-runfork/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-5
+packages/engine/src/issue-tracker-router.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 3,5-6,8,35-62,67-68,79,83,88-89,91-92
+apps/desktop/src/main/engine-command.ts
+  s_746973d897c991::t_287ae83b6ae76e 26-33,35
+packages/engine/src/executor.ts
+  s_746973d897c991::t_287ae83b6ae76e 20,25,46-52,57,406,681-742,748-749,752-753,816-819,836,841,848,857,867,892,909,912,964,973-981,1021,1026,1030,1057-1058,1075-1076,1143,1148,1151,1192-1193,1382-1389,1493-1501,1522,1524,1565-1588,1592-1619,1621-1622
+apps/cli/src/telemetry.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 41-47,52-53
+configs/lint/tests/fixtures/no-effect-all-step-sequencing/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-effect-all-step-sequencing/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+patches/@tanstack__ai-sandbox-local-process@0.2.4.patch
+  s_746973d897c991::t_287ae83b6ae76e 1-20
+packages/engine/src/availability.ts
+  s_746973d897c991::t_287ae83b6ae76e 4,16,39-42
+configs/lint/tests/fixtures/no-native-button-mismatch/valid-example.tsx
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+packages/contracts/CONTEXT.md
+  s_746973d897c991::t_287ae83b6ae76e 129,274-277,367
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_746973d897c991::t_287ae83b6ae76e 41-44
+configs/lint/tests/fixtures/no-flatmap-ladder/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/engine/src/engine.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 51,255,276-290,292-293,304,312,360-364,419,754-763,772-773,818-823
+apps/desktop/src/main/quit.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-77
+configs/lint/tests/fixtures/no-effect-ladder/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-match-void-branch/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-effect-as/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/codex-cli/src/harness.test.ts
+  s_746973d897c991::t_7042efb48f20e0 274-275
+  s_746973d897c991::t_82893e7cadd6f3 371
+  s_1e1e3ff9f08ccc::t_7d0b0652bbf286 327-352,354-359,361-370
+packages/engine/src/linear/client.ts
+  s_746973d897c991::t_287ae83b6ae76e 13,28,138-141,145-148,158,163-171,193-197,213-214,219,316-319,321-329,385,481,599-607,609-614,639-641
+apps/desktop/src/main/window.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-32
+packages/cursor-acp/FINDINGS.md
+  s_746973d897c991::t_287ae83b6ae76e 75-76
+packages/engine/src/credential-store.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 5,585-586,589-617,620,626,628-634,646,655,658-660,664-666,673,681,684-686,689-691
+packages/engine/src/provider-runner.ts
+  s_746973d897c991::t_287ae83b6ae76e 140-141
+packages/engine/src/model-catalog.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 72-76,93-97
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_746973d897c991::t_287ae83b6ae76e 7-12
+packages/engine/src/recovery.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 20,29,31-37,156-196,201-205,207,247-248,255,258,262-264,267-282,285,287-288,291-293,298-299,302,306-307,310-312,314-318,324-327,330-400,402-410,413-566,569-579,584-590,592-600,605-611,616-622,627-633,638-644,646-647,652-661,664,666-668,676-679,684-693,695,700-711,716-722,727-739,744-745,749-776,781,796-815,822-836,841-849,851-852,857-875,880-899,906-918,923-925,930-940,945-962,965-999,1001,1004-1022
+packages/contracts/src/issue-tracker.ts
+  s_746973d897c991::t_287ae83b6ae76e 8,12-16
+packages/engine/src/worktree.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 6,23,136-137,553
+configs/lint/tests/fixtures/no-effect-side-effect-wrapper/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-switch/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-8
+packages/engine/src/linear/client-credentials.ts
+  s_746973d897c991::t_287ae83b6ae76e 15,96
+apps/desktop/src/main/window.ts
+  s_746973d897c991::t_287ae83b6ae76e 15-26
+configs/lint/no-effect-fn-generator.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+configs/lint/tests/fixtures/no-match-effect-branch/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-10
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 230-235,253-257
+packages/engine/src/daemon-composition.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 10,13,18,34-35,51-52,93-99,102-117,144-247,256-257,260,265,274
+configs/lint/tests/fixtures/no-option-as/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/engine/src/registry.ts
+  s_746973d897c991::t_287ae83b6ae76e 496-499,501-509,511-519,538,540-582,593-621
+packages/engine/src/scheduler.ts
+  s_746973d897c991::t_287ae83b6ae76e 12,27,100,301-304
+packages/engine/src/linear/linear.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 3,61-77,95,166-167,295-297,429,431-432,565-577
+biome.json
+  s_746973d897c991::t_287ae83b6ae76e 81-86
+configs/lint/tests/fixtures/no-nested-effect-call/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 3,116-140
+configs/lint/tests/fixtures/no-effect-bind/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/engine/src/classify.ts
+  s_746973d897c991::t_287ae83b6ae76e 119,148
+packages/engine/src/credential-store.ts
+  s_746973d897c991::t_287ae83b6ae76e 11,228,250
+packages/engine/src/coordination.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 53-60
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_746973d897c991::t_287ae83b6ae76e 106-117,131-132
+configs/lint/tests/fixtures/no-effect-sync-promise/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/engine/src/comments.ts
+  s_746973d897c991::t_287ae83b6ae76e 2,23,51,81-87,89-92,95-106,108,117-118,135-141,147,150-154
+  s_746973d897c991::t_ebccd1a0b6c12f 155
+configs/lint/tests/fixtures/no-side-effect-in-state-updater/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-7
+configs/lint/tests/fixtures/no-effect-do/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-4
+packages/engine/src/daemon.ts
+  s_746973d897c991::t_287ae83b6ae76e 516-517,520
+packages/engine/src/plugin.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 10,25-26,167,172-176
+configs/lint/tests/fixtures/no-nested-effect-gen/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-7
+packages/engine/src/commands.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 34,65,264-277,381-409,537-546,548-556,558-573,575-577,600,647,922,941,974,1010,1025,1521-1534,1536-1562,1671,1703-1721,1723-1739
+packages/engine/src/external-harness-runtime.ts
+  s_746973d897c991::t_287ae83b6ae76e 283-296
+packages/engine/src/recovery.ts
+  s_746973d897c991::t_287ae83b6ae76e 9,25,28,33,52,68-72,81,178-179,191,193,225-226,234-236,238-239,241-242
+configs/lint/tests/fixtures/no-switch/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+configs/lint/tests/fixtures/no-use-effect/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/cursor-acp/src/harness.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-9,22-23,28-44,128,133-136,158-170,247-265,267-270,272-275,279,282-291,294,296-298,300-325,328,331-348,352,354-358,360-375,379,381-398,400,404,406-409,412,415-422,426,428-431,434,437-440,444,450-454,457,460-465,467,471,477,479,481-482
+configs/lint/no-match-void-branch.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+packages/engine/src/model-catalog.ts
+  s_746973d897c991::t_287ae83b6ae76e 2,12,67,72
+packages/engine/src/tools/owned-tools.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 9,32,355
+packages/engine/src/linear/client.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 1,4,9-10,101-106,108-136,477-479,483-485,487-489,496-498,500-502,506-508,696-880
+apps/cli/src/ledger.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 282-289
+configs/lint/tests/fixtures/no-effect-sync-throw/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-5
+configs/lint/tests/fixtures/no-effect-fn-generator/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-5
+configs/lint/tests/fixtures/no-effect-sync-effect/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-match-effect-branch/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-8
+packages/engine/src/reconcile.ts
+  s_746973d897c991::t_287ae83b6ae76e 26,110,154,156-157,164,169,216,222-223,227
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_746973d897c991::t_287ae83b6ae76e 1-121
+packages/engine/src/harness.ts
+  s_746973d897c991::t_287ae83b6ae76e 93,105,107,412-413
+configs/lint/tests/fixtures/no-use-effect/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-4
+configs/lint/tests/rule-test-harness.mjs
+  s_746973d897c991::t_287ae83b6ae76e 1-48
+configs/lint/tests/fixtures/no-effect-as/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-flatmap-ladder/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+configs/lint/no-option-as.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+configs/lint/tests/fixtures/no-effect-do/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-effect-bind/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_746973d897c991::t_287ae83b6ae76e 1-99
+apps/cli/src/commands.ts
+  s_746973d897c991::t_287ae83b6ae76e 45-47,65,72,578-579
+apps/cli/src/rpc.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 27-28,70
+configs/lint/tests/fixtures/no-side-effect-in-state-updater/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+packages/engine/src/github/client.ts
+  s_746973d897c991::t_287ae83b6ae76e 12,27,409
+packages/engine/src/watch-activity.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 163-165
+apps/cli/src/stop-signal.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 5
+configs/lint/tests/fixtures/no-arrow-ladder/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_746973d897c991::t_287ae83b6ae76e 99,102
+configs/lint/tests/fixtures/no-effect-step-const-staging/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-5
+packages/codex-cli/src/harness.ts
+  s_746973d897c991::t_7042efb48f20e0 281-282
+configs/lint/no-arrow-ladder.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+packages/engine/src/linear/client-credentials.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 7
+configs/lint/no-nested-effect-gen.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+configs/lint/tests/fixtures/no-effect-sync-throw/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+configs/lint/tests/fixtures/no-native-button-mismatch/invalid-example.tsx
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/no-nested-effect-call.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+configs/lint/tests/fixtures/no-match-void-branch/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/engine/src/time.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_746973d897c991::t_287ae83b6ae76e 7,258-352
+packages/engine/CONTEXT.md
+  s_746973d897c991::t_287ae83b6ae76e 48-51,89,141,227-246
+apps/desktop/src/main/quit.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-16
+configs/lint/tests/fixtures/no-effect-orElse-ladder/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+apps/cli/src/platform.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 8,15,21,59-61,80-107,221-223,229,400-413,440-443
+docs/spec/performance-observability.md
+  s_746973d897c991::t_287ae83b6ae76e 1-124
+configs/lint/tests/fixtures/no-arrow-ladder/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+apps/cli/src/login.ts
+  s_746973d897c991::t_287ae83b6ae76e 119
+configs/lint/tests/fixtures/no-pipeline-fragment-staging/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+package.json
+  s_746973d897c991::t_287ae83b6ae76e 16-17
+packages/cursor-acp/src/harness.ts
+  s_746973d897c991::t_287ae83b6ae76e 3,12,19,24,115,127,146,149,204,206,227-230,306-343,347-353,355,359-386,389,392-398,400-403
+  s_746973d897c991::t_7b8793763e5108 391
+configs/lint/tests/fixtures/no-effect-sync-effect/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_746973d897c991::t_287ae83b6ae76e 5,177-190
+configs/lint/tests/fixtures/no-effect-orElse-ladder/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_746973d897c991::t_287ae83b6ae76e 1,22-35,44,56,59-60,64-69,71-79,86,90-95
+apps/desktop/src/main/engine-supervisor.ts
+  s_746973d897c991::t_287ae83b6ae76e 200-211
+docs/spec/control-store-convergence.md
+  s_746973d897c991::t_287ae83b6ae76e 1-101
+packages/cursor-acp/CONTEXT.md
+  s_746973d897c991::t_287ae83b6ae76e 13,17,25,28-31,37
+configs/lint/tests/rules.test.mjs
+  s_746973d897c991::t_287ae83b6ae76e 1-176
+packages/engine/src/cooldown.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-85
+apps/cli/src/login.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 9,23,157,215
+apps/desktop/src/main/engine-command.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 3,6-7,10-15,69-70
+configs/lint/no-iife-wrapper.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+configs/lint/tests/fixtures/no-iife-wrapper/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-effect-sync-promise/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+docs/adr/0020-telemetry-is-local-first-in-its-own-store.md
+  s_746973d897c991::t_287ae83b6ae76e 1-99
+configs/lint/no-effect-bind.grit
+  s_746973d897c991::t_287ae83b6ae76e 4
+configs/lint/tests/fixtures/no-runtime-runfork/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-effect-side-effect-wrapper/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+packages/engine/package.json
+  s_746973d897c991::t_287ae83b6ae76e 25
+docs/research/performance-feedback-loop-into-tracker.md
+  s_746973d897c991::t_287ae83b6ae76e 1-341
+configs/lint/tests/fixtures/no-effect-ladder/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+configs/lint/tests/fixtures/no-effect-step-const-staging/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+packages/engine/src/harness.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 60-61
+docs/research/effect-never-lint-rule.md
+  s_746973d897c991::t_287ae83b6ae76e 1-168
+docs/research/repeatable-performance-benchmarking.md
+  s_746973d897c991::t_287ae83b6ae76e 1-350
+apps/desktop/src/main/index.ts
+  s_746973d897c991::t_287ae83b6ae76e 4,7,11,15,33,38,43,55,108,110,114-115,119,121-123
+configs/lint/tests/fixtures/no-effect-fn-generator/invalid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-5
+packages/engine/src/run-control.ts
+  s_746973d897c991::t_287ae83b6ae76e 48-70,73-74
+packages/engine/src/control-store.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 13,18,26-37,42-43,74-79,130-136,139-152,155-162,165-172,176,178,180-186,188-206,239-246,263-285,387-393,426,428,430-435,439-441,445,450,452-459,498
+packages/engine/src/issue-tracker.ts
+  s_746973d897c991::t_287ae83b6ae76e 13,22
+  s_746973d897c991::t_0cafdecfa90fb1 23
+packages/engine/src/external-harness-runtime.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 301-302,930-968
+  s_746973d897c991::t_70460dae682fd4 969
+configs/lint/tests/fixtures/no-nested-effect-gen/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+configs/lint/tests/fixtures/no-nested-effect-call/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-6
+docs/adr/0021-the-performance-sensor-files-its-own-tickets.md
+  s_746973d897c991::t_287ae83b6ae76e 1-105
+docs/research/effect-observability-for-performance.md
+  s_746973d897c991::t_287ae83b6ae76e 1-305
+packages/engine/src/comments.test.ts
+  s_746973d897c991::t_287ae83b6ae76e 93,132,172,176,191-202
+  s_746973d897c991::t_0841f1b46fe65c 203
+packages/engine/src/playbook.ts
+  s_746973d897c991::t_287ae83b6ae76e 2-3,71
+docs/research/electron-node-performance-practices.md
+  s_746973d897c991::t_287ae83b6ae76e 1-325
+configs/lint/tests/fixtures/no-pipeline-fragment-staging/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-3
+configs/lint/tests/fixtures/no-iife-wrapper/valid-example.ts
+  s_746973d897c991::t_287ae83b6ae76e 1-5
+pnpm-lock.yaml
+  s_746973d897c991::t_17bf48f1216efa 74-76,325,328,331,341,344,350,363,369,387,390,393,400,403,412,439,442,445-448,464,470,5935,5938,6260,6275,6810,6814,6826,6829,6860,6865,6867,6869,6871,6875,6877-6878,6884,6889,6913,7252,9733,9824,9848
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ce9412f72a1e1687b2c80eda50da60dce2f95d5d",
+  "prompts": {},
+  "sessions": {
+    "s_1e1e3ff9f08ccc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05f42-20eb-73a3-8a09-508564737f2a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_746973d897c991": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05deb-78f6-7d43-9d45-b47fea83c7bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
