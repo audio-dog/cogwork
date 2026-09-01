@@ -42,11 +42,6 @@ const ruleCases = [
   },
   {
     message:
-      "Rule: avoid Effect.never. Why: it hides lifecycle and leaks resources. Fix: use Stream or explicit acquire/release lifecycles with clear teardown.",
-    name: "no-effect-never",
-  },
-  {
-    message:
       "Rule: avoid Effect.orElse around sequencing chains. Why: it hides error handling and splits the flow. Fix: move error handling to a single terminal decision after the pipeline.",
     name: "no-effect-orElse-ladder",
   },

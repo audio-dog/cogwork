@@ -12,6 +12,18 @@ export interface MainWindowDeps {
   readonly requestQuit: () => void;
 }
 
+export const showMainWindow = (deps: MainWindowDeps) => {
+  if (deps.shouldQuit()) return;
+  const window = BrowserWindow.getAllWindows()[0];
+  if (!window) {
+    createMainWindow(deps);
+    return;
+  }
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+};
+
 const loadRenderer = (window: BrowserWindow): void => {
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     window.loadURL(process.env.ELECTRON_RENDERER_URL);
