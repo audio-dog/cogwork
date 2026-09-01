@@ -77,6 +77,7 @@ const claimedByUs: ObservedItem = {
   claim: { by: "cogwork-bot", claimedAtMillis: 1, stage: "implement" },
   claimedByUs: true,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -93,6 +94,7 @@ const claimedByOther: ObservedItem = {
   claim: { by: "someone-else", claimedAtMillis: 1 },
   claimedByUs: false,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -109,6 +111,7 @@ const unclaimed: ObservedItem = {
   claim: null,
   claimedByUs: false,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -125,6 +128,7 @@ const staleNoStage: ObservedItem = {
   claim: { by: "cogwork-bot", claimedAtMillis: 1 },
   claimedByUs: true,
   attempts: [],
+  handback: null,
   openBlockers: 0,
   proposal: null,
   priority: "medium",
@@ -192,6 +196,7 @@ const issueTrackerStub = (service: Partial<IssueTrackerService>) =>
     followedUp: () => Effect.void,
     attemptFailed: () => Effect.void,
     handOff: () => Effect.void,
+    handBack: () => Effect.void,
     stalled: () => Effect.void,
     reclassify: () => Effect.void,
     ...service,
@@ -251,6 +256,7 @@ const recoveryLayer = (deps: RecoveryDeps) => {
 interface LiveRecoveryProbeState {
   readonly admitted: Ref.Ref<ReadonlyArray<EligibleWork>>;
   readonly attempts: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
+  readonly handoffs: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
   readonly inFlight: Ref.Ref<ReadonlySet<WorkItemIdType>>;
   readonly ledger: RunLedger.RunLedgerService;
   readonly released: Ref.Ref<ReadonlyArray<WorkItemIdType>>;
@@ -266,6 +272,7 @@ class LiveRecoveryProbe extends Context.Service<LiveRecoveryProbe, LiveRecoveryP
       return {
         admitted: yield* Ref.make<ReadonlyArray<EligibleWork>>([]),
         attempts: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
+        handoffs: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
         inFlight: yield* Ref.make<ReadonlySet<WorkItemIdType>>(new Set()),
         ledger: yield* RunLedger.makeMemory,
         released: yield* Ref.make<ReadonlyArray<WorkItemIdType>>([]),
@@ -755,6 +762,7 @@ describe("Recovery.recoverWhenLive", () => {
           issueTracker: {
             release: (_workspace, itemId) => Ref.update(probe.released, (items) => [...items, itemId]),
             attemptFailed: (_workspace, itemId) => Ref.update(probe.attempts, (items) => [...items, itemId]),
+            handOff: (_workspace, itemId) => Ref.update(probe.handoffs, (items) => [...items, itemId]),
           },
         }),
       ),
@@ -789,6 +797,34 @@ describe("Recovery.recoverWhenLive", () => {
             [prior.id],
           );
         }),
+    );
+
+    it.effect("retries after a handback without counting earlier crashes", () =>
+      Effect.gen(function* () {
+        const probe = yield* LiveRecoveryProbe;
+        const recovery = yield* Recovery.Recovery;
+        yield* Effect.all(
+          [
+            Ref.set(probe.admitted, []),
+            Ref.set(probe.handoffs, []),
+            Ref.set(
+              probe.snapshot,
+              snapshotOf([{ ...claimedByUs, handback: { by: "local-owner", atMillis: 2 } }]),
+            ),
+          ],
+          { discard: true },
+        );
+        yield* probe.ledger.insertRun(crashedRun("handback-crash-a", 1, "crashed"));
+        yield* probe.ledger.insertRun(crashedRun("handback-crash-b", 2, "crashed"));
+        yield* probe.ledger.insertRun(crashedRun("handback-crash-c", 3, "running"));
+        yield* recovery.recover();
+
+        assert.deepStrictEqual(
+          (yield* Ref.get(probe.admitted)).map((work) => work.id),
+          [id("#1")],
+        );
+        assert.deepStrictEqual(yield* Ref.get(probe.handoffs), []);
+      }),
     );
 
     it.effect("holds an orphan claim while its work item is in flight", () =>

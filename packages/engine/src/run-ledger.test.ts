@@ -347,7 +347,7 @@ describe("RunLedger (memory)", () => {
     it.effect("counts consecutive crashes and resets the count after a success", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
-        const crashes = () => ledger.consecutiveCrashes("gh", "#7");
+        const crashes = () => ledger.consecutiveCrashes(workspace, workItem, 0);
         yield* ledger.insertRun(record("c1", 1000, { status: "crashed" }));
         yield* ledger.insertRun(record("c2", 2000, { status: "crashed" }));
         assert.strictEqual(yield* crashes(), 2);
@@ -365,11 +365,24 @@ describe("RunLedger (memory)", () => {
     it.effect("resets the crash streak on any completed run between crashes", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
-        const crashes = () => ledger.consecutiveCrashes("gh", "#7");
+        const crashes = () => ledger.consecutiveCrashes(workspace, workItem, 0);
         yield* ledger.insertRun(record("c1", 1000, { status: "crashed" }));
         yield* ledger.insertRun(record("failed", 2000, { status: "failed" }));
         yield* ledger.insertRun(record("c2", 3000, { status: "crashed" }));
         assert.strictEqual(yield* crashes(), 1);
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
+    it.effect("counts only crashes from runs started after a handback", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertRun(record("before", 1000, { status: "crashed" }));
+        yield* ledger.insertRun(record("at-barrier", 2000, { status: "crashed" }));
+        yield* ledger.insertRun(record("after", 3000, { status: "crashed" }));
+
+        assert.strictEqual(yield* ledger.consecutiveCrashes(workspace, workItem, 2000), 1);
       }),
     );
   });

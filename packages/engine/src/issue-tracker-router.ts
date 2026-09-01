@@ -22,6 +22,7 @@ export const route = (github: IssueTrackerService, linear: IssueTrackerService):
     followedUp: (workspace, id, outcome) => forWorkspace(workspace).followedUp(workspace, id, outcome),
     attemptFailed: (workspace, id, outcome) => forWorkspace(workspace).attemptFailed(workspace, id, outcome),
     handOff: (workspace, id, outcome) => forWorkspace(workspace).handOff(workspace, id, outcome),
+    handBack: (workspace, id, outcome) => forWorkspace(workspace).handBack(workspace, id, outcome),
     stalled: (workspace, id, outcome) => forWorkspace(workspace).stalled(workspace, id, outcome),
     reclassify: (workspace, id, outcome) => forWorkspace(workspace).reclassify(workspace, id, outcome),
   };
