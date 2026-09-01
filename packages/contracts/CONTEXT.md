@@ -271,6 +271,10 @@ _Avoid_: Block reason (blocking now means open dependencies), error, failure.
 A coordination record marking an item as being worked: `by`, `claimedAtMillis`, and an optional operation. Persisted onto the issue tracker (a label plus a marker), so it survives a daemon restart.
 _Avoid_: Lock, lease, reservation
 
+**Refused claim**:
+A claim the issue tracker will not accept — a write the credential is not permitted to make, such as creating the claim label in a team that forbids it. Distinct from a *contended* claim, which cannot happen: classify only ever offers unclaimed work. A refusal the port reports as permanent (`IssueTrackerError.retryable === false`) is one every retry gets the same answer to; absent that field a refusal is worth polling again. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`. What the engine does about one is the executor's, in the engine glossary.
+_Avoid_: Contended claim, stale claim (one we release), exhausted (a run that gave up after trying)
+
 **Attempt record**:
 A coordination record of one finished operation attempt on an item: its operation, outcome (`succeeded` / `failed` / `abandoned`), and time. Persisted on the issue tracker.
 _Avoid_: Run — a run is the local execution; an attempt is the durable outcome

@@ -45,6 +45,10 @@ _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, 
 The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when it has no run and the scheduler does not hold the work item in flight.
 _Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
 
+**Claim hold-off**:
+What the executor does with a **refused claim**: the item is held out of claiming for a growing window, keyed by workspace, item and operation, so one refusal cannot re-write coordination on every generation — the failure is not contention, so the next poll would get the same answer. A refusal the port reports as permanent also parks the item: the refusal is posted as a note *before* the role writes, since those writes can hit the very refusal being reported, then `ready-for-human` escalates it. A cleared claim clears the window, so the item recovers on its own once a person fixes the tracker.
+_Avoid_: Rate-limit cooldown (the reconcile worker's, keyed by credential scope — same mechanism, different scope), backoff, retry, exhausted (a run that gave up after trying)
+
 **Admit**:
 The narrow scheduler capability that reserves capacity for a recovered run and starts it. It always launches because recovery is resuming work this daemon already claimed; the scheduler separately exposes whether a work item is in flight so the live sweep cannot release a claim while its run starts.
 _Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue

@@ -495,7 +495,7 @@ function trackerRecorder(claimFailure?: IssueTrackerError) {
           return recorded.pipe(Effect.andThen(Effect.fail(claimFailure)));
         },
         release: (_workspace, itemId) => record(calls, { method: "release", item: itemId }),
-        note: () => Effect.void,
+        note: (_workspace, itemId, detail) => record(calls, { method: "note", item: itemId, note: detail }),
         triaged: (_workspace, itemId, outcome) =>
           record(calls, { method: "triaged", item: itemId, role: outcome.role, proposal: outcome.proposal }),
         implemented: (_workspace, itemId) => record(calls, { method: "implemented", item: itemId }),
@@ -1839,6 +1839,103 @@ describe("Executor.execute", () => {
     );
   });
 
+  it.effect("stops re-attempting a refused claim on every following generation", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: 'Linear refused creating the "cogwork:claimed" label in team REC',
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "claim", item: triageItem.id }]);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
+  it.effect("retries a refused claim once its hold-off window expires", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: 'Linear refused creating the "cogwork:claimed" label in team REC',
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      yield* TestClock.adjust("2 minutes");
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        { method: "claim", item: triageItem.id },
+        { method: "claim", item: triageItem.id },
+      ]);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
+  it.effect("parks an item the work source will never let it claim, with the refusal", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      retryable: false,
+      message: 'Linear refused creating the "cogwork:claimed" label in team REC: not allowed',
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+
+      const written = yield* Ref.get(calls);
+      assert.deepStrictEqual(
+        written.map((call) => call.method),
+        ["claim", "note", "handOff"],
+      );
+      const note = written.find((call) => call.method === "note")?.note ?? "";
+      assert.include(note, "Could not claim this issue for triage");
+      assert.include(note, "cogwork:claimed");
+      assert.include(note, "Add the label named below");
+      assert.include(note, "ready-for-human");
+      assert.strictEqual(written.find((call) => call.method === "handOff")?.stage, "triage");
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
+  it.effect("leaves a claim the work source may yet accept unparked", () => {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      message: "coordination marker write failed",
+    });
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+
+      assert.isFalse(yield* execute(executor, workspace, triageItem));
+      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "claim", item: triageItem.id }]);
+    }).pipe(
+      Effect.provide(
+        provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(failure)),
+      ),
+    );
+  });
+
   it.effect("does nothing when triage is disabled in the Operation Definition", () => {
     return Effect.gen(function* () {
       const calls = yield* TrackerCalls;
@@ -1865,7 +1962,10 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
       assert.isFalse(yield* execute(executor, disabledWorkspace, resumed));
-      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: resumed.id }]);
+      assert.deepStrictEqual(
+        (yield* Ref.get(calls)).map((call) => call.method),
+        ["note", "release"],
+      );
     }).pipe(
       Effect.provide(
         provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(), []),
@@ -1883,7 +1983,10 @@ describe("Executor.execute", () => {
       const calls = yield* TrackerCalls;
       const executor = yield* Executor.Executor;
       assert.isFalse(yield* execute(executor, disabledWorkspace, recovered));
-      assert.deepStrictEqual(yield* Ref.get(calls), [{ method: "release", item: recovered.id }]);
+      assert.deepStrictEqual(
+        (yield* Ref.get(calls)).map((call) => call.method),
+        ["note", "release"],
+      );
     }).pipe(
       Effect.provide(
         provide([runner(successEvents)], worktreeStubLayer, noopProviderLayer, trackerRecorder(), []),
