@@ -1,0 +1,35 @@
+packages/contracts/src/workspace.ts
+  s_c4f0341d379190::t_e0e13ac5353cfb 87,96
+packages/engine/src/playbook.ts
+  s_c4f0341d379190::t_e0e13ac5353cfb 1,9,41,44-45,50,55,59,64,68,73
+docs/spec/settings-and-plugins.md
+  s_c4f0341d379190::t_e0e13ac5353cfb 455-456,515-518,527
+packages/engine/src/workspace-registry.test.ts
+  s_c4f0341d379190::t_e0e13ac5353cfb 1,46-59,131,135,137,141-155,157-159,161-171,175,179,181-182,186,188-190,200-201,208,211,214,217,249,257,262,300,313-319,332,334-335,341-346,365-376,379,381-382,391,393
+packages/engine/src/control-store-schema.ts
+  s_c4f0341d379190::t_e0e13ac5353cfb 153,158-159
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_c4f0341d379190::t_e0e13ac5353cfb 123
+packages/contracts/CONTEXT.md
+  s_c4f0341d379190::t_e0e13ac5353cfb 60,130
+packages/engine/src/control-store-create.gen.ts
+  s_c4f0341d379190::t_e0e13ac5353cfb 13
+packages/engine/src/registry.ts
+  s_c4f0341d379190::t_e0e13ac5353cfb 3,5,119,124-125,130,134-140,147,151-152,196,201-202,238-240,247-248,274,279-280,291,309,314-315,373-375,383,388-389,399,404-405
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "55d9e88703fa0f0338b6602563bf6920f6481999",
+  "prompts": {},
+  "sessions": {
+    "s_c4f0341d379190": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05d9a-5624-7622-9258-2e7275ed9376",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
