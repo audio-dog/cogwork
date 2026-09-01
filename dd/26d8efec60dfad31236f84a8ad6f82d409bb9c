@@ -1,0 +1,28 @@
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_bd27954a7b4363::t_fa845dbfef7d6c 16
+  s_bd27954a7b4363::t_9b45adce83da65 25-27
+  s_bd27954a7b4363::t_6820044503321d 68-70
+  s_bd27954a7b4363::t_9e1b842610dec3 121
+  s_bd27954a7b4363::t_2194e84930fd2a 1-15,17-24,28-67,71-120
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_bd27954a7b4363::t_833b7511084f59 177-190
+  s_bd27954a7b4363::t_537da4527c5646 5
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_bd27954a7b4363::t_036cfeeaed7fc3 41-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "dd26d8efec60dfad31236f84a8ad6f82d409bb9c",
+  "prompts": {},
+  "sessions": {
+    "s_bd27954a7b4363": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cbec2a29-cdae-46e8-acf6-1a95c4899851",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
