@@ -1,0 +1,23 @@
+docs/adr/0020-telemetry-is-local-first-in-its-own-store.md
+  s_4ae61d8d70e02e::t_077962570d7144 42-45
+  s_4ae61d8d70e02e::t_0685da29069094 10-11
+  s_4ae61d8d70e02e::t_237444c8a8db87 49-50
+  s_4ae61d8d70e02e::t_10199160526031 1-9,12-29,32-41,46-48,51-99
+  s_4ae61d8d70e02e::t_b82e211155b248 30-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "481fd7c03afb2e0316b1dbf4308f8dd170621709",
+  "prompts": {},
+  "sessions": {
+    "s_4ae61d8d70e02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb42e325-567c-4173-8033-8e65733e9986",
+        "model": "claude-fable-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
