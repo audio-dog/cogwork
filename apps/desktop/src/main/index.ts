@@ -12,7 +12,7 @@ import { installShutdownBeforeQuit } from "./quit";
 import { isDaemonListening } from "./socket-probe";
 import { createTray } from "./tray";
 import { waitForDaemonListening } from "./wait-for-socket";
-import { createMainWindow, type MainWindowDeps } from "./window";
+import { type MainWindowDeps, showMainWindow } from "./window";
 import { createWindowPreferencesStore } from "./window-preferences";
 
 const control = { quitting: false };
@@ -30,16 +30,7 @@ const windowDeps: MainWindowDeps = {
   requestQuit,
 };
 
-const showMainWindow = () => {
-  const window = BrowserWindow.getAllWindows()[0];
-  if (!window) {
-    createMainWindow(windowDeps);
-    return;
-  }
-  if (window.isMinimized()) window.restore();
-  window.show();
-  window.focus();
-};
+const showWindow = () => showMainWindow(windowDeps);
 
 const makeSupervisorLayer = () => {
   const socketPath = defaultSocketPath;
@@ -114,14 +105,14 @@ const bootstrap = () => {
     const supervisor = runtime.runSync(EngineSupervisor);
     registerIpc({ socketPath: defaultSocketPath, supervisor, windowPreferences, runtime });
 
-    createMainWindow(windowDeps);
+    showWindow();
     createTray({
-      onShow: showMainWindow,
+      onShow: showWindow,
       onQuit: requestQuit,
     });
 
-    app.on("activate", showMainWindow);
-    app.on("second-instance", showMainWindow);
+    app.on("activate", showWindow);
+    app.on("second-instance", showWindow);
     app.on("before-quit", () => {
       control.quitting = true;
     });
