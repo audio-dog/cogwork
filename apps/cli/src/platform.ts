@@ -112,12 +112,15 @@ export const gitLayer = Layer.effect(
       const value = yield* runGit(worktreePath, ["rev-parse", "--git-path", marker]);
       const markerPath = path.resolve(worktreePath, value.trim());
       return yield* fs.exists(markerPath).pipe(
-        Effect.mapError(
-          (cause) =>
-            new Git.GitError({
-              command: `git rev-parse --git-path ${marker}`,
-              message: describe(cause),
-            }),
+        Effect.catch((cause) =>
+          cause.reason._tag === "NotFound"
+            ? Effect.succeed(false)
+            : Effect.fail(
+                new Git.GitError({
+                  command: `git rev-parse --git-path ${marker}`,
+                  message: describe(cause),
+                }),
+              ),
         ),
       );
     });
@@ -240,7 +243,11 @@ export const worktreeFsLayer = Layer.effect(
               onSome: (mtime) => ({ mtimeMillis: mtime.getTime() }),
             }),
           ),
-          Effect.orElseSucceed(() => null),
+          Effect.catch((error) =>
+            error.reason._tag === "NotFound"
+              ? Effect.succeed(null)
+              : Effect.fail(fail(`stat ${target}`)(error)),
+          ),
         ),
     } satisfies WorktreeFs.WorktreeFsService;
   }),
@@ -267,7 +274,16 @@ export const contextFsLayer = Layer.effect(
         );
 
     return {
-      readFile: (target) => fs.readFileString(target).pipe(Effect.orElseSucceed(() => null)),
+      readFile: (target) =>
+        fs
+          .readFileString(target)
+          .pipe(
+            Effect.catch((error) =>
+              error.reason._tag === "NotFound"
+                ? Effect.succeed(null)
+                : Effect.fail(fail(`read ${target}`)(error)),
+            ),
+          ),
       readDirectory,
       copyDirectory: (source, dest) =>
         fs
