@@ -108,7 +108,7 @@ const stalledChat = (signal: AbortSignal) => ({
   },
 });
 
-const failedChat = (error: unknown): AsyncIterable<StreamChunk> => ({
+const failedChat = (error: unknown) => ({
   [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(error) }),
 });
 

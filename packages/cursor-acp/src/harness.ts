@@ -188,16 +188,16 @@ const transportError = (cause: unknown) =>
 
 const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
   const outbound = Semaphore.makeUnsafe(1);
-  const useWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
-    Effect.runPromise(
-      outbound.withPermit(
-        Effect.acquireUseRelease(
-          Effect.sync(() => base.writable.getWriter()),
-          (writer) => Effect.promise(() => use(writer)),
-          (writer) => Effect.sync(() => writer.releaseLock()),
-        ),
+  const withWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
+    outbound.withPermit(
+      Effect.acquireUseRelease(
+        Effect.sync(() => base.writable.getWriter()),
+        (writer) => Effect.tryPromise({ try: () => use(writer), catch: transportError }),
+        (writer) => Effect.sync(() => writer.releaseLock()),
       ),
     );
+  const runWithWriter = <A>(use: (writer: WritableStreamDefaultWriter<AcpMessage>) => Promise<A>) =>
+    Effect.runPromise(withWriter(use));
 
   return {
     readable: Stream.fromReadableStream({
@@ -208,17 +208,16 @@ const interceptCursorTelemetry = (base: AcpJsonRpcStream): AcpJsonRpcStream => {
         if (!("method" in message && "id" in message && swallowedCursorMethods.has(message.method))) {
           return Effect.succeed(true);
         }
-        return Effect.tryPromise({
-          try: () => useWriter((writer) => writer.write({ jsonrpc: "2.0", id: message.id, result: {} })),
-          catch: transportError,
-        }).pipe(Effect.map(() => false));
+        return withWriter((writer) => writer.write({ jsonrpc: "2.0", id: message.id, result: {} })).pipe(
+          Effect.map(() => false),
+        );
       }),
       Stream.toReadableStream(),
     ),
     writable: new WritableStream<AcpMessage>({
-      write: (message) => useWriter((writer) => writer.write(message)),
-      close: () => useWriter((writer) => writer.close()),
-      abort: (reason) => useWriter((writer) => writer.abort(reason)),
+      write: (message) => runWithWriter((writer) => writer.write(message)),
+      close: () => runWithWriter((writer) => writer.close()),
+      abort: (reason) => runWithWriter((writer) => writer.abort(reason)),
     }),
   };
 };
