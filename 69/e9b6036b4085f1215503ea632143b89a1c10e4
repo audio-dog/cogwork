@@ -1,0 +1,19 @@
+packages/engine/src/comments.ts
+  s_a76d1edf065141::t_3ced1f42a86f10 22,80-86,88-91,94-105,107,116-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "69e9b6036b4085f1215503ea632143b89a1c10e4",
+  "prompts": {},
+  "sessions": {
+    "s_a76d1edf065141": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "89829111-87a1-4711-b21a-2d1d6a0f8330",
+        "model": "claude-opus-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
