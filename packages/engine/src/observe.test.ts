@@ -18,7 +18,6 @@ const workspace: RegisteredWorkspace = {
     name: "fake",
     checkoutPath: "/repos/fake",
     issueTracker: { type: "github", repo: "owner/repo" },
-    harness: { preferred: "cursor" },
   }),
 };
 
@@ -41,7 +40,6 @@ const item = (attempts: TrackerItem["attempts"]): TrackerItem => ({
   claimedByUs: false,
   attempts,
   handback: { by: "local-owner", atMillis: 5 },
-  owned: true,
   followUp,
   openBlockers: 0,
   proposal: null,
