@@ -3,10 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, SubscriptionRef } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
-import { IpcChannel } from "../shared/ipc";
-import { EngineSupervisor } from "./engine-supervisor";
+import { type EngineStatus, IpcChannel } from "../shared/ipc";
+import { EngineSupervisor, type EngineSupervisorService } from "./engine-supervisor";
 
 type IpcHandler = (...args: readonly unknown[]) => unknown;
 
@@ -38,22 +38,23 @@ class FakeSender extends EventEmitter {
   }
 }
 
-const supervisor = new EngineSupervisor({
-  command: { command: "node", args: [], cwd: "/tmp" },
-  socketPath: "/tmp/unused.sock",
-  spawn: () => {
-    throw new Error("not used");
-  },
-  probe: () => Promise.resolve(true),
-  awaitReachable: () => Promise.resolve(true),
-  onStatus: () => {},
-  logger: { info: () => {}, warn: () => {} },
-});
+const supervisor: EngineSupervisorService = {
+  status: Effect.runSync(SubscriptionRef.make<EngineStatus>("adopted")),
+  start: Effect.void,
+  stop: Effect.void,
+};
 
 const windowPreferences = {
   get: () => ({ closeToHide: true }),
   set: (preferences: { readonly closeToHide: boolean }) => preferences,
 };
+
+const makeRuntime = () => ManagedRuntime.make(Layer.succeed(EngineSupervisor, supervisor));
+
+const listen = (server: net.Server, socketPath: string) =>
+  new Promise<void>((resolve) => server.listen(socketPath, resolve));
+
+const closeServer = (server: net.Server) => new Promise<void>((resolve) => server.close(() => resolve()));
 
 afterEach(() => {
   ipc.handlers.clear();
@@ -69,8 +70,8 @@ it("closes a renderer's socket when the renderer is destroyed", async () => {
     accepted.resolve(socket);
     socket.once("close", () => closed.resolve());
   });
-  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
-  const runtime = ManagedRuntime.make(Layer.empty);
+  await listen(server, socketPath);
+  const runtime = makeRuntime();
   const sender = new FakeSender();
 
   try {
@@ -86,7 +87,7 @@ it("closes a renderer's socket when the renderer is destroyed", async () => {
     expect((await accepted.promise).destroyed).toBe(true);
   } finally {
     await runtime.dispose();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await closeServer(server);
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -98,8 +99,8 @@ it("replaces a renderer's socket when it connects again", async () => {
   const server = net.createServer((socket) =>
     socket.on("data", (frame) => frames.emit("frame", { frame, socket })),
   );
-  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
-  const runtime = ManagedRuntime.make(Layer.empty);
+  await listen(server, socketPath);
+  const runtime = makeRuntime();
   const sender = new FakeSender();
 
   try {
@@ -130,14 +131,14 @@ it("replaces a renderer's socket when it connects again", async () => {
     expect(firstEvent.socket.destroyed).toBe(true);
   } finally {
     await runtime.dispose();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await closeServer(server);
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
 it("interrupts a pending connection when the renderer is destroyed", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cf-ipc-"));
-  const runtime = ManagedRuntime.make(Layer.empty);
+  const runtime = makeRuntime();
   const sender = new FakeSender();
 
   try {
@@ -166,7 +167,7 @@ it("drops renderer frames until its daemon connection is ready", async () => {
     accepted.resolve(socket);
     socket.once("data", (chunk) => received.resolve(chunk.toString()));
   });
-  const runtime = ManagedRuntime.make(Layer.empty);
+  const runtime = makeRuntime();
   const sender = new FakeSender();
 
   try {
@@ -177,7 +178,7 @@ it("drops renderer frames until its daemon connection is ready", async () => {
 
     const pending = connect({ sender });
     send({ sender }, "early");
-    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+    await listen(server, socketPath);
     await pending;
     await accepted.promise;
     send({ sender }, "ready");
@@ -185,7 +186,7 @@ it("drops renderer frames until its daemon connection is ready", async () => {
     expect(await received.promise).toBe("ready");
   } finally {
     await runtime.dispose();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await closeServer(server);
     rmSync(dir, { recursive: true, force: true });
   }
 });
