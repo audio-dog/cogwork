@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 
-export const lintRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const lintRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const fixtureRoot = path.join(lintRoot, "tests", "fixtures");
 export const repoRoot = path.resolve(lintRoot, "../..");
 
