@@ -1,4 +1,3 @@
-import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -10,6 +9,8 @@ import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 export const catalogEndpoint = "https://models.dev/api.json";
 
 export const defaultTtlMillis = 5 * 60_000;
+
+export const catalogFetchDeadline = "30 seconds";
 
 const CatalogModelEntry = Schema.Struct({
   id: Schema.String,
@@ -60,32 +61,37 @@ const modelsFor = (api: CatalogApi, providerIds: ReadonlyArray<string>) =>
       .sort((left, right) => left.id.localeCompare(right.id));
   });
 
-interface CatalogSnapshot {
-  readonly at: number;
-  readonly api: CatalogApi;
-}
-
 export const makeService = Effect.fn("ModelCatalog.make")(function* (
   source: CatalogSource,
   ttlMillis: number = defaultTtlMillis,
 ) {
-  const cache = yield* Ref.make<CatalogSnapshot | null>(null);
-
-  const currentApi = Effect.fn("ModelCatalog.currentApi")(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    const cached = yield* Ref.get(cache);
-    if (cached && now - cached.at < ttlMillis) return cached.api;
-    return yield* source.fetch.pipe(
-      Effect.tap((api) => Ref.set(cache, { at: now, api })),
-      Effect.catchTag("CatalogError", (error) =>
-        cached
-          ? Effect.logWarning("serving a stale model catalog; refresh failed", {
-              message: error.message,
-            }).pipe(Effect.map(() => cached.api))
-          : Effect.fail(error),
+  const stale = yield* Ref.make<CatalogApi | null>(null);
+  const [cachedApi, invalidate] = yield* Effect.cachedInvalidateWithTTL(
+    source.fetch.pipe(
+      Effect.timeout(catalogFetchDeadline),
+      Effect.catchTag(
+        "TimeoutError",
+        () =>
+          new CatalogError({ message: `the model catalog fetch timed out after ${catalogFetchDeadline}` }),
       ),
-    );
+      Effect.tap((api) => Ref.set(stale, api)),
+    ),
+    ttlMillis,
+  );
+
+  const serveStale = Effect.fn("ModelCatalog.serveStale")(function* (error: CatalogError) {
+    yield* invalidate;
+    const cached = yield* Ref.get(stale);
+    if (cached === null) return yield* error;
+    yield* Effect.logWarning("serving a stale model catalog; refresh failed", {
+      message: error.message,
+    });
+    return cached;
   });
+
+  const currentApi = Effect.fn("ModelCatalog.currentApi")(() =>
+    cachedApi.pipe(Effect.catchTag("CatalogError", serveStale)),
+  );
 
   const models = Effect.fn("ModelCatalog.models")(function* (providerIds: ReadonlyArray<string>) {
     const api = yield* currentApi();

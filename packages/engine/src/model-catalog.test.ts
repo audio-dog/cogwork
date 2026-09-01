@@ -1,6 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
+import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { type CatalogApi, CatalogError, type CatalogSource, httpSource, makeService } from "./model-catalog";
@@ -61,6 +64,51 @@ describe("ModelCatalog", () => {
     }),
   );
 
+  it.effect("starts the TTL when the fetch completes", () =>
+    Effect.gen(function* () {
+      const fetches = yield* Ref.make(0);
+      const source: CatalogSource = {
+        fetch: Effect.gen(function* () {
+          const attempt = yield* Ref.getAndUpdate(fetches, (count) => count + 1);
+          if (attempt === 0) yield* Effect.sleep("2 seconds");
+          return api;
+        }),
+      };
+      const catalog = yield* makeService(source, 1_000);
+      const firstRead = yield* catalog.models(["anthropic"]).pipe(Effect.forkChild);
+      yield* TestClock.adjust("2 seconds");
+      yield* Fiber.join(firstRead);
+      yield* catalog.models(["openai"]);
+      assert.strictEqual(yield* Ref.get(fetches), 1);
+    }),
+  );
+
+  it.effect("single-flights concurrent cold reads", () =>
+    Effect.gen(function* () {
+      const fetches = yield* Ref.make(0);
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const source: CatalogSource = {
+        fetch: Effect.gen(function* () {
+          yield* Ref.update(fetches, (count) => count + 1);
+          yield* Deferred.succeed(started, undefined);
+          yield* Deferred.await(release);
+          return api;
+        }),
+      };
+      const catalog = yield* makeService(source);
+      const reads = yield* Effect.all(
+        Array.from({ length: 3 }, () => catalog.models(["anthropic"])),
+        { concurrency: "unbounded" },
+      ).pipe(Effect.forkChild);
+      yield* Deferred.await(started);
+      yield* Effect.yieldNow;
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(reads);
+      assert.strictEqual(yield* Ref.get(fetches), 1);
+    }),
+  );
+
   it.effect("serves the stale catalog when a refresh fails after a good load", () =>
     Effect.gen(function* () {
       const { source, fail, fetches } = yield* harness(api);
@@ -73,6 +121,28 @@ describe("ModelCatalog", () => {
         ["gpt-5"],
       );
       assert.strictEqual(yield* fetches, 2);
+    }),
+  );
+
+  it.effect("serves the stale catalog when a refresh times out", () =>
+    Effect.gen(function* () {
+      const fetches = yield* Ref.make(0);
+      const source: CatalogSource = {
+        fetch: Effect.gen(function* () {
+          const attempt = yield* Ref.getAndUpdate(fetches, (count) => count + 1);
+          if (attempt === 0) return api;
+          return yield* Effect.never;
+        }),
+      };
+      const catalog = yield* makeService(source, 0);
+      yield* catalog.models(["anthropic"]);
+      const refresh = yield* catalog.models(["openai"]).pipe(Effect.timeout("31 seconds"), Effect.forkChild);
+      yield* TestClock.adjust("31 seconds");
+      const models = yield* Fiber.join(refresh);
+      assert.deepStrictEqual(
+        models.map((model) => model.id),
+        ["gpt-5"],
+      );
     }),
   );
 
