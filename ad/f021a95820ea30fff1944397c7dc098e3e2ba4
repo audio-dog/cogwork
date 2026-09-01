@@ -1,0 +1,35 @@
+apps/desktop/tsconfig.node.json
+  s_5cf84fa7f14674::t_9dab26efddd25e 2
+apps/desktop/package.json
+  s_5cf84fa7f14674::t_a15d310e445daf 16-20,22
+  s_5cf84fa7f14674::t_2db78bfd5795bb 14-15,23
+apps/desktop/engine.vite.config.mts
+  s_5cf84fa7f14674::t_97cca38b915e37 11
+  s_5cf84fa7f14674::t_bdf5e77cda7cb4 24-35,37-38,40-60,62-65,67-74,76-78
+  s_5cf84fa7f14674::t_9c72e1f517c0cb 9,61
+  s_5cf84fa7f14674::t_5b3e90b1f05af4 2-4,7,10,13-14,75
+  s_5cf84fa7f14674::t_d446430737b213 1,8,12
+  s_5cf84fa7f14674::t_d7044e220d9237 5-6,36,39
+  s_5cf84fa7f14674::t_2db78bfd5795bb 15-23
+  s_5cf84fa7f14674::t_49bedef09eca20 66
+apps/desktop/electron-builder.yml
+  s_5cf84fa7f14674::t_e962793a6cb14c 19-20
+  s_5cf84fa7f14674::t_fa4f76544b6aa3 17-18
+  s_5cf84fa7f14674::t_29760846ad9584 14-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "adf021a95820ea30fff1944397c7dc098e3e2ba4",
+  "prompts": {},
+  "sessions": {
+    "s_5cf84fa7f14674": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05e8f-e6d5-7001-84b2-e8275f6fc77d",
+        "model": "gpt-5.4"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
