@@ -1,3 +1,4 @@
-import * as Effect from "effect/Effect";
+const Effect = { Do: "local" } as const;
 
-export const value = Effect.succeed({ value: 1 });
+export const modulePath = "effect/Effect";
+export const builder = Effect.Do;

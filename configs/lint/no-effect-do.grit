@@ -1,7 +1,7 @@
 file($body) where {
   or {
     $body <: contains `"effect"`,
-    $body <: contains `"effect/$module"`,
+    $body <: contains JsImport() as $effectImport where { $effectImport <: contains `"effect/$module"` },
     $body <: contains bubble `import "effect/$module"`,
     $body <: contains `"@effect-atom/atom-react"`
   },
