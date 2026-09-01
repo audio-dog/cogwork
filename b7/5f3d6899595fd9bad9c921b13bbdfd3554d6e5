@@ -1,0 +1,26 @@
+packages/codex-cli/src/harness.test.ts
+  s_746973d897c991::t_563cd18842a6ef 291-292,319-320,335
+  s_746973d897c991::t_e0c7cbdbb1b7bc 206-207
+  s_746973d897c991::t_b32e992c15dce3 208,293,321,393
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_746973d897c991::t_e0c7cbdbb1b7bc 30-32,47-48
+  s_746973d897c991::t_b32e992c15dce3 49
+packages/codex-cli/src/harness.ts
+  s_746973d897c991::t_dd74b81a4a5c17 224-243,311
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b75f3d6899595fd9bad9c921b13bbdfd3554d6e5",
+  "prompts": {},
+  "sessions": {
+    "s_746973d897c991": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05deb-78f6-7d43-9d45-b47fea83c7bf",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
