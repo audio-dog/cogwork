@@ -1,0 +1,19 @@
+packages/engine/src/daemon.ts
+  s_a2be459ac722c0::t_390f5812bfc41b 516-517,520
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "99a3c2e760ab930285c2ba1b73539af91bdd71bb",
+  "prompts": {},
+  "sessions": {
+    "s_a2be459ac722c0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05da3-95c9-7111-8295-de6ed47a57c7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
