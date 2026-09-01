@@ -149,7 +149,10 @@ const expireDeadline = (
   deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>,
   clientId: number,
   requestId: string | number,
-) => takeDeadlines(deadlines, (key) => key === deadlineKey(clientId, requestId)).pipe(Effect.asVoid);
+) =>
+  takeDeadlines(deadlines, (key) => key === deadlineKey(clientId, requestId)).pipe(
+    Effect.map((pending) => pending.length > 0),
+  );
 
 const cancelClientDeadlines = (deadlines: Ref.Ref<ReadonlyMap<string, PendingDeadline>>, clientId: number) =>
   takeDeadlines(deadlines, (_key, pending) => pending.clientId === clientId).pipe(
@@ -207,20 +210,21 @@ const startDeadline = (
   const key = deadlineKey(clientId, request.id);
   return Effect.sleep(deadline).pipe(
     Effect.andThen(expireDeadline(deadlines, clientId, request.id)),
-    Effect.andThen(
-      encodeError(deadlineFailure(request.tag, String(deadline))).pipe(
+    Effect.flatMap((claimed) => {
+      if (!claimed) return Effect.void;
+      return encodeError(deadlineFailure(request.tag, String(deadline))).pipe(
         Effect.orDie,
         Effect.flatMap((encodedError) => notifyDeadline(handlers, clientId, request.id, encodedError)),
-      ),
-    ),
-    Effect.andThen(
-      sendInterrupt(upstream, clientId, request.id).pipe(
-        Effect.timeout("1 second"),
-        Effect.ignoreCause,
-        Effect.forkDetach,
-        Effect.asVoid,
-      ),
-    ),
+        Effect.andThen(
+          sendInterrupt(upstream, clientId, request.id).pipe(
+            Effect.timeout("1 second"),
+            Effect.ignoreCause,
+            Effect.forkDetach,
+            Effect.asVoid,
+          ),
+        ),
+      );
+    }),
     Effect.forkDetach,
     Effect.flatMap((fiber) =>
       Ref.update(deadlines, (current) => new Map(current).set(key, { clientId, fiber })),

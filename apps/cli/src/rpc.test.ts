@@ -4,9 +4,11 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
+import * as Scheduler from "effect/Scheduler";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -41,6 +43,12 @@ const assertTimedOutMessages = (messages: ReadonlyArray<FromClientEncoded>) => {
   assert.strictEqual(messages[1].requestId, messages[0].id);
 };
 
+class ResponseGate extends Context.Service<ResponseGate, Latch.Latch>()(
+  "@cogwork/cli/rpc.test/ResponseGate",
+) {
+  static readonly layer = Layer.effect(ResponseGate, Latch.make());
+}
+
 class SentMessages extends Context.Service<SentMessages, Ref.Ref<ReadonlyArray<FromClientEncoded>>>()(
   "@cogwork/cli/rpc.test/SentMessages",
 ) {
@@ -69,6 +77,43 @@ class SentMessages extends Context.Service<SentMessages, Ref.Ref<ReadonlyArray<F
     ),
     Layer.provideMerge(SentMessages.layer),
   );
+
+  static readonly respondingClientLayer = daemonRpcDeadlineLayer("1 second").pipe(
+    Layer.provide(
+      Layer.effect(
+        RpcClient.Protocol,
+        RpcClient.Protocol.make((writeResponse) =>
+          Effect.gen(function* () {
+            const messages = yield* SentMessages;
+            const responseGate = yield* ResponseGate;
+            const serialization = yield* RpcSerialization.RpcSerialization;
+            return {
+              send: (clientId, message) =>
+                Ref.update(messages, (current) => [...current, message]).pipe(
+                  Effect.andThen(
+                    message._tag === "Request"
+                      ? responseGate.await.pipe(
+                          Effect.andThen(
+                            writeResponse(clientId, {
+                              _tag: "Exit",
+                              requestId: message.id,
+                              exit: { _tag: "Success", value: [] },
+                            }),
+                          ),
+                        )
+                      : Effect.void,
+                  ),
+                ),
+              supportsAck: true,
+              supportsTransferables: false,
+              codecFor: serialization.codecFor,
+            };
+          }),
+        ),
+      ).pipe(Layer.provide(RpcSerialization.layerNdjson)),
+    ),
+    Layer.provideMerge(Layer.merge(SentMessages.layer, ResponseGate.layer)),
+  );
 }
 
 describe("daemon socket", () => {
@@ -87,6 +132,33 @@ describe("daemon socket", () => {
         assertDeadlineError(yield* Fiber.join(fiber), "ListRuns");
         yield* Effect.yieldNow;
         assertTimedOutMessages(yield* Ref.get(messages));
+      }).pipe(Effect.scoped),
+    );
+  });
+
+  layer(SentMessages.respondingClientLayer)((it) => {
+    it.effect("does not time out after a response wins the deadline race", () =>
+      Effect.gen(function* () {
+        const client = yield* makeDaemonClient();
+        const messages = yield* SentMessages;
+        const responseGate = yield* ResponseGate;
+        const fiber = yield* client
+          .ListRuns()
+          .pipe(
+            Effect.provideService(Scheduler.MaxOpsBeforeYield, 4),
+            Effect.forkChild({ startImmediately: true }),
+          );
+
+        yield* Effect.yieldNow;
+        yield* responseGate.open;
+        yield* TestClock.adjust("1 second");
+
+        assert.deepStrictEqual(yield* Fiber.join(fiber), []);
+        yield* Effect.yieldNow;
+        assert.deepStrictEqual(
+          (yield* Ref.get(messages)).map((message) => message._tag),
+          ["Request"],
+        );
       }).pipe(Effect.scoped),
     );
   });
