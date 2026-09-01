@@ -24,12 +24,14 @@
     "@tanstack/ai-sandbox-local-process": "catalog:",
     "drizzle-kit": "1.0.0-rc.4",
     "drizzle-orm": "catalog:",
-    "effect": "catalog:effect"
+    "effect": "catalog:effect",
+    "proper-lockfile": "4.1.2"
   },
   "devDependencies": {
     "@catenarycloud/linteffect": "^0.0.7",
     "@effect/platform-node": "catalog:effect",
     "@effect/vitest": "catalog:effect",
+    "@types/proper-lockfile": "4.1.4",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
