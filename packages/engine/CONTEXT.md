@@ -138,7 +138,7 @@ A command-glob rule refused in every profile, for every operation — the small 
 _Avoid_: Confinement (that keeps writes inside the worktree root; this bounds shell commands), sandbox isolation
 
 **Operating-instructions package**:
-The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills.
+The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills. The engine ships the default package, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Operation resolution**:
