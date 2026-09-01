@@ -22,6 +22,12 @@ export const tokenEndpoint = "https://api.linear.app/oauth/token";
 export const tokenEndpointDeadline = "30 seconds";
 const identityRequestDeadline = "30 seconds";
 
+export const withTokenEndpointDeadline = <A, E, R>(operation: Effect.Effect<A, E, R>, onTimeout: () => E) =>
+  operation.pipe(
+    Effect.timeout(tokenEndpointDeadline),
+    Effect.catchTag("TimeoutError", () => Effect.fail(onTimeout())),
+  );
+
 export const defaultRedirectPort = 39_517;
 export const defaultScopes = ["read", "write", "app:assignable", "app:mentionable"] as const;
 
@@ -144,45 +150,41 @@ export const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse);
 export const exchangeToken = Effect.fn("linear.oauth.exchangeToken")(function* (params: TokenExchangeParams) {
   const client = yield* HttpClient.HttpClient;
   const request = tokenExchangeRequest(params);
-  return yield* Effect.gen(function* () {
-    const response = yield* client
-      .execute(
-        HttpClientRequest.post(request.url).pipe(
-          HttpClientRequest.setHeaders(request.headers),
-          HttpClientRequest.bodyText(request.body, request.headers["content-type"]),
-        ),
-      )
-      .pipe(
-        Effect.catchTag("HttpClientError", (error) =>
-          Effect.fail(
-            new LinearOAuthError({
-              message: `Linear token exchange could not reach Linear: ${error.message}`,
-            }),
+  return yield* withTokenEndpointDeadline(
+    Effect.gen(function* () {
+      const response = yield* client
+        .execute(
+          HttpClientRequest.post(request.url).pipe(
+            HttpClientRequest.setHeaders(request.headers),
+            HttpClientRequest.bodyText(request.body, request.headers["content-type"]),
           ),
+        )
+        .pipe(
+          Effect.catchTag("HttpClientError", (error) =>
+            Effect.fail(
+              new LinearOAuthError({
+                message: `Linear token exchange could not reach Linear: ${error.message}`,
+              }),
+            ),
+          ),
+        );
+      if (response.status >= 400) {
+        return yield* new LinearOAuthError({
+          message: `Linear rejected the token exchange (HTTP ${response.status})`,
+        });
+      }
+      const body = yield* response.json.pipe(
+        Effect.catchTag("HttpClientError", () =>
+          Effect.fail(new LinearOAuthError({ message: "Linear token exchange returned an unreadable body" })),
         ),
       );
-    if (response.status >= 400) {
-      return yield* new LinearOAuthError({
-        message: `Linear rejected the token exchange (HTTP ${response.status})`,
-      });
-    }
-    const body = yield* response.json.pipe(
-      Effect.catchTag("HttpClientError", () =>
-        Effect.fail(new LinearOAuthError({ message: "Linear token exchange returned an unreadable body" })),
-      ),
-    );
-    return yield* decodeTokenResponse(body).pipe(
-      Effect.mapError(
-        () => new LinearOAuthError({ message: "Linear token exchange returned an unexpected shape" }),
-      ),
-    );
-  }).pipe(
-    Effect.timeout(tokenEndpointDeadline),
-    Effect.catchTag("TimeoutError", () =>
-      Effect.fail(
-        new LinearOAuthError({ message: `Linear token exchange timed out after ${tokenEndpointDeadline}` }),
-      ),
-    ),
+      return yield* decodeTokenResponse(body).pipe(
+        Effect.mapError(
+          () => new LinearOAuthError({ message: "Linear token exchange returned an unexpected shape" }),
+        ),
+      );
+    }),
+    () => new LinearOAuthError({ message: `Linear token exchange timed out after ${tokenEndpointDeadline}` }),
   );
 });
 
@@ -216,28 +218,24 @@ const refreshFailed = (account: string, detail: string) =>
 
 export const makeTokenRefresh = (client: HttpClient.HttpClient): TokenRefresh =>
   Effect.fn("linear.oauth.tokenRefresh")(function* (request: TokenRefreshRequest) {
-    return yield* Effect.gen(function* () {
-      const response = yield* Effect.mapError(client.execute(refreshRequest(request)), () =>
-        refreshFailed(request.account, "the token endpoint could not be reached"),
-      );
-      if (response.status !== 200) {
-        return yield* refreshFailed(request.account, `the token endpoint returned ${response.status}`);
-      }
-      const body = yield* Effect.mapError(response.json, () =>
-        refreshFailed(request.account, "the token endpoint returned an unreadable body"),
-      );
-      const decoded = yield* Effect.mapError(decodeTokenResponse(body), () =>
-        refreshFailed(request.account, "the token endpoint returned an unexpected payload"),
-      );
-      const now = yield* Clock.currentTimeMillis;
-      return storedTokenFrom(decoded, now);
-    }).pipe(
-      Effect.timeout(tokenEndpointDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        Effect.fail(
-          refreshFailed(request.account, `the token endpoint timed out after ${tokenEndpointDeadline}`),
-        ),
-      ),
+    return yield* withTokenEndpointDeadline(
+      Effect.gen(function* () {
+        const response = yield* Effect.mapError(client.execute(refreshRequest(request)), () =>
+          refreshFailed(request.account, "the token endpoint could not be reached"),
+        );
+        if (response.status !== 200) {
+          return yield* refreshFailed(request.account, `the token endpoint returned ${response.status}`);
+        }
+        const body = yield* Effect.mapError(response.json, () =>
+          refreshFailed(request.account, "the token endpoint returned an unreadable body"),
+        );
+        const decoded = yield* Effect.mapError(decodeTokenResponse(body), () =>
+          refreshFailed(request.account, "the token endpoint returned an unexpected payload"),
+        );
+        const now = yield* Clock.currentTimeMillis;
+        return storedTokenFrom(decoded, now);
+      }),
+      () => refreshFailed(request.account, `the token endpoint timed out after ${tokenEndpointDeadline}`),
     );
   });
 

@@ -14,7 +14,12 @@ import {
   CredentialError,
   expiryMarginMillis,
 } from "../credential-store";
-import { clientCredentialsRequest, decodeTokenResponse, tokenEndpointDeadline } from "./oauth";
+import {
+  clientCredentialsRequest,
+  decodeTokenResponse,
+  tokenEndpointDeadline,
+  withTokenEndpointDeadline,
+} from "./oauth";
 
 class GrantKey extends Data.Class<{
   readonly account: string;
@@ -52,40 +57,37 @@ const mint = (http: HttpClient.HttpClient) =>
   Effect.fn("linear.clientCredentials.mint")(function* (key: GrantKey) {
     const clientSecret = yield* secretOf(key);
     const form = clientCredentialsRequest({ clientId: key.clientId, clientSecret });
-    return yield* Effect.gen(function* () {
-      const response = yield* Effect.mapError(
-        http.execute(
-          HttpClientRequest.post(form.url).pipe(
-            HttpClientRequest.setHeaders(form.headers),
-            HttpClientRequest.bodyText(form.body, form.headers["content-type"]),
+    return yield* withTokenEndpointDeadline(
+      Effect.gen(function* () {
+        const response = yield* Effect.mapError(
+          http.execute(
+            HttpClientRequest.post(form.url).pipe(
+              HttpClientRequest.setHeaders(form.headers),
+              HttpClientRequest.bodyText(form.body, form.headers["content-type"]),
+            ),
           ),
-        ),
-        () => failure(key, `could not reach Linear's token endpoint for ${key.account}`),
-      );
-      if (response.status !== 200) {
-        return yield* failure(
-          key,
-          `Linear rejected the client credentials for ${key.account} (HTTP ${response.status})`,
+          () => failure(key, `could not reach Linear's token endpoint for ${key.account}`),
         );
-      }
-      const decoded = yield* Effect.mapError(Effect.flatMap(response.json, decodeTokenResponse), () =>
-        failure(key, `Linear returned an unreadable token response for ${key.account}`),
-      );
-      yield* Effect.logInfo("minted a Linear client-credentials token", {
-        account: key.account,
-        expiresInSeconds: decoded.expires_in,
-      });
-      return {
-        accessToken: Redacted.make(decoded.access_token),
-        lifetimeMillis: decoded.expires_in * 1000,
-      } satisfies MintedToken;
-    }).pipe(
-      Effect.timeout(tokenEndpointDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        Effect.fail(
-          failure(key, `Linear's token endpoint timed out after ${tokenEndpointDeadline} for ${key.account}`),
-        ),
-      ),
+        if (response.status !== 200) {
+          return yield* failure(
+            key,
+            `Linear rejected the client credentials for ${key.account} (HTTP ${response.status})`,
+          );
+        }
+        const decoded = yield* Effect.mapError(Effect.flatMap(response.json, decodeTokenResponse), () =>
+          failure(key, `Linear returned an unreadable token response for ${key.account}`),
+        );
+        yield* Effect.logInfo("minted a Linear client-credentials token", {
+          account: key.account,
+          expiresInSeconds: decoded.expires_in,
+        });
+        return {
+          accessToken: Redacted.make(decoded.access_token),
+          lifetimeMillis: decoded.expires_in * 1000,
+        } satisfies MintedToken;
+      }),
+      () =>
+        failure(key, `Linear's token endpoint timed out after ${tokenEndpointDeadline} for ${key.account}`),
     );
   });
 

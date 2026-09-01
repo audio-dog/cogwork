@@ -207,9 +207,9 @@ describe("linear client credentials", () => {
     return run(
       Effect.gen(function* () {
         const grant = yield* make();
-        const request = yield* Effect.forkChild(Effect.flip(grant.token(account)));
+        const requestFiber = yield* Effect.forkChild(Effect.flip(grant.token(account)));
         yield* TestClock.adjust("1 minute");
-        const error = yield* Fiber.join(request);
+        const error = yield* Fiber.join(requestFiber);
         assert.strictEqual(error.account, "AUD");
         assert.include(error.message, "timed out");
         assert.strictEqual(onAbort.mock.calls.length, 1);

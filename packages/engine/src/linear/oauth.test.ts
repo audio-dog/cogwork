@@ -205,9 +205,9 @@ describe("linear oauth helpers", () => {
       return Promise.withResolvers<Response>().promise;
     };
     return Effect.gen(function* () {
-      const request = yield* Effect.forkChild(Effect.flip(refresh("refresh-1")));
+      const requestFiber = yield* Effect.forkChild(Effect.flip(refresh("refresh-1")));
       yield* TestClock.adjust("1 minute");
-      const error = yield* Fiber.join(request);
+      const error = yield* Fiber.join(requestFiber);
       assert.strictEqual(error.account, "AUD");
       assert.include(error.message, "timed out");
       assert.strictEqual(onAbort.mock.calls.length, 1);
@@ -320,7 +320,7 @@ describe("linear oauth helpers", () => {
   it.effect("fails a hanging token exchange at the token endpoint deadline", () =>
     Effect.gen(function* () {
       const onAbort = vi.fn();
-      const request = yield* Effect.forkChild(
+      const requestFiber = yield* Effect.forkChild(
         Effect.flip(
           exchangeToken(exchangeParams).pipe(
             withFetch((_input, init) => {
@@ -331,7 +331,7 @@ describe("linear oauth helpers", () => {
         ),
       );
       yield* TestClock.adjust("1 minute");
-      const error = yield* Fiber.join(request);
+      const error = yield* Fiber.join(requestFiber);
       assert.include(error.message, "timed out");
       assert.strictEqual(onAbort.mock.calls.length, 1);
     }),
@@ -378,9 +378,9 @@ describe("linear oauth helpers", () => {
           return Promise.withResolvers<Response>().promise;
         }),
       );
-      const request = yield* Effect.forkChild(Effect.flip(discoverIdentity("access-token")));
+      const requestFiber = yield* Effect.forkChild(Effect.flip(discoverIdentity("access-token")));
       yield* TestClock.adjust("1 minute");
-      const error = yield* Fiber.join(request);
+      const error = yield* Fiber.join(requestFiber);
       assert.include(error.message, "timed out");
       assert.isAbove(signals.length, 0);
       assert.isTrue(signals.every((signal) => signal.aborted));
