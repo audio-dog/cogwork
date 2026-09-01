@@ -25,25 +25,24 @@ const urlOf = (input: RequestInfo | URL) =>
   typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
 
 const respondingWith = (status: number, body = "{}") =>
-  layer
-    .pipe(
-      Layer.provide(githubClientLayer),
-      Layer.provide(FetchHttpClient.layer),
-      Layer.provide(
-        Layer.effect(
-          FetchHttpClient.Fetch,
-          Effect.gen(function* () {
-            const seen = yield* FetchedUrls;
-            return (input: RequestInfo | URL) =>
-              Ref.update(seen, (current) => [...current, urlOf(input)]).pipe(
-                Effect.map(() => new Response(body, { status })),
-                Effect.runPromise,
-              );
-          }),
-        ),
+  layer.pipe(
+    Layer.provide(githubClientLayer),
+    Layer.provide(FetchHttpClient.layer),
+    Layer.provide(
+      Layer.effect(
+        FetchHttpClient.Fetch,
+        Effect.gen(function* () {
+          const seen = yield* FetchedUrls;
+          return (input: RequestInfo | URL) =>
+            Ref.update(seen, (current) => [...current, urlOf(input)]).pipe(
+              Effect.map(() => new Response(body, { status })),
+              Effect.runPromise,
+            );
+        }),
       ),
-    )
-    .pipe(Layer.provideMerge(FetchedUrls.layer));
+    ),
+    Layer.provideMerge(FetchedUrls.layer),
+  );
 
 describe("ConnectionVerifier", () => {
   it.effect("asks GitHub whether the token authenticates at all", () =>
