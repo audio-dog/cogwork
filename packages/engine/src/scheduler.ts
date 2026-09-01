@@ -10,8 +10,10 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FiberSet from "effect/FiberSet";
 import * as Layer from "effect/Layer";
+import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import type { EligibleWork } from "./classify";
 import { Executor } from "./executor";
@@ -21,6 +23,19 @@ import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { branchName, ticketSlug } from "./worktree";
+
+const runsInFlight = Metric.gauge("cogwork_scheduler_runs_in_flight", {
+  description: "Runs currently executing across all workspaces.",
+});
+const budgetUsed = Metric.gauge("cogwork_scheduler_budget_used", {
+  description: "Runs charged against the current UTC day's budget.",
+});
+const budgetExhaustedTicks = Metric.counter("cogwork_scheduler_budget_exhausted_ticks_total", {
+  description: "Scheduler ticks that found eligible work after the daily budget was exhausted.",
+});
+const jobOutcomes = Metric.counter("cogwork_scheduler_job_outcomes_total", {
+  description: "Scheduled jobs completed by outcome.",
+});
 
 export interface SchedulerConfig {
   readonly globalLimit: number;
@@ -150,6 +165,31 @@ export interface TickStamp {
 const refreshed = (state: SchedulerState, stamp: TickStamp, candidates: ReadonlyArray<Candidate>) =>
   atGeneration(rolledOver(state, stamp.day), stamp.generation, candidates);
 
+const updateStateMetrics = (state: SchedulerState) =>
+  Effect.all([Metric.update(runsInFlight, state.global), Metric.update(budgetUsed, state.budgetUsed)], {
+    discard: true,
+  });
+
+const jobOutcome = <A, E>(exit: Exit.Exit<A, E>) => {
+  if (Exit.isSuccess(exit)) return "success";
+  if (Cause.hasInterruptsOnly(exit.cause)) return "interrupt";
+  return "failure";
+};
+
+const recordJobOutcome = <A, E>(exit: Exit.Exit<A, E>) =>
+  Metric.update(Metric.withAttributes(jobOutcomes, { outcome: jobOutcome(exit) }), 1);
+
+const isBudgetExhaustedTick = (
+  planned: Plan,
+  candidates: ReadonlyArray<Candidate>,
+  config: SchedulerConfig,
+) =>
+  !planned.state.stopping &&
+  !planned.state.paused &&
+  planned.picks.length === 0 &&
+  candidates.length > 0 &&
+  planned.state.budgetUsed >= config.dailyBudget;
+
 export interface Plan {
   readonly state: SchedulerState;
   readonly picks: ReadonlyArray<Candidate>;
@@ -226,12 +266,21 @@ export const make = (config: SchedulerConfig) =>
         stage: candidate.work.stage,
       };
       return executor.execute(candidate.workspace, candidate.work, candidate.observation).pipe(
-        Effect.flatMap((started) => (started ? Effect.void : Ref.update(stateRef, refundBudget))),
+        Effect.flatMap((started) =>
+          started
+            ? Effect.void
+            : Ref.updateAndGet(stateRef, refundBudget).pipe(Effect.flatMap(updateStateMetrics)),
+        ),
+        Effect.onExit(recordJobOutcome),
         Effect.catchCauseIf(
           (cause) => !Cause.hasInterruptsOnly(cause),
           (cause) => Effect.logWarning("scheduled job crashed", cause),
         ),
-        Effect.ensuring(Ref.update(stateRef, (state) => release(state, candidate))),
+        Effect.ensuring(
+          Ref.updateAndGet(stateRef, (state) => release(state, candidate)).pipe(
+            Effect.flatMap(updateStateMetrics),
+          ),
+        ),
         Effect.annotateLogs(correlation),
         Effect.annotateSpans(correlation),
       );
@@ -246,6 +295,10 @@ export const make = (config: SchedulerConfig) =>
         const next = plan(candidates, state, config, { day, generation: snapshot.generation });
         return [next, next.state];
       });
+      yield* updateStateMetrics(planned.state);
+      if (isBudgetExhaustedTick(planned, candidates, config)) {
+        yield* Metric.update(budgetExhaustedTicks, 1);
+      }
       if (planned.picks.length > 0) {
         yield* Effect.logInfo("scheduled jobs", {
           picked: planned.picks.map((c) => ({
@@ -290,7 +343,8 @@ export const make = (config: SchedulerConfig) =>
     ) {
       const config = yield* Ref.get(configRef);
       const candidate = candidateOf(workspace, work, config, observation);
-      yield* Ref.update(stateRef, (state) => reserve(state, candidate));
+      const state = yield* Ref.updateAndGet(stateRef, (state) => reserve(state, candidate));
+      yield* updateStateMetrics(state);
       yield* FiberSet.run(jobs, runJob(candidate));
     });
 
