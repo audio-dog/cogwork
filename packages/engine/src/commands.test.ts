@@ -924,10 +924,13 @@ describe("RunControl", () => {
 
       caller.interruptUnsafe(Fiber.getCurrent()?.id);
       yield* Deferred.await(interrupted);
+      yield* Effect.yieldNow;
 
+      const callerBeforeTeardown = caller.pollUnsafe();
       assert.strictEqual((yield* control.cancel(rid("run-1")))._tag, "Interrupting");
       yield* Deferred.succeed(finishTeardown, undefined);
       yield* Fiber.await(caller);
+      assert.isUndefined(callerBeforeTeardown);
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),
   );
 

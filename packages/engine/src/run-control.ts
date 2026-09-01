@@ -58,9 +58,7 @@ export const make = Effect.gen(function* () {
             }
           });
           yield* Deferred.succeed(ready, undefined);
-          return yield* restore(Fiber.join(fiber)).pipe(
-            Effect.onInterrupt(() => Effect.sync(() => fiber.interruptUnsafe(Fiber.getCurrent()?.id))),
-          );
+          return yield* restore(Fiber.join(fiber)).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
         }),
       ),
     cancel: Effect.fn("RunControl.cancel")(function* (runId: RunId) {
