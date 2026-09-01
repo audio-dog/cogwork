@@ -507,10 +507,8 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
               options.environment,
             ),
           );
-          const sandbox = defineSandbox({
-            id: `cogwork-${options.name}`,
-            fileEvents: false,
-            provider: localProcessSandbox({
+          const ownedProvider = HarnessBridge.ownSandboxHandles(
+            localProcessSandbox({
               dir: plan.sandbox.workspace,
               scrubEnv: [
                 "GITHUB_TOKEN",
@@ -520,7 +518,13 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
                 ...ambientMcpEnvironmentNames,
               ],
             }),
+          );
+          const sandbox = defineSandbox({
+            id: `cogwork-${options.name}`,
+            fileEvents: false,
+            provider: ownedProvider.provider,
             workspace: defineWorkspace({ source: { type: "none" } }),
+            lifecycle: HarnessBridge.perRunSandboxLifecycle,
           });
           const abortController = new AbortController();
           const stream = runChat({
@@ -532,7 +536,14 @@ export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner 
             modelOptions: codexModelOptions(handle, effort),
             outputSchema: plan.structuredOutput ?? undefined,
           });
-          return HarnessBridge.bridgeChat(stream, codexTurnError, codexTurnError).pipe(
+          return HarnessBridge.bridgeChat(
+            HarnessBridge.abortOnReturn(stream, () => {
+              abortController.abort();
+              return ownedProvider.destroy();
+            }),
+            codexTurnError,
+            codexTurnError,
+          ).pipe(
             Stream.mapError(addRemediation),
             Stream.ensuring(Effect.sync(() => abortController.abort())),
           );
