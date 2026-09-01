@@ -55,22 +55,6 @@ export const SourceControlConfig = Schema.Struct({
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
 
-export const PlaybookStageConfig = Schema.Struct({
-  prompt: Schema.optional(TrimmedNonEmptyString),
-  skill: Schema.optional(TrimmedNonEmptyString),
-  resumeMaxAgeMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
-  resumeMaxTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
-});
-export type PlaybookStageConfig = typeof PlaybookStageConfig.Type;
-
-export const PlaybookConfig = Schema.Struct({
-  triage: Schema.optional(PlaybookStageConfig),
-  implement: Schema.optional(PlaybookStageConfig),
-  "follow-up": Schema.optional(PlaybookStageConfig),
-  verify: Schema.optional(PlaybookStageConfig),
-});
-export type PlaybookConfig = typeof PlaybookConfig.Type;
-
 export const WorktreeConfig = Schema.Struct({
   root: Schema.optional(TrimmedNonEmptyString),
   remote: Schema.optional(TrimmedNonEmptyString),
@@ -84,26 +68,8 @@ export type WorktreeConfig = typeof WorktreeConfig.Type;
 export const WorkspaceConcurrency = Schema.Int.check(Schema.isGreaterThan(0));
 export type WorkspaceConcurrency = typeof WorkspaceConcurrency.Type;
 
-export const WorkspaceInputWorktreeConfig = Schema.Struct({
-  linkPaths: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
-  setup: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
-});
-export type WorkspaceInputWorktreeConfig = typeof WorkspaceInputWorktreeConfig.Type;
-
-export const WorkspaceBindingWorktreeConfig = Schema.Struct({
-  root: Schema.optional(TrimmedNonEmptyString),
-  remote: Schema.optional(TrimmedNonEmptyString),
-  baseBranch: Schema.optional(TrimmedNonEmptyString),
-  reapAfterMillis: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
-});
+export const WorkspaceBindingWorktreeConfig = WorktreeConfig;
 export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConfig.Type;
-
-export const WorkspaceInput = Schema.Struct({
-  mcpSkills: Schema.optional(Schema.Array(McpSkill)),
-  playbook: Schema.optional(PlaybookConfig),
-  worktrees: Schema.optional(WorkspaceInputWorktreeConfig),
-});
-export type WorkspaceInput = typeof WorkspaceInput.Type;
 
 export const WorkspaceRegistration = Schema.Struct({
   name: TrimmedNonEmptyString,
@@ -111,6 +77,7 @@ export const WorkspaceRegistration = Schema.Struct({
   gitRemote: Schema.optional(TrimmedNonEmptyString),
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
+  mcpSkills: Schema.optional(Schema.Array(McpSkill)),
   linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
   worktrees: Schema.optional(WorkspaceBindingWorktreeConfig),
   concurrency: Schema.optional(WorkspaceConcurrency),
@@ -139,7 +106,6 @@ export const WorkspaceConfig = Schema.Struct({
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
-  playbook: Schema.optional(PlaybookConfig),
   worktrees: Schema.optional(WorktreeConfig),
   linearHistory: Schema.Boolean.pipe(Schema.withDecodingDefaultKey(Effect.succeed(false))),
 });

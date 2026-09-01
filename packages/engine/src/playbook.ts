@@ -1,4 +1,4 @@
-import type { LifecycleStage, McpSkill, PlaybookStageConfig, WorkspaceConfig } from "@cogwork/contracts";
+import type { LifecycleStage, McpSkill, WorkspaceConfig } from "@cogwork/contracts";
 
 export interface OperationDefinition {
   readonly skill: string;
@@ -39,20 +39,13 @@ interface StageDefaults {
   readonly resumeMaxTokens: number | null;
 }
 
-const resolveStageConfig = (
-  config: WorkspaceConfig,
-  stage: PlaybookStageConfig | undefined,
-  defaults: StageDefaults,
-): OperationDefinition => ({
-  skill: stage?.skill ?? defaults.skill,
-  promptTemplate: stage?.prompt ?? defaults.promptTemplate,
-  resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
-  resumeMaxTokens: stage?.resumeMaxTokens ?? defaults.resumeMaxTokens,
+const resolveStageConfig = (config: WorkspaceConfig, defaults: StageDefaults) => ({
+  ...defaults,
   mcpSkills: config.mcpSkills ?? [],
 });
 
 export const resolveTriage = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, config.playbook?.triage, {
+  resolveStageConfig(config, {
     skill: "triage-agent",
     promptTemplate: defaultTriagePrompt,
     resumeMaxAgeMillis: null,
@@ -60,7 +53,7 @@ export const resolveTriage = (config: WorkspaceConfig) =>
   });
 
 export const resolveImplement = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, config.playbook?.implement, {
+  resolveStageConfig(config, {
     skill: "implement-agent",
     promptTemplate: defaultImplementPrompt,
     resumeMaxAgeMillis: null,
@@ -68,7 +61,7 @@ export const resolveImplement = (config: WorkspaceConfig) =>
   });
 
 export const resolveFollowUp = (config: WorkspaceConfig) =>
-  resolveStageConfig(config, config.playbook?.["follow-up"], {
+  resolveStageConfig(config, {
     skill: "follow-up-agent",
     promptTemplate: defaultFollowUpPrompt,
     resumeMaxAgeMillis: dayMillis,

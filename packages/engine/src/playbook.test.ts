@@ -26,24 +26,11 @@ describe("resolveTriage", () => {
     assert.strictEqual(resolved.skill, "triage-agent");
     assert.isNull(resolved.resumeMaxAgeMillis);
   });
-
-  it("prefers per-stage skill and prompt overrides", () => {
-    const resolved = resolveTriage(
-      config({ playbook: { triage: { skill: "my-triage", prompt: "Do the thing" } } }),
-    );
-    assert.strictEqual(resolved.skill, "my-triage");
-    assert.strictEqual(resolved.promptTemplate, "Do the thing");
-  });
 });
 
 describe("resolveImplement", () => {
   it("defaults to the implement-agent skill when the stage is unset", () => {
     assert.strictEqual(resolveImplement(config()).skill, "implement-agent");
-  });
-
-  it("prefers a per-stage skill override", () => {
-    const resolved = resolveImplement(config({ playbook: { implement: { skill: "my-impl" } } }));
-    assert.strictEqual(resolved.skill, "my-impl");
   });
 });
 
@@ -53,14 +40,6 @@ describe("resolveFollowUp", () => {
     assert.strictEqual(resolved.skill, "follow-up-agent");
     assert.strictEqual(resolved.resumeMaxAgeMillis, 86_400_000);
     assert.isNull(resolved.resumeMaxTokens);
-  });
-
-  it("prefers per-stage resume overrides", () => {
-    const resolved = resolveFollowUp(
-      config({ playbook: { "follow-up": { resumeMaxAgeMillis: 5_000, resumeMaxTokens: 42 } } }),
-    );
-    assert.strictEqual(resolved.resumeMaxAgeMillis, 5_000);
-    assert.strictEqual(resolved.resumeMaxTokens, 42);
   });
 });
 
@@ -153,21 +132,6 @@ describe("buildImplementPrompt", () => {
       id: "#15",
       title: "Implement playbook",
     });
-    assert.include(prompt, "Only one pull request should ever exist for this branch");
-    assert.include(prompt, "push your work to that one instead of opening another");
-  });
-
-  it("keeps the pull request reuse rule when the implement prompt is customized", () => {
-    const prompt = buildImplementPrompt(
-      resolveImplement(
-        config({
-          playbook: { implement: { prompt: "Implement the requested change." } },
-        }),
-      ),
-      { id: "#15", title: "Implement playbook" },
-    );
-
-    assert.include(prompt, "Implement the requested change.");
     assert.include(prompt, "Only one pull request should ever exist for this branch");
     assert.include(prompt, "push your work to that one instead of opening another");
   });
