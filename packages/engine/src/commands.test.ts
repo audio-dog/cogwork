@@ -1145,7 +1145,6 @@ describe("Connection mutations", () => {
         connectionId: github,
         repo: "acme/repo",
       },
-      harness: { preferred: "cursor" },
     });
     const registries = Layer.mergeAll(
       Layer.succeed(

@@ -146,7 +146,6 @@ describe("workspace observation", () => {
         connectionId: "github/acme",
         repo: "acme/example",
       },
-      harness: { preferred: "cursor" },
     }),
   };
   const githubWorkspace: Registry.RegisteredWorkspace = {
@@ -159,7 +158,6 @@ describe("workspace observation", () => {
         connectionId: "github/acme",
         repo: "acme/example",
       },
-      harness: { preferred: "cursor" },
     }),
   };
   const auth = new IssueTracker.IssueTrackerError({ reason: "auth", message: "unauthorized" });
@@ -441,7 +439,6 @@ describe("reconcile worker", () => {
         connectionId: "github/acme",
         repo: "acme/example",
       },
-      harness: { preferred: "cursor" },
     }),
   };
 

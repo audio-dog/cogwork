@@ -242,7 +242,7 @@ describe("Run Plan assembly", () => {
     const resolved = resolveRunPlanStage(
       workspace.config,
       "implement",
-      [],
+      [codexHarness],
       [
         {
           contribution: { id: "local:repo/mcp/linear", kind: "mcp-server" },
@@ -299,6 +299,7 @@ describe("Run Plan assembly", () => {
       file: "/plugins/linear/mcp/linear.json",
     } satisfies FileContribution;
     const resolved = resolveRunPlanStage(workspace.config, "implement", [
+      codexHarness,
       {
         setting: "bindings",
         level: { _tag: "Operation", workflow: "coding", operation: "implement" },
