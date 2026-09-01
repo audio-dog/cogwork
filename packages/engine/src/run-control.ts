@@ -44,31 +44,35 @@ export const make = Effect.gen(function* () {
       effect: Effect.Effect<A, E, R>,
       onCancel: Effect.Effect<void, never, R2> = Effect.void,
     ) =>
-      Effect.uninterruptibleMask((restore) => {
-        const register = Effect.fn("RunControl.run")(function* () {
-          const ready = yield* Deferred.make<void>();
-          const manualCancellation = yield* Deferred.make<void>();
-          const fiber = yield* FiberMap.run(
-            fibers,
-            runId,
-            restore(Deferred.await(ready).pipe(Effect.andThen(effect))).pipe(
-              Effect.onInterrupt(() =>
-                Effect.suspend(() => (Deferred.isDoneUnsafe(manualCancellation) ? onCancel : Effect.void)),
+      Effect.uninterruptibleMask((restore) =>
+        Effect.all({ ready: Deferred.make<void>(), manualCancellation: Deferred.make<void>() }).pipe(
+          Effect.flatMap(({ ready, manualCancellation }) =>
+            FiberMap.run(
+              fibers,
+              runId,
+              restore(Deferred.await(ready).pipe(Effect.andThen(effect))).pipe(
+                Effect.onInterrupt(() =>
+                  Effect.suspend(() => (Deferred.isDoneUnsafe(manualCancellation) ? onCancel : Effect.void)),
+                ),
+              ),
+            ).pipe(
+              Effect.tap((fiber) =>
+                Effect.sync(() => {
+                  const current = FiberMap.getUnsafe(fibers, runId);
+                  if (Option.isSome(current) && current.value === fiber) {
+                    MutableHashMap.set(registrations, runId, { fiber, manualCancellation, workspace });
+                    fiber.addObserver(() => forget(runId, fiber));
+                  }
+                }),
+              ),
+              Effect.tap(() => Deferred.succeed(ready, undefined)),
+              Effect.flatMap((fiber) =>
+                restore(Fiber.join(fiber)).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
               ),
             ),
-          );
-          yield* Effect.sync(() => {
-            const current = FiberMap.getUnsafe(fibers, runId);
-            if (Option.isSome(current) && current.value === fiber) {
-              MutableHashMap.set(registrations, runId, { fiber, manualCancellation, workspace });
-              fiber.addObserver(() => forget(runId, fiber));
-            }
-          });
-          yield* Deferred.succeed(ready, undefined);
-          return yield* restore(Fiber.join(fiber)).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber)));
-        });
-        return register();
-      }),
+          ),
+        ),
+      ),
     cancel: Effect.fn("RunControl.cancel")((runId: RunId) =>
       Effect.sync(() => {
         const current = FiberMap.getUnsafe(fibers, runId);
