@@ -1,6 +1,8 @@
 import {
   AvailabilityCause,
+  Connection,
   ConnectionId,
+  ConnectionNotReady,
   type ContributionSettingRow,
   DeclaredVersion,
   defaultControlStore,
@@ -181,6 +183,26 @@ const requiredNeedsWorkspace: RegisteredWorkspace = {
           { name: "review", kind: "skill" },
         ],
       },
+    },
+  }),
+};
+
+const requiredConnectionWorkspace: RegisteredWorkspace = {
+  ...implementWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    ...implementWorkspace.config,
+    playbook: {
+      implement: { needs: [{ name: "tracker", kind: "connection" }] },
+    },
+  }),
+};
+
+const requiredMcpWorkspace: RegisteredWorkspace = {
+  ...implementWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    ...implementWorkspace.config,
+    playbook: {
+      implement: { needs: [{ name: "tracker", kind: "mcp-server" }] },
     },
   }),
 };
@@ -548,6 +570,7 @@ class HarnessGate extends Context.Service<HarnessGate, Deferred.Deferred<void>>(
 
 interface HarnessObservationState {
   readonly span: Ref.Ref<Tracer.Span | null>;
+  readonly preflightEntered: Deferred.Deferred<void>;
   readonly logs: Array<{ readonly message: unknown; readonly annotations: Record<string, unknown> }>;
 }
 
@@ -556,7 +579,11 @@ class HarnessObservation extends Context.Service<HarnessObservation, HarnessObse
 ) {
   static readonly layer = Layer.effect(
     HarnessObservation,
-    Effect.map(Ref.make<Tracer.Span | null>(null), (span) => ({ span, logs: [] })),
+    Effect.all({
+      span: Ref.make<Tracer.Span | null>(null),
+      preflightEntered: Deferred.make<void>(),
+      logs: Effect.succeed([]),
+    }),
   );
 }
 
@@ -599,6 +626,41 @@ const capturingRunner = (
       ),
   }),
 });
+
+const connectionProjectingRunner: TestRunner = {
+  make: () => ({
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: ["Connections"],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    run: () => Stream.fromArray(implementEvents),
+  }),
+};
+
+const mcpProjectingRunner: TestRunner = {
+  make: () => ({
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: ["MCP"],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    run: () => Stream.fromArray(implementEvents),
+  }),
+};
+
+const blockedPreflightRunner: TestRunner = {
+  make: (_requests, gate, observation) => ({
+    name: cursor,
+    sessionKind: "opaque-handle",
+    projectedMembers: [],
+    planMiddleware: [],
+    execution: fullHarnessExecution,
+    preflight: () =>
+      Deferred.succeed(observation.preflightEntered, undefined).pipe(Effect.andThen(Deferred.await(gate))),
+    run: () => Stream.fromArray(implementEvents),
+  }),
+};
 
 const gatedRunner: TestRunner = {
   make: (_requests, gate) => ({
@@ -967,7 +1029,7 @@ const unavailablePluginLayer = Layer.succeed(PluginManager, {
   contributions: () => Effect.succeed(unavailablePluginContributions),
 });
 
-const connectionStoreStub = Layer.succeed(ConnectionStore, {
+const connectionStoreService = {
   overview: Effect.succeed({ connections: [] }),
   find: () => Effect.succeed(null),
   findSystem: () => Effect.succeed(null),
@@ -979,6 +1041,37 @@ const connectionStoreStub = Layer.succeed(ConnectionStore, {
   establish: () => Effect.die(new Error("unexpected Connection establishment")),
   revoke: () => Effect.die(new Error("unexpected Connection revocation")),
   remove: () => Effect.die(new Error("unexpected Connection removal")),
+} satisfies ConnectionStoreService;
+
+const connectionStoreStub = Layer.succeed(ConnectionStore, connectionStoreService);
+
+const readyConnectionStore = Layer.succeed(ConnectionStore, {
+  ...connectionStoreService,
+  overview: Effect.succeed({
+    connections: [
+      {
+        system: "linear",
+        connection: Connection.make({
+          id: linearConnectionId,
+          system: "linear",
+          account: "acme",
+          status: "established",
+        }),
+        readiness: { _tag: "Ready" },
+      },
+    ],
+  }),
+} satisfies ConnectionStoreService);
+
+const rejectedLiveCredentialStore = Layer.succeed(ConnectionStore, {
+  ...connectionStoreService,
+  bearer: () =>
+    Effect.fail(
+      new ConnectionNotReady({
+        connectionId: linearConnectionId,
+        message: "Linear rejected the credential",
+      }),
+    ),
 } satisfies ConnectionStoreService);
 
 const stagesEnabled: OperationSettingRow = {
@@ -1554,6 +1647,35 @@ describe("Executor.execute", () => {
     }).pipe(Effect.provide(provide([runner(implementEvents)], blockedPrepareWorktree)), Effect.scoped);
   });
 
+  it.effect("leaves the Control store write gate available during Harness preflight", () => {
+    return Effect.gen(function* () {
+      const controlStore = yield* ControlStore;
+      const gate = yield* HarnessGate;
+      const observation = yield* HarnessObservation;
+      const executor = yield* Executor.Executor;
+      const running = yield* Effect.forkChild(execute(executor, implementWorkspace, implementItem));
+
+      yield* Deferred.await(observation.preflightEntered);
+      const writer = yield* Effect.forkChild(controlStore.withWrite(Effect.succeed("written")));
+      yield* Effect.yieldNow;
+      assert.isDefined(writer.pollUnsafe());
+
+      yield* Deferred.succeed(gate, undefined);
+      yield* Fiber.join(running);
+    }).pipe(
+      Effect.provide(
+        provide(
+          [blockedPreflightRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          runnableStages,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
   it.effect("uses refreshed contribution settings before preparing MCP credentials", () => {
     const enabled: ContributionSettingRow = {
       contribution: { id: "plugin:linear/mcp/linear", kind: "mcp-server" },
@@ -1643,9 +1765,77 @@ describe("Executor.execute", () => {
           worktreeStubLayer,
           noopProviderLayer,
           trackerRecorder(),
-          [bindings],
+          [...runnableStages, bindings],
           ContextCleanupCalls.contextAssemblerLayer,
           missingPluginCredentialLayer,
+        ),
+      ),
+    );
+  });
+
+  it.effect("accepts a ready required Connection", () => {
+    const binding: OperationSettingRow = {
+      setting: "bindings",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "SettingsProfile" },
+      value: [{ need: "tracker", contribution: linearConnectionId }],
+    };
+
+    return Effect.gen(function* () {
+      const executor = yield* Executor.Executor;
+      assert.isTrue(yield* execute(executor, requiredConnectionWorkspace, implementItem));
+    }).pipe(
+      Effect.provide(
+        provide(
+          [connectionProjectingRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [...runnableStages, binding],
+          ContextCleanupCalls.contextAssemblerLayer,
+          pluginManagerStub,
+          [],
+          controlStoreLayer([...runnableStages, binding]),
+          runLedgerIdentity,
+          readyConnectionStore,
+        ),
+      ),
+    );
+  });
+
+  it.effect("declines a required Plugin MCP server when its live credential is rejected", () => {
+    const binding: OperationSettingRow = {
+      setting: "bindings",
+      level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+      scope: { _tag: "SettingsProfile" },
+      value: [{ need: "tracker", contribution: "plugin:linear/mcp/linear" }],
+    };
+
+    return Effect.gen(function* () {
+      const calls = yield* TrackerCalls;
+      const executor = yield* Executor.Executor;
+      const started = yield* execute(executor, requiredMcpWorkspace, implementItem);
+      const current = yield* executor.availabilityOf(requiredMcpWorkspace, implementItem);
+
+      assert.isFalse(started);
+      assert.deepStrictEqual(yield* Ref.get(calls), []);
+      const cause = current.causes.find((candidate) => AvailabilityCause.guards.UnsatisfiedNeed(candidate));
+      assert.isDefined(cause);
+      assert.include(cause?.message ?? "", "rejected the credential");
+    }).pipe(
+      Effect.provide(
+        provide(
+          [mcpProjectingRunner],
+          worktreeStubLayer,
+          noopProviderLayer,
+          trackerRecorder(),
+          [...runnableStages, binding],
+          ContextCleanupCalls.contextAssemblerLayer,
+          availablePluginMcpLayer,
+          [],
+          controlStoreLayer([...runnableStages, binding]),
+          runLedgerIdentity,
+          rejectedLiveCredentialStore,
         ),
       ),
     );

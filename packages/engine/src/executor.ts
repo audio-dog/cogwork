@@ -269,12 +269,13 @@ const localAvailability = (
     reason: null,
   }) satisfies AvailabilityContribution;
 
-const pluginReadiness = (contribution: PluginContribution) =>
+const pluginReadiness = (contribution: PluginContribution, liveReasons: ReadonlyMap<string, string | null>) =>
   PluginContributionLoad.match(contribution.load, {
     Failed: ({ reason }) => reason,
     Loaded: ({ mcpServer }) => {
       if (contribution.kind !== "mcp-server") return null;
       if (!mcpServer) return "MCP server definition is unavailable";
+      if (liveReasons.has(contribution.id)) return liveReasons.get(contribution.id) ?? null;
       return mcpServer.credentialAvailable ? null : "MCP server credential is unavailable";
     },
   });
@@ -283,6 +284,7 @@ const pluginAvailability = (
   resolved: ResolvedOperation,
   workspace: RegisteredWorkspace,
   contribution: PluginContribution,
+  liveReasons: ReadonlyMap<string, string | null>,
 ) => {
   const fileContribution: FileContribution = {
     id: contribution.id,
@@ -291,7 +293,7 @@ const pluginAvailability = (
     localName: contribution.localName,
     file: contribution.file,
   };
-  const reason = pluginReadiness(contribution);
+  const reason = pluginReadiness(contribution, liveReasons);
   return {
     id: contribution.id,
     kind: contribution.kind,
@@ -368,6 +370,54 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const preparePluginMcpServer = Effect.fn("Executor.preparePluginMcpServer")(function* ({
+    id,
+    server,
+  }: PluginMcpContribution) {
+    const { endpoint, secretEnv } = server;
+    const unavailable = (message: string) => ({
+      identity: id,
+      name: id,
+      endpoint,
+      bearer: null,
+      unavailableReason: message,
+    });
+    if (!server.credentialAvailable) {
+      return unavailable(
+        secretEnv ? `MCP server needs environment key ${secretEnv}` : `${id} needs a ready Connection`,
+      );
+    }
+    if (server.connectionId) {
+      return yield* connections.bearer(server.connectionId).pipe(
+        Effect.match({
+          onFailure: (error) => unavailable(error.message),
+          onSuccess: (credential) => ({
+            identity: id,
+            name: id,
+            endpoint,
+            bearer: credential.token,
+            unavailableReason: null,
+          }),
+        }),
+      );
+    }
+    if (!secretEnv) {
+      return { identity: id, name: id, endpoint, bearer: null, unavailableReason: null };
+    }
+    return yield* Config.redacted(secretEnv).pipe(
+      Effect.match({
+        onFailure: (error) => unavailable(`MCP server needs environment key ${secretEnv}: ${error.message}`),
+        onSuccess: (bearer) => ({
+          identity: id,
+          name: id,
+          endpoint,
+          bearer,
+          unavailableReason: null,
+        }),
+      }),
+    );
+  });
+
   const harnessRequest = Effect.fn("Executor.harnessRequest")(function* (
     workspace: RegisteredWorkspace,
     planStage: ResolvedOperation,
@@ -402,52 +452,7 @@ export const make = Effect.gen(function* () {
     const admittedIdentities = new Set(admitted.map(({ id }) => id));
     const pluginMcpServers: ReadonlyArray<PreparedMcpServer> = yield* Effect.forEach(
       loaded.filter(({ id }) => admittedIdentities.has(id)).flatMap(pluginMcp),
-      ({ id, server }) =>
-        Effect.gen(function* () {
-          const { endpoint, secretEnv } = server;
-          const unavailable = (message: string) => ({
-            identity: id,
-            name: id,
-            endpoint,
-            bearer: null,
-            unavailableReason: message,
-          });
-          if (!server.credentialAvailable) {
-            return unavailable(
-              secretEnv ? `MCP server needs environment key ${secretEnv}` : `${id} needs a ready Connection`,
-            );
-          }
-          if (server.connectionId) {
-            return yield* connections.bearer(server.connectionId).pipe(
-              Effect.match({
-                onFailure: (error) => unavailable(error.message),
-                onSuccess: (credential) => ({
-                  identity: id,
-                  name: id,
-                  endpoint,
-                  bearer: credential.token,
-                  unavailableReason: null,
-                }),
-              }),
-            );
-          }
-          if (!secretEnv) {
-            return { identity: id, name: id, endpoint, bearer: null, unavailableReason: null };
-          }
-          return yield* Config.redacted(secretEnv).pipe(
-            Effect.match({
-              onFailure: (error) =>
-                unavailable(`MCP server needs environment key ${secretEnv}: ${error.message}`),
-              onSuccess: (bearer) => ({
-                identity: id,
-                name: id,
-                endpoint,
-                bearer,
-                unavailableReason: null,
-              }),
-            }),
-          );
-        }),
+      preparePluginMcpServer,
     );
     const workspaceMcpServers = (yield* assembler.assemble(workspace.config)).map((server) => ({
       ...server,
@@ -1165,6 +1170,28 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  const connectionAvailability = Effect.fn("Executor.connectionAvailability")(function* () {
+    return yield* connections.overview.pipe(
+      Effect.match({
+        onFailure: () => [] satisfies ReadonlyArray<AvailabilityContribution>,
+        onSuccess: (overview) =>
+          overview.connections.flatMap(({ connection, readiness }) => {
+            if (!connection) return [];
+            const reason = readiness._tag === "Ready" ? null : readiness.reason;
+            return [
+              {
+                id: connection.id,
+                kind: "connection",
+                enabled: true,
+                ready: reason === null,
+                reason,
+              } satisfies AvailabilityContribution,
+            ];
+          }),
+      }),
+    );
+  });
+
   const evaluateAvailability = Effect.fn("Executor.evaluateAvailability")(function* (
     workspace: RegisteredWorkspace,
     operation: LifecycleStage,
@@ -1180,7 +1207,7 @@ export const make = Effect.gen(function* () {
         return conclusion;
       });
 
-    const resolved = yield* resolvePlanStage(workspace, operation);
+    const resolved = yield* controlStore.withWrite(resolvePlanStage(workspace, operation));
     if (!resolved) {
       return {
         resolved,
@@ -1191,9 +1218,24 @@ export const make = Effect.gen(function* () {
     }
     const overview = yield* loadPluginOverview();
     const pluginContributions = installedContributions(overview);
+    const pluginMcpServers = yield* Effect.forEach(
+      pluginContributions.flatMap(pluginMcp),
+      preparePluginMcpServer,
+    );
+    const liveReasons = new Map(
+      pluginMcpServers.map(
+        ({ identity, unavailableReason }) =>
+          [identity, unavailableReason] satisfies readonly [string, string | null],
+      ),
+    );
     const contributions = [
       ...workspace.contributions.map((contribution) => localAvailability(resolved, workspace, contribution)),
-      ...pluginContributions.map((contribution) => pluginAvailability(resolved, workspace, contribution)),
+      ...pluginContributions.map((contribution) =>
+        pluginAvailability(resolved, workspace, contribution, liveReasons),
+      ),
+      ...(resolved.stage.needs.some(({ kind }) => kind === "connection")
+        ? yield* connectionAvailability()
+        : []),
     ];
     const runtimeCauses = [
       yield* checkoutAvailability(workspace),
@@ -1219,18 +1261,16 @@ export const make = Effect.gen(function* () {
     workspace: RegisteredWorkspace,
     item: EligibleWork,
   ) {
-    return yield* controlStore
-      .withWrite(evaluateAvailability(workspace, item.stage))
-      .pipe(Effect.map(({ availability }) => availability));
+    return yield* evaluateAvailability(workspace, item.stage).pipe(
+      Effect.map(({ availability }) => availability),
+    );
   });
 
   const refreshAvailability = Effect.fn("Executor.refreshAvailability")(function* (
     workspace: RegisteredWorkspace,
   ) {
-    return yield* controlStore.withWrite(
-      Effect.forEach(lifecycleStages, (operation) =>
-        evaluateAvailability(workspace, operation).pipe(Effect.map(({ availability }) => availability)),
-      ),
+    return yield* Effect.forEach(lifecycleStages, (operation) =>
+      evaluateAvailability(workspace, operation).pipe(Effect.map(({ availability }) => availability)),
     );
   });
 
@@ -1318,7 +1358,7 @@ export const make = Effect.gen(function* () {
       return yield* selectedOps.prepare.pipe(
         Effect.flatMap((prepared) =>
           Effect.gen(function* () {
-            const checked = yield* controlStore.withWrite(evaluateAvailability(workspace, item.stage));
+            const checked = yield* evaluateAvailability(workspace, item.stage);
             if (!checked.resolved || !checked.availability.available) {
               yield* noteUnavailableResume(workspace, item, checked.availability.causes);
               return null;
@@ -1415,7 +1455,7 @@ export const make = Effect.gen(function* () {
     item: EligibleWork,
     observation: RunPlanObservation,
   ) {
-    const checked = yield* controlStore.withWrite(evaluateAvailability(workspace, item.stage));
+    const checked = yield* evaluateAvailability(workspace, item.stage);
     if (!checked.resolved || !checked.availability.available) {
       return yield* decline(workspace, item, checked.availability.causes);
     }
