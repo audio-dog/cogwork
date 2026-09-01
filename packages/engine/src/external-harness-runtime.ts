@@ -52,7 +52,7 @@ import {
   type ResolvedMcpSkill,
   resolvedMcpSkills,
 } from "./harness";
-import { abortOnReturn, bridgeChat, ownSandboxHandles, perRunSandboxLifecycle } from "./provider-bridge";
+import { bridgeChat } from "./provider-bridge";
 import { SessionStore } from "./session-store";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
@@ -370,6 +370,22 @@ const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     stream: true,
   });
 
+const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abortController: AbortController) => ({
+  [Symbol.asyncIterator]: () => {
+    const iterator = stream[Symbol.asyncIterator]();
+    return {
+      next: () => iterator.next(),
+      return: (value?: unknown): Promise<IteratorResult<Value>> => {
+        abortController.abort(RUN_CANCEL_REASON);
+        if (iterator.return) {
+          return iterator.return(value);
+        }
+        return Promise.resolve({ done: true, value: undefined });
+      },
+    };
+  },
+});
+
 const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
   inputs: ExternalHarnessRuntimeInputs,
@@ -385,7 +401,7 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
     id: `cogwork-${descriptor.name}`,
     provider,
     workspace: defineWorkspace(workspaceDefinition),
-    lifecycle: perRunSandboxLifecycle,
+    lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
     ...(policy ? { policy } : {}),
     fileEvents: inputs.fileHooks !== undefined,
     ...(inputs.fileHooks ? { hooks: inputs.fileHooks } : {}),
@@ -430,7 +446,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                   resolved,
                   descriptor.estimateUsage ?? preserveUsage,
                   bridgeChat(
-                    abortOnReturn(opened.stream, () => opened.abortController.abort(RUN_CANCEL_REASON)),
+                    abortOnReturn(opened.stream, opened.abortController),
                     descriptor.diagnostics,
                     descriptor.diagnostics,
                   ).pipe(Stream.ensuring(Effect.sync(() => opened.abortController.abort()))),
@@ -446,12 +462,9 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
 
 export const trustedLocalProcessSandboxProvider =
   (options: { readonly scrubEnv: ReadonlyArray<string> }) => (request: ExternalHarnessResolvedRequest) =>
-    Effect.sync(
-      () =>
-        ownSandboxHandles(
-          localProcessSandbox({
-            dir: request.checkout.path,
-            scrubEnv: [...options.scrubEnv],
-          }),
-        ).provider,
+    Effect.succeed(
+      localProcessSandbox({
+        dir: request.checkout.path,
+        scrubEnv: [...options.scrubEnv],
+      }),
     );
