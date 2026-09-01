@@ -46,7 +46,7 @@ const resolveStageConfig = (
   defaults: StageDefaults,
 ): OperationDefinition => ({
   skill: stage?.skill ?? defaults.skill,
-  promptTemplate: stage?.prompt ?? defaults.promptTemplate,
+  promptTemplate: stage?.prompt?.trim() || defaults.promptTemplate,
   resumeMaxAgeMillis: stage?.resumeMaxAgeMillis ?? defaults.resumeMaxAgeMillis,
   resumeMaxTokens: stage?.resumeMaxTokens ?? defaults.resumeMaxTokens,
   mcpSkills: config.mcpSkills ?? [],
